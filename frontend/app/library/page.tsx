@@ -38,15 +38,21 @@ import {
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
   getBulkGenerationResult,
+  getLibraryFilterOptions,
+  getLibrarySubjectStats,
   getSavedLibraryFilters,
+  listLibraryMatchingIds,
+  listLibraryPage,
   listNoteStatuses,
-  listNotes,
   listSubjects,
   type BulkGenerationResultResponse,
+  type LibraryFilterParams,
   type NoteListItemResponse,
+  type NotesLibraryFilterOptionsResponse,
   type NoteStatusResponse,
   type SavedLibraryFilterResponse,
   type SavedLibraryFilterState,
+  type SubjectStatsResponse,
   type NoteVisibility,
 } from "@/lib/api";
 import {getBrowsingCardClassName, getSelectionCardClassName} from "@/lib/clickable-card";
@@ -88,6 +94,11 @@ const FILTER_SAVE_ERROR_TOAST = "Could not save filter";
 const FILTER_DELETE_ERROR_TOAST = "Could not delete filter";
 const BULK_RESULT_FETCH_MAX_ATTEMPTS = 5;
 const BULK_RESULT_FETCH_RETRY_DELAY_MS = 800;
+const LIBRARY_REFRESH_MAX_PAGE_SIZE = 100;
+const SELECT_ALL_LIMIT = 1000;
+const SELECT_ALL_TRUNCATED_TOAST = `Selection was capped at the first ${SELECT_ALL_LIMIT.toLocaleString()} matching notes.`;
+const SELECT_ALL_ERROR_TOAST = "Could not select all matching notes.";
+const LOAD_MORE_ERROR_TOAST = "Could not load more notes.";
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
 const SORT_LABELS: Record<LibrarySortOption, string> = {
   RECENTLY_UPDATED: "Recently Updated",
@@ -109,6 +120,16 @@ const VISIBILITY_FILTER_LABELS: Record<LibraryVisibilityFilter, string> = {
   PRIVATE: "Private",
 };
 const VISIBILITY_FILTER_KEYS = Object.keys(VISIBILITY_FILTER_LABELS) as LibraryVisibilityFilter[];
+const EMPTY_FILTER_OPTIONS: NotesLibraryFilterOptionsResponse = {
+  subjects: [],
+  coursePrograms: [],
+  tags: [],
+};
+const EMPTY_SUBJECT_STATS: SubjectStatsResponse = {
+  topSubjects: [],
+  otherSubjectsCount: 0,
+  total: 0,
+};
 
 type ToastMessage = string | {
   message: string;
@@ -318,6 +339,24 @@ function buildLibraryUrl(
   return `/library${qs ? `?${qs}` : ""}`;
 }
 
+function buildLibraryFilterParams(
+  search: string,
+  subject: string,
+  courseProgram: string,
+  tags: string[],
+  readiness: LibraryReadinessFilter,
+  visibility: LibraryVisibilityFilter,
+): LibraryFilterParams {
+  return {
+    search: search.trim() || undefined,
+    readiness,
+    courseProgram: courseProgram === ALL_COURSE_PROGRAMS ? undefined : courseProgram,
+    subject: subject === ALL_SUBJECTS ? undefined : subject,
+    tags,
+    visibility,
+  };
+}
+
 function buildSavedFilterState(
   q: string,
   subject: string,
@@ -515,6 +554,9 @@ export default function LibraryPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialLoadStartedRef = useRef(false);
+  const filterFetchEffectStartedRef = useRef(false);
+  const listRequestTokenRef = useRef(0);
+  const selectionRequestTokenRef = useRef(0);
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
   const bulkGraceUntilRef = useRef(0);
   const generatingNoteIdsRef = useRef<Set<string>>(new Set());
@@ -537,7 +579,13 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
-  const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
+  const [totalMatching, setTotalMatching] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadedPageCount, setLoadedPageCount] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [filterOptions, setFilterOptions] = useState<NotesLibraryFilterOptionsResponse>(EMPTY_FILTER_OPTIONS);
+  const [filterOptionsLoaded, setFilterOptionsLoaded] = useState(false);
+  const [subjectStats, setSubjectStats] = useState<SubjectStatsResponse>(EMPTY_SUBJECT_STATS);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false);
@@ -554,6 +602,8 @@ export default function LibraryPage() {
   const [visibilityFilter, setVisibilityFilter] = useState<LibraryVisibilityFilter>(() => parseVisibilityFilter(searchParams.get("visibility")));
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [matchingSelectionIds, setMatchingSelectionIds] = useState<string[]>([]);
+  const [selectingAll, setSelectingAll] = useState(false);
   const [createPlanOpen, setCreatePlanOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [pendingBulkResultId, setPendingBulkResultId] = useState<string | null>(null);
@@ -583,6 +633,25 @@ export default function LibraryPage() {
       .filter((filterKey) => showQuizReadyIndicators || filterKey !== "QUIZ_READY")
   ), [showQuizReadyIndicators]);
 
+  const effectiveReadinessFilter = !showQuizReadyIndicators && readinessFilter === "QUIZ_READY"
+    ? "ALL"
+    : readinessFilter;
+  const libraryFilterParams = useMemo(() => buildLibraryFilterParams(
+    searchQuery,
+    selectedSubject,
+    selectedCourseProgram,
+    selectedTags,
+    effectiveReadinessFilter,
+    visibilityFilter,
+  ), [effectiveReadinessFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, visibilityFilter]);
+  const subjectStatsFilterParams = useMemo(() => ({
+    search: libraryFilterParams.search,
+    readiness: libraryFilterParams.readiness,
+    courseProgram: libraryFilterParams.courseProgram,
+    tags: libraryFilterParams.tags,
+    visibility: libraryFilterParams.visibility,
+  }), [libraryFilterParams]);
+
   const loadLibrary = useCallback(async () => {
     if (!requireAuthenticatedOnboardedUser(router)) {
       return;
@@ -590,27 +659,41 @@ export default function LibraryPage() {
 
     setLoading(true);
     setError(null);
+    const requestToken = ++listRequestTokenRef.current;
     try {
-      const [notesResult, subjectsResult] = await Promise.allSettled([
-        listNotes(),
+      const [pageResult, subjectsResult, filterOptionsResult, subjectStatsResult] = await Promise.allSettled([
+        listLibraryPage({...libraryFilterParams, sort: sortBy, page: 0, pageSize: LIBRARY_PAGE_SIZE}),
         listSubjects("mine"),
+        getLibraryFilterOptions(),
+        getLibrarySubjectStats(subjectStatsFilterParams),
       ]);
-      if (notesResult.status !== "fulfilled") {
-        throw notesResult.reason;
+      if (requestToken !== listRequestTokenRef.current) {
+        return;
       }
-      const notes = notesResult.value;
-      // Seed the seen-set from the full load so only later (poller) arrivals animate.
-      seenNoteIdsRef.current = new Set(notes.map((note) => note.id));
-      setItems(notes);
+      if (pageResult.status !== "fulfilled") {
+        throw pageResult.reason;
+      }
+      seenNoteIdsRef.current = new Set(pageResult.value.items.map((note) => note.id));
+      setItems(pageResult.value.items);
+      setTotalMatching(pageResult.value.totalMatching);
+      setHasMore(pageResult.value.hasMore);
+      setLoadedPageCount(1);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
-      setVisibleCount(LIBRARY_PAGE_SIZE);
+      setFilterOptions(filterOptionsResult.status === "fulfilled" ? filterOptionsResult.value : EMPTY_FILTER_OPTIONS);
+      setFilterOptionsLoaded(filterOptionsResult.status === "fulfilled");
+      setSubjectStats(subjectStatsResult.status === "fulfilled" ? subjectStatsResult.value : EMPTY_SUBJECT_STATS);
     } catch (loadError) {
+      if (requestToken !== listRequestTokenRef.current) {
+        return;
+      }
       const message = loadError instanceof Error ? loadError.message : "Could not load your notes.";
       setError(message);
     } finally {
-      setLoading(false);
+      if (requestToken === listRequestTokenRef.current) {
+        setLoading(false);
+      }
     }
-  }, [router]);
+  }, [libraryFilterParams, router, sortBy, subjectStatsFilterParams]);
 
   // Silent refresh used by the generation poller: updates the note list only,
   // without toggling the loading skeleton or resetting pagination.
@@ -618,13 +701,35 @@ export default function LibraryPage() {
     if (!getAuthUser()) {
       return null;
     }
+    const requestToken = ++listRequestTokenRef.current;
+    setLoadingMore(false);
     try {
-      const notes = await listNotes();
-      setItems(notes);
-      return notes;
+      // Poll refreshes are intentionally bounded to the server's maximum page size.
+      const page = await listLibraryPage({
+        ...libraryFilterParams,
+        sort: sortBy,
+        page: 0,
+        pageSize: Math.min(items.length || LIBRARY_PAGE_SIZE, LIBRARY_REFRESH_MAX_PAGE_SIZE),
+      });
+      if (requestToken !== listRequestTokenRef.current) {
+        return null;
+      }
+      setItems(page.items);
+      setTotalMatching(page.totalMatching);
+      setHasMore(page.hasMore);
+      return page.items;
     } catch {
       // Keep the current list; the next poll can recover.
       return null;
+    }
+  }, [items.length, libraryFilterParams, sortBy]);
+
+  const refreshFilterOptionsSilently = useCallback(async () => {
+    try {
+      setFilterOptions(await getLibraryFilterOptions());
+      setFilterOptionsLoaded(true);
+    } catch {
+      // Keep the last usable option set; this must not block poll recovery.
     }
   }, []);
 
@@ -784,6 +889,9 @@ export default function LibraryPage() {
           if (!active || notes === null) {
             return;
           }
+          if (grew || resolved) {
+            void refreshFilterOptionsSilently();
+          }
         }
 
         if (anyGenerating || grew || withinGrace) {
@@ -805,7 +913,7 @@ export default function LibraryPage() {
       active = false;
       globalThis.clearInterval(intervalId);
     };
-  }, [autoRefreshActive, fetchNotesSilently]);
+  }, [autoRefreshActive, fetchNotesSilently, refreshFilterOptionsSilently]);
 
   // Animate rows that arrive after the initial load (e.g. bulk-generated notes
   // surfaced by the poller) so they do not just pop into the list.
@@ -828,24 +936,45 @@ export default function LibraryPage() {
   }, [items]);
 
   useEffect(() => {
+    if (!filterFetchEffectStartedRef.current) {
+      filterFetchEffectStartedRef.current = true;
+      return undefined;
+    }
+    selectionRequestTokenRef.current += 1;
     const timeoutId = globalThis.setTimeout(() => {
       router.replace(
         buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter),
         { scroll: false },
       );
+      const requestToken = ++listRequestTokenRef.current;
+      setError(null);
+      setMatchingSelectionIds([]);
+      setSelectingAll(false);
+      setLoadingMore(false);
+      void Promise.allSettled([
+        listLibraryPage({...libraryFilterParams, sort: sortBy, page: 0, pageSize: LIBRARY_PAGE_SIZE}),
+        getLibrarySubjectStats(subjectStatsFilterParams),
+      ]).then(([pageResult, statsResult]) => {
+        if (requestToken !== listRequestTokenRef.current) {
+          return;
+        }
+        if (pageResult.status !== "fulfilled") {
+          const message = pageResult.reason instanceof Error
+            ? pageResult.reason.message
+            : "Could not load your notes.";
+          setError(message);
+          return;
+        }
+        seenNoteIdsRef.current = new Set(pageResult.value.items.map((note) => note.id));
+        setItems(pageResult.value.items);
+        setTotalMatching(pageResult.value.totalMatching);
+        setHasMore(pageResult.value.hasMore);
+        setLoadedPageCount(1);
+        setSubjectStats(statsResult.status === "fulfilled" ? statsResult.value : EMPTY_SUBJECT_STATS);
+      });
     }, LIBRARY_FILTER_SYNC_DEBOUNCE_MS);
     return () => globalThis.clearTimeout(timeoutId);
-  }, [searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter, router]);
-
-  const hasItems = items.length > 0;
-
-  const derivedSubjects = useMemo(() => {
-    const subjectSet = new Set<string>();
-    for (const item of items) {
-      subjectSet.add(getLibrarySubject(item));
-    }
-    return Array.from(subjectSet).sort((left, right) => left.localeCompare(right));
-  }, [items]);
+  }, [libraryFilterParams, readinessFilter, router, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy, subjectStatsFilterParams, visibilityFilter]);
 
   const availableSubjects = useMemo(() => {
     return Array.from(
@@ -853,71 +982,44 @@ export default function LibraryPage() {
         ...subjectSuggestions
           .map((subject) => normalizeSubject(subject))
           .filter((subject): subject is string => Boolean(subject)),
-        ...derivedSubjects,
+        ...filterOptions.subjects.map((facet) => facet.value),
       ]),
     ).sort((left, right) => left.localeCompare(right));
-  }, [derivedSubjects, subjectSuggestions]);
-
-  const subjectCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) {
-      const subject = getLibrarySubject(item);
-      counts.set(subject, (counts.get(subject) ?? 0) + 1);
-    }
-    return counts;
-  }, [items]);
-
-  const tagCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) {
-      for (const tag of normalizeTags(item.tags)) {
-        counts.set(tag, (counts.get(tag) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [items]);
-
-  const courseProgramCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) {
-      const courseProgram = normalizeCourseProgram(item.courseProgram);
-      if (courseProgram) {
-        counts.set(courseProgram, (counts.get(courseProgram) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [items]);
+  }, [filterOptions.subjects, subjectSuggestions]);
 
   const availableCoursePrograms = useMemo(() => {
-    return Array.from(courseProgramCounts.keys()).sort((left, right) => {
-      const countDiff = (courseProgramCounts.get(right) ?? 0) - (courseProgramCounts.get(left) ?? 0);
-      return countDiff !== 0 ? countDiff : left.localeCompare(right);
-    });
-  }, [courseProgramCounts]);
+    return filterOptions.coursePrograms.map((facet) => facet.value);
+  }, [filterOptions.coursePrograms]);
 
   const availableTags = useMemo(() => {
-    return Array.from(tagCounts.keys());
-  }, [tagCounts]);
+    return filterOptions.tags.map((facet) => facet.value);
+  }, [filterOptions.tags]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !filterOptionsLoaded) return;
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
       setSelectedSubject(ALL_SUBJECTS);
     }
-  }, [availableSubjects, loading, selectedSubject]);
+  }, [availableSubjects, filterOptionsLoaded, loading, selectedSubject]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !filterOptionsLoaded) return;
     if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
       setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
     }
-  }, [availableCoursePrograms, loading, selectedCourseProgram]);
+  }, [availableCoursePrograms, filterOptionsLoaded, loading, selectedCourseProgram]);
 
   useEffect(() => {
-    if (loading) return;
-    setSelectedTags((previous) => previous.filter((tag) => availableTags.includes(tag)));
-    setTagDraft((previous) => previous.filter((tag) => availableTags.includes(tag)));
-  }, [availableTags, loading]);
+    if (loading || !filterOptionsLoaded) return;
+    setSelectedTags((previous) => {
+      const next = previous.filter((tag) => availableTags.includes(tag));
+      return next.length === previous.length ? previous : next;
+    });
+    setTagDraft((previous) => {
+      const next = previous.filter((tag) => availableTags.includes(tag));
+      return next.length === previous.length ? previous : next;
+    });
+  }, [availableTags, filterOptionsLoaded, loading]);
 
   useEffect(() => {
     if (tagSelectorOpen) {
@@ -942,10 +1044,6 @@ export default function LibraryPage() {
     }, 0);
     return () => globalThis.clearTimeout(id);
   }, [courseProgramComboOpen]);
-
-  useEffect(() => {
-    setVisibleCount(LIBRARY_PAGE_SIZE);
-  }, [readinessFilter, visibilityFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, sortBy]);
 
   useEffect(() => {
     if (!showQuizReadyIndicators && readinessFilter === "QUIZ_READY") {
@@ -974,13 +1072,21 @@ export default function LibraryPage() {
     ));
   }, []);
 
+  const subjectPriorityCounts = useMemo(
+    () => new Map(filterOptions.subjects.map((facet) => [facet.value, facet.count])),
+    [filterOptions.subjects],
+  );
+  const tagPriorityCounts = useMemo(
+    () => new Map(filterOptions.tags.map((facet) => [facet.value, facet.count])),
+    [filterOptions.tags],
+  );
   const subjectPriorityComparator = useMemo(
-    () => buildPriorityComparator(recentSubjects, subjectCounts),
-    [recentSubjects, subjectCounts],
+    () => buildPriorityComparator(recentSubjects, subjectPriorityCounts),
+    [recentSubjects, subjectPriorityCounts],
   );
   const tagPriorityComparator = useMemo(
-    () => buildPriorityComparator(recentTags, tagCounts),
-    [recentTags, tagCounts],
+    () => buildPriorityComparator(recentTags, tagPriorityCounts),
+    [recentTags, tagPriorityCounts],
   );
 
   const displayedSubjects = useMemo(() => {
@@ -1030,6 +1136,7 @@ export default function LibraryPage() {
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0;
+  const hasItems = items.length > 0 || hasActiveFilters;
   const currentSavedFilterState = useMemo(() => buildSavedFilterState(
     searchQuery,
     selectedSubject,
@@ -1051,6 +1158,7 @@ export default function LibraryPage() {
     [selectedNotes],
   );
   const selectedHasNonQuizReadyNotes = selectedNotes.length > selectedQuizReadyCount;
+  const selectedUnresolvedCount = selectedNoteIds.length - selectedNotes.length;
 
   const applySavedFilter = useCallback((filterState: SavedLibraryFilterState) => {
     const nextSearch = readSavedString(filterState.search) ?? "";
@@ -1125,127 +1233,10 @@ export default function LibraryPage() {
     }
   }, []);
 
-  const sortedFilteredItems = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    const filtered = items.filter((item) => {
-      const itemTitle = item.title?.trim() || "Untitled note";
-      const itemTags = normalizeTags(item.tags);
-      const itemSubject = getLibrarySubject(item);
-      const itemCourseProgram = normalizeCourseProgram(item.courseProgram);
-
-      const searchMatch = query.length === 0
-        || itemTitle.toLowerCase().includes(query)
-        || itemTags.some((tag) => tag.toLowerCase().includes(query));
-      const effectiveReadinessFilter = !showQuizReadyIndicators && readinessFilter === "QUIZ_READY"
-        ? "ALL"
-        : readinessFilter;
-      const readinessMatch = effectiveReadinessFilter === "ALL"
-        || (effectiveReadinessFilter === "DRAFT" && item.studyPackStatus === "DRAFT")
-        || (effectiveReadinessFilter === "QUIZ_READY" && Boolean(item.generatedQuizId))
-        || (effectiveReadinessFilter === "STUDY_PACK_READY" && item.studyPackStatus === "STUDY_PACK_READY");
-      const courseProgramMatch = selectedCourseProgram === ALL_COURSE_PROGRAMS
-        || itemCourseProgram === selectedCourseProgram;
-      const subjectMatch = selectedSubject === ALL_SUBJECTS || itemSubject === selectedSubject;
-      const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
-      const visibilityMatch = visibilityFilter === "ALL"
-        || (visibilityFilter === "PUBLIC" && item.visibility === "PUBLIC")
-        || (visibilityFilter === "PRIVATE" && item.visibility === "PRIVATE");
-
-      return searchMatch && readinessMatch && courseProgramMatch && subjectMatch && tagMatch && visibilityMatch;
-    });
-
-    const byDateDesc = (leftDate: string | null | undefined, rightDate: string | null | undefined) => {
-      const leftTime = leftDate ? new Date(leftDate).getTime() : 0;
-      const rightTime = rightDate ? new Date(rightDate).getTime() : 0;
-      return rightTime - leftTime;
-    };
-
-    const byDateAsc = (leftDate: string | null | undefined, rightDate: string | null | undefined) => {
-      const leftTime = leftDate ? new Date(leftDate).getTime() : 0;
-      const rightTime = rightDate ? new Date(rightDate).getTime() : 0;
-      return leftTime - rightTime;
-    };
-
-    return [...filtered].sort((left, right) => {
-      switch (sortBy) {
-        case "TITLE_ASC":
-          return (left.title ?? "Untitled note").localeCompare(right.title ?? "Untitled note");
-        case "TITLE_DESC":
-          return (right.title ?? "Untitled note").localeCompare(left.title ?? "Untitled note");
-        case "OLDEST":
-          return byDateAsc(left.createdAt, right.createdAt);
-        case "NEWEST":
-          return byDateDesc(left.createdAt, right.createdAt);
-        case "RECENTLY_REVIEWED": {
-          const reviewedDiff = byDateDesc(
-            left.lastSessionCompletedAt,
-            right.lastSessionCompletedAt,
-          );
-          if (reviewedDiff !== 0) {
-            return reviewedDiff;
-          }
-          return byDateDesc(left.updatedAt, right.updatedAt);
-        }
-        case "RECENTLY_UPDATED":
-        default:
-          return byDateDesc(left.updatedAt, right.updatedAt);
-      }
-    });
-  }, [items, readinessFilter, visibilityFilter, searchQuery, selectedCourseProgram, selectedSubject, selectedTags, showQuizReadyIndicators, sortBy]);
-
-  const visibleItems = useMemo(
-    () => sortedFilteredItems.slice(0, visibleCount),
-    [sortedFilteredItems, visibleCount],
-  );
-  const hasMore = visibleCount < sortedFilteredItems.length;
-
-  // Subject facet counts for the stats strip, computed over the notes matching
-  // every active filter EXCEPT subject — so the chips reflect the current view
-  // (e.g. only Nursing subjects when a Nursing course/program filter is active).
-  const subjectFacets = useMemo(() => {
-    const SUBJECT_FACET_LIMIT = 6;
-    const query = searchQuery.trim().toLowerCase();
-    const effectiveReadinessFilter = !showQuizReadyIndicators && readinessFilter === "QUIZ_READY"
-      ? "ALL"
-      : readinessFilter;
-    const counts = new Map<string, number>();
-    let total = 0;
-    for (const item of items) {
-      const itemTitle = item.title?.trim() || "Untitled note";
-      const itemTags = normalizeTags(item.tags);
-      const itemCourseProgram = normalizeCourseProgram(item.courseProgram);
-      const searchMatch = query.length === 0
-        || itemTitle.toLowerCase().includes(query)
-        || itemTags.some((tag) => tag.toLowerCase().includes(query));
-      const readinessMatch = effectiveReadinessFilter === "ALL"
-        || (effectiveReadinessFilter === "DRAFT" && item.studyPackStatus === "DRAFT")
-        || (effectiveReadinessFilter === "QUIZ_READY" && Boolean(item.generatedQuizId))
-        || (effectiveReadinessFilter === "STUDY_PACK_READY" && item.studyPackStatus === "STUDY_PACK_READY");
-      const courseProgramMatch = selectedCourseProgram === ALL_COURSE_PROGRAMS
-        || itemCourseProgram === selectedCourseProgram;
-      const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
-      const visibilityMatch = visibilityFilter === "ALL"
-        || (visibilityFilter === "PUBLIC" && item.visibility === "PUBLIC")
-        || (visibilityFilter === "PRIVATE" && item.visibility === "PRIVATE");
-      if (!(searchMatch && readinessMatch && courseProgramMatch && tagMatch && visibilityMatch)) {
-        continue;
-      }
-      total += 1;
-      const itemSubject = getLibrarySubject(item);
-      counts.set(itemSubject, (counts.get(itemSubject) ?? 0) + 1);
-    }
-    const sorted = [...counts.entries()].sort(
-      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
-    );
-    const topSubjects = sorted.slice(0, SUBJECT_FACET_LIMIT).map(([subject, count]) => ({ subject, count }));
-    const otherSubjectsCount = sorted.slice(SUBJECT_FACET_LIMIT).reduce((sum, [, count]) => sum + count, 0);
-    return { topSubjects, otherSubjectsCount, total };
-  }, [items, readinessFilter, visibilityFilter, searchQuery, selectedCourseProgram, selectedTags, showQuizReadyIndicators]);
-
   const showSubjectStatsStrip = !loading
     && selectedSubject === ALL_SUBJECTS
-    && subjectFacets.total >= 5
-    && subjectFacets.topSubjects.length >= 2;
+    && subjectStats.total >= 5
+    && subjectStats.topSubjects.length >= 2;
 
   const applySubjectStatsFilter = useCallback((subject: string) => {
     setSelectedSubject(subject);
@@ -1256,13 +1247,48 @@ export default function LibraryPage() {
     );
   }, [readinessFilter, visibilityFilter, router, searchQuery, selectedCourseProgram, selectedTags, sortBy]);
 
+  const handleLoadMore = useCallback(async () => {
+    const requestToken = ++listRequestTokenRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await listLibraryPage({
+        ...libraryFilterParams,
+        sort: sortBy,
+        page: loadedPageCount,
+        pageSize: LIBRARY_PAGE_SIZE,
+      });
+      if (requestToken !== listRequestTokenRef.current) {
+        return;
+      }
+      const existingIds = new Set(items.map((item) => item.id));
+      const newItems = page.items.filter((item) => !existingIds.has(item.id));
+      newItems.forEach((item) => seenNoteIdsRef.current?.add(item.id));
+      setItems((previous) => [...previous, ...newItems]);
+      setTotalMatching(page.totalMatching);
+      setHasMore(page.hasMore);
+      setLoadedPageCount((previous) => previous + 1);
+    } catch {
+      if (requestToken === listRequestTokenRef.current) {
+        setToast(LOAD_MORE_ERROR_TOAST);
+      }
+    } finally {
+      if (requestToken === listRequestTokenRef.current) {
+        setLoadingMore(false);
+      }
+    }
+  }, [items, libraryFilterParams, loadedPageCount, sortBy]);
+
   const resetSelectionMode = useCallback(() => {
+    selectionRequestTokenRef.current += 1;
     setSelectionMode(false);
     setSelectedNoteIds([]);
+    setMatchingSelectionIds([]);
+    setSelectingAll(false);
   }, []);
 
   const startPlanSelection = useCallback(() => {
     setSelectedNoteIds([]);
+    setMatchingSelectionIds([]);
     setSelectionMode(true);
   }, []);
 
@@ -1280,22 +1306,38 @@ export default function LibraryPage() {
     ));
   }, []);
 
-  const allFilteredSelected = sortedFilteredItems.length > 0
-    && sortedFilteredItems.every((item) => selectedNoteIds.includes(item.id));
+  const allFilteredSelected = matchingSelectionIds.length > 0
+    && matchingSelectionIds.every((itemId) => selectedNoteIds.includes(itemId));
 
-  const toggleSelectAllFiltered = useCallback(() => {
-    const filteredIds = sortedFilteredItems.map((item) => item.id);
-    setSelectedNoteIds((previous) => {
-      const allSelected = filteredIds.length > 0 && filteredIds.every((id) => previous.includes(id));
-      if (allSelected) {
-        const remove = new Set(filteredIds);
-        return previous.filter((id) => !remove.has(id));
+  const toggleSelectAllFiltered = useCallback(async () => {
+    if (allFilteredSelected) {
+      const remove = new Set(matchingSelectionIds);
+      setSelectedNoteIds((previous) => previous.filter((id) => !remove.has(id)));
+      return;
+    }
+
+    const requestToken = ++selectionRequestTokenRef.current;
+    setSelectingAll(true);
+    try {
+      const response = await listLibraryMatchingIds(libraryFilterParams);
+      if (requestToken !== selectionRequestTokenRef.current) {
+        return;
       }
-      const merged = new Set(previous);
-      filteredIds.forEach((id) => merged.add(id));
-      return Array.from(merged);
-    });
-  }, [sortedFilteredItems]);
+      setMatchingSelectionIds(response.noteIds);
+      setSelectedNoteIds(response.noteIds);
+      if (response.truncated) {
+        setToast(SELECT_ALL_TRUNCATED_TOAST);
+      }
+    } catch {
+      if (requestToken === selectionRequestTokenRef.current) {
+        setToast(SELECT_ALL_ERROR_TOAST);
+      }
+    } finally {
+      if (requestToken === selectionRequestTokenRef.current) {
+        setSelectingAll(false);
+      }
+    }
+  }, [allFilteredSelected, libraryFilterParams, matchingSelectionIds]);
 
   const openExamBuilder = useCallback(() => {
     if (selectedNoteIds.length === 0 || selectedQuizReadyCount === 0) {
@@ -1492,15 +1534,20 @@ export default function LibraryPage() {
                       Generate a quiz for at least one note to build an exam.
                     </p>
                   ) : null}
+                  {isTeacherExamBuilderEnabled && selectedUnresolvedCount > 0 ? (
+                    <p className="text-xs text-foreground/60">
+                      Quiz-ready count is based on the {selectedNotes.length} of {selectedNoteIds.length} selected notes currently loaded — load more or narrow your filters to see the full picture.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={toggleSelectAllFiltered}
-                    disabled={sortedFilteredItems.length === 0}
+                    onClick={() => void toggleSelectAllFiltered()}
+                    disabled={totalMatching === 0 || selectingAll}
                   >
-                    {allFilteredSelected ? "Deselect all" : `Select all (${sortedFilteredItems.length})`}
+                    {allFilteredSelected ? "Deselect all" : `Select all (${totalMatching})`}
                   </Button>
                   <Button type="button" variant="outline" onClick={resetSelectionMode}>
                     Cancel
@@ -1588,9 +1635,7 @@ export default function LibraryPage() {
             </div>
 
             <p className="border-t border-border pt-3 text-sm text-foreground/60">
-              {hasActiveFilters
-                ? `${sortedFilteredItems.length} of ${items.length} notes`
-                : `${items.length} notes`}
+              {totalMatching} note{totalMatching === 1 ? "" : "s"}{hasActiveFilters ? " matching your filters" : ""}
             </p>
 
             {(hasSavableFilter || (!savedFiltersUnavailable && (savedFiltersLoading || savedFilters.length > 0))) ? (
@@ -1732,7 +1777,7 @@ export default function LibraryPage() {
                 <p className="mr-1 text-xs font-medium uppercase tracking-wide text-foreground/55">
                   Subjects
                 </p>
-                {subjectFacets.topSubjects.map((subjectCount) => (
+                {subjectStats.topSubjects.map((subjectCount) => (
                   <button
                     key={subjectCount.subject}
                     type="button"
@@ -1743,16 +1788,16 @@ export default function LibraryPage() {
                     <span className="text-foreground/50">{subjectCount.count}</span>
                   </button>
                 ))}
-                {subjectFacets.otherSubjectsCount > 0 ? (
+                {subjectStats.otherSubjectsCount > 0 ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt px-3 py-1.5 text-sm font-medium text-foreground/55">
-                    Other {subjectFacets.otherSubjectsCount}
+                    Other {subjectStats.otherSubjectsCount}
                   </span>
                 ) : null}
               </div>
             ) : null}
           </Card>
 
-          {visibleItems.length === 0 ? (
+          {items.length === 0 ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <h2 className="text-base font-semibold sm:text-lg">
                 {readinessFilter === "DRAFT" ? "No draft notes" : "No notes match these filters"}
@@ -1770,7 +1815,7 @@ export default function LibraryPage() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {visibleItems.map((item) => {
+              {items.map((item) => {
                 const itemTags = normalizeTags(item.tags);
                 const examReady = canIncludeInExam(item);
                 const isSelected = selectedNoteIds.includes(item.id);
@@ -1858,7 +1903,10 @@ export default function LibraryPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setVisibleCount((previous) => previous + LIBRARY_PAGE_SIZE)}
+                onClick={() => void handleLoadMore()}
+                disabled={loadingMore}
+                loading={loadingMore}
+                loadingText="Loading..."
                 className="w-full sm:w-auto"
               >
                 Load more
