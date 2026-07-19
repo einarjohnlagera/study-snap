@@ -10,10 +10,14 @@ import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.NoteStatusResponse;
+import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
+import com.studysnap.backend.dto.NotesLibraryIdsResponse;
+import com.studysnap.backend.dto.NotesLibraryPageResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
+import com.studysnap.backend.dto.SubjectStatsResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.UserRole;
@@ -179,6 +183,73 @@ class NoteControllerTest {
 
         verify(noteService).listMineStatuses(routeUser.userId());
         verify(noteService, never()).getById("status", routeUser.userId());
+    }
+
+    @Test
+    void libraryRoutesResolveToDedicatedHandlersInsteadOfNoteIdHandler() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        when(noteService.listLibraryPage(
+                routeUser.userId(), null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 20
+        )).thenReturn(new NotesLibraryPageResponse(List.of(), 0, 20, 0, false));
+        when(noteService.listLibraryMatchingIds(
+                routeUser.userId(), null, "ALL", null, null, null, "ALL"
+        )).thenReturn(new NotesLibraryIdsResponse(List.of(), 0, false));
+        when(noteService.getLibrarySubjectStats(
+                routeUser.userId(), null, "ALL", null, null, "ALL"
+        )).thenReturn(new SubjectStatsResponse(List.of(), 0, 0));
+        when(noteService.getLibraryFilterOptions(routeUser.userId()))
+                .thenReturn(new NotesLibraryFilterOptionsResponse(List.of(), List.of(), List.of()));
+
+        mockMvc.perform(get("/notes/library"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.pageSize").value(20));
+        mockMvc.perform(get("/notes/library/ids"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.noteIds").isArray())
+                .andExpect(jsonPath("$.truncated").value(false));
+        mockMvc.perform(get("/notes/library/subject-stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.topSubjects").isArray())
+                .andExpect(jsonPath("$.total").value(0));
+        mockMvc.perform(get("/notes/library/filter-options"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects").isArray())
+                .andExpect(jsonPath("$.coursePrograms").isArray())
+                .andExpect(jsonPath("$.tags").isArray());
+
+        verify(noteService).listLibraryPage(
+                routeUser.userId(), null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 20
+        );
+        verify(noteService).listLibraryMatchingIds(
+                routeUser.userId(), null, "ALL", null, null, null, "ALL"
+        );
+        verify(noteService).getLibrarySubjectStats(
+                routeUser.userId(), null, "ALL", null, null, "ALL"
+        );
+        verify(noteService).getLibraryFilterOptions(routeUser.userId());
+        verify(noteService, never()).getById("library", routeUser.userId());
+    }
+
+    @Test
+    void listLibraryPageClampsPageAndPageSizeBeforeDelegating() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        NotesLibraryPageResponse expected = new NotesLibraryPageResponse(List.of(), 0, 100, 0, false);
+        when(noteService.listLibraryPage(
+                userId, null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 100
+        )).thenReturn(expected);
+
+        NotesLibraryPageResponse response = noteController.listLibraryPage(
+                null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", -1, 101, user
+        );
+
+        assertThat(response).isEqualTo(expected);
+        verify(noteService).listLibraryPage(
+                userId, null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 100
+        );
     }
 
     @Test

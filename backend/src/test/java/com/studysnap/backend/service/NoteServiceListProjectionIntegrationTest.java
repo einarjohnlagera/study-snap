@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
+import com.studysnap.backend.dto.NotesLibraryPageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
@@ -148,6 +149,44 @@ class NoteServiceListProjectionIntegrationTest {
         assertThat(selectStatements()).anySatisfy(sql -> assertThat(sql.toLowerCase())
                 .contains("content")
                 .doesNotContain("substring"));
+    }
+
+    @Test
+    void listLibraryPageMapsTheNativeFastPathIntoTheExistingListItemProjection() {
+        UUID ownerUserId = UUID.randomUUID();
+        NoteEntity newest = saveNote(
+                ownerUserId,
+                LONG_NOTE_TITLE,
+                "Cardiac assessment content",
+                BASE_TIME.plusHours(2),
+                NoteVisibility.PRIVATE
+        );
+        saveNote(
+                ownerUserId,
+                SHORT_NOTE_TITLE,
+                "Medication safety content",
+                BASE_TIME.plusHours(1),
+                NoteVisibility.PRIVATE
+        );
+        entityManager.flush();
+        entityManager.clear();
+        SqlCaptureStatementInspector.clear();
+
+        NotesLibraryPageResponse response = noteService.listLibraryPage(
+                ownerUserId, null, "ALL", null, null, List.of(), "ALL", "RECENTLY_UPDATED", 0, 1
+        );
+
+        assertThat(response.items()).singleElement()
+                .satisfies(item -> {
+                    assertThat(item.id()).isEqualTo(newest.getId().toString());
+                    assertThat(item.tags()).containsExactly(NOTE_TAGS);
+                    assertThat(item.targetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER.name());
+                });
+        assertThat(response.totalMatching()).isEqualTo(2);
+        assertThat(response.hasMore()).isTrue();
+        assertThat(selectStatements().stream()
+                .filter(sql -> !sql.toLowerCase().contains("copied_from_public=true")))
+                .hasSize(2);
     }
 
     private void assertListItemMatchesStoredNote(
