@@ -2,7 +2,7 @@
 
 ## v0.51.0 - Read-Path Performance Pass II
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: fix production slowness on Private Library, Public Library, Note Collection detail, and the Dashboard — unbounded backend queries and sequential frontend waterfalls diagnosed via direct codebase investigation and a Fable planning session (`docs/claude-prompt/production-performance-audit-out/01-production-performance-audit.md`), following the same discipline as `v0.38.0 - Read-Path Optimization Pass`.
 
