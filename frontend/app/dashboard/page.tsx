@@ -84,6 +84,7 @@ type TeacherGeneratedQuizSummary = {
 };
 
 const MAX_TEACHER_QUIZ_NOTES = 8;
+const DASHBOARD_NOTE_FETCH_LIMIT = 20;
 
 function formatDashboardDate(value: string): string {
   const parsed = new Date(value);
@@ -143,14 +144,13 @@ function resolveStudentPrimaryHref(
 
 function resolveChallengeQuizHref(
   recommendation: ContinueStudyingResponse | null,
-  notes: NoteListItemResponse[],
+  mostRecentReadyNoteId: string | null,
 ): string {
   if (recommendation?.noteId) {
     return `/notes/${recommendation.noteId}/challenge-quiz`;
   }
-  const recentReadyNote = notes.find((note) => note.studyPackStatus === "STUDY_PACK_READY");
-  if (recentReadyNote?.id) {
-    return `/notes/${recentReadyNote.id}/challenge-quiz`;
+  if (mostRecentReadyNoteId) {
+    return `/notes/${mostRecentReadyNoteId}/challenge-quiz`;
   }
   return "/notes/new";
 }
@@ -334,7 +334,7 @@ export default function DashboardPage() {
     setError(null);
     try {
       const [notesResult, meResult, continueStudyingResult, todayFocusResult, overviewResult] = await Promise.allSettled([
-        listNotes(),
+        listNotes(DASHBOARD_NOTE_FETCH_LIMIT),
         getMe(),
         getContinueStudyingRecommendation(),
         getTodayFocus(),
@@ -570,7 +570,9 @@ export default function DashboardPage() {
     () => resolveDashboardProfileType(profile?.profileType),
     [profile?.profileType],
   );
-  const hasCompletedSession = items.some((note) => (note.quizCount ?? 0) > 0);
+  const totalNoteCount = overview?.totalNoteCount ?? items.length;
+  const hasCompletedSession = overview?.hasQuizQuestions
+    ?? items.some((note) => (note.quizCount ?? 0) > 0);
   const latestCompletedTopic = recentReadyNotes.find((note) => (note.quizCount ?? 0) > 0)?.subject
     ?? recentReadyNotes.find((note) => (note.quizCount ?? 0) > 0)?.title
     ?? null;
@@ -600,8 +602,11 @@ export default function DashboardPage() {
     [continueStudying, recentNotes],
   );
   const boardExamChallengeHref = useMemo(
-    () => resolveChallengeQuizHref(continueStudying, items),
-    [continueStudying, items],
+    () => resolveChallengeQuizHref(
+      continueStudying,
+      overview?.mostRecentReadyNoteId ?? recentReadyNotes[0]?.id ?? null,
+    ),
+    [continueStudying, overview?.mostRecentReadyNoteId, recentReadyNotes],
   );
   const examCountdown = useMemo(
     () => formatExamCountdown(profile?.examDate ?? null),
@@ -781,12 +786,12 @@ export default function DashboardPage() {
                 lockedActionLabel="Unlock Adaptive Practice"
                 onUnlockAdaptivePractice={() => setActivePaywallModal("adaptive-practice")}
               />
-              {items.length === 0 ? (
+              {totalNoteCount === 0 ? (
                 <DashboardEmpty profileType={dashboardProfileType} />
               ) : (
                 <StudyPackGrid
                   notes={recentNotes}
-                  totalNotes={items.length}
+                  totalNotes={totalNoteCount}
                   recentNoteMetaById={recentNoteMetaById}
                   title="Recent Notes"
                   countLabel="saved"
@@ -798,7 +803,7 @@ export default function DashboardPage() {
                 profileType={profile?.profileType ?? null}
                 primaryCollectionId={profile?.primaryCollectionId ?? null}
                 viewAllHref="/collections/published?ref=/dashboard"
-                browseWhenEmpty={items.length === 0}
+                browseWhenEmpty={totalNoteCount === 0}
               />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}
@@ -880,7 +885,7 @@ export default function DashboardPage() {
                 profileType={profile?.profileType ?? null}
                 primaryCollectionId={profile?.primaryCollectionId ?? null}
                 viewAllHref="/collections/published?ref=/dashboard"
-                browseWhenEmpty={items.length === 0}
+                browseWhenEmpty={totalNoteCount === 0}
               />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}
@@ -915,7 +920,7 @@ export default function DashboardPage() {
                 emptyActionLabel={teacherGeneratedQuizEmptyAction.label}
                 emptyActionIcon={teacherGeneratedQuizEmptyAction.icon}
               />
-              {items.length === 0 ? (
+              {totalNoteCount === 0 ? (
                 <Card className="space-y-4 p-4 sm:p-6">
                   <h2 className="text-lg font-semibold sm:text-xl">Start your teaching workspace</h2>
                   <p className="max-w-2xl text-sm text-foreground/75">
@@ -929,7 +934,7 @@ export default function DashboardPage() {
               ) : (
                 <StudyPackGrid
                   notes={recentNotes}
-                  totalNotes={items.length}
+                  totalNotes={totalNoteCount}
                   recentNoteMetaById={{}}
                   title="Recent Notes"
                   countLabel="notes"

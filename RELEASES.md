@@ -14,7 +14,7 @@ Anti-drift: read-path performance only, following F1/F2/F6's precedent from v0.5
 
 ### Shipped
 
-_(nothing yet)_
+- **Dashboard Stage-1 bounded fetch (backend + frontend).** Dashboard now requests only the 20 most-recently-updated owned notes from the existing `GET /notes?limit=` path while `GET /dashboard/overview` supplies the exact total owned-note count, an owner-scoped quiz-question existence signal, and the id of the most-recently-updated note whose resolved status is `STUDY_PACK_READY`. The count and boolean preserve empty states, Recent Notes totals, and first-time card ordering beyond the bounded page; the ready-note id preserves Challenge Quiz / Board Exam fallback routing, with the bounded page retained as a safe fallback when overview loading fails.
 
 ## v0.51.0 - Read-Path Performance Pass II
 

@@ -265,12 +265,20 @@ public class DashboardService {
         DashboardFocusAreasResponse focusAreas = buildFocusAreas(completedChallengeSessions, planType);
         DashboardWeeklyActivityResponse weeklyActivity = buildWeeklyActivity(userId);
         ExamPacingPlanResponse examPacingPlan = resolveExamPacingPlan(userId, OffsetDateTime.now(ZoneOffset.UTC));
+        long totalNoteCount = noteRepository.countByOwnerUserId(userId);
+        boolean hasQuizQuestions = noteRepository.existsOwnedNoteWithQuizQuestions(userId);
+        String mostRecentReadyNoteId = noteRepository.findMostRecentlyUpdatedStudyPackReadyNoteId(userId)
+                .map(UUID::toString)
+                .orElse(null);
 
         return new DashboardOverviewResponse(
                 performanceSummary,
                 focusAreas,
                 weeklyActivity,
-                examPacingPlan
+                examPacingPlan,
+                totalNoteCount,
+                hasQuizQuestions,
+                mostRecentReadyNoteId
         );
     }
 

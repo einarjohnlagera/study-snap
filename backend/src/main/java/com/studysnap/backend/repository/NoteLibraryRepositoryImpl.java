@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -81,6 +82,15 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
                    n.course_program as "courseProgram"
             """;
     private static final String NOTES_FROM = " from notes n ";
+    private static final String STUDY_PACK_READY_PREDICATE = """
+            (
+                n.status = 'GENERATED'
+                or (
+                    (n.status is null or n.status = 'DRAFT')
+                    and exists (select 1 from study_packs sp where sp.note_id = n.id)
+                )
+            )
+            """;
 
     private final EntityManager entityManager;
     private final SpelAwareProxyProjectionFactory projectionFactory = new SpelAwareProxyProjectionFactory();
@@ -229,6 +239,32 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
                 .toList();
     }
 
+    @Override
+    public boolean existsOwnedNoteWithQuizQuestions(UUID ownerUserId) {
+        String quizCount = StudyPackQuizSqlExpressions.quizCount("sp", isPostgres());
+        Query query = entityManager.createNativeQuery("""
+                select n.id
+                from notes n
+                join study_packs sp on sp.note_id = n.id
+                where n.owner_user_id = :ownerUserId
+                  and (""" + quizCount + ") > 0");
+        query.setParameter(OWNER_USER_ID_ALIAS, ownerUserId);
+        query.setMaxResults(1);
+        return !rawResults(query).isEmpty();
+    }
+
+    @Override
+    public Optional<UUID> findMostRecentlyUpdatedStudyPackReadyNoteId(UUID ownerUserId) {
+        Query query = entityManager.createNativeQuery("""
+                select n.id
+                from notes n
+                where n.owner_user_id = :ownerUserId
+                  and """ + STUDY_PACK_READY_PREDICATE + " order by n.updated_at desc");
+        query.setParameter(OWNER_USER_ID_ALIAS, ownerUserId);
+        query.setMaxResults(1);
+        return rawResults(query).stream().findFirst().map(this::toUuid);
+    }
+
     private FilterSql buildFilter(NoteLibraryFilterCriteria criteria) {
         StringBuilder where = new StringBuilder(" where n.owner_user_id = :ownerUserId");
         Map<String, Object> parameters = new LinkedHashMap<>();
@@ -285,15 +321,7 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
                      and (n.status is null or n.status = 'DRAFT')
                      and not exists (select 1 from study_packs sp where sp.note_id = n.id)
                     """);
-            case STUDY_PACK_READY -> where.append("""
-                     and (
-                         n.status = 'GENERATED'
-                         or (
-                             (n.status is null or n.status = 'DRAFT')
-                             and exists (select 1 from study_packs sp where sp.note_id = n.id)
-                         )
-                     )
-                    """);
+            case STUDY_PACK_READY -> where.append(" and ").append(STUDY_PACK_READY_PREDICATE);
             case QUIZ_READY -> where.append("""
                      and exists (
                          select 1

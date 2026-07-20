@@ -416,6 +416,9 @@ export type DashboardOverviewResponse = {
   focusAreas: DashboardFocusAreasResponse;
   weeklyActivity: DashboardWeeklyActivityResponse;
   examPacingPlan: ExamPacingPlanResponse | null;
+  totalNoteCount: number;
+  hasQuizQuestions: boolean;
+  mostRecentReadyNoteId: string | null;
 };
 
 export type ProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL";

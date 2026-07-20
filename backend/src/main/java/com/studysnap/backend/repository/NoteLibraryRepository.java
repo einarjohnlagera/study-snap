@@ -5,6 +5,7 @@ import com.studysnap.backend.model.NoteListItemProjection;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface NoteLibraryRepository {
@@ -35,4 +36,8 @@ public interface NoteLibraryRepository {
     List<NoteLibraryValueCountProjection> countLibraryCoursePrograms(UUID ownerUserId);
 
     List<NoteLibraryValueCountProjection> countLibraryTags(UUID ownerUserId);
+
+    boolean existsOwnedNoteWithQuizQuestions(UUID ownerUserId);
+
+    Optional<UUID> findMostRecentlyUpdatedStudyPackReadyNoteId(UUID ownerUserId);
 }

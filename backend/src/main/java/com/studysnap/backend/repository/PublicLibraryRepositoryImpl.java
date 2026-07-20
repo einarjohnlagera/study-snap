@@ -136,9 +136,7 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
             PublicLibraryFilterCriteria criteria
     ) {
         FilterSql filter = buildFilter(criteria);
-        String quizCount = isPostgres()
-                ? "case when sp.quiz is null then 0 else jsonb_array_length(sp.quiz) end"
-                : "case when sp.quiz is null or trim(cast(sp.quiz as varchar)) in ('', '[]', 'null') then 0 else 1 end";
+        String quizCount = StudyPackQuizSqlExpressions.quizCount("sp", isPostgres());
         String candidateSelect = """
                 select n.id as id,
                        n.owner_user_id as "ownerUserId",
