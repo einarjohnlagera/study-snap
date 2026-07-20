@@ -32,6 +32,7 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
     Optional<NoteEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
     Optional<NoteEntity> findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(UUID ownerUserId, UUID copiedFromNoteId);
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
+    long countByOwnerUserId(UUID ownerUserId);
 
     @Query("""
             select n.id as id,

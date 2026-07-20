@@ -118,6 +118,9 @@ const overview = {
     studyDays: 2,
   },
   examPacingPlan: null,
+  totalNoteCount: 25,
+  hasQuizQuestions: true,
+  mostRecentReadyNoteId: "note-1",
 };
 
 const publicNotes = [
@@ -231,12 +234,14 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByRole("link", { name: "Resume Quick Review" })).toHaveAttribute("href", "/notes/note-1/quick-review");
     expect(screen.getByText("Weak Concepts")).toBeInTheDocument();
     expect(screen.getByText("Recent Notes")).toBeInTheDocument();
+    expect(screen.getByText("25 saved")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "See all in Public Library →" })).toHaveAttribute("href", "/public/library?courseProgram=PNLE");
     expect(screen.getByText("Quick Review")).toBeInTheDocument();
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
     expect(screen.queryByText("Create Quiz")).not.toBeInTheDocument();
+    expect(listNotes).toHaveBeenCalledWith(20);
   });
 
   it("batches Quick Review timestamps once for all eligible recent notes", async () => {
@@ -315,6 +320,10 @@ describe("DashboardPage profile variants", () => {
       },
     });
     (listNotes as jest.Mock).mockResolvedValue(notes.map((note) => ({ ...note, quizCount: 0 })));
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      hasQuizQuestions: false,
+    });
 
     const firstTimeRender = render(<DashboardPage />);
     const firstTimeQuickReview = await screen.findByText("Quick Review");
@@ -324,6 +333,10 @@ describe("DashboardPage profile variants", () => {
 
     firstTimeRender.unmount();
     (listNotes as jest.Mock).mockResolvedValue(notes);
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      hasQuizQuestions: true,
+    });
 
     render(<DashboardPage />);
     const returningQuickReview = await screen.findByText("Quick Review");
@@ -665,6 +678,93 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByRole("link", { name: "Practice Weak Areas" })).toBeInTheDocument();
   });
 
+  it("routes Board Exam to the overview's most-recent ready note outside the bounded page", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Board",
+      displayName: "Board",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 21,
+      profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
+      examDate: "2099-05-15",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
+    (getContinueStudyingRecommendation as jest.Mock).mockResolvedValue(null);
+    (listNotes as jest.Mock).mockResolvedValue(notes.map((note) => ({
+      ...note,
+      studyPackStatus: "DRAFT",
+      studyPackId: null,
+    })));
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      totalNoteCount: 21,
+      mostRecentReadyNoteId: "ready-note-outside-page",
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("link", { name: "Start Board Exam" })).toHaveAttribute(
+      "href",
+      "/notes/ready-note-outside-page/challenge-quiz",
+    );
+  });
+
+  it("falls back to bounded note signals when the overview fetch fails", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      courseProgram: "PNLE",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10, challengeQuizzesPerMonth: 5, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
+      },
+    });
+    (getDashboardOverview as jest.Mock).mockRejectedValue(new Error("overview unavailable"));
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Recent Notes")).toBeInTheDocument();
+    expect(screen.getByText("2 saved")).toBeInTheDocument();
+    const quickReview = screen.getByText("Quick Review");
+    const usage = screen.getByText("Usage / Progress");
+    expect(usage.compareDocumentPosition(quickReview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "We could not load your notes" })).not.toBeInTheDocument();
+  });
+
+  it("falls back to the bounded ready note for Board Exam when the overview fetch fails", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Board",
+      displayName: "Board",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
+      examDate: "2099-05-15",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
+    (getContinueStudyingRecommendation as jest.Mock).mockResolvedValue(null);
+    (getDashboardOverview as jest.Mock).mockRejectedValue(new Error("overview unavailable"));
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("link", { name: "Start Board Exam" })).toHaveAttribute(
+      "href",
+      "/notes/note-1/challenge-quiz",
+    );
+  });
+
   it("shows the pacing line instead of the plain countdown when the backend provides an exam pacing plan", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       firstName: "Board",
@@ -720,6 +820,7 @@ describe("DashboardPage profile variants", () => {
     render(<DashboardPage />);
 
     expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
+    expect(screen.getByText("25 saved")).toBeInTheDocument();
   });
 
   it("renders the teacher dashboard with material and quiz-focused sections", async () => {
@@ -754,6 +855,7 @@ describe("DashboardPage profile variants", () => {
       screen.getByText("Welcome to NoteLib! Start by creating a note, then generate a Study Pack and review the quiz in Quiz Preview."),
     ).toBeInTheDocument();
     expect(screen.getByText("Recent Notes")).toBeInTheDocument();
+    expect(screen.getByText("25 notes")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
     expect(screen.getByText("Recently Generated Quizzes")).toBeInTheDocument();
     expect(screen.getByText("Ready to Export")).toBeInTheDocument();
@@ -837,6 +939,12 @@ describe("DashboardPage profile variants", () => {
       onboardingCompletedAt: "2026-03-20T00:00:00Z",
     });
     (listNotes as jest.Mock).mockResolvedValue([]);
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      totalNoteCount: 0,
+      hasQuizQuestions: false,
+      mostRecentReadyNoteId: null,
+    });
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
         plan: "FREE",
@@ -864,6 +972,12 @@ describe("DashboardPage profile variants", () => {
       onboardingCompletedAt: "2026-03-20T00:00:00Z",
     });
     (listNotes as jest.Mock).mockResolvedValue([]);
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      totalNoteCount: 0,
+      hasQuizQuestions: false,
+      mostRecentReadyNoteId: null,
+    });
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
         plan: "FREE",
@@ -877,5 +991,57 @@ describe("DashboardPage profile variants", () => {
     expect(await screen.findByText("Start studying smarter")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Import files" })).toHaveAttribute("href", "/notes/import");
     expect(screen.getByRole("link", { name: "Create a note" })).toHaveAttribute("href", "/notes/new");
+  });
+
+  it("shows the Teacher empty state from the overview's zero total", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Teach",
+      displayName: "Teach",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 0,
+      profileType: "TEACHER",
+      courseProgram: "PNLE",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
+    (listNotes as jest.Mock).mockResolvedValue([]);
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      totalNoteCount: 0,
+      hasQuizQuestions: false,
+      mostRecentReadyNoteId: null,
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Start your teaching workspace")).toBeInTheDocument();
+    expect(screen.queryByText("Recent Notes")).not.toBeInTheDocument();
+  });
+
+  it("keeps the Board Exam browse-empty plan state tied to the overview's zero total", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Board",
+      displayName: "Board",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 0,
+      profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
+      examDate: "2099-05-15",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
+    (listNotes as jest.Mock).mockResolvedValue([]);
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      totalNoteCount: 0,
+      hasQuizQuestions: false,
+      mostRecentReadyNoteId: null,
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText(/We don't have an official/)).toBeInTheDocument();
   });
 });

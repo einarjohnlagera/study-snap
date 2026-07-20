@@ -5,6 +5,10 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
+import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteStatus;
+import com.studysnap.backend.entity.NoteTargetProfileType;
+import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.QuickReviewRound;
@@ -17,6 +21,10 @@ import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
+import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicNoteLikeRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -43,10 +51,14 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 
 @SpringBootTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.studysnap.backend.testutil.SqlCaptureStatementInspector")
 @Transactional
 class DashboardServiceProjectionIntegrationTest {
+    private static final int DASHBOARD_NOTE_FETCH_LIMIT = 20;
     private static final OffsetDateTime BASE_TIME = OffsetDateTime.parse("2026-06-01T10:00:00Z");
     private static final String SESSION_METADATA_CONCEPT_BREAKDOWN = "conceptBreakdown";
     private static final String CARDIOLOGY_CONCEPT = "Cardiology";
@@ -59,6 +71,8 @@ class DashboardServiceProjectionIntegrationTest {
     @Autowired
     private StudyPackRepository studyPackRepository;
     @Autowired
+    private NoteRepository noteRepository;
+    @Autowired
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -66,6 +80,8 @@ class DashboardServiceProjectionIntegrationTest {
     private EntityManager entityManager;
     @Autowired
     private StubConceptHealthService conceptHealthService;
+
+    private NoteService noteService;
 
     @BeforeEach
     void initSchema() {
@@ -119,6 +135,28 @@ class DashboardServiceProjectionIntegrationTest {
                     product_onboarding_completed_at timestamp with time zone,
                     primary_collection_id uuid,
                     study_days_per_week integer,
+                    created_at timestamp with time zone not null,
+                    updated_at timestamp with time zone not null
+                )
+                """);
+        jdbcTemplate.execute("""
+                create table if not exists notes (
+                    id uuid primary key,
+                    owner_user_id uuid not null,
+                    title text,
+                    subject varchar(64),
+                    course_program varchar(120),
+                    tags varchar array not null,
+                    content text not null,
+                    status varchar(16) not null,
+                    visibility varchar(16) not null,
+                    target_profile_type varchar(16) not null,
+                    source_note_id uuid,
+                    copied_from_note_id uuid,
+                    copied_from_user_id uuid,
+                    copied_from_title varchar(255),
+                    copied_from_public boolean,
+                    copied_at timestamp with time zone,
                     created_at timestamp with time zone not null,
                     updated_at timestamp with time zone not null
                 )
@@ -186,9 +224,64 @@ class DashboardServiceProjectionIntegrationTest {
         jdbcTemplate.execute("delete from quick_review_sessions");
         jdbcTemplate.execute("delete from study_packs");
         jdbcTemplate.execute("delete from user_activity_events");
+        jdbcTemplate.execute("delete from notes");
         jdbcTemplate.execute("delete from users");
         conceptHealthService.reset();
+        noteService = createNoteService();
         SqlCaptureStatementInspector.clear();
+    }
+
+    @Test
+    void getOverviewPreservesUnboundedNoteSignalsBeyondTheStageOneLimit() {
+        UUID userId = UUID.randomUUID();
+        saveUser(userId, ProfileType.STUDENT, null);
+        NoteEntity oldestReadyNote = null;
+        for (int index = 0; index <= DASHBOARD_NOTE_FETCH_LIMIT; index++) {
+            boolean oldest = index == DASHBOARD_NOTE_FETCH_LIMIT;
+            NoteEntity note = saveNote(
+                    userId,
+                    "Note " + index,
+                    BASE_TIME.minusHours(index),
+                    oldest ? NoteStatus.GENERATED : NoteStatus.DRAFT
+            );
+            if (oldest) {
+                oldestReadyNote = note;
+                saveStudyPack(userId, note.getId(), List.of("Older ready concept"), List.of(
+                        new QuizItem("Question", List.of("A", "B"), "A", "Older ready concept", "Explanation")
+                ));
+            }
+        }
+        entityManager.flush();
+        entityManager.clear();
+
+        var unboundedItems = noteService.listMine(userId);
+        var boundedItems = noteService.listMine(userId, DASHBOARD_NOTE_FETCH_LIMIT);
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(unboundedItems).hasSize(DASHBOARD_NOTE_FETCH_LIMIT + 1);
+        assertThat(boundedItems).hasSize(DASHBOARD_NOTE_FETCH_LIMIT);
+        assertThat(boundedItems).noneMatch(item -> (item.quizCount() == null ? 0 : item.quizCount()) > 0);
+        assertThat(response.totalNoteCount()).isEqualTo(unboundedItems.size());
+        assertThat(response.hasQuizQuestions()).isEqualTo(
+                unboundedItems.stream().anyMatch(item -> (item.quizCount() == null ? 0 : item.quizCount()) > 0)
+        );
+        assertThat(response.hasQuizQuestions()).isTrue();
+        assertThat(response.mostRecentReadyNoteId()).isEqualTo(oldestReadyNote.getId().toString());
+    }
+
+    @Test
+    void getOverviewReturnsEmptyNoteSignalsWhenTheUserOwnsNoNotes() {
+        UUID userId = UUID.randomUUID();
+        saveUser(userId, ProfileType.STUDENT, null);
+        entityManager.flush();
+        entityManager.clear();
+
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(noteService.listMine(userId)).isEmpty();
+        assertThat(response.totalNoteCount()).isZero();
+        assertThat(response.hasQuizQuestions()).isFalse();
+        assertThat(response.mostRecentReadyNoteId()).isNull();
     }
 
     @Test
@@ -262,6 +355,7 @@ class DashboardServiceProjectionIntegrationTest {
         List<String> studyPackProjectionSelects = selects.stream()
                 .filter(sql -> sql.toLowerCase().contains("study_packs"))
                 .filter(sql -> !sql.toLowerCase().contains("count("))
+                .filter(sql -> sql.toLowerCase().contains("key_concepts"))
                 .toList();
 
         assertThat(sessionSelects).hasSize(2);
@@ -309,15 +403,29 @@ class DashboardServiceProjectionIntegrationTest {
     }
 
     private StudyPackEntity saveStudyPack(UUID userId, List<String> keyConcepts) {
+        return saveStudyPack(
+                userId,
+                UUID.randomUUID(),
+                keyConcepts,
+                List.of(new QuizItem("Question", List.of("A", "B"), "A", CARDIOLOGY_CONCEPT, "Explanation"))
+        );
+    }
+
+    private StudyPackEntity saveStudyPack(
+            UUID userId,
+            UUID noteId,
+            List<String> keyConcepts,
+            List<QuizItem> quiz
+    ) {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(UUID.randomUUID());
         studyPack.setOwnerUserId(userId);
-        studyPack.setNoteId(UUID.randomUUID());
+        studyPack.setNoteId(noteId);
         studyPack.setInputType(InputType.TEXT);
         studyPack.setTitle("Study Pack");
         studyPack.setSummary("Large generated summary must not be selected.");
         studyPack.setKeyConcepts(keyConcepts);
-        studyPack.setQuiz(List.of(new QuizItem("Question", List.of("A", "B"), "A", CARDIOLOGY_CONCEPT, "Explanation")));
+        studyPack.setQuiz(quiz);
         studyPack.setModelTier(ModelTier.FREE);
         studyPack.setModelUsed("test-model");
         studyPack.setStatus(StudyPackStatus.DONE);
@@ -325,6 +433,54 @@ class DashboardServiceProjectionIntegrationTest {
         studyPack.setUpdatedAt(BASE_TIME);
         studyPack.setTags(new String[]{"test"});
         return studyPackRepository.save(studyPack);
+    }
+
+    private NoteEntity saveNote(UUID userId, String title, OffsetDateTime updatedAt, NoteStatus status) {
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setOwnerUserId(userId);
+        note.setTitle(title);
+        note.setSubject("Test subject");
+        note.setCourseProgram("Test program");
+        note.setTags(new String[]{"test"});
+        note.setContent("Test note content");
+        note.setStatus(status);
+        note.setVisibility(NoteVisibility.PRIVATE);
+        note.setTargetProfileType(NoteTargetProfileType.STUDENT);
+        note.setCopiedFromPublic(false);
+        note.setCreatedAt(updatedAt);
+        note.setUpdatedAt(updatedAt);
+        return noteRepository.save(note);
+    }
+
+    private NoteService createNoteService() {
+        AnalyticsEventRepository analyticsEventRepository = mock(AnalyticsEventRepository.class);
+        PublicNoteLikeRepository publicNoteLikeRepository = mock(PublicNoteLikeRepository.class);
+        GeneratedQuizRepository generatedQuizRepository = mock(GeneratedQuizRepository.class);
+        QuizSessionHistoryService quizSessionHistoryService = mock(QuizSessionHistoryService.class);
+
+        lenient().when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(any(), any()))
+                .thenReturn(List.of());
+        lenient().when(publicNoteLikeRepository.countLikesByNoteIds(any())).thenReturn(List.of());
+        lenient().when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(any(), any()))
+                .thenReturn(List.of());
+        lenient().when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(any(), any())).thenReturn(List.of());
+        lenient().when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(any(), any()))
+                .thenReturn(Map.of());
+        return new NoteService(
+                noteRepository,
+                analyticsEventRepository,
+                publicNoteLikeRepository,
+                studyPackRepository,
+                generatedQuizRepository,
+                userRepository,
+                quizSessionHistoryService,
+                mock(SubscriptionService.class),
+                mock(FeatureGateService.class),
+                mock(AnalyticsService.class),
+                mock(ContentModerationService.class),
+                mock(OnboardingGuardService.class)
+        );
     }
 
     private void saveCompletedSession(
