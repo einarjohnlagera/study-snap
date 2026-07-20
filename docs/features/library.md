@@ -61,7 +61,7 @@ Interaction:
 - note actions belong in Note Detail
 - Teacher/Admin Library adds a teacher-only `Select` mode instead of changing default card behavior:
   - each note shows a checkbox while selection mode is active
-  - the selection toolbar (shared by plan creation and teacher exam selection) has a `Select all` / `Deselect all` toggle scoped to the active filters — it selects all filter-matching notes (including those beyond the first display page, since the filtered set is computed client-side); deselect-all clears only the currently-filtered set (v0.33.0)
+  - the selection toolbar (shared by plan creation and teacher exam selection) has a `Select all` / `Deselect all` toggle scoped to the active filters; it resolves the complete matching id set through `GET /notes/library/ids` instead of selecting only the loaded page, with a stable 1,000-id cap and an explicit toast when the result is truncated. Deselect-all clears that resolved filtered set. Because selected ids can extend beyond loaded note cards, the teacher exam flow labels its quiz-ready count as covering only the selected notes currently loaded and suggests loading more or narrowing the filters when some selections are unresolved (v0.51.0).
   - only notes with a stored `generatedQuiz` can be selected for exam export
   - non-quiz-ready notes stay visible but show a disabled checkbox plus `Generate a quiz first` guidance
   - selected notes open `Exam Builder`, where teachers can:
@@ -80,7 +80,7 @@ Interaction:
 Shared list controls:
 
 - order is always `Search`, `Filter`, `Sort`, then notes list
-- the `Search` field shows an inline clear (`×`) button when it has text, mirroring the combobox clear affordance; clicking it runs the normal search-change path (live for the private library, debounced URL sync for the public library), not just a textbox reset. It is distinct from the filter panel's `Clear all`, which resets every active filter. Search inputs use a 16px font on mobile to avoid iOS Safari focus-zoom.
+- the `Search` field shows an inline clear (`×`) button when it has text, mirroring the combobox clear affordance; clicking it runs the normal search-change path (debounced server filtering and URL sync for the private library, debounced URL sync for the public library), not just a textbox reset. It is distinct from the filter panel's `Clear all`, which resets every active filter. Search inputs use a 16px font on mobile to avoid iOS Safari focus-zoom.
 - on mobile, `Filter` and `Sort` open shared bottom-sheet/modal controls instead of staying always visible
 
 Private Library filters:
@@ -116,7 +116,7 @@ Private Library filter persistence:
 - Filter state is reflected in URL query params (`q`, `subject`, `cp`, `tags`, `status`, `sort`); state is initialized from the URL on mount so deep links and browser back/forward work correctly.
 - When navigating from a note card to Note Detail, the current filter URL is encoded as a `?ref=` param on the note URL (e.g. `/notes/{id}?from=library&ref=%2Flibrary%3Ftags%3DReview`). The note detail "← Library" back link reads `ref` to restore the exact filtered state.
 - The `?ref=` approach is used instead of `sessionStorage` because Next.js Router Cache keys by URL; sessionStorage state would be restored from cache when revisiting the same note within the cache TTL, breaking the back link for different filter contexts.
-- The three filter-pruning effects (subject, courseProgram, tags — which remove selections no longer present in loaded items) are gated by `loading` state. They do not run during initial load so URL-restored selections survive until items are fetched and pruning is valid.
+- Subject, course/program, and tag pruning uses the whole-library `GET /notes/library/filter-options` response rather than the current page. The effects wait for a successful options response, so URL-restored filters survive initial loading and an options-endpoint failure does not silently clear them.
 
 Private Library sorting:
 
@@ -127,11 +127,18 @@ Private Library sorting:
 - `Title (Z-A)`
 - `Oldest`
 
+Private Library pagination and filtering:
+
+- initial load requests page 0 with 20 notes from `GET /notes/library`; search, filter, and sort changes use the existing 400ms URL-sync debounce to replace that page with fresh server-filtered results
+- `Load more` requests and appends the next server page; note objects are not re-filtered, re-sorted, or sliced from an unbounded browser array
+- the lean, unfiltered `GET /notes/status` poll remains the discovery signal for newly materialized bulk rows; when it detects growth or a generating-status resolution, the enriched refresh is limited to the currently loaded filtered window, capped at 100 notes
+- the summary line reports the backend `totalMatching` value and labels it as matching the active filters when applicable
+
 ### Stats Strip
 
 The private Library shows a compact subject stats strip inside the filter card, between the filter controls and the note list.
 
-The strip is **faceted**: counts are computed **client-side** from the already-loaded note list (`listNotes()` returns the full library), over the notes matching every active filter **except** subject. So the chips always reflect the current view — when a Course/Program, tag, search, or readiness filter is active, only the subjects present in that filtered set appear, with counts for those notes. With no filters active, it shows the whole-library subject breakdown. There is no dedicated stats endpoint.
+The strip is **faceted** over notes matching every active filter **except** subject. The frontend reads it from `GET /notes/library/subject-stats` alongside page-0 filter refreshes; the endpoint returns the top 6 subjects, the summed remainder, and the filtered total. Its subject buckets use the same normalized subject → course/program → `General` fallback as the Library filter, so the browser no longer needs the full note array to compute the strip.
 
 Behavior:
 

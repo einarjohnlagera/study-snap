@@ -22,10 +22,12 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
-import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
+import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import com.studysnap.backend.repository.QuickReviewSessionScoreAggregate;
 import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -256,11 +258,10 @@ class DashboardServiceTest {
                 )
         );
 
-        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
-                userId,
-                QuickReviewSessionMode.QUICK_REVIEW,
-                Pageable.unpaged()
-        )).thenReturn(toSummaryProjections(List.of(quickReview)));
+        when(quickReviewSessionRepository.getCompletedQuizSessionScoreAggregate(
+                eq(userId),
+                eq(List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE))
+        )).thenReturn(scoreAggregate(3, new BigDecimal("205")));
         when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                 userId,
                 QuickReviewSessionMode.CHALLENGE
@@ -298,11 +299,10 @@ class DashboardServiceTest {
     void getOverview_marksAdaptivePracticeAvailableForFreeUsersWithQuota() {
         UUID userId = UUID.randomUUID();
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
-        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
-                userId,
-                QuickReviewSessionMode.QUICK_REVIEW,
-                Pageable.unpaged()
-        )).thenReturn(List.of());
+        when(quickReviewSessionRepository.getCompletedQuizSessionScoreAggregate(
+                eq(userId),
+                eq(List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE))
+        )).thenReturn(scoreAggregate(0, BigDecimal.ZERO));
         when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                 userId,
                 QuickReviewSessionMode.CHALLENGE
@@ -317,6 +317,8 @@ class DashboardServiceTest {
         DashboardOverviewResponse response = dashboardService.getOverview(userId);
 
         assertThat(response.focusAreas().adaptivePracticeAvailable()).isTrue();
+        assertThat(response.performanceSummary().averageQuizScore()).isNull();
+        assertThat(response.performanceSummary().totalQuizzesTaken()).isZero();
     }
 
     @Test
@@ -333,12 +335,14 @@ class DashboardServiceTest {
         firstStudyPack.setKeyConcepts(List.of("A", "B"));
         secondStudyPack.setKeyConcepts(List.of("C", "D", "E"));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(userId, Pageable.unpaged()))
-                .thenReturn(List.of(firstStudyPack, secondStudyPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId))
+                .thenReturn(List.of(toProgressProjection(firstStudyPack), toProgressProjection(secondStudyPack)));
         when(conceptHealthService.getDueConceptsByStudyPackIds(eq(userId), any(), any(OffsetDateTime.class)))
                 .thenReturn(Map.of(firstStudyPackId, List.of("A", "B"), secondStudyPackId, List.of("C", "D", "E")));
-        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
-                userId, QuickReviewSessionMode.QUICK_REVIEW, Pageable.unpaged())).thenReturn(List.of());
+        when(quickReviewSessionRepository.getCompletedQuizSessionScoreAggregate(
+                eq(userId),
+                eq(List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE))
+        )).thenReturn(scoreAggregate(0, BigDecimal.ZERO));
         when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                 userId, QuickReviewSessionMode.CHALLENGE)).thenReturn(List.of());
         when(studyPackRepository.countByOwnerUserId(userId)).thenReturn(2L);
@@ -425,8 +429,8 @@ class DashboardServiceTest {
         studyPack.setKeyConcepts(List.of("A"));
         stubOverviewCollaborators(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(userId, Pageable.unpaged()))
-                .thenReturn(List.of(studyPack));
+        when(studyPackRepository.findProgressViewsByOwnerUserId(userId))
+                .thenReturn(List.of(toProgressProjection(studyPack)));
         when(conceptHealthService.getDueConceptsByStudyPackIds(eq(userId), any(), any(OffsetDateTime.class)))
                 .thenReturn(Map.of(studyPackId, List.of()));
 
@@ -436,8 +440,10 @@ class DashboardServiceTest {
     }
 
     private void stubOverviewCollaborators(UUID userId) {
-        when(quickReviewSessionRepository.findCompletedSessionSummariesByUserIdAndSessionModeOrderByCompletedAtDesc(
-                userId, QuickReviewSessionMode.QUICK_REVIEW, Pageable.unpaged())).thenReturn(List.of());
+        when(quickReviewSessionRepository.getCompletedQuizSessionScoreAggregate(
+                eq(userId),
+                eq(List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE))
+        )).thenReturn(scoreAggregate(0, BigDecimal.ZERO));
         when(quickReviewSessionRepository.findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
                 userId, QuickReviewSessionMode.CHALLENGE)).thenReturn(List.of());
         when(studyPackRepository.countByOwnerUserId(userId)).thenReturn(0L);
@@ -1364,6 +1370,44 @@ class DashboardServiceTest {
                 session.getCreatedAt(),
                 session.getCompletedAt()
         );
+    }
+
+    private QuickReviewSessionScoreAggregate scoreAggregate(long count, BigDecimal totalScore) {
+        return new QuickReviewSessionScoreAggregate(count, totalScore);
+    }
+
+    private StudyPackProgressProjection toProgressProjection(StudyPackEntity studyPack) {
+        return new StudyPackProgressProjection() {
+            @Override
+            public UUID getId() {
+                return studyPack.getId();
+            }
+
+            @Override
+            public UUID getNoteId() {
+                return studyPack.getNoteId();
+            }
+
+            @Override
+            public UUID getOwnerUserId() {
+                return studyPack.getOwnerUserId();
+            }
+
+            @Override
+            public String getSubject() {
+                return studyPack.getSubject();
+            }
+
+            @Override
+            public List<String> getKeyConcepts() {
+                return studyPack.getKeyConcepts();
+            }
+
+            @Override
+            public com.studysnap.backend.entity.StudyPackStatus getStatus() {
+                return studyPack.getStatus();
+            }
+        };
     }
 
     private List<QuickReviewSessionMetadataProjection> toMetadataProjections(List<QuickReviewSessionEntity> sessions) {

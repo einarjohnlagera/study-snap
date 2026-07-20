@@ -9,10 +9,16 @@ import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatusResponse;
+import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
+import com.studysnap.backend.dto.NotesLibraryIdsResponse;
+import com.studysnap.backend.dto.NotesLibraryPageResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicLibraryDiscoverySectionsResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.RecentQuizSessionHistoryResponse;
+import com.studysnap.backend.dto.SubjectStatsResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.UserRole;
@@ -40,21 +46,33 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 @ExtendWith(MockitoExtension.class)
 class NoteControllerTest {
@@ -63,6 +81,7 @@ class NoteControllerTest {
     private static final String USER_ADMIN_ROLE_GATE = "hasAnyRole('USER','ADMIN')";
     private static final String MULTIPART_FIELD_NAME = "files";
     private static final String TEXT_PLAIN_CONTENT_TYPE = "text/plain";
+    private static final String STUDY_PACK_STATUS_GENERATING = "GENERATING";
 
     @Mock
     private AuthService authService;
@@ -135,6 +154,125 @@ class NoteControllerTest {
         verify(authService).requireEmailVerified(userId);
         verify(noteBulkGenerationService).queueBatch(request, userId, false);
         assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void listMine_clampsProvidedLimitBeforeDelegating() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(noteService.listMine(userId, 1)).thenReturn(List.of());
+
+        List<NoteListItemResponse> response = noteController.listMine(0, user);
+
+        assertThat(response).isEmpty();
+        verify(noteService).listMine(userId, 1);
+    }
+
+    @Test
+    void statusRoute_resolvesToStatusListHandlerInsteadOfNoteIdHandler() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        UUID noteId = UUID.randomUUID();
+        when(noteService.listMineStatuses(routeUser.userId())).thenReturn(List.of(
+                new NoteStatusResponse(noteId.toString(), STUDY_PACK_STATUS_GENERATING)
+        ));
+
+        mockMvc.perform(get("/notes/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(noteId.toString()))
+                .andExpect(jsonPath("$[0].studyPackStatus").value(STUDY_PACK_STATUS_GENERATING));
+
+        verify(noteService).listMineStatuses(routeUser.userId());
+        verify(noteService, never()).getById("status", routeUser.userId());
+    }
+
+    @Test
+    void libraryRoutesResolveToDedicatedHandlersInsteadOfNoteIdHandler() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        when(noteService.listLibraryPage(
+                routeUser.userId(), null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 20
+        )).thenReturn(new NotesLibraryPageResponse(List.of(), 0, 20, 0, false));
+        when(noteService.listLibraryMatchingIds(
+                routeUser.userId(), null, "ALL", null, null, null, "ALL"
+        )).thenReturn(new NotesLibraryIdsResponse(List.of(), 0, false));
+        when(noteService.getLibrarySubjectStats(
+                routeUser.userId(), null, "ALL", null, null, "ALL"
+        )).thenReturn(new SubjectStatsResponse(List.of(), 0, 0));
+        when(noteService.getLibraryFilterOptions(routeUser.userId()))
+                .thenReturn(new NotesLibraryFilterOptionsResponse(List.of(), List.of(), List.of()));
+
+        mockMvc.perform(get("/notes/library"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.pageSize").value(20));
+        mockMvc.perform(get("/notes/library/ids"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.noteIds").isArray())
+                .andExpect(jsonPath("$.truncated").value(false));
+        mockMvc.perform(get("/notes/library/subject-stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.topSubjects").isArray())
+                .andExpect(jsonPath("$.total").value(0));
+        mockMvc.perform(get("/notes/library/filter-options"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjects").isArray())
+                .andExpect(jsonPath("$.coursePrograms").isArray())
+                .andExpect(jsonPath("$.tags").isArray());
+
+        verify(noteService).listLibraryPage(
+                routeUser.userId(), null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 20
+        );
+        verify(noteService).listLibraryMatchingIds(
+                routeUser.userId(), null, "ALL", null, null, null, "ALL"
+        );
+        verify(noteService).getLibrarySubjectStats(
+                routeUser.userId(), null, "ALL", null, null, "ALL"
+        );
+        verify(noteService).getLibraryFilterOptions(routeUser.userId());
+        verify(noteService, never()).getById("library", routeUser.userId());
+    }
+
+    @Test
+    void listLibraryPageClampsPageAndPageSizeBeforeDelegating() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        NotesLibraryPageResponse expected = new NotesLibraryPageResponse(List.of(), 0, 100, 0, false);
+        when(noteService.listLibraryPage(
+                userId, null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 100
+        )).thenReturn(expected);
+
+        NotesLibraryPageResponse response = noteController.listLibraryPage(
+                null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", -1, 101, user
+        );
+
+        assertThat(response).isEqualTo(expected);
+        verify(noteService).listLibraryPage(
+                userId, null, "ALL", null, null, null, "ALL", "RECENTLY_UPDATED", 0, 100
+        );
+    }
+
+    @Test
+    void quickReviewLastReviewedRouteReturnsRequestedNotesInOrderWithNullForMissingCompletion() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        UUID reviewedNoteId = UUID.randomUUID();
+        UUID neverReviewedNoteId = UUID.randomUUID();
+        OffsetDateTime completedAt = OffsetDateTime.parse("2026-07-18T10:15:00Z");
+        List<UUID> requestedNoteIds = List.of(reviewedNoteId, neverReviewedNoteId);
+        when(quickReviewSessionService.getLastReviewedAtByNoteIds(requestedNoteIds, routeUser.userId()))
+                .thenReturn(Map.of(reviewedNoteId, completedAt));
+
+        mockMvc.perform(get("/notes/quick-review/last-reviewed")
+                        .queryParam("noteIds", reviewedNoteId.toString(), neverReviewedNoteId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].noteId").value(reviewedNoteId.toString()))
+                .andExpect(jsonPath("$[0].lastReviewedAt").value("2026-07-18T10:15:00Z"))
+                .andExpect(jsonPath("$[1].noteId").value(neverReviewedNoteId.toString()))
+                .andExpect(jsonPath("$[1].lastReviewedAt").value(nullValue()));
+
+        verify(quickReviewSessionService).getLastReviewedAtByNoteIds(requestedNoteIds, routeUser.userId());
     }
 
     @Test
@@ -345,7 +483,7 @@ class NoteControllerTest {
     void listPublic_mapsAudienceQueryToTargetProfileFilter() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, NoteTargetProfileType.STUDENT, 4))
+        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, NoteTargetProfileType.STUDENT, 4, null, null, false, null))
                 .thenReturn(new PublicNoteListResponse(List.of(), 0));
 
         PublicNoteListResponse response = noteController.listPublic(
@@ -358,6 +496,10 @@ class NoteControllerTest {
                 "student",
                 null,
                 4,
+                null,
+                null,
+                false,
+                null,
                 user
         );
 
@@ -370,7 +512,11 @@ class NoteControllerTest {
                 "nursing",
                 CREATOR_USERNAME,
                 NoteTargetProfileType.STUDENT,
-                4
+                4,
+                null,
+                null,
+                false,
+                null
         );
         assertThat(response.items()).isEmpty();
         assertThat(response.total()).isZero();
@@ -380,7 +526,7 @@ class NoteControllerTest {
     void listPublic_clampsLargeSizeBeforeDelegating() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        when(noteService.listPublic(userId, null, null, null, null, null, null, null, 50))
+        when(noteService.listPublic(userId, null, null, null, null, null, null, null, 50, null, null, false, null))
                 .thenReturn(new PublicNoteListResponse(List.of(), 0));
 
         PublicNoteListResponse response = noteController.listPublic(
@@ -393,12 +539,132 @@ class NoteControllerTest {
                 null,
                 null,
                 200,
+                null,
+                null,
+                false,
+                null,
                 user
         );
 
-        verify(noteService).listPublic(userId, null, null, null, null, null, null, null, 50);
+        verify(noteService).listPublic(userId, null, null, null, null, null, null, null, 50, null, null, false, null);
         assertThat(response.items()).isEmpty();
         assertThat(response.total()).isZero();
+    }
+
+    @Test
+    void publicLibraryPaginatedRouteClampsBoundsAndPassesNewFilters() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        PublicNoteListResponse expected = new PublicNoteListResponse(List.of(), 0, 0, 50, 0L, false);
+        when(noteService.listPublic(
+                routeUser.userId(),
+                null,
+                "most_copied",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                50,
+                true,
+                List.of("BY_YOU", "OFFICIAL")
+        )).thenReturn(expected);
+
+        mockMvc.perform(get("/notes/public")
+                        .param("sort", "most_copied")
+                        .param("page", "-4")
+                        .param("pageSize", "500")
+                        .param("readyOnly", "true")
+                        .param("source", "BY_YOU", "OFFICIAL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.pageSize").value(50))
+                .andExpect(jsonPath("$.totalMatching").value(0))
+                .andExpect(jsonPath("$.hasMore").value(false));
+
+        verify(noteService).listPublic(
+                routeUser.userId(),
+                null,
+                "most_copied",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                50,
+                true,
+                List.of("BY_YOU", "OFFICIAL")
+        );
+    }
+
+    @Test
+    void publicLibraryLegacyRouteOmitsPaginationFieldsWhenPagingParamsAreAbsent() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        when(noteService.listPublic(
+                routeUser.userId(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null
+        )).thenReturn(new PublicNoteListResponse(List.of(), 0));
+
+        mockMvc.perform(get("/notes/public"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.total").value(0))
+                .andExpect(jsonPath("$.page").doesNotExist())
+                .andExpect(jsonPath("$.pageSize").doesNotExist())
+                .andExpect(jsonPath("$.totalMatching").doesNotExist())
+                .andExpect(jsonPath("$.hasMore").doesNotExist());
+
+        verify(noteService).listPublic(
+                routeUser.userId(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null
+        );
+    }
+
+    @Test
+    void publicDiscoverySectionsRouteResolvesToLiteralHandler() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        when(noteService.getPublicLibraryDiscoverySections(
+                routeUser.userId(), NoteTargetProfileType.BOARD_TAKER
+        )).thenReturn(new PublicLibraryDiscoverySectionsResponse(List.of(), List.of(), List.of()));
+
+        mockMvc.perform(get("/notes/public/discovery-sections").param("audience", "board-taker"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.featured").isArray())
+                .andExpect(jsonPath("$.popular").isArray())
+                .andExpect(jsonPath("$.recent").isArray());
+
+        verify(noteService).getPublicLibraryDiscoverySections(
+                routeUser.userId(), NoteTargetProfileType.BOARD_TAKER
+        );
+        verify(noteService, never()).getPublicById("discovery-sections", routeUser.userId());
     }
 
     @Test
@@ -604,14 +870,18 @@ class NoteControllerTest {
                         false
                 )
         );
-        when(noteService.listPublic(userId, null, null, null, null, null, null, null, null))
+        when(noteService.listPublic(userId, null, null, null, null, null, null, null, null, null, null, false, null))
                 .thenReturn(new PublicNoteListResponse(expected, expected.size()));
 
-        PublicNoteListResponse response = noteController.listPublic(null, null, null, null, null, null, null, null, null, user);
+        PublicNoteListResponse response = noteController.listPublic(
+                null, null, null, null, null, null, null, null, null, null, null, false, null, user
+        );
 
         assertThat(response.items()).isEqualTo(expected);
         assertThat(response.total()).isEqualTo(expected.size());
-        verify(noteService).listPublic(userId, null, null, null, null, null, null, null, null);
+        verify(noteService).listPublic(
+                userId, null, null, null, null, null, null, null, null, null, null, false, null
+        );
     }
 
     @Test
@@ -683,5 +953,26 @@ class NoteControllerTest {
                 false,
                 false
         );
+    }
+
+    private MockMvc buildMockMvc(AuthenticatedUser routeUser) {
+        return standaloneSetup(noteController)
+                .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
+                    @Override
+                    public boolean supportsParameter(MethodParameter parameter) {
+                        return parameter.getParameterType() == AuthenticatedUser.class;
+                    }
+
+                    @Override
+                    public Object resolveArgument(
+                            MethodParameter parameter,
+                            ModelAndViewContainer mavContainer,
+                            NativeWebRequest webRequest,
+                            WebDataBinderFactory binderFactory
+                    ) {
+                        return routeUser;
+                    }
+                })
+                .build();
     }
 }

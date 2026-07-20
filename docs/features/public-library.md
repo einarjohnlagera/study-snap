@@ -31,7 +31,7 @@ Shareable filter URLs:
 
 The generic filtered no-results state offers both `Clear filters` and `Remove last filter`. The latter removes only the most recently changed filter when known, falling back to clearing filters when there is no recoverable target.
 
-The More Filters sheet includes a `Study Pack Ready` boolean toggle. It filters the already-loaded public-note result set by the existing `studyPackStatus === STUDY_PACK_READY` value and can be switched off to restore the full list. This stays client-side because the current public-library request loads the full matching result set rather than paginated slices.
+The More Filters sheet includes a `Study Pack Ready` boolean toggle. Applied state is sent as `readyOnly=true` to the paginated public-note endpoint, so readiness filtering happens before page selection and can be switched off to restore the full server-filtered list.
 
 ## Key Files
 
@@ -78,14 +78,15 @@ Landing page should visually reinforce Public Library as a real discovery surfac
 Public Library has two display modes:
 
 **Discovery mode** (default, no active search/filters/sort changes):
-- 🔥 Featured Notes — top 3 study-ready notes by quality + engagement
-- 📈 Most Popular — top 5 notes meeting the social-proof threshold, ordered by copies then views (excluding Featured notes)
-- 🆕 Recently Added — top 5 by createdAt (excluding Featured and Popular)
-- each section includes `View More`, which opens a focused section view on the same page (`?view=featured|popular|recent`)
+- the client consumes `GET /notes/public/discovery-sections`; the backend supplies up to six mutually exclusive notes per section
+- 🔥 Featured Notes — render the first 3 server-ranked study-ready notes by quality + engagement
+- 📈 Most Popular — render the first 5 server-ranked notes meeting the social-proof threshold (excluding Featured notes)
+- 🆕 Recently Added — render the first 5 by `createdAt` (excluding Featured and Popular)
+- each section includes `View More`, which opens a focused, backend-paginated section view on the same page (`?view=featured|popular|recent`)
 - subjects and popular tags remain available in the always-visible top browsing rails instead of a separate discovery block
 
 **Filter mode** (when any search, filter, or sort is active):
-- Standard sorted/filtered list of all matching public notes
+- Standard server-sorted/server-filtered list, loaded 20 notes at a time with `Load more`
 - When no explicit sort is selected, `Recommended` is the default: it reuses the existing decay-adjusted discovery score across all matching notes, with engagement and freshness tiebreaks. It does not apply Featured-only eligibility.
 - Explicit `Newest`, `Most Copied`, `Most Viewed`, and `Title A-Z` choices continue to override the default. `?sort=recent` remains the canonical explicit Newest URL; no `sort` parameter means Recommended only in filter mode and keeps Discovery mode unchanged.
 - With an active Course / Program filter, a matching Official Study Plan adds one contextual `Browse official plans` pointer above results. The existing `listPublicStudyPlans({ courseProgram })` lookup selects its first result like the Dashboard recommendation; lookup failure or no result renders nothing and never affects note results.
@@ -149,7 +150,7 @@ score = viewCount + (copyCount * 3) + (likeCount * 2)
   - `copyCount DESC`
   - `viewCount DESC`
   - `createdAt DESC`
-- Discovery-home limit: 3 notes in `Featured Notes`
+- Discovery-home limit: 6 notes in `Featured Notes`
 
 ## Most Popular Ranking
 
@@ -189,9 +190,9 @@ Recent remains intentionally simple:
 ## Deduplication Across Sections
 
 Sections never repeat the same note:
-- Featured: top 3 eligible notes by score from all public notes
-- Most Popular: top 5 threshold-qualified notes from notes NOT in Featured
-- Recently Added: top 5 by createdAt from notes NOT in Featured or Popular
+- Featured: top 6 eligible notes by score from all public notes
+- Most Popular: top 6 threshold-qualified notes from notes NOT in Featured
+- Recently Added: top 6 by createdAt from notes NOT in Featured or Popular
 
 ## Layout
 
@@ -239,20 +240,19 @@ Public Library filters:
 - `By You`
 - `Official`
 - `Community`
+- `Study Pack Ready`
 
 Learner Level is not a current Public Library filter; it remains owner/profile metadata rather than a More Filters control.
 
-Filter mode renders all matching notes from its already-loaded result set in one page load; there is currently no pagination or load-more control. This is an intentional current limitation, not a separate discovery layout.
+Filter mode renders the first server-selected page and appends subsequent pages through `Load more`; no client-side post-filtering, re-sorting, or slicing is applied to a fetched page.
 
 The in-app `?subject=` filter and the canonical `/public/library/{subject}` landing page intentionally serve different purposes. Filter mode is a flat, query-driven browsing list; the subject landing page is a curated Featured / Popular / Recent discovery surface with its own `CollectionPage` SEO markup. They should not be merged into one component without a dedicated future refactor.
 
-Cascading Course / Program filter (v0.25.1):
+Facet suggestion scope after F8:
 
-- Selecting a Course / Program in the More Filters modal narrows the Subjects dropdown and Popular Tags chips to only those associated with notes in that program
-- Cascade is computed client-side from already-loaded notes — no extra network request
-- If the current Subjects draft is not in the narrowed set, it auto-clears to "All"
-- Tags draft entries not in the narrowed set are removed
-- Clearing Course / Program back to "All" restores the full Subjects and Tags lists
+- Subject, Course / Program, and Tag choices come from their dedicated whole-public-library endpoints, not the currently loaded note page.
+- Selecting a Course / Program still filters results server-side after `Apply`, but it does not narrow the modal's draft Subject or Tag suggestion lists; those retain the complete facet set.
+- This intentionally removes the former client-only co-occurrence maps rather than introducing a disproportionate new co-occurrence endpoint.
 
 Public Library browsing rails:
 
@@ -278,17 +278,27 @@ Public Library browsing rails:
 
 `GET /notes/public` is the backend filter source for shareable Public Library URLs.
 
+The backend exposes two compatible modes:
+
+- Legacy mode is selected when both `page` and `pageSize` are absent. It preserves the existing unbounded mapping/filtering flow and the historical pre-search-filter meaning of `total`, so sitemap, subject-index, note-count, and related-note server callers remain unchanged.
+- Paginated mode is selected when either `page` or `pageSize` is present. It applies filters before pagination, returns only one fully enriched page, and adds `page`, `pageSize`, `totalMatching`, and `hasMore`. `page` is clamped to zero or greater and `pageSize` to 1-50. `/public/library` consumes this mode with a 20-note page size and token-guards page replacement/appends against stale responses.
+
 Response shape:
 
 ```json
 {
   "items": [],
-  "total": 0
+  "total": 0,
+  "page": 0,
+  "pageSize": 20,
+  "totalMatching": 0,
+  "hasMore": false
 }
 ```
 
-- `items` contains the public notes after the current in-memory filters, sorting, and optional `size` clamp.
-- `total` is captured after public-note list mapping and before in-memory filters such as `search`, `subject`, `tag`, and `courseProgram`; DB-level creator and audience pre-filters still apply before this baseline is captured.
+- The four pagination fields are nullable and omitted from legacy JSON responses.
+- In legacy mode, `items` contains the public notes after the current in-memory filters, sorting, and optional `size` clamp; `total` is captured after public-note list mapping and before in-memory `search`, `subject`, `tag`, and `courseProgram` filters. DB-level creator and audience pre-filters still apply before this baseline.
+- In paginated mode, `items` is the requested enriched page and `totalMatching` is the post-filter count. `total` mirrors that count for response compatibility.
 - Server-side Public Library helpers unwrap `items` and continue returning `NoteListItemResponse[]` to static/SSR callers.
 
 Supported query params:
@@ -300,7 +310,23 @@ Supported query params:
 - `courseProgram`
 - `creator` (username — filters to a single creator's public notes)
 - `size` (optional integer, clamped to 1-50 when present — limits result count; omitted means uncapped)
-- `sort`
+- `sort` (`recent`, `title`, `featured`, `popular`/`copied`, `views`, `most_copied`, or `recommended` in paginated mode)
+- `readyOnly` (optional boolean; requires the existing resolved `STUDY_PACK_READY` state)
+- `source` (repeatable `BY_YOU`, `OFFICIAL`, or `COMMUNITY`; values are OR-combined)
+- `page` / `pageSize` (optional; either one opts into real backend pagination)
+
+`most_copied` sorts every matching note by copies then creation time without the Popular eligibility gate. `recommended` applies the existing decay-adjusted engagement score to every matching note without the Featured eligibility gate. The gated `featured` and `popular`/`copied` keys remain available for focused discovery-section views.
+
+`GET /notes/public/discovery-sections` accepts only the optional audience/target-profile filter. It returns mutually exclusive `featured`, `popular`, and `recent` lists capped at six each: Featured is selected first, Popular excludes Featured ids, and Recent excludes both earlier sections. Its candidate scan is lean and candidate-set engagement counts are batch-loaded; full list-item enrichment runs only for the final union of at most 18 notes. The discovery homepage consumes these lists directly and preserves its existing 3/5/5 visual display limits.
+
+Whole-library Public Library facet values have dedicated anonymous endpoints, independent of the currently loaded result page:
+
+- `GET /subjects?scope=public`
+- `GET /course-programs?scope=public`
+- `GET /tags?scope=public` — distinct tags from `PUBLIC` notes only, trimmed, case-insensitively deduplicated with first-seen casing retained, and sorted alphabetically
+
+Private Library tags continue to come from `/notes/library/filter-options`; `/tags` intentionally has no `mine` scope.
+The Public Library loads all three public facet lists independently of result pages. Course/program values arrive alphabetically; the UI promotes recently selected values before slicing the top chip rail, then uses alphabetical order as the fallback because no popularity counts are returned.
 
 Behavior:
 
@@ -315,7 +341,7 @@ Behavior:
 - search is case-insensitive and already matches Course / Program and tags alongside the existing note text fields; a query such as `PNLE` finds notes whose canonical program is PNLE without a duplicate search predicate
 - subject, tags, and course/program use normalized slug values in the URL
 - clearing filters should return to `/public/library`
-- Public Library shows the response count near the filter bar: `{total} notes` with no active URL filters, or `{items.length} of {total} notes` when `search`, `subject`, `tag`, `courseProgram`, non-ALL `audience`, or `creator` is present
+- Public Library shows the paginated response count near the filter bar: `{totalMatching} notes` with no active filters, or `{items.length} of {totalMatching} notes` when filters are active
 - the count is hidden while the list is loading to avoid a transient `0 notes` state
 - tag and subject selector search inputs must keep focus while typing; modal rerenders must not move focus to the close button or other controls
 
@@ -324,7 +350,7 @@ Behavior:
 A dismissible discovery hint shown above the note list when no `courseProgram` filter is active and no creator filter is set:
 
 - Text: `Studying for a specific exam or program? Browse notes by Course or Program.`
-- Top six Course / Program chips are ranked by the real public-note counts already loaded for the current browse result and apply the same canonical `?courseProgram=` slug filter as the sheet; no program list is hardcoded
+- Top six Course / Program chips come from the whole-library facet endpoint, with recently selected values promoted before alphabetical fallback, and apply the same canonical `?courseProgram=` slug filter as the sheet; no program list is hardcoded
 - Action: `Browse by Course/Program` — opens the filter sheet as the full taxonomy path
 - Dismiss button (X) hides the card and stores dismissal in `sessionStorage` (key: `notelib_public_library_cp_cta_dismissed`); it reappears on a new browsing session
 - Hidden when `?courseProgram=` or `?creator=` is already present in the URL

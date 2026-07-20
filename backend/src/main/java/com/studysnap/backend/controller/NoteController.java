@@ -1,8 +1,14 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
+import com.studysnap.backend.dto.NoteQuickReviewLastReviewedResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatusResponse;
+import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
+import com.studysnap.backend.dto.NotesLibraryIdsResponse;
+import com.studysnap.backend.dto.NotesLibraryPageResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicLibraryDiscoverySectionsResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.BulkGenerationResultResponse;
@@ -21,6 +27,7 @@ import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
+import com.studysnap.backend.dto.SubjectStatsResponse;
 import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
@@ -32,6 +39,7 @@ import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BulkGenerationResultService;
@@ -47,6 +55,7 @@ import com.studysnap.backend.service.QuickReviewSessionService;
 import com.studysnap.backend.service.QuickReviewStudyTipService;
 import com.studysnap.backend.service.QuizSessionHistoryService;
 import com.studysnap.backend.service.StudyPackService;
+import com.studysnap.backend.util.UuidParsingUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -64,7 +73,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -75,6 +86,31 @@ public class NoteController {
     private static final String STUDY_PACK_STATUS_DRAFT = "DRAFT";
     private static final int PUBLIC_NOTES_MIN_SIZE = 1;
     private static final int PUBLIC_NOTES_MAX_SIZE = 50;
+    private static final int PRIVATE_NOTES_MIN_LIMIT = 1;
+    private static final int PRIVATE_NOTES_MAX_LIMIT = 50;
+    private static final int LIBRARY_MIN_PAGE = 0;
+    private static final int LIBRARY_MAX_PAGE = Integer.MAX_VALUE;
+    private static final int LIBRARY_MIN_PAGE_SIZE = 1;
+    private static final int LIBRARY_MAX_PAGE_SIZE = 100;
+    private static final String LIBRARY_DEFAULT_PAGE = "0";
+    private static final String LIBRARY_DEFAULT_PAGE_SIZE = "20";
+    private static final String LIBRARY_DEFAULT_FILTER = "ALL";
+    private static final String LIBRARY_DEFAULT_SORT = "RECENTLY_UPDATED";
+    private static final String SEARCH_REQUEST_PARAM = "search";
+    private static final String READINESS_REQUEST_PARAM = "readiness";
+    private static final String COURSE_PROGRAM_REQUEST_PARAM = "courseProgram";
+    private static final String SUBJECT_REQUEST_PARAM = "subject";
+    private static final String TAG_REQUEST_PARAM = "tag";
+    private static final String VISIBILITY_REQUEST_PARAM = "visibility";
+    private static final String SORT_REQUEST_PARAM = "sort";
+    private static final String PAGE_REQUEST_PARAM = "page";
+    private static final String PAGE_SIZE_REQUEST_PARAM = "pageSize";
+    private static final String READY_ONLY_REQUEST_PARAM = "readyOnly";
+    private static final String SOURCE_REQUEST_PARAM = "source";
+    private static final String AUDIENCE_REQUEST_PARAM = "audience";
+    private static final String TARGET_PROFILE_TYPE_REQUEST_PARAM = "targetProfileType";
+    private static final int PUBLIC_LIBRARY_DEFAULT_PAGE = 0;
+    private static final int PUBLIC_LIBRARY_DEFAULT_PAGE_SIZE = 20;
 
     private final AuthService authService;
     private final BulkGenerationResultService bulkGenerationResultService;
@@ -269,6 +305,25 @@ public class NoteController {
         return quickReviewSessionService.getPerformanceSummary(studyPackId, userId);
     }
 
+    @GetMapping("/quick-review/last-reviewed")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public List<NoteQuickReviewLastReviewedResponse> getQuickReviewLastReviewedBatch(
+            @RequestParam(value = "noteIds") List<String> noteIds,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        List<UUID> parsedNoteIds = noteIds.stream()
+                .map(noteId -> UuidParsingUtils.parseUuidOrThrow(noteId, NoteNotFoundException::new))
+                .toList();
+        Map<UUID, OffsetDateTime> lastReviewedAtByNoteId = quickReviewSessionService
+                .getLastReviewedAtByNoteIds(parsedNoteIds, user.userId());
+        return parsedNoteIds.stream()
+                .map(noteId -> new NoteQuickReviewLastReviewedResponse(
+                        noteId.toString(),
+                        lastReviewedAtByNoteId.get(noteId)
+                ))
+                .toList();
+    }
+
     @GetMapping("/{id}/quick-review/sessions/{sessionId}")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public QuizSessionReviewResponse getQuickReviewSessionReview(
@@ -432,10 +487,87 @@ public class NoteController {
     @GetMapping
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public List<NoteListItemResponse> listMine(
+            @RequestParam(value = "limit", required = false) Integer limit,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
-        return noteService.listMine(userId);
+        return noteService.listMine(
+                userId,
+                limit == null ? null : Math.clamp(limit, PRIVATE_NOTES_MIN_LIMIT, PRIVATE_NOTES_MAX_LIMIT)
+        );
+    }
+
+    @GetMapping("/status")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public List<NoteStatusResponse> listMineStatuses(@AuthenticationPrincipal AuthenticatedUser user) {
+        return noteService.listMineStatuses(user.userId());
+    }
+
+    @GetMapping("/library")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NotesLibraryPageResponse listLibraryPage(
+            @RequestParam(value = SEARCH_REQUEST_PARAM, required = false) String search,
+            @RequestParam(value = READINESS_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String readiness,
+            @RequestParam(value = COURSE_PROGRAM_REQUEST_PARAM, required = false) String courseProgram,
+            @RequestParam(value = SUBJECT_REQUEST_PARAM, required = false) String subject,
+            @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
+            @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @RequestParam(value = SORT_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_SORT) String sort,
+            @RequestParam(value = PAGE_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_PAGE) Integer page,
+            @RequestParam(value = PAGE_SIZE_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_PAGE_SIZE) Integer pageSize,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.listLibraryPage(
+                user.userId(),
+                search,
+                readiness,
+                courseProgram,
+                subject,
+                tags,
+                visibility,
+                sort,
+                Math.clamp(page, LIBRARY_MIN_PAGE, LIBRARY_MAX_PAGE),
+                Math.clamp(pageSize, LIBRARY_MIN_PAGE_SIZE, LIBRARY_MAX_PAGE_SIZE)
+        );
+    }
+
+    @GetMapping("/library/ids")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NotesLibraryIdsResponse listLibraryMatchingIds(
+            @RequestParam(value = SEARCH_REQUEST_PARAM, required = false) String search,
+            @RequestParam(value = READINESS_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String readiness,
+            @RequestParam(value = COURSE_PROGRAM_REQUEST_PARAM, required = false) String courseProgram,
+            @RequestParam(value = SUBJECT_REQUEST_PARAM, required = false) String subject,
+            @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
+            @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.listLibraryMatchingIds(
+                user.userId(), search, readiness, courseProgram, subject, tags, visibility
+        );
+    }
+
+    @GetMapping("/library/subject-stats")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public SubjectStatsResponse getLibrarySubjectStats(
+            @RequestParam(value = SEARCH_REQUEST_PARAM, required = false) String search,
+            @RequestParam(value = READINESS_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String readiness,
+            @RequestParam(value = COURSE_PROGRAM_REQUEST_PARAM, required = false) String courseProgram,
+            @RequestParam(value = TAG_REQUEST_PARAM, required = false) List<String> tags,
+            @RequestParam(value = VISIBILITY_REQUEST_PARAM, defaultValue = LIBRARY_DEFAULT_FILTER) String visibility,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.getLibrarySubjectStats(
+                user.userId(), search, readiness, courseProgram, tags, visibility
+        );
+    }
+
+    @GetMapping("/library/filter-options")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NotesLibraryFilterOptionsResponse getLibraryFilterOptions(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.getLibraryFilterOptions(user.userId());
     }
 
     @GetMapping("/public")
@@ -446,12 +578,17 @@ public class NoteController {
             @RequestParam(value = "tag", required = false) List<String> tags,
             @RequestParam(value = "courseProgram", required = false) String courseProgram,
             @RequestParam(value = "creator", required = false) String creator,
-            @RequestParam(value = "audience", required = false) String audience,
-            @RequestParam(value = "targetProfileType", required = false) NoteTargetProfileType targetProfileType,
+            @RequestParam(value = AUDIENCE_REQUEST_PARAM, required = false) String audience,
+            @RequestParam(value = TARGET_PROFILE_TYPE_REQUEST_PARAM, required = false) NoteTargetProfileType targetProfileType,
             @RequestParam(value = "size", required = false) Integer size,
+            @RequestParam(value = PAGE_REQUEST_PARAM, required = false) Integer page,
+            @RequestParam(value = PAGE_SIZE_REQUEST_PARAM, required = false) Integer pageSize,
+            @RequestParam(value = READY_ONLY_REQUEST_PARAM, defaultValue = "false") boolean readyOnly,
+            @RequestParam(value = SOURCE_REQUEST_PARAM, required = false) List<String> sources,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID viewerUserId = user == null ? null : user.userId();
+        boolean paginated = page != null || pageSize != null;
         return noteService.listPublic(
                 viewerUserId,
                 search,
@@ -461,7 +598,35 @@ public class NoteController {
                 courseProgram,
                 creator,
                 resolvePublicAudienceFilter(audience, targetProfileType),
-                size == null ? null : Math.clamp(size, PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE)
+                size == null ? null : Math.clamp(size, PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE),
+                paginated
+                        ? Math.clamp(
+                                page == null ? PUBLIC_LIBRARY_DEFAULT_PAGE : page,
+                                LIBRARY_MIN_PAGE,
+                                LIBRARY_MAX_PAGE
+                        )
+                        : null,
+                paginated
+                        ? Math.clamp(
+                                pageSize == null ? PUBLIC_LIBRARY_DEFAULT_PAGE_SIZE : pageSize,
+                                PUBLIC_NOTES_MIN_SIZE,
+                                PUBLIC_NOTES_MAX_SIZE
+                        )
+                        : null,
+                readyOnly,
+                sources
+        );
+    }
+
+    @GetMapping("/public/discovery-sections")
+    public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(
+            @RequestParam(value = AUDIENCE_REQUEST_PARAM, required = false) String audience,
+            @RequestParam(value = TARGET_PROFILE_TYPE_REQUEST_PARAM, required = false) NoteTargetProfileType targetProfileType,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.getPublicLibraryDiscoverySections(
+                user == null ? null : user.userId(),
+                resolvePublicAudienceFilter(audience, targetProfileType)
         );
     }
 

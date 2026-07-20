@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import LibraryPage from "./page";
 import { reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 import {
@@ -7,8 +7,13 @@ import {
   createSavedLibraryFilter,
   deleteSavedLibraryFilter,
   getBulkGenerationResult,
+  getLibraryFilterOptions,
+  getLibrarySubjectStats,
   getSavedLibraryFilters,
+  listLibraryMatchingIds,
+  listLibraryPage,
   listCollections,
+  listNoteStatuses,
   listNotes,
   listSubjects,
 } from "@/lib/api";
@@ -50,8 +55,13 @@ jest.mock("@/lib/api", () => ({
   deleteSavedLibraryFilter: jest.fn(),
   exportCombinedGeneratedQuizDocx: jest.fn(),
   getBulkGenerationResult: jest.fn(),
+  getLibraryFilterOptions: jest.fn(),
+  getLibrarySubjectStats: jest.fn(),
   getSavedLibraryFilters: jest.fn(),
   listCollections: jest.fn(),
+  listLibraryMatchingIds: jest.fn(),
+  listLibraryPage: jest.fn(),
+  listNoteStatuses: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
@@ -105,6 +115,7 @@ function buildNote(id: string, overrides: Record<string, unknown> = {}) {
     generatedQuizQuestionCount: null,
     createdAt: "2026-03-20T10:00:00Z",
     updatedAt: "2026-03-21T10:00:00Z",
+    lastSessionCompletedAt: null,
     ...overrides,
   };
 }
@@ -119,6 +130,100 @@ function notesAcrossSubjects(subjectsByCount: Array<[string, number]>) {
     }
   }
   return notes;
+}
+
+type MockLibraryParams = {
+  search?: string;
+  readiness?: string;
+  courseProgram?: string;
+  subject?: string;
+  tags?: string[];
+  visibility?: string;
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+function mockLibrarySubject(note: ReturnType<typeof buildNote>) {
+  return (note.subject as string | null) ?? (note.courseProgram as string | null) ?? "General";
+}
+
+function filterMockNotes(notes: ReturnType<typeof buildNote>[], params: MockLibraryParams) {
+  const query = params.search?.trim().toLowerCase() ?? "";
+  return notes.filter((note) => {
+    const tags = (note.tags as string[]) ?? [];
+    const searchMatches = !query
+      || String(note.title ?? "Untitled note").toLowerCase().includes(query)
+      || tags.some((tag) => tag.toLowerCase().includes(query));
+    const readinessMatches = !params.readiness || params.readiness === "ALL"
+      || (params.readiness === "DRAFT" && note.studyPackStatus === "DRAFT")
+      || (params.readiness === "QUIZ_READY" && Boolean(note.generatedQuizId))
+      || (params.readiness === "STUDY_PACK_READY" && note.studyPackStatus === "STUDY_PACK_READY");
+    const courseMatches = !params.courseProgram || note.courseProgram === params.courseProgram;
+    const subjectMatches = !params.subject || mockLibrarySubject(note) === params.subject;
+    const tagsMatch = !params.tags?.length || params.tags.some((tag) => tags.includes(tag));
+    const visibilityMatches = !params.visibility || params.visibility === "ALL" || note.visibility === params.visibility;
+    return searchMatches && readinessMatches && courseMatches && subjectMatches && tagsMatch && visibilityMatches;
+  });
+}
+
+function sortMockNotes(notes: ReturnType<typeof buildNote>[], sort = "RECENTLY_UPDATED") {
+  const time = (value: unknown) => value ? new Date(String(value)).getTime() : 0;
+  return [...notes].sort((left, right) => {
+    if (sort === "TITLE_ASC") return String(left.title ?? "Untitled note").localeCompare(String(right.title ?? "Untitled note"));
+    if (sort === "TITLE_DESC") return String(right.title ?? "Untitled note").localeCompare(String(left.title ?? "Untitled note"));
+    if (sort === "OLDEST") return time(left.createdAt) - time(right.createdAt);
+    if (sort === "NEWEST") return time(right.createdAt) - time(left.createdAt);
+    if (sort === "RECENTLY_REVIEWED") {
+      return time(right.lastSessionCompletedAt) - time(left.lastSessionCompletedAt)
+        || time(right.updatedAt) - time(left.updatedAt);
+    }
+    return time(right.updatedAt) - time(left.updatedAt);
+  });
+}
+
+function buildMockSubjectStats(notes: ReturnType<typeof buildNote>[], params: MockLibraryParams) {
+  const matching = filterMockNotes(notes, {...params, subject: undefined});
+  const counts = new Map<string, number>();
+  matching.forEach((note) => {
+    const subject = mockLibrarySubject(note);
+    counts.set(subject, (counts.get(subject) ?? 0) + 1);
+  });
+  const sorted = [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  return {
+    topSubjects: sorted.slice(0, 6).map(([subject, count]) => ({subject, count})),
+    otherSubjectsCount: sorted.slice(6).reduce((total, [, count]) => total + count, 0),
+    total: matching.length,
+  };
+}
+
+function buildMockFilterOptions(notes: ReturnType<typeof buildNote>[]) {
+  const subjects = new Map<string, number>();
+  const coursePrograms = new Map<string, number>();
+  const tags = new Map<string, number>();
+  notes.forEach((note) => {
+    const subject = mockLibrarySubject(note);
+    subjects.set(subject, (subjects.get(subject) ?? 0) + 1);
+    if (note.courseProgram) {
+      const value = String(note.courseProgram);
+      coursePrograms.set(value, (coursePrograms.get(value) ?? 0) + 1);
+    }
+    ((note.tags as string[]) ?? []).forEach((tag) => tags.set(tag, (tags.get(tag) ?? 0) + 1));
+  });
+  const facets = (counts: Map<string, number>) => [...counts.entries()]
+    .map(([value, count]) => ({value, count}))
+    .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value));
+  return {subjects: facets(subjects), coursePrograms: facets(coursePrograms), tags: facets(tags)};
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return {promise, resolve, reject};
 }
 
 describe("Library page", () => {
@@ -167,6 +272,9 @@ describe("Library page", () => {
     (deleteSavedLibraryFilter as jest.Mock).mockResolvedValue(undefined);
     (getBulkGenerationResult as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Pharmacy"]);
+    (listNoteStatuses as jest.Mock).mockReset();
+    (listNoteStatuses as jest.Mock).mockResolvedValue([]);
+    (listNotes as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-42",
@@ -220,13 +328,179 @@ describe("Library page", () => {
         updatedAt: "2026-03-23T10:00:00Z",
       },
     ]);
+    (listLibraryPage as jest.Mock).mockReset();
+    (listLibraryPage as jest.Mock).mockImplementation(async (params: MockLibraryParams) => {
+      const notes = await (listNotes as jest.Mock)() as ReturnType<typeof buildNote>[];
+      const matching = sortMockNotes(filterMockNotes(notes, params), params.sort);
+      const page = params.page ?? 0;
+      const pageSize = params.pageSize ?? 20;
+      const items = matching.slice(page * pageSize, (page + 1) * pageSize);
+      return {
+        items,
+        page,
+        pageSize,
+        totalMatching: matching.length,
+        hasMore: (page + 1) * pageSize < matching.length,
+      };
+    });
+    (getLibrarySubjectStats as jest.Mock).mockReset();
+    (getLibrarySubjectStats as jest.Mock).mockImplementation(async (params: MockLibraryParams) => {
+      const notes = await (listNotes as jest.Mock)() as ReturnType<typeof buildNote>[];
+      return buildMockSubjectStats(notes, params);
+    });
+    (getLibraryFilterOptions as jest.Mock).mockReset();
+    (getLibraryFilterOptions as jest.Mock).mockImplementation(async () => {
+      const notes = await (listNotes as jest.Mock)() as ReturnType<typeof buildNote>[];
+      return buildMockFilterOptions(notes);
+    });
+    (listLibraryMatchingIds as jest.Mock).mockReset();
+    (listLibraryMatchingIds as jest.Mock).mockImplementation(async (params: MockLibraryParams) => {
+      const notes = await (listNotes as jest.Mock)() as ReturnType<typeof buildNote>[];
+      const matching = filterMockNotes(notes, params);
+      return {noteIds: matching.map((note) => note.id), totalMatching: matching.length, truncated: false};
+    });
+  });
+
+  it("loads the initial library page exactly once", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    await act(async () => {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 450));
+    });
+
+    expect(listLibraryPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("debounces filter requests and fetches the page and subject stats once", async () => {
+    render(<LibraryPage />);
+    await screen.findByText("Cell Respiration");
+    (listLibraryPage as jest.Mock).mockClear();
+    (getLibrarySubjectStats as jest.Mock).mockClear();
+
+    const search = screen.getByLabelText("Search");
+    fireEvent.change(search, {target: {value: "r"}});
+    fireEvent.change(search, {target: {value: "re"}});
+    fireEvent.change(search, {target: {value: "review"}});
+
+    await waitFor(() => expect(listLibraryPage).toHaveBeenCalledTimes(1));
+    expect(getLibrarySubjectStats).toHaveBeenCalledTimes(1);
+    expect(listLibraryPage).toHaveBeenCalledWith(expect.objectContaining({search: "review", page: 0, pageSize: 20}));
+  });
+
+  it("ignores an older filter response that resolves after a newer one", async () => {
+    const defaultImplementation = (listLibraryPage as jest.Mock).getMockImplementation()!;
+    const older = deferred<Record<string, unknown>>();
+    const newer = deferred<Record<string, unknown>>();
+    (listLibraryPage as jest.Mock).mockImplementation((params: MockLibraryParams) => {
+      if (params.search === "older") return older.promise;
+      if (params.search === "newer") return newer.promise;
+      return defaultImplementation(params);
+    });
+    render(<LibraryPage />);
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.change(screen.getByLabelText("Search"), {target: {value: "older"}});
+    await waitFor(() => expect(listLibraryPage).toHaveBeenCalledWith(expect.objectContaining({search: "older"})));
+    fireEvent.change(screen.getByLabelText("Search"), {target: {value: "newer"}});
+    await waitFor(() => expect(listLibraryPage).toHaveBeenCalledWith(expect.objectContaining({search: "newer"})));
+
+    await act(async () => newer.resolve({
+      items: [buildNote("newer-note", {title: "Newer result"})],
+      page: 0,
+      pageSize: 20,
+      totalMatching: 1,
+      hasMore: false,
+    }));
+    expect(await screen.findByText("Newer result")).toBeInTheDocument();
+    await act(async () => older.resolve({
+      items: [buildNote("older-note", {title: "Older result"})],
+      page: 0,
+      pageSize: 20,
+      totalMatching: 1,
+      hasMore: false,
+    }));
+
+    expect(screen.getByText("Newer result")).toBeInTheDocument();
+    expect(screen.queryByText("Older result")).not.toBeInTheDocument();
+  });
+
+  it("appends the next server page and removes Load more at the end", async () => {
+    const first = buildNote("page-one", {title: "Page one"});
+    const second = buildNote("page-two", {title: "Page two"});
+    (listLibraryPage as jest.Mock)
+      .mockResolvedValueOnce({items: [first], page: 0, pageSize: 20, totalMatching: 2, hasMore: true})
+      .mockResolvedValueOnce({items: [second], page: 1, pageSize: 20, totalMatching: 2, hasMore: false});
+
+    render(<LibraryPage />);
+    await screen.findByText("Page one");
+    fireEvent.click(screen.getByRole("button", {name: "Load more"}));
+
+    expect(await screen.findByText("Page two")).toBeInTheDocument();
+    expect(screen.getByText("Page one")).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Load more"})).not.toBeInTheDocument();
+    expect(listLibraryPage).toHaveBeenLastCalledWith(expect.objectContaining({page: 1, pageSize: 20}));
+  });
+
+  it("keeps loaded notes and shows a toast when Load more fails", async () => {
+    const first = buildNote("page-one", {title: "Page one"});
+    (listLibraryPage as jest.Mock)
+      .mockResolvedValueOnce({items: [first], page: 0, pageSize: 20, totalMatching: 2, hasMore: true})
+      .mockRejectedValueOnce(new Error("network"));
+
+    render(<LibraryPage />);
+    await screen.findByText("Page one");
+    fireEvent.click(screen.getByRole("button", {name: "Load more"}));
+
+    expect(await screen.findByText("Could not load more notes.")).toBeInTheDocument();
+    expect(screen.getByText("Page one")).toBeInTheDocument();
+  });
+
+  it("shows the existing load error when the initial library page fails", async () => {
+    (listLibraryPage as jest.Mock).mockRejectedValue(new Error("Library unavailable"));
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("Could not load notes")).toBeInTheDocument();
+    expect(screen.getByText("Library unavailable")).toBeInTheDocument();
+  });
+
+  it("shows the existing load error when a debounced filter request fails", async () => {
+    render(<LibraryPage />);
+    await screen.findByText("Cell Respiration");
+    (listLibraryPage as jest.Mock).mockRejectedValueOnce(new Error("Filtered library unavailable"));
+
+    fireEvent.change(screen.getByLabelText("Search"), {target: {value: "biology"}});
+
+    expect(await screen.findByText("Could not load notes")).toBeInTheDocument();
+    expect(screen.getByText("Filtered library unavailable")).toBeInTheDocument();
+  });
+
+  it("renders notes and subject stats when filter options fail", async () => {
+    (getLibraryFilterOptions as jest.Mock).mockRejectedValue(new Error("options unavailable"));
+    (listNotes as jest.Mock).mockResolvedValue(notesAcrossSubjects([["Biology", 3], ["Chemistry", 2]]));
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("Note note-1")).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Biology 3"})).toBeInTheDocument();
+  });
+
+  it("renders notes and hides the subject strip when subject stats fail", async () => {
+    (getLibrarySubjectStats as jest.Mock).mockRejectedValue(new Error("stats unavailable"));
+    (listNotes as jest.Mock).mockResolvedValue(notesAcrossSubjects([["Biology", 3], ["Chemistry", 2]]));
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("Note note-1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Biology 3"})).not.toBeInTheDocument();
   });
 
   it("opens note detail when a card is clicked and does not render card action menus", async () => {
     render(<LibraryPage />);
 
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: /Create/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Create options" })).toBeInTheDocument();
     expect(screen.getByText("3 notes")).toBeInTheDocument();
     expect(screen.getByText("Nursing")).toBeInTheDocument();
     expect(listSubjects).toHaveBeenCalledWith("mine");
@@ -285,21 +559,84 @@ describe("Library page", () => {
         updatedAt: "2026-03-21T10:00:00Z",
       },
     ]);
+    (listNoteStatuses as jest.Mock).mockResolvedValue([
+      { id: "note-bulk-1", studyPackStatus: "GENERATING" },
+    ]);
 
     render(<LibraryPage />);
 
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
-    // Reset the call count after the initial load so the assertion measures the
-    // poller specifically (the mock is shared and not auto-cleared between tests).
-    (listNotes as jest.Mock).mockClear();
-
-    // A GENERATING note keeps the poller running, so listNotes is re-fetched
-    // beyond the initial load — the notes appear without a manual refresh.
+    // A GENERATING note keeps the poller running, so the paginated list is
+    // refreshed beyond the initial load without returning to GET /notes.
     await waitFor(
-      () => expect((listNotes as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(1),
+      () => expect((listLibraryPage as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2),
       { timeout: 5000 },
     );
+    expect(listLibraryPage).toHaveBeenLastCalledWith(expect.objectContaining({page: 0, pageSize: 1}));
   }, 10000);
+
+  it("skips the enriched note fetch when a status tick has no changes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    const generatingNote = buildNote("note-generating", { studyPackStatus: "GENERATING" });
+    (listNotes as jest.Mock).mockResolvedValue([generatingNote]);
+    (listNoteStatuses as jest.Mock)
+      .mockResolvedValueOnce([{ id: generatingNote.id, studyPackStatus: "GENERATING" }])
+      .mockResolvedValueOnce([{ id: generatingNote.id, studyPackStatus: "GENERATING" }])
+      .mockRejectedValue(new Error("stop polling after the assertion tick"));
+
+    render(<LibraryPage />);
+
+    await screen.findByText(generatingNote.title);
+    await waitFor(() => expect((listNoteStatuses as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(3));
+    expect(listLibraryPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("refreshes the enriched note list when a new row appears without a generating status", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    const visibleGeneratingNote = buildNote("note-visible", { studyPackStatus: "GENERATING" });
+    (listNotes as jest.Mock).mockResolvedValue([visibleGeneratingNote]);
+    (listNoteStatuses as jest.Mock)
+      .mockResolvedValueOnce([{ id: visibleGeneratingNote.id, studyPackStatus: "DRAFT" }])
+      .mockResolvedValueOnce([
+        { id: visibleGeneratingNote.id, studyPackStatus: "DRAFT" },
+        { id: "note-new-row", studyPackStatus: "DRAFT" },
+      ])
+      .mockRejectedValue(new Error("stop polling after the growth tick"));
+
+    render(<LibraryPage />);
+
+    await screen.findByText(visibleGeneratingNote.title);
+    await waitFor(() => expect((listNoteStatuses as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(3));
+    expect(listLibraryPage).toHaveBeenCalledTimes(3);
+  });
+
+  it("refreshes the enriched note list when a generating status resolves", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    const generatingNote = buildNote("note-resolving", { studyPackStatus: "GENERATING" });
+    (listNotes as jest.Mock).mockResolvedValue([generatingNote]);
+    (listNoteStatuses as jest.Mock)
+      .mockResolvedValueOnce([{ id: generatingNote.id, studyPackStatus: "GENERATING" }])
+      .mockResolvedValueOnce([{ id: generatingNote.id, studyPackStatus: "STUDY_PACK_READY" }])
+      .mockRejectedValue(new Error("stop polling after the resolution tick"));
+
+    render(<LibraryPage />);
+
+    await screen.findByText(generatingNote.title);
+    await waitFor(() => expect(listNoteStatuses).toHaveBeenCalledTimes(2));
+    expect(listLibraryPage).toHaveBeenCalledTimes(3);
+  });
 
   it("renders subject stats when the library has enough notes across multiple subjects", async () => {
     (listNotes as jest.Mock).mockResolvedValue(
@@ -683,6 +1020,40 @@ describe("Library page", () => {
     expect(call.noteIds).toEqual(expect.arrayContaining(["note-42", "note-99", "note-77"]));
   });
 
+  it("selects unloaded matching ids, reports the quiz-count caveat, and warns when capped", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({id: "teacher-1", role: "USER", profileType: "TEACHER"});
+    (listLibraryMatchingIds as jest.Mock).mockResolvedValue({
+      noteIds: ["note-99", "unloaded-note"],
+      totalMatching: 1200,
+      truncated: true,
+    });
+
+    render(<LibraryPage />);
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", {name: "Create options"}));
+    fireEvent.click(screen.getByRole("menuitem", {name: /Lesson Plan/}));
+    fireEvent.click(screen.getByRole("button", {name: /Select all/}));
+
+    expect(await screen.findByText(/Quiz-ready count is based on the 1 of 2 selected notes currently loaded/)).toBeInTheDocument();
+    expect(screen.getByText("Selection was capped at the first 1,000 matching notes.")).toBeInTheDocument();
+    expect(screen.getByText(/2 notes selected/)).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Build exam"})).toBeEnabled();
+  });
+
+  it("keeps selection unchanged and shows feedback when select-all fails", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({id: "student-1", role: "USER", profileType: "STUDENT"});
+    (listLibraryMatchingIds as jest.Mock).mockRejectedValue(new Error("network"));
+    render(<LibraryPage />);
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", {name: "Create options"}));
+    fireEvent.click(screen.getByRole("menuitem", {name: /Study Plan/}));
+    fireEvent.click(screen.getByLabelText("Select Cell Respiration"));
+    fireEvent.click(screen.getByRole("button", {name: /Select all/}));
+
+    expect(await screen.findByText("Could not select all matching notes.")).toBeInTheDocument();
+    expect(screen.getByText(/1 note selected/)).toBeInTheDocument();
+  });
+
   it("allows creating an empty Study Plan with no notes selected", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "student-1",
@@ -771,9 +1142,11 @@ describe("Library page", () => {
     await openMoreFilters();
     selectSubjectFilter("Biology");
 
-    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
-    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+      expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+      expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    });
   });
 
   it("filters notes by readiness chips", async () => {
@@ -792,22 +1165,28 @@ describe("Library page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Draft" }));
 
-    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
-    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+      expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+      expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Quiz Ready" }));
 
-    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
-    expect(screen.getByText("2 of 3 notes")).toBeInTheDocument();
-    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
-    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+      expect(screen.getByText("2 notes matching your filters")).toBeInTheDocument();
+      expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+      expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Study Pack Ready" }));
 
-    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
-    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
-    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+      expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+      expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    });
   });
 
   it("shows draft empty state copy when no draft notes match", async () => {
@@ -837,9 +1216,11 @@ describe("Library page", () => {
     await openMoreFilters();
     fireEvent.click(screen.getByRole("button", { name: "Draft" }));
 
-    expect(screen.queryByText("Ready Note")).not.toBeInTheDocument();
-    expect(screen.getByText("No draft notes")).toBeInTheDocument();
-    expect(screen.getByText("No draft notes — you've generated Study Packs for everything in your library.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Ready Note")).not.toBeInTheDocument();
+      expect(screen.getByText("No draft notes")).toBeInTheDocument();
+      expect(screen.getByText("No draft notes — you've generated Study Packs for everything in your library.")).toBeInTheDocument();
+    });
   });
 
   it("shows Quiz Ready filter and badges for teacher profiles", async () => {
@@ -871,7 +1252,7 @@ describe("Library page", () => {
     await openMoreFilters();
     fireEvent.click(screen.getByRole("button", { name: "Quiz Ready" }));
 
-    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument());
 
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "student-1",
@@ -899,9 +1280,11 @@ describe("Library page", () => {
     });
     fireEvent.mouseDown(screen.getAllByRole("button", { name: "Pharmacy" })[0]);
 
-    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
-    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
-    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+      expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+      expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    });
   });
 
   it("searches library notes by title and tags in real time", async () => {
@@ -913,9 +1296,11 @@ describe("Library page", () => {
       target: { value: "review" },
     });
 
-    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
-    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
-    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+      expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+      expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    });
   });
 
   it("shows the save filter action only when a filter is active", async () => {
@@ -1001,8 +1386,10 @@ describe("Library page", () => {
       "/library?cp=Pharmacy&tags=math&status=study_pack_ready&sort=title_asc",
       { scroll: false },
     );
-    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
-    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+      expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    });
   });
 
   it("deletes a saved filter from the picker", async () => {
@@ -1056,9 +1443,11 @@ describe("Library page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "energy" })[0]);
     applyTopModal();
 
-    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
-    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+      expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+      expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    });
   });
 
   it("uses OR logic for multiple tags from the same note", async () => {
@@ -1078,9 +1467,11 @@ describe("Library page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "medication" })[0]);
     applyTopModal();
 
-    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
-    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
-    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+      expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+      expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    });
   });
 
   it("uses OR logic for multiple tags from different notes", async () => {
@@ -1100,9 +1491,11 @@ describe("Library page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "exam" })[0]);
     applyTopModal();
 
-    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
-    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
-    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+      expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+      expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    });
   });
 
   it("combines subject and tag filters while keeping subject restrictive", async () => {
@@ -1119,9 +1512,11 @@ describe("Library page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "cells" })[0]);
     applyTopModal();
 
-    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
-    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+      expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+      expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    });
   });
 
   it("combines search and tag filters while keeping search restrictive", async () => {
@@ -1140,9 +1535,11 @@ describe("Library page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "review" })[0]);
     applyTopModal();
 
-    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
-    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
-    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+      expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+      expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+    });
   });
 
   it("searches tags inside the selector and supports quick deselect from selected tags", async () => {
@@ -1165,10 +1562,12 @@ describe("Library page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "mitochondria" })[0]);
     applyTopModal();
 
-    expect(screen.getAllByRole("button", { name: "mitochondria" })[0]).toBeInTheDocument();
-    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
-    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: "mitochondria" })[0]).toBeInTheDocument();
+      expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+      expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+      expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+    });
   });
 
   it("shows the empty filtered state and clears filters back to results", async () => {
@@ -1185,13 +1584,17 @@ describe("Library page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "review" })[0]);
     applyTopModal();
 
-    expect(screen.getByText("No notes match these filters")).toBeInTheDocument();
-    expect(screen.getByText("Try adjusting your filters")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("No notes match these filters")).toBeInTheDocument();
+      expect(screen.getByText("Try adjusting your filters")).toBeInTheDocument();
+    });
 
     fireEvent.click(screen.getAllByRole("button", { name: "Clear filters" })[0]);
 
-    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
-    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+      expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+    });
   });
 
   it("sorts notes from the shared sort sheet", async () => {
@@ -1201,8 +1604,10 @@ describe("Library page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
     fireEvent.click(screen.getByRole("button", { name: "Title (Z-A)" }));
 
-    const cardTitles = Array.from(container.querySelectorAll("h3")).map((element) => element.textContent);
-    expect(cardTitles.slice(0, 3)).toEqual(["Zygote Review", "Dosage Calculations", "Cell Respiration"]);
+    await waitFor(() => {
+      const cardTitles = Array.from(container.querySelectorAll("h3")).map((element) => element.textContent);
+      expect(cardTitles.slice(0, 3)).toEqual(["Zygote Review", "Dosage Calculations", "Cell Respiration"]);
+    });
   });
 
   it("shows the derived subject fallback when a note has no explicit subject", async () => {

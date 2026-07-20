@@ -58,6 +58,12 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
                 max(q.completedAt)
             )
             """;
+    String STUDY_PACK_LATEST_COMPLETION_PROJECTION = """
+             new com.studysnap.backend.repository.StudyPackLatestCompletionProjection(
+                q.studyPackId,
+                max(q.completedAt)
+            )
+            """;
 
     Optional<QuickReviewSessionEntity> findByIdAndUserId(UUID id, UUID userId);
 
@@ -135,6 +141,23 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
     );
 
     @Query("""
+            select """ + STUDY_PACK_LATEST_COMPLETION_PROJECTION + """
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.status = :status
+              and q.completedAt is not null
+              and q.sessionMode = :sessionMode
+              and q.studyPackId in :studyPackIds
+            group by q.studyPackId
+            """)
+    List<StudyPackLatestCompletionProjection> findLatestCompletedAtByUserIdAndStudyPackIdInAndSessionMode(
+            @Param("userId") UUID userId,
+            @Param("status") QuickReviewSessionStatus status,
+            @Param("sessionMode") QuickReviewSessionMode sessionMode,
+            @Param("studyPackIds") Collection<UUID> studyPackIds
+    );
+
+    @Query("""
             select q
             from QuickReviewSessionEntity q
             where q.userId = :userId
@@ -178,6 +201,21 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             order by q.completedAt desc
             """)
     List<QuickReviewSessionSummaryProjection> findCompletedSessionSummariesByUserIdAndSessionModeInOrderByCompletedAtDesc(
+            @Param("userId") UUID userId,
+            @Param("sessionModes") Collection<QuickReviewSessionMode> sessionModes
+    );
+
+    @Query("""
+            select new com.studysnap.backend.repository.QuickReviewSessionScoreAggregate(
+                count(q),
+                sum(coalesce(q.scorePercentage, 0))
+            )
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.sessionMode in :sessionModes
+              and q.completedAt is not null
+            """)
+    QuickReviewSessionScoreAggregate getCompletedQuizSessionScoreAggregate(
             @Param("userId") UUID userId,
             @Param("sessionModes") Collection<QuickReviewSessionMode> sessionModes
     );

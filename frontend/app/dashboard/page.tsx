@@ -18,8 +18,7 @@ import {
   getDashboardOverview,
   getGoalSummary,
   getMe,
-  getNote,
-  getQuickReviewPerformanceSummary,
+  getQuickReviewLastReviewedBatch,
   getTodayFocus,
   listNotes,
   type ContinueStudyingResponse,
@@ -377,30 +376,18 @@ export default function DashboardPage() {
         setShowFirstStudyWelcomeModal(isFirstStudyOnboardingEligible(me));
 
         if (me.profileType === "TEACHER") {
-          const recentTeacherNotes = [...notes]
+          const generatedQuizItems = [...notes]
             .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
-            .slice(0, MAX_TEACHER_QUIZ_NOTES);
-          const detailResults = await Promise.allSettled(
-            recentTeacherNotes.map((note) => getNote(note.id)),
-          );
-          const generatedQuizItems = detailResults.flatMap((result) => {
-            if (result.status !== "fulfilled") {
-              return [];
-            }
-            const detail = result.value;
-            const generatedQuiz = detail.generatedQuiz;
-            if (!generatedQuiz) {
-              return [];
-            }
-            return [{
-              noteId: detail.id,
-              title: detail.title?.trim() || "Untitled note",
-              subject: detail.subject ?? null,
-              generatedAt: generatedQuiz.generatedAt,
-              updatedAt: detail.updatedAt,
-              questionCount: generatedQuiz.questions.length,
-            }];
-          })
+            .slice(0, MAX_TEACHER_QUIZ_NOTES)
+            .filter((note) => note.generatedQuizId !== null)
+            .map((note) => ({
+              noteId: note.id,
+              title: note.title?.trim() || "Untitled note",
+              subject: note.subject ?? null,
+              generatedAt: note.generatedQuizGeneratedAt!,
+              updatedAt: note.updatedAt,
+              questionCount: note.generatedQuizQuestionCount ?? 0,
+            }))
             .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime());
           setTeacherGeneratedQuizzes(generatedQuizItems);
           setRecentNoteMetaById({});
@@ -411,18 +398,24 @@ export default function DashboardPage() {
             .filter((note) => note.studyPackStatus === "STUDY_PACK_READY" && Boolean(note.studyPackId));
 
           if (recentStudyPackNotes.length > 0) {
-            const entries = await Promise.all(
-              recentStudyPackNotes.map(async (note) => {
-                const quickReviewResult = await getQuickReviewPerformanceSummary(note.id).catch(() => null);
-                return [
-                  note.id,
-                  {
-                    lastReviewedAt: quickReviewResult?.lastReviewedAt ?? null,
-                    quizCount: note.quizCount,
-                  },
-                ] as const;
-              }),
-            );
+            let lastReviewedAtByNoteId = new Map<string, string | null>();
+            try {
+              const lastReviewedResults = await getQuickReviewLastReviewedBatch(
+                recentStudyPackNotes.map((note) => note.id),
+              );
+              lastReviewedAtByNoteId = new Map(
+                lastReviewedResults.map((result) => [result.noteId, result.lastReviewedAt]),
+              );
+            } catch {
+              // Quick Review history is optional Dashboard metadata; keep Stage 1 content visible.
+            }
+            const entries = recentStudyPackNotes.map((note) => [
+              note.id,
+              {
+                lastReviewedAt: lastReviewedAtByNoteId.get(note.id) ?? null,
+                quizCount: note.quizCount,
+              },
+            ] as const);
             setRecentNoteMetaById(Object.fromEntries(entries));
           } else {
             setRecentNoteMetaById({});

@@ -1,10 +1,18 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
+import com.studysnap.backend.dto.FacetCount;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteStatusResponse;
+import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
+import com.studysnap.backend.dto.NotesLibraryIdsResponse;
+import com.studysnap.backend.dto.NotesLibraryPageResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicLibraryDiscoverySectionsResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
+import com.studysnap.backend.dto.SubjectFacetCount;
+import com.studysnap.backend.dto.SubjectStatsResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
@@ -21,13 +29,31 @@ import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.InvalidLibraryQueryException;
+import com.studysnap.backend.exception.InvalidPublicLibraryQueryException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UserNotFoundException;
-import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.model.NoteListItemView;
+import com.studysnap.backend.model.NoteLibraryReadiness;
+import com.studysnap.backend.model.NoteLibrarySort;
+import com.studysnap.backend.model.NoteListItemProjection;
+import com.studysnap.backend.model.PublicLibrarySort;
+import com.studysnap.backend.model.PublicLibrarySource;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
+import com.studysnap.backend.repository.NoteLibraryCandidateProjection;
+import com.studysnap.backend.repository.NoteLibraryFilterCriteria;
+import com.studysnap.backend.repository.NoteLibrarySubjectIdProjection;
+import com.studysnap.backend.repository.NoteLibrarySubjectProjection;
+import com.studysnap.backend.repository.NoteLibrarySubjectView;
+import com.studysnap.backend.repository.NoteLibraryValueCountProjection;
+import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteStatusProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
+import com.studysnap.backend.repository.PublicLibraryCandidateProjection;
+import com.studysnap.backend.repository.PublicLibraryFilterCriteria;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -40,11 +66,15 @@ import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -52,10 +82,13 @@ import java.util.HashSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -77,6 +110,19 @@ public class NoteService {
     private static final String PUBLIC_SORT_COPIED = "copied";
     private static final String PUBLIC_SORT_VIEWS = "views";
     private static final String PUBLIC_SORT_TITLE = "title";
+    private static final String PUBLIC_SORT_MOST_COPIED = "most_copied";
+    private static final String PUBLIC_SORT_RECOMMENDED = "recommended";
+    private static final String SORT_PARAMETER_NAME = "sort";
+    private static final String PUBLIC_RANKING_PLACEHOLDER = "available";
+    private static final int PUBLIC_DISCOVERY_SECTION_LIMIT = 6;
+    private static final String LIBRARY_SUBJECT_FALLBACK = "General";
+    private static final String LIBRARY_UNTITLED_NOTE = "Untitled note";
+    private static final OffsetDateTime LIBRARY_UNREVIEWED_AT = OffsetDateTime.ofInstant(
+            Instant.EPOCH,
+            ZoneOffset.UTC
+    );
+    private static final int LIBRARY_SUBJECT_FACET_LIMIT = 6;
+    private static final int MAX_LIBRARY_SELECT_ALL_RESULTS = 1000;
     private static final Comparator<String> COURSE_PROGRAM_DISPLAY_COMPARATOR = (left, right) -> {
         int caseInsensitive = left.compareToIgnoreCase(right);
         return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
@@ -331,8 +377,172 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listMine(UUID ownerUserId) {
-        List<NoteEntity> notes = noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
+        return listMine(ownerUserId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<NoteListItemResponse> listMine(UUID ownerUserId, Integer limit) {
+        Pageable pageable = limit == null ? Pageable.unpaged() : PageRequest.of(0, limit);
+        List<? extends NoteListItemView> notes = noteRepository
+                .findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId, pageable);
         return toListItems(notes, ownerUserId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public NotesLibraryPageResponse listLibraryPage(
+            UUID ownerUserId,
+            String search,
+            String readiness,
+            String courseProgram,
+            String subject,
+            List<String> tags,
+            String visibility,
+            String sort,
+            int page,
+            int pageSize
+    ) {
+        NoteLibraryFilterCriteria criteria = buildLibraryFilterCriteria(
+                ownerUserId, search, readiness, courseProgram, tags, visibility
+        );
+        NoteLibrarySort librarySort = parseLibrarySort(sort);
+        String subjectBucket = normalizeOptionalLibrarySubject(subject);
+        boolean materialize = librarySort == NoteLibrarySort.RECENTLY_REVIEWED || subjectBucket != null;
+
+        long totalMatching;
+        List<NoteListItemProjection> pageProjections;
+        long offset = (long) page * pageSize;
+        Map<UUID, OffsetDateTime> lastReviewedAtByNoteId = Map.of();
+        boolean lastReviewedAtPrecomputed = false;
+        if (materialize) {
+            List<NoteLibraryCandidateProjection> candidates = filterLibrarySubjectCandidates(
+                    noteRepository.findLibraryCandidates(criteria),
+                    subjectBucket
+            );
+            totalMatching = candidates.size();
+            if (librarySort == NoteLibrarySort.RECENTLY_REVIEWED) {
+                lastReviewedAtByNoteId = quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(
+                        ownerUserId,
+                        candidates.stream().map(NoteLibraryCandidateProjection::id).toList()
+                );
+                lastReviewedAtPrecomputed = true;
+            }
+            List<UUID> pageIds = candidates.stream()
+                    .sorted(libraryCandidateComparator(librarySort, lastReviewedAtByNoteId))
+                    .skip(offset)
+                    .limit(pageSize)
+                    .map(NoteLibraryCandidateProjection::id)
+                    .toList();
+            pageProjections = orderListItemProjections(
+                    noteRepository.findLibraryListItemProjectionsByOwnerUserIdAndIdIn(ownerUserId, pageIds),
+                    pageIds
+            );
+        } else {
+            totalMatching = noteRepository.countLibraryMatches(criteria);
+            pageProjections = offset > Integer.MAX_VALUE
+                    ? List.of()
+                    : noteRepository.findLibraryPage(criteria, librarySort, (int) offset, pageSize);
+        }
+
+        // findLatestSessionCompletedAtByNoteIds scans all of the user's completed sessions
+        // regardless of the noteIds filter, so reuse the RECENTLY_REVIEWED sort's result here
+        // instead of triggering that same unbounded scan a second time inside toListItems.
+        List<NoteListItemResponse> items = toListItems(
+                pageProjections,
+                ownerUserId,
+                true,
+                lastReviewedAtPrecomputed ? lastReviewedAtByNoteId : null
+        );
+        boolean hasMore = ((long) page + 1L) * pageSize < totalMatching;
+        return new NotesLibraryPageResponse(items, page, pageSize, totalMatching, hasMore);
+    }
+
+    @Transactional(readOnly = true)
+    public NotesLibraryIdsResponse listLibraryMatchingIds(
+            UUID ownerUserId,
+            String search,
+            String readiness,
+            String courseProgram,
+            String subject,
+            List<String> tags,
+            String visibility
+    ) {
+        NoteLibraryFilterCriteria criteria = buildLibraryFilterCriteria(
+                ownerUserId, search, readiness, courseProgram, tags, visibility
+        );
+        String subjectBucket = normalizeOptionalLibrarySubject(subject);
+        List<UUID> matchingIds;
+        long totalMatching;
+        if (subjectBucket == null) {
+            totalMatching = noteRepository.countLibraryMatches(criteria);
+            matchingIds = noteRepository.findLibraryMatchingIds(criteria, MAX_LIBRARY_SELECT_ALL_RESULTS);
+        } else {
+            matchingIds = filterLibrarySubjectCandidates(
+                    noteRepository.findLibrarySubjectIdCandidates(criteria),
+                    subjectBucket
+            ).stream()
+                    .map(NoteLibrarySubjectIdProjection::id)
+                    .sorted()
+                    .toList();
+            totalMatching = matchingIds.size();
+            matchingIds = matchingIds.stream().limit(MAX_LIBRARY_SELECT_ALL_RESULTS).toList();
+        }
+        return new NotesLibraryIdsResponse(
+                matchingIds.stream().map(UUID::toString).toList(),
+                totalMatching,
+                totalMatching > MAX_LIBRARY_SELECT_ALL_RESULTS
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public SubjectStatsResponse getLibrarySubjectStats(
+            UUID ownerUserId,
+            String search,
+            String readiness,
+            String courseProgram,
+            List<String> tags,
+            String visibility
+    ) {
+        NoteLibraryFilterCriteria criteria = buildLibraryFilterCriteria(
+                ownerUserId, search, readiness, courseProgram, tags, visibility
+        );
+        return buildLibrarySubjectStats(noteRepository.findLibrarySubjectCandidates(criteria));
+    }
+
+    @Transactional(readOnly = true)
+    public NotesLibraryFilterOptionsResponse getLibraryFilterOptions(UUID ownerUserId) {
+        List<FacetCount> subjects = toFacetCounts(
+                countLibrarySubjectBuckets(noteRepository.findAllLibrarySubjectCandidates(ownerUserId))
+        );
+        List<FacetCount> coursePrograms = toFacetCounts(noteRepository.countLibraryCoursePrograms(ownerUserId));
+        List<FacetCount> tags = toFacetCounts(noteRepository.countLibraryTags(ownerUserId));
+        return new NotesLibraryFilterOptionsResponse(subjects, coursePrograms, tags);
+    }
+
+    @Transactional(readOnly = true)
+    public List<NoteStatusResponse> listMineStatuses(UUID ownerUserId) {
+        List<NoteStatusProjection> notes = noteRepository
+                .findStatusProjectionsByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
+        if (notes.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> noteIds = notes.stream()
+                .map(NoteStatusProjection::id)
+                .toList();
+        Set<UUID> noteIdsWithStudyPacks = studyPackRepository.findProgressViewsByNoteIdIn(noteIds).stream()
+                .map(StudyPackProgressProjection::getNoteId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        return notes.stream()
+                .map(note -> new NoteStatusResponse(
+                        note.id().toString(),
+                        NoteStudyPackStatusResolver.resolve(
+                                note.status(),
+                                noteIdsWithStudyPacks.contains(note.id())
+                        )
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -347,6 +557,126 @@ public class NoteService {
             NoteTargetProfileType targetProfileType,
             Integer size
     ) {
+        return listPublic(
+                viewerUserId,
+                search,
+                sort,
+                subject,
+                tags,
+                courseProgram,
+                creator,
+                targetProfileType,
+                size,
+                null,
+                null,
+                false,
+                List.of()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public PublicNoteListResponse listPublic(
+            UUID viewerUserId,
+            String search,
+            String sort,
+            String subject,
+            List<String> tags,
+            String courseProgram,
+            String creator,
+            NoteTargetProfileType targetProfileType,
+            Integer size,
+            Integer page,
+            Integer pageSize,
+            boolean readyOnly,
+            List<String> sourceValues
+    ) {
+        List<PublicLibrarySource> sources = parsePublicLibrarySources(sourceValues);
+        if (page == null && pageSize == null) {
+            return listPublicLegacy(
+                    viewerUserId,
+                    search,
+                    sort,
+                    subject,
+                    tags,
+                    courseProgram,
+                    creator,
+                    targetProfileType,
+                    size,
+                    readyOnly,
+                    sources
+            );
+        }
+
+        int resolvedPage = page == null ? 0 : page;
+        int resolvedPageSize = pageSize == null ? 20 : pageSize;
+        PublicLibrarySort publicSort = parsePublicLibrarySort(sort);
+        PublicLibraryFilterCriteria criteria = buildPublicLibraryFilterCriteria(
+                viewerUserId,
+                search,
+                subject,
+                tags,
+                courseProgram,
+                creator,
+                targetProfileType,
+                readyOnly,
+                sources
+        );
+        long offset = (long) resolvedPage * resolvedPageSize;
+        long totalMatching;
+        List<NoteListItemProjection> pageProjections;
+        if (publicSort.isSqlOrderable()) {
+            totalMatching = noteRepository.countPublicLibraryMatches(criteria);
+            pageProjections = offset > Integer.MAX_VALUE
+                    ? List.of()
+                    : noteRepository.findPublicLibraryPage(
+                            criteria,
+                            publicSort,
+                            (int) offset,
+                            resolvedPageSize
+                    );
+        } else {
+            List<NoteListItemResponse> rankedCandidates = sortPublicLibraryCandidates(
+                    buildPublicLibraryRankingItems(noteRepository.findPublicLibraryCandidates(criteria)),
+                    publicSort
+            );
+            totalMatching = rankedCandidates.size();
+            List<UUID> pageIds = rankedCandidates.stream()
+                    .skip(offset)
+                    .limit(resolvedPageSize)
+                    .map(item -> UUID.fromString(item.id()))
+                    .toList();
+            pageProjections = orderListItemProjections(
+                    noteRepository.findPublicLibraryListItemProjectionsByIdIn(pageIds),
+                    pageIds
+            );
+        }
+
+        List<NoteListItemResponse> items = toListItems(pageProjections, viewerUserId, false);
+        boolean hasMore = ((long) resolvedPage + 1L) * resolvedPageSize < totalMatching;
+        int compatibleTotal = (int) Math.min(totalMatching, Integer.MAX_VALUE);
+        return new PublicNoteListResponse(
+                items,
+                compatibleTotal,
+                resolvedPage,
+                resolvedPageSize,
+                totalMatching,
+                hasMore
+        );
+    }
+
+    private PublicNoteListResponse listPublicLegacy(
+            UUID viewerUserId,
+            String search,
+            String sort,
+            String subject,
+            List<String> tags,
+            String courseProgram,
+            String creator,
+            NoteTargetProfileType targetProfileType,
+            Integer size,
+            boolean readyOnly,
+            List<PublicLibrarySource> sources
+    ) {
         String normalizedCreator = normalizePublicLibraryCreator(creator);
         List<NoteEntity> notes;
         if (normalizedCreator != null) {
@@ -359,8 +689,63 @@ public class NoteService {
         List<NoteListItemResponse> allItems = toListItems(notes, viewerUserId, false);
         int total = allItems.size();
         List<NoteListItemResponse> items = filterPublicLibraryItems(allItems, search, subject, tags, courseProgram);
+        items = filterPublicLibraryAdditiveFilters(items, readyOnly, sources);
         items = sortPublicLibraryItems(items, sort);
         return new PublicNoteListResponse(limitPublicLibraryItems(items, size), total);
+    }
+
+    @Transactional(readOnly = true)
+    public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(
+            UUID viewerUserId,
+            NoteTargetProfileType targetProfileType
+    ) {
+        PublicLibraryFilterCriteria criteria = buildPublicLibraryFilterCriteria(
+                viewerUserId,
+                null,
+                null,
+                List.of(),
+                null,
+                null,
+                targetProfileType,
+                false,
+                List.of()
+        );
+        List<NoteListItemResponse> candidates = buildPublicLibraryRankingItems(
+                noteRepository.findPublicLibraryCandidates(criteria)
+        );
+        List<NoteListItemResponse> featuredCandidates = PublicNotesScoringUtils.sortByFeatured(candidates).stream()
+                .limit(PUBLIC_DISCOVERY_SECTION_LIMIT)
+                .toList();
+        Set<String> featuredIds = featuredCandidates.stream().map(NoteListItemResponse::id).collect(Collectors.toSet());
+        List<NoteListItemResponse> popularCandidates = PublicNotesScoringUtils.sortByPopular(
+                candidates.stream().filter(item -> !featuredIds.contains(item.id())).toList()
+        ).stream().limit(PUBLIC_DISCOVERY_SECTION_LIMIT).toList();
+        Set<String> usedIds = new HashSet<>(featuredIds);
+        popularCandidates.stream().map(NoteListItemResponse::id).forEach(usedIds::add);
+        List<NoteListItemResponse> recentCandidates = PublicNotesScoringUtils.sortByRecent(
+                candidates.stream().filter(item -> !usedIds.contains(item.id())).toList()
+        ).stream().limit(PUBLIC_DISCOVERY_SECTION_LIMIT).toList();
+
+        List<UUID> unionIds = java.util.stream.Stream.of(featuredCandidates, popularCandidates, recentCandidates)
+                .flatMap(List::stream)
+                .map(item -> UUID.fromString(item.id()))
+                .distinct()
+                .toList();
+        List<NoteListItemResponse> enriched = toListItems(
+                orderListItemProjections(
+                        noteRepository.findPublicLibraryListItemProjectionsByIdIn(unionIds),
+                        unionIds
+                ),
+                viewerUserId,
+                false
+        );
+        Map<String, NoteListItemResponse> enrichedById = enriched.stream()
+                .collect(Collectors.toMap(NoteListItemResponse::id, item -> item));
+        return new PublicLibraryDiscoverySectionsResponse(
+                enrichPublicRankingItems(featuredCandidates, enrichedById),
+                enrichPublicRankingItems(popularCandidates, enrichedById),
+                enrichPublicRankingItems(recentCandidates, enrichedById)
+        );
     }
 
     @Transactional(readOnly = true)
@@ -388,6 +773,21 @@ public class NoteService {
                 .toList();
     }
 
+    private List<NoteListItemResponse> filterPublicLibraryAdditiveFilters(
+            List<NoteListItemResponse> items,
+            boolean readyOnly,
+            List<PublicLibrarySource> sources
+    ) {
+        return items.stream()
+                .filter(item -> !readyOnly || NoteStudyPackStatusResolver.STUDY_PACK_READY.equals(item.studyPackStatus()))
+                .filter(item -> sources.isEmpty() || sources.stream().anyMatch(source -> switch (source) {
+                    case BY_YOU -> item.isCurrentUser();
+                    case OFFICIAL -> item.isOfficialAuthor();
+                    case COMMUNITY -> !item.isCurrentUser() && !item.isOfficialAuthor();
+                }))
+                .toList();
+    }
+
     private List<NoteListItemResponse> sortPublicLibraryItems(List<NoteListItemResponse> items, String sort) {
         if (sort == null) {
             return items;
@@ -398,6 +798,8 @@ public class NoteService {
             case PUBLIC_SORT_FEATURED -> PublicNotesScoringUtils.sortByFeatured(items);
             case PUBLIC_SORT_POPULAR, PUBLIC_SORT_COPIED -> PublicNotesScoringUtils.sortByPopular(items);
             case PUBLIC_SORT_RECENT -> PublicNotesScoringUtils.sortByRecent(items);
+            case PUBLIC_SORT_RECOMMENDED -> sortPublicLibraryCandidates(items, PublicLibrarySort.RECOMMENDED);
+            case PUBLIC_SORT_MOST_COPIED -> sortPublicLibraryCandidates(items, PublicLibrarySort.MOST_COPIED);
             case PUBLIC_SORT_VIEWS -> items.stream()
                     .sorted(Comparator
                             .comparingLong((NoteListItemResponse item) -> item.viewCount() == null ? 0L : item.viewCount())
@@ -406,12 +808,114 @@ public class NoteService {
                     .toList();
             case PUBLIC_SORT_TITLE -> items.stream()
                     .sorted(Comparator.comparing(
-                            item -> StringUtils.defaultIfBlank(item.title(), "Untitled note"),
+                            item -> StringUtils.defaultIfBlank(item.title(), LIBRARY_UNTITLED_NOTE),
                             String.CASE_INSENSITIVE_ORDER
                     ))
                     .toList();
             default -> items;
         };
+    }
+
+    private List<NoteListItemResponse> buildPublicLibraryRankingItems(
+            List<PublicLibraryCandidateProjection> candidates
+    ) {
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> noteIds = candidates.stream().map(PublicLibraryCandidateProjection::id).toList();
+        Map<UUID, Long> copyCounts = loadCopyCounts(noteIds);
+        Map<UUID, Long> likeCounts = loadLikeCounts(noteIds);
+        Map<UUID, Long> shareCounts = loadPublicEventCounts(noteIds, AnalyticsEventType.PUBLIC_NOTE_SHARED);
+        Map<UUID, Long> viewCounts = loadPublicEventCounts(noteIds, AnalyticsEventType.PUBLIC_NOTE_VIEWED);
+        return candidates.stream()
+                .map(candidate -> new NoteListItemResponse(
+                        candidate.id().toString(),
+                        null,
+                        null,
+                        null,
+                        NoteTargetProfileType.STUDENT.name(),
+                        null,
+                        List.of(),
+                        candidate.hasContent() ? PUBLIC_RANKING_PLACEHOLDER : "",
+                        candidate.hasSummary() ? PUBLIC_RANKING_PLACEHOLDER : "",
+                        NoteVisibility.PUBLIC.name(),
+                        null,
+                        NoteStudyPackStatusResolver.resolve(candidate.status(), candidate.hasStudyPack()),
+                        candidate.quizCount(),
+                        copyCounts.getOrDefault(candidate.id(), 0L),
+                        likeCounts.getOrDefault(candidate.id(), 0L),
+                        shareCounts.getOrDefault(candidate.id(), 0L),
+                        viewCounts.getOrDefault(candidate.id(), 0L),
+                        DEFAULT_AUTHOR_NAME,
+                        null,
+                        false,
+                        false,
+                        candidate.createdAt(),
+                        candidate.updatedAt(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        false
+                ))
+                .toList();
+    }
+
+    private List<NoteListItemResponse> sortPublicLibraryCandidates(
+            List<NoteListItemResponse> items,
+            PublicLibrarySort sort
+    ) {
+        Comparator<NoteListItemResponse> createdAtDesc = Comparator.comparing(
+                NoteListItemResponse::createdAt,
+                Comparator.nullsLast(Comparator.reverseOrder())
+        );
+        Comparator<NoteListItemResponse> copyCountDesc = Comparator.comparingLong(
+                (NoteListItemResponse item) -> publicMetricValue(item.copyCount())
+        ).reversed();
+        Comparator<NoteListItemResponse> viewCountDesc = Comparator.comparingLong(
+                (NoteListItemResponse item) -> publicMetricValue(item.viewCount())
+        ).reversed();
+        return switch (sort) {
+            case FEATURED -> PublicNotesScoringUtils.sortByFeatured(items);
+            case POPULAR, COPIED -> PublicNotesScoringUtils.sortByPopular(items);
+            case VIEWS -> items.stream().sorted(viewCountDesc.thenComparing(createdAtDesc)).toList();
+            case MOST_COPIED -> items.stream().sorted(copyCountDesc.thenComparing(createdAtDesc)).toList();
+            case RECOMMENDED -> {
+                Instant now = Instant.now();
+                yield items.stream()
+                        .sorted(Comparator
+                                .comparingDouble((NoteListItemResponse item) ->
+                                        PublicNotesScoringUtils.computeScore(item, now))
+                                .reversed()
+                                .thenComparing(copyCountDesc)
+                                .thenComparing(viewCountDesc)
+                                .thenComparing(createdAtDesc))
+                        .toList();
+            }
+            case RECENT -> PublicNotesScoringUtils.sortByRecent(items);
+            case TITLE -> items.stream()
+                    .sorted(Comparator.comparing(
+                            item -> StringUtils.defaultIfBlank(item.title(), LIBRARY_UNTITLED_NOTE),
+                            String.CASE_INSENSITIVE_ORDER
+                    ))
+                    .toList();
+        };
+    }
+
+    private long publicMetricValue(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private List<NoteListItemResponse> enrichPublicRankingItems(
+            List<NoteListItemResponse> rankedItems,
+            Map<String, NoteListItemResponse> enrichedById
+    ) {
+        return rankedItems.stream()
+                .map(item -> enrichedById.get(item.id()))
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private List<NoteListItemResponse> limitPublicLibraryItems(List<NoteListItemResponse> items, Integer size) {
@@ -476,6 +980,59 @@ public class NoteService {
         return value.trim();
     }
 
+    private PublicLibraryFilterCriteria buildPublicLibraryFilterCriteria(
+            UUID viewerUserId,
+            String search,
+            String subject,
+            List<String> tags,
+            String courseProgram,
+            String creator,
+            NoteTargetProfileType targetProfileType,
+            boolean readyOnly,
+            List<PublicLibrarySource> sources
+    ) {
+        return new PublicLibraryFilterCriteria(
+                viewerUserId,
+                AccountPurgeService.DELETED_USER_ID,
+                toLibrarySearchPattern(search),
+                normalizePublicLibraryFilterSlug(subject),
+                normalizePublicLibraryFilterSlugs(tags),
+                normalizePublicLibraryFilterSlug(courseProgram),
+                normalizePublicLibraryCreator(creator),
+                targetProfileType,
+                readyOnly,
+                sources
+        );
+    }
+
+    private PublicLibrarySort parsePublicLibrarySort(String sort) {
+        String normalized = sort == null || sort.isBlank()
+                ? PUBLIC_SORT_RECOMMENDED
+                : sort.trim().toLowerCase(Locale.ROOT);
+        try {
+            return PublicLibrarySort.valueOf(normalized.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidPublicLibraryQueryException(SORT_PARAMETER_NAME);
+        }
+    }
+
+    private List<PublicLibrarySource> parsePublicLibrarySources(List<String> sourceValues) {
+        if (sourceValues == null || sourceValues.isEmpty()) {
+            return List.of();
+        }
+        try {
+            return sourceValues.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(value -> !value.isBlank())
+                    .map(value -> PublicLibrarySource.valueOf(value.toUpperCase(Locale.ROOT)))
+                    .distinct()
+                    .toList();
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidPublicLibraryQueryException("source");
+        }
+    }
+
     private List<String> normalizePublicLibraryFilterSlugs(List<String> values) {
         if (values == null || values.isEmpty()) {
             return List.of();
@@ -522,6 +1079,13 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
+    public List<String> listPublicTags() {
+        return normalizeTags(noteRepository.findDistinctPublicTags()).stream()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public PublicNoteDetailResponse getPublicById(String id, UUID viewerUserId) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)
@@ -557,14 +1121,27 @@ public class NoteService {
         return mapToPublicDetail(matched, linkedStudyPack, viewerUserId);
     }
 
-    private List<NoteListItemResponse> toListItems(List<NoteEntity> notes, UUID viewerUserId, boolean includeOwnerUserId) {
+    private List<NoteListItemResponse> toListItems(
+            List<? extends NoteListItemView> notes,
+            UUID viewerUserId,
+            boolean includeOwnerUserId
+    ) {
+        return toListItems(notes, viewerUserId, includeOwnerUserId, null);
+    }
+
+    private List<NoteListItemResponse> toListItems(
+            List<? extends NoteListItemView> notes,
+            UUID viewerUserId,
+            boolean includeOwnerUserId,
+            Map<UUID, OffsetDateTime> precomputedLastSessionCompletedAtByNoteId
+    ) {
         if (notes.isEmpty()) {
             return List.of();
         }
 
-        List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
+        List<UUID> noteIds = notes.stream().map(NoteListItemView::getId).toList();
         List<UUID> ownerIds = notes.stream()
-                .map(NoteEntity::getOwnerUserId)
+                .map(NoteListItemView::getOwnerUserId)
                 .distinct()
                 .toList();
         Map<UUID, Long> copyCountsByNoteId = loadCopyCounts(noteIds);
@@ -586,8 +1163,9 @@ public class NoteService {
                 }
             }
         }
-        Map<UUID, OffsetDateTime> lastSessionCompletedAtByNoteId = quizSessionHistoryService
-                .findLatestSessionCompletedAtByNoteIds(viewerUserId, noteIds);
+        Map<UUID, OffsetDateTime> lastSessionCompletedAtByNoteId = precomputedLastSessionCompletedAtByNoteId != null
+                ? precomputedLastSessionCompletedAtByNoteId
+                : quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(viewerUserId, noteIds);
         Map<UUID, UserEntity> ownerById = new HashMap<>();
         for (UserEntity owner : userRepository.findAllById(ownerIds)) {
             ownerById.put(owner.getId(), owner);
@@ -757,7 +1335,7 @@ public class NoteService {
         return NoteTargetProfileType.STUDENT;
     }
 
-    private NoteTargetProfileType resolveTargetProfileType(NoteEntity note) {
+    private NoteTargetProfileType resolveTargetProfileType(NoteListItemView note) {
         return note.getTargetProfileType() == null ? NoteTargetProfileType.STUDENT : note.getTargetProfileType();
     }
 
@@ -811,7 +1389,7 @@ public class NoteService {
     }
 
     private NoteListItemResponse mapToListItemResponse(
-            NoteEntity note,
+            NoteListItemView note,
             StudyPackEntity studyPack,
             long copyCount,
             long likeCount,
@@ -837,7 +1415,7 @@ public class NoteService {
                 studyPack == null ? "" : SummaryPreviewUtils.buildSummaryPreview(studyPack.getSummary(), SUMMARY_PREVIEW_MAX_LENGTH),
                 resolveVisibility(note).name(),
                 studyPack == null ? null : studyPack.getId().toString(),
-                NoteStudyPackStatusResolver.resolve(note, studyPack),
+                NoteStudyPackStatusResolver.resolve(note.getStatus(), studyPack != null),
                 studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
                 copyCount,
                 likeCount,
@@ -984,6 +1562,207 @@ public class NoteService {
                 .orElse(normalizedRequested);
     }
 
+    private NoteLibraryFilterCriteria buildLibraryFilterCriteria(
+            UUID ownerUserId,
+            String search,
+            String readiness,
+            String courseProgram,
+            List<String> tags,
+            String visibility
+    ) {
+        return new NoteLibraryFilterCriteria(
+                ownerUserId,
+                toLibrarySearchPattern(search),
+                parseLibraryReadiness(readiness),
+                normalizeOptionalText(courseProgram),
+                normalizeLibraryFilterTags(tags),
+                parseLibraryVisibility(visibility)
+        );
+    }
+
+    private String toLibrarySearchPattern(String search) {
+        if (search == null || search.isBlank()) {
+            return null;
+        }
+        String escaped = search.trim()
+                .toLowerCase(Locale.ROOT)
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + escaped + "%";
+    }
+
+    private List<String> normalizeLibraryFilterTags(List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return List.of();
+        }
+        return tags.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(tag -> !tag.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private NoteLibraryReadiness parseLibraryReadiness(String readiness) {
+        String normalized = readiness == null || readiness.isBlank()
+                ? NoteLibraryReadiness.ALL.name()
+                : readiness.trim().toUpperCase(Locale.ROOT);
+        try {
+            return NoteLibraryReadiness.valueOf(normalized);
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidLibraryQueryException("readiness");
+        }
+    }
+
+    private NoteVisibility parseLibraryVisibility(String visibility) {
+        if (visibility == null || visibility.isBlank() || NoteLibraryReadiness.ALL.name().equalsIgnoreCase(visibility)) {
+            return null;
+        }
+        try {
+            return NoteVisibility.valueOf(visibility.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidLibraryQueryException("visibility");
+        }
+    }
+
+    private NoteLibrarySort parseLibrarySort(String sort) {
+        String normalized = sort == null || sort.isBlank()
+                ? NoteLibrarySort.RECENTLY_UPDATED.name()
+                : sort.trim().toUpperCase(Locale.ROOT);
+        try {
+            return NoteLibrarySort.valueOf(normalized);
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidLibraryQueryException(SORT_PARAMETER_NAME);
+        }
+    }
+
+    private String normalizeOptionalLibrarySubject(String subject) {
+        return SubjectNormalizationUtils.normalizeForStorage(subject);
+    }
+
+    private <T extends NoteLibrarySubjectView> List<T> filterLibrarySubjectCandidates(
+            List<T> candidates,
+            String subjectBucket
+    ) {
+        if (subjectBucket == null) {
+            return candidates;
+        }
+        return candidates.stream()
+                .filter(candidate -> resolveLibrarySubjectBucket(
+                        candidate.subject(), candidate.courseProgram()
+                ).equals(subjectBucket))
+                .toList();
+    }
+
+    private String resolveLibrarySubjectBucket(String subject, String courseProgram) {
+        String normalizedSubject = SubjectNormalizationUtils.normalizeForStorage(subject);
+        if (normalizedSubject != null) {
+            return normalizedSubject;
+        }
+        String normalizedCourseProgram = CourseProgramNormalizationUtils.normalizeForStorage(courseProgram);
+        return normalizedCourseProgram == null ? LIBRARY_SUBJECT_FALLBACK : normalizedCourseProgram;
+    }
+
+    private Comparator<NoteLibraryCandidateProjection> libraryCandidateComparator(
+            NoteLibrarySort sort,
+            Map<UUID, OffsetDateTime> lastReviewedAtByNoteId
+    ) {
+        Comparator<NoteLibraryCandidateProjection> updatedDesc = Comparator
+                .comparing(NoteLibraryCandidateProjection::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder()))
+                .reversed();
+        Comparator<NoteLibraryCandidateProjection> primary = switch (sort) {
+            case TITLE_ASC -> Comparator.<NoteLibraryCandidateProjection, String>comparing(
+                    candidate -> candidate.title() == null ? LIBRARY_UNTITLED_NOTE : candidate.title(),
+                    this::compareLibraryLabels
+            );
+            case TITLE_DESC -> Comparator.<NoteLibraryCandidateProjection, String>comparing(
+                    candidate -> candidate.title() == null ? LIBRARY_UNTITLED_NOTE : candidate.title(),
+                    this::compareLibraryLabels
+            ).reversed();
+            case OLDEST -> Comparator.comparing(
+                    NoteLibraryCandidateProjection::createdAt,
+                    Comparator.nullsFirst(Comparator.naturalOrder())
+            );
+            case NEWEST -> Comparator.comparing(
+                    NoteLibraryCandidateProjection::createdAt,
+                    Comparator.nullsFirst(Comparator.naturalOrder())
+            ).reversed();
+            case RECENTLY_REVIEWED -> Comparator.<NoteLibraryCandidateProjection, OffsetDateTime>comparing(
+                    candidate -> Objects.requireNonNullElse(
+                            lastReviewedAtByNoteId.get(candidate.id()),
+                            LIBRARY_UNREVIEWED_AT
+                    )
+            ).reversed();
+            case RECENTLY_UPDATED -> updatedDesc;
+        };
+        Comparator<NoteLibraryCandidateProjection> withUpdatedTiebreak = sort == NoteLibrarySort.RECENTLY_UPDATED
+                ? primary
+                : primary.thenComparing(updatedDesc);
+        return withUpdatedTiebreak.thenComparing(NoteLibraryCandidateProjection::id);
+    }
+
+    private int compareLibraryLabels(String left, String right) {
+        return java.text.Collator.getInstance().compare(left, right);
+    }
+
+    private List<NoteListItemProjection> orderListItemProjections(
+            List<NoteListItemProjection> projections,
+            List<UUID> orderedIds
+    ) {
+        if (orderedIds.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, NoteListItemProjection> byId = projections.stream()
+                .collect(Collectors.toMap(NoteListItemProjection::getId, projection -> projection));
+        return orderedIds.stream().map(byId::get).filter(Objects::nonNull).toList();
+    }
+
+    private SubjectStatsResponse buildLibrarySubjectStats(List<NoteLibrarySubjectProjection> candidates) {
+        List<FacetCount> sortedCounts = toFacetCounts(countLibrarySubjectBuckets(candidates));
+        List<SubjectFacetCount> topSubjects = sortedCounts.stream()
+                .limit(LIBRARY_SUBJECT_FACET_LIMIT)
+                .map(count -> new SubjectFacetCount(count.value(), count.count()))
+                .toList();
+        long otherSubjectsCount = sortedCounts.stream()
+                .skip(LIBRARY_SUBJECT_FACET_LIMIT)
+                .mapToLong(FacetCount::count)
+                .sum();
+        return new SubjectStatsResponse(topSubjects, otherSubjectsCount, candidates.size());
+    }
+
+    private Map<String, Long> countLibrarySubjectBuckets(List<? extends NoteLibrarySubjectView> candidates) {
+        Map<String, Long> counts = new HashMap<>();
+        for (NoteLibrarySubjectView candidate : candidates) {
+            counts.merge(
+                    resolveLibrarySubjectBucket(candidate.subject(), candidate.courseProgram()),
+                    1L,
+                    Long::sum
+            );
+        }
+        return counts;
+    }
+
+    private List<FacetCount> toFacetCounts(Map<String, Long> counts) {
+        return counts.entrySet().stream()
+                .map(entry -> new FacetCount(entry.getKey(), entry.getValue()))
+                .sorted(facetCountComparator())
+                .toList();
+    }
+
+    private List<FacetCount> toFacetCounts(List<NoteLibraryValueCountProjection> counts) {
+        return counts.stream()
+                .map(count -> new FacetCount(count.value(), count.count()))
+                .sorted(facetCountComparator())
+                .toList();
+    }
+
+    private Comparator<FacetCount> facetCountComparator() {
+        return Comparator.comparingLong(FacetCount::count)
+                .reversed()
+                .thenComparing(FacetCount::value, this::compareLibraryLabels);
+    }
+
     private NoteVisibility parseVisibility(String visibilityRaw) {
         if (visibilityRaw == null || visibilityRaw.isBlank()) {
             throw new AppException("INVALID_VISIBILITY", "Visibility is required.", HttpStatus.BAD_REQUEST);
@@ -995,7 +1774,7 @@ public class NoteService {
         }
     }
 
-    private NoteVisibility resolveVisibility(NoteEntity note) {
+    private NoteVisibility resolveVisibility(NoteListItemView note) {
         return note.getVisibility() == null ? NoteVisibility.PRIVATE : note.getVisibility();
     }
 

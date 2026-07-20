@@ -45,6 +45,17 @@ Growth behavior:
   - `Most Viewed`
 - Discovery sorting should use real copy/share/view signals when available.
 
+Paginated browsing contract (F8):
+
+- `GET /notes/public` keeps its legacy response when `page`/`pageSize` are absent, preserving sitemap and SSR callers.
+- Supplying either pagination parameter enables SQL-pushed filtering plus an enriched 1-50-note page with `page`, `pageSize`, `totalMatching`, and `hasMore`.
+- Paginated sorting supports `recent`, `title`, gated `featured`, gated `popular`/`copied`, ungated `views`, ungated `most_copied`, and ungated decay-ranked `recommended`.
+- `readyOnly=true` limits results to notes resolving to `STUDY_PACK_READY`; the frontend sends repeatable lowercase `source=by_you|official|community` values to filter author origin (the backend accepts them case-insensitively).
+- `GET /notes/public/discovery-sections` returns mutually exclusive Featured, Popular, and Recent sections, each capped at six and optionally audience-scoped.
+- `/public/library` consumes the paginated contract in 20-note pages, sends all applied filters/sorts to the backend, and appends subsequent pages through `Load more`; stale page responses are request-token guarded.
+- The discovery homepage consumes `GET /notes/public/discovery-sections`, while focused Featured/Popular/Recent views use paginated `featured`/`popular`/`recent` sorts.
+- Whole-library filter values come from `GET /subjects?scope=public`, `GET /course-programs?scope=public`, and `GET /tags?scope=public`, so facet pickers never depend on the currently loaded note page.
+
 Canonical note/detail routes:
 
 - `/public/library/{subject}`
