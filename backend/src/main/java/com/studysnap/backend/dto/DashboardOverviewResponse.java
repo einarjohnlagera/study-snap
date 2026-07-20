@@ -4,6 +4,9 @@ public record DashboardOverviewResponse(
         DashboardPerformanceSummaryResponse performanceSummary,
         DashboardFocusAreasResponse focusAreas,
         DashboardWeeklyActivityResponse weeklyActivity,
-        ExamPacingPlanResponse examPacingPlan
+        ExamPacingPlanResponse examPacingPlan,
+        long totalNoteCount,
+        boolean hasQuizQuestions,
+        String mostRecentReadyNoteId
 ) {
 }

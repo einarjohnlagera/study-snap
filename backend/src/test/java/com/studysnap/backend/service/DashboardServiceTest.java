@@ -119,6 +119,10 @@ class DashboardServiceTest {
                 .thenReturn(Optional.empty());
         lenient().when(noteRepository.findByIdAndOwnerUserId(any(UUID.class), any(UUID.class)))
                 .thenReturn(Optional.empty());
+        lenient().when(noteRepository.countByOwnerUserId(any(UUID.class))).thenReturn(0L);
+        lenient().when(noteRepository.existsOwnedNoteWithQuizQuestions(any(UUID.class))).thenReturn(false);
+        lenient().when(noteRepository.findMostRecentlyUpdatedStudyPackReadyNoteId(any(UUID.class)))
+                .thenReturn(Optional.empty());
     }
 
     @Test
@@ -231,6 +235,7 @@ class DashboardServiceTest {
     void getOverview_returnsPerformanceFocusAreasAndWeeklyActivity() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
+        UUID mostRecentReadyNoteId = UUID.randomUUID();
         // Pin to a fixed mid-day instant: sub-hour offsets below cross calendar-day
         // boundaries when run near midnight, making studyDays nondeterministic.
         OffsetDateTime now = OffsetDateTime.parse("2026-05-23T12:00:00Z");
@@ -277,6 +282,10 @@ class DashboardServiceTest {
                 buildActivityEvent(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, now.minusDays(1)),
                 buildActivityEvent(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, now.minusDays(1).minusHours(1))
         ));
+        when(noteRepository.countByOwnerUserId(userId)).thenReturn(24L);
+        when(noteRepository.existsOwnedNoteWithQuizQuestions(userId)).thenReturn(true);
+        when(noteRepository.findMostRecentlyUpdatedStudyPackReadyNoteId(userId))
+                .thenReturn(Optional.of(mostRecentReadyNoteId));
 
         DashboardOverviewResponse response = dashboardService.getOverview(userId);
 
@@ -293,6 +302,9 @@ class DashboardServiceTest {
         assertThat(response.weeklyActivity().quizzesTaken()).isEqualTo(2);
         assertThat(response.weeklyActivity().adaptiveSessions()).isEqualTo(1);
         assertThat(response.weeklyActivity().studyDays()).isEqualTo(2);
+        assertThat(response.totalNoteCount()).isEqualTo(24);
+        assertThat(response.hasQuizQuestions()).isTrue();
+        assertThat(response.mostRecentReadyNoteId()).isEqualTo(mostRecentReadyNoteId.toString());
     }
 
     @Test

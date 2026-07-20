@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.51.0 - Read-Path Performance Pass II` is the current released version (on `releases/v0.51.0`, cut from `main` after v0.50.4 merged) — see its section below.
+`v0.51.1 - Dashboard Stage-1 Limit Wiring` is the current released version (on `releases/v0.51.1`, cut from `main` after v0.51.0 merged) — see its section below.
+
+`v0.51.0 - Read-Path Performance Pass II` is the previous released version — see its section below.
 
 `v0.50.4 - Exam Hub Discovery Polish` is the previous released version — see its section below.
 
@@ -88,8 +90,17 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Wave 2 Exam Hub candidate: CPALE (Accountancy) — the N2 depth inventory found ~100+ notes across Accountancy-adjacent subjects (accounting, auditing, taxation, financial management) not covered by any current Exam Hub | `public-library-seo-expansion-out/02-subject-depth-inventory.sql` query 1 results | Not yet scoped, side-finding only | needs a product decision — confirm real courseProgram-level depth crosses the existing Wave-2 gate (~25-30 notes, `docs/features/exam-hub.md`), then scope like the original 3 hubs | 2026-07-17 |
 | Public-note copy idempotency guard never backfills a stale copy | investigated during v0.50.3 signoff follow-up, no session doc | Low-priority, self-inflicted-by-timing edge case | `NoteService.copyNote()`'s existing-copy branch returns a prior copy as-is even if it predates the source's Study Pack becoming ready — a user re-copying after their first copy landed draft keeps getting the stale draft forever. Only reachable if a user copies before the source pack exists, then retries later. Candidate fix (not scoped): if the existing copy has no pack and the source now has a ready one, backfill it instead of returning as-is | 2026-07-17 |
 | Production performance audit (Private Library, Public Library, Note Collection detail, Dashboard reported slow) | `production-performance-audit-out/01-production-performance-audit.md` | **Shipped — v0.51.0.** F1, F2, F4, F5, F6, F7, and F8 shipped in full (F8 — real server-side Public Library pagination — chosen directly over F3's stopgap). F9 (client caching) and F10 (denormalized counts) intentionally remain parked below | F9/F10: gated on post-v0.51.0 production evidence (slow-query logs, whether refetch pain persists once queries are bounded) — not before | 2026-07-20 |
-| Dashboard Stage-1 `listNotes()` limit-wiring (F2 follow-up, deliberately deferred during F2's implementation) | `docs/codex-prompts/v0.51.0-note-list-lean-projection.md` | Not yet scoped | `frontend/app/dashboard/page.tsx`'s `totalNotes={items.length}`, `hasCompletedSession = items.some(...)`, and `resolveChallengeQuizHref(continueStudying, items)` all depend on the full unbounded note array — needs those 3 to stop depending on the full array (e.g. a dedicated count + a "has any ready note" signal) before Dashboard can safely pass `limit` to the now-available bounded endpoint. Natural fit for F6's scope, not yet folded in | 2026-07-18 |
+| Dashboard Stage-1 `listNotes()` limit-wiring (F2 follow-up, deliberately deferred during F2's implementation) | `docs/codex-prompts/v0.51.0-note-list-lean-projection.md` | **Shipped — v0.51.1.** Dashboard now requests the 20 most-recently-updated owned notes; the existing overview response supplies the exact owner-note count, quiz-question existence, and most-recent resolved-ready note id so totals, empty states, first-time ordering, and Challenge routing retain their unbounded semantics | none | 2026-07-20 |
 | F9/F10 — client-side caching + denormalized engagement counts (parked from the performance audit above) | `production-performance-audit-out/01-production-performance-audit.md` | Parked, intentionally not in v0.51.0 | production evidence after v0.51.0 ships: do bounded/parallelized pages still show refetch pain (F9)? does slow-query logging still flag the enrichment queries (F10)? | 2026-07-17 |
+
+## v0.51.1 - Dashboard Stage-1 Limit Wiring (Released, base branch `releases/v0.51.1`)
+
+Origin: F2's follow-up item from `v0.51.0 - Read-Path Performance Pass II`, deliberately deferred during F2's own implementation because Dashboard Stage-1's `totalNotes`, `hasCompletedSession`, and Challenge-CTA resolution all depended on the full unbounded note array at the time. Now that F2's bounded `limit` param exists and is unused, this closes the gap.
+
+**Scope (shipped):**
+- Dashboard Stage-1 bounded fetch (backend + frontend).
+
+Anti-drift: read-path performance only, following F1/F2/F6's precedent from v0.51.0 — no change to what Dashboard displays or which note Continue Studying / Challenge Quiz routes to. No new caching infrastructure. No changes to quiz-session data model, mastery/readiness computation, or profile-type branching logic. Full scope in `RELEASES.md`.
 
 ## v0.51.0 - Read-Path Performance Pass II (Released, base branch `releases/v0.51.0`)
 
