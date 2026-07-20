@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.52.0 - Proactive In-App Feedback Prompts
+
+**Status: In Progress**
+
+Theme: stop waiting on cold outreach to churned users and instead surface the existing feedback pipeline proactively, at two moments where a *current* user's experience is freshest — right after their first-ever quiz result, and when they return after a period of inactivity — so future cohorts' friction gets caught in real time instead of inferred after the fact.
+
+### Planned Scope
+
+- **First-quiz-ever feedback prompt (backend + frontend).** `QuizFeedbackPanel` already renders on Quick Review, Challenge, and Adaptive results screens; wire it into Board Exam / Long Exam results too, and add a new backend signal for "has this user ever completed a session before, across every mode" (nothing computes this today — existing queries are all scoped to one Study Pack) so the panel can specifically surface a "how did that go?" ask the one time it's actually a user's first completed session ever, not every time.
+- **Return-after-inactivity feedback prompt (backend + frontend).** Reuses `RetentionService`'s existing inactivity definition and configured threshold (`properties.getRetention().getInactivityDays()` — the same cutoff the existing 3-day inactivity email uses) rather than inventing a new one, exposed to the frontend as a new signal so a "welcome back" ask can render once per qualifying return.
+- Both prompts render once per user (mirrors the existing `pickActiveGuidance()` one-shot-per-tip pattern) and use quick-action buttons that prefill the existing freeform `SendFeedbackWidget`/`QuizFeedbackPanel` textarea (mirrors `QuizFeedbackPanel`'s existing "Report Question" / "Confusing Explanation" pattern) — no new structured data model, no new feedback pipeline.
+
+Anti-drift: reuses the existing `POST /feedback` pipeline and flat `feedback` table as-is — no new feedback storage, no rating/NPS data model. No changes to the existing 3-day inactivity email or its cooldown logic — this only reads the same threshold, it does not touch `RetentionEmailScheduler`. No outreach to already-churned users — this is forward-looking, for users currently in the app.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.51.1 - Dashboard Stage-1 Limit Wiring
 
 **Status: Released**
