@@ -92,6 +92,7 @@ describe("SendFeedbackWidget", () => {
     fireEvent.click(screen.getByRole("button", { name: "Report Question" }));
 
     expect(screen.getByRole("dialog", { name: "Help improve this quiz" })).toBeInTheDocument();
+    expect(screen.getByText("Reporting: Report Question")).toBeInTheDocument();
     expect(screen.getByLabelText("Message")).toHaveValue("Feedback type: Report Question\nQuiz: Challenge Quiz\n\nWhat happened?");
 
     fireEvent.change(screen.getByLabelText("Message"), {
@@ -105,5 +106,37 @@ describe("SendFeedbackWidget", () => {
         "http://localhost/",
       );
     });
+  });
+
+  it("clears a quick-action prefill when its context chip is dismissed", () => {
+    render(
+      <SendFeedbackWidget
+        variant="inline"
+        showTriggerButton={false}
+        quickActions={[{ label: "Report Question", template: "Prefilled question context" }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Report Question" }));
+    expect(screen.getByLabelText("Message")).toHaveValue("Prefilled question context");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear Report Question feedback context" }));
+
+    expect(screen.getByLabelText("Message")).toHaveValue("");
+    expect(screen.queryByText("Reporting: Report Question")).not.toBeInTheDocument();
+  });
+
+  it("updates the character counter and changes tone past its warning thresholds", () => {
+    render(<SendFeedbackWidget />);
+    fireEvent.click(screen.getByRole("button", { name: /Send Feedback/i }));
+
+    const messageField = screen.getByLabelText("Message");
+    expect(screen.getByText("0 / 4000")).toHaveClass("text-foreground/50");
+
+    fireEvent.change(messageField, { target: { value: "a".repeat(3801) } });
+    expect(screen.getByText("3801 / 4000")).toHaveClass("text-amber-600");
+
+    fireEvent.change(messageField, { target: { value: "a".repeat(3951) } });
+    expect(screen.getByText("3951 / 4000")).toHaveClass("text-red-600");
   });
 });

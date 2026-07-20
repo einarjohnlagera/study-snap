@@ -17,6 +17,8 @@ Collect soft-launch feedback from authenticated users without sending them out o
 - the frontend also sends the current page through `X-Page-Url`
 - successful submission should show:
   - `Thanks! Your feedback helps improve NoteLib.`
+- quick-action templates open the modal with a dismissible `Reporting: {action}` context chip; dismissing the chip clears the prefilled message without submitting or closing the modal
+- Admin's `Recent Feedback` table keeps compact, truncated cells and provides a per-row `View` modal for the complete submission already present in the dashboard response
 
 ## Placement Rules
 
@@ -65,6 +67,7 @@ Admin Dashboard should show a read-only `Recent Feedback` table with:
 - message
 - page URL
 - status
+- a per-row `View` action that opens the full message, clickable page URL, user email, full submission timestamp, and read-only status without issuing another request
 
 ## Email Notification
 
