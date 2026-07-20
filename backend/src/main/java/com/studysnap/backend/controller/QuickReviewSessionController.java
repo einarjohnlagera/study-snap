@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
 import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.AdaptivePracticeCompleteRequest;
+import com.studysnap.backend.dto.AdaptivePracticeCompleteResponse;
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewSessionConfidenceRequest;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
@@ -147,7 +148,7 @@ public class QuickReviewSessionController {
     }
 
     @PostMapping("/adaptive-practice/{sessionId}/complete")
-    public SimpleMessageResponse completeAdaptivePracticeQuiz(
+    public AdaptivePracticeCompleteResponse completeAdaptivePracticeQuiz(
             @PathVariable String sessionId,
             @Valid @RequestBody AdaptivePracticeCompleteRequest request,
             @AuthenticationPrincipal AuthenticatedUser user

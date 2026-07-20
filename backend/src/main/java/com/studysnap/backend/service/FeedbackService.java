@@ -1,11 +1,14 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.FeedbackPromptContextResponse;
 import com.studysnap.backend.entity.FeedbackEntity;
 import com.studysnap.backend.entity.FeedbackStatus;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.FeedbackRepository;
+import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +30,19 @@ public class FeedbackService {
     private final EmailTemplateService emailTemplateService;
     private final EmailService emailService;
     private final StudySnapProperties studySnapProperties;
+    private final RetentionService retentionService;
+    private final QuickReviewSessionRepository quickReviewSessionRepository;
+
+    @Transactional(readOnly = true)
+    public FeedbackPromptContextResponse getPromptContext(UUID userId) {
+        return new FeedbackPromptContextResponse(
+                retentionService.isReturningAfterInactivity(userId),
+                quickReviewSessionRepository.existsByUserIdAndStatusAndCompletedAtIsNotNull(
+                        userId,
+                        QuickReviewSessionStatus.COMPLETED
+                )
+        );
+    }
 
     @Transactional
     public String submitFeedback(UUID userId, String message, String pageUrl) {

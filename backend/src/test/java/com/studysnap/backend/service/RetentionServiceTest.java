@@ -129,6 +129,22 @@ class RetentionServiceTest {
     }
 
     @Test
+    void isReturningAfterInactivity_usesTheSameMeaningfulActivityThresholdAsInactiveUsers() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        UUID userId = UUID.randomUUID();
+        when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(userId), anyCollection()))
+                .thenReturn(true);
+        when(activityEventRepository.existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(userId),
+                anyCollection(),
+                eq(now.minusDays(3))
+        )).thenReturn(false, true);
+
+        assertThat(retentionService.isReturningAfterInactivity(userId, now)).isTrue();
+        assertThat(retentionService.isReturningAfterInactivity(userId, now)).isFalse();
+    }
+
+    @Test
     void findUsersWithWeakConcepts_returnsRemainingTopicsAfterAdaptiveFollowUp() {
         OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
         UserEntity user = verifiedUser();

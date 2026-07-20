@@ -266,6 +266,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     (completeQuickReviewSession as jest.Mock).mockResolvedValue({
       ...baseResult,
       isFirstCompletedQuiz: true,
+      isFirstCompletedSessionEver: true,
     });
     render(<QuickReviewPage />);
 
@@ -274,6 +275,8 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
 
     expect(await screen.findByRole("heading", { name: "0 of 1 concept secured" })).toBeInTheDocument();
+    expect(screen.getByText("How did your first quiz go?")).toBeInTheDocument();
+    expect(screen.queryByText("Was this quiz helpful?")).not.toBeInTheDocument();
     expect(screen.getByText("The rest are best reviewed tomorrow — you're not done yet.")).toBeInTheDocument();
     await waitFor(() => {
       expect(trackAnalyticsEvent).toHaveBeenCalledWith({
@@ -290,6 +293,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     (completeQuickReviewSession as jest.Mock).mockResolvedValue({
       ...baseResult,
       isFirstCompletedQuiz: false,
+      isFirstCompletedSessionEver: false,
     });
     render(<QuickReviewPage />);
 
@@ -309,6 +313,7 @@ describe("QuickReviewPage post-quiz UX", () => {
       scorePercentage: 100,
       weakConcepts: [],
       isFirstCompletedQuiz: true,
+      isFirstCompletedSessionEver: true,
     });
     render(<QuickReviewPage />);
 

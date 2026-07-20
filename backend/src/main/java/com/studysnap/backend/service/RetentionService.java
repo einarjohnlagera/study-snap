@@ -66,6 +66,11 @@ public class RetentionService {
     }
 
     @Transactional(readOnly = true)
+    public boolean isReturningAfterInactivity(UUID userId) {
+        return isReturningAfterInactivity(userId, OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    @Transactional(readOnly = true)
     public List<WeakConceptReminder> findUsersWithWeakConcepts() {
         return findUsersWithWeakConcepts(OffsetDateTime.now(ZoneOffset.UTC));
     }
@@ -106,10 +111,8 @@ public class RetentionService {
     }
 
     List<InactiveUserReminder> findInactiveUsers(OffsetDateTime now) {
-        OffsetDateTime cutoff = now.minusDays(properties.getRetention().getInactivityDays());
         return userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE).stream()
-                .filter(user -> hasRecordedStudyActivity(user.getId()))
-                .filter(user -> !hasRecentMeaningfulActivity(user.getId(), cutoff))
+                .filter(user -> isReturningAfterInactivity(user.getId(), now))
                 .filter(user -> cooldownElapsed(
                         user.getId(),
                         RetentionEmailType.INACTIVITY,
@@ -123,6 +126,11 @@ public class RetentionService {
                         buildAbsoluteUrl("/dashboard")
                 ))
                 .toList();
+    }
+
+    boolean isReturningAfterInactivity(UUID userId, OffsetDateTime now) {
+        OffsetDateTime cutoff = now.minusDays(properties.getRetention().getInactivityDays());
+        return hasRecordedStudyActivity(userId) && !hasRecentMeaningfulActivity(userId, cutoff);
     }
 
     List<WeakConceptReminder> findUsersWithWeakConcepts(OffsetDateTime now) {

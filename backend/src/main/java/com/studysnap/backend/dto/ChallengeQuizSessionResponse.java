@@ -18,6 +18,7 @@ public record ChallengeQuizSessionResponse(
         List<String> weakConcepts,
         Integer durationSeconds,
         OffsetDateTime createdAt,
-        OffsetDateTime completedAt
+        OffsetDateTime completedAt,
+        boolean isFirstCompletedSessionEver
 ) {
 }

@@ -5,6 +5,7 @@ import {
   completeOnboarding,
   getContinueStudyingRecommendation,
   getDashboardOverview,
+  getFeedbackPromptContext,
   getGoalSummary,
   getMe,
   getNote,
@@ -50,6 +51,7 @@ jest.mock("@/lib/api", () => ({
   createPremiumCheckoutSession: jest.fn(),
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
+  getFeedbackPromptContext: jest.fn(),
   getGoalSummary: jest.fn(),
   getMe: jest.fn(),
   getNote: jest.fn(),
@@ -154,6 +156,8 @@ const publicNotes = [
 
 describe("DashboardPage profile variants", () => {
   beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
     (listNotes as jest.Mock).mockReset();
@@ -161,6 +165,7 @@ describe("DashboardPage profile variants", () => {
     (getMe as jest.Mock).mockReset();
     (getContinueStudyingRecommendation as jest.Mock).mockReset();
     (getDashboardOverview as jest.Mock).mockReset();
+    (getFeedbackPromptContext as jest.Mock).mockReset();
     (getGoalSummary as jest.Mock).mockReset();
     (getQuickReviewLastReviewedBatch as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
@@ -173,6 +178,7 @@ describe("DashboardPage profile variants", () => {
     (updateLearningProfileContext as jest.Mock).mockReset();
     (setAuthUser as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({ usageSummary: null });
     clearPendingLightweightProfileCompletion("user-1");
 
     (listNotes as jest.Mock).mockResolvedValue(notes);
@@ -189,6 +195,10 @@ describe("DashboardPage profile variants", () => {
       resumeState: "QUESTION_IN_PROGRESS",
     });
     (getDashboardOverview as jest.Mock).mockResolvedValue(overview);
+    (getFeedbackPromptContext as jest.Mock).mockResolvedValue({
+      returningAfterInactivity: false,
+      hasCompletedQuizSession: true,
+    });
     (getTodayFocus as jest.Mock).mockResolvedValue({
       type: "REVIEW_PACK",
       studyPackId: "pack-1",
@@ -242,6 +252,48 @@ describe("DashboardPage profile variants", () => {
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
     expect(screen.queryByText("Create Quiz")).not.toBeInTheDocument();
     expect(listNotes).toHaveBeenCalledWith(20);
+  });
+
+  it("shows the one-time welcome-back feedback ask from the inactivity context", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      courseProgram: "PNLE",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getFeedbackPromptContext as jest.Mock).mockResolvedValue({
+      returningAfterInactivity: true,
+      hasCompletedQuizSession: true,
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Welcome back — what got in the way?")).toBeInTheDocument();
+  });
+
+  it("does not block or show the welcome-back ask when feedback context fails", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      courseProgram: "PNLE",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getFeedbackPromptContext as jest.Mock).mockRejectedValue(new Error("context unavailable"));
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("heading", { name: "Continue Studying" })).toBeInTheDocument();
+    expect(screen.queryByText("Welcome back — what got in the way?")).not.toBeInTheDocument();
   });
 
   it("batches Quick Review timestamps once for all eligible recent notes", async () => {
@@ -420,7 +472,9 @@ describe("DashboardPage profile variants", () => {
     render(<DashboardPage />);
 
     await screen.findByText("Continue Studying");
-    expect(screen.queryByText("Finish setting up your study profile")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Finish setting up your study profile")).not.toBeInTheDocument();
+    });
   });
 
   it("persists dismissal of the personalization prompt per user", async () => {

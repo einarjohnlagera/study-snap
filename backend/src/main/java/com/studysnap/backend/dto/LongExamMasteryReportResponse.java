@@ -12,7 +12,8 @@ public record LongExamMasteryReportResponse(
         List<String> weakDomains,
         String performanceSummary,
         String suggestedNextStep,
-        List<LongExamSourceNote> sourceNotes
+        List<LongExamSourceNote> sourceNotes,
+        boolean isFirstCompletedSessionEver
 ) {
     public record LongExamDomainStat(
             String domain,

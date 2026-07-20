@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.FeedbackPromptContextResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SubmitFeedbackRequest;
 import com.studysnap.backend.entity.UserRole;
@@ -48,5 +49,20 @@ class FeedbackControllerTest {
 
         assertThat(response.message()).isEqualTo("Thanks! Your feedback helps improve NoteLib.");
         verify(feedbackService).submitFeedback(userId, "The page was confusing.", "https://www.notelib.app/settings");
+    }
+
+    @Test
+    void getPromptContext_returnsTheAuthenticatedUsersSignals() {
+        FeedbackController controller = new FeedbackController(feedbackService);
+        UUID userId = UUID.randomUUID();
+        FeedbackPromptContextResponse expected = new FeedbackPromptContextResponse(true, true);
+        when(feedbackService.getPromptContext(userId)).thenReturn(expected);
+
+        FeedbackPromptContextResponse response = controller.getPromptContext(
+                new AuthenticatedUser(userId, UserRole.USER, true, 0)
+        );
+
+        assertThat(response).isEqualTo(expected);
+        verify(feedbackService).getPromptContext(userId);
     }
 }

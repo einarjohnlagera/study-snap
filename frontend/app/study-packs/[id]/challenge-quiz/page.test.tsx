@@ -926,6 +926,7 @@ describe("ChallengeQuizPage", () => {
 
   it("loads note/session once and does not loop initialization calls", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
       planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
@@ -1269,6 +1270,7 @@ describe("ChallengeQuizPage", () => {
       durationSeconds: 10,
       createdAt: "2026-03-21T10:00:00Z",
       completedAt: "2026-03-21T10:01:00Z",
+      isFirstCompletedSessionEver: false,
     });
 
     render(<ChallengeQuizPage />);
@@ -1278,6 +1280,8 @@ describe("ChallengeQuizPage", () => {
     await screen.findByText("Board Exam Result");
 
     expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
+    expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
   });
 
   it("fetches and renders the server-resolved next step after regular Challenge completion", async () => {
@@ -1327,6 +1331,7 @@ describe("ChallengeQuizPage", () => {
 
   it('result screen shows "← Back to Note" navigation link', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
       planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
@@ -1396,6 +1401,7 @@ describe("ChallengeQuizPage", () => {
       durationSeconds: 10,
       createdAt: "2026-03-21T10:00:00Z",
       completedAt: "2026-03-21T10:01:00Z",
+      isFirstCompletedSessionEver: true,
     });
 
     render(<ChallengeQuizPage />);
@@ -1409,8 +1415,8 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText("No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Take Another Board Exam" })).toHaveClass("bg-primary");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
-    expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
+    expect(screen.getByText("How did your first quiz go?")).toBeInTheDocument();
+    expect(screen.queryByText("Was this quiz helpful?")).not.toBeInTheDocument();
   });
 
   it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {

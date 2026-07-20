@@ -25,6 +25,7 @@ public record QuickReviewSessionResponse(
         Map<String, Object> sessionState,
         OffsetDateTime createdAt,
         OffsetDateTime completedAt,
-        boolean isFirstCompletedQuiz
+        boolean isFirstCompletedQuiz,
+        boolean isFirstCompletedSessionEver
 ) {
 }

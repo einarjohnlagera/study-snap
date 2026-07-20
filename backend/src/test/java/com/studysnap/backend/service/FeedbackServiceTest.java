@@ -3,9 +3,11 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.FeedbackEntity;
 import com.studysnap.backend.entity.FeedbackStatus;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.FeedbackRepository;
+import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +39,10 @@ class FeedbackServiceTest {
     private EmailTemplateService emailTemplateService;
     @Mock
     private EmailService emailService;
+    @Mock
+    private RetentionService retentionService;
+    @Mock
+    private QuickReviewSessionRepository quickReviewSessionRepository;
 
     private StudySnapProperties studySnapProperties;
     private FeedbackService feedbackService;
@@ -50,7 +56,9 @@ class FeedbackServiceTest {
                 userRepository,
                 emailTemplateService,
                 emailService,
-                studySnapProperties
+                studySnapProperties,
+                retentionService,
+                quickReviewSessionRepository
         );
     }
 
@@ -84,6 +92,21 @@ class FeedbackServiceTest {
 
         assertThatThrownBy(() -> feedbackService.submitFeedback(userId, "Message", "/dashboard"))
                 .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    void getPromptContext_combinesRetentionAndCompletedQuizSignals() {
+        UUID userId = UUID.randomUUID();
+        when(retentionService.isReturningAfterInactivity(userId)).thenReturn(true);
+        when(quickReviewSessionRepository.existsByUserIdAndStatusAndCompletedAtIsNotNull(
+                userId,
+                QuickReviewSessionStatus.COMPLETED
+        )).thenReturn(true);
+
+        var response = feedbackService.getPromptContext(userId);
+
+        assertThat(response.returningAfterInactivity()).isTrue();
+        assertThat(response.hasCompletedQuizSession()).isTrue();
     }
 
     private UserEntity buildUser(UUID userId, String email) {

@@ -6,9 +6,12 @@ Collect soft-launch feedback from authenticated users without sending them out o
 
 ## Flow
 
-- authenticated users can open `Send Feedback` from one of two intentional entry points:
+- authenticated users can open `Send Feedback` from intentional passive entry points:
   - a small header feedback icon on focused app routes such as Note Editor, Note Detail / Study Pack view, and quiz flows
   - the floating launcher only on safe non-critical pages such as Dashboard, Library, Public Library, and Settings
+- the app also makes two proactive, inline asks through the same freeform pipeline:
+  - after the user's first-ever completed quiz session across Quick Review, Challenge Quiz / Board Exam, Adaptive Practice, and Long Exam
+  - on Dashboard when a user returns after the configured inactivity threshold
 - feedback is submitted through `POST /api/feedback`
 - the request body contains only `message`
 - the frontend also sends the current page through `X-Page-Url`
@@ -26,11 +29,21 @@ Collect soft-launch feedback from authenticated users without sending them out o
 - quiz result screens should collect feedback inline with:
   - prompt: `Was this quiz helpful?`
   - actions: `Yes` and `Give Feedback`
+- on the first-ever completed quiz result, replace that generic prompt with `How did your first quiz go?` and templated clear/confusing actions; never render both asks together
 - quiz review sections may still show inline issue-reporting actions such as:
   - `Report Question`
   - `Confusing Explanation`
   - `Something is wrong`
 - avoid page-specific offset hacks or overlap fixes for feedback; route-aware placement rules are the source of truth
+
+## Proactive Trigger Rules
+
+- first-quiz detection is owner-wide and mode-neutral: any completed quiz session on any Study Pack makes later results use the existing generic panel
+- return-after-inactivity reuses `RetentionService`'s `MEANINGFUL_STUDY_ACTIVITIES` checks and `StudySnapProperties.Retention.inactivityDays`; it does not define a second threshold or activity list
+- both proactive asks use user-scoped keys under the existing `notelib-guidance-dismissed-` localStorage convention and are marked seen on first display; dismissing without submitting therefore does not make an ask reappear
+- the welcome-back ask requires prior quiz history and checks a session-scoped marker for the first-quiz ask, so a returning user's first-ever quiz receives only the higher-priority first-quiz ask even if return context is fetched again on the same visit; the inactivity ask remains eligible on a later qualifying return if it has not been shown
+- failures loading first-quiz context fall back to the generic quiz-results panel; failures loading return context render no proactive Dashboard ask
+- all quick actions prefill the existing freeform feedback message and submit unchanged through `POST /api/feedback`; no rating or prompt-specific fields are stored
 
 ## Stored Data
 

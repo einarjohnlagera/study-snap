@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, MessageSquarePlus } from "lucide-react";
+import { MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ type SendFeedbackWidgetProps = {
   quickActions?: FeedbackQuickAction[];
   iconButtonClassName?: string;
   showTriggerButton?: boolean;
+  onDismiss?: () => void;
 };
 
 export function SendFeedbackWidget({
@@ -37,6 +38,7 @@ export function SendFeedbackWidget({
   quickActions = [],
   iconButtonClassName,
   showTriggerButton = true,
+  onDismiss,
 }: Readonly<SendFeedbackWidgetProps>) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -93,9 +95,21 @@ export function SendFeedbackWidget({
     <>
       {variant === "inline" ? (
         <div className="space-y-3 rounded-xl border border-border bg-background p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">{title}</p>
-            <p className="text-sm text-foreground/75">{description}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">{title}</p>
+              <p className="text-sm text-foreground/75">{description}</p>
+            </div>
+            {onDismiss ? (
+              <button
+                type="button"
+                className="rounded-md p-1 text-foreground/55 transition-colors hover:bg-highlight hover:text-foreground"
+                onClick={onDismiss}
+                aria-label="Dismiss feedback prompt"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {quickActions.map((action) => (
