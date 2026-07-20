@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.config.FeedbackHeaders;
 import com.studysnap.backend.dto.FeedbackPromptContextResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SubmitFeedbackRequest;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.util.UUID;
 
@@ -21,13 +24,20 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class FeedbackControllerTest {
 
+    private static final String SETTINGS_URL = "https://www.notelib.app/settings";
+
     @Mock
     private FeedbackService feedbackService;
 
     @Test
     void controller_requiresAuthenticatedUserRole() throws NoSuchMethodException {
         PreAuthorize annotation = FeedbackController.class
-                .getMethod("submitFeedback", AuthenticatedUser.class, SubmitFeedbackRequest.class, String.class)
+                .getMethod(
+                        "submitFeedback",
+                        AuthenticatedUser.class,
+                        SubmitFeedbackRequest.class,
+                        String.class
+                )
                 .getAnnotation(PreAuthorize.class);
 
         assertThat(annotation).isNotNull();
@@ -38,17 +48,23 @@ class FeedbackControllerTest {
     void submitFeedback_returnsSuccessMessage() {
         FeedbackController controller = new FeedbackController(feedbackService);
         UUID userId = UUID.randomUUID();
-        when(feedbackService.submitFeedback(userId, "The page was confusing.", "https://www.notelib.app/settings"))
-                .thenReturn("Thanks! Your feedback helps improve NoteLib.");
+        UUID feedbackId = UUID.randomUUID();
+        when(feedbackService.submitFeedback(userId, "The page was confusing.", SETTINGS_URL))
+                .thenReturn(new FeedbackService.FeedbackSubmissionResult(
+                        feedbackId,
+                        "Thanks! Your feedback helps improve NoteLib."
+                ));
 
-        SimpleMessageResponse response = controller.submitFeedback(
+        ResponseEntity<SimpleMessageResponse> response = controller.submitFeedback(
                 new AuthenticatedUser(userId, UserRole.USER, true, 0),
                 new SubmitFeedbackRequest("The page was confusing."),
-                "https://www.notelib.app/settings"
+                SETTINGS_URL
         );
 
-        assertThat(response.message()).isEqualTo("Thanks! Your feedback helps improve NoteLib.");
-        verify(feedbackService).submitFeedback(userId, "The page was confusing.", "https://www.notelib.app/settings");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("Thanks! Your feedback helps improve NoteLib.");
+        assertThat(response.getHeaders().getFirst(FeedbackHeaders.FEEDBACK_ID)).isEqualTo(feedbackId.toString());
+        verify(feedbackService).submitFeedback(userId, "The page was confusing.", SETTINGS_URL);
     }
 
     @Test
@@ -64,5 +80,27 @@ class FeedbackControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(feedbackService).getPromptContext(userId);
+    }
+
+    @Test
+    void uploadImage_usesTheAuthenticatedOwner() {
+        FeedbackController controller = new FeedbackController(feedbackService);
+        UUID userId = UUID.randomUUID();
+        UUID feedbackId = UUID.randomUUID();
+        MockMultipartFile image = new MockMultipartFile(
+                "image",
+                "screen.png",
+                "image/png",
+                new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+        );
+
+        ResponseEntity<Void> response = controller.uploadImage(
+                new AuthenticatedUser(userId, UserRole.USER, true, 0),
+                feedbackId,
+                image
+        );
+
+        assertThat(response.getStatusCode().value()).isEqualTo(204);
+        verify(feedbackService).uploadImage(userId, feedbackId, image);
     }
 }

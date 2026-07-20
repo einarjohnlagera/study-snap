@@ -23,8 +23,13 @@ public class WebConfig implements WebMvcConfigurer {
 		registry.addMapping("/**")
 				.allowedOrigins(allowedOrigins)
 				.allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-				.allowedHeaders("Authorization", "Content-Type", "X-Request-Id", "X-Page-Url")
-				.exposedHeaders(RequestIdFilter.REQUEST_ID_HEADER)
+				.allowedHeaders(
+						"Authorization",
+						"Content-Type",
+						"X-Request-Id",
+						FeedbackHeaders.PAGE_URL
+				)
+				.exposedHeaders(RequestIdFilter.REQUEST_ID_HEADER, FeedbackHeaders.FEEDBACK_ID)
 				.allowCredentials(false);
 	}
 }

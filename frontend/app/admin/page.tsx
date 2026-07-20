@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   getAdminDashboardRecentEvents,
   getAdminDashboardSummary,
   getAdminDashboardTopContent,
+  getAdminFeedbackImage,
   getAdminRegenerationStatus,
   issueAdminRefund,
   regenerateAdminSummaries,
@@ -138,6 +139,9 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [refundTarget, setRefundTarget] = useState<AdminRecentUpgradeItemResponse | null>(null);
   const [feedbackDetailTarget, setFeedbackDetailTarget] = useState<AdminRecentFeedbackItemResponse | null>(null);
+  const [feedbackImageUrl, setFeedbackImageUrl] = useState<string | null>(null);
+  const feedbackImageUrlRef = useRef<string | null>(null);
+  const feedbackImageRequestRef = useRef(0);
   const [refundError, setRefundError] = useState<string | null>(null);
   const [refundSuccessMessage, setRefundSuccessMessage] = useState<string | null>(null);
   const [issuingRefund, setIssuingRefund] = useState(false);
@@ -211,12 +215,46 @@ export default function AdminPage() {
   };
 
   const handleOpenFeedbackDetail = (item: AdminRecentFeedbackItemResponse) => {
+    const requestId = ++feedbackImageRequestRef.current;
+    replaceFeedbackImageUrl(null);
     setFeedbackDetailTarget(item);
+    if (!item.hasImage) {
+      return;
+    }
+    void getAdminFeedbackImage(item.feedbackId)
+      .then((image) => {
+        if (requestId !== feedbackImageRequestRef.current || !image) {
+          return;
+        }
+        replaceFeedbackImageUrl(URL.createObjectURL(image));
+      })
+      .catch(() => {
+        if (requestId === feedbackImageRequestRef.current) {
+          replaceFeedbackImageUrl(null);
+        }
+      });
   };
 
   const handleCloseFeedbackDetail = () => {
+    feedbackImageRequestRef.current += 1;
+    replaceFeedbackImageUrl(null);
     setFeedbackDetailTarget(null);
   };
+
+  const replaceFeedbackImageUrl = (nextUrl: string | null) => {
+    if (feedbackImageUrlRef.current) {
+      URL.revokeObjectURL(feedbackImageUrlRef.current);
+    }
+    feedbackImageUrlRef.current = nextUrl;
+    setFeedbackImageUrl(nextUrl);
+  };
+
+  useEffect(() => () => {
+    feedbackImageRequestRef.current += 1;
+    if (feedbackImageUrlRef.current) {
+      URL.revokeObjectURL(feedbackImageUrlRef.current);
+    }
+  }, []);
 
   const handleConfirmRefund = async () => {
     if (!refundTarget?.transactionId) {
@@ -606,6 +644,17 @@ export default function AdminPage() {
                 {formatFeedbackStatus(feedbackDetailTarget.status)}
               </span>
             </section>
+            {feedbackImageUrl ? (
+              <section className="space-y-1.5">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Screenshot</h3>
+                {/* eslint-disable-next-line @next/next/no-img-element -- authenticated blob URL */}
+                <img
+                  src={feedbackImageUrl}
+                  alt="Feedback screenshot"
+                  className="max-h-[420px] w-full rounded-xl border border-border bg-muted/20 object-contain"
+                />
+              </section>
+            ) : null}
           </div>
         ) : null}
       </AppModal>

@@ -1,10 +1,15 @@
 "use client";
 
-import { MessageSquare, MessageSquarePlus, X } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { ImagePlus, MessageSquare, MessageSquarePlus, X } from "lucide-react";
+import { type ChangeEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
-import { submitFeedback } from "@/lib/api";
+import { submitFeedback, uploadFeedbackImage } from "@/lib/api";
+import {
+  FeedbackImageValidationError,
+  formatFeedbackImageSize,
+  prepareFeedbackImage,
+} from "@/lib/feedback-image";
 import { cn } from "@/lib/utils";
 
 const MAX_FEEDBACK_MESSAGE_LENGTH = 4000;
@@ -50,13 +55,41 @@ export function SendFeedbackWidget({
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [activeQuickActionLabel, setActiveQuickActionLabel] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<{ file: File; previewUrl: string } | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [imageUploadFailed, setImageUploadFailed] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const attachmentPreviewUrlRef = useRef<string | null>(null);
+  const attachmentRequestRef = useRef(0);
+
+  const replaceAttachment = (nextAttachment: { file: File; previewUrl: string } | null) => {
+    if (attachmentPreviewUrlRef.current) {
+      URL.revokeObjectURL(attachmentPreviewUrlRef.current);
+    }
+    attachmentPreviewUrlRef.current = nextAttachment?.previewUrl ?? null;
+    setAttachment(nextAttachment);
+  };
+
+  useEffect(() => () => {
+    attachmentRequestRef.current += 1;
+    if (attachmentPreviewUrlRef.current) {
+      URL.revokeObjectURL(attachmentPreviewUrlRef.current);
+    }
+  }, []);
 
   const resetState = () => {
+    attachmentRequestRef.current += 1;
     setMessage("");
     setError(null);
     setSubmitting(false);
     setSuccessMessage(null);
     setActiveQuickActionLabel(null);
+    replaceAttachment(null);
+    setAttachmentError(null);
+    setImageUploadFailed(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const closeModal = () => {
@@ -80,17 +113,61 @@ export function SendFeedbackWidget({
       return;
     }
 
+    attachmentRequestRef.current += 1;
     setSubmitting(true);
     setError(null);
     try {
       const pageUrl = globalThis.window === undefined ? null : globalThis.window.location.href;
       const response = await submitFeedback({ message: trimmed }, pageUrl);
+      let uploadFailed = false;
+      if (attachment) {
+        if (!response.feedbackId) {
+          uploadFailed = true;
+        } else {
+          try {
+            await uploadFeedbackImage(response.feedbackId, attachment.file);
+          } catch {
+            uploadFailed = true;
+          }
+        }
+      }
       setSuccessMessage(response.message);
+      setImageUploadFailed(uploadFailed);
       setMessage("");
+      replaceAttachment(null);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Could not send feedback. Please try again.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleAttachmentChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    event.target.value = "";
+    if (!selectedFile) {
+      return;
+    }
+    const requestId = ++attachmentRequestRef.current;
+    setAttachmentError(null);
+    try {
+      const preparedFile = await prepareFeedbackImage(selectedFile);
+      if (requestId !== attachmentRequestRef.current) {
+        return;
+      }
+      replaceAttachment({
+        file: preparedFile,
+        previewUrl: URL.createObjectURL(preparedFile),
+      });
+    } catch (attachmentFailure) {
+      if (requestId !== attachmentRequestRef.current) {
+        return;
+      }
+      setAttachmentError(
+        attachmentFailure instanceof FeedbackImageValidationError
+          ? attachmentFailure.message
+          : "Could not prepare this screenshot. Choose another image.",
+      );
     }
   };
 
@@ -214,8 +291,13 @@ export function SendFeedbackWidget({
         enableSwipeToClose
       >
         {successMessage ? (
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-800 dark:text-emerald-200">
-            {successMessage}
+          <div className="space-y-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-800 dark:text-emerald-200">
+            <p>{successMessage}</p>
+            {imageUploadFailed ? (
+              <p className="text-xs text-foreground/65">
+                Note: your screenshot couldn&apos;t be attached, but your feedback was sent.
+              </p>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-3">
@@ -268,6 +350,55 @@ export function SendFeedbackWidget({
               >
                 {message.length} / {MAX_FEEDBACK_MESSAGE_LENGTH}
               </p>
+            </div>
+            <div className="space-y-2 border-t border-border/60 pt-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                aria-label="Choose feedback screenshot"
+                onChange={(event) => void handleAttachmentChange(event)}
+              />
+              {attachment ? (
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-2.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
+                  <img
+                    src={attachment.previewUrl}
+                    alt="Screenshot preview"
+                    className="h-12 w-16 shrink-0 rounded-md border border-border object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium text-foreground">{attachment.file.name}</p>
+                    <p className="text-[11px] text-foreground/55">{formatFeedbackImageSize(attachment.file.size)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-full p-1 text-foreground/55 transition-colors hover:bg-highlight hover:text-foreground"
+                    onClick={() => {
+                      replaceAttachment(null);
+                      setAttachmentError(null);
+                    }}
+                    aria-label="Remove screenshot"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-2 px-2 text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus className="h-4 w-4" aria-hidden="true" />
+                  Add a screenshot (optional)
+                </Button>
+              )}
+              {attachmentError ? (
+                <p className="text-xs text-red-700 dark:text-red-300">{attachmentError}</p>
+              ) : null}
             </div>
           </div>
         )}

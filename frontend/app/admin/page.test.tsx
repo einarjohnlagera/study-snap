@@ -4,6 +4,7 @@ import {
   getAdminDashboardRecentEvents,
   getAdminDashboardSummary,
   getAdminDashboardTopContent,
+  getAdminFeedbackImage,
 } from "@/lib/api";
 
 const routerMock = {
@@ -22,6 +23,7 @@ jest.mock("@/lib/api", () => ({
   getAdminDashboardSummary: jest.fn(),
   getAdminDashboardTopContent: jest.fn(),
   getAdminDashboardRecentEvents: jest.fn(),
+  getAdminFeedbackImage: jest.fn(),
   ApiRequestError: class ApiRequestError extends Error {
     status: number;
 
@@ -43,6 +45,15 @@ describe("AdminPage", () => {
     (getAdminDashboardSummary as jest.Mock).mockReset();
     (getAdminDashboardTopContent as jest.Mock).mockReset();
     (getAdminDashboardRecentEvents as jest.Mock).mockReset();
+    (getAdminFeedbackImage as jest.Mock).mockReset();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: jest.fn(() => "blob:feedback-screenshot"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: jest.fn(),
+    });
   });
 
   it("renders admin summary cards and tables for admins", async () => {
@@ -120,6 +131,7 @@ describe("AdminPage", () => {
           pageUrl: "https://www.notelib.app/notes/new",
           status: "NEW",
           createdAt: "2026-03-22T00:00:00Z",
+          hasImage: false,
         },
       ],
     });
@@ -209,14 +221,17 @@ describe("AdminPage", () => {
         pageUrl: fullPageUrl,
         status: "REVIEWED",
         createdAt: submittedAt,
+        hasImage: true,
       }],
     });
+    (getAdminFeedbackImage as jest.Mock).mockResolvedValue(new Blob(["image-bytes"], { type: "image/png" }));
 
     render(<AdminPage />);
 
     expect(await screen.findByText("Recent Feedback")).toBeInTheDocument();
     expect(screen.queryByText(fullMessage)).not.toBeInTheDocument();
     expect(screen.queryByText(fullPageUrl)).not.toBeInTheDocument();
+    expect(getAdminFeedbackImage).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "View" }));
 
@@ -226,6 +241,11 @@ describe("AdminPage", () => {
     expect(within(dialog).getByText("reader@notelib.app")).toBeInTheDocument();
     expect(within(dialog).getByText(expectedSubmittedAt)).toBeInTheDocument();
     expect(within(dialog).getByText("Reviewed")).toBeInTheDocument();
+    expect(getAdminFeedbackImage).toHaveBeenCalledWith("feedback-long");
+    expect(await within(dialog).findByRole("img", { name: "Feedback screenshot" })).toHaveAttribute(
+      "src",
+      "blob:feedback-screenshot",
+    );
 
     fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)!);
 
