@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { submitFeedback } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+const MAX_FEEDBACK_MESSAGE_LENGTH = 4000;
+const FEEDBACK_COUNTER_WARNING_THRESHOLD = 3800;
+const FEEDBACK_COUNTER_DANGER_THRESHOLD = 3950;
+
 export type FeedbackQuickAction = {
   label: string;
   template?: string;
@@ -45,12 +49,14 @@ export function SendFeedbackWidget({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [activeQuickActionLabel, setActiveQuickActionLabel] = useState<string | null>(null);
 
   const resetState = () => {
     setMessage("");
     setError(null);
     setSubmitting(false);
     setSuccessMessage(null);
+    setActiveQuickActionLabel(null);
   };
 
   const closeModal = () => {
@@ -58,10 +64,11 @@ export function SendFeedbackWidget({
     resetState();
   };
 
-  const handleOpen = (prefill?: string) => {
+  const handleOpen = (prefill?: string, quickActionLabel?: string) => {
     setOpen(true);
     setError(null);
     setSuccessMessage(null);
+    setActiveQuickActionLabel(typeof prefill === "string" ? quickActionLabel ?? null : null);
     if (typeof prefill === "string") {
       setMessage(prefill);
     }
@@ -111,26 +118,33 @@ export function SendFeedbackWidget({
               </button>
             ) : null}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {quickActions.map((action) => (
-              <Button
-                key={action.label}
-                type="button"
-                size="sm"
-                variant={action.variant ?? "outline"}
-                className="w-full gap-2 sm:w-auto"
-                onClick={() => {
-                  if (action.onClick) {
-                    action.onClick();
-                    return;
-                  }
-                  handleOpen(action.template);
-                }}
-              >
-                {action.icon ? <span className="inline-flex items-center">{action.icon}</span> : null}
-                {action.label}
-              </Button>
-            ))}
+          <div className="space-y-2">
+            {quickActions.length > 0 ? (
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground/50">
+                Quick start
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {quickActions.map((action) => (
+                <Button
+                  key={action.label}
+                  type="button"
+                  size="sm"
+                  variant={action.variant ?? "outline"}
+                  className="h-8 gap-1.5 rounded-full px-3 text-xs"
+                  onClick={() => {
+                    if (action.onClick) {
+                      action.onClick();
+                      return;
+                    }
+                    handleOpen(action.template, action.label);
+                  }}
+                >
+                  {action.icon ? <span className="inline-flex items-center">{action.icon}</span> : null}
+                  {action.label}
+                </Button>
+              ))}
+            </div>
             {showTriggerButton ? (
               <Button
                 type="button"
@@ -173,7 +187,8 @@ export function SendFeedbackWidget({
         onClose={closeModal}
         title={title}
         description={description}
-        descriptionClassName="whitespace-pre-line"
+        titleIcon={<MessageSquare className="h-4 w-4 text-primary" aria-hidden="true" />}
+        descriptionClassName="whitespace-pre-line !text-foreground/65"
         contentClassName="pb-1"
         actions={successMessage ? (
           <div className="flex justify-end">
@@ -204,6 +219,22 @@ export function SendFeedbackWidget({
           </div>
         ) : (
           <div className="space-y-3">
+            {activeQuickActionLabel ? (
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-primary">
+                <span>Reporting: {activeQuickActionLabel}</span>
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 transition-colors hover:bg-primary/15"
+                  onClick={() => {
+                    setMessage("");
+                    setActiveQuickActionLabel(null);
+                  }}
+                  aria-label={`Clear ${activeQuickActionLabel} feedback context`}
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
             <label htmlFor="feedback-message" className="block text-sm font-medium text-foreground">
               Message
             </label>
@@ -212,17 +243,32 @@ export function SendFeedbackWidget({
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               rows={6}
-              maxLength={4000}
-              placeholder="Describe the bug, issue, or feature you'd like to suggest..."
+              maxLength={MAX_FEEDBACK_MESSAGE_LENGTH}
+              placeholder="What's going on? Describe the bug, confusing moment, or idea…"
               className="min-h-[180px] w-full rounded-xl border border-border bg-background px-3 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600 sm:min-h-[220px]"
             />
-            {error ? (
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-            ) : (
-              <p className="text-xs text-foreground/60">
-                You can report bugs, confusing parts, or request features. This goes directly to our improvement list.
+            <div className="flex items-start justify-between gap-3">
+              {error ? (
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              ) : (
+                <p className="text-xs text-foreground/60">
+                  You can report bugs, confusing parts, or request features. This goes directly to our improvement list.
+                </p>
+              )}
+              <p
+                className={cn(
+                  "shrink-0 text-xs tabular-nums",
+                  message.length > FEEDBACK_COUNTER_DANGER_THRESHOLD
+                    ? "text-red-600 dark:text-red-400"
+                    : message.length > FEEDBACK_COUNTER_WARNING_THRESHOLD
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-foreground/50",
+                )}
+                aria-live="polite"
+              >
+                {message.length} / {MAX_FEEDBACK_MESSAGE_LENGTH}
               </p>
-            )}
+            </div>
           </div>
         )}
       </AppModal>

@@ -94,6 +94,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Production performance audit (Private Library, Public Library, Note Collection detail, Dashboard reported slow) | `production-performance-audit-out/01-production-performance-audit.md` | **Shipped — v0.51.0.** F1, F2, F4, F5, F6, F7, and F8 shipped in full (F8 — real server-side Public Library pagination — chosen directly over F3's stopgap). F9 (client caching) and F10 (denormalized counts) intentionally remain parked below | F9/F10: gated on post-v0.51.0 production evidence (slow-query logs, whether refetch pain persists once queries are bounded) — not before | 2026-07-20 |
 | Dashboard Stage-1 `listNotes()` limit-wiring (F2 follow-up, deliberately deferred during F2's implementation) | `docs/codex-prompts/v0.51.0-note-list-lean-projection.md` | **Shipped — v0.51.1.** Dashboard now requests the 20 most-recently-updated owned notes; the existing overview response supplies the exact owner-note count, quiz-question existence, and most-recent resolved-ready note id so totals, empty states, first-time ordering, and Challenge routing retain their unbounded semantics | none | 2026-07-20 |
 | F9/F10 — client-side caching + denormalized engagement counts (parked from the performance audit above) | `production-performance-audit-out/01-production-performance-audit.md` | Parked, intentionally not in v0.51.0 | production evidence after v0.51.0 ships: do bounded/parallelized pages still show refetch pain (F9)? does slow-query logging still flag the enrichment queries (F10)? | 2026-07-17 |
+| Feedback system polish — Send Feedback modal visual redesign, optional screenshot/image attachment on bug reports, and a read-only Admin detail view for the "Recent Feedback" table (currently a static, truncated table) | `feedback-system-polish-out/01-modal-design-and-admin-detail.md` | **Folded into v0.52.0 as a mid-release scope addition.** Modal restyle + strictly-optional screenshot field (separate `feedback_image` table, not a column on `FeedbackEntity`, to avoid regressing the v0.51.0 read-path fix); Admin gets a "View" button reusing the existing Refund modal pattern. A status-update action is recommended as a separate fast-follow, not bundled in | none — see `RELEASES.md` v0.52.0 | 2026-07-20 |
 
 ## v0.52.0 - Proactive In-App Feedback Prompts (In Progress, base branch `releases/v0.52.0`)
 
@@ -102,8 +103,9 @@ Origin: a direct pivot away from the retention-diagnosis interview plan (`docs/c
 **Scope:**
 - First-quiz-ever feedback prompt (backend + frontend).
 - Return-after-inactivity feedback prompt (backend + frontend).
+- Mid-release addition (2026-07-20): feedback modal restyle + Admin detail view (frontend only), plus an optional screenshot attachment on feedback (backend + frontend) — see `docs/claude-prompt/feedback-system-polish-session-plan.md`.
 
-Anti-drift: reuses the existing `POST /feedback` pipeline as-is — no new feedback storage or rating/NPS data model. No changes to the existing 3-day inactivity email or its cooldown logic. No outreach to already-churned users. Full scope in `RELEASES.md`.
+Anti-drift: reuses the existing `POST /feedback` pipeline as-is. The one exception is the mid-release addition's new `feedback_image` table, explicitly justified by a read-path constraint (see `RELEASES.md`) — no other new storage, no rating/NPS data model. No changes to the existing 3-day inactivity email or its cooldown logic. No outreach to already-churned users. Full scope in `RELEASES.md`.
 
 ## v0.51.1 - Dashboard Stage-1 Limit Wiring (Released, base branch `releases/v0.51.1`)
 
