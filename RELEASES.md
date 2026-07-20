@@ -1,5 +1,21 @@
 # RELEASES.md - NoteLib
 
+## v0.51.1 - Dashboard Stage-1 Limit Wiring
+
+**Status: In Progress**
+
+Theme: close the F2 follow-up deliberately deferred during v0.51.0 — decouple Dashboard Stage-1's three full-note-array dependencies so the bounded `limit` param F2 already built (and left unused) can finally be wired in.
+
+### Planned Scope
+
+- **Dashboard Stage-1 bounded fetch (backend + frontend).** `NoteService.listMine`'s optional `limit` param (shipped unused in F2, v0.51.0) gets wired into Dashboard's Stage-1 note fetch. Three call sites in `frontend/app/dashboard/page.tsx` currently require the full unbounded array and must be decoupled first: `totalNotes={items.length}` (needs a dedicated count), `hasCompletedSession = items.some(note => (note.quizCount ?? 0) > 0)` (needs a "has any note with a completed quiz" signal), and `resolveChallengeQuizHref()`'s `STUDY_PACK_READY` fallback (needs a "has any ready note" signal — the first ready note found in a bounded page is not guaranteed to be the same one found across the full library).
+
+Anti-drift: read-path performance only, following F1/F2/F6's precedent from v0.51.0 — no change to what Dashboard displays or which note Continue Studying / Challenge Quiz routes to, only how many notes are fetched to compute it. No new caching infrastructure. No changes to quiz-session data model, mastery/readiness computation, or profile-type branching logic.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.51.0 - Read-Path Performance Pass II
 
 **Status: Released**
