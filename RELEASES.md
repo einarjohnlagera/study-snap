@@ -16,7 +16,8 @@ Anti-drift: reuses the existing `POST /feedback` pipeline and flat `feedback` ta
 
 ### Shipped
 
-_(nothing yet)_
+- **First-quiz-ever feedback prompt (backend + frontend).** All completed quiz modes now resolve the same owner-wide completed-session existence query before persisting a result and return a new `isFirstCompletedSessionEver` field with the completion response. Quick Review, Challenge Quiz / Board Exam, Adaptive Practice, and Long Exam result/review surfaces replace the generic helpfulness panel with a one-time, user-scoped first-experience ask when that signal is true; signal failures retain the existing generic panel, and Long Exam now has the same inline feedback entry point as the other quiz modes. Audit fix: the initial implementation reused Quick Review's pre-existing `isFirstCompletedQuiz` field (which drives the unrelated, currently-accruing v0.48.0 open-loop-ending experiment, scoped to Quick Review/Challenge activity only per `docs/features/quick-review.md`) and silently broadened its computation to span every mode — corrected by restoring `isFirstCompletedQuiz`'s original scope untouched and introducing `isFirstCompletedSessionEver` as a distinct field for this feature.
+- **Return-after-inactivity feedback prompt (backend + frontend).** Added an authenticated `GET /feedback/context` signal that delegates to `RetentionService`'s existing meaningful-activity definition and configured inactivity-day threshold, without changing the inactivity email or scheduler. Dashboard shows a one-time, user-scoped welcome-back ask only for returning users with prior quiz history, preserving the first-quiz prompt as the sole ask when both moments overlap; context failures remain non-blocking and render no prompt.
 
 ## v0.51.1 - Dashboard Stage-1 Limit Wiring
 

@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AdaptivePracticeCompleteRequest;
+import com.studysnap.backend.dto.AdaptivePracticeCompleteResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -35,7 +36,7 @@ public class AdaptivePracticeController {
     }
 
     @PostMapping("/sessions/{sessionId}/complete")
-    public SimpleMessageResponse completeAdaptivePractice(
+    public AdaptivePracticeCompleteResponse completeAdaptivePractice(
             @PathVariable String sessionId,
             @Valid @RequestBody AdaptivePracticeCompleteRequest request,
             @AuthenticationPrincipal AuthenticatedUser user

@@ -843,6 +843,11 @@ export type MeResponse = {
   subscription: SubscriptionPlanStatusResponse;
 };
 
+export type FeedbackPromptContextResponse = {
+  returningAfterInactivity: boolean;
+  hasCompletedQuizSession: boolean;
+};
+
 export type SignInMethodsResponse = {
   email: string;
   passwordEnabled: boolean;
@@ -993,6 +998,7 @@ export type QuickReviewSessionSummaryResponse = {
   createdAt: string;
   completedAt: string | null;
   isFirstCompletedQuiz?: boolean;
+  isFirstCompletedSessionEver?: boolean;
 };
 
 export type QuickReviewPerformanceSummaryResponse = {
@@ -1038,6 +1044,10 @@ export type AdaptivePracticeCompleteRequest = {
   totalQuestions: number;
   durationSeconds?: number;
   correctConceptNames?: string[];
+};
+
+export type AdaptivePracticeCompleteResponse = SimpleMessageResponse & {
+  isFirstCompletedSessionEver?: boolean;
 };
 
 export type ConceptHealthEntry = {
@@ -1134,6 +1144,7 @@ export type ChallengeQuizSessionResponse = {
   durationSeconds: number | null;
   createdAt: string;
   completedAt: string | null;
+  isFirstCompletedSessionEver?: boolean;
 };
 
 export type GenerateMoreChallengeQuizResponse = {
@@ -1256,6 +1267,7 @@ export type LongExamMasteryReportResponse = {
   performanceSummary: string;
   suggestedNextStep: string;
   sourceNotes: LongExamSourceNote[];
+  isFirstCompletedSessionEver?: boolean;
 };
 
 export type InterviewPracticeStartResponse = {
@@ -2365,6 +2377,15 @@ export async function submitFeedback(
   return parseApiResponse<SimpleMessageResponse>(response, "Could not send feedback. Please try again.");
 }
 
+export async function getFeedbackPromptContext(): Promise<FeedbackPromptContextResponse> {
+  const response = await fetchWithAuth(
+    "/feedback/context",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<FeedbackPromptContextResponse>(response, "Could not load feedback prompt context.");
+}
+
 export async function completeOnboardingProfileType(
   request: OnboardingProfileTypeRequest,
 ): Promise<MeResponse> {
@@ -3199,7 +3220,7 @@ export async function getInProgressAdaptivePracticeSession(
 export async function completeAdaptivePracticeSession(
   sessionId: string,
   request: AdaptivePracticeCompleteRequest,
-): Promise<SimpleMessageResponse> {
+): Promise<AdaptivePracticeCompleteResponse> {
   const response = await fetchWithAuth(
     `/adaptive-practice/sessions/${sessionId}/complete`,
     {
@@ -3209,7 +3230,7 @@ export async function completeAdaptivePracticeSession(
     },
     true,
   );
-  return parseApiResponse<SimpleMessageResponse>(
+  return parseApiResponse<AdaptivePracticeCompleteResponse>(
     response,
     "Could not complete adaptive practice session.",
   );

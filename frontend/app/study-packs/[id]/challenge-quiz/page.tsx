@@ -2318,6 +2318,8 @@ export default function ChallengeQuizPage() {
             quizLabel="Board Exam Mode"
             noteTitle={note?.title}
             section={showAnswerReview ? "review" : "results"}
+            isFirstCompletedSessionEver={result.isFirstCompletedSessionEver}
+            userId={getAuthUser()?.id}
           />
         </section>
       ) : phase === "complete" && result ? (
@@ -2591,6 +2593,8 @@ export default function ChallengeQuizPage() {
             quizLabel={isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz"}
             noteTitle={note?.title}
             section={showAnswerReview ? "review" : "results"}
+            isFirstCompletedSessionEver={result.isFirstCompletedSessionEver}
+            userId={getAuthUser()?.id}
           />
         </Card>
       ) : null}

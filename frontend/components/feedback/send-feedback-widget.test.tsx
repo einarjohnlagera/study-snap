@@ -46,6 +46,7 @@ describe("SendFeedbackWidget", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Send Feedback" })[1]);
 
     expect(await screen.findByText("Could not send feedback.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Message")).toHaveValue("The dashboard card layout feels cramped.");
   });
 
   it("hides the launcher on mobile when requested", () => {

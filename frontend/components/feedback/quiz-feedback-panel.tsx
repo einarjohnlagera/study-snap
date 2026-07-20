@@ -1,13 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { MessageCircleQuestion, ThumbsDown, ThumbsUp } from "lucide-react";
 import { SendFeedbackWidget, type FeedbackQuickAction } from "@/components/feedback/send-feedback-widget";
+import {
+  getUserScopedGuidanceId,
+  hasSeenTip,
+  markTipSeen,
+  markTipSeenThisSession,
+} from "@/lib/guidance";
+
+export const FIRST_QUIZ_FEEDBACK_PROMPT_ID = "first-quiz-feedback";
 
 type QuizFeedbackPanelProps = {
   quizLabel: string;
   noteTitle?: string | null;
   section: "results" | "review";
+  isFirstCompletedSessionEver?: boolean;
+  userId?: string | null;
 };
 
 function buildQuizFeedbackActions(
@@ -32,8 +42,63 @@ export function QuizFeedbackPanel({
   quizLabel,
   noteTitle,
   section,
+  isFirstCompletedSessionEver,
+  userId,
 }: Readonly<QuizFeedbackPanelProps>) {
   const [helpfulAcknowledged, setHelpfulAcknowledged] = useState(false);
+  const firstQuizPromptStorageId = useMemo(
+    () => userId ? getUserScopedGuidanceId(FIRST_QUIZ_FEEDBACK_PROMPT_ID, userId) : null,
+    [userId],
+  );
+  const [showFirstQuizPrompt] = useState(
+    () => isFirstCompletedSessionEver === true
+      && firstQuizPromptStorageId !== null
+      && !hasSeenTip(firstQuizPromptStorageId),
+  );
+  const [firstQuizPromptDismissed, setFirstQuizPromptDismissed] = useState(false);
+
+  useEffect(() => {
+    if (showFirstQuizPrompt && firstQuizPromptStorageId) {
+      markTipSeen(firstQuizPromptStorageId);
+      markTipSeenThisSession(firstQuizPromptStorageId);
+    }
+  }, [firstQuizPromptStorageId, showFirstQuizPrompt]);
+
+  if (firstQuizPromptDismissed) {
+    return null;
+  }
+
+  if (showFirstQuizPrompt) {
+    const context = [
+      "Feedback type: First Quiz Experience",
+      `Quiz: ${quizLabel}`,
+      `Context: ${section === "review" ? "Review Answers" : "Quiz Results"}`,
+      noteTitle ? `Note: ${noteTitle}` : "Note: Unknown",
+      "",
+    ].join("\n");
+
+    return (
+      <SendFeedbackWidget
+        variant="inline"
+        title="How did your first quiz go?"
+        description="Your first impression is especially useful. Tell us what felt clear or what made the quiz harder to use."
+        showTriggerButton={false}
+        onDismiss={() => setFirstQuizPromptDismissed(true)}
+        quickActions={[
+          {
+            label: "That was clear",
+            icon: <ThumbsUp className="h-4 w-4" />,
+            template: `${context}What felt clear?`,
+          },
+          {
+            label: "That was confusing",
+            icon: <MessageCircleQuestion className="h-4 w-4" />,
+            template: `${context}What felt confusing?`,
+          },
+        ]}
+      />
+    );
+  }
 
   if (section === "results") {
     const helpfulTemplate = [

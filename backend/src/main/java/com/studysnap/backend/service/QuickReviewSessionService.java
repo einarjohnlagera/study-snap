@@ -188,6 +188,8 @@ public class QuickReviewSessionService {
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(request.totalQuestions()), 2, RoundingMode.HALF_UP);
 
+        boolean isFirstCompletedSessionEver = !quickReviewSessionRepository
+                .existsByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED);
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
         session.setCurrentQuestionIndex(request.totalQuestions());
         session.setCurrentRound(request.retryCount() > 0 ? QuickReviewRound.RETRY : QuickReviewRound.INITIAL);
@@ -225,7 +227,7 @@ public class QuickReviewSessionService {
         );
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_QUICK_REVIEW, saved.getStudyPackId());
 
-        return toResponse(saved, planType, isFirstCompletedQuiz);
+        return toResponse(saved, planType, isFirstCompletedQuiz, isFirstCompletedSessionEver);
     }
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
@@ -425,13 +427,14 @@ public class QuickReviewSessionService {
     }
 
     private QuickReviewSessionResponse toResponse(QuickReviewSessionEntity session, PlanType planType) {
-        return toResponse(session, planType, false);
+        return toResponse(session, planType, false, false);
     }
 
     private QuickReviewSessionResponse toResponse(
             QuickReviewSessionEntity session,
             PlanType planType,
-            boolean isFirstCompletedQuiz
+            boolean isFirstCompletedQuiz,
+            boolean isFirstCompletedSessionEver
     ) {
         return new QuickReviewSessionResponse(
                 session.getId().toString(),
@@ -449,7 +452,8 @@ public class QuickReviewSessionService {
                 session.getSessionState(),
                 session.getCreatedAt(),
                 session.getCompletedAt(),
-                isFirstCompletedQuiz
+                isFirstCompletedQuiz,
+                isFirstCompletedSessionEver
         );
     }
 

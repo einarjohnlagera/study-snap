@@ -453,6 +453,8 @@ public class ChallengeQuizService {
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(statistics.totalQuestions()), 2, RoundingMode.HALF_UP);
 
+        boolean isFirstCompletedSessionEver = !quickReviewSessionRepository
+                .existsByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED);
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
         session.setCurrentQuestionIndex(statistics.totalQuestions());
         session.setCurrentRound(QuickReviewRound.INITIAL);
@@ -496,7 +498,8 @@ public class ChallengeQuizService {
                 statistics.weakConcepts(),
                 saved.getDurationSeconds(),
                 saved.getCreatedAt(),
-                saved.getCompletedAt()
+                saved.getCompletedAt(),
+                isFirstCompletedSessionEver
         );
     }
 
