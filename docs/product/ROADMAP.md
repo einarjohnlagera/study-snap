@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.51.1 - Dashboard Stage-1 Limit Wiring` is the current in-progress version (on `releases/v0.51.1`, cut from `main` after v0.51.0 merged) — see its section below.
+`v0.51.1 - Dashboard Stage-1 Limit Wiring` is the current released version (on `releases/v0.51.1`, cut from `main` after v0.51.0 merged) — see its section below.
 
 `v0.51.0 - Read-Path Performance Pass II` is the previous released version — see its section below.
 
@@ -93,7 +93,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Dashboard Stage-1 `listNotes()` limit-wiring (F2 follow-up, deliberately deferred during F2's implementation) | `docs/codex-prompts/v0.51.0-note-list-lean-projection.md` | **Shipped — v0.51.1.** Dashboard now requests the 20 most-recently-updated owned notes; the existing overview response supplies the exact owner-note count, quiz-question existence, and most-recent resolved-ready note id so totals, empty states, first-time ordering, and Challenge routing retain their unbounded semantics | none | 2026-07-20 |
 | F9/F10 — client-side caching + denormalized engagement counts (parked from the performance audit above) | `production-performance-audit-out/01-production-performance-audit.md` | Parked, intentionally not in v0.51.0 | production evidence after v0.51.0 ships: do bounded/parallelized pages still show refetch pain (F9)? does slow-query logging still flag the enrichment queries (F10)? | 2026-07-17 |
 
-## v0.51.1 - Dashboard Stage-1 Limit Wiring (In Progress, base branch `releases/v0.51.1`)
+## v0.51.1 - Dashboard Stage-1 Limit Wiring (Released, base branch `releases/v0.51.1`)
 
 Origin: F2's follow-up item from `v0.51.0 - Read-Path Performance Pass II`, deliberately deferred during F2's own implementation because Dashboard Stage-1's `totalNotes`, `hasCompletedSession`, and Challenge-CTA resolution all depended on the full unbounded note array at the time. Now that F2's bounded `limit` param exists and is unused, this closes the gap.
 

@@ -2,7 +2,7 @@
 
 ## v0.51.1 - Dashboard Stage-1 Limit Wiring
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close the F2 follow-up deliberately deferred during v0.51.0 — decouple Dashboard Stage-1's three full-note-array dependencies so the bounded `limit` param F2 already built (and left unused) can finally be wired in.
 
