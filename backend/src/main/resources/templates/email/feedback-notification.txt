@@ -3,6 +3,7 @@ New feedback was submitted in NoteLib.
 User: {{userEmail}}
 Page: {{pageUrl}}
 Date: {{submittedAt}}
+{{imageNoticeText}}
 
 Message:
 {{message}}

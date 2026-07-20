@@ -663,6 +663,7 @@ export type AdminRecentFeedbackItemResponse = {
   pageUrl: string | null;
   status: "NEW" | "REVIEWED" | "CLOSED";
   createdAt: string;
+  hasImage: boolean;
 };
 
 export type AdminDashboardTopContentResponse = {
@@ -2359,7 +2360,7 @@ export async function issueAdminRefund(transactionId: string): Promise<AdminIssu
 export async function submitFeedback(
   request: SubmitFeedbackRequest,
   pageUrl: string | null,
-): Promise<SimpleMessageResponse> {
+): Promise<SimpleMessageResponse & { feedbackId: string | null }> {
   const headers = new Headers(buildAuthHeaders("application/json"));
   if (pageUrl && pageUrl.trim().length > 0) {
     headers.set("X-Page-Url", pageUrl);
@@ -2374,7 +2375,43 @@ export async function submitFeedback(
     },
     true,
   );
-  return parseApiResponse<SimpleMessageResponse>(response, "Could not send feedback. Please try again.");
+  const payload = await parseApiResponse<SimpleMessageResponse>(response, "Could not send feedback. Please try again.");
+  return {
+    ...payload,
+    feedbackId: response.headers.get("X-Feedback-Id"),
+  };
+}
+
+export async function uploadFeedbackImage(feedbackId: string, image: File): Promise<void> {
+  const body = new FormData();
+  body.set("image", image);
+  const response = await fetchWithAuth(
+    `/feedback/${feedbackId}/image`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+      body,
+    },
+    true,
+  );
+  if (!response.ok) {
+    await throwApiRequestError(response, "Could not attach screenshot.");
+  }
+}
+
+export async function getAdminFeedbackImage(feedbackId: string): Promise<Blob | null> {
+  const response = await fetchWithAuth(
+    `/admin/feedback/${feedbackId}/image`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    await throwApiRequestError(response, "Could not load feedback screenshot.");
+  }
+  return response.blob();
 }
 
 export async function getFeedbackPromptContext(): Promise<FeedbackPromptContextResponse> {

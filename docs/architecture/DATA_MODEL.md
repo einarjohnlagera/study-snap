@@ -143,6 +143,25 @@ Recommended fields:
 - `updated_at`
 - `last_login_at` (nullable)
 
+## Feedback Images
+
+Purpose:
+
+- store one optional screenshot for a submitted feedback item without adding blob hydration to feedback list reads
+
+Fields:
+
+- `feedback_id` (primary key, foreign key to `feedback.id`, cascade delete)
+- `content_type` (`image/png` | `image/jpeg` | `image/webp`)
+- `size_bytes` (maximum `2MB`)
+- `image_bytes`
+- `created_at`
+
+Storage notes:
+
+- Screenshot bytes belong only in `feedback_image`; they must not be added to `FeedbackEntity` or the `feedback` table.
+- Admin list reads project only screenshot existence. Image bytes are loaded only for one feedback detail request.
+
 ## Subscriptions
 
 Purpose:
