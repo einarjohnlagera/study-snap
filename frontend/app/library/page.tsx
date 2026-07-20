@@ -703,8 +703,12 @@ export default function LibraryPage() {
     }
     const requestToken = ++listRequestTokenRef.current;
     setLoadingMore(false);
+    // Poll refreshes are intentionally bounded to the server's maximum page size; when that
+    // bound truncates below what's already loaded via "Load more", loadedPageCount must be
+    // realigned so the next "Load more" continues right after the truncated list instead of
+    // skipping the gap between the truncated cap and the previous offset.
+    const wasTruncated = items.length > LIBRARY_REFRESH_MAX_PAGE_SIZE;
     try {
-      // Poll refreshes are intentionally bounded to the server's maximum page size.
       const page = await listLibraryPage({
         ...libraryFilterParams,
         sort: sortBy,
@@ -717,6 +721,9 @@ export default function LibraryPage() {
       setItems(page.items);
       setTotalMatching(page.totalMatching);
       setHasMore(page.hasMore);
+      if (wasTruncated) {
+        setLoadedPageCount(Math.floor(page.items.length / LIBRARY_PAGE_SIZE));
+      }
       return page.items;
     } catch {
       // Keep the current list; the next poll can recover.

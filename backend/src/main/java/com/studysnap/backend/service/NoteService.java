@@ -411,18 +411,21 @@ public class NoteService {
         long totalMatching;
         List<NoteListItemProjection> pageProjections;
         long offset = (long) page * pageSize;
+        Map<UUID, OffsetDateTime> lastReviewedAtByNoteId = Map.of();
+        boolean lastReviewedAtPrecomputed = false;
         if (materialize) {
             List<NoteLibraryCandidateProjection> candidates = filterLibrarySubjectCandidates(
                     noteRepository.findLibraryCandidates(criteria),
                     subjectBucket
             );
             totalMatching = candidates.size();
-            Map<UUID, OffsetDateTime> lastReviewedAtByNoteId = librarySort == NoteLibrarySort.RECENTLY_REVIEWED
-                    ? quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(
-                            ownerUserId,
-                            candidates.stream().map(NoteLibraryCandidateProjection::id).toList()
-                    )
-                    : Map.of();
+            if (librarySort == NoteLibrarySort.RECENTLY_REVIEWED) {
+                lastReviewedAtByNoteId = quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(
+                        ownerUserId,
+                        candidates.stream().map(NoteLibraryCandidateProjection::id).toList()
+                );
+                lastReviewedAtPrecomputed = true;
+            }
             List<UUID> pageIds = candidates.stream()
                     .sorted(libraryCandidateComparator(librarySort, lastReviewedAtByNoteId))
                     .skip(offset)
@@ -440,7 +443,15 @@ public class NoteService {
                     : noteRepository.findLibraryPage(criteria, librarySort, (int) offset, pageSize);
         }
 
-        List<NoteListItemResponse> items = toListItems(pageProjections, ownerUserId, true);
+        // findLatestSessionCompletedAtByNoteIds scans all of the user's completed sessions
+        // regardless of the noteIds filter, so reuse the RECENTLY_REVIEWED sort's result here
+        // instead of triggering that same unbounded scan a second time inside toListItems.
+        List<NoteListItemResponse> items = toListItems(
+                pageProjections,
+                ownerUserId,
+                true,
+                lastReviewedAtPrecomputed ? lastReviewedAtByNoteId : null
+        );
         boolean hasMore = ((long) page + 1L) * pageSize < totalMatching;
         return new NotesLibraryPageResponse(items, page, pageSize, totalMatching, hasMore);
     }
@@ -1115,6 +1126,15 @@ public class NoteService {
             UUID viewerUserId,
             boolean includeOwnerUserId
     ) {
+        return toListItems(notes, viewerUserId, includeOwnerUserId, null);
+    }
+
+    private List<NoteListItemResponse> toListItems(
+            List<? extends NoteListItemView> notes,
+            UUID viewerUserId,
+            boolean includeOwnerUserId,
+            Map<UUID, OffsetDateTime> precomputedLastSessionCompletedAtByNoteId
+    ) {
         if (notes.isEmpty()) {
             return List.of();
         }
@@ -1143,8 +1163,9 @@ public class NoteService {
                 }
             }
         }
-        Map<UUID, OffsetDateTime> lastSessionCompletedAtByNoteId = quizSessionHistoryService
-                .findLatestSessionCompletedAtByNoteIds(viewerUserId, noteIds);
+        Map<UUID, OffsetDateTime> lastSessionCompletedAtByNoteId = precomputedLastSessionCompletedAtByNoteId != null
+                ? precomputedLastSessionCompletedAtByNoteId
+                : quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(viewerUserId, noteIds);
         Map<UUID, UserEntity> ownerById = new HashMap<>();
         for (UserEntity owner : userRepository.findAllById(ownerIds)) {
             ownerById.put(owner.getId(), owner);

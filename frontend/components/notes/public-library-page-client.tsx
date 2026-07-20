@@ -585,6 +585,7 @@ export function PublicLibraryPageClient() {
   const loadNotes = useCallback(async () => {
     const requestToken = ++listRequestTokenRef.current;
     setLoading(true);
+    setLoadMoreLoading(false);
     setError(null);
     setLoadMoreError(null);
     try {
