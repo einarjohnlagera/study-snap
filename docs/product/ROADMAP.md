@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.52.0 - Proactive In-App Feedback Prompts` is the current in-progress version (on `releases/v0.52.0`, cut from `main` after v0.51.1 merged) — see its section below.
+`v0.52.0 - Proactive In-App Feedback Prompts` is the current released version (on `releases/v0.52.0`, cut from `main` after v0.51.1 merged) — see its section below.
 
 `v0.51.1 - Dashboard Stage-1 Limit Wiring` is the previous released version — see its section below.
 
@@ -96,7 +96,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | F9/F10 — client-side caching + denormalized engagement counts (parked from the performance audit above) | `production-performance-audit-out/01-production-performance-audit.md` | Parked, intentionally not in v0.51.0 | production evidence after v0.51.0 ships: do bounded/parallelized pages still show refetch pain (F9)? does slow-query logging still flag the enrichment queries (F10)? | 2026-07-17 |
 | Feedback system polish — Send Feedback modal visual redesign, optional screenshot/image attachment on bug reports, and a read-only Admin detail view for the "Recent Feedback" table (currently a static, truncated table) | `feedback-system-polish-out/01-modal-design-and-admin-detail.md` | **Folded into v0.52.0 as a mid-release scope addition.** Modal restyle + strictly-optional screenshot field (separate `feedback_image` table, not a column on `FeedbackEntity`, to avoid regressing the v0.51.0 read-path fix); Admin gets a "View" button reusing the existing Refund modal pattern. A status-update action is recommended as a separate fast-follow, not bundled in | none — see `RELEASES.md` v0.52.0 | 2026-07-20 |
 
-## v0.52.0 - Proactive In-App Feedback Prompts (In Progress, base branch `releases/v0.52.0`)
+## v0.52.0 - Proactive In-App Feedback Prompts (Released, base branch `releases/v0.52.0`)
 
 Origin: a direct pivot away from the retention-diagnosis interview plan (`docs/claude-prompt/retention-diagnosis-session-plan.md`), after the v0.48.0 cohort-read gate came back with too weak a signal to act on and cold email outreach to churned users was judged unlikely to work (precedent: failed-payment recovery emails got zero response). Rather than chasing a hard-to-reach churned cohort, this surfaces the app's existing, under-used `SendFeedbackWidget`/`QuizFeedbackPanel` pipeline proactively to *current* users at two moments, so future cohorts' friction is caught in real time instead of inferred later. Retention H1 + H5 (`docs/product/ROADMAP.md` Backlog Index) stays exactly where it was — this doesn't resolve or replace that gate, it's a separate, forward-looking track.
 

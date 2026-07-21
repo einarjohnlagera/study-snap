@@ -2,7 +2,7 @@
 
 ## v0.52.0 - Proactive In-App Feedback Prompts
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: stop waiting on cold outreach to churned users and instead surface the existing feedback pipeline proactively, at two moments where a *current* user's experience is freshest — right after their first-ever quiz result, and when they return after a period of inactivity — so future cohorts' friction gets caught in real time instead of inferred after the fact.
 
