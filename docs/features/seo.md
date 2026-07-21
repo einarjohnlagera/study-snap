@@ -54,7 +54,7 @@ Landing page should publish:
 - Public Library subject landing pages (`/public/library/{subject}`) should also emit `CollectionPage` JSON-LD.
 - Canonical public note pages should emit `Article` JSON-LD using real note data only.
 - Learn articles should emit `Article` JSON-LD (title, description, canonical URL, category as `articleSection`) — Learn is the flagship SEO content surface and previously had no structured data at all.
-- Exam Hub pages (`/exam/{slug}`) should also emit `CollectionPage` JSON-LD.
+- Exam Hub pages (`/exam/{slug}`) should also emit `CollectionPage` JSON-LD, including an `ItemList` (`mainEntity`) of every member note's name and canonical URL via `buildCollectionPageStructuredData`'s optional `items` param — omitted when the list is empty. Reuse this `items` param for any other `CollectionPage` surface (e.g. subject landing pages) that wants to assert real membership rather than an empty collection.
 
 ## Sitemap
 

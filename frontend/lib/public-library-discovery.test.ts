@@ -398,9 +398,9 @@ describe("getBrowseSubjects", () => {
 
     const result = getBrowseSubjects(notes);
 
-    expect(result[0]).toBe("Physics");
-    expect(result[1]).toBe("Biology");
-    expect(result[2]).toBe("Chemistry");
+    expect(result[0]).toEqual({ subject: "Physics", count: 3 });
+    expect(result[1]).toEqual({ subject: "Biology", count: 2 });
+    expect(result[2]).toEqual({ subject: "Chemistry", count: 1 });
   });
 
   it("normalizes subject dash formatting", () => {
@@ -413,7 +413,7 @@ describe("getBrowseSubjects", () => {
 
     // Both collapse into the same normalized subject
     expect(result).toHaveLength(1);
-    expect(result[0]).toBe("Biology – Cell Division");
+    expect(result[0]).toEqual({ subject: "Biology – Cell Division", count: 2 });
   });
 
   it("excludes notes with null or empty subjects", () => {
@@ -425,7 +425,7 @@ describe("getBrowseSubjects", () => {
 
     const result = getBrowseSubjects(notes);
 
-    expect(result).toEqual(["Biology"]);
+    expect(result).toEqual([{ subject: "Biology", count: 1 }]);
   });
 
   it("tiebreaks equal-count subjects alphabetically", () => {
@@ -436,7 +436,7 @@ describe("getBrowseSubjects", () => {
 
     const result = getBrowseSubjects(notes);
 
-    expect(result).toEqual(["Biology", "Physics"]);
+    expect(result).toEqual([{ subject: "Biology", count: 1 }, { subject: "Physics", count: 1 }]);
   });
 
   it("limits to BROWSE_SUBJECTS_LIMIT by default", () => {

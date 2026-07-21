@@ -172,14 +172,19 @@ export function getRecentNotes(
     .slice(0, limit);
 }
 
+export type BrowseSubjectEntry = {
+  subject: string;
+  count: number;
+};
+
 /**
- * Return unique normalized subjects sorted by note count descending, then alphabetically.
- * Limits to BROWSE_SUBJECTS_LIMIT entries.
+ * Return unique normalized subjects with their note counts, sorted by count descending, then
+ * alphabetically. Limits to BROWSE_SUBJECTS_LIMIT entries.
  */
 export function getBrowseSubjects(
   notes: NoteListItemResponse[],
   maxSubjects = BROWSE_SUBJECTS_LIMIT,
-): string[] {
+): BrowseSubjectEntry[] {
   const counts = new Map<string, number>();
   for (const note of notes) {
     const subject = normalizeSubject(note.subject);
@@ -189,7 +194,7 @@ export function getBrowseSubjects(
   }
   return [...counts.entries()]
     .sort(([subjectA, countA], [subjectB, countB]) => countB - countA || subjectA.localeCompare(subjectB))
-    .map(([subject]) => subject)
+    .map(([subject, count]) => ({ subject, count }))
     .slice(0, maxSubjects);
 }
 
