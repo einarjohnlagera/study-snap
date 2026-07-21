@@ -228,4 +228,36 @@ describe("SendFeedbackWidget", () => {
     );
     expect(uploadFeedbackImage).toHaveBeenCalledWith("feedback-1", screenshot);
   });
+
+  it("disables the attachment controls while a submission with a screenshot is in flight", async () => {
+    const screenshot = new File(["png"], "dashboard.png", { type: "image/png" });
+    (prepareFeedbackImage as jest.Mock).mockResolvedValue(screenshot);
+    let resolveSubmit: (() => void) | undefined;
+    (submitFeedback as jest.Mock).mockImplementation(() => new Promise((resolve) => {
+      resolveSubmit = () => resolve({
+        message: "Thanks! Your feedback helps improve NoteLib.",
+        feedbackId: "feedback-1",
+      });
+    }));
+    (uploadFeedbackImage as jest.Mock).mockResolvedValue(undefined);
+    render(<SendFeedbackWidget />);
+    fireEvent.click(screen.getByRole("button", { name: /Send Feedback/i }));
+    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "The card is clipped." } });
+    fireEvent.change(screen.getByLabelText("Choose feedback screenshot"), {
+      target: { files: [screenshot] },
+    });
+    await screen.findByRole("img", { name: "Screenshot preview" });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Send Feedback" })[1]);
+
+    // While the submission (and its trailing image upload) is still in flight, the attachment
+    // the user is looking at must be the one that actually gets uploaded — removing or swapping
+    // it here must not be possible.
+    expect(screen.getByRole("button", { name: "Remove screenshot" })).toBeDisabled();
+    expect(screen.getByLabelText("Choose feedback screenshot")).toBeDisabled();
+
+    resolveSubmit?.();
+    await screen.findByText("Thanks! Your feedback helps improve NoteLib.");
+    expect(uploadFeedbackImage).toHaveBeenCalledWith("feedback-1", screenshot);
+  });
 });

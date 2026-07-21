@@ -3,7 +3,8 @@ const MAX_FEEDBACK_IMAGE_DIMENSION = 1600;
 const SUPPORTED_FEEDBACK_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 const INVALID_TYPE_MESSAGE = "Choose a PNG, JPEG, or WebP screenshot.";
-const TOO_LARGE_MESSAGE = "Screenshot is still over 2 MB after resizing. Choose a smaller image.";
+const TOO_LARGE_MESSAGE = "Screenshot is over 2 MB. Choose a smaller image.";
+const STILL_TOO_LARGE_AFTER_RESIZE_MESSAGE = "Screenshot is still over 2 MB after resizing. Choose a smaller image.";
 
 export class FeedbackImageValidationError extends Error {
   constructor(message: string) {
@@ -27,7 +28,7 @@ export async function prepareFeedbackImage(file: File): Promise<File> {
   try {
     const longestEdge = Math.max(bitmap.width, bitmap.height);
     if (longestEdge <= MAX_FEEDBACK_IMAGE_DIMENSION) {
-      assertImageSize(file.size);
+      assertImageSize(file.size, TOO_LARGE_MESSAGE);
       return file;
     }
 
@@ -41,7 +42,7 @@ export async function prepareFeedbackImage(file: File): Promise<File> {
     }
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     const resizedBlob = await canvasToBlob(canvas, file.type);
-    assertImageSize(resizedBlob.size);
+    assertImageSize(resizedBlob.size, STILL_TOO_LARGE_AFTER_RESIZE_MESSAGE);
     return new File([resizedBlob], file.name, {
       type: file.type,
       lastModified: file.lastModified,
@@ -58,9 +59,9 @@ export function formatFeedbackImageSize(sizeBytes: number): string {
   return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
 }
 
-function assertImageSize(sizeBytes: number) {
+function assertImageSize(sizeBytes: number, message: string) {
   if (sizeBytes > MAX_FEEDBACK_IMAGE_BYTES) {
-    throw new FeedbackImageValidationError(TOO_LARGE_MESSAGE);
+    throw new FeedbackImageValidationError(message);
   }
 }
 

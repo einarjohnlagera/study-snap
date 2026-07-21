@@ -495,6 +495,11 @@ export default function AdaptivePracticePage() {
             setCompletionSignalLoaded(true);
             setNextStepResponse(null);
           });
+      } else {
+        // No session id to complete against (e.g. a response applied without one) — there is no
+        // first-quiz-ever signal to wait for, so fall back to the generic feedback panel immediately
+        // instead of leaving it permanently unrendered.
+        setCompletionSignalLoaded(true);
       }
     }
     setCurrentIndex(nextIndex);
