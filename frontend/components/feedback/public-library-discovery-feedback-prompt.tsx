@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Compass, SearchX } from "lucide-react";
 import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { getDashboardOverview } from "@/lib/api";
-import { getUserScopedGuidanceId, hasSeenTip, markTipSeen } from "@/lib/guidance";
+import { getUserScopedGuidanceId, hasSeenTip, hasSeenTipThisSession, markTipSeen } from "@/lib/guidance";
+import { FIRST_QUIZ_FEEDBACK_PROMPT_ID } from "@/components/feedback/quiz-feedback-panel";
 import {
   hasPublicLibraryDiscoveryFriction,
   hasShownEarlyLifecycleFeedbackSignalThisSession,
@@ -25,10 +26,19 @@ export function PublicLibraryDiscoveryFeedbackPrompt({
     () => getUserScopedGuidanceId(PUBLIC_LIBRARY_DISCOVERY_FEEDBACK_PROMPT_ID, userId),
     [userId],
   );
+  const firstQuizStorageId = useMemo(
+    () => getUserScopedGuidanceId(FIRST_QUIZ_FEEDBACK_PROMPT_ID, userId),
+    [userId],
+  );
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (hasSeenTip(storageId) || hasShownEarlyLifecycleFeedbackSignalThisSession() || !hasPublicLibraryDiscoveryFriction()) {
+    if (
+      hasSeenTip(storageId)
+      || hasShownEarlyLifecycleFeedbackSignalThisSession()
+      || hasSeenTipThisSession(firstQuizStorageId)
+      || !hasPublicLibraryDiscoveryFriction()
+    ) {
       return;
     }
     let cancelled = false;
@@ -47,7 +57,7 @@ export function PublicLibraryDiscoveryFeedbackPrompt({
     return () => {
       cancelled = true;
     };
-  }, [storageId]);
+  }, [firstQuizStorageId, storageId]);
 
   if (!visible) {
     return null;

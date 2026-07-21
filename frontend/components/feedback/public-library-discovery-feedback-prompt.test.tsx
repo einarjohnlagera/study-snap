@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PublicLibraryDiscoveryFeedbackPrompt } from "./public-library-discovery-feedback-prompt";
+import { FIRST_QUIZ_FEEDBACK_PROMPT_ID } from "@/components/feedback/quiz-feedback-panel";
 import { getDashboardOverview } from "@/lib/api";
+import { getUserScopedGuidanceId, markTipSeenThisSession } from "@/lib/guidance";
 import {
   markEarlyLifecycleFeedbackSignalShownThisSession,
   markPublicLibraryNoteAdoptedThisSession,
@@ -65,6 +67,16 @@ describe("PublicLibraryDiscoveryFeedbackPrompt", () => {
     (getDashboardOverview as jest.Mock).mockResolvedValue({ totalNoteCount: 1 });
     viewThreeNotesWithoutAdopting();
     markEarlyLifecycleFeedbackSignalShownThisSession();
+
+    render(<PublicLibraryDiscoveryFeedbackPrompt userId="user-1" />);
+    expect(getDashboardOverview).not.toHaveBeenCalled();
+    expect(screen.queryByText("What's making it hard to find something to study?")).not.toBeInTheDocument();
+  });
+
+  it("does not render if the first-quiz-ever prompt already fired this session", () => {
+    (getDashboardOverview as jest.Mock).mockResolvedValue({ totalNoteCount: 1 });
+    viewThreeNotesWithoutAdopting();
+    markTipSeenThisSession(getUserScopedGuidanceId(FIRST_QUIZ_FEEDBACK_PROMPT_ID, "user-1"));
 
     render(<PublicLibraryDiscoveryFeedbackPrompt userId="user-1" />);
     expect(getDashboardOverview).not.toHaveBeenCalled();

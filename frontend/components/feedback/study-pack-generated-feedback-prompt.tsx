@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, HelpCircle } from "lucide-react";
 import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
-import { getUserScopedGuidanceId, hasSeenTip, markTipSeen } from "@/lib/guidance";
+import { getUserScopedGuidanceId, hasSeenTip, hasSeenTipThisSession, markTipSeen } from "@/lib/guidance";
+import { FIRST_QUIZ_FEEDBACK_PROMPT_ID } from "@/components/feedback/quiz-feedback-panel";
 import {
   hasShownEarlyLifecycleFeedbackSignalThisSession,
   markEarlyLifecycleFeedbackSignalShownThisSession,
@@ -24,8 +25,14 @@ export function StudyPackGeneratedFeedbackPrompt({
     () => getUserScopedGuidanceId(STUDY_PACK_GENERATED_FEEDBACK_PROMPT_ID, userId),
     [userId],
   );
+  const firstQuizStorageId = useMemo(
+    () => getUserScopedGuidanceId(FIRST_QUIZ_FEEDBACK_PROMPT_ID, userId),
+    [userId],
+  );
   const [visible] = useState(
-    () => !hasSeenTip(storageId) && !hasShownEarlyLifecycleFeedbackSignalThisSession(),
+    () => !hasSeenTip(storageId)
+      && !hasShownEarlyLifecycleFeedbackSignalThisSession()
+      && !hasSeenTipThisSession(firstQuizStorageId),
   );
   const [dismissed, setDismissed] = useState(false);
 
