@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.54.1 - Public Note Copy Correctness Fixes
+
+**Status: In Progress**
+
+Theme: two small, independent correctness fixes surfaced while validating the public-note copy flow — a backend idempotency gap, and a frontend CTA that never learned the ownership rule the rest of the page already follows.
+
+### Planned Scope
+
+- **Backfill on re-copy (backend).** `NoteService.copyNote()`'s existing-copy branch (`backend/src/main/java/com/studysnap/backend/service/NoteService.java:237-244`) currently returns a non-owner's existing copy as-is, even if it has no linked Study Pack and the source note now has a ready one. Fix: when the existing copy has no Study Pack and the source's Study Pack is now ready, backfill a copied Study Pack onto the existing copy (reusing `copySourceStudyPack`) instead of returning it pack-less forever.
+- **Owner-gated "Quiz yourself" CTA (frontend).** The public note detail page's "Ready to quiz yourself?" card (`frontend/app/public/library/[subject]/[slug]/page.tsx:277-295`) renders unconditionally for anyone, including the note's own owner — clicking it as the owner forces a redundant copy-and-regenerate cycle on content they already own. `PublicNoteOwnershipActions` (same page, further down) already implements the correct rule from `docs/features/public-notes.md` (owner sees `Open Note` + `Share`, non-owner sees the copy CTAs) — this card just never adopted it. Fix: gate the card on `!note.isCurrentUser`, matching the existing pattern; no new CTA variant needed.
+
+Anti-drift: the backend fix only changes the existing-copy backfill path — no change to the owner-copy path, the first-copy creation path, or `copyPublicNoteForSignup`'s delegation to `copyNote`. The frontend fix only adds an existing-pattern ownership gate to one already-documented CTA — no change to `PublicNoteOwnershipActions` itself, no new component. No new entity, migration, or endpoint either way.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.54.0 - CPALE Exam Hub (Wave 2)
 
 **Status: Released**
