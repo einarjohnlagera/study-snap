@@ -25,10 +25,12 @@ export function buildCollectionPageStructuredData({
   name,
   url,
   description,
+  items,
 }: {
   name: string;
   url: string;
   description: string;
+  items?: { name: string; url: string }[];
 }) {
   return {
     "@context": "https://schema.org",
@@ -36,6 +38,17 @@ export function buildCollectionPageStructuredData({
     name,
     url,
     description,
+    mainEntity: items && items.length > 0
+      ? {
+          "@type": "ItemList",
+          itemListElement: items.map((item, index) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            name: item.name,
+            item: item.url,
+          })),
+        }
+      : undefined,
   };
 }
 

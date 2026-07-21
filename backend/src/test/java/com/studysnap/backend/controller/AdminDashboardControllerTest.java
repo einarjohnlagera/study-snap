@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AdminDashboardRecentEventsResponse;
 import com.studysnap.backend.dto.AdminDashboardSummaryResponse;
 import com.studysnap.backend.dto.AdminDashboardTopContentResponse;
+import com.studysnap.backend.dto.AdminOrganicLandingsResponse;
 import com.studysnap.backend.service.AdminDashboardService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -69,5 +70,17 @@ class AdminDashboardControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(adminDashboardService).getRecentEvents();
+    }
+
+    @Test
+    void getOrganicLandings_returnsOrganicLandingPayload() {
+        AdminDashboardController controller = new AdminDashboardController(adminDashboardService);
+        AdminOrganicLandingsResponse expected = new AdminOrganicLandingsResponse(List.of(), 0, 0, null);
+        when(adminDashboardService.getOrganicLandings()).thenReturn(expected);
+
+        AdminOrganicLandingsResponse response = controller.getOrganicLandings();
+
+        assertThat(response).isEqualTo(expected);
+        verify(adminDashboardService).getOrganicLandings();
     }
 }

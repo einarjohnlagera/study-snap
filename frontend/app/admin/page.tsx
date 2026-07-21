@@ -9,6 +9,7 @@ import { ToastMessage } from "@/components/ui/toast-message";
 import Link from "next/link";
 import {
   ApiRequestError,
+  getAdminOrganicLandings,
   getAdminDashboardRecentEvents,
   getAdminDashboardSummary,
   getAdminDashboardTopContent,
@@ -19,6 +20,7 @@ import {
   type AdminRecentUpgradeItemResponse,
   type AdminRecentFeedbackItemResponse,
   type AdminDashboardRecentEventsResponse,
+  type AdminOrganicLandingsResponse,
   type AdminDashboardSummaryResponse,
   type AdminDashboardTopContentResponse,
   type AdminRegenerationStatusResponse,
@@ -49,6 +51,46 @@ function formatDateTime(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatWeekStart(value: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatPercent(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "percent",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatOrganicSurface(eventType: AdminOrganicLandingsResponse["landings"][number]["eventType"]): string {
+  switch (eventType) {
+    case "EXAM_HUB_VIEWED":
+      return "Exam Hub";
+    case "PUBLISHED_PLANS_VIEWED":
+      return "Published Plans";
+    default:
+      return "Landing Page";
+  }
+}
+
+function formatReferrerSource(source: AdminOrganicLandingsResponse["landings"][number]["referrerSource"]): string {
+  switch (source) {
+    case "other-search":
+      return "Other search";
+    case "social":
+      return "Social";
+    case "google":
+      return "Google";
+    default:
+      return "Direct";
+  }
 }
 
 function truncateCell(value: string, maxLength = 80): string {
@@ -135,6 +177,7 @@ export default function AdminPage() {
   const [summary, setSummary] = useState<AdminDashboardSummaryResponse | null>(null);
   const [topContent, setTopContent] = useState<AdminDashboardTopContentResponse | null>(null);
   const [recentEvents, setRecentEvents] = useState<AdminDashboardRecentEventsResponse | null>(null);
+  const [organicLandings, setOrganicLandings] = useState<AdminOrganicLandingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refundTarget, setRefundTarget] = useState<AdminRecentUpgradeItemResponse | null>(null);
@@ -158,14 +201,16 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [summaryResponse, topContentResponse, recentEventsResponse] = await Promise.all([
+      const [summaryResponse, topContentResponse, recentEventsResponse, organicLandingsResponse] = await Promise.all([
         getAdminDashboardSummary(),
         getAdminDashboardTopContent(),
         getAdminDashboardRecentEvents(),
+        getAdminOrganicLandings(),
       ]);
       setSummary(summaryResponse);
       setTopContent(topContentResponse);
       setRecentEvents(recentEventsResponse);
+      setOrganicLandings(organicLandingsResponse);
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 403) {
         router.replace("/dashboard");
@@ -433,7 +478,7 @@ export default function AdminPage() {
         <Card className="border-red-500/40 bg-red-50/70 p-6 text-sm text-red-700 dark:bg-red-950/20 dark:text-red-300">
           {error}
         </Card>
-      ) : summary && topContent && recentEvents ? (
+      ) : summary && topContent && recentEvents && organicLandings ? (
         <>
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-foreground">Overview</h2>
@@ -459,6 +504,41 @@ export default function AdminPage() {
               {engagementCards.map((card) => (
                 <MetricCard key={card.label} label={card.label} value={card.value} detail={card.detail} />
               ))}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold text-foreground">Organic Landing Attribution</h2>
+            <div className="grid gap-6 xl:grid-cols-3">
+              <div className="xl:col-span-2">
+                <SimpleTable
+                  title="Recent Organic Landings"
+                  columns={["Week of", "Surface", "Referrer source", "Landings"]}
+                  emptyMessage="No tracked page-view landings in the last eight weeks."
+                  rows={organicLandings.landings.map((item) => [
+                    formatWeekStart(item.weekStart),
+                    formatOrganicSurface(item.eventType),
+                    formatReferrerSource(item.referrerSource),
+                    formatMetric(item.count),
+                  ])}
+                />
+              </div>
+              <Card className="space-y-3 p-4 sm:p-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">
+                  Exam Hub Google CTA rate
+                </p>
+                <p className="text-2xl font-semibold text-foreground">
+                  {organicLandings.examHubOrganicClickThroughRatio === null
+                    ? "—"
+                    : formatPercent(organicLandings.examHubOrganicClickThroughRatio)}
+                </p>
+                <p className="text-sm leading-relaxed text-foreground/65">
+                  {formatMetric(organicLandings.examHubCtaClicks)} signup CTA clicks from {formatMetric(organicLandings.googleExamHubViews)} Google Exam Hub landings.
+                </p>
+                {organicLandings.examHubOrganicClickThroughRatio === null ? (
+                  <p className="text-sm text-foreground/55">No Google Exam Hub landings in this window yet.</p>
+                ) : null}
+              </Card>
             </div>
           </section>
 

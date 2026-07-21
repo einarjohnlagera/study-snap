@@ -54,7 +54,7 @@ Landing page should publish:
 - Public Library subject landing pages (`/public/library/{subject}`) should also emit `CollectionPage` JSON-LD.
 - Canonical public note pages should emit `Article` JSON-LD using real note data only.
 - Learn articles should emit `Article` JSON-LD (title, description, canonical URL, category as `articleSection`) — Learn is the flagship SEO content surface and previously had no structured data at all.
-- Exam Hub pages (`/exam/{slug}`) should also emit `CollectionPage` JSON-LD.
+- Exam Hub pages (`/exam/{slug}`) should also emit `CollectionPage` JSON-LD, including an `ItemList` (`mainEntity`) of every member note's name and canonical URL via `buildCollectionPageStructuredData`'s optional `items` param — omitted when the list is empty. Reuse this `items` param for any other `CollectionPage` surface (e.g. subject landing pages) that wants to assert real membership rather than an empty collection.
 
 ## Sitemap
 
@@ -74,6 +74,12 @@ subject entries below it, and the subject page's own `generateMetadata` sets `ro
 follow: true }` below it. The page itself stays reachable and renders normally either way — this is an
 indexation gate, not a visibility or access change. Individual note pages are never gated by this
 threshold; a single good note is a legitimate long-tail asset regardless of its subject's overall depth.
+
+## Measurement
+
+Every public page view that uses the shared `AnalyticsPageViewTracker` records only a coarse `referrerSource` metadata bucket: `google`, `other-search`, `social`, or `direct`. It does not persist raw referrer URLs and is deliberately separate from first-touch signup attribution, which preserves a session's raw referrer only for the signup record.
+
+The Admin dashboard's read-only Organic Landing Attribution panel groups the recent eight-week landing history by week, public surface, and bucket. It also reports the coarse aggregate Google Exam Hub landing → `EXAM_HUB_CTA_CLICKED` ratio. This is not visitor- or session-correlated conversion reporting; no anonymous identifier or Search Console integration is implied.
 
 ## Learn Content Marketing Pages
 

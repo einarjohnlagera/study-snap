@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.53.0 - SEO Discoverability: Exam Hub Depth & Organic Attribution
+
+**Status: Released**
+
+Theme: close the highest-leverage fixable gaps identified in the organic-search strategy session (`docs/claude-prompt/seo-strategy-out/01-seo-strategy.md`) — exam hub pages currently hide most of their real content behind an 18-card cap, ship no structured data proving the hub actually contains those notes, and give no visibility into whether organic search traffic exists at all. This is pure new-user acquisition work: getting people who don't know NoteLib exists into the funnel, not a retention or re-engagement play.
+
+### Planned Scope
+
+- **P4 — Exam hub subject breakdown + full-inventory path (frontend).** Add a "Browse by subject" section per exam hub showing real note counts per subject linking to subject pages, plus an unauthenticated "Browse all {N} notes →" link so all of a hub's notes are reachable (currently capped at 18 cards via 3 discovery sections × `DISCOVERY_SECTION_LIMIT = 6`). No backend change expected — the depth already exists, only the on-page path to it is missing.
+- **P5 — `ItemList` inside exam hub `CollectionPage` JSON-LD (frontend).** Extend the hub's existing structured data so its `CollectionPage` schema asserts its actual member notes (name + canonical URL) instead of an empty collection with no visible members.
+- **P6 — Organic-landing attribution (frontend + backend + admin dashboard).** Bucket `document.referrer` into a coarse `referrerSource` (`google` / `other-search` / `social` / `direct`, no raw URLs) fed through the existing analytics pipeline, surfaced as a new Admin dashboard panel (organic landings per week per surface, organic-landing → exam-CTA click rate). No new `AnalyticsEventType` expected.
+
+Anti-drift (per the strategy session's explicit rejections): no programmatic keyword landing pages, no AI-generated reviewer content to fill syllabus gaps, no PDF-bait CTAs, no nudging user notes toward public visibility, no PRC results/news pages, no re-litigating the already-shipped sitemap/JSON-LD/robots architecture (this only extends it), no hreflang/localization work, no Wave 2 exam hub expansion (P9, explicitly gated on note-count depth per bucket). P1 (Google Search Console setup) is a non-code ops task outside this release's scope; P3 (exam-named Learn guides) needs human-authored content and is not part of this code release either — both remain in the Backlog Index.
+
+### Shipped
+
+- **P4 — Exam hub subject breakdown + full-inventory path (frontend).** Each exam hub now shows a "Browse by Subject" section (real per-subject note counts, linking to the existing dedicated subject-landing pages) and a fourth "More {Exam} Notes" section listing every note not already surfaced in Featured/Most Popular/Recently Added, so a 63-note bucket is no longer capped at 18 visible cards. Adaptation from the original plan: the spec called for a "Browse all {N} notes →" link out to a filtered Public Library view, but `buildPublicLibraryUrl`'s `courseProgram` filter is single-value while some exam hubs map to multiple course/programs (e.g. PNLE: "Nursing" + "Medical – Surgical Nursing") — a single-value link would under-represent the hub. Rendering the remaining notes directly on the hub page instead avoids that gap entirely and puts more crawlable content directly on the page being optimized, which more directly addresses the diagnosed "hides the depth that exists" blocker. No backend change.
+- **P5 — `ItemList` inside exam hub `CollectionPage` JSON-LD (frontend).** `buildCollectionPageStructuredData` now accepts an optional `items` list and emits a `mainEntity: ItemList` of every member note (name + canonical absolute URL) when provided; omitted entirely when the list is empty. The exam hub page passes its full, uncapped note list, so the hub's structured data now asserts real membership instead of an empty collection.
+- **P6 — Organic-landing attribution (frontend + backend + Admin dashboard).** Every page view emitted through the shared `AnalyticsPageViewTracker` now adds a coarse, privacy-preserving `referrerSource` bucket (`google`, `other-search`, `social`, or `direct`) without storing raw referrer URLs or changing any page-view call site. Admin's bounded eight-week Organic Landing Attribution panel groups those landing events by week, surface, and source, and reports the intentionally aggregate-only Google Exam Hub landing → existing signup-CTA click ratio; no event types, migrations, or Search Console dependency were added.
+
 ## v0.52.1 - Early-Lifecycle Feedback Signals
 
 **Status: Released**
