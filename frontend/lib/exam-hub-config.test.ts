@@ -7,12 +7,13 @@ describe("exam hub config", () => {
     ["Medical – Surgical Nursing", "pnle"],
     ["Education", "let"],
     ["nursing", "pnle"],
+    ["Accountancy", "cpale"],
   ])("maps %s to %s", (courseProgram, expectedSlug) => {
     expect(getExamSlugForCourseProgram(courseProgram)).toBe(expectedSlug);
   });
 
   it("returns null for unknown course programs", () => {
-    expect(getExamSlugForCourseProgram("Accountancy")).toBeNull();
+    expect(getExamSlugForCourseProgram("Civil Engineering")).toBeNull();
     expect(getExamSlugForCourseProgram(null)).toBeNull();
   });
 });

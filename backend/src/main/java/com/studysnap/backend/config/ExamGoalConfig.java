@@ -8,13 +8,15 @@ public final class ExamGoalConfig {
     public static final String ALE = "ale";
     public static final String PNLE = "pnle";
     public static final String LET = "let";
+    public static final String CPALE = "cpale";
 
     private static final String ARCHITECTURE = "Architecture";
     private static final String NURSING = "Nursing";
     private static final String MEDICAL_SURGICAL_NURSING = "Medical – Surgical Nursing";
     private static final String EDUCATION = "Education";
+    private static final String ACCOUNTANCY = "Accountancy";
 
-    private static final List<String> VALID_SLUGS = List.of(ALE, PNLE, LET);
+    private static final List<String> VALID_SLUGS = List.of(ALE, PNLE, LET, CPALE);
     private static final Map<String, ExamGoalDefinition> EXAMS = Map.of(
             ALE,
             new ExamGoalDefinition(
@@ -33,6 +35,12 @@ public final class ExamGoalConfig {
                     "LET",
                     "Licensure Examination for Teachers",
                     List.of(EDUCATION)
+            ),
+            CPALE,
+            new ExamGoalDefinition(
+                    "CPALE",
+                    "Certified Public Accountant Licensure Examination",
+                    List.of(ACCOUNTANCY)
             )
     );
 

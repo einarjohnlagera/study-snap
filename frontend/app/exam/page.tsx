@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, GraduationCap, Heart, PenTool } from "lucide-react";
+import { ArrowRight, Calculator, GraduationCap, Heart, PenTool } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PublicFooter } from "@/components/public/public-footer";
 import { BackLink } from "@/components/ui/back-link";
@@ -13,12 +13,13 @@ const EXAM_HUB_ICONS: Record<ExamHubSlug, LucideIcon> = {
   ale: PenTool,
   pnle: Heart,
   let: GraduationCap,
+  cpale: Calculator,
 };
 
-const examIndexDescription = "Browse NoteLib exam hubs for ALE, PNLE, and LET public notes, summaries, and practice quizzes.";
+const examIndexDescription = "Browse NoteLib exam hubs for ALE, PNLE, LET, and CPALE public notes, summaries, and practice quizzes.";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "NoteLib Exam Hubs – ALE, PNLE, and LET Review Notes",
+  title: "NoteLib Exam Hubs – ALE, PNLE, LET, and CPALE Review Notes",
   description: examIndexDescription,
   path: "/exam",
 });
@@ -34,12 +35,12 @@ export default function ExamHubIndexPage() {
           <div className="space-y-2">
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Board exam review notes</h1>
             <p className="max-w-2xl text-sm leading-relaxed text-foreground/70 sm:text-base">
-              Start with curated public notes for the board exam communities NoteLib supports in this launch wave.
+              Start with curated public notes for the board exam communities NoteLib supports.
             </p>
           </div>
         </header>
 
-        <section className="grid gap-4 md:grid-cols-3" aria-label="Wave 1 exam hubs">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Exam hubs">
           {EXAM_HUB_SLUGS.map((slug) => {
             const exam = EXAM_HUBS[slug];
             const Icon = EXAM_HUB_ICONS[slug];

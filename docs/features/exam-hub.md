@@ -6,10 +6,11 @@ Exam hubs give board-exam communities a public destination that collects relevan
 
 ## Routes
 
-- `/exam` — static public index for the launch exams.
+- `/exam` — static public index for all configured exam hubs.
 - `/exam/ale` — Architect Licensure Examination (ALE).
 - `/exam/pnle` — Philippine Nurse Licensure Examination (PNLE).
 - `/exam/let` — Licensure Examination for Teachers (LET).
+- `/exam/cpale` — Certified Public Accountant Licensure Examination (CPALE).
 
 Unknown slugs return `notFound()`.
 
@@ -22,6 +23,14 @@ Unknown slugs return `notFound()`.
 | `let` | Licensure Examination for Teachers (LET) | `Education` |
 
 The mapping lives in `frontend/lib/exam-hub-config.ts`. Keep curation aliases there as the single frontend source of truth. Do not scatter exam-to-course mappings in route components or UI copy.
+
+## Wave 2 Set
+
+| Slug | Exam | Included `courseProgram` values |
+|---|---|---|
+| `cpale` | Certified Public Accountant Licensure Examination (CPALE) | `Accountancy` |
+
+Filtering matches `courseProgram` exactly (case-insensitive, trimmed) — not `subject`. Accountancy-adjacent notes that carry a different courseProgram value (e.g. "Business", "Commerce") with subject="Accounting" will not surface in this hub. This is a known, accepted characteristic of the existing config-alias-map mechanism, not a bug — do not broaden the filter to match on `subject` to compensate.
 
 ## Access Rules
 
@@ -185,7 +194,6 @@ Zero-note exam states should honestly say: `No {Exam Name} notes have been share
 
 Deferred candidates from the v0.25.0 audit:
 
-- CPALE / Accountancy.
 - Civil Engineering.
 - Electrical Engineering.
 - Mechanical Engineering.
