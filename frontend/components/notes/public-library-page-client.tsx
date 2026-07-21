@@ -20,6 +20,8 @@ import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { getAuthUser } from "@/lib/auth";
+import { PublicLibraryDiscoveryFeedbackPrompt } from "@/components/feedback/public-library-discovery-feedback-prompt";
+import { markPublicLibraryNoteAdoptedThisSession } from "@/lib/early-lifecycle-feedback-signals";
 import {
   listCoursePrograms,
   listNotes,
@@ -740,6 +742,7 @@ export function PublicLibraryPageClient() {
   }, [loadCopiedNotes]);
 
   const handleCopySuccess = useCallback((payload: { copiedNoteId: string; sourceNoteId: string; studyPackStatus: NoteListItemResponse["studyPackStatus"] }) => {
+    markPublicLibraryNoteAdoptedThisSession();
     setCopiedNoteIdsBySourceId((previous) => ({
       ...previous,
       [payload.sourceNoteId]: payload.copiedNoteId,
@@ -1376,6 +1379,8 @@ export function PublicLibraryPageClient() {
         tipId="public-library-intro"
         message="Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included."
       />
+
+      {currentUserId ? <PublicLibraryDiscoveryFeedbackPrompt userId={currentUserId} /> : null}
 
       {loading && !hasLoadedOnce ? (
         <div className="grid gap-4 md:grid-cols-2">

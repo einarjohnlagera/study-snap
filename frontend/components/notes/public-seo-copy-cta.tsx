@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ResponsiveActionButton, type ActionIconName } from "@/components/ui/action-button";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
 import { copyNote, trackAnalyticsEvent, type AnalyticsEventType } from "@/lib/api";
+import { markPublicLibraryNoteAdoptedThisSession } from "@/lib/early-lifecycle-feedback-signals";
 import {
   buildCopiedNotePath,
   buildPublicCopyIntentQuery,
@@ -88,6 +89,7 @@ export function PublicSeoCopyCta({
       try {
         const copied = await copyNote(noteId, { includeStudyPack });
         if (!cancelled) {
+          markPublicLibraryNoteAdoptedThisSession();
           router.replace(buildCopiedNoteRedirectPath(copied.id, requestedRedirectTarget, copied.studyPackStatus));
         }
       } catch (error) {
@@ -125,6 +127,7 @@ export function PublicSeoCopyCta({
     setCopyError(null);
     try {
       const copied = await copyNote(noteId, { includeStudyPack });
+      markPublicLibraryNoteAdoptedThisSession();
       router.push(buildCopiedNoteRedirectPath(copied.id, redirectTarget, copied.studyPackStatus));
     } catch (error) {
       setCopyError(error instanceof Error ? error.message : "Could not copy note.");
