@@ -2,7 +2,7 @@
 
 ## v0.52.1 - Early-Lifecycle Feedback Signals
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: three small, targeted proactive feedback prompts aimed specifically at *new* users in their first few sessions — a leading indicator for friction that predicts a second/third session might not happen, not a way to learn from users who already churned (that's the separate, still-unsent outbound interview track). Scoped from a Fable design session (`docs/claude-prompt/app-wide-feedback-signals-out/01-app-wide-feedback-signals.md`) that explicitly rejected a full app-wide build as the same "more listening infrastructure on a tiny population" anti-pattern the retention diagnosis already flagged, in favor of this small slice.
 
