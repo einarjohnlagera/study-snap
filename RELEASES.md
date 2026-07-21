@@ -2,7 +2,7 @@
 
 ## v0.54.0 - CPALE Exam Hub (Wave 2)
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: extend the Exam Hub acquisition surface to a fourth board exam — CPALE (Certified Public Accountant Licensure Examination) — reusing the same config-alias-map pattern that shipped ALE/PNLE/LET, now that the Wave 2 depth gate has cleared (`docs/claude-prompt/next-priority-new-user-focus-out/02-h1-h5-cohort-recheck-and-cpale-depth.sql` Query 2, confirmed against production).
 
