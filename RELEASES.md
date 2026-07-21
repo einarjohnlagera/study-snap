@@ -2,7 +2,7 @@
 
 ## v0.53.0 - SEO Discoverability: Exam Hub Depth & Organic Attribution
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close the highest-leverage fixable gaps identified in the organic-search strategy session (`docs/claude-prompt/seo-strategy-out/01-seo-strategy.md`) — exam hub pages currently hide most of their real content behind an 18-card cap, ship no structured data proving the hub actually contains those notes, and give no visibility into whether organic search traffic exists at all. This is pure new-user acquisition work: getting people who don't know NoteLib exists into the funnel, not a retention or re-engagement play.
 
