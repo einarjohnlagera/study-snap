@@ -358,6 +358,7 @@ export function SendFeedbackWidget({
                 accept="image/png,image/jpeg,image/webp"
                 className="sr-only"
                 aria-label="Choose feedback screenshot"
+                disabled={submitting}
                 onChange={(event) => void handleAttachmentChange(event)}
               />
               {attachment ? (
@@ -374,11 +375,12 @@ export function SendFeedbackWidget({
                   </div>
                   <button
                     type="button"
-                    className="rounded-full p-1 text-foreground/55 transition-colors hover:bg-highlight hover:text-foreground"
+                    className="rounded-full p-1 text-foreground/55 transition-colors hover:bg-highlight hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                     onClick={() => {
                       replaceAttachment(null);
                       setAttachmentError(null);
                     }}
+                    disabled={submitting}
                     aria-label="Remove screenshot"
                   >
                     <X className="h-4 w-4" aria-hidden="true" />
@@ -391,6 +393,7 @@ export function SendFeedbackWidget({
                   variant="ghost"
                   className="h-8 gap-2 px-2 text-xs"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={submitting}
                 >
                   <ImagePlus className="h-4 w-4" aria-hidden="true" />
                   Add a screenshot (optional)
