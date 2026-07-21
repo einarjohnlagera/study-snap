@@ -1,4 +1,4 @@
-export type ExamHubSlug = "ale" | "pnle" | "let";
+export type ExamHubSlug = "ale" | "pnle" | "let" | "cpale";
 
 export type ExamHubConfig = {
   slug: ExamHubSlug;
@@ -31,6 +31,13 @@ export const EXAM_HUBS = {
     fullName: "Licensure Examination for Teachers (LET)",
     description: "Free LET reviewer notes and practice quizzes for Philippine teacher licensure exam takers",
     coursePrograms: ["Education"],
+  },
+  cpale: {
+    slug: "cpale",
+    shortName: "CPALE",
+    fullName: "Certified Public Accountant Licensure Examination (CPALE)",
+    description: "Free CPALE reviewer notes and practice quizzes for Philippine accountancy board exam takers",
+    coursePrograms: ["Accountancy"],
   },
 } as const satisfies Record<ExamHubSlug, ExamHubConfig>;
 

@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.53.0 - SEO Discoverability: Exam Hub Depth & Organic Attribution` (In Progress); previous: `v0.52.1 - Early-Lifecycle Feedback Signals` (Released)
+Current release baseline: `v0.54.0 - CPALE Exam Hub (Wave 2)` (In Progress); previous: `v0.53.0 - SEO Discoverability: Exam Hub Depth & Organic Attribution` (Released)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 

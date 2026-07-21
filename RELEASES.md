@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.54.0 - CPALE Exam Hub (Wave 2)
+
+**Status: Released**
+
+Theme: extend the Exam Hub acquisition surface to a fourth board exam — CPALE (Certified Public Accountant Licensure Examination) — reusing the same config-alias-map pattern that shipped ALE/PNLE/LET, now that the Wave 2 depth gate has cleared (`docs/claude-prompt/next-priority-new-user-focus-out/02-h1-h5-cohort-recheck-and-cpale-depth.sql` Query 2, confirmed against production).
+
+### Planned Scope
+
+- **CPALE hub (frontend).** Add `/exam/cpale` following the existing Wave 1 hub template exactly — discovery sections with empty-header suppression, "Browse by Subject" with real per-subject counts, "More CPALE Notes" full-inventory section, `CollectionPage`/`ItemList` JSON-LD, honest zero-note state with the intent-preserving signup CTA. Curate Accountancy-adjacent subject/courseProgram aliases (accounting, auditing, taxation, financial management) in `frontend/lib/exam-hub-config.ts`, the same config-alias-map-first approach PNLE used to combine multiple source values into one hub.
+- **Sitemap / index inclusion (frontend).** Add the new hub route to the static public sitemap and indexation rules alongside the existing three hubs.
+
+Anti-drift: reuse the existing Wave 1 hub component/route/JSON-LD pattern exactly — no new backend endpoint, no new entity or migration, no admin note-tagging or courseProgram normalization tool (config alias map only, per `docs/features/exam-hub.md` Wave 2 guidance — "Admin normalization is a separate fast-follow and should not be introduced as a prerequisite unless production data becomes messy enough to require it"). CPALE only — do not extend this release to any other Wave 2 candidate (Civil Engineering, Electrical Engineering, Mechanical Engineering, Pharmacy, Physical Therapy, Civil Service Exam); each needs its own depth confirmation first.
+
+### Shipped
+
+- **CPALE hub (backend + frontend).** Added `cpale` (courseProgram `Accountancy`) to `frontend/lib/exam-hub-config.ts` and the synced `backend/.../config/ExamGoalConfig.java` — no route-level code change needed since `/exam/[slug]` and the sitemap already iterate the config dynamically. Updated the `/exam` index page (new icon, updated copy, dropped the now-inaccurate "Wave 1" framing on the index grid/aria-label since a Wave 2 hub now renders alongside Wave 1). Note filtering is courseProgram-exact-match only — Accountancy-adjacent notes tagged with a different courseProgram (e.g. "Business", "Commerce") will not surface in this hub; see `docs/features/exam-hub.md` Wave 2 Set.
+
 ## v0.53.0 - SEO Discoverability: Exam Hub Depth & Organic Attribution
 
 **Status: Released**
