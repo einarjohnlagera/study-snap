@@ -75,18 +75,20 @@ describe("ExamHubPage", () => {
     window.sessionStorage.clear();
   });
 
-  it("defines exactly the wave-1 exam hubs and course program aliases", () => {
-    expect(EXAM_HUB_SLUGS).toEqual(["ale", "pnle", "let"]);
+  it("defines exactly the configured exam hubs and course program aliases", () => {
+    expect(EXAM_HUB_SLUGS).toEqual(["ale", "pnle", "let", "cpale"]);
     expect(EXAM_HUBS.ale.coursePrograms).toEqual(["Architecture"]);
     expect(EXAM_HUBS.pnle.coursePrograms).toEqual(["Nursing", "Medical – Surgical Nursing"]);
     expect(EXAM_HUBS.let.coursePrograms).toEqual(["Education"]);
-    expect(generateStaticParams()).toEqual([{ slug: "ale" }, { slug: "pnle" }, { slug: "let" }]);
+    expect(EXAM_HUBS.cpale.coursePrograms).toEqual(["Accountancy"]);
+    expect(generateStaticParams()).toEqual([{ slug: "ale" }, { slug: "pnle" }, { slug: "let" }, { slug: "cpale" }]);
   });
 
   it.each([
     ["ale", "Architect Licensure Examination (ALE)", "Architecture"],
     ["pnle", "Philippine Nurse Licensure Examination (PNLE)", "Nursing"],
     ["let", "Licensure Examination for Teachers (LET)", "Education"],
+    ["cpale", "Certified Public Accountant Licensure Examination (CPALE)", "Accountancy"],
   ])("renders /exam/%s with the configured exam copy and filters", async (slug, fullName, firstCourseProgram) => {
     (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue(sectionNotes);
 
@@ -146,6 +148,7 @@ describe("ExamHubPage", () => {
     ["ale", "Free ALE Reviewer Notes & Practice Quizzes — Architect Licensure Examination (ALE) | NoteLib"],
     ["pnle", "Free PNLE Reviewer Notes & Practice Quizzes — Philippine Nurse Licensure Examination (PNLE) | NoteLib"],
     ["let", "Free LET Reviewer Notes & Practice Quizzes — Licensure Examination for Teachers (LET) | NoteLib"],
+    ["cpale", "Free CPALE Reviewer Notes & Practice Quizzes — Certified Public Accountant Licensure Examination (CPALE) | NoteLib"],
   ])("generates metadata for /exam/%s", async (slug, title) => {
     const metadata = await generateMetadata({ params: Promise.resolve({ slug }) });
 

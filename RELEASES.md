@@ -15,7 +15,7 @@ Anti-drift: reuse the existing Wave 1 hub component/route/JSON-LD pattern exactl
 
 ### Shipped
 
-_(nothing yet)_
+- **CPALE hub (backend + frontend).** Added `cpale` (courseProgram `Accountancy`) to `frontend/lib/exam-hub-config.ts` and the synced `backend/.../config/ExamGoalConfig.java` — no route-level code change needed since `/exam/[slug]` and the sitemap already iterate the config dynamically. Updated the `/exam` index page (new icon, updated copy, dropped the now-inaccurate "Wave 1" framing on the index grid/aria-label since a Wave 2 hub now renders alongside Wave 1). Note filtering is courseProgram-exact-match only — Accountancy-adjacent notes tagged with a different courseProgram (e.g. "Business", "Commerce") will not surface in this hub; see `docs/features/exam-hub.md` Wave 2 Set.
 
 ## v0.53.0 - SEO Discoverability: Exam Hub Depth & Organic Attribution
 
