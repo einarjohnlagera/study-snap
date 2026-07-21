@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.53.0 - SEO Discoverability: Exam Hub Depth & Organic Attribution
+
+**Status: In Progress**
+
+Theme: close the highest-leverage fixable gaps identified in the organic-search strategy session (`docs/claude-prompt/seo-strategy-out/01-seo-strategy.md`) — exam hub pages currently hide most of their real content behind an 18-card cap, ship no structured data proving the hub actually contains those notes, and give no visibility into whether organic search traffic exists at all. This is pure new-user acquisition work: getting people who don't know NoteLib exists into the funnel, not a retention or re-engagement play.
+
+### Planned Scope
+
+- **P4 — Exam hub subject breakdown + full-inventory path (frontend).** Add a "Browse by subject" section per exam hub showing real note counts per subject linking to subject pages, plus an unauthenticated "Browse all {N} notes →" link so all of a hub's notes are reachable (currently capped at 18 cards via 3 discovery sections × `DISCOVERY_SECTION_LIMIT = 6`). No backend change expected — the depth already exists, only the on-page path to it is missing.
+- **P5 — `ItemList` inside exam hub `CollectionPage` JSON-LD (frontend).** Extend the hub's existing structured data so its `CollectionPage` schema asserts its actual member notes (name + canonical URL) instead of an empty collection with no visible members.
+- **P6 — Organic-landing attribution (frontend + backend + admin dashboard).** Bucket `document.referrer` into a coarse `referrerSource` (`google` / `other-search` / `social` / `direct`, no raw URLs) fed through the existing analytics pipeline, surfaced as a new Admin dashboard panel (organic landings per week per surface, organic-landing → exam-CTA click rate). No new `AnalyticsEventType` expected.
+
+Anti-drift (per the strategy session's explicit rejections): no programmatic keyword landing pages, no AI-generated reviewer content to fill syllabus gaps, no PDF-bait CTAs, no nudging user notes toward public visibility, no PRC results/news pages, no re-litigating the already-shipped sitemap/JSON-LD/robots architecture (this only extends it), no hreflang/localization work, no Wave 2 exam hub expansion (P9, explicitly gated on note-count depth per bucket). P1 (Google Search Console setup) is a non-code ops task outside this release's scope; P3 (exam-named Learn guides) needs human-authored content and is not part of this code release either — both remain in the Backlog Index.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.52.1 - Early-Lifecycle Feedback Signals
 
 **Status: Released**
