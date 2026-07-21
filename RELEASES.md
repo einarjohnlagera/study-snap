@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.53.0 - Early-Lifecycle Feedback Signals
+
+**Status: In Progress**
+
+Theme: three small, targeted proactive feedback prompts aimed specifically at *new* users in their first few sessions — a leading indicator for friction that predicts a second/third session might not happen, not a way to learn from users who already churned (that's the separate, still-unsent outbound interview track). Scoped from a Fable design session (`docs/claude-prompt/app-wide-feedback-signals-out/01-app-wide-feedback-signals.md`) that explicitly rejected a full app-wide build as the same "more listening infrastructure on a tiny population" anti-pattern the retention diagnosis already flagged, in favor of this small slice.
+
+### Planned Scope
+
+- **Public Library browsed-without-adopting prompt (frontend only).** Fires once, client-side only (session view counter + existing `notelib-guidance-dismissed-` one-shot convention), when a user within their first 14 days since signup views 3+ distinct public notes in one session without adopting any. Renders back on the Public Library list. Chips: "Not enough notes for my course/program" / "Not sure what to search for" (both submit) / "Just browsing for now" (silent dismiss).
+- **First non-onboarding Study Pack generation prompt (frontend only).** Fires once, the first time a Study Pack finishes generating from the regular Note Detail page outside `/onboarding` (deliberately not on the user's very first-ever generation during onboarding itself — asking before they've consumed anything is premature). Chips: "Summary missed the point" / "Quiz doesn't match the note" (both submit) / "Yes, this is useful" (silent dismiss).
+- **Second-ever completed quiz prompt (backend + frontend).** The one placement needing a backend signal: a session-count-equals-2 check reusing the same query shape that already produces `isFirstCompletedSessionEver`. Chips: "Too easy" / "Too hard" / "Too repetitive" (all submit) / "Felt right" (silent dismiss) — deliberately excludes "Confusing," which stays the first-quiz ask's territory. This is the item to cut first if release scope needs trimming.
+
+Anti-drift: reuses the existing `SendFeedbackWidget`/`QuizFeedbackPanel` quick-action mechanism exactly as shipped — no new database table, no new endpoint, no structured/category field (stays freeform-only; Fable's own recommendation was to reject a `quick_reason` column on volume grounds at ~127 activated users, not cost), no aggregate/count view in Admin. Does not touch the two existing shipped proactive prompts (first-quiz-ever, return-after-inactivity), the existing quiz-results generic panel, or the quiz-review issue-reporting actions — all three stay exactly as shipped. Does not touch or substitute for H1 (commitment device) / H5 (pre-decided return action), the separate, larger, still-gated retention bet — this release is explicitly the "small slice, hold everything larger" verdict from the Fable session, not a step toward or away from that gate.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.52.0 - Proactive In-App Feedback Prompts
 
 **Status: Released**

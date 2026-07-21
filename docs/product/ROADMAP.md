@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.52.0 - Proactive In-App Feedback Prompts` is the current released version (on `releases/v0.52.0`, cut from `main` after v0.51.1 merged) — see its section below.
+`v0.53.0 - Early-Lifecycle Feedback Signals` is the current in-progress version (on `releases/v0.53.0`, cut from `main` after v0.52.0 merged) — see its section below.
+
+`v0.52.0 - Proactive In-App Feedback Prompts` is the previous released version — see its section below.
 
 `v0.51.1 - Dashboard Stage-1 Limit Wiring` is the previous released version — see its section below.
 
@@ -58,7 +60,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 
 | Item | Source | Status | Gate (what un-parks it) | Last reviewed |
 |---|---|---|---|---|
-| Retention H1 + H5 (commitment device + pre-decided return action) | `retention-diagnosis-session-plan.md` | Conditional — next up | v0.48.0 cohort read positive-or-ambiguous (~late July 2026) | 2026-07-15 |
+| Retention H1 + H5 (commitment device + pre-decided return action) | `retention-diagnosis-session-plan.md` | Conditional — next up | v0.48.0 cohort read positive-or-ambiguous (~late July 2026) — not yet re-read this cycle, no new production pull run | 2026-07-21 |
 | User interviews (retained + churned exam-dated, script written) + 3 zero-code analytics pulls (device mix, PDF export volume, Official Review Set coverage audit) | `retention-diagnosis-out/04-interim-window-queries.sql`, `05-interview-script.md` | Active — do now, ready to run | none | 2026-07-15 |
 | 3 pulls needing real instrumentation first (UTM/referral tracking, offline-fallback hit rate, catalog "browse" tracking for the browse-without-adopt metric) | `retention-diagnosis-session-plan.md` "Strategy checkpoint" | **Shipped — v0.50.0** | explicit decision to instrument — ✅ made 2026-07-15 | 2026-07-15 |
 | SEO / organic search strategy (why NoteLib doesn't surface for exam-named searches like "free PNLE notes"; sitemap/content/measurement plan) | `seo-strategy-out/01-seo-strategy.md` | Run — 9 candidates (P1–P9); P2 (vocabulary pass) folded into v0.50.4; P1 (GSC setup) is a non-code ops task; P3/P4/P5/P6 remain unscoped, gated on a future release decision | none blocking P2; rest await scoping | 2026-07-17 |
@@ -95,6 +97,16 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Dashboard Stage-1 `listNotes()` limit-wiring (F2 follow-up, deliberately deferred during F2's implementation) | `docs/codex-prompts/v0.51.0-note-list-lean-projection.md` | **Shipped — v0.51.1.** Dashboard now requests the 20 most-recently-updated owned notes; the existing overview response supplies the exact owner-note count, quiz-question existence, and most-recent resolved-ready note id so totals, empty states, first-time ordering, and Challenge routing retain their unbounded semantics | none | 2026-07-20 |
 | F9/F10 — client-side caching + denormalized engagement counts (parked from the performance audit above) | `production-performance-audit-out/01-production-performance-audit.md` | Parked, intentionally not in v0.51.0 | production evidence after v0.51.0 ships: do bounded/parallelized pages still show refetch pain (F9)? does slow-query logging still flag the enrichment queries (F10)? | 2026-07-17 |
 | Feedback system polish — Send Feedback modal visual redesign, optional screenshot/image attachment on bug reports, and a read-only Admin detail view for the "Recent Feedback" table (currently a static, truncated table) | `feedback-system-polish-out/01-modal-design-and-admin-detail.md` | **Folded into v0.52.0 as a mid-release scope addition.** Modal restyle + strictly-optional screenshot field (separate `feedback_image` table, not a column on `FeedbackEntity`, to avoid regressing the v0.51.0 read-path fix); Admin gets a "View" button reusing the existing Refund modal pattern. A status-update action is recommended as a separate fast-follow, not bundled in | none — see `RELEASES.md` v0.52.0 | 2026-07-20 |
+| Structured quiz feedback questions (quiz-results-card-only scope; too-easy/repetitive/confusing chips) | `quiz-feedback-microsurvey-out/01-structured-quiz-questions.md` | **Superseded** — product owner corrected scope to app-wide/new-user-focused mid-session; folded as one input into the app-wide session below, not a standalone answer | none — superseded | 2026-07-21 |
+| App-wide new-user early-lifecycle feedback signals (Public Library browse-without-adopt, first non-onboarding Study Pack generation, second-ever completed quiz) — explicitly a leading indicator for new-user friction, not a churn-diagnosis substitute for the unsent outbound interviews above | `app-wide-feedback-signals-out/01-app-wide-feedback-signals.md` | **Scoped into v0.53.0.** Fable's own verdict: build this small slice (2 of 3 placements zero-backend), hold anything larger — rejected a structured `quick_reason` field on volume grounds (~127 activated users), rejected the floated "is the UI hard to understand?" as too vague, explicitly does not touch or substitute for H1/H5 above | none — see `RELEASES.md` v0.53.0 | 2026-07-21 |
+
+## v0.53.0 - Early-Lifecycle Feedback Signals (In Progress, base branch `releases/v0.53.0`)
+
+Origin: a follow-on to v0.52.0's proactive feedback prompts. The product owner initially floated this as quiz-result-specific copy, then corrected scope twice mid-session: first to app-wide, then explicitly to target *new* users specifically ("we're not chasing our previous users anymore, we're now chasing new users to retain") rather than winning back already-churned users — a question the existing `retention-diagnosis-session-plan.md` interview track owns instead, and which in-app prompts structurally cannot answer regardless. A Fable design session (`docs/claude-prompt/app-wide-feedback-signals-out/01-app-wide-feedback-signals.md`) scoped the three placements shipped here, explicitly rejecting a fuller build as the same "more listening infrastructure on an already-tiny population" anti-pattern the retention diagnosis flagged, in favor of a small, mostly-zero-backend slice.
+
+### Planned Scope
+
+See `RELEASES.md` v0.53.0 for the three placements (Public Library browse-without-adopt, first non-onboarding Study Pack generation, second-ever completed quiz) and their anti-drift rules.
 
 ## v0.52.0 - Proactive In-App Feedback Prompts (Released, base branch `releases/v0.52.0`)
 
