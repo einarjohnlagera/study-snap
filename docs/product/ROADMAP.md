@@ -108,7 +108,7 @@ Origin: the organic-search strategy session (`docs/claude-prompt/seo-strategy-ou
 
 ### Planned Scope
 
-See `RELEASES.md` v0.53.0 for the three items (exam hub subject breakdown + full-inventory path, `ItemList` structured data, organic-landing attribution) and their anti-drift rules.
+All three scoped P4/P5/P6 items are shipped; see `RELEASES.md` v0.53.0 for the exam-hub depth, `ItemList`, and organic-landing attribution decisions and anti-drift rules.
 
 ## v0.52.1 - Early-Lifecycle Feedback Signals (Released, base branch `releases/v0.52.1`)
 

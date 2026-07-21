@@ -27,6 +27,7 @@ class AnalyticsEventRepositoryTest {
     @BeforeEach
     void initSchema() {
         jdbcTemplate.execute("drop table if exists analytics_events");
+        jdbcTemplate.execute("create alias if not exists jsonb_extract_path_text for \"com.studysnap.backend.testutil.H2JsonFunctions.jsonbExtractPathText\"");
         jdbcTemplate.execute("""
                 create table analytics_events (
                     id uuid primary key,
@@ -144,6 +145,40 @@ class AnalyticsEventRepositoryTest {
                 .isEqualTo(1);
     }
 
+    @Test
+    void organicLandingQueries_groupPageViewsByWeekSurfaceAndReferrerSource() {
+        OffsetDateTime olderWeek = OffsetDateTime.of(2026, 6, 8, 9, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime recentWeek = OffsetDateTime.of(2026, 6, 15, 9, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime since = olderWeek.minusDays(1);
+
+        insertEvent(AnalyticsEventType.LANDING_PAGE_VIEWED, olderWeek, "google");
+        insertEvent(AnalyticsEventType.LANDING_PAGE_VIEWED, olderWeek.plusHours(1), "google");
+        insertEvent(AnalyticsEventType.EXAM_HUB_VIEWED, recentWeek, "other-search");
+        insertEvent(AnalyticsEventType.EXAM_HUB_VIEWED, recentWeek.plusHours(1), "google");
+        insertEvent(AnalyticsEventType.PUBLISHED_PLANS_VIEWED, recentWeek.plusHours(2), "social");
+        insertEvent(AnalyticsEventType.EXAM_HUB_CTA_CLICKED, recentWeek.plusHours(3), "google");
+
+        List<OrganicLandingProjection> landings = analyticsEventRepository.findOrganicLandingsSince(since);
+        ExamHubOrganicClickThroughProjection clickThrough = analyticsEventRepository
+                .findExamHubOrganicClickThroughSince(since);
+
+        assertThat(landings)
+                .extracting(
+                        OrganicLandingProjection::getWeekStart,
+                        OrganicLandingProjection::getEventType,
+                        OrganicLandingProjection::getReferrerSource,
+                        OrganicLandingProjection::getTotalCount
+                )
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(LocalDate.parse("2026-06-07"), "LANDING_PAGE_VIEWED", "google", 2L),
+                        org.assertj.core.groups.Tuple.tuple(LocalDate.parse("2026-06-14"), "EXAM_HUB_VIEWED", "other-search", 1L),
+                        org.assertj.core.groups.Tuple.tuple(LocalDate.parse("2026-06-14"), "EXAM_HUB_VIEWED", "google", 1L),
+                        org.assertj.core.groups.Tuple.tuple(LocalDate.parse("2026-06-14"), "PUBLISHED_PLANS_VIEWED", "social", 1L)
+                );
+        assertThat(clickThrough.getGoogleExamHubViews()).isEqualTo(1L);
+        assertThat(clickThrough.getExamHubCtaClicks()).isEqualTo(1L);
+    }
+
     private void insertEvent(UUID userId, AnalyticsEventType eventType, OffsetDateTime createdAt) {
         jdbcTemplate.update(
                 """
@@ -153,6 +188,19 @@ class AnalyticsEventRepositoryTest {
                 UUID.randomUUID(),
                 userId,
                 eventType.name(),
+                createdAt
+        );
+    }
+
+    private void insertEvent(AnalyticsEventType eventType, OffsetDateTime createdAt, String referrerSource) {
+        jdbcTemplate.update(
+                """
+                        insert into analytics_events (id, event_type, metadata_json, created_at)
+                        values (?, ?, ?, ?)
+                        """,
+                UUID.randomUUID(),
+                eventType.name(),
+                "{\"referrerSource\":\"" + referrerSource + "\"}",
                 createdAt
         );
     }

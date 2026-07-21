@@ -75,6 +75,12 @@ follow: true }` below it. The page itself stays reachable and renders normally e
 indexation gate, not a visibility or access change. Individual note pages are never gated by this
 threshold; a single good note is a legitimate long-tail asset regardless of its subject's overall depth.
 
+## Measurement
+
+Every public page view that uses the shared `AnalyticsPageViewTracker` records only a coarse `referrerSource` metadata bucket: `google`, `other-search`, `social`, or `direct`. It does not persist raw referrer URLs and is deliberately separate from first-touch signup attribution, which preserves a session's raw referrer only for the signup record.
+
+The Admin dashboard's read-only Organic Landing Attribution panel groups the recent eight-week landing history by week, public surface, and bucket. It also reports the coarse aggregate Google Exam Hub landing → `EXAM_HUB_CTA_CLICKED` ratio. This is not visitor- or session-correlated conversion reporting; no anonymous identifier or Search Console integration is implied.
+
 ## Learn Content Marketing Pages
 
 - Learn hub and Learn article pages are public SEO surfaces.

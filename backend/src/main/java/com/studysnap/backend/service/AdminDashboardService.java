@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AdminDashboardRecentEventsResponse;
 import com.studysnap.backend.dto.AdminDashboardSummaryResponse;
 import com.studysnap.backend.dto.AdminDashboardTopContentResponse;
+import com.studysnap.backend.dto.AdminOrganicLandingsResponse;
 import com.studysnap.backend.dto.AdminRecentFeedbackItemResponse;
 import com.studysnap.backend.dto.AdminRecentFailedPaymentItemResponse;
 import com.studysnap.backend.dto.AdminRecentUpgradeItemResponse;
@@ -19,9 +20,11 @@ import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.repository.FeedbackImageRepository;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.ExamHubOrganicClickThroughProjection;
 import com.studysnap.backend.repository.FeedbackRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
+import com.studysnap.backend.repository.OrganicLandingProjection;
 import com.studysnap.backend.repository.PremiumWaitlistRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
@@ -50,6 +53,8 @@ import java.util.stream.Collectors;
 public class AdminDashboardService {
     private static final int TOP_CONTENT_LIMIT = 5;
     private static final int RECENT_EVENT_LIMIT = 5;
+    private static final int ORGANIC_LANDINGS_LOOKBACK_WEEKS = 8;
+    private static final int ORGANIC_CLICK_THROUGH_RATIO_SCALE = 4;
     private static final long YEARLY_SUBSCRIPTION_DAYS_THRESHOLD = 300L;
 
     private final AnalyticsEventRepository analyticsEventRepository;
@@ -226,6 +231,28 @@ public class AdminDashboardService {
         return new AdminDashboardRecentEventsResponse(recentPremiumUpgrades, recentFailedPayments, recentFeedback);
     }
 
+    public AdminOrganicLandingsResponse getOrganicLandings() {
+        return getOrganicLandingsSince(OffsetDateTime.now().minusWeeks(ORGANIC_LANDINGS_LOOKBACK_WEEKS));
+    }
+
+    AdminOrganicLandingsResponse getOrganicLandingsSince(OffsetDateTime since) {
+        List<AdminOrganicLandingsResponse.Landing> landings = analyticsEventRepository.findOrganicLandingsSince(since)
+                .stream()
+                .map(this::toOrganicLanding)
+                .toList();
+        ExamHubOrganicClickThroughProjection clickThrough = analyticsEventRepository
+                .findExamHubOrganicClickThroughSince(since);
+        long googleExamHubViews = clickThrough == null ? 0L : clickThrough.getGoogleExamHubViews();
+        long examHubCtaClicks = clickThrough == null ? 0L : clickThrough.getExamHubCtaClicks();
+
+        return new AdminOrganicLandingsResponse(
+                landings,
+                googleExamHubViews,
+                examHubCtaClicks,
+                calculateOrganicClickThroughRatio(examHubCtaClicks, googleExamHubViews)
+        );
+    }
+
     private List<AdminSubjectMetricItemResponse> normalizeTopSubjects(List<AdminSubjectMetricItemResponse> rawSubjects) {
         Map<String, Long> merged = new LinkedHashMap<>();
         for (AdminSubjectMetricItemResponse item : rawSubjects) {
@@ -237,6 +264,23 @@ public class AdminDashboardService {
                 .sorted((left, right) -> Long.compare(right.studyPackCount(), left.studyPackCount()))
                 .limit(TOP_CONTENT_LIMIT)
                 .toList();
+    }
+
+    private AdminOrganicLandingsResponse.Landing toOrganicLanding(OrganicLandingProjection projection) {
+        return new AdminOrganicLandingsResponse.Landing(
+                projection.getWeekStart(),
+                projection.getEventType(),
+                projection.getReferrerSource(),
+                projection.getTotalCount()
+        );
+    }
+
+    private BigDecimal calculateOrganicClickThroughRatio(long clicks, long views) {
+        if (views == 0L) {
+            return null;
+        }
+        return BigDecimal.valueOf(clicks)
+                .divide(BigDecimal.valueOf(views), ORGANIC_CLICK_THROUGH_RATIO_SCALE, RoundingMode.HALF_UP);
     }
 
     private RevenueEstimate estimateRevenue(List<SubscriptionEntity> activePremiumSubscriptions) {

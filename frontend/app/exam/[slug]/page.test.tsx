@@ -196,7 +196,7 @@ describe("ExamHubPage", () => {
       expect(trackAnalyticsEvent).toHaveBeenCalledWith({
         eventType: "EXAM_HUB_VIEWED",
         entityId: null,
-        metadata: { slug: "ale" },
+        metadata: { slug: "ale", referrerSource: "direct" },
       });
     });
   });
