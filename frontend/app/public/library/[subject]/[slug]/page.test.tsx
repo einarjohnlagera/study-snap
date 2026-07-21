@@ -307,6 +307,22 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByRole("button", { name: /Quiz yourself on this note/i })).toBeInTheDocument();
   });
 
+  it("hides the soft conversion CTA for the note's own owner", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      isCurrentUser: true,
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByRole("heading", { name: "Ready to quiz yourself?" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Quiz yourself on this note/i })).not.toBeInTheDocument();
+  });
+
   it("renders full notes section", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
 
