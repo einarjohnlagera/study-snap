@@ -517,6 +517,71 @@ class NoteServiceTest {
     }
 
     @Test
+    void copyPublicNote_backfillsStudyPackOnExistingCopyOnceSourceBecomesReady() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceOwnerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID existingCopyId = UUID.randomUUID();
+
+        NoteEntity source = buildNote(sourceNoteId, sourceOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "source content");
+        NoteEntity existingCopy = buildNote(existingCopyId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "copied content");
+        existingCopy.setCopiedFromNoteId(sourceNoteId);
+        existingCopy.setCopiedFromUserId(sourceOwnerUserId);
+        existingCopy.setCopiedFromPublic(Boolean.TRUE);
+        StudyPackEntity sourceStudyPack = buildSourceStudyPack(sourceNoteId);
+
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+        when(noteRepository.findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(ownerUserId, sourceNoteId))
+                .thenReturn(Optional.of(existingCopy));
+        when(studyPackRepository.findByNoteId(existingCopyId)).thenReturn(Optional.empty());
+        when(studyPackRepository.findByNoteId(sourceNoteId)).thenReturn(Optional.of(sourceStudyPack));
+
+        NoteResponse copied = noteService.copyNote(sourceNoteId.toString(), ownerUserId);
+
+        assertThat(copied.id()).isEqualTo(existingCopyId.toString());
+        assertThat(copied.studyPackStatus()).isEqualTo("STUDY_PACK_READY");
+        assertThat(copied.summary()).isEqualTo(sourceStudyPack.getSummary());
+
+        ArgumentCaptor<NoteEntity> noteCaptor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(noteCaptor.capture());
+        assertThat(noteCaptor.getValue().getId()).isEqualTo(existingCopyId);
+        assertThat(noteCaptor.getValue().getStatus()).isEqualTo(NoteStatus.GENERATED);
+
+        ArgumentCaptor<StudyPackEntity> studyPackCaptor = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(studyPackRepository).save(studyPackCaptor.capture());
+        assertThat(studyPackCaptor.getValue().getId()).isNotEqualTo(sourceStudyPack.getId());
+        assertThat(studyPackCaptor.getValue().getNoteId()).isEqualTo(existingCopyId);
+        assertThat(studyPackCaptor.getValue().getOwnerUserId()).isEqualTo(ownerUserId);
+        verify(analyticsService, never()).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.PUBLIC_NOTE_COPIED), eq(sourceNoteId), any());
+    }
+
+    @Test
+    void copyPublicNote_doesNotBackfillWhenIncludeStudyPackIsFalse() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceOwnerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID existingCopyId = UUID.randomUUID();
+
+        NoteEntity source = buildNote(sourceNoteId, sourceOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "source content");
+        NoteEntity existingCopy = buildNote(existingCopyId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "copied content");
+        existingCopy.setCopiedFromNoteId(sourceNoteId);
+        existingCopy.setCopiedFromUserId(sourceOwnerUserId);
+        existingCopy.setCopiedFromPublic(Boolean.TRUE);
+
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+        when(noteRepository.findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(ownerUserId, sourceNoteId))
+                .thenReturn(Optional.of(existingCopy));
+        when(studyPackRepository.findByNoteId(existingCopyId)).thenReturn(Optional.empty());
+
+        NoteResponse copied = noteService.copyNote(sourceNoteId.toString(), ownerUserId, false);
+
+        assertThat(copied.id()).isEqualTo(existingCopyId.toString());
+        assertThat(copied.studyPackStatus()).isEqualTo("DRAFT");
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+        verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+    }
+
+    @Test
     void copyPublicNoteForSignup_rejectsPrivateNotes() {
         UUID ownerUserId = UUID.randomUUID();
         UUID sourceNoteId = UUID.randomUUID();

@@ -238,8 +238,18 @@ public class NoteService {
             Optional<NoteEntity> existingCopy = noteRepository
                     .findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(ownerUserId, source.getId());
             if (existingCopy.isPresent()) {
-                StudyPackEntity existingStudyPack = findLinkedStudyPack(existingCopy.get().getId());
-                return mapToResponse(existingCopy.get(), existingStudyPack);
+                NoteEntity existing = existingCopy.get();
+                StudyPackEntity existingStudyPack = findLinkedStudyPack(existing.getId());
+                if (existingStudyPack == null && includeStudyPack) {
+                    StudyPackEntity sourceStudyPack = studyPackRepository.findByNoteId(source.getId()).orElse(null);
+                    if (sourceStudyPack != null) {
+                        existingStudyPack = copySourceStudyPack(sourceStudyPack, existing);
+                        existing.setStatus(NoteStatus.GENERATED);
+                        existing.setUpdatedAt(OffsetDateTime.now());
+                        existing = noteRepository.save(existing);
+                    }
+                }
+                return mapToResponse(existing, existingStudyPack);
             }
         }
 
