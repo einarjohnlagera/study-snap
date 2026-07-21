@@ -24,6 +24,7 @@ import { QuizSessionHistory } from "@/components/notes/quiz-session-history";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
+import { StudyPackGeneratedFeedbackPrompt } from "@/components/feedback/study-pack-generated-feedback-prompt";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { normalizeConceptKey } from "@/lib/concepts";
@@ -387,6 +388,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
+  const [justGeneratedStudyPack, setJustGeneratedStudyPack] = useState(false);
   const [showGenerateStudyPackGuide, setShowGenerateStudyPackGuide] = useState(false);
   const [showQuickReviewGuide, setShowQuickReviewGuide] = useState(false);
   const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
@@ -873,6 +875,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, [note?.keyConcepts.length, note?.studyPackId, note?.studyPackStatus]);
   const showFirstStudyPackSuccessBanner = !isTeacherMode && firstStudyStep === "study-pack-ready"
     && note?.studyPackStatus === "STUDY_PACK_READY";
+  const showStudyPackGeneratedFeedbackPrompt = !isTeacherMode && justGeneratedStudyPack
+    && !showFirstStudyPackSuccessBanner && note?.studyPackStatus === "STUDY_PACK_READY";
+  const currentAuthUserId = getAuthUser()?.id ?? null;
   const availableCourseProgramSuggestions = useMemo(
     () => mergeCourseProgramSuggestions(
       COURSE_PROGRAM_SUGGESTIONS,
@@ -915,6 +920,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           void refreshUsageSummary();
           void maybeShowGeneratedMetadataSuggestion(loadedNote);
           setToast("Study Pack generated successfully.");
+          setJustGeneratedStudyPack(true);
           return;
         }
         if (loadedNote.studyPackStatus === "FAILED") {
@@ -1630,6 +1636,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 />
               </div>
             </Card>
+          ) : null}
+          {showStudyPackGeneratedFeedbackPrompt && currentAuthUserId ? (
+            <StudyPackGeneratedFeedbackPrompt userId={currentAuthUserId} noteTitle={note?.title} />
           ) : null}
           {pendingPublicCopyGenerate && !isEmailVerified ? (
             <Card className="relative space-y-3 border-amber-500/30 bg-amber-500/5 p-4 sm:p-6">

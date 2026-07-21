@@ -69,6 +69,8 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
 
     boolean existsByUserIdAndStatusAndCompletedAtIsNotNull(UUID userId, QuickReviewSessionStatus status);
 
+    long countByUserIdAndStatusAndCompletedAtIsNotNull(UUID userId, QuickReviewSessionStatus status);
+
     void deleteByUserId(UUID userId);
 
     Optional<QuickReviewSessionEntity> findByIdAndUserIdAndSessionMode(UUID id, UUID userId, QuickReviewSessionMode sessionMode);

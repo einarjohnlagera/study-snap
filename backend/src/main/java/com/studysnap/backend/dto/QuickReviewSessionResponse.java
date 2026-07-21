@@ -26,6 +26,7 @@ public record QuickReviewSessionResponse(
         OffsetDateTime createdAt,
         OffsetDateTime completedAt,
         boolean isFirstCompletedQuiz,
-        boolean isFirstCompletedSessionEver
+        boolean isFirstCompletedSessionEver,
+        boolean isSecondCompletedSessionEver
 ) {
 }

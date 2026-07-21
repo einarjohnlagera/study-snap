@@ -1247,11 +1247,16 @@ export default function QuickReviewPage() {
           </div>
 
           <QuizFeedbackPanel
-            key={persistedResult?.isFirstCompletedSessionEver === true ? "first-quiz-feedback" : "quiz-feedback"}
+            key={persistedResult?.isFirstCompletedSessionEver === true
+              ? "first-quiz-feedback"
+              : persistedResult?.isSecondCompletedSessionEver === true
+                ? "second-quiz-feedback"
+                : "quiz-feedback"}
             quizLabel="Quick Review"
             noteTitle={note.title}
             section={showAnswerReview ? "review" : "results"}
             isFirstCompletedSessionEver={persistedResult?.isFirstCompletedSessionEver}
+            isSecondCompletedSessionEver={persistedResult?.isSecondCompletedSessionEver}
             userId={getAuthUser()?.id}
           />
         </Card>

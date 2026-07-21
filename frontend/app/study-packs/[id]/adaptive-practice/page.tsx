@@ -707,6 +707,7 @@ export default function AdaptivePracticePage() {
               noteTitle={note?.title}
               section={showAnswerReview ? "review" : "results"}
               isFirstCompletedSessionEver={completionResult?.isFirstCompletedSessionEver}
+              isSecondCompletedSessionEver={completionResult?.isSecondCompletedSessionEver}
               userId={getAuthUser()?.id}
             />
           ) : null}
