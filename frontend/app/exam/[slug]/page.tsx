@@ -11,14 +11,20 @@ import type { NoteListItemResponse } from "@/lib/api";
 import { EXAM_HUB_SLUGS, getExamHubConfig, type ExamHubConfig } from "@/lib/exam-hub-config";
 import { buildLearnCategoryPath } from "@/lib/learn-guides";
 import {
+  type BrowseSubjectEntry,
   DISCOVERY_SECTION_LIMIT,
   excludeById,
+  getBrowseSubjects,
   getFeaturedNotes,
   getPopularNotes,
   getRecentNotes,
 } from "@/lib/public-library-discovery";
 import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
-import { buildPublicLibraryNotePathFromSlug, getPublicTitleSlug } from "@/lib/public-note-path";
+import {
+  buildPublicLibraryNotePathFromSlug,
+  buildPublicLibrarySubjectPath,
+  getPublicTitleSlug,
+} from "@/lib/public-note-path";
 import { getServerPublicNotesByCoursePrograms } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
@@ -59,15 +65,21 @@ function getSectionedNotes(notes: ExamHubNote[]) {
   const popular = getPopularNotes(excludeById(notes, featuredIds), DISCOVERY_SECTION_LIMIT) as ExamHubNote[];
   const visibleIds = new Set([...featured, ...popular].map((note) => note.id));
   const recent = getRecentNotes(excludeById(notes, visibleIds), DISCOVERY_SECTION_LIMIT) as ExamHubNote[];
+  const shownIds = new Set([...featured, ...popular, ...recent].map((note) => note.id));
+  const remaining = getRecentNotes(excludeById(notes, shownIds), notes.length) as ExamHubNote[];
 
-  return { featured, popular, recent };
+  return { featured, popular, recent, remaining };
 }
 
-function ExamNoteCard({ note }: Readonly<{ note: ExamHubNote }>) {
-  const href = buildPublicLibraryNotePathFromSlug({
+function buildNoteCanonicalUrl(note: ExamHubNote) {
+  return buildPublicLibraryNotePathFromSlug({
     subject: note.subject,
     slug: getNoteSlug(note),
   });
+}
+
+function ExamNoteCard({ note }: Readonly<{ note: ExamHubNote }>) {
+  const href = buildNoteCanonicalUrl(note);
   const returnUrl = buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(note.courseProgram) });
 
   return (
@@ -123,6 +135,35 @@ function ExamSection({ title, description, notes }: Readonly<ExamSectionProps>) 
   );
 }
 
+function BrowseSubjectsSection({ subjects }: Readonly<{ subjects: BrowseSubjectEntry[] }>) {
+  if (subjects.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="space-y-3" aria-labelledby="browse-by-subject-heading">
+      <div className="space-y-1">
+        <h2 id="browse-by-subject-heading" className="text-xl font-semibold tracking-tight">
+          Browse by Subject
+        </h2>
+        <p className="text-sm text-foreground/65">Jump straight to notes for a specific subject.</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {subjects.map(({ subject, count }) => (
+          <Link
+            key={subject}
+            href={buildPublicLibrarySubjectPath(subject)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 hover:text-blue-700 dark:hover:text-blue-300"
+          >
+            {subject}
+            <span className="text-xs text-foreground/50">({count})</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function generateStaticParams() {
   return EXAM_HUB_SLUGS.map((slug) => ({ slug }));
 }
@@ -151,8 +192,9 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
   const notes = await getServerPublicNotesByCoursePrograms(exam.coursePrograms) as ExamHubNote[];
   const description = buildExamMetadataDescription(exam);
   const examPath = buildExamPath(exam.slug);
-  const { featured, popular, recent } = getSectionedNotes(notes);
+  const { featured, popular, recent, remaining } = getSectionedNotes(notes);
   const hasAnyNotes = featured.length > 0 || popular.length > 0 || recent.length > 0;
+  const browseSubjects = getBrowseSubjects(notes);
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
@@ -166,6 +208,10 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
           name: `${exam.fullName} – NoteLib Exam Hub`,
           url: absoluteUrl(examPath),
           description,
+          items: notes.map((note) => ({
+            name: note.title?.trim() || "Untitled note",
+            url: absoluteUrl(buildNoteCanonicalUrl(note)),
+          })),
         })}
       />
 
@@ -211,6 +257,7 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
 
       {hasAnyNotes ? (
         <div className="space-y-8">
+          <BrowseSubjectsSection subjects={browseSubjects} />
           <ExamSection
             title="Featured Notes"
             description={`High-signal ${exam.shortName} notes ranked by engagement and freshness.`}
@@ -225,6 +272,11 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
             title="Recently Added"
             description={`Newest public notes for ${exam.shortName} reviewers.`}
             notes={recent}
+          />
+          <ExamSection
+            title={`More ${exam.shortName} Notes`}
+            description={`Every other public ${exam.shortName} note, so nothing stays hidden — ${notes.length} in total across this hub.`}
+            notes={remaining}
           />
         </div>
       ) : (
