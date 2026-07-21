@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.AdaptivePracticeCompleteResponse;
 import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
@@ -273,7 +274,7 @@ public class QuickReviewAdaptivePracticeService {
         );
     }
 
-    public SimpleMessageResponse completeAdaptiveSession(
+    public AdaptivePracticeCompleteResponse completeAdaptiveSession(
         String sessionIdRaw,
         UUID userId,
         Integer correctAnswers,
@@ -290,7 +291,7 @@ public class QuickReviewAdaptivePracticeService {
             .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
-            return new SimpleMessageResponse(ADAPTIVE_PRACTICE_SESSION_ALREADY_COMPLETED_MESSAGE);
+            return new AdaptivePracticeCompleteResponse(ADAPTIVE_PRACTICE_SESSION_ALREADY_COMPLETED_MESSAGE, false);
         }
 
         int safeTotalQuestions = session.getTotalQuestions() == null
@@ -311,6 +312,8 @@ public class QuickReviewAdaptivePracticeService {
             : BigDecimal.valueOf(safeCorrectAnswers)
               .multiply(BigDecimal.valueOf(100))
               .divide(BigDecimal.valueOf(safeTotalQuestions), 2, RoundingMode.HALF_UP);
+        boolean isFirstCompletedSessionEver = !quickReviewSessionRepository
+            .existsByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED);
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
         session.setCurrentQuestionIndex(safeTotalQuestions);
         session.setTotalQuestions(safeTotalQuestions);
@@ -339,7 +342,7 @@ public class QuickReviewAdaptivePracticeService {
         if (!missedConcepts.isEmpty()) {
             conceptHealthService.recordIncorrectAnswers(userId, session.getStudyPackId(), missedConcepts, now);
         }
-        return new SimpleMessageResponse(ADAPTIVE_PRACTICE_SESSION_COMPLETED_MESSAGE);
+        return new AdaptivePracticeCompleteResponse(ADAPTIVE_PRACTICE_SESSION_COMPLETED_MESSAGE, isFirstCompletedSessionEver);
     }
 
     public SimpleMessageResponse forfeitAdaptiveSession(String sessionIdRaw, UUID userId) {

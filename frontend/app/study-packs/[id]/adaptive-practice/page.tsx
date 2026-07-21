@@ -36,6 +36,7 @@ import {
   isEmailNotVerifiedError,
   trackAnalyticsEvent,
   type NoteResponse,
+  type AdaptivePracticeCompleteResponse,
   type PostSessionNextStepResponse,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
@@ -63,6 +64,8 @@ export default function AdaptivePracticePage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestInFlightRef = useRef(false);
+  const [completionResult, setCompletionResult] = useState<AdaptivePracticeCompleteResponse | null>(null);
+  const [completionSignalLoaded, setCompletionSignalLoaded] = useState(false);
   const loadedForNoteRef = useRef<string | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -481,12 +484,22 @@ export default function AdaptivePracticePage() {
         }
         setNextStepResponse(null);
         void completeAdaptivePracticeSession(adaptiveQuiz.sessionId, completeRequest)
-          .then(() => getPostSessionNextStep(adaptiveQuiz.studyPackId))
+          .then((completed) => {
+            setCompletionResult(completed);
+            setCompletionSignalLoaded(true);
+            return getPostSessionNextStep(adaptiveQuiz.studyPackId);
+          })
           .then(setNextStepResponse)
           .catch(() => {
             // Completion and next-step persistence should not block adaptive practice flow.
+            setCompletionSignalLoaded(true);
             setNextStepResponse(null);
           });
+      } else {
+        // No session id to complete against (e.g. a response applied without one) — there is no
+        // first-quiz-ever signal to wait for, so fall back to the generic feedback panel immediately
+        // instead of leaving it permanently unrendered.
+        setCompletionSignalLoaded(true);
       }
     }
     setCurrentIndex(nextIndex);
@@ -688,11 +701,15 @@ export default function AdaptivePracticePage() {
               planType={currentPlan}
             />
           ) : null}
-          <QuizFeedbackPanel
-            quizLabel="Adaptive Practice"
-            noteTitle={note?.title}
-            section={showAnswerReview ? "review" : "results"}
-          />
+          {completionSignalLoaded ? (
+            <QuizFeedbackPanel
+              quizLabel="Adaptive Practice"
+              noteTitle={note?.title}
+              section={showAnswerReview ? "review" : "results"}
+              isFirstCompletedSessionEver={completionResult?.isFirstCompletedSessionEver}
+              userId={getAuthUser()?.id}
+            />
+          ) : null}
         </Card>
       ) : (
         <div className="space-y-4">

@@ -663,6 +663,7 @@ export type AdminRecentFeedbackItemResponse = {
   pageUrl: string | null;
   status: "NEW" | "REVIEWED" | "CLOSED";
   createdAt: string;
+  hasImage: boolean;
 };
 
 export type AdminDashboardTopContentResponse = {
@@ -843,6 +844,11 @@ export type MeResponse = {
   subscription: SubscriptionPlanStatusResponse;
 };
 
+export type FeedbackPromptContextResponse = {
+  returningAfterInactivity: boolean;
+  hasCompletedQuizSession: boolean;
+};
+
 export type SignInMethodsResponse = {
   email: string;
   passwordEnabled: boolean;
@@ -993,6 +999,7 @@ export type QuickReviewSessionSummaryResponse = {
   createdAt: string;
   completedAt: string | null;
   isFirstCompletedQuiz?: boolean;
+  isFirstCompletedSessionEver?: boolean;
 };
 
 export type QuickReviewPerformanceSummaryResponse = {
@@ -1038,6 +1045,10 @@ export type AdaptivePracticeCompleteRequest = {
   totalQuestions: number;
   durationSeconds?: number;
   correctConceptNames?: string[];
+};
+
+export type AdaptivePracticeCompleteResponse = SimpleMessageResponse & {
+  isFirstCompletedSessionEver?: boolean;
 };
 
 export type ConceptHealthEntry = {
@@ -1134,6 +1145,7 @@ export type ChallengeQuizSessionResponse = {
   durationSeconds: number | null;
   createdAt: string;
   completedAt: string | null;
+  isFirstCompletedSessionEver?: boolean;
 };
 
 export type GenerateMoreChallengeQuizResponse = {
@@ -1256,6 +1268,7 @@ export type LongExamMasteryReportResponse = {
   performanceSummary: string;
   suggestedNextStep: string;
   sourceNotes: LongExamSourceNote[];
+  isFirstCompletedSessionEver?: boolean;
 };
 
 export type InterviewPracticeStartResponse = {
@@ -2347,7 +2360,7 @@ export async function issueAdminRefund(transactionId: string): Promise<AdminIssu
 export async function submitFeedback(
   request: SubmitFeedbackRequest,
   pageUrl: string | null,
-): Promise<SimpleMessageResponse> {
+): Promise<SimpleMessageResponse & { feedbackId: string | null }> {
   const headers = new Headers(buildAuthHeaders("application/json"));
   if (pageUrl && pageUrl.trim().length > 0) {
     headers.set("X-Page-Url", pageUrl);
@@ -2362,7 +2375,52 @@ export async function submitFeedback(
     },
     true,
   );
-  return parseApiResponse<SimpleMessageResponse>(response, "Could not send feedback. Please try again.");
+  const payload = await parseApiResponse<SimpleMessageResponse>(response, "Could not send feedback. Please try again.");
+  return {
+    ...payload,
+    feedbackId: response.headers.get("X-Feedback-Id"),
+  };
+}
+
+export async function uploadFeedbackImage(feedbackId: string, image: File): Promise<void> {
+  const body = new FormData();
+  body.set("image", image);
+  const response = await fetchWithAuth(
+    `/feedback/${feedbackId}/image`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+      body,
+    },
+    true,
+  );
+  if (!response.ok) {
+    await throwApiRequestError(response, "Could not attach screenshot.");
+  }
+}
+
+export async function getAdminFeedbackImage(feedbackId: string): Promise<Blob | null> {
+  const response = await fetchWithAuth(
+    `/admin/feedback/${feedbackId}/image`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    await throwApiRequestError(response, "Could not load feedback screenshot.");
+  }
+  return response.blob();
+}
+
+export async function getFeedbackPromptContext(): Promise<FeedbackPromptContextResponse> {
+  const response = await fetchWithAuth(
+    "/feedback/context",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<FeedbackPromptContextResponse>(response, "Could not load feedback prompt context.");
 }
 
 export async function completeOnboardingProfileType(
@@ -3199,7 +3257,7 @@ export async function getInProgressAdaptivePracticeSession(
 export async function completeAdaptivePracticeSession(
   sessionId: string,
   request: AdaptivePracticeCompleteRequest,
-): Promise<SimpleMessageResponse> {
+): Promise<AdaptivePracticeCompleteResponse> {
   const response = await fetchWithAuth(
     `/adaptive-practice/sessions/${sessionId}/complete`,
     {
@@ -3209,7 +3267,7 @@ export async function completeAdaptivePracticeSession(
     },
     true,
   );
-  return parseApiResponse<SimpleMessageResponse>(
+  return parseApiResponse<AdaptivePracticeCompleteResponse>(
     response,
     "Could not complete adaptive practice session.",
   );

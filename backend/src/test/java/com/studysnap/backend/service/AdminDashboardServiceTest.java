@@ -19,6 +19,7 @@ import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.FeedbackRepository;
+import com.studysnap.backend.repository.FeedbackImageRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
 import com.studysnap.backend.repository.PremiumWaitlistRepository;
@@ -61,6 +62,8 @@ class AdminDashboardServiceTest {
     private PremiumWaitlistRepository premiumWaitlistRepository;
     @Mock
     private FeedbackRepository feedbackRepository;
+    @Mock
+    private FeedbackImageRepository feedbackImageRepository;
 
     private AdminDashboardService adminDashboardService;
 
@@ -74,7 +77,8 @@ class AdminDashboardServiceTest {
                 subscriptionRepository,
                 paymentTransactionRepository,
                 premiumWaitlistRepository,
-                feedbackRepository
+                feedbackRepository,
+                feedbackImageRepository
         );
     }
 
@@ -211,6 +215,8 @@ class AdminDashboardServiceTest {
                 .thenReturn(List.of(failedPayment));
         when(feedbackRepository.findAllByOrderByCreatedAtDesc(any(Pageable.class)))
                 .thenReturn(List.of(feedback));
+        when(feedbackImageRepository.findExistingFeedbackIds(List.of(feedback.getId())))
+                .thenReturn(List.of(feedback.getId()));
 
         AdminDashboardRecentEventsResponse response = adminDashboardService.getRecentEvents();
 
@@ -223,6 +229,7 @@ class AdminDashboardServiceTest {
         assertThat(response.recentFailedPayments().getFirst().currency()).isEqualTo("PHP");
         assertThat(response.recentFeedback()).hasSize(1);
         assertThat(response.recentFeedback().getFirst().message()).isEqualTo("Please make the upgrade flow clearer.");
+        assertThat(response.recentFeedback().getFirst().hasImage()).isTrue();
     }
 
     private UserEntity buildUser(String email) {

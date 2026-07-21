@@ -11,6 +11,7 @@ public record AdminRecentFeedbackItemResponse(
         String message,
         String pageUrl,
         FeedbackStatus status,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        boolean hasImage
 ) {
 }

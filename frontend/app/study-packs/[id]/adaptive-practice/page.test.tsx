@@ -56,6 +56,7 @@ jest.mock("@/lib/api", () => ({
 
 describe("AdaptivePracticePage", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
@@ -109,6 +110,7 @@ describe("AdaptivePracticePage", () => {
 
   function setupGeneratedAdaptiveQuiz() {
     (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
     (getNote as jest.Mock).mockResolvedValue({
@@ -151,7 +153,10 @@ describe("AdaptivePracticePage", () => {
         },
       ],
     });
-    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      message: "Saved",
+      isFirstCompletedSessionEver: true,
+    });
   }
 
   it("keeps answer correctness after displayed choice shuffling", async () => {
@@ -411,6 +416,8 @@ describe("AdaptivePracticePage", () => {
     fireEvent.click(correctChoice!);
     fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
     await screen.findByText("Adaptive Practice Complete");
+    expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
+    expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Generate New Set" })).toBeInTheDocument();
   });
@@ -522,6 +529,7 @@ describe("AdaptivePracticePage", () => {
 
   it('result screen shows "Note" navigation link', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
     (getNote as jest.Mock).mockResolvedValue({
@@ -547,7 +555,10 @@ describe("AdaptivePracticePage", () => {
         },
       ],
     });
-    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      message: "Saved",
+      isFirstCompletedSessionEver: true,
+    });
 
     render(<AdaptivePracticePage />);
 
@@ -561,8 +572,8 @@ describe("AdaptivePracticePage", () => {
     await screen.findByText("Adaptive Practice Complete");
 
     expect(screen.getAllByRole("link", { name: "Note" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
+    expect(await screen.findByText("How did your first quiz go?")).toBeInTheDocument();
+    expect(screen.queryByText("Was this quiz helpful?")).not.toBeInTheDocument();
   });
 
   it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,12 @@ import {
   getAdminDashboardRecentEvents,
   getAdminDashboardSummary,
   getAdminDashboardTopContent,
+  getAdminFeedbackImage,
   getAdminRegenerationStatus,
   issueAdminRefund,
   regenerateAdminSummaries,
   type AdminRecentUpgradeItemResponse,
+  type AdminRecentFeedbackItemResponse,
   type AdminDashboardRecentEventsResponse,
   type AdminDashboardSummaryResponse,
   type AdminDashboardTopContentResponse,
@@ -39,6 +41,13 @@ function formatDate(value: string): string {
     month: "short",
     day: "numeric",
     year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
   }).format(new Date(value));
 }
 
@@ -129,6 +138,10 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refundTarget, setRefundTarget] = useState<AdminRecentUpgradeItemResponse | null>(null);
+  const [feedbackDetailTarget, setFeedbackDetailTarget] = useState<AdminRecentFeedbackItemResponse | null>(null);
+  const [feedbackImageUrl, setFeedbackImageUrl] = useState<string | null>(null);
+  const feedbackImageUrlRef = useRef<string | null>(null);
+  const feedbackImageRequestRef = useRef(0);
   const [refundError, setRefundError] = useState<string | null>(null);
   const [refundSuccessMessage, setRefundSuccessMessage] = useState<string | null>(null);
   const [issuingRefund, setIssuingRefund] = useState(false);
@@ -200,6 +213,48 @@ export default function AdminPage() {
     setRefundTarget(null);
     setRefundError(null);
   };
+
+  const handleOpenFeedbackDetail = (item: AdminRecentFeedbackItemResponse) => {
+    const requestId = ++feedbackImageRequestRef.current;
+    replaceFeedbackImageUrl(null);
+    setFeedbackDetailTarget(item);
+    if (!item.hasImage) {
+      return;
+    }
+    void getAdminFeedbackImage(item.feedbackId)
+      .then((image) => {
+        if (requestId !== feedbackImageRequestRef.current || !image) {
+          return;
+        }
+        replaceFeedbackImageUrl(URL.createObjectURL(image));
+      })
+      .catch(() => {
+        if (requestId === feedbackImageRequestRef.current) {
+          replaceFeedbackImageUrl(null);
+        }
+      });
+  };
+
+  const handleCloseFeedbackDetail = () => {
+    feedbackImageRequestRef.current += 1;
+    replaceFeedbackImageUrl(null);
+    setFeedbackDetailTarget(null);
+  };
+
+  const replaceFeedbackImageUrl = (nextUrl: string | null) => {
+    if (feedbackImageUrlRef.current) {
+      URL.revokeObjectURL(feedbackImageUrlRef.current);
+    }
+    feedbackImageUrlRef.current = nextUrl;
+    setFeedbackImageUrl(nextUrl);
+  };
+
+  useEffect(() => () => {
+    feedbackImageRequestRef.current += 1;
+    if (feedbackImageUrlRef.current) {
+      URL.revokeObjectURL(feedbackImageUrlRef.current);
+    }
+  }, []);
 
   const handleConfirmRefund = async () => {
     if (!refundTarget?.transactionId) {
@@ -480,7 +535,7 @@ export default function AdminPage() {
           <section>
             <SimpleTable
               title="Recent Feedback"
-              columns={["Date", "User", "Message", "Page URL", "Status"]}
+              columns={["Date", "User", "Message", "Page URL", "Status", "Action"]}
               emptyMessage="No feedback submitted yet."
               rows={recentEvents.recentFeedback.map((item) => [
                 formatDate(item.createdAt),
@@ -488,6 +543,15 @@ export default function AdminPage() {
                 truncateCell(item.message, 96),
                 item.pageUrl ? truncateCell(item.pageUrl, 60) : "Not provided",
                 formatFeedbackStatus(item.status),
+                <Button
+                  key={`feedback-view-${item.feedbackId}`}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleOpenFeedbackDetail(item)}
+                >
+                  View
+                </Button>,
               ])}
             />
           </section>
@@ -526,6 +590,72 @@ export default function AdminPage() {
           <p className="rounded-md border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/20 dark:text-red-300">
             {refundError}
           </p>
+        ) : null}
+      </AppModal>
+      <AppModal
+        isOpen={Boolean(feedbackDetailTarget)}
+        title="Feedback Details"
+        onClose={handleCloseFeedbackDetail}
+        panelClassName="max-w-[520px]"
+        actions={(
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" onClick={handleCloseFeedbackDetail}>
+              Close
+            </Button>
+          </div>
+        )}
+      >
+        {feedbackDetailTarget ? (
+          <div className="space-y-5">
+            <section className="space-y-1.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Message</h3>
+              <p className="whitespace-pre-line break-words text-sm leading-relaxed text-foreground">
+                {feedbackDetailTarget.message}
+              </p>
+            </section>
+            <section className="space-y-1.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Page URL</h3>
+              {feedbackDetailTarget.pageUrl ? (
+                <a
+                  href={feedbackDetailTarget.pageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block break-all text-sm text-primary underline-offset-4 hover:underline"
+                >
+                  {feedbackDetailTarget.pageUrl}
+                </a>
+              ) : (
+                <p className="text-sm text-foreground/65">Not provided</p>
+              )}
+            </section>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <section className="space-y-1.5">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/55">User email</h3>
+                <p className="break-all text-sm text-foreground">{feedbackDetailTarget.userEmail}</p>
+              </section>
+              <section className="space-y-1.5">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Submitted</h3>
+                <p className="text-sm text-foreground">{formatDateTime(feedbackDetailTarget.createdAt)}</p>
+              </section>
+            </div>
+            <section className="space-y-1.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Status</h3>
+              <span className="inline-flex rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-foreground/75">
+                {formatFeedbackStatus(feedbackDetailTarget.status)}
+              </span>
+            </section>
+            {feedbackImageUrl ? (
+              <section className="space-y-1.5">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Screenshot</h3>
+                {/* eslint-disable-next-line @next/next/no-img-element -- authenticated blob URL */}
+                <img
+                  src={feedbackImageUrl}
+                  alt="Feedback screenshot"
+                  className="max-h-[420px] w-full rounded-xl border border-border bg-muted/20 object-contain"
+                />
+              </section>
+            ) : null}
+          </div>
         ) : null}
       </AppModal>
     </div>

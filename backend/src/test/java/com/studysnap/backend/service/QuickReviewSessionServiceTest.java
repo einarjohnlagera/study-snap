@@ -136,6 +136,10 @@ class QuickReviewSessionServiceTest {
                         invocation.getArgument(1)
                 ));
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PRO);
+        lenient().when(quickReviewSessionRepository.existsByUserIdAndStatusAndCompletedAtIsNotNull(
+                any(UUID.class),
+                any(QuickReviewSessionStatus.class)
+        )).thenReturn(false);
         lenient().when(activityEventRepository.existsByUserIdAndActivityTypeIn(any(UUID.class), any())).thenReturn(false);
     }
 
@@ -206,6 +210,50 @@ class QuickReviewSessionServiceTest {
         );
 
         assertThat(response.isFirstCompletedQuiz()).isFalse();
+    }
+
+    @Test
+    void completeSession_marksFirstCompletedSessionEverWhenNoPriorCompletedSessionExistsInAnyMode() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.existsByUserIdAndStatusAndCompletedAtIsNotNull(
+                userId,
+                QuickReviewSessionStatus.COMPLETED
+        )).thenReturn(false);
+
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(1, 1, 0, 60, null)
+        );
+
+        assertThat(response.isFirstCompletedSessionEver()).isTrue();
+    }
+
+    @Test
+    void completeSession_marksNotFirstCompletedSessionEverWhenAnyPriorCompletedSessionExistsInAnyMode() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.existsByUserIdAndStatusAndCompletedAtIsNotNull(
+                userId,
+                QuickReviewSessionStatus.COMPLETED
+        )).thenReturn(true);
+
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(1, 1, 0, 60, null)
+        );
+
+        assertThat(response.isFirstCompletedSessionEver()).isFalse();
     }
 
     @Test

@@ -18,6 +18,7 @@ import {QuizGenerationOverlay} from "@/components/study-pack/quiz-generation-ove
 import {useQuizSessionGuard} from "@/components/study-pack/quiz-session-guard";
 import {StickyAssessmentFooter} from "@/components/ui/sticky-assessment-footer";
 import {PaywallModal} from "@/components/billing/paywall-modal";
+import {QuizFeedbackPanel} from "@/components/feedback/quiz-feedback-panel";
 import {ToastMessage} from "@/components/ui/toast-message";
 import {getAuthUser} from "@/lib/auth";
 import {getCollectionLabels} from "@/lib/collection-labels";
@@ -1231,6 +1232,14 @@ export default function LongExamPage() {
                             Study Again
                         </Button>
                     </div>
+
+                    <QuizFeedbackPanel
+                        quizLabel="Long Exam"
+                        noteTitle={note?.title}
+                        section="results"
+                        isFirstCompletedSessionEver={masteryReport.isFirstCompletedSessionEver}
+                        userId={getAuthUser()?.id}
+                    />
                 </section>
             ) : null}
 

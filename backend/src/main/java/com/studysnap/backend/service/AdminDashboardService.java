@@ -10,14 +10,16 @@ import com.studysnap.backend.dto.AdminSubjectMetricItemResponse;
 import com.studysnap.backend.entity.AnalyticsEventEntity;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.BillingType;
+import com.studysnap.backend.entity.FeedbackEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
-import com.studysnap.backend.repository.FeedbackRepository;
+import com.studysnap.backend.repository.FeedbackImageRepository;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.FeedbackRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
 import com.studysnap.backend.repository.PremiumWaitlistRepository;
@@ -37,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -57,6 +60,7 @@ public class AdminDashboardService {
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final PremiumWaitlistRepository premiumWaitlistRepository;
     private final FeedbackRepository feedbackRepository;
+    private final FeedbackImageRepository feedbackImageRepository;
 
     public AdminDashboardSummaryResponse getSummary() {
         OffsetDateTime now = OffsetDateTime.now();
@@ -198,8 +202,15 @@ public class AdminDashboardService {
                 ))
                 .toList();
 
-        List<AdminRecentFeedbackItemResponse> recentFeedback = feedbackRepository
-                .findAllByOrderByCreatedAtDesc(PageRequest.of(0, RECENT_EVENT_LIMIT))
+        List<FeedbackEntity> recentFeedbackEntities = feedbackRepository
+                .findAllByOrderByCreatedAtDesc(PageRequest.of(0, RECENT_EVENT_LIMIT));
+        List<UUID> recentFeedbackIds = recentFeedbackEntities.stream()
+                .map(FeedbackEntity::getId)
+                .toList();
+        Set<UUID> feedbackIdsWithImages = recentFeedbackIds.isEmpty()
+                ? Set.of()
+                : Set.copyOf(feedbackImageRepository.findExistingFeedbackIds(recentFeedbackIds));
+        List<AdminRecentFeedbackItemResponse> recentFeedback = recentFeedbackEntities
                 .stream()
                 .map(feedback -> new AdminRecentFeedbackItemResponse(
                         feedback.getId(),
@@ -207,7 +218,8 @@ public class AdminDashboardService {
                         feedback.getMessage(),
                         feedback.getPageUrl(),
                         feedback.getStatus(),
-                        feedback.getCreatedAt()
+                        feedback.getCreatedAt(),
+                        feedbackIdsWithImages.contains(feedback.getId())
                 ))
                 .toList();
 

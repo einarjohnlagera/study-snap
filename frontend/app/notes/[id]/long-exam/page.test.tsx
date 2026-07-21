@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LongExamPage from "./page";
 import { getAuthUser } from "@/lib/auth";
 import {
+  completeLongExamSession,
   forfeitLongExamSession,
   getActiveLongExamSession,
   getCollection,
@@ -57,6 +58,7 @@ jest.mock("@/lib/api", () => ({
 
 describe("LongExamPage", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     pushMock.mockReset();
     replaceMock.mockReset();
     searchParamsMock = new URLSearchParams();
@@ -65,6 +67,7 @@ describe("LongExamPage", () => {
     (startLongExam as jest.Mock).mockReset();
     (getActiveLongExamSession as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
       planType: "PRO",
     });
     (getMe as jest.Mock).mockResolvedValue({
@@ -349,5 +352,56 @@ describe("LongExamPage", () => {
 
     expect(await screen.findByText("You have an active session.")).toBeInTheDocument();
     expect(forfeitLongExamSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [true, "How did your first quiz go?", "Was this quiz helpful?"],
+    [false, "Was this quiz helpful?", "How did your first quiz go?"],
+  ])("selects the correct feedback panel on the mastery report", async (isFirstCompletedSessionEver, expectedTitle, absentTitle) => {
+    (startLongExam as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      quiz: [{
+        question: "What powers the cell?",
+        choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+        correctIndex: 0,
+        concept: "Cell Biology",
+        explanation: "Mitochondria produce cellular energy.",
+      }],
+      totalQuestions: 1,
+      difficulty: "mixed",
+      canResume: false,
+      timeLimitSeconds: 90,
+      timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000),
+      sourceNoteRefs: [],
+      usedThisMonth: 1,
+      monthlyLimit: 10,
+    });
+    (completeLongExamSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      totalQuestions: 1,
+      answeredQuestions: 1,
+      scorePercentage: 100,
+      domainBreakdown: [{
+        domain: "Cell Biology",
+        totalQuestions: 1,
+        correctAnswers: 1,
+        accuracyPercentage: 100,
+      }],
+      weakDomains: [],
+      performanceSummary: "Strong result.",
+      suggestedNextStep: "Review again tomorrow.",
+      sourceNotes: [],
+      isFirstCompletedSessionEver,
+    });
+
+    render(<LongExamPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Begin Long Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
+
+    expect(await screen.findByRole("heading", { name: "Long Exam Complete" })).toBeInTheDocument();
+    expect(screen.getByText(expectedTitle)).toBeInTheDocument();
+    expect(screen.queryByText(absentTitle)).not.toBeInTheDocument();
   });
 });

@@ -1,7 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QuizFeedbackPanel } from "./quiz-feedback-panel";
 
 describe("QuizFeedbackPanel", () => {
+  beforeEach(() => {
+    globalThis.localStorage.clear();
+  });
+
   it("renders the helpfulness prompt on quiz result sections", () => {
     render(
       <QuizFeedbackPanel
@@ -59,5 +63,38 @@ describe("QuizFeedbackPanel", () => {
 
     expect(screen.getByText("Help improve this quiz")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Report Question" })).toBeInTheDocument();
+  });
+
+  it("shows the first-quiz ask once and suppresses it after dismissal", async () => {
+    const view = render(
+      <QuizFeedbackPanel
+        quizLabel="Long Exam"
+        noteTitle="Cardio Notes"
+        section="results"
+        isFirstCompletedSessionEver
+        userId="user-1"
+      />,
+    );
+
+    expect(await screen.findByText("How did your first quiz go?")).toBeInTheDocument();
+    expect(screen.queryByText("Was this quiz helpful?")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss feedback prompt" }));
+    expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
+
+    view.unmount();
+    render(
+      <QuizFeedbackPanel
+        quizLabel="Long Exam"
+        noteTitle="Cardio Notes"
+        section="results"
+        isFirstCompletedSessionEver
+        userId="user-1"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
   });
 });

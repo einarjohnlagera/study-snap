@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
+import { WelcomeBackFeedbackPrompt } from "@/components/feedback/welcome-back-feedback-prompt";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -16,6 +17,7 @@ import {
   completeProductOnboarding,
   getContinueStudyingRecommendation,
   getDashboardOverview,
+  getFeedbackPromptContext,
   getGoalSummary,
   getMe,
   getQuickReviewLastReviewedBatch,
@@ -24,6 +26,7 @@ import {
   type ContinueStudyingResponse,
   type DashboardOverviewResponse,
   type GoalNudgeResponse,
+  type FeedbackPromptContextResponse,
   type MeResponse,
   type NoteListItemResponse,
   type ProfileType,
@@ -315,6 +318,7 @@ export default function DashboardPage() {
   const [continueStudying, setContinueStudying] = useState<ContinueStudyingResponse | null>(null);
   const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
   const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null);
+  const [feedbackPromptContext, setFeedbackPromptContext] = useState<FeedbackPromptContextResponse | null>(null);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -333,12 +337,13 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [notesResult, meResult, continueStudyingResult, todayFocusResult, overviewResult] = await Promise.allSettled([
+      const [notesResult, meResult, continueStudyingResult, todayFocusResult, overviewResult, feedbackContextResult] = await Promise.allSettled([
         listNotes(DASHBOARD_NOTE_FETCH_LIMIT),
         getMe(),
         getContinueStudyingRecommendation(),
         getTodayFocus(),
         getDashboardOverview(),
+        getFeedbackPromptContext(),
       ]);
 
       if (notesResult.status !== "fulfilled") {
@@ -431,6 +436,7 @@ export default function DashboardPage() {
       setContinueStudying(continueStudyingResult.status === "fulfilled" ? continueStudyingResult.value : null);
       setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
       setOverview(overviewResult.status === "fulfilled" ? overviewResult.value : null);
+      setFeedbackPromptContext(feedbackContextResult.status === "fulfilled" ? feedbackContextResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your notes.";
       setError(message);
@@ -732,6 +738,13 @@ export default function DashboardPage() {
               initialExamDate={profile.examDate}
               onDismiss={dismissLightweightProfilePrompt}
               onComplete={completeLightweightProfilePrompt}
+            />
+          ) : null}
+          {profile && feedbackPromptContext ? (
+            <WelcomeBackFeedbackPrompt
+              userId={profile.id}
+              returningAfterInactivity={feedbackPromptContext.returningAfterInactivity}
+              hasCompletedQuizSession={feedbackPromptContext.hasCompletedQuizSession}
             />
           ) : null}
           {activeDashboardTip ? <GuidanceTip tipId={activeDashboardTip.id} message={activeDashboardTip.message} /> : null}
