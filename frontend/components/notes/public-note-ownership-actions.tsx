@@ -10,6 +10,7 @@ import { SubjectBadge } from "@/components/notes/subject-badge";
 import { isPublicNoteOwner, resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicCreatorOrProfilePath, buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
+import { recordPublicNoteViewedWithoutAdopting } from "@/lib/early-lifecycle-feedback-signals";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicNoteOwnershipActionsProps = {
@@ -119,6 +120,12 @@ export function PublicNoteOwnershipActions({
 
   const isOwner = isCurrentUser || isPublicNoteOwner({ ownerUserId, currentUserId });
   const openNoteHref = `/notes/${noteId}`;
+
+  useEffect(() => {
+    if (!isOwner && currentUserId) {
+      recordPublicNoteViewedWithoutAdopting(noteId);
+    }
+  }, [currentUserId, isOwner, noteId]);
 
   const resolvedShareUrl = useMemo(() => {
     const path = buildPublicLibraryNotePath({ subject, title });

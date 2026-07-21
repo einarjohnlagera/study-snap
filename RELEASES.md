@@ -16,7 +16,7 @@ Anti-drift: reuses the existing `SendFeedbackWidget`/`QuizFeedbackPanel` quick-a
 
 ### Shipped
 
-_(nothing yet)_
+- **Public Library browsed-without-adopting prompt + First non-onboarding Study Pack generation prompt (frontend only).** Both reuse the existing `SendFeedbackWidget`/`QuizFeedbackPanel` quick-action mechanism with no schema or endpoint change. The Public Library prompt gates on the already-shipped `GET /dashboard/overview` `totalNoteCount` signal instead of a new account-creation-date field (which doesn't exist client-side today) — same "new/light user" intent as the originally-scoped 14-day gate, using data that already exists. Adoption is tracked from both copy entry points (list-card and detail-page) so the prompt never fires for a user who already adopted a note this session. A new shared session cap (`lib/early-lifecycle-feedback-signals.ts`) ensures at most one of this release's new prompts fires per session, per the design session's own density guidance.
 
 ## v0.52.0 - Proactive In-App Feedback Prompts
 
