@@ -2,7 +2,7 @@
 
 ## v0.54.1 - Public Note Copy Correctness Fixes
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: two small, independent correctness fixes surfaced while validating the public-note copy flow — a backend idempotency gap, and a frontend CTA that never learned the ownership rule the rest of the page already follows.
 
@@ -17,6 +17,10 @@ Anti-drift: the backend fix only changes the existing-copy backfill path — no 
 
 - **Backfill on re-copy (backend).** `NoteService.copyNote()`'s existing-copy branch now backfills a copied Study Pack onto a previously pack-less copy once the source's Study Pack becomes ready, gated on the same `includeStudyPack` flag the initial-copy path already honors. No change when the existing copy already has a pack, or when `includeStudyPack=false`.
 - **Owner-gated "Quiz yourself" CTA (frontend).** The public note detail page's "Ready to quiz yourself?" card is now hidden for the note's own owner (`!note.isCurrentUser`), matching `docs/features/public-notes.md`'s already-documented owner/non-owner action split. Owners now rely on the existing `PublicNoteOwnershipActions` "Open Note" action to go straight to their existing note instead of triggering a redundant copy-and-regenerate cycle.
+
+### Known Limitations
+
+- **AI-suggested-metadata modal reported to flash and auto-bypass during a manual Generate → Quick Review flow, not confirmed.** A user reported that after copying their own public note and manually generating a Study Pack, the `AiSuggestionModal` (metadata suggestion) appears briefly then gets bypassed before Quick Review opens. Static tracing of `private-note-detail-page-client.tsx`'s generation-completion state machine (`awaitingGeneratedMetadataSuggestionRef`, `maybeShowGeneratedMetadataSuggestion`, the `shouldAutoStartQuickReview` effect) did not reproduce or locate the mechanism — the one race condition found (auto-quick-review firing before `pendingSuggestion` resolves) requires a `startQuickReview=1` query param that this owner flow does not carry. Needs live reproduction to pin down; not fixed in v0.54.1.
 
 ## v0.54.0 - CPALE Exam Hub (Wave 2)
 
