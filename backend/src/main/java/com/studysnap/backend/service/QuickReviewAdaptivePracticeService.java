@@ -291,7 +291,7 @@ public class QuickReviewAdaptivePracticeService {
             .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
-            return new AdaptivePracticeCompleteResponse(ADAPTIVE_PRACTICE_SESSION_ALREADY_COMPLETED_MESSAGE, false);
+            return new AdaptivePracticeCompleteResponse(ADAPTIVE_PRACTICE_SESSION_ALREADY_COMPLETED_MESSAGE, false, false);
         }
 
         int safeTotalQuestions = session.getTotalQuestions() == null
@@ -314,6 +314,8 @@ public class QuickReviewAdaptivePracticeService {
               .divide(BigDecimal.valueOf(safeTotalQuestions), 2, RoundingMode.HALF_UP);
         boolean isFirstCompletedSessionEver = !quickReviewSessionRepository
             .existsByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED);
+        boolean isSecondCompletedSessionEver = quickReviewSessionRepository
+            .countByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED) == 1;
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
         session.setCurrentQuestionIndex(safeTotalQuestions);
         session.setTotalQuestions(safeTotalQuestions);
@@ -342,7 +344,11 @@ public class QuickReviewAdaptivePracticeService {
         if (!missedConcepts.isEmpty()) {
             conceptHealthService.recordIncorrectAnswers(userId, session.getStudyPackId(), missedConcepts, now);
         }
-        return new AdaptivePracticeCompleteResponse(ADAPTIVE_PRACTICE_SESSION_COMPLETED_MESSAGE, isFirstCompletedSessionEver);
+        return new AdaptivePracticeCompleteResponse(
+            ADAPTIVE_PRACTICE_SESSION_COMPLETED_MESSAGE,
+            isFirstCompletedSessionEver,
+            isSecondCompletedSessionEver
+        );
     }
 
     public SimpleMessageResponse forfeitAdaptiveSession(String sessionIdRaw, UUID userId) {

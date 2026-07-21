@@ -2319,6 +2319,7 @@ export default function ChallengeQuizPage() {
             noteTitle={note?.title}
             section={showAnswerReview ? "review" : "results"}
             isFirstCompletedSessionEver={result.isFirstCompletedSessionEver}
+            isSecondCompletedSessionEver={result.isSecondCompletedSessionEver}
             userId={getAuthUser()?.id}
           />
         </section>
@@ -2594,6 +2595,7 @@ export default function ChallengeQuizPage() {
             noteTitle={note?.title}
             section={showAnswerReview ? "review" : "results"}
             isFirstCompletedSessionEver={result.isFirstCompletedSessionEver}
+            isSecondCompletedSessionEver={result.isSecondCompletedSessionEver}
             userId={getAuthUser()?.id}
           />
         </Card>

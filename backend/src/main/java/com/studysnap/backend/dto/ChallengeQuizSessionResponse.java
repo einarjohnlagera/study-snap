@@ -19,6 +19,7 @@ public record ChallengeQuizSessionResponse(
         Integer durationSeconds,
         OffsetDateTime createdAt,
         OffsetDateTime completedAt,
-        boolean isFirstCompletedSessionEver
+        boolean isFirstCompletedSessionEver,
+        boolean isSecondCompletedSessionEver
 ) {
 }

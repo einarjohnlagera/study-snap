@@ -455,6 +455,8 @@ public class ChallengeQuizService {
 
         boolean isFirstCompletedSessionEver = !quickReviewSessionRepository
                 .existsByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED);
+        boolean isSecondCompletedSessionEver = quickReviewSessionRepository
+                .countByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED) == 1;
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
         session.setCurrentQuestionIndex(statistics.totalQuestions());
         session.setCurrentRound(QuickReviewRound.INITIAL);
@@ -499,7 +501,8 @@ public class ChallengeQuizService {
                 saved.getDurationSeconds(),
                 saved.getCreatedAt(),
                 saved.getCompletedAt(),
-                isFirstCompletedSessionEver
+                isFirstCompletedSessionEver,
+                isSecondCompletedSessionEver
         );
     }
 

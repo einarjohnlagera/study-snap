@@ -190,6 +190,8 @@ public class QuickReviewSessionService {
 
         boolean isFirstCompletedSessionEver = !quickReviewSessionRepository
                 .existsByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED);
+        boolean isSecondCompletedSessionEver = quickReviewSessionRepository
+                .countByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED) == 1;
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
         session.setCurrentQuestionIndex(request.totalQuestions());
         session.setCurrentRound(request.retryCount() > 0 ? QuickReviewRound.RETRY : QuickReviewRound.INITIAL);
@@ -227,7 +229,7 @@ public class QuickReviewSessionService {
         );
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_QUICK_REVIEW, saved.getStudyPackId());
 
-        return toResponse(saved, planType, isFirstCompletedQuiz, isFirstCompletedSessionEver);
+        return toResponse(saved, planType, isFirstCompletedQuiz, isFirstCompletedSessionEver, isSecondCompletedSessionEver);
     }
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
@@ -427,14 +429,15 @@ public class QuickReviewSessionService {
     }
 
     private QuickReviewSessionResponse toResponse(QuickReviewSessionEntity session, PlanType planType) {
-        return toResponse(session, planType, false, false);
+        return toResponse(session, planType, false, false, false);
     }
 
     private QuickReviewSessionResponse toResponse(
             QuickReviewSessionEntity session,
             PlanType planType,
             boolean isFirstCompletedQuiz,
-            boolean isFirstCompletedSessionEver
+            boolean isFirstCompletedSessionEver,
+            boolean isSecondCompletedSessionEver
     ) {
         return new QuickReviewSessionResponse(
                 session.getId().toString(),
@@ -453,7 +456,8 @@ public class QuickReviewSessionService {
                 session.getCreatedAt(),
                 session.getCompletedAt(),
                 isFirstCompletedQuiz,
-                isFirstCompletedSessionEver
+                isFirstCompletedSessionEver,
+                isSecondCompletedSessionEver
         );
     }
 

@@ -9,9 +9,12 @@ Collect soft-launch feedback from authenticated users without sending them out o
 - authenticated users can open `Send Feedback` from intentional passive entry points:
   - a small header feedback icon on focused app routes such as Note Editor, Note Detail / Study Pack view, and quiz flows
   - the floating launcher only on safe non-critical pages such as Dashboard, Library, Public Library, and Settings
-- the app also makes two proactive, inline asks through the same freeform pipeline:
+- the app also makes five proactive, inline asks through the same freeform pipeline:
   - after the user's first-ever completed quiz session across Quick Review, Challenge Quiz / Board Exam, Adaptive Practice, and Long Exam
+  - after the user's second-ever completed quiz session across those same modes, focused on difficulty and pacing
   - on Dashboard when a user returns after the configured inactivity threshold
+  - on Public Library after a new/light user browses several public notes without adopting one
+  - after a user's first non-onboarding Study Pack generation
 - feedback is submitted through `POST /api/feedback`
 - the request body contains only `message`
 - the frontend also sends the current page through `X-Page-Url`
@@ -34,6 +37,7 @@ Collect soft-launch feedback from authenticated users without sending them out o
   - prompt: `Was this quiz helpful?`
   - actions: `Yes` and `Give Feedback`
 - on the first-ever completed quiz result, replace that generic prompt with `How did your first quiz go?` and templated clear/confusing actions; never render both asks together
+- on the second-ever completed quiz result, after the first-quiz priority and before the generic prompt, render `How did that quiz feel?` with `Felt right` (silent dismiss) plus templated `Too easy`, `Too hard`, and `Too repetitive` actions; `Confusing` remains exclusive to the first-quiz prompt
 - quiz review sections may still show inline issue-reporting actions such as:
   - `Report Question`
   - `Confusing Explanation`
@@ -42,11 +46,13 @@ Collect soft-launch feedback from authenticated users without sending them out o
 
 ## Proactive Trigger Rules
 
-- first-quiz detection is owner-wide and mode-neutral: any completed quiz session on any Study Pack makes later results use the existing generic panel
+- first-quiz detection is owner-wide and mode-neutral: zero prior completed sessions emits `isFirstCompletedSessionEver`, while later results proceed to the second-quiz or generic branch as applicable
+- second-quiz detection is owner-wide and mode-neutral: all four completion services count completed sessions immediately before the current one becomes `COMPLETED`, so exactly one prior completion emits `isSecondCompletedSessionEver`; it is therefore mutually exclusive with `isFirstCompletedSessionEver` (`0` prior sessions versus `1`)
 - return-after-inactivity reuses `RetentionService`'s `MEANINGFUL_STUDY_ACTIVITIES` checks and `StudySnapProperties.Retention.inactivityDays`; it does not define a second threshold or activity list
-- both proactive asks use user-scoped keys under the existing `notelib-guidance-dismissed-` localStorage convention and are marked seen on first display; dismissing without submitting therefore does not make an ask reappear
+- these proactive asks use user-scoped keys under the existing `notelib-guidance-dismissed-` localStorage convention and are marked seen on first display; dismissing without submitting therefore does not make an ask reappear
+- the second-quiz ask also uses `early-lifecycle-feedback-signals.ts`'s shared session cap with the Public Library and non-onboarding Study Pack-generation asks; once any of those three fires, the other two stay eligible only in a later browsing session if their own permanent marker is still unseen
 - the welcome-back ask requires prior quiz history and checks a session-scoped marker for the first-quiz ask, so a returning user's first-ever quiz receives only the higher-priority first-quiz ask even if return context is fetched again on the same visit; the inactivity ask remains eligible on a later qualifying return if it has not been shown
-- failures loading first-quiz context fall back to the generic quiz-results panel; failures loading return context render no proactive Dashboard ask
+- missing first- or second-session response fields fall back to the next existing quiz-results branch; failures loading return context render no proactive Dashboard ask
 - all quick actions prefill the existing freeform feedback message and submit unchanged through `POST /api/feedback`; no rating or prompt-specific fields are stored
 
 ## Stored Data

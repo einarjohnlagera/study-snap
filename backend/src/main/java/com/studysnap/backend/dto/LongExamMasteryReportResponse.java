@@ -13,7 +13,8 @@ public record LongExamMasteryReportResponse(
         String performanceSummary,
         String suggestedNextStep,
         List<LongExamSourceNote> sourceNotes,
-        boolean isFirstCompletedSessionEver
+        boolean isFirstCompletedSessionEver,
+        boolean isSecondCompletedSessionEver
 ) {
     public record LongExamDomainStat(
             String domain,

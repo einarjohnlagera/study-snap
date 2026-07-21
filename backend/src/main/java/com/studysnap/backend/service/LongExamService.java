@@ -382,6 +382,8 @@ public class LongExamService {
 
         boolean isFirstCompletedSessionEver = !quickReviewSessionRepository
                 .existsByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED);
+        boolean isSecondCompletedSessionEver = quickReviewSessionRepository
+                .countByUserIdAndStatusAndCompletedAtIsNotNull(userId, QuickReviewSessionStatus.COMPLETED) == 1;
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
         session.setCurrentQuestionIndex(quiz.size());
         session.setCurrentRound(QuickReviewRound.INITIAL);
@@ -420,7 +422,13 @@ public class LongExamService {
                 ANALYTICS_METADATA_QUESTION_COUNT, statistics.totalQuestions(),
                 ANALYTICS_METADATA_SCORE_PERCENTAGE, statistics.scorePercentage()
         ));
-        return buildMasteryReportResponse(saved.getId(), statistics, saved.getSessionState(), isFirstCompletedSessionEver);
+        return buildMasteryReportResponse(
+                saved.getId(),
+                statistics,
+                saved.getSessionState(),
+                isFirstCompletedSessionEver,
+                isSecondCompletedSessionEver
+        );
     }
 
     private void recordCorrectConceptsForSourcePacks(
@@ -756,7 +764,8 @@ public class LongExamService {
             UUID sessionId,
             LongExamStatistics statistics,
             Map<String, Object> sessionState,
-            boolean isFirstCompletedSessionEver
+            boolean isFirstCompletedSessionEver,
+            boolean isSecondCompletedSessionEver
     ) {
         return new LongExamMasteryReportResponse(
                 sessionId,
@@ -768,7 +777,8 @@ public class LongExamService {
                 statistics.performanceSummary(),
                 statistics.suggestedNextStep(),
                 extractSourceNotes(sessionState),
-                isFirstCompletedSessionEver
+                isFirstCompletedSessionEver,
+                isSecondCompletedSessionEver
         );
     }
 
