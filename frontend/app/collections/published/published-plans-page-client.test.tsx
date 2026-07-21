@@ -88,7 +88,11 @@ describe("PublishedPlansPage", () => {
     const { rerender } = render(<PublishedPlansPage />);
 
     await waitFor(() => {
-      expect(trackAnalyticsEvent).toHaveBeenCalledWith({ eventType: "PUBLISHED_PLANS_VIEWED", entityId: null, metadata: undefined });
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+        eventType: "PUBLISHED_PLANS_VIEWED",
+        entityId: null,
+        metadata: { referrerSource: "direct" },
+      });
     });
 
     rerender(<PublishedPlansPage />);

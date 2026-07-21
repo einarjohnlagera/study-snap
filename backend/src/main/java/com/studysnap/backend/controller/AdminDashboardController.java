@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AdminDashboardRecentEventsResponse;
 import com.studysnap.backend.dto.AdminDashboardSummaryResponse;
 import com.studysnap.backend.dto.AdminDashboardTopContentResponse;
+import com.studysnap.backend.dto.AdminOrganicLandingsResponse;
 import com.studysnap.backend.service.AdminDashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,5 +31,10 @@ public class AdminDashboardController {
     @GetMapping("/recent-events")
     public AdminDashboardRecentEventsResponse getRecentEvents() {
         return adminDashboardService.getRecentEvents();
+    }
+
+    @GetMapping("/organic-landings")
+    public AdminOrganicLandingsResponse getOrganicLandings() {
+        return adminDashboardService.getOrganicLandings();
     }
 }

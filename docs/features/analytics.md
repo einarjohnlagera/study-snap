@@ -80,6 +80,10 @@ Top-of-funnel and acquisition events:
 
 New users may carry nullable `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`, and `referrer` fields on `users`. The frontend captures these from the first browser landing in session storage, then both email/password and Google signup submit paths send the same payload. Attribution is written only while creating a new user and is never overwritten by a later login.
 
+### Page-view referrer attribution
+
+The shared `AnalyticsPageViewTracker` adds a `referrerSource` metadata field to every page-view event it emits. Its only permitted values are `google`, `other-search`, `social`, and `direct`; raw referrer URLs and hostnames are never written to analytics events for this use. This page-view-scoped bucket is intentionally separate from first-touch signup attribution above.
+
 Feature-activation funnel events (v0.28.0):
 
 - `GUIDANCE_TIP_SHOWN` — a `trackAnalytics` `GuidanceTip` became visible (impression); `metadata.tipId` identifies the tip
@@ -142,3 +146,5 @@ Returns rollups for:
 - total upgrades
 
 This endpoint is for internal/admin reporting only.
+
+`GET /api/admin/dashboard/organic-landings` is a separate Admin dashboard read for the recent eight-week page-view window. It returns week/surface/referrer-source landing rows plus the aggregate Google `EXAM_HUB_VIEWED` → `EXAM_HUB_CTA_CLICKED` ratio. It is not a session-correlated funnel.

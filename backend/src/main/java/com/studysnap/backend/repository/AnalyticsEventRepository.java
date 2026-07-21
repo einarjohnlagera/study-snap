@@ -20,11 +20,43 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
     String BOARD_EXAM_STARTED_EVENT_TYPE = "BOARD_EXAM_STARTED";
     String LONG_EXAM_STARTED_EVENT_TYPE = "LONG_EXAM_STARTED";
     String INTERVIEW_PRACTICE_STARTED_EVENT_TYPE = "INTERVIEW_PRACTICE_STARTED";
+    String LANDING_PAGE_VIEWED_EVENT_TYPE = "LANDING_PAGE_VIEWED";
+    String EXAM_HUB_VIEWED_EVENT_TYPE = "EXAM_HUB_VIEWED";
+    String PUBLISHED_PLANS_VIEWED_EVENT_TYPE = "PUBLISHED_PLANS_VIEWED";
+    String EXAM_HUB_CTA_CLICKED_EVENT_TYPE = "EXAM_HUB_CTA_CLICKED";
     // Retention activation = first STUDY_PACK_GENERATED. Week-2 return = any analytics event in (firstPack + 7d, firstPack + 14d].
     // Eligible users have a first pack at least 14 days before the report time so the week-2 window is complete.
     String RETENTION_WINDOW_START_DAYS = "7";
     String RETENTION_WINDOW_END_DAYS = "14";
     int RETENTION_COHORT_WEEK_LIMIT = 8;
+    String REFERRER_SOURCE_JSON_PATH = "referrerSource";
+    String GOOGLE_REFERRER_SOURCE = "google";
+    String DIRECT_REFERRER_SOURCE = "direct";
+    // PostgreSQL's jsonb_extract_path_text(metadata_json, 'referrerSource') is equivalent to
+    // metadata_json ->> 'referrerSource', while remaining executable in the H2 integration suite.
+    String REFERRER_SOURCE_EXPRESSION = "jsonb_extract_path_text(ae.metadata_json, '" + REFERRER_SOURCE_JSON_PATH + "')";
+    String ORGANIC_LANDINGS_QUERY = "SELECT CAST(DATE_TRUNC('week', ae.created_at) AS DATE) AS weekStart,\n"
+            + "       ae.event_type AS eventType,\n"
+            + "       COALESCE(" + REFERRER_SOURCE_EXPRESSION + ", '" + DIRECT_REFERRER_SOURCE + "') AS referrerSource,\n"
+            + "       COUNT(*) AS totalCount\n"
+            + "FROM analytics_events ae\n"
+            + "WHERE ae.event_type IN ('" + LANDING_PAGE_VIEWED_EVENT_TYPE + "', '"
+            + EXAM_HUB_VIEWED_EVENT_TYPE + "', '" + PUBLISHED_PLANS_VIEWED_EVENT_TYPE + "')\n"
+            + "  AND ae.created_at >= CAST(:since AS TIMESTAMP WITH TIME ZONE)\n"
+            + "GROUP BY CAST(DATE_TRUNC('week', ae.created_at) AS DATE), ae.event_type, "
+            + "COALESCE(" + REFERRER_SOURCE_EXPRESSION + ", '" + DIRECT_REFERRER_SOURCE + "')\n"
+            + "ORDER BY weekStart DESC, eventType ASC, referrerSource ASC";
+    String EXAM_HUB_ORGANIC_CLICK_THROUGH_QUERY = "SELECT COALESCE(SUM(CASE\n"
+            + "           WHEN ae.event_type = '" + EXAM_HUB_VIEWED_EVENT_TYPE + "'\n"
+            + "            AND " + REFERRER_SOURCE_EXPRESSION + " = '" + GOOGLE_REFERRER_SOURCE + "'\n"
+            + "           THEN 1 ELSE 0 END), 0) AS googleExamHubViews,\n"
+            + "       COALESCE(SUM(CASE\n"
+            + "           WHEN ae.event_type = '" + EXAM_HUB_CTA_CLICKED_EVENT_TYPE + "'\n"
+            + "           THEN 1 ELSE 0 END), 0) AS examHubCtaClicks\n"
+            + "FROM analytics_events ae\n"
+            + "WHERE ae.event_type IN ('" + EXAM_HUB_VIEWED_EVENT_TYPE + "', '"
+            + EXAM_HUB_CTA_CLICKED_EVENT_TYPE + "')\n"
+            + "  AND ae.created_at >= CAST(:since AS TIMESTAMP WITH TIME ZONE)";
     String VALUE_LOOP_CLOSURE_QUERY = """
             SELECT COUNT(DISTINCT fp.user_id)
             FROM (
@@ -217,6 +249,12 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
 
     @Query(value = WEEKLY_RETENTION_COHORTS_QUERY, nativeQuery = true)
     List<WeeklyRetentionCohortProjection> findWeeklyRetentionCohorts(@Param("now") OffsetDateTime now);
+
+    @Query(value = ORGANIC_LANDINGS_QUERY, nativeQuery = true)
+    List<OrganicLandingProjection> findOrganicLandingsSince(@Param("since") OffsetDateTime since);
+
+    @Query(value = EXAM_HUB_ORGANIC_CLICK_THROUGH_QUERY, nativeQuery = true)
+    ExamHubOrganicClickThroughProjection findExamHubOrganicClickThroughSince(@Param("since") OffsetDateTime since);
 
     List<AnalyticsEventEntity> findByEventTypeOrderByCreatedAtDesc(AnalyticsEventType eventType, Pageable pageable);
 

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { trackAnalyticsEvent, type AnalyticsEventType } from "@/lib/api";
+import { bucketReferrerSource, type ReferrerSource } from "@/lib/referrer-source";
 
 type AnalyticsPageViewTrackerProps = {
   eventType: AnalyticsEventType;
@@ -15,7 +16,19 @@ export function AnalyticsPageViewTracker({
   metadata,
 }: AnalyticsPageViewTrackerProps) {
   useEffect(() => {
-    void trackAnalyticsEvent({ eventType, entityId, metadata });
+    let referrerSource: ReferrerSource = "direct";
+    try {
+      if (globalThis.document !== undefined) {
+        referrerSource = bucketReferrerSource(globalThis.document.referrer);
+      }
+    } catch {
+      referrerSource = "direct";
+    }
+    void trackAnalyticsEvent({
+      eventType,
+      entityId,
+      metadata: { ...metadata, referrerSource },
+    });
   }, [entityId, eventType, metadata]);
 
   return null;

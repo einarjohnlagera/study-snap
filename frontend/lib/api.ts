@@ -678,6 +678,18 @@ export type AdminDashboardRecentEventsResponse = {
   recentFeedback: AdminRecentFeedbackItemResponse[];
 };
 
+export type AdminOrganicLandingsResponse = {
+  landings: Array<{
+    weekStart: string;
+    eventType: "LANDING_PAGE_VIEWED" | "EXAM_HUB_VIEWED" | "PUBLISHED_PLANS_VIEWED";
+    referrerSource: "google" | "other-search" | "social" | "direct";
+    count: number;
+  }>;
+  googleExamHubViews: number;
+  examHubCtaClicks: number;
+  examHubOrganicClickThroughRatio: number | null;
+};
+
 export type AdminFunnelMetricsResponse = {
   windowDays: number | null;
   windowStartedAt: string | null;
@@ -2280,6 +2292,18 @@ export async function getAdminDashboardRecentEvents(): Promise<AdminDashboardRec
     true,
   );
   return parseApiResponse<AdminDashboardRecentEventsResponse>(response, "Could not load recent admin events.");
+}
+
+export async function getAdminOrganicLandings(): Promise<AdminOrganicLandingsResponse> {
+  const response = await fetchWithAuth(
+    "/admin/dashboard/organic-landings",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminOrganicLandingsResponse>(response, "Could not load organic landing metrics.");
 }
 
 export async function getAdminFunnelMetrics(days?: number): Promise<AdminFunnelMetricsResponse> {

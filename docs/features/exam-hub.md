@@ -160,8 +160,8 @@ Completing Long Exam, Board Exam, or Interview Practice records concept-level si
 
 Exam hub analytics events are frontend-fired and non-blocking:
 
-- `EXAM_HUB_VIEWED` with metadata `{ slug }`.
-- `EXAM_HUB_CTA_CLICKED` with metadata `{ slug, destination }`.
+- `EXAM_HUB_VIEWED` with metadata `{ slug, referrerSource }`; the shared page-view tracker supplies the coarse source bucket.
+- `EXAM_HUB_CTA_CLICKED` with metadata `{ slug, destination }`; Admin's organic-landing panel consumes this existing event only as a coarse aggregate Google Exam Hub landing → CTA ratio, not as a visitor-correlated funnel.
 - `STUDY_GOAL_SET` with metadata `{ studyGoal }`.
 - `STUDY_GOAL_DISMISSED` with metadata `{ studyGoal }`.
 - `DASHBOARD_GOAL_CARD_VIEWED` with metadata `{ studyGoal }`.

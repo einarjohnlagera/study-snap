@@ -4,6 +4,7 @@ import {
   getAdminDashboardRecentEvents,
   getAdminDashboardSummary,
   getAdminDashboardTopContent,
+  getAdminOrganicLandings,
   getAdminFeedbackImage,
 } from "@/lib/api";
 
@@ -23,6 +24,7 @@ jest.mock("@/lib/api", () => ({
   getAdminDashboardSummary: jest.fn(),
   getAdminDashboardTopContent: jest.fn(),
   getAdminDashboardRecentEvents: jest.fn(),
+  getAdminOrganicLandings: jest.fn(),
   getAdminFeedbackImage: jest.fn(),
   ApiRequestError: class ApiRequestError extends Error {
     status: number;
@@ -45,6 +47,7 @@ describe("AdminPage", () => {
     (getAdminDashboardSummary as jest.Mock).mockReset();
     (getAdminDashboardTopContent as jest.Mock).mockReset();
     (getAdminDashboardRecentEvents as jest.Mock).mockReset();
+    (getAdminOrganicLandings as jest.Mock).mockReset();
     (getAdminFeedbackImage as jest.Mock).mockReset();
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
@@ -135,6 +138,17 @@ describe("AdminPage", () => {
         },
       ],
     });
+    (getAdminOrganicLandings as jest.Mock).mockResolvedValue({
+      landings: [{
+        weekStart: "2026-07-19",
+        eventType: "EXAM_HUB_VIEWED",
+        referrerSource: "google",
+        count: 12,
+      }],
+      googleExamHubViews: 12,
+      examHubCtaClicks: 3,
+      examHubOrganicClickThroughRatio: 0.25,
+    });
 
     render(<AdminPage />);
 
@@ -146,6 +160,8 @@ describe("AdminPage", () => {
     expect(screen.getByText("Most Viewed Public Notes")).toBeInTheDocument();
     expect(screen.getByText("Recent Failed Payments")).toBeInTheDocument();
     expect(screen.getByText("Recent Feedback")).toBeInTheDocument();
+    expect(screen.getByText("Organic Landing Attribution")).toBeInTheDocument();
+    expect(screen.getByText("25.0%")).toBeInTheDocument();
     expect(screen.getByText("The note editor feels confusing on mobile.")).toBeInTheDocument();
     expect(screen.getByText("PHP 249.00")).toBeInTheDocument();
   });
@@ -159,7 +175,17 @@ describe("AdminPage", () => {
       expect(getAdminDashboardSummary).not.toHaveBeenCalled();
       expect(getAdminDashboardTopContent).not.toHaveBeenCalled();
       expect(getAdminDashboardRecentEvents).not.toHaveBeenCalled();
+      expect(getAdminOrganicLandings).not.toHaveBeenCalled();
     });
+  });
+
+  it("uses the existing dashboard error state when organic landing metrics fail", async () => {
+    requireAdminUser.mockReturnValue(true);
+    (getAdminOrganicLandings as jest.Mock).mockRejectedValue(new Error("Could not load organic landing metrics."));
+
+    render(<AdminPage />);
+
+    expect(await screen.findByText("Could not load organic landing metrics.")).toBeInTheDocument();
   });
 
   it("opens and closes a full Recent Feedback detail view", async () => {
@@ -224,11 +250,18 @@ describe("AdminPage", () => {
         hasImage: true,
       }],
     });
+    (getAdminOrganicLandings as jest.Mock).mockResolvedValue({
+      landings: [],
+      googleExamHubViews: 0,
+      examHubCtaClicks: 0,
+      examHubOrganicClickThroughRatio: null,
+    });
     (getAdminFeedbackImage as jest.Mock).mockResolvedValue(new Blob(["image-bytes"], { type: "image/png" }));
 
     render(<AdminPage />);
 
     expect(await screen.findByText("Recent Feedback")).toBeInTheDocument();
+    expect(screen.getByText("No tracked page-view landings in the last eight weeks.")).toBeInTheDocument();
     expect(screen.queryByText(fullMessage)).not.toBeInTheDocument();
     expect(screen.queryByText(fullPageUrl)).not.toBeInTheDocument();
     expect(getAdminFeedbackImage).not.toHaveBeenCalled();
