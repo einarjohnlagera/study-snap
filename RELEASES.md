@@ -1,6 +1,6 @@
 # RELEASES.md - NoteLib
 
-## v0.53.0 - Early-Lifecycle Feedback Signals
+## v0.52.1 - Early-Lifecycle Feedback Signals
 
 **Status: In Progress**
 
