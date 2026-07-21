@@ -1000,6 +1000,7 @@ export type QuickReviewSessionSummaryResponse = {
   completedAt: string | null;
   isFirstCompletedQuiz?: boolean;
   isFirstCompletedSessionEver?: boolean;
+  isSecondCompletedSessionEver?: boolean;
 };
 
 export type QuickReviewPerformanceSummaryResponse = {
@@ -1049,6 +1050,7 @@ export type AdaptivePracticeCompleteRequest = {
 
 export type AdaptivePracticeCompleteResponse = SimpleMessageResponse & {
   isFirstCompletedSessionEver?: boolean;
+  isSecondCompletedSessionEver?: boolean;
 };
 
 export type ConceptHealthEntry = {
@@ -1146,6 +1148,7 @@ export type ChallengeQuizSessionResponse = {
   createdAt: string;
   completedAt: string | null;
   isFirstCompletedSessionEver?: boolean;
+  isSecondCompletedSessionEver?: boolean;
 };
 
 export type GenerateMoreChallengeQuizResponse = {
@@ -1269,6 +1272,7 @@ export type LongExamMasteryReportResponse = {
   suggestedNextStep: string;
   sourceNotes: LongExamSourceNote[];
   isFirstCompletedSessionEver?: boolean;
+  isSecondCompletedSessionEver?: boolean;
 };
 
 export type InterviewPracticeStartResponse = {

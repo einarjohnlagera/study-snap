@@ -1238,6 +1238,7 @@ export default function LongExamPage() {
                         noteTitle={note?.title}
                         section="results"
                         isFirstCompletedSessionEver={masteryReport.isFirstCompletedSessionEver}
+                        isSecondCompletedSessionEver={masteryReport.isSecondCompletedSessionEver}
                         userId={getAuthUser()?.id}
                     />
                 </section>

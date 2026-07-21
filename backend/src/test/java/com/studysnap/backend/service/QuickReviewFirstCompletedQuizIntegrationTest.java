@@ -13,6 +13,7 @@ import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.security.AiRateLimitService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +39,7 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     private QuickReviewSessionService quickReviewSessionService;
+    private QuickReviewAdaptivePracticeService adaptivePracticeService;
 
     @BeforeEach
     void setUp() {
@@ -79,7 +81,8 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
         StudyPackRepository studyPackRepository = mock(StudyPackRepository.class);
         SubscriptionService subscriptionService = mock(SubscriptionService.class);
         when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
-        FeatureGateService featureGateService = new FeatureGateService(subscriptionService, new StudySnapProperties());
+        StudySnapProperties properties = new StudySnapProperties();
+        FeatureGateService featureGateService = new FeatureGateService(subscriptionService, properties);
         quickReviewSessionService = new QuickReviewSessionService(
                 quickReviewSessionRepository,
                 studyPackRepository,
@@ -88,6 +91,21 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
                 mock(AnalyticsService.class),
                 subscriptionService,
                 featureGateService,
+                mock(ConceptHealthService.class)
+        );
+        adaptivePracticeService = new QuickReviewAdaptivePracticeService(
+                studyPackRepository,
+                quickReviewSessionRepository,
+                mock(QuizGenerationService.class),
+                mock(ActivityTrackingService.class),
+                subscriptionService,
+                featureGateService,
+                properties,
+                mock(UserUsageService.class),
+                mock(AuthService.class),
+                mock(AnalyticsService.class),
+                mock(AiRateLimitService.class),
+                mock(StudyPackGenerationContextResolver.class),
                 mock(ConceptHealthService.class)
         );
     }
@@ -115,6 +133,48 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
         assertThat(secondResponse.isFirstCompletedQuiz()).isFalse();
     }
 
+    @Test
+    void completeSession_reportsSecondCompletedSessionOnlyForTheSecondOwnerWideCompletion() {
+        UUID userId = UUID.randomUUID();
+
+        assertThat(quickReviewSessionRepository.countByUserIdAndStatusAndCompletedAtIsNotNull(
+                userId,
+                QuickReviewSessionStatus.COMPLETED
+        )).isZero();
+        assertThat(quickReviewSessionRepository.existsByUserIdAndStatusAndCompletedAtIsNotNull(
+                userId,
+                QuickReviewSessionStatus.COMPLETED
+        )).isFalse();
+
+        QuickReviewSessionEntity firstSession = saveInProgressSession(userId);
+        QuickReviewSessionResponse firstResponse = complete(firstSession, userId);
+
+        assertThat(firstResponse.isFirstCompletedSessionEver()).isTrue();
+        assertThat(firstResponse.isSecondCompletedSessionEver()).isFalse();
+        assertThat(quickReviewSessionRepository.countByUserIdAndStatusAndCompletedAtIsNotNull(
+                userId,
+                QuickReviewSessionStatus.COMPLETED
+        )).isOne();
+
+        QuickReviewSessionEntity secondSession = saveInProgressSession(userId, QuickReviewSessionMode.ADAPTIVE);
+        var secondResponse = adaptivePracticeService.completeAdaptiveSession(
+                secondSession.getId().toString(),
+                userId,
+                0,
+                1,
+                60,
+                null
+        );
+
+        assertThat(secondResponse.isFirstCompletedSessionEver()).isFalse();
+        assertThat(secondResponse.isSecondCompletedSessionEver()).isTrue();
+
+        QuickReviewSessionResponse thirdResponse = complete(saveInProgressSession(userId), userId);
+
+        assertThat(thirdResponse.isFirstCompletedSessionEver()).isFalse();
+        assertThat(thirdResponse.isSecondCompletedSessionEver()).isFalse();
+    }
+
     private QuickReviewSessionResponse complete(QuickReviewSessionEntity session, UUID userId) {
         return quickReviewSessionService.completeSession(
                 session.getId().toString(),
@@ -124,12 +184,16 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
     }
 
     private QuickReviewSessionEntity saveInProgressSession(UUID userId) {
+        return saveInProgressSession(userId, QuickReviewSessionMode.QUICK_REVIEW);
+    }
+
+    private QuickReviewSessionEntity saveInProgressSession(UUID userId, QuickReviewSessionMode sessionMode) {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
         session.setId(UUID.randomUUID());
         session.setUserId(userId);
         session.setStudyPackId(UUID.randomUUID());
         session.setNoteId(UUID.randomUUID());
-        session.setSessionMode(QuickReviewSessionMode.QUICK_REVIEW);
+        session.setSessionMode(sessionMode);
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
