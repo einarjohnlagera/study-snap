@@ -504,10 +504,10 @@ export default function ChallengeQuizPage() {
       }
       if (me.primaryCollectionId) {
         void getCollectionGoal(me.primaryCollectionId)
-          .then((goal) => setWeeklyPacingWeeksRemaining(goal.weeksRemaining))
-          .catch(() => undefined);
-        void getCollection(me.primaryCollectionId)
-          .then((collection) => setPrimaryCollectionCompanion(collection.companion))
+          .then((goal) => {
+            setWeeklyPacingWeeksRemaining(goal.weeksRemaining);
+            setPrimaryCollectionCompanion(goal.companion);
+          })
           .catch(() => undefined);
       }
     }).catch(() => undefined);

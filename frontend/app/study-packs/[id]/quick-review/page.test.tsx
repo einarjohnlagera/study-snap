@@ -5,7 +5,6 @@ import {
   completeQuickReviewSession,
   forfeitQuickReviewSession,
   generateQuickReviewStudyTip,
-  getCollection,
   getCollectionGoal,
   getMe,
   getPostSessionNextStep,
@@ -57,7 +56,6 @@ jest.mock("@/lib/api", () => ({
   completeQuickReviewSession: jest.fn(),
   forfeitQuickReviewSession: jest.fn(),
   generateQuickReviewStudyTip: jest.fn(),
-  getCollection: jest.fn(),
   getCollectionGoal: jest.fn(),
   getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
@@ -227,7 +225,6 @@ describe("QuickReviewPage post-quiz UX", () => {
     (getMe as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE" });
     (getCollectionGoal as jest.Mock).mockReset();
-    (getCollection as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
@@ -397,8 +394,8 @@ describe("QuickReviewPage post-quiz UX", () => {
   it("shows the primary Review Set's Companion excerpt when it has Common Mistakes content", async () => {
     setupCompleteState();
     (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });
-    (getCollectionGoal as jest.Mock).mockResolvedValue({ weeksRemaining: null });
-    (getCollection as jest.Mock).mockResolvedValue({
+    (getCollectionGoal as jest.Mock).mockResolvedValue({
+      weeksRemaining: null,
       companion: { commonMistakes: "Watch out for mixing up mitosis and meiosis.", studyStrategy: null },
     });
 
@@ -409,13 +406,13 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
     expect(screen.getByText(/Common Mistakes/)).toBeInTheDocument();
-    expect(getCollection).toHaveBeenCalledWith("goal-1");
+    expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
   });
 
   it("does not show a Companion excerpt when the primary Review Set has no Companion content", async () => {
     setupCompleteState();
     (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });
-    (getCollection as jest.Mock).mockResolvedValue({ companion: null });
+    (getCollectionGoal as jest.Mock).mockResolvedValue({ weeksRemaining: null, companion: null });
 
     render(<QuickReviewPage />);
 
