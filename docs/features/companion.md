@@ -106,6 +106,8 @@ If the data required by a condition is missing, that tip is not eligible. At mos
 
 `GoalCollectionDetailResponse` also carries `companionMayBeOutdated`, an ADMIN-only authoring signal for eligible top-level collections. It is `true` only when the requester is ADMIN, Companion content exists, a saved structure snapshot exists, and the current structure no longer matches that snapshot. The comparison is intentionally structural and lightweight: child/note membership count and sorted ids only. It does not compare note body edits, generated content, concept counts, mastery, or per-user progress.
 
+- **Result-Screen Companion Bridge (v0.55.0):** the Quick Review, Challenge Quiz (both result branches, including Board Exam Mode's), and Adaptive Practice result screens each independently fetch `getMe()` → `primaryCollectionId` → `getCollectionGoal(primaryCollectionId)` on session completion (the same fetch `WeeklyPacingEchoCard` already makes — reads `companion` off that response, no second call) and render a labeled excerpt card via `CompanionResultBridgeCard`. Prefers a non-empty Common Mistakes excerpt, falls back to Study Strategy, renders nothing when neither is present or no primary collection is set. Renders regardless of whether the just-completed note actually belongs to the primary collection (same accepted tradeoff as the Post-session echo, see `docs/features/collections.md`'s Countdown & Pacing section). Curator-published content only — no generation, no mid-exam coaching, no new endpoint.
+
 ## Coach Experience (presentation layer, v0.43.0)
 
 The detail page presents Companion in a coach voice. This is presentation only — it does not change what is stored, authored, or generated, and it does not reorder sections.

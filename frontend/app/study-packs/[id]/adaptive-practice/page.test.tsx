@@ -6,7 +6,6 @@ import {
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
-  getCollection,
   getCollectionGoal,
   getInProgressAdaptivePracticeSession,
   getMe,
@@ -45,7 +44,6 @@ jest.mock("@/lib/api", () => ({
   completeAdaptivePracticeSession: jest.fn(),
   forfeitAdaptivePracticeSession: jest.fn(),
   generateAdaptiveQuickReviewQuiz: jest.fn(),
-  getCollection: jest.fn(),
   getCollectionGoal: jest.fn(),
   getInProgressAdaptivePracticeSession: jest.fn(),
   getMe: jest.fn(),
@@ -106,7 +104,6 @@ describe("AdaptivePracticePage", () => {
     (getMe as jest.Mock).mockReset();
     (getMe as jest.Mock).mockRejectedValue(new Error("me unavailable"));
     (getCollectionGoal as jest.Mock).mockReset();
-    (getCollection as jest.Mock).mockReset();
     (forfeitAdaptivePracticeSession as jest.Mock).mockReset();
     (forfeitAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Adaptive Practice session forfeited." });
   });
@@ -516,8 +513,8 @@ describe("AdaptivePracticePage", () => {
     });
     (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
     (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });
-    (getCollectionGoal as jest.Mock).mockResolvedValue({ weeksRemaining: null });
-    (getCollection as jest.Mock).mockResolvedValue({
+    (getCollectionGoal as jest.Mock).mockResolvedValue({
+      weeksRemaining: null,
       companion: { commonMistakes: "Watch out for mixing up mitosis and meiosis.", studyStrategy: null },
     });
 
@@ -532,7 +529,7 @@ describe("AdaptivePracticePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
 
     expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
-    expect(getCollection).toHaveBeenCalledWith("goal-1");
+    expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
   });
 
   it('result screen does not contain a "Note" button', async () => {
