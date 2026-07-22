@@ -14,7 +14,7 @@ Anti-drift: no new schema, no new note→collection reverse-lookup query, no new
 
 ### Shipped
 
-_(nothing yet)_
+- **Result-Screen Companion excerpt (frontend).** New `CompanionResultBridgeCard`, wired into the Quick Review, Challenge Quiz (both result branches), and Adaptive Practice result screens right next to the existing `WeeklyPacingEchoCard`. Reuses the same `getMe()` → `primaryCollectionId` → collection-fetch pattern already shipped for the Echo — `getCollection(primaryCollectionId)` here instead of `getCollectionGoal`. Prefers a non-empty Common Mistakes excerpt, falls back to Study Strategy, renders nothing when the primary collection has no Companion or no primary collection is set. No new schema, no new endpoint, no backend changes.
 
 ## v0.54.1 - Public Note Copy Correctness Fixes
 
