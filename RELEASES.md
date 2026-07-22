@@ -8,7 +8,7 @@ Theme: close the loop from "you missed this" to "here's what it actually means, 
 
 ### Planned Scope
 
-- **Weak/missed-concept deep link on result screens (frontend).** On the Adaptive Practice and Challenge Quiz result screens' weak-concept lists, each concept becomes a link straight to that concept's explanation on the source note — reusing Note Detail's existing `?tab=` URL-addressable tab state (`private-note-detail-page-client.tsx`) rather than inventing a new navigation mechanism. No new AI call: the explanation text already exists per-concept in the generated Study Pack (Key Concepts).
+- **Weak/missed-concept deep link on result screens (frontend).** On the Quick Review, Adaptive Practice, and Challenge Quiz (both result branches, including Board Exam Mode's) result screens' weak-concept lists, each concept becomes a link straight to that concept's explanation on the source note — reusing Note Detail's existing `?tab=` URL-addressable tab state (`private-note-detail-page-client.tsx`) rather than inventing a new navigation mechanism. No new AI call: the explanation text already exists per-concept in the generated Study Pack (Key Concepts).
 
 Anti-drift: no new schema, no new endpoint, no new generation — pure navigation/routing over data and URL patterns that already exist. Does not touch the locked 5-mode quiz contract, ConceptHealth write rules, or the ungated question-format contract. Not a retention mechanic — this is a same-session, in-the-moment learning aid, not a return-trigger. Sourced from Fable's 2026-07-22 study-effectiveness session (`docs/claude-prompt/study-effectiveness-out/01-study-effectiveness-ui-pricing.md` §1 item 1) — its top pick across that whole consultation.
 
