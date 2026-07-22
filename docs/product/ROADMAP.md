@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.54.1 - Public Note Copy Correctness Fixes` is the current released version (on `releases/v0.54.1`, cut from `main` after v0.54.0 merged) — see its section below.
+`v0.55.0 - Result-Screen Companion Bridge` is the current in-progress version (on `releases/v0.55.0`, cut from `main` after v0.54.1 merged) — see its section below.
+
+`v0.54.1 - Public Note Copy Correctness Fixes` is the previous released version — see its section below.
 
 `v0.54.0 - CPALE Exam Hub (Wave 2)` is the previous released version — see its section below.
 
@@ -87,7 +89,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Mobile bottom tab bar | same | **Shipped — v0.50.0** | device-mix pull shows heavy mobile usage — confirmed, ~75% mobile by distinct users | 2026-07-15 |
 | App Shape Core (Live Milestones, Concept-to-Note Back-Annotation, Struggle Map) | same | Held indefinitely | retention constraint clears | 2026-07-15 |
 | App Shape Polish stragglers (sticky toolbar re-attempt, Review Set filter facet, feedback digest) | same | Held / needs real scoping | Struggle Map (above) ships first for the digest item; others need a scoping pass | 2026-07-15 |
-| Result-Screen Companion Bridge — surface the relevant curator-authored Common Mistakes/Study Strategy excerpt on the quiz result screen | `app-shape-out/01-app-shape-features.md` item 4 | **Premise problem resolved 2026-07-22.** The original blocker (no way to resolve which collection's Companion to show, since a note can belong to multiple collections) is sidestepped by reusing the exact `users.primaryCollectionId` pattern the v0.46.0 Weekly Pacing Echo already shipped for the same result-screen slot: show the user's primary collection's Companion excerpt if one exists, regardless of whether the just-completed note belongs to that collection — same accepted "generally relevant, not precisely matched" tradeoff already blessed in this exact UI slot. Zero new schema, zero new note→collection reverse-lookup query. Scopeable now | none — ready to scope | 2026-07-22 |
+| Result-Screen Companion Bridge — surface the relevant curator-authored Common Mistakes/Study Strategy excerpt on the quiz result screen | `app-shape-out/01-app-shape-features.md` item 4 | **Scoped into v0.55.0.** Premise problem resolved 2026-07-22 by reusing the `users.primaryCollectionId` pattern the v0.46.0 Weekly Pacing Echo already shipped for the same result-screen slot | none, in progress | 2026-07-22 |
 | Bulk Quiz Generation & Teacher-Flow Polish (+ Ideas 2/3 folded in) | `ROADMAP.md` §Bulk Quiz Generation | Held | ≥5 active teacher accounts | 2026-07-15 |
 | Listen Mode / Bilingual UI / Study Buddy (Ideas 7, 10, 11) | `new-capability-out/01-new-capability-ideation.md` | Low priority | interview language/social/loop signal | 2026-07-15 |
 | PDF export surfacing (near-zero usage — 1 export, ever) | `retention-diagnosis-session-plan.md` "Fourth Fable checkpoint" | Parked — do not build | retention funnel + interview signal on offline demand both resolve; value-vs-discovery is currently undeterminable (see checkpoint) | 2026-07-15 |
@@ -110,6 +112,14 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Feedback system polish — Send Feedback modal visual redesign, optional screenshot/image attachment on bug reports, and a read-only Admin detail view for the "Recent Feedback" table (currently a static, truncated table) | `feedback-system-polish-out/01-modal-design-and-admin-detail.md` | **Folded into v0.52.0 as a mid-release scope addition.** Modal restyle + strictly-optional screenshot field (separate `feedback_image` table, not a column on `FeedbackEntity`, to avoid regressing the v0.51.0 read-path fix); Admin gets a "View" button reusing the existing Refund modal pattern. A status-update action is recommended as a separate fast-follow, not bundled in | none — see `RELEASES.md` v0.52.0 | 2026-07-20 |
 | Structured quiz feedback questions (quiz-results-card-only scope; too-easy/repetitive/confusing chips) | `quiz-feedback-microsurvey-out/01-structured-quiz-questions.md` | **Superseded** — product owner corrected scope to app-wide/new-user-focused mid-session; folded as one input into the app-wide session below, not a standalone answer | none — superseded | 2026-07-21 |
 | App-wide new-user early-lifecycle feedback signals (Public Library browse-without-adopt, first non-onboarding Study Pack generation, second-ever completed quiz) — explicitly a leading indicator for new-user friction, not a churn-diagnosis substitute for the unsent outbound interviews above | `app-wide-feedback-signals-out/01-app-wide-feedback-signals.md` | **Shipped — v0.52.1.** Fable's own verdict: build this small slice (2 of 3 placements zero-backend), hold anything larger — rejected a structured `quick_reason` field on volume grounds (~127 activated users), rejected the floated "is the UI hard to understand?" as too vague, explicitly does not touch or substitute for H1/H5 above | none — see `RELEASES.md` v0.52.1 | 2026-07-21 |
+
+## v0.55.0 - Result-Screen Companion Bridge (In Progress, base branch `releases/v0.55.0`)
+
+Origin: the only genuinely unblocked candidate from the App Shape planning session (`docs/claude-prompt/app-shape-out/01-app-shape-features.md` item 4) — its premise problem was resolved 2026-07-22 by reusing the v0.46.0 Weekly Pacing Echo's `primaryCollectionId` pattern instead of building a note→collection reverse lookup. Every other App Shape Core/Polish candidate remains gated on the retention constraint clearing or its own unresolved scoping question — this release does not touch those.
+
+### Planned Scope
+
+See `RELEASES.md` v0.55.0 for the Companion Bridge scope and anti-drift rules.
 
 ## v0.54.1 - Public Note Copy Correctness Fixes (Released, base branch `releases/v0.54.1`)
 

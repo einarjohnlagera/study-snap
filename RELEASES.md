@@ -1,5 +1,21 @@
 # RELEASES.md - NoteLib
 
+## v0.55.0 - Result-Screen Companion Bridge
+
+**Status: In Progress**
+
+Theme: bring curator-authored Companion guidance to the moment it's most relevant — the quiz result screen — instead of leaving it stranded on the Review Set page, reusing the exact `primaryCollectionId` pattern the v0.46.0 Weekly Pacing Echo already shipped in the same slot.
+
+### Planned Scope
+
+- **Result-Screen Companion excerpt (frontend).** On the Quick Review, Challenge Quiz, and Adaptive Practice result screens (the same three surfaces `WeeklyPacingEchoCard` already renders on), fetch the user's primary collection via `getCollection(primaryCollectionId)` and, if it carries Companion content with a non-empty Common Mistakes or Study Strategy section, show a labeled excerpt card ("From your Review Set's guide: ..."). Shown regardless of whether the just-completed note actually belongs to the primary collection — the same accepted "generally relevant, not precisely matched" tradeoff the Weekly Pacing Echo already established in this slot. Curator-published content only; no generation, no mid-exam coaching.
+
+Anti-drift: no new schema, no new note→collection reverse-lookup query, no new endpoint (`getCollection` already surfaces Companion per `docs/features/companion.md`). No change to `EXAM_MODES.md`'s locked 5-mode contract — result-screen only, post-session. Board Exam Mode and Interview Practice are out of scope for this release (their result/report screens don't currently carry the Weekly Pacing Echo either — matching that precedent, not expanding it).
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.54.1 - Public Note Copy Correctness Fixes
 
 **Status: Released**
