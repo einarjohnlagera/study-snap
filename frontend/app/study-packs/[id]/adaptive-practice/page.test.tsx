@@ -483,6 +483,55 @@ describe("AdaptivePracticePage", () => {
     expect(getPostSessionNextStep).toHaveBeenCalledWith("study-pack-1");
   });
 
+  it("shows the primary Review Set's Companion excerpt when it has Common Mistakes content", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      planType: "PRO",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Derivatives"],
+      message: "Focusing on weak areas.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });
+    (getCollectionGoal as jest.Mock).mockResolvedValue({
+      weeksRemaining: null,
+      companion: { commonMistakes: "Watch out for mixing up mitosis and meiosis.", studyStrategy: null },
+    });
+
+    render(<AdaptivePracticePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    await screen.findByText("1. What is the derivative of sin(x)?");
+    const correctChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    fireEvent.click(correctChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+
+    expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
+    expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
+  });
+
   it('result screen does not contain a "Note" button', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       emailVerifiedAt: "2026-03-21T09:00:00Z",

@@ -391,6 +391,39 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(screen.queryByText(/That's another session toward this week's target/)).not.toBeInTheDocument();
   });
 
+  it("shows the primary Review Set's Companion excerpt when it has Common Mistakes content", async () => {
+    setupCompleteState();
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });
+    (getCollectionGoal as jest.Mock).mockResolvedValue({
+      weeksRemaining: null,
+      companion: { commonMistakes: "Watch out for mixing up mitosis and meiosis.", studyStrategy: null },
+    });
+
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
+    expect(screen.getByText(/Common Mistakes/)).toBeInTheDocument();
+    expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
+  });
+
+  it("does not show a Companion excerpt when the primary Review Set has no Companion content", async () => {
+    setupCompleteState();
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });
+    (getCollectionGoal as jest.Mock).mockResolvedValue({ weeksRemaining: null, companion: null });
+
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(screen.queryByText(/Common Mistakes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Study Strategy/)).not.toBeInTheDocument();
+  });
+
   it("loads Quick Review once and does not loop initialization calls", async () => {
     setupCompleteState();
 

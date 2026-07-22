@@ -17,6 +17,7 @@ import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
+import { CompanionResultBridgeCard } from "@/components/study-pack/companion-result-bridge-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { useBottomViewportClaim } from "@/components/exam-mode/exam-focus-context";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
@@ -39,6 +40,7 @@ import {
   trackAnalyticsEvent,
   updateProfileLearnerLevel,
   updateQuickReviewSessionProgress,
+  type CompanionContent,
   type LearnerLevel,
   type NoteResponse,
   type PostSessionNextStepResponse,
@@ -201,6 +203,7 @@ export default function QuickReviewPage() {
   const [multiSelectSubmitted, setMultiSelectSubmitted] = useState(false);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
+  const [primaryCollectionCompanion, setPrimaryCollectionCompanion] = useState<CompanionContent | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const { usageSummary } = useBillingUsageSummary();
@@ -474,7 +477,10 @@ export default function QuickReviewPage() {
       }
       if (me.primaryCollectionId) {
         void getCollectionGoal(me.primaryCollectionId)
-          .then((goal) => setWeeklyPacingWeeksRemaining(goal.weeksRemaining))
+          .then((goal) => {
+            setWeeklyPacingWeeksRemaining(goal.weeksRemaining);
+            setPrimaryCollectionCompanion(goal.companion);
+          })
           .catch(() => undefined);
       }
     }).catch(() => undefined);
@@ -1072,6 +1078,10 @@ export default function QuickReviewPage() {
           <WeeklyPacingEchoCard
             weeksRemaining={weeklyPacingWeeksRemaining}
             goalLabel={getCollectionLabels(viewerProfileType as ProfileType | null).goalSingular}
+          />
+          <CompanionResultBridgeCard
+            companion={primaryCollectionCompanion}
+            reviewSetLabel={getCollectionLabels(viewerProfileType as ProfileType | null).singular}
           />
 
           {nextStepResponse === null ? (

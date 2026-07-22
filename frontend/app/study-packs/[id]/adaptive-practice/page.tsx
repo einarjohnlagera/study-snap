@@ -17,6 +17,7 @@ import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
+import { CompanionResultBridgeCard } from "@/components/study-pack/companion-result-bridge-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -35,6 +36,7 @@ import {
   getPostSessionNextStep,
   isEmailNotVerifiedError,
   trackAnalyticsEvent,
+  type CompanionContent,
   type NoteResponse,
   type AdaptivePracticeCompleteResponse,
   type PostSessionNextStepResponse,
@@ -86,6 +88,7 @@ export default function AdaptivePracticePage() {
   const [showLimitReachedState, setShowLimitReachedState] = useState(false);
   const [nextStepResponse, setNextStepResponse] = useState<PostSessionNextStepResponse | null>(null);
   const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
+  const [primaryCollectionCompanion, setPrimaryCollectionCompanion] = useState<CompanionContent | null>(null);
   const { usageSummary } = useBillingUsageSummary();
 
   const noteId = useMemo(() => {
@@ -295,7 +298,10 @@ export default function AdaptivePracticePage() {
     void getMe().then((me) => {
       if (me.primaryCollectionId) {
         void getCollectionGoal(me.primaryCollectionId)
-          .then((goal) => setWeeklyPacingWeeksRemaining(goal.weeksRemaining))
+          .then((goal) => {
+            setWeeklyPacingWeeksRemaining(goal.weeksRemaining);
+            setPrimaryCollectionCompanion(goal.companion);
+          })
           .catch(() => undefined);
       }
     }).catch(() => undefined);
@@ -668,6 +674,10 @@ export default function AdaptivePracticePage() {
           <WeeklyPacingEchoCard
             weeksRemaining={weeklyPacingWeeksRemaining}
             goalLabel={getCollectionLabels(getAuthUser()?.profileType ?? null).goalSingular}
+          />
+          <CompanionResultBridgeCard
+            companion={primaryCollectionCompanion}
+            reviewSetLabel={getCollectionLabels(getAuthUser()?.profileType ?? null).singular}
           />
           <div className="flex flex-col gap-2 sm:flex-row">
             {nextStepResponse === null ? (
