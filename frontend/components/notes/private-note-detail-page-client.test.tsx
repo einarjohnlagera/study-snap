@@ -1864,6 +1864,50 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
   });
 
+  it("scrolls to and highlights the first matching key concept on a direct concept link", async () => {
+    const previousPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = jest.fn();
+
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof globalThis.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = jest.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    globalThis.history.replaceState({}, "", "/notes/note-1?tab=key-concepts#concept-cells");
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      keyConcepts: ["Cells", "  cells  ", "Genetics"],
+    });
+
+    try {
+      render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+      const concepts = await screen.findAllByText(/cells/i);
+      const firstConcept = concepts.find((element) => element.textContent === "Cells");
+      expect(firstConcept?.closest("li")).toHaveAttribute("id", "concept-cells");
+      await waitFor(() => {
+        expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+      });
+      expect(document.getElementById("concept-cells")).toBe(firstConcept?.closest("li"));
+      expect(firstConcept?.closest("li")).toHaveClass("bg-amber-500/15");
+    } finally {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      globalThis.history.replaceState({}, "", previousPath || "/");
+      searchParamValues = {};
+      searchParamsMock = createSearchParamsMock();
+    }
+  });
+
   it("switches study pack views through tabs without reloading", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
