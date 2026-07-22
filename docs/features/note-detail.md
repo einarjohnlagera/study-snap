@@ -123,6 +123,12 @@ Rules:
 - `Full Notes` should render the complete original note content so users can review the source note without leaving Note Detail
 - the `Summary` tab should include a subtle `View Full Notes →` CTA above the summary text that switches to `Full Notes` without reloading the page
 
+### Key Concepts deep links
+
+- Each Key Concepts entry has a stable, URL-safe `concept-*` anchor derived from its trimmed, case-insensitive concept key.
+- Direct `?tab=key-concepts#concept-*` visits open the Key Concepts tab, scroll to the matching entry after tab content mounts, and briefly highlight it.
+- Duplicate normalized concept names intentionally resolve to the first rendered entry. A missing anchor is a safe no-op.
+
 ## Public Note Detail
 
 Public note detail is a separate public/read-only surface. For non-owners, it keeps one quiz-first primary CTA (`Quiz yourself on this note`) plus the secondary `Add to Library` and `Share this note` actions; it does not present editable-draft copying as a competing button. Related discovery has two independently-omittable sections: `More in {Subject}` fetches the existing `GET /notes/public?subject=X` data, excludes the current note, and shows two or three results through the shared `shared-note-card.tsx` component with a canonical `See all in {Subject}` subject-landing link; empty, too-thin, or failed results omit it silently. `More from {Display Name}` remains the canonical creator-filtered Public Library link and is omitted when author fields are unavailable.

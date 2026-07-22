@@ -93,6 +93,7 @@ import {
 } from "@/lib/challenge-quiz-entry";
 import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { getAvailableExamModes } from "@/lib/exam-mode-visibility";
+import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { cn } from "@/lib/utils";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
@@ -2251,10 +2252,24 @@ export default function ChallengeQuizPage() {
                   {result.weakConcepts.length > 0 ? (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {result.weakConcepts.map((concept) => (
-                        <span key={concept}
-                              className="rounded-full border border-amber-600/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                          {concept}
-                        </span>
+                        note?.id && note.keyConcepts?.some((keyConcept) => (
+                          normalizeConceptKey(keyConcept) === normalizeConceptKey(concept)
+                        )) ? (
+                          <Link
+                            key={concept}
+                            href={`/notes/${note.id}?tab=key-concepts#${buildConceptAnchorId(concept)}`}
+                            className="rounded-full border border-amber-600/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+                          >
+                            {concept}
+                          </Link>
+                        ) : (
+                          <span
+                            key={concept}
+                            className="rounded-full border border-amber-600/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+                          >
+                            {concept}
+                          </span>
+                        )
                       ))}
                     </div>
                   ) : (
@@ -2481,7 +2496,18 @@ export default function ChallengeQuizPage() {
                   {result.weakConcepts.length > 0 ? (
                     <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/85">
                       {result.weakConcepts.map((concept) => (
-                        <li key={concept}>{concept}</li>
+                        <li key={concept}>
+                          {note?.id && note.keyConcepts?.some((keyConcept) => (
+                            normalizeConceptKey(keyConcept) === normalizeConceptKey(concept)
+                          )) ? (
+                            <Link
+                              href={`/notes/${note.id}?tab=key-concepts#${buildConceptAnchorId(concept)}`}
+                              className="font-medium text-amber-700 underline underline-offset-4 dark:text-amber-300"
+                            >
+                              {concept}
+                            </Link>
+                          ) : concept}
+                        </li>
                       ))}
                     </ul>
                   ) : (

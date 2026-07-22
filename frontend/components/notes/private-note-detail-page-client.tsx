@@ -27,7 +27,7 @@ import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { StudyPackGeneratedFeedbackPrompt } from "@/components/feedback/study-pack-generated-feedback-prompt";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
-import { normalizeConceptKey } from "@/lib/concepts";
+import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
   formatStudyPackResetDate,
@@ -432,6 +432,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     targetProfileType: "",
     tags: [],
   });
+  const [conceptHash, setConceptHash] = useState("");
+  const [highlightedConceptAnchor, setHighlightedConceptAnchor] = useState<string | null>(null);
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
@@ -558,6 +560,50 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   );
 
   const activeStudyPackTab = normalizeNoteDetailTab(searchParams.get("tab"));
+
+  useEffect(() => {
+    const syncConceptHash = () => {
+      setConceptHash(globalThis.location.hash);
+    };
+
+    syncConceptHash();
+    globalThis.addEventListener("hashchange", syncConceptHash);
+    return () => {
+      globalThis.removeEventListener("hashchange", syncConceptHash);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeStudyPackTab !== "key-concepts" || !conceptHash) {
+      return;
+    }
+
+    const conceptAnchorId = conceptHash.slice(1);
+    const conceptElement = globalThis.document.getElementById(conceptAnchorId);
+    if (!conceptElement || typeof conceptElement.scrollIntoView !== "function") {
+      return;
+    }
+
+    const animationFrameId = globalThis.requestAnimationFrame(() => {
+      const currentConceptElement = globalThis.document.getElementById(conceptAnchorId);
+      if (!currentConceptElement || typeof currentConceptElement.scrollIntoView !== "function") {
+        return;
+      }
+      currentConceptElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      setHighlightedConceptAnchor(conceptAnchorId);
+    });
+    const highlightTimeoutId = globalThis.setTimeout(() => {
+      setHighlightedConceptAnchor((currentAnchor) => (
+        currentAnchor === conceptAnchorId ? null : currentAnchor
+      ));
+    }, 1800);
+
+    return () => {
+      globalThis.cancelAnimationFrame(animationFrameId);
+      globalThis.clearTimeout(highlightTimeoutId);
+    };
+  }, [activeStudyPackTab, conceptHash, note?.id, note?.keyConcepts.length]);
+
   const handleSelectSessionReview = useCallback((session: RecentQuizSessionHistoryItem) => {
     if (!note || !isNoteSessionReviewMode(session.sessionMode)) {
       return;
@@ -2159,12 +2205,20 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   <>
                     <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
                       {note.keyConcepts.map((concept, index) => {
+                        const conceptAnchorId = buildConceptAnchorId(concept);
                         const health = conceptHealthLoadState === "loaded"
                           ? conceptHealthByName.get(normalizeConceptKey(concept))
                           : undefined;
                         const readinessStatus = resolveConceptReadinessStatus(health);
                         return (
-                          <li key={`${note.id}-concept-${index}`}>
+                          <li
+                            key={`${note.id}-concept-${index}`}
+                            id={conceptAnchorId}
+                            className={cn(
+                              "scroll-mt-24 rounded-md transition-colors duration-500",
+                              highlightedConceptAnchor === conceptAnchorId && "bg-amber-500/15",
+                            )}
+                          >
                             <span className="inline-flex flex-wrap items-center gap-2">
                               <span>{concept}</span>
                               {canViewConceptReviewTiming && health?.isStruggling ? (

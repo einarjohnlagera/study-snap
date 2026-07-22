@@ -1199,6 +1199,35 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("button", { name: "View Weak Concepts" })).toBeInTheDocument();
   });
 
+  it("links only regular Challenge Quiz weak concepts that have a Key Concepts explanation", async () => {
+    setupInProgressChallengeQuiz("challenge");
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 1,
+      correctAnswers: 0,
+      scorePercentage: 0,
+      performanceLevel: "Needs Improvement",
+      conceptBreakdown: [{ concept: "Concept", correctAnswers: 0, totalQuestions: 1, accuracyPercentage: 0 }],
+      weakConcepts: ["  CONCEPT  ", "Unmapped concept"],
+      durationSeconds: 24,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:10:00Z",
+    });
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+    await screen.findByText("Challenge Quiz Result");
+
+    expect(screen.getByRole("link", { name: /^\s*CONCEPT\s*$/i })).toHaveAttribute(
+      "href",
+      "/notes/note-1?tab=key-concepts#concept-concept",
+    );
+    expect(screen.getByText("Unmapped concept").closest("a")).toBeNull();
+  });
+
   it('result screen does not contain a "Note" button', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
@@ -1282,6 +1311,38 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
     expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
     expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
+  });
+
+  it("links only Board Exam weak-concept chips that have a Key Concepts explanation", async () => {
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_601_000);
+    setupBoardExamSession({ timerStartedAtEpochSeconds: 1_720_000_000 });
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 2,
+      correctAnswers: 0,
+      scorePercentage: 0,
+      performanceLevel: "Needs Improvement",
+      conceptBreakdown: [
+        { concept: "Cell Biology", correctAnswers: 0, totalQuestions: 1, accuracyPercentage: 0 },
+        { concept: "Cell Structure", correctAnswers: 0, totalQuestions: 1, accuracyPercentage: 0 },
+      ],
+      weakConcepts: ["  CELL BIOLOGY  ", "Unmapped concept"],
+      durationSeconds: 24,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:10:00Z",
+    });
+    render(<ChallengeQuizPage />);
+
+    await screen.findByText("Board Exam Result");
+
+    expect(screen.getByRole("link", { name: /CELL BIOLOGY/i })).toHaveAttribute(
+      "href",
+      "/notes/note-1?tab=key-concepts#concept-cell-biology",
+    );
+    expect(screen.getByText("Unmapped concept").closest("a")).toBeNull();
+    nowSpy.mockRestore();
   });
 
   it("fetches and renders the server-resolved next step after regular Challenge completion", async () => {

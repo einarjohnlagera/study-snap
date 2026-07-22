@@ -69,6 +69,7 @@ import {
   toSelectedChoiceIndexRecord,
   toSelectedMultiChoiceIndicesRecord,
 } from "@/lib/quiz";
+import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { cn } from "@/lib/utils";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
@@ -1103,7 +1104,18 @@ export default function QuickReviewPage() {
                   <p className="text-foreground/75">Focus on these concepts to improve your score:</p>
                   <ul className="list-disc space-y-1 pl-5 text-foreground/85">
                     {displayedWeakConcepts.map((concept) => (
-                      <li key={concept}>{concept}</li>
+                      <li key={concept}>
+                        {note?.id && note.keyConcepts?.some((keyConcept) => (
+                          normalizeConceptKey(keyConcept) === normalizeConceptKey(concept)
+                        )) ? (
+                          <Link
+                            href={`/notes/${note.id}?tab=key-concepts#${buildConceptAnchorId(concept)}`}
+                            className="font-medium text-amber-700 underline underline-offset-4 dark:text-amber-300"
+                          >
+                            {concept}
+                          </Link>
+                        ) : concept}
+                      </li>
                     ))}
                   </ul>
                 </div>
