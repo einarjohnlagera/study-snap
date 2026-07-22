@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.55.0 - Result-Screen Companion Bridge` is the current released version (on `releases/v0.55.0`, cut from `main` after v0.54.1 merged) — see its section below.
+`v0.56.0 - Weak-Concept Explanation Links` is the current in-progress version (on `releases/v0.56.0`, cut from `main` after v0.55.0 merged) — see its section below.
+
+`v0.55.0 - Result-Screen Companion Bridge` is the previous released version — see its section below.
 
 `v0.54.1 - Public Note Copy Correctness Fixes` is the previous released version — see its section below.
 
@@ -114,6 +116,14 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Feedback system polish — Send Feedback modal visual redesign, optional screenshot/image attachment on bug reports, and a read-only Admin detail view for the "Recent Feedback" table (currently a static, truncated table) | `feedback-system-polish-out/01-modal-design-and-admin-detail.md` | **Folded into v0.52.0 as a mid-release scope addition.** Modal restyle + strictly-optional screenshot field (separate `feedback_image` table, not a column on `FeedbackEntity`, to avoid regressing the v0.51.0 read-path fix); Admin gets a "View" button reusing the existing Refund modal pattern. A status-update action is recommended as a separate fast-follow, not bundled in | none — see `RELEASES.md` v0.52.0 | 2026-07-20 |
 | Structured quiz feedback questions (quiz-results-card-only scope; too-easy/repetitive/confusing chips) | `quiz-feedback-microsurvey-out/01-structured-quiz-questions.md` | **Superseded** — product owner corrected scope to app-wide/new-user-focused mid-session; folded as one input into the app-wide session below, not a standalone answer | none — superseded | 2026-07-21 |
 | App-wide new-user early-lifecycle feedback signals (Public Library browse-without-adopt, first non-onboarding Study Pack generation, second-ever completed quiz) — explicitly a leading indicator for new-user friction, not a churn-diagnosis substitute for the unsent outbound interviews above | `app-wide-feedback-signals-out/01-app-wide-feedback-signals.md` | **Shipped — v0.52.1.** Fable's own verdict: build this small slice (2 of 3 placements zero-backend), hold anything larger — rejected a structured `quick_reason` field on volume grounds (~127 activated users), rejected the floated "is the UI hard to understand?" as too vague, explicitly does not touch or substitute for H1/H5 above | none — see `RELEASES.md` v0.52.1 | 2026-07-21 |
+
+## v0.56.0 - Weak-Concept Explanation Links (In Progress, base branch `releases/v0.56.0`)
+
+Origin: Fable's top pick from the 2026-07-22 study-effectiveness session (`docs/claude-prompt/study-effectiveness-out/01-study-effectiveness-ui-pricing.md` §1 item 1) — explicitly scoped to exclude retention-trigger mechanics and Smart Review Planning. Picked as the cheapest, most direct answer to "does the product help you learn right now, in this session" — no dependency on the in-flight retention/acquisition experiments.
+
+### Planned Scope
+
+See `RELEASES.md` v0.56.0 for scope and anti-drift rules.
 
 ## v0.55.0 - Result-Screen Companion Bridge (Released, base branch `releases/v0.55.0`)
 
