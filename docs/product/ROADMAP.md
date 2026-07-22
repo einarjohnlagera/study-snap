@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.55.0 - Result-Screen Companion Bridge` is the current in-progress version (on `releases/v0.55.0`, cut from `main` after v0.54.1 merged) — see its section below.
+`v0.55.0 - Result-Screen Companion Bridge` is the current released version (on `releases/v0.55.0`, cut from `main` after v0.54.1 merged) — see its section below.
 
 `v0.54.1 - Public Note Copy Correctness Fixes` is the previous released version — see its section below.
 
@@ -113,7 +113,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Structured quiz feedback questions (quiz-results-card-only scope; too-easy/repetitive/confusing chips) | `quiz-feedback-microsurvey-out/01-structured-quiz-questions.md` | **Superseded** — product owner corrected scope to app-wide/new-user-focused mid-session; folded as one input into the app-wide session below, not a standalone answer | none — superseded | 2026-07-21 |
 | App-wide new-user early-lifecycle feedback signals (Public Library browse-without-adopt, first non-onboarding Study Pack generation, second-ever completed quiz) — explicitly a leading indicator for new-user friction, not a churn-diagnosis substitute for the unsent outbound interviews above | `app-wide-feedback-signals-out/01-app-wide-feedback-signals.md` | **Shipped — v0.52.1.** Fable's own verdict: build this small slice (2 of 3 placements zero-backend), hold anything larger — rejected a structured `quick_reason` field on volume grounds (~127 activated users), rejected the floated "is the UI hard to understand?" as too vague, explicitly does not touch or substitute for H1/H5 above | none — see `RELEASES.md` v0.52.1 | 2026-07-21 |
 
-## v0.55.0 - Result-Screen Companion Bridge (In Progress, base branch `releases/v0.55.0`)
+## v0.55.0 - Result-Screen Companion Bridge (Released, base branch `releases/v0.55.0`)
 
 Origin: the only genuinely unblocked candidate from the App Shape planning session (`docs/claude-prompt/app-shape-out/01-app-shape-features.md` item 4) — its premise problem was resolved 2026-07-22 by reusing the v0.46.0 Weekly Pacing Echo's `primaryCollectionId` pattern instead of building a note→collection reverse lookup. Every other App Shape Core/Polish candidate remains gated on the retention constraint clearing or its own unresolved scoping question — this release does not touch those.
 

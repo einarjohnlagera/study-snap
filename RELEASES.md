@@ -2,7 +2,7 @@
 
 ## v0.55.0 - Result-Screen Companion Bridge
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: bring curator-authored Companion guidance to the moment it's most relevant — the quiz result screen — instead of leaving it stranded on the Review Set page, reusing the exact `primaryCollectionId` pattern the v0.46.0 Weekly Pacing Echo already shipped in the same slot.
 
