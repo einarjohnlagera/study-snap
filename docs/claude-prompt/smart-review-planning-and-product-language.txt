@@ -1,0 +1,614 @@
+# Product Planning: NoteLib Smart Review Planning System & Product Language
+
+> **Status:** Draft — Product Vision, Not Yet Scoped to a Release
+>
+> Captured verbatim from the user's product-planning brief (2026-07-10). Not yet reconciled against
+> the codebase's existing anti-drift rules (see note at the bottom before treating any of this as
+> actionable scope).
+
+---
+
+We're planning a major evolution of NoteLib and I'd like you to think as a product architect, UX designer, AI systems designer, content strategist, and SaaS product owner—not just as an engineer.
+
+This is not just a feature discussion.
+
+This is about defining the future direction of NoteLib.
+
+---
+
+# Product Philosophy
+
+NoteLib is **not** trying to become "another AI app."
+
+We want to become:
+
+> **The smartest study platform.**
+
+Students don't open NoteLib because they want AI.
+
+They open NoteLib because they want to:
+
+- Pass their board exam
+- Understand difficult concepts
+- Build confidence
+- Study more efficiently
+
+Therefore our guiding philosophy is:
+
+> **Sell outcomes, not AI.**
+
+AI should quietly power the experience behind the scenes.
+
+The product should feel intelligent without constantly reminding users that AI is involved.
+
+The student should feel like:
+
+> "This app understands how I study."
+
+—not—
+
+> "This app has AI."
+
+---
+
+# Current Product
+
+Users can currently:
+
+- Create Notes
+- Generate Study Packs
+- Practice Quizzes
+- Review Key Concepts
+- Copy Public Notes
+- Copy entire Study Packs
+- Join Official Review Sets
+- Create personal Review Sets
+
+The Public Library continues to grow every day.
+
+Official Review Sets are currently curated manually.
+
+---
+
+# Current Manual Admin Workflow
+
+Today our workflow is extremely manual.
+
+1. Generate Public Notes for a course/program.
+2. Publish those notes.
+3. Create a Review Set.
+4. Create Subject Plans manually.
+5. Find and attach Notes to each Subject Plan.
+6. Generate missing Notes if needed.
+7. Publish.
+
+For a large licensure exam this easily becomes:
+
+- 50+
+- 100+
+- sometimes 200+
+
+notes.
+
+Whenever a required topic doesn't exist, the workflow stops until that note is manually created.
+
+This process doesn't scale.
+
+---
+
+# New Vision
+
+Instead of manually assembling Review Sets...
+
+We want NoteLib to intelligently assemble them.
+
+Example:
+
+User requests:
+
+> Civil Engineering Review
+
+↓
+
+System determines the recommended curriculum.
+
+↓
+
+Searches the Public Library.
+
+↓
+
+Already available
+
+82 concepts
+
+↓
+
+Missing
+
+18 concepts
+
+↓
+
+Generate only the missing concepts.
+
+↓
+
+Assemble Review Set.
+
+↓
+
+Ready to study.
+
+The philosophy becomes:
+
+> **Reuse first. Generate second.**
+
+---
+
+# Two Different Intelligence Systems
+
+We believe these should become two completely different experiences.
+
+---
+
+## 1. Internal Curator (Admin)
+
+Used only by NoteLib admins.
+
+Responsibilities:
+
+- Create Official Review Sets
+- Detect curriculum gaps
+- Recommend missing notes
+- Generate missing notes
+- Improve Public Library coverage
+- Suggest subject plans
+- Maintain official learning paths
+
+This is an internal productivity tool.
+
+---
+
+## 2. Learning Assistant (Student)
+
+Used by learners.
+
+Responsibilities:
+
+- Organize Review Sets
+- Recommend existing notes
+- Build personalized study journeys
+- Reuse existing Study Packs
+- Generate only what is missing
+- Adapt to the learner
+
+The learner never thinks about AI.
+
+They simply experience an intelligent study platform.
+
+---
+
+# Knowledge Reuse Philosophy
+
+We've already discovered something valuable.
+
+Instead of copying only Public Notes...
+
+Users can copy the entire Study Pack.
+
+Meaning:
+
+Generated once.
+
+↓
+
+Reused forever.
+
+↓
+
+Huge LLM savings.
+
+We believe Review Sets should follow the exact same philosophy.
+
+The more knowledge exists...
+
+the smarter and cheaper the platform becomes.
+
+---
+
+# Product Questions
+
+Please help design this system from first principles.
+
+---
+
+## 1. Smart Review Planning Architecture
+
+How should intelligent Review Set creation work?
+
+Should it:
+
+- Search Public Notes first?
+- Search existing Study Packs?
+- Search Official Review Sets?
+- Search previous user-created Review Sets?
+- Reuse existing material whenever possible?
+- Generate only missing concepts?
+
+What should the architecture look like?
+
+---
+
+## 2. Knowledge Matching
+
+How should NoteLib determine whether an existing Public Note satisfies a curriculum objective?
+
+Possible approaches:
+
+- Embeddings
+- Tags
+- Categories
+- Semantic similarity
+- Key Concepts
+- Curriculum mapping
+
+How should duplicate concepts be avoided?
+
+How should confidence be measured?
+
+---
+
+## 3. Curriculum Coverage
+
+Suppose:
+
+Civil Engineering requires
+
+120 concepts.
+
+Library already contains
+
+102.
+
+Missing
+
+18.
+
+How should coverage be measured?
+
+Should coverage be based on:
+
+- Concepts
+- Learning objectives
+- Curriculum outcomes
+- Weighted importance
+
+How should this be visualized?
+
+---
+
+## 4. User Experience
+
+Imagine the ideal learner experience.
+
+Instead of:
+
+"Generate AI Review Set"
+
+The learner simply says:
+
+> "I want to prepare for the Civil Engineering Licensure Exam."
+
+The system then:
+
+- Detects existing knowledge
+- Finds reusable notes
+- Finds reusable Study Packs
+- Shows curriculum coverage
+- Suggests Official Review Sets
+- Generates only missing knowledge if necessary
+
+Design this entire experience.
+
+---
+
+## 5. Knowledge Flywheel
+
+One of our biggest long-term goals is creating a knowledge flywheel.
+
+Example:
+
+First learner generates
+
+20 missing concepts.
+
+↓
+
+Admin reviews.
+
+↓
+
+Published.
+
+↓
+
+Future learners reuse.
+
+↓
+
+Generation cost approaches zero.
+
+How should this system evolve?
+
+How should cache invalidation work?
+
+How should existing Review Sets improve over time?
+
+---
+
+## 6. Admin Workflow
+
+Help redesign the admin experience.
+
+Instead of:
+
+Create Review Set
+
+↓
+
+Create Subject Plans
+
+↓
+
+Find Notes
+
+↓
+
+Generate Missing Notes
+
+↓
+
+Publish
+
+Could it become:
+
+Create Review Set
+
+↓
+
+AI suggests Subject Plans
+
+↓
+
+Automatically attaches existing Notes
+
+↓
+
+Highlights missing Notes
+
+↓
+
+Generates only missing Notes
+
+↓
+
+Admin reviews
+
+↓
+
+Publish
+
+Design the ideal workflow.
+
+---
+
+## 7. Subscription Strategy
+
+Current pricing:
+
+Free
+
+- Limited Study Packs
+- Limited Quizzes
+
+Plus
+
+- Higher quotas
+- Concept Review
+
+Pro
+
+- Board Exam
+- Long Exam
+- Interview Practice
+
+Questions:
+
+Should smart Review Planning be:
+
+- Free with limits?
+- Plus?
+- Pro?
+
+Should reuse of existing Notes be free while only newly generated knowledge consumes quota?
+
+Design a pricing strategy that encourages adoption while keeping AI costs sustainable.
+
+---
+
+# Product Language & Branding
+
+One important design principle.
+
+We intentionally want to avoid calling features "AI."
+
+Students don't buy AI.
+
+Students buy outcomes.
+
+We want NoteLib to feel intelligent without constantly exposing the technology behind it.
+
+Examples:
+
+Instead of:
+
+❌ AI Review Set Builder
+
+Prefer:
+
+✅ Create Review Plan
+
+✅ Build Study Journey
+
+✅ Create Review Set
+
+---
+
+Instead of:
+
+❌ AI Note Generator
+
+Prefer:
+
+✅ Create Notes
+
+✅ Topic Notes
+
+---
+
+Instead of:
+
+❌ AI Quiz Generator
+
+Prefer:
+
+✅ Practice Quiz
+
+---
+
+Instead of:
+
+❌ AI Flashcards
+
+Prefer:
+
+✅ Key Concepts
+
+---
+
+Instead of:
+
+❌ AI Companion
+
+Prefer:
+
+✅ Learning Companion
+
+---
+
+Instead of marketing AI inside the product...
+
+We want students to simply feel:
+
+> "This app knows what I should study next."
+
+AI should primarily appear in:
+
+- Landing pages
+- Marketing
+- Pricing
+- Documentation
+- Blog posts
+
+—not throughout the core product.
+
+---
+
+# Product Copy Audit
+
+Please perform a complete audit of NoteLib's current terminology.
+
+Review:
+
+- Feature names
+- Menu labels
+- Buttons
+- Empty states
+- Success messages
+- Marketing copy
+- Pricing terminology
+- Upgrade prompts
+- Onboarding language
+
+Recommend wording that feels:
+
+- Student-first
+- Outcome-focused
+- Calm
+- Intelligent
+- Premium
+
+without unnecessarily mentioning AI.
+
+---
+
+# Long-Term Vision
+
+Challenge every assumption.
+
+We're not building another AI chatbot.
+
+We're building an intelligent learning platform where:
+
+- Knowledge compounds over time.
+- Every generated note increases platform value.
+- AI costs decrease as the Public Library grows.
+- Review Sets become increasingly reusable.
+- Official content continuously improves.
+- Personalized learning becomes smarter over time.
+- Students receive increasingly better recommendations.
+
+Think about this as designing the operating system for learning—not simply another AI feature.
+
+---
+
+# Deliverables
+
+Please provide:
+
+1. Overall system architecture
+2. Smart Review Planning architecture
+3. Knowledge reuse strategy
+4. Curriculum coverage strategy
+5. Admin workflow redesign
+6. Student experience redesign
+7. Subscription & monetization strategy
+8. Product language & terminology audit
+9. Recommended feature renaming
+10. UX recommendations
+11. Technical implementation approach
+12. Phased roadmap (MVP → v2 → long-term vision)
+
+Please challenge assumptions where appropriate and don't hesitate to propose ideas beyond what I've described if they better align with NoteLib's long-term vision.
+
+---
+
+# Reconciliation note (added by Claude Code, not part of the original brief)
+
+This vision's "Learning Assistant" auto-assembly flow (student types a goal, system assembles a
+Review Set) sits directly against a locked anti-drift rule already in the codebase:
+**"Curation, never generation" — a learner never receives an auto-generated plan** (see
+`docs/product/ROADMAP.md`, v0.31.0 and reaffirmed through v0.43.1). This brief's own
+"Two Different Intelligence Systems" split (Internal Curator vs. Learning Assistant) is the
+resolution: auto-assembly/generation stays admin-facing with mandatory human review before
+publish; the student-facing side stays recommend/reuse-only. Any plan produced from this brief
+must preserve that split rather than re-litigate it.
+
+Also relevant, already established and not something this brief needs to re-derive from scratch:
+- `docs/product/ROADMAP.md`, "Future, gated — AI-generated Review Sets" — an earlier, smaller-scope
+  seed of this same idea (public notes → suggest Subject Plans → map notes → generate Companion →
+  human review → publish), gated on the v0.42.0 authoring-assist pipeline proving out.
+- `docs/product/ROADMAP.md`, "Monetization philosophy" — already draws a FREE-static /
+  PLUS-interaction / PRO-personalization line that this brief's Q7 (Subscription Strategy) should
+  extend, not contradict.
