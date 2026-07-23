@@ -1864,6 +1864,78 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
   });
 
+  it("nudges toward Full Notes on the Quiz tab until the learner has viewed it", async () => {
+    searchParamValues = { tab: "quiz" };
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      quiz: [
+        {
+          question: "What is a cell?",
+          choices: ["Basic unit of life", "A tissue", "An organ", "A molecule"],
+          correctAnswerIndex: 0,
+          explanation: "Cells are the basic unit of life.",
+        },
+      ],
+    });
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Haven't reviewed the full notes yet? Skim the source material before testing yourself.")).toBeInTheDocument();
+
+    // Switch to Full Notes via the tab bar directly (not the tip's own action button),
+    // so this exercises the condition (hasViewedFullNotes) rather than the tip's dismiss path.
+    fireEvent.click(screen.getByRole("tab", { name: "Full Notes" }));
+    searchParamValues = { tab: "full-notes" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Quiz" }));
+    searchParamValues = { tab: "quiz" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(screen.queryByText("Haven't reviewed the full notes yet? Skim the source material before testing yourself.")).not.toBeInTheDocument();
+  });
+
+  it("sorts Key Concepts by readiness — struggling and due first, mastered last", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells", "Genetics", "Evolution", "Ecology"],
+    });
+    (getConceptHealth as jest.Mock).mockResolvedValue([
+      { concept: "Cells", readinessStatus: "MASTERED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: false, daysSinceReview: null },
+      { concept: "Genetics", readinessStatus: "DUE", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+      { concept: "Evolution", readinessStatus: "NOT_STARTED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+      { concept: "Ecology", readinessStatus: "DUE", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: true, isDue: true, daysSinceReview: null },
+    ]);
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Key Concepts" }));
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    const items = await screen.findAllByRole("listitem");
+    const conceptOrder = items
+      .map((item) => item.textContent ?? "")
+      .filter((text) => ["Cells", "Genetics", "Evolution", "Ecology"].some((concept) => text.includes(concept)));
+
+    expect(conceptOrder[0]).toContain("Ecology");
+    expect(conceptOrder[1]).toContain("Genetics");
+    expect(conceptOrder[2]).toContain("Evolution");
+    expect(conceptOrder[3]).toContain("Cells");
+  });
+
   it("scrolls to and highlights the first matching key concept on a direct concept link", async () => {
     const previousPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
     const originalRequestAnimationFrame = globalThis.requestAnimationFrame;

@@ -15,6 +15,7 @@ Anti-drift: no new schema, no new endpoint, no new generation — pure navigatio
 ### Shipped
 
 - **Weak/missed-concept explanation links (frontend).** Quick Review, Adaptive Practice, Challenge Quiz, and Board Exam Mode result lists now link only weak concepts that normalize to a source-note Key Concepts entry. The link opens `?tab=key-concepts#concept-*`; Note Detail scrolls to and briefly highlights the target, while unmatched concepts remain plain text. No backend, generation, quiz-scoring, or ConceptHealth-write changes.
+- **Mid-release scope addition: Quiz-tab Full Notes nudge + Key Concepts readiness sort (frontend).** Two more Polish candidates from the same Fable study-effectiveness session, folded in because they touch the exact same Note Detail area this release already modified. First, a one-time `GuidanceTip` (`quiz-tab-full-notes-nudge`) appears on the Quiz tab if the learner hasn't visited Full Notes yet this page visit, with a "View Full Notes" action — deliberately **not** a tab reorder: `docs/features/note-detail.md`'s tab order (`Summary, Key Concepts, Quiz, Full Notes`) was a prior, deliberate decision (v0.7.0's `View Full Notes →` Summary CTA), not drift, so this adds a narrower nudge instead of reopening that decision. Second, the Key Concepts tab now sorts entries by readiness (struggling first, then due, then not-started, mastered last) once ConceptHealth has loaded — no reorder before that, to avoid a pop-in jump. Both are read-only, no backend/schema/generation changes.
 
 ## v0.55.0 - Result-Screen Companion Bridge
 
