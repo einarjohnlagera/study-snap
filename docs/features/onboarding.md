@@ -96,6 +96,11 @@ no note authoring and no AI generation.
 The check fails open: no qualifying set, a zero-ready set, or a lookup error continues to the
 normal five-step path. `STUDENT`, `TEACHER`, and `PROFESSIONAL` never enter this branch.
 
+The header shows `Step 5 of 5` (full progress bar) on this screen, display-only — the underlying
+step-machine state stays at 3 so Back and transition logic are unaffected. This screen is the last
+one this cohort sees before onboarding completes, so the header should read as the final step
+rather than the misleading `Step 3 of 5` a literal step number would otherwise show.
+
 ### Step 3 — Input Method
 
 For the qualifying Board Taker cohort described above, this step does not render: `Confirm &

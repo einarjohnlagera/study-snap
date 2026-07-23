@@ -272,6 +272,10 @@ export default function OnboardingPage() {
   const currentStep = draft.currentStep;
   const isPracticeFirstScreen = currentStep === 3 && practiceFirstPlan !== null;
   const currentStepName = isPracticeFirstScreen ? "confirm-practice" : getStepName(currentStep);
+  // Display-only: this screen replaces Steps 3-4 and is the last thing the learner sees before
+  // onboarding completes on this path, so the header should read as the final step. The underlying
+  // `currentStep` stays 3 so Back/transition logic elsewhere is unaffected.
+  const displayStep = isPracticeFirstScreen ? 5 : currentStep;
   const groupedLearnerLevels = getGroupedLearnerLevels(profileType);
   const selectedInputMethod = draft.inputMethod;
   const generatedNoteReady = draft.generatedNoteReady;
@@ -1700,12 +1704,12 @@ export default function OnboardingPage() {
         <div className="border-b border-border px-5 py-4 sm:px-6 sm:py-4">
           <div className="space-y-2.5">
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-foreground/50">
-              {profileTypeOnlyMode ? "Profile setup" : `Step ${currentStep} of 5`}
+              {profileTypeOnlyMode ? "Profile setup" : `Step ${displayStep} of 5`}
             </p>
             <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
               <div
                 className="motion-progress-bar h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
-                style={{ width: profileTypeOnlyMode ? "100%" : `${(currentStep / 5) * 100}%` }}
+                style={{ width: profileTypeOnlyMode ? "100%" : `${(displayStep / 5) * 100}%` }}
               />
             </div>
           </div>

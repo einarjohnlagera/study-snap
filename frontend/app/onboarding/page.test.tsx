@@ -348,6 +348,7 @@ describe("OnboardingPage", () => {
     expect(await screen.findByText("2 of 3 notes practice-ready")).toBeInTheDocument();
     expect(screen.queryByText("How do you want to start?")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Generate Note" })).not.toBeInTheDocument();
+    expect(screen.getByText("Step 5 of 5")).toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole("button", { name: "Start this Review Set" }));
 
