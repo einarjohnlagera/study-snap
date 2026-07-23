@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.57.0 - Practice-First Activation Onboarding
+
+**Status: In Progress**
+
+Theme: for a board-exam learner whose target course/program already has a curated Official Review Set, get them from signup to a real first practice question with zero note-authoring and zero AI generation — matching the "start practicing immediately" activation model that motivated this release, instead of forcing every learner through the same generate-or-write-a-note onboarding path.
+
+### Planned Scope
+
+- **Practice-first onboarding branch (frontend).** Immediately after onboarding Step 2 (`Study Goal`) submits, branch on `profileType === BOARD_EXAM` AND a depth-qualifying (published, `itemCount > 0`, `readyCount > 0`) Official Review Set existing for the collected `courseProgram`. When true, skip Steps 3-4 (note authoring / Study Pack generation) and render one new "Confirm & Practice" screen instead: confirm the collected target → show the matched Official Review Set card (reusing the existing `DashboardStudyPlanSection` card, promoted to the primary action) → one-tap `Start this plan` → existing free/instant `adopt`/`adopt-goal` (zero LLM call) → persist onboarding completion → land directly in a Quick Review session on the first Study-Pack-ready note in the adopted plan. No qualifying Official Review Set → falls through to the unchanged 5-step flow. `STUDENT`/`TEACHER`/`PROFESSIONAL` onboarding is completely unaffected.
+- **Interview-free validation instrumentation (backend + frontend).** New `AnalyticsEventType` entries for the activation funnel (branch fired, plan adopted, first practice completed) so the pre/post W1→W2 retention read (same covered `courseProgram` tracks, pre-ship create-first cohort vs. post-ship practice-first cohort) can actually be pulled once enough onboardings have completed.
+
+Anti-drift: no new backend entity, no new endpoint, no migration — this is an onboarding **routing** change only, built entirely on existing free/instant `adopt`/`adopt-goal` and the existing stored Study-Pack quiz. Does not touch the Study Pack concept, note ownership model, generation pipeline, or the Internal Curator/Learning Assistant split. Does not add a new admin-curation workflow — a learner whose track has no qualifying Official Review Set still falls through to today's unchanged create-first path; closing that coverage gap is a separate, unscoped dependency. Sourced from Phase 1 of the Company Redefinition roadmap (`docs/claude-prompt/company-redefinition-out/06-unified-roadmap.md`), fully designed in `docs/claude-prompt/company-redefinition-out/02-activation-onboarding.md`. This release's own instrumentation is the acceptance signal — no separate release closes this loop.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.56.0 - Weak-Concept Explanation Links
 
 **Status: Released**
