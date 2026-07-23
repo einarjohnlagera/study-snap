@@ -2,7 +2,7 @@
 
 ## v0.56.0 - Weak-Concept Explanation Links
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close the loop from "you missed this" to "here's what it actually means, right now" on quiz result screens — a learner who missed a concept can jump straight to that concept's Study Pack explanation in one click, instead of the only paths forward being Review Answers, Back to Note, or starting a new session cold.
 
