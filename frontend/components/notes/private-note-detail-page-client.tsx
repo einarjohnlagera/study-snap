@@ -623,7 +623,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       globalThis.cancelAnimationFrame(animationFrameId);
       globalThis.clearTimeout(highlightTimeoutId);
     };
-  }, [activeStudyPackTab, conceptHash, note?.id, note?.keyConcepts.length]);
+  }, [activeStudyPackTab, conceptHash, note?.id, note?.keyConcepts.length, conceptHealthLoadState]);
 
   const handleSelectSessionReview = useCallback((session: RecentQuizSessionHistoryItem) => {
     if (!note || !isNoteSessionReviewMode(session.sessionMode)) {

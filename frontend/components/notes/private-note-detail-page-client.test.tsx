@@ -1980,6 +1980,80 @@ describe("PrivateNoteDetailPageClient", () => {
     }
   });
 
+  it("re-scrolls to the deep-linked concept after the readiness sort relocates it", async () => {
+    const previousPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = jest.fn();
+    let resolveConceptHealth: (entries: unknown[]) => void = () => {};
+
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof globalThis.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = jest.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    globalThis.history.replaceState({}, "", "/notes/note-1?tab=key-concepts#concept-cells");
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      // "Cells" is deep-linked but sorts last (generation order) until ConceptHealth
+      // loads and its "isStruggling" flag promotes it to the top of the list.
+      keyConcepts: ["Genetics", "Evolution", "Ecology", "Cells"],
+    });
+    (getConceptHealth as jest.Mock).mockImplementation(
+      () => new Promise((resolve) => {
+        resolveConceptHealth = resolve;
+      }),
+    );
+
+    try {
+      render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+      // Initial scroll(s) fire against the unsorted (generation-order) position,
+      // before ConceptHealth has loaded — exact call count isn't the contract here,
+      // only that a scroll happened and landed on "Cells" pre-sort.
+      await waitFor(() => {
+        expect(scrollIntoView.mock.calls.length).toBeGreaterThanOrEqual(1);
+      });
+      const cellsAnchor = document.getElementById("concept-cells");
+      expect(cellsAnchor).toHaveClass("bg-amber-500/15");
+      const callsBeforeSort = scrollIntoView.mock.calls.length;
+
+      await act(async () => {
+        resolveConceptHealth([
+          { concept: "Genetics", readinessStatus: "NOT_STARTED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+          { concept: "Evolution", readinessStatus: "NOT_STARTED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+          { concept: "Ecology", readinessStatus: "NOT_STARTED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+          { concept: "Cells", readinessStatus: "DUE", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: true, isDue: true, daysSinceReview: null },
+        ]);
+      });
+
+      // The readiness sort promotes the struggling "Cells" concept to the top of the
+      // list — a real DOM relocation, not just a re-render in place.
+      const items = await screen.findAllByRole("listitem");
+      expect(items[0]).toHaveAttribute("id", "concept-cells");
+
+      // The scroll/highlight effect must re-run against the concept's new position,
+      // not leave the page scrolled to where it used to sit before the sort applied.
+      await waitFor(() => {
+        expect(scrollIntoView.mock.calls.length).toBeGreaterThan(callsBeforeSort);
+      });
+      expect(document.getElementById("concept-cells")).toHaveClass("bg-amber-500/15");
+    } finally {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      globalThis.history.replaceState({}, "", previousPath || "/");
+      searchParamValues = {};
+      searchParamsMock = createSearchParamsMock();
+    }
+  });
+
   it("switches study pack views through tabs without reloading", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
