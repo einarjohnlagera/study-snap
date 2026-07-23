@@ -19,6 +19,7 @@ import {
   trackAnalyticsEvent,
   updateLearningProfileContext,
   type LearnerLevel,
+  type NoteCollectionSummary,
   type NoteResponse,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
@@ -49,12 +50,16 @@ import {
   resolveRemainingUsageCredits,
 } from "@/lib/plans";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
-import { DashboardStudyPlanSection } from "@/app/dashboard/dashboard-study-plan-section";
+import {
+  DashboardStudyPlanSection,
+  listCourseProgramStudyPlans,
+  type StudyPlanStartContext,
+} from "@/app/dashboard/dashboard-study-plan-section";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type GenerationSectionKey = "summary" | "concepts" | "quiz";
-type StepName = "profile" | "learning-context" | "input" | "study-pack" | "completion";
+type StepName = "profile" | "learning-context" | "input" | "confirm-practice" | "study-pack" | "completion";
 
 const TOPIC_MIN_LENGTH = 3;
 const NOTE_CONTENT_MIN_LENGTH = 50;
@@ -68,6 +73,8 @@ const STEP_FIVE_SAVE_ERROR_MESSAGE =
   "We couldn't save your profile. Your Study Pack is still available.";
 const STEP_FOUR_BACK_NOTICE =
   "Going back will start a new Study Pack. Your current one will be saved.";
+const PRACTICE_FIRST_COMPLETION_ERROR_MESSAGE =
+  "Your plan is ready. We couldn't save your profile yet. Please try again.";
 
 const STEP_NAMES: Record<number, StepName> = {
   1: "profile",
@@ -115,6 +122,23 @@ function countDaysUntilExam(examDate: string): number | null {
     selectedDate.getDate(),
   );
   return Math.round((selectedUtc - todayUtc) / 86400000);
+}
+
+function getExamCountdownCopy(examDate: string): string | null {
+  const daysUntilExam = countDaysUntilExam(examDate);
+  if (daysUntilExam === null) {
+    return null;
+  }
+  if (daysUntilExam < 0) {
+    return "Your exam date has passed. Keep practicing to stay sharp.";
+  }
+  if (daysUntilExam === 0) {
+    return "Your exam is today. Focus on a final round of review.";
+  }
+  if (daysUntilExam === 1) {
+    return "You have 1 day until your exam.";
+  }
+  return `You have ${daysUntilExam} days until your exam.`;
 }
 
 function buildContinueStudyHref(note: NoteResponse | null): string {
@@ -223,6 +247,8 @@ export default function OnboardingPage() {
   const [savingProfileType, setSavingProfileType] = useState(false);
   const [profileTypeSaveError, setProfileTypeSaveError] = useState<string | null>(null);
   const [showNoteGenerationLimitModal, setShowNoteGenerationLimitModal] = useState(false);
+  const [checkingPracticeFirstPlan, setCheckingPracticeFirstPlan] = useState(false);
+  const [practiceFirstPlan, setPracticeFirstPlan] = useState<NoteCollectionSummary | null>(null);
   const [isDesktop, setIsDesktop] = useState(true);
   const [previewOpen, setPreviewOpen] = useState<Record<GenerationSectionKey, boolean>>({
     summary: true,
@@ -237,12 +263,15 @@ export default function OnboardingPage() {
   const completionTrackedRef = useRef(false);
   const generationTrackedRef = useRef<string | null>(null);
   const completionAttemptedRef = useRef(false);
+  const practiceFirstEligibleTrackedRef = useRef(new Set<string>());
+  const practiceFirstPlanAdoptedTrackedRef = useRef(new Set<string>());
   const shouldTrackAbandonmentRef = useRef(true);
   const userIdRef = useRef<string | null>(null);
 
   const profileType = draft.profileType;
   const currentStep = draft.currentStep;
-  const currentStepName = getStepName(currentStep);
+  const isPracticeFirstScreen = currentStep === 3 && practiceFirstPlan !== null;
+  const currentStepName = isPracticeFirstScreen ? "confirm-practice" : getStepName(currentStep);
   const groupedLearnerLevels = getGroupedLearnerLevels(profileType);
   const selectedInputMethod = draft.inputMethod;
   const generatedNoteReady = draft.generatedNoteReady;
@@ -283,10 +312,12 @@ export default function OnboardingPage() {
   const canStartStudyPack = selectedInputMethod === "generate"
     ? generatedNoteReady && noteLength >= NOTE_CONTENT_MIN_LENGTH
     : selectedInputMethod === "own_note" && noteLength >= NOTE_CONTENT_MIN_LENGTH;
-  const stepTransitionKey = currentStep === 3
+  const stepTransitionKey = isPracticeFirstScreen
+    ? `practice-first-${practiceFirstPlan.id}`
+    : currentStep === 3
     ? `step-3-${selectedInputMethod ?? "none"}-${generatedNoteReady ? "generated" : "initial"}`
     : `step-${currentStep}`;
-  const stepUsesScrollableShell = currentStep === 3;
+  const stepUsesScrollableShell = currentStep === 3 && !isPracticeFirstScreen;
 
   const trackOnboardingEvent = (
     eventType: Parameters<typeof trackAnalyticsEvent>[0]["eventType"],
@@ -295,6 +326,17 @@ export default function OnboardingPage() {
     void trackAnalyticsEvent({
       eventType,
       metadata: metadata ?? {},
+    });
+  };
+
+  const trackPracticeFirstEligible = (plan: NoteCollectionSummary) => {
+    if (practiceFirstEligibleTrackedRef.current.has(plan.id)) {
+      return;
+    }
+    practiceFirstEligibleTrackedRef.current.add(plan.id);
+    trackOnboardingEvent("ONBOARDING_V2_PRACTICE_FIRST_ELIGIBLE", {
+      collection_id: plan.id,
+      course_program: draft.courseProgram.trim(),
     });
   };
 
@@ -458,6 +500,20 @@ export default function OnboardingPage() {
       step_name: currentStepName,
     });
   }, [currentStep, currentStepName, loading]);
+
+  useEffect(() => {
+    if (
+      isPracticeFirstScreen
+      && practiceFirstPlan
+      && !practiceFirstEligibleTrackedRef.current.has(practiceFirstPlan.id)
+    ) {
+      practiceFirstEligibleTrackedRef.current.add(practiceFirstPlan.id);
+      trackOnboardingEvent("ONBOARDING_V2_PRACTICE_FIRST_ELIGIBLE", {
+        collection_id: practiceFirstPlan.id,
+        course_program: draft.courseProgram.trim(),
+      });
+    }
+  }, [draft.courseProgram, isPracticeFirstScreen, practiceFirstPlan]);
 
   useEffect(() => {
     return () => {
@@ -648,6 +704,112 @@ export default function OnboardingPage() {
       ...previous,
       currentStep: nextStep,
     }));
+  };
+
+  const handleContinueFromStepTwo = async () => {
+    if (!canContinueFromStepTwo || checkingPracticeFirstPlan) {
+      return;
+    }
+    setPracticeFirstPlan(null);
+    if (profileType !== "BOARD_EXAM") {
+      goToStep(3);
+      return;
+    }
+
+    setCheckingPracticeFirstPlan(true);
+    try {
+      const matchingPlan = (await listCourseProgramStudyPlans(draft.courseProgram))[0] ?? null;
+      if (
+        matchingPlan
+        && matchingPlan.itemCount > 0
+        && (matchingPlan.readyCount ?? 0) > 0
+      ) {
+        setPracticeFirstPlan(matchingPlan);
+      }
+    } catch {
+      // This is an optional fast path. Learners can always continue through the normal flow.
+    } finally {
+      goToStep(3);
+      setCheckingPracticeFirstPlan(false);
+    }
+  };
+
+  const syncCompletedOnboardingUser = (me: Awaited<ReturnType<typeof completeOnboarding>>) => {
+    const authUser = getAuthUser();
+    if (!authUser) {
+      return;
+    }
+    clearDeferredOnboardingCompletion(authUser.id);
+    setAuthUser({
+      ...authUser,
+      displayName: me.displayName,
+      profileType: me.profileType,
+      emailVerifiedAt: me.emailVerifiedAt,
+      onboardingCompletedAt: me.onboardingCompletedAt,
+      productOnboardingCompletedAt: me.productOnboardingCompletedAt,
+    });
+  };
+
+  const completePracticeFirstOnboarding = async () => {
+    if (!profileType) {
+      return;
+    }
+    setCompletingOnboarding(true);
+    setCompletionError(null);
+    try {
+      const me = await completeOnboarding({
+        profileType,
+        examDate: draft.examDate || null,
+      });
+      syncCompletedOnboardingUser(me);
+      void updateLearningProfileContext(draft.learnerLevel, draft.courseProgram.trim() || null)
+        .catch(() => {
+          // Learning context can be adjusted later in profile settings.
+        });
+      if (!completionTrackedRef.current) {
+        completionTrackedRef.current = true;
+        trackOnboardingEvent("ONBOARDING_V2_COMPLETED", {
+          profile_type: profileType,
+          learner_level: draft.learnerLevel ?? null,
+          course_program: draft.courseProgram.trim() || null,
+          method: null,
+          time_elapsed_seconds: Math.max(0, Math.round((Date.now() - draft.startedAtMs) / 1000)),
+        });
+      }
+    } catch {
+      const userId = userIdRef.current;
+      if (userId) {
+        setDeferredOnboardingCompletion(userId);
+      }
+      setCompletionError(PRACTICE_FIRST_COMPLETION_ERROR_MESSAGE);
+      throw new Error(PRACTICE_FIRST_COMPLETION_ERROR_MESSAGE);
+    } finally {
+      setCompletingOnboarding(false);
+    }
+  };
+
+  const handlePracticeFirstPlanStarted = async (startContext: StudyPlanStartContext) => {
+    trackPracticeFirstEligible(startContext.plan);
+    if (!practiceFirstPlanAdoptedTrackedRef.current.has(startContext.collectionId)) {
+      practiceFirstPlanAdoptedTrackedRef.current.add(startContext.collectionId);
+      trackOnboardingEvent("ONBOARDING_V2_PRACTICE_FIRST_PLAN_ADOPTED", {
+        collection_id: startContext.collectionId,
+        source_collection_id: startContext.plan.id,
+        is_goal: startContext.isGoal,
+      });
+    }
+
+    await completePracticeFirstOnboarding();
+    shouldTrackAbandonmentRef.current = false;
+    if (userIdRef.current) {
+      clearOnboardingDraft(userIdRef.current);
+    }
+    // Land on the adopted Review Set's detail page — same destination every other adopt entry
+    // point in the product already uses (Today's Focus / Continue Studying is one tap away from
+    // there). Do not jump straight into Quick Review: a brand-new learner landing cold inside a
+    // quiz with no orientation contradicts the guidance-first identity the rest of the product
+    // establishes (Today's Focus, readiness, Companion) — confirmed by live testing of this flow.
+    router.push(`/collections/${startContext.collectionId}`);
   };
 
   const handleBack = () => {
@@ -1011,6 +1173,39 @@ export default function OnboardingPage() {
       );
     }
 
+    if (isPracticeFirstScreen && practiceFirstPlan) {
+      const examCountdown = draft.examDate ? getExamCountdownCopy(draft.examDate) : null;
+      return (
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
+          <div className="space-y-2 text-center sm:text-left">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+              You&apos;re preparing for {draft.courseProgram.trim()}.
+            </CardTitle>
+            <CardDescription className="text-sm">
+              Your official Review Set is ready to practice now — no note setup needed.
+            </CardDescription>
+          </div>
+
+          {examCountdown ? (
+            <Card className="space-y-2 p-4">
+              <CardTitle className="text-base">Exam Countdown</CardTitle>
+              <p className="text-sm text-foreground/75">{examCountdown}</p>
+            </Card>
+          ) : null}
+
+          <DashboardStudyPlanSection
+            courseProgram={draft.courseProgram}
+            profileType={profileType}
+            context="practice-first"
+            onPlanStarted={handlePracticeFirstPlanStarted}
+          />
+
+          {completingOnboarding ? <p className="text-sm text-foreground/60">Saving your profile...</p> : null}
+          {completionError ? <p className="text-sm text-red-600 dark:text-red-400">{completionError}</p> : null}
+        </div>
+      );
+    }
+
     if (currentStep === 3) {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
@@ -1370,8 +1565,10 @@ export default function OnboardingPage() {
           <Button
             type="button"
             className="min-h-12 text-base sm:min-w-40"
-            onClick={() => goToStep(3)}
-            disabled={!canContinueFromStepTwo}
+            onClick={() => void handleContinueFromStepTwo()}
+            disabled={!canContinueFromStepTwo || checkingPracticeFirstPlan}
+            loading={checkingPracticeFirstPlan}
+            loadingText="Continuing..."
           >
             Continue
           </Button>
@@ -1380,6 +1577,15 @@ export default function OnboardingPage() {
     }
 
     if (currentStep === 3) {
+      if (isPracticeFirstScreen) {
+        return (
+          <div className="flex">
+            <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+              Back
+            </Button>
+          </div>
+        );
+      }
       if (selectedInputMethod === "generate" && !generatedNoteReady) {
         return (
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">

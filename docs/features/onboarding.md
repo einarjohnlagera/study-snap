@@ -82,7 +82,25 @@ Teacher Learner Level helper copy frames the field as the default quiz difficult
 
 Board Taker also gets an inline optional `Exam Date` field on this step.
 
+#### Practice-first Board Taker branch
+
+After a Board Taker submits the required learner level and course/program, onboarding checks the
+existing published Official Review Sets for that course/program. When the first match has both
+`itemCount > 0` and `readyCount > 0`, Steps 3–4 are replaced with a `Confirm & Practice` screen.
+It confirms the collected course/program (and reuses the optional exam-countdown presentation),
+shows the matching official Review Set, and lets the learner adopt it, landing on the adopted Review
+Set's detail page (Today's Focus, with Continue Studying one tap away) rather than directly inside a
+quiz — a brand-new learner should land somewhere oriented, not cold inside a question. This path has
+no note authoring and no AI generation.
+
+The check fails open: no qualifying set, a zero-ready set, or a lookup error continues to the
+normal five-step path. `STUDENT`, `TEACHER`, and `PROFESSIONAL` never enter this branch.
+
 ### Step 3 — Input Method
+
+For the qualifying Board Taker cohort described above, this step does not render: `Confirm &
+Practice` replaces both Input Method and Study Pack Generation, and Step 5 is skipped entirely
+after adoption. All other learners see the unchanged input-method choices below.
 
 Users choose one path:
 
@@ -139,6 +157,8 @@ Actions:
 - `Go to Dashboard` remains functional as a quiet secondary action.
 
 The completion call persists onboarding completion through the existing backend flow and sets `onboardingCompletedAt`.
+For the practice-first Board Taker branch, the same call fires from `Start this plan` after adoption
+rather than from a rendered Step 5; a completion failure can retry without re-adopting the plan.
 
 #### Recommended plan adopt card
 
@@ -186,6 +206,10 @@ The following are **not** persisted by onboarding completion itself:
 - reminder preferences
 
 `learnerLevel` and `courseProgram` are saved before the user advances through onboarding via the shared Learning Profile update path.
+
+The practice-first branch uses the same completion persistence from its `Start this plan` action,
+then routes to the adopted Review Set's detail page; it intentionally does not render Step 5 for
+that cohort.
 
 ## Generation Safety
 

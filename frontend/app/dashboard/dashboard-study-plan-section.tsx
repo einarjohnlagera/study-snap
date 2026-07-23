@@ -20,13 +20,28 @@ import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
 export { getStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
 
+export type StudyPlanStartContext = {
+  collectionId: string;
+  isGoal: boolean;
+  plan: NoteCollectionSummary;
+};
+
+export async function listCourseProgramStudyPlans(courseProgram: string | null): Promise<NoteCollectionSummary[]> {
+  const normalizedCourseProgram = normalizeCourseProgram(courseProgram);
+  if (!normalizedCourseProgram) {
+    return [];
+  }
+  return listPublicStudyPlans({ courseProgram: normalizedCourseProgram });
+}
+
 type DashboardStudyPlanSectionProps = {
   courseProgram: string | null;
   profileType: ProfileType | null;
-  context?: "default" | "onboarding";
+  context?: "default" | "onboarding" | "practice-first";
   primaryCollectionId?: string | null;
   viewAllHref?: string;
   browseWhenEmpty?: boolean;
+  onPlanStarted?: (context: StudyPlanStartContext) => Promise<void>;
 };
 
 export function DashboardStudyPlanSection({
@@ -36,6 +51,7 @@ export function DashboardStudyPlanSection({
   primaryCollectionId,
   viewAllHref,
   browseWhenEmpty = false,
+  onPlanStarted,
 }: Readonly<DashboardStudyPlanSectionProps>) {
   const router = useRouter();
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
@@ -46,6 +62,7 @@ export function DashboardStudyPlanSection({
   const [loadedCourseProgram, setLoadedCourseProgram] = useState<string | null>(null);
   const [adopting, setAdopting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [startedPlan, setStartedPlan] = useState<StudyPlanStartContext | null>(null);
 
   const [primaryMatch, setPrimaryMatch] = useState<NoteCollectionSummary | null>(null);
   const [primaryLoaded, setPrimaryLoaded] = useState(false);
@@ -95,7 +112,7 @@ export function DashboardStudyPlanSection({
     let cancelled = false;
     setError(null);
     void Promise.all([
-      listPublicStudyPlans({ courseProgram: normalizedCourseProgram }),
+      listCourseProgramStudyPlans(normalizedCourseProgram),
       listCollections(),
     ])
       .then(([publicPlans, personalCollections]) => {
@@ -195,26 +212,59 @@ export function DashboardStudyPlanSection({
   const subjectPlanLabel = `${displayPlan.childCount} ${labels.subjectSingular}${displayPlan.childCount === 1 ? "" : "s"}`;
   const noteLabel = `${displayPlan.itemCount} ${displayPlan.itemCount === 1 ? "note" : "notes"}`;
   const descriptionFallback = isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} in saved order.`;
-  const detailLine = isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} curated for this track.`;
+  const detailLine = context === "practice-first" && typeof displayPlan.readyCount === "number"
+    ? `${displayPlan.readyCount} of ${displayPlan.itemCount} notes practice-ready`
+    : (isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} curated for this track.`);
+
+  const finishStart = async (startContext: StudyPlanStartContext) => {
+    if (onPlanStarted) {
+      await onPlanStarted(startContext);
+      return;
+    }
+    router.push(`/collections/${startContext.collectionId}`);
+  };
 
   const handleStart = async () => {
-    if (continuePlan) {
-      router.push(`/collections/${continuePlan.id}`);
+    if (adopting) {
       return;
     }
     setAdopting(true);
     setError(null);
     try {
+      if (startedPlan) {
+        await finishStart(startedPlan);
+        return;
+      }
+      if (continuePlan) {
+        await finishStart({
+          collectionId: continuePlan.id,
+          isGoal,
+          plan: displayPlan,
+        });
+        return;
+      }
       if (isGoal) {
         const result = await adoptGoal(displayPlan.id);
         setStudyPlanSkippedNotice(result.goalCollectionId, result.skippedSubjectCount);
         setJustAdoptedNotice(result.goalCollectionId);
-        router.push(`/collections/${result.goalCollectionId}`);
+        const startContext = {
+          collectionId: result.goalCollectionId,
+          isGoal,
+          plan: displayPlan,
+        };
+        setStartedPlan(startContext);
+        await finishStart(startContext);
         return;
       }
       const result = await adoptStudyPlan(displayPlan.id);
       setStudyPlanSkippedNotice(result.collectionId, result.skippedCount);
-      router.push(`/collections/${result.collectionId}`);
+      const startContext = {
+        collectionId: result.collectionId,
+        isGoal,
+        plan: displayPlan,
+      };
+      setStartedPlan(startContext);
+      await finishStart(startContext);
     } catch (adoptError) {
       setError(adoptError instanceof Error ? adoptError.message : `Could not start this ${isGoal ? labels.goalSingular : labels.singular}.`);
     } finally {
