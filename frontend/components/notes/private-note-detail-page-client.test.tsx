@@ -1864,6 +1864,196 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
   });
 
+  it("nudges toward Full Notes on the Quiz tab until the learner has viewed it", async () => {
+    searchParamValues = { tab: "quiz" };
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      quiz: [
+        {
+          question: "What is a cell?",
+          choices: ["Basic unit of life", "A tissue", "An organ", "A molecule"],
+          correctAnswerIndex: 0,
+          explanation: "Cells are the basic unit of life.",
+        },
+      ],
+    });
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Haven't reviewed the full notes yet? Skim the source material before testing yourself.")).toBeInTheDocument();
+
+    // Switch to Full Notes via the tab bar directly (not the tip's own action button),
+    // so this exercises the condition (hasViewedFullNotes) rather than the tip's dismiss path.
+    fireEvent.click(screen.getByRole("tab", { name: "Full Notes" }));
+    searchParamValues = { tab: "full-notes" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Quiz" }));
+    searchParamValues = { tab: "quiz" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(screen.queryByText("Haven't reviewed the full notes yet? Skim the source material before testing yourself.")).not.toBeInTheDocument();
+  });
+
+  it("sorts Key Concepts by readiness — struggling and due first, mastered last", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells", "Genetics", "Evolution", "Ecology"],
+    });
+    (getConceptHealth as jest.Mock).mockResolvedValue([
+      { concept: "Cells", readinessStatus: "MASTERED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: false, daysSinceReview: null },
+      { concept: "Genetics", readinessStatus: "DUE", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+      { concept: "Evolution", readinessStatus: "NOT_STARTED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+      { concept: "Ecology", readinessStatus: "DUE", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: true, isDue: true, daysSinceReview: null },
+    ]);
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Key Concepts" }));
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    const items = await screen.findAllByRole("listitem");
+    const conceptOrder = items
+      .map((item) => item.textContent ?? "")
+      .filter((text) => ["Cells", "Genetics", "Evolution", "Ecology"].some((concept) => text.includes(concept)));
+
+    expect(conceptOrder[0]).toContain("Ecology");
+    expect(conceptOrder[1]).toContain("Genetics");
+    expect(conceptOrder[2]).toContain("Evolution");
+    expect(conceptOrder[3]).toContain("Cells");
+  });
+
+  it("scrolls to and highlights the first matching key concept on a direct concept link", async () => {
+    const previousPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = jest.fn();
+
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof globalThis.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = jest.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    globalThis.history.replaceState({}, "", "/notes/note-1?tab=key-concepts#concept-cells");
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      keyConcepts: ["Cells", "  cells  ", "Genetics"],
+    });
+
+    try {
+      render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+      const concepts = await screen.findAllByText(/cells/i);
+      const firstConcept = concepts.find((element) => element.textContent === "Cells");
+      expect(firstConcept?.closest("li")).toHaveAttribute("id", "concept-cells");
+      await waitFor(() => {
+        expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+      });
+      expect(document.getElementById("concept-cells")).toBe(firstConcept?.closest("li"));
+      expect(firstConcept?.closest("li")).toHaveClass("bg-amber-500/15");
+    } finally {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      globalThis.history.replaceState({}, "", previousPath || "/");
+      searchParamValues = {};
+      searchParamsMock = createSearchParamsMock();
+    }
+  });
+
+  it("re-scrolls to the deep-linked concept after the readiness sort relocates it", async () => {
+    const previousPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = jest.fn();
+    let resolveConceptHealth: (entries: unknown[]) => void = () => {};
+
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof globalThis.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = jest.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    globalThis.history.replaceState({}, "", "/notes/note-1?tab=key-concepts#concept-cells");
+    searchParamValues = { tab: "key-concepts" };
+    searchParamsMock = createSearchParamsMock();
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      // "Cells" is deep-linked but sorts last (generation order) until ConceptHealth
+      // loads and its "isStruggling" flag promotes it to the top of the list.
+      keyConcepts: ["Genetics", "Evolution", "Ecology", "Cells"],
+    });
+    (getConceptHealth as jest.Mock).mockImplementation(
+      () => new Promise((resolve) => {
+        resolveConceptHealth = resolve;
+      }),
+    );
+
+    try {
+      render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+      // Initial scroll(s) fire against the unsorted (generation-order) position,
+      // before ConceptHealth has loaded — exact call count isn't the contract here,
+      // only that a scroll happened and landed on "Cells" pre-sort.
+      await waitFor(() => {
+        expect(scrollIntoView.mock.calls.length).toBeGreaterThanOrEqual(1);
+      });
+      const cellsAnchor = document.getElementById("concept-cells");
+      expect(cellsAnchor).toHaveClass("bg-amber-500/15");
+      const callsBeforeSort = scrollIntoView.mock.calls.length;
+
+      await act(async () => {
+        resolveConceptHealth([
+          { concept: "Genetics", readinessStatus: "NOT_STARTED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+          { concept: "Evolution", readinessStatus: "NOT_STARTED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+          { concept: "Ecology", readinessStatus: "NOT_STARTED", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: false, isDue: true, daysSinceReview: null },
+          { concept: "Cells", readinessStatus: "DUE", lastCorrectAt: null, lastIncorrectAt: null, isStruggling: true, isDue: true, daysSinceReview: null },
+        ]);
+      });
+
+      // The readiness sort promotes the struggling "Cells" concept to the top of the
+      // list — a real DOM relocation, not just a re-render in place.
+      const items = await screen.findAllByRole("listitem");
+      expect(items[0]).toHaveAttribute("id", "concept-cells");
+
+      // The scroll/highlight effect must re-run against the concept's new position,
+      // not leave the page scrolled to where it used to sit before the sort applied.
+      await waitFor(() => {
+        expect(scrollIntoView.mock.calls.length).toBeGreaterThan(callsBeforeSort);
+      });
+      expect(document.getElementById("concept-cells")).toHaveClass("bg-amber-500/15");
+    } finally {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      globalThis.history.replaceState({}, "", previousPath || "/");
+      searchParamValues = {};
+      searchParamsMock = createSearchParamsMock();
+    }
+  });
+
   it("switches study pack views through tabs without reloading", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({

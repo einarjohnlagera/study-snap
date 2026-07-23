@@ -117,6 +117,7 @@ describe("AdaptivePracticePage", () => {
       id: "note-1",
       title: "Derivatives",
       studyPackStatus: "STUDY_PACK_READY",
+      keyConcepts: ["Trigonometric derivatives"],
       adaptivePracticeAvailable: true,
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
@@ -420,6 +421,58 @@ describe("AdaptivePracticePage", () => {
     expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Generate New Set" })).toBeInTheDocument();
+  });
+
+  it("links only targeted weak areas that have a Key Concepts explanation", async () => {
+    setupGeneratedAdaptiveQuiz();
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["  TRIGONOMETRIC DERIVATIVES  ", "Unmapped concept"],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Trigonometric derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["  TRIGONOMETRIC DERIVATIVES  ", "Unmapped concept"],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Trigonometric derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    render(<AdaptivePracticePage />);
+
+    const correctChoice = (await screen.findAllByRole("button")).find((button) => (
+      /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? "")
+    ));
+    fireEvent.click(correctChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    await screen.findByText("Adaptive Practice Complete");
+
+    expect(screen.getByRole("link", { name: /TRIGONOMETRIC DERIVATIVES/i })).toHaveAttribute(
+      "href",
+      "/notes/note-1?tab=key-concepts#concept-trigonometric-derivatives",
+    );
+    expect(screen.getByText("Unmapped concept").closest("a")).toBeNull();
   });
 
   it("fetches and renders the server-resolved next step after Adaptive Practice completion", async () => {

@@ -94,6 +94,8 @@ Shared pattern:
 - keep existing fallback CTA UI available when the fetch fails or returns no usable response
 - answer review and other controls stay secondary
 - `← Back to Note` sits below the action group instead of becoming a primary button
+- Weak/missed concepts on the Quick Review, Adaptive Practice, Challenge Quiz, and Board Exam Mode result screens link to the matching source-note Key Concepts explanation when the trimmed, case-insensitive concept key exists there. The link preserves the existing Note Detail `?tab=key-concepts` route and anchors to that concept; unmatched strings remain plain text rather than linking to a missing explanation.
+- Long Exam and Interview Practice result/report screens are not part of this weak-concept deep-link behavior.
 
 Server resolution priority:
 

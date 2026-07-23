@@ -27,7 +27,7 @@ import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { StudyPackGeneratedFeedbackPrompt } from "@/components/feedback/study-pack-generated-feedback-prompt";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
-import { normalizeConceptKey } from "@/lib/concepts";
+import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
   formatStudyPackResetDate,
@@ -121,6 +121,8 @@ import Link from "next/link";
 
 const COPIED_STUDY_PACK_REGENERATE_HINT_ID = "copied-study-pack-regenerate-hint";
 const COPIED_STUDY_PACK_REGENERATE_HINT_MESSAGE = "This Study Pack was copied. If the difficulty doesn't match your level, regenerate it to get a version tailored to you.";
+const QUIZ_FULL_NOTES_NUDGE_ID = "quiz-tab-full-notes-nudge";
+const QUIZ_FULL_NOTES_NUDGE_MESSAGE = "Haven't reviewed the full notes yet? Skim the source material before testing yourself.";
 const NOTE_READINESS_SUBJECT = "This note";
 
 type ConceptHealthLoadState = "idle" | "loading" | "loaded" | "error";
@@ -204,6 +206,18 @@ function resolveConceptReadinessStatus(health: ConceptHealthEntry | undefined): 
     return "MASTERED";
   }
   return health.lastCorrectAt ? "DUE" : "NOT_STARTED";
+}
+
+function getConceptSortRank(status: ConceptReadinessStatus, isStruggling: boolean): number {
+  if (isStruggling) {
+    return 0;
+  }
+  switch (status) {
+    case "DUE": return 1;
+    case "NOT_STARTED": return 2;
+    case "MASTERED": return 3;
+    default: return 2;
+  }
 }
 
 function getConceptStatusLabel(status: ConceptReadinessStatus): string {
@@ -432,6 +446,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     targetProfileType: "",
     tags: [],
   });
+  const [conceptHash, setConceptHash] = useState("");
+  const [highlightedConceptAnchor, setHighlightedConceptAnchor] = useState<string | null>(null);
+  const [hasViewedFullNotes, setHasViewedFullNotes] = useState(false);
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
@@ -558,6 +575,56 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   );
 
   const activeStudyPackTab = normalizeNoteDetailTab(searchParams.get("tab"));
+
+  useEffect(() => {
+    if (activeStudyPackTab === "full-notes") {
+      setHasViewedFullNotes(true);
+    }
+  }, [activeStudyPackTab]);
+
+  useEffect(() => {
+    const syncConceptHash = () => {
+      setConceptHash(globalThis.location.hash);
+    };
+
+    syncConceptHash();
+    globalThis.addEventListener("hashchange", syncConceptHash);
+    return () => {
+      globalThis.removeEventListener("hashchange", syncConceptHash);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeStudyPackTab !== "key-concepts" || !conceptHash) {
+      return;
+    }
+
+    const conceptAnchorId = conceptHash.slice(1);
+    const conceptElement = globalThis.document.getElementById(conceptAnchorId);
+    if (!conceptElement || typeof conceptElement.scrollIntoView !== "function") {
+      return;
+    }
+
+    const animationFrameId = globalThis.requestAnimationFrame(() => {
+      const currentConceptElement = globalThis.document.getElementById(conceptAnchorId);
+      if (!currentConceptElement || typeof currentConceptElement.scrollIntoView !== "function") {
+        return;
+      }
+      currentConceptElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      setHighlightedConceptAnchor(conceptAnchorId);
+    });
+    const highlightTimeoutId = globalThis.setTimeout(() => {
+      setHighlightedConceptAnchor((currentAnchor) => (
+        currentAnchor === conceptAnchorId ? null : currentAnchor
+      ));
+    }, 1800);
+
+    return () => {
+      globalThis.cancelAnimationFrame(animationFrameId);
+      globalThis.clearTimeout(highlightTimeoutId);
+    };
+  }, [activeStudyPackTab, conceptHash, note?.id, note?.keyConcepts.length, conceptHealthLoadState]);
+
   const handleSelectSessionReview = useCallback((session: RecentQuizSessionHistoryItem) => {
     if (!note || !isNoteSessionReviewMode(session.sessionMode)) {
       return;
@@ -769,6 +836,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     ];
     return pickActiveGuidance(rules);
   }, [isStudyPackReady, note?.copiedFromPublic]);
+  const quizFullNotesNudgeGuidance = useMemo(() => {
+    const rules: GuidanceRule[] = [
+      {
+        id: QUIZ_FULL_NOTES_NUDGE_ID,
+        priority: 10,
+        condition: () => activeStudyPackTab === "quiz" && isStudyPackReady && !hasViewedFullNotes,
+        message: QUIZ_FULL_NOTES_NUDGE_MESSAGE,
+      },
+    ];
+    return pickActiveGuidance(rules);
+  }, [activeStudyPackTab, hasViewedFullNotes, isStudyPackReady]);
   const generationMessage = resolveStudyPackGenerationMessage(generationMessageIndex);
   const pollingNoteId = note?.id ?? null;
   const title = note?.title?.trim() || "Untitled note";
@@ -825,6 +903,19 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     () => buildNoteReadinessEntry(note?.keyConcepts ?? [], conceptHealthByName),
     [conceptHealthByName, note?.keyConcepts],
   );
+  const sortedKeyConceptEntries = useMemo(() => {
+    const entries = (note?.keyConcepts ?? []).map((concept, index) => ({ concept, index }));
+    if (conceptHealthLoadState !== "loaded") {
+      return entries;
+    }
+    return [...entries].sort((a, b) => {
+      const healthA = conceptHealthByName.get(normalizeConceptKey(a.concept));
+      const healthB = conceptHealthByName.get(normalizeConceptKey(b.concept));
+      const rankA = getConceptSortRank(resolveConceptReadinessStatus(healthA), healthA?.isStruggling ?? false);
+      const rankB = getConceptSortRank(resolveConceptReadinessStatus(healthB), healthB?.isStruggling ?? false);
+      return rankA !== rankB ? rankA - rankB : a.index - b.index;
+    });
+  }, [conceptHealthByName, conceptHealthLoadState, note?.keyConcepts]);
   const dueConceptCount = useMemo(
     () => noteReadinessEntry?.dueConcepts ?? 0,
     [noteReadinessEntry],
@@ -2158,13 +2249,21 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 ) : (
                   <>
                     <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
-                      {note.keyConcepts.map((concept, index) => {
+                      {sortedKeyConceptEntries.map(({ concept, index }) => {
+                        const conceptAnchorId = buildConceptAnchorId(concept);
                         const health = conceptHealthLoadState === "loaded"
                           ? conceptHealthByName.get(normalizeConceptKey(concept))
                           : undefined;
                         const readinessStatus = resolveConceptReadinessStatus(health);
                         return (
-                          <li key={`${note.id}-concept-${index}`}>
+                          <li
+                            key={`${note.id}-concept-${index}`}
+                            id={conceptAnchorId}
+                            className={cn(
+                              "scroll-mt-24 rounded-md transition-colors duration-500",
+                              highlightedConceptAnchor === conceptAnchorId && "bg-amber-500/15",
+                            )}
+                          >
                             <span className="inline-flex flex-wrap items-center gap-2">
                               <span>{concept}</span>
                               {canViewConceptReviewTiming && health?.isStruggling ? (
@@ -2232,7 +2331,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
                 </Card>
               ) : (
-                <div id="practice-quiz">
+                <div id="practice-quiz" className="space-y-3">
+                  {quizFullNotesNudgeGuidance ? (
+                    <GuidanceTip
+                      tipId={quizFullNotesNudgeGuidance.id}
+                      message={quizFullNotesNudgeGuidance.message}
+                      action={{ label: "View Full Notes", onClick: () => handleChangeStudyPackTab("full-notes") }}
+                    />
+                  ) : null}
                   <PracticeQuizCard quiz={note.quiz} />
                 </div>
               )

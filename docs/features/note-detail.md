@@ -122,6 +122,14 @@ Rules:
 - switching `?tab=` state must not refetch the note or remount Note Detail into a loading state
 - `Full Notes` should render the complete original note content so users can review the source note without leaving Note Detail
 - the `Summary` tab should include a subtle `View Full Notes →` CTA above the summary text that switches to `Full Notes` without reloading the page
+- the `Quiz` tab shows a one-time `GuidanceTip` nudging the learner to `View Full Notes` if they haven't visited that tab yet this page visit, once the Study Pack is ready — this is deliberately a nudge, not a tab reorder; the "use the order" rule above is a prior, deliberate decision (v0.7.0's `View Full Notes →` Summary CTA already exists to serve the reading flow) and should not be reopened without a fresh product decision
+
+### Key Concepts deep links
+
+- Each Key Concepts entry has a stable, URL-safe `concept-*` anchor derived from its trimmed, case-insensitive concept key.
+- Direct `?tab=key-concepts#concept-*` visits open the Key Concepts tab, scroll to the matching entry after tab content mounts, and briefly highlight it.
+- Duplicate normalized concept names intentionally resolve to the first rendered entry. A missing anchor is a safe no-op.
+- Entries sort by readiness once ConceptHealth has loaded — struggling first, then due, then not-started, mastered last — instead of generation order. Before ConceptHealth loads, entries render in generation order to avoid a pop-in reorder.
 
 ## Public Note Detail
 

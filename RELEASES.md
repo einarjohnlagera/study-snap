@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.56.0 - Weak-Concept Explanation Links
+
+**Status: Released**
+
+Theme: close the loop from "you missed this" to "here's what it actually means, right now" on quiz result screens — a learner who missed a concept can jump straight to that concept's Study Pack explanation in one click, instead of the only paths forward being Review Answers, Back to Note, or starting a new session cold.
+
+### Planned Scope
+
+_(complete)_
+
+Anti-drift: no new schema, no new endpoint, no new generation — pure navigation/routing over data and URL patterns that already exist. Does not touch the locked 5-mode quiz contract, ConceptHealth write rules, or the ungated question-format contract. Not a retention mechanic — this is a same-session, in-the-moment learning aid, not a return-trigger. Sourced from Fable's 2026-07-22 study-effectiveness session (`docs/claude-prompt/study-effectiveness-out/01-study-effectiveness-ui-pricing.md` §1 item 1) — its top pick across that whole consultation.
+
+### Shipped
+
+- **Weak/missed-concept explanation links (frontend).** Quick Review, Adaptive Practice, Challenge Quiz, and Board Exam Mode result lists now link only weak concepts that normalize to a source-note Key Concepts entry. The link opens `?tab=key-concepts#concept-*`; Note Detail scrolls to and briefly highlights the target, while unmatched concepts remain plain text. No backend, generation, quiz-scoring, or ConceptHealth-write changes.
+- **Mid-release scope addition: Quiz-tab Full Notes nudge + Key Concepts readiness sort (frontend).** Two more Polish candidates from the same Fable study-effectiveness session, folded in because they touch the exact same Note Detail area this release already modified. First, a one-time `GuidanceTip` (`quiz-tab-full-notes-nudge`) appears on the Quiz tab if the learner hasn't visited Full Notes yet this page visit, with a "View Full Notes" action — deliberately **not** a tab reorder: `docs/features/note-detail.md`'s tab order (`Summary, Key Concepts, Quiz, Full Notes`) was a prior, deliberate decision (v0.7.0's `View Full Notes →` Summary CTA), not drift, so this adds a narrower nudge instead of reopening that decision. Second, the Key Concepts tab now sorts entries by readiness (struggling first, then due, then not-started, mastered last) once ConceptHealth has loaded — no reorder before that, to avoid a pop-in jump. Both are read-only, no backend/schema/generation changes.
+- **Pre-signoff fix: scroll/highlight vs. readiness-sort race on deep-linked concepts (frontend).** A whole-release check (both PRs above touch `private-note-detail-page-client.tsx`) found the scroll-to-anchor effect's dependency array didn't include `conceptHealthLoadState`. In the realistic case — ConceptHealth loading asynchronously after the note itself — a learner arriving via a weak-concept link got scrolled/highlighted against the pre-sort (generation-order) position; once ConceptHealth finished loading a moment later, the readiness sort could relocate that same concept (frequently upward, since it's likely struggling/due — the exact reason it was linked) with no re-scroll to follow it, leaving the highlight on a concept that had already moved. Fixed by adding `conceptHealthLoadState` to the effect's dependencies so it re-targets the concept's final sorted position; regression test added (`private-note-detail-page-client.test.tsx`) confirming an additional scroll occurs once the sort settles and the highlight lands on the correct, relocated element. The 4-surface weak-concept matching (Quick Review, Adaptive Practice, Challenge Quiz's two result branches) was also independently re-verified and found consistent — same shared `normalizeConceptKey`/`buildConceptAnchorId` helpers, no drift.
+
 ## v0.55.0 - Result-Screen Companion Bridge
 
 **Status: Released**

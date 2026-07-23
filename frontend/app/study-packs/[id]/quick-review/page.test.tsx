@@ -82,6 +82,7 @@ const baseNote = {
       explanation: "Mitochondria produce ATP.",
     },
   ],
+  keyConcepts: ["Cell organelles"],
   adaptivePracticeAvailable: false,
   challengeQuizAvailable: true,
 };
@@ -259,6 +260,26 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     const noteButton = screen.queryByRole("button", { name: /^Note$/ });
     expect(noteButton).not.toBeInTheDocument();
+  });
+
+  it("links only weak concepts that have a Key Concepts explanation", async () => {
+    setupCompleteState();
+    (completeQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseResult,
+      weakConcepts: ["  CELL ORGANELLES  ", "Unmapped concept"],
+    });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(screen.getByRole("link", { name: /CELL ORGANELLES/i })).toHaveAttribute(
+      "href",
+      "/notes/note-1?tab=key-concepts#concept-cell-organelles",
+    );
+    expect(screen.getByText("Unmapped concept").closest("a")).toBeNull();
   });
 
   it("shows the open loop for a first incomplete quiz and tracks it once", async () => {

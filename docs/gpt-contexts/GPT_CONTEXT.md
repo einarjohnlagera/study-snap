@@ -2,7 +2,7 @@
 
 > Paste the block below as your first message in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.50.0 (released) - 2026-07-15
+> Last updated: v0.56.0 (merged, pending signoff) - 2026-07-23
 
 ---
 
@@ -20,27 +20,30 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **Rebrand note:** The product is NoteLib. Code, package names, and database/schema names still use `studysnap` in many places unless explicitly changed.
 
-**Current baseline:** `v0.50.0 - Mobile Bottom Tab Bar` is the most recently released version. No version is currently in progress. The product is mid-way through a retention-experiment cycle — see the dedicated section below before proposing new roadmap work; it explains why recent releases look small and isolated rather than feature-driven. v0.50.0 is the first real UI-shape change in that cycle (navigation, not a retention experiment) — see the Current Release section and the new Navigation note under Core Feature Surfaces.
+**Current baseline:** `v0.55.0 - Result-Screen Companion Bridge` is the most recently **released** version. `v0.56.0 - Weak-Concept Explanation Links` has all planned scope merged onto `releases/v0.56.0` and is **pending signoff** (not yet released, not yet on `main`) as of this update — treat it as functionally live for planning purposes but don't describe it as shipped externally until signoff closes. See "Current Release: v0.56.0" below. The product's strategic posture shifted mid-cycle (2026-07-20/21) from a single retention-bet gate to a broader "acquire and retain *new* users" posture — see "Retention Is the Proven Constraint" below, it's been substantially rewritten and should be read before proposing anything.
 
 ---
 
-## Retention Is the Proven Constraint (read this before proposing anything)
+## Retention Is the Proven Constraint — and the Strategic Posture Shifted Mid-Cycle (read this before proposing anything)
 
-**The number:** W1→W2 retention is currently **2.4%** (production read, 2026-07-15; 3 of 127 eligible activated users returned in week 2). This has been the core strategic constraint since v0.32.2 first flagged it (was 5.6% then) — it has **not meaningfully improved** despite two intervening feature releases aimed at it (v0.44.0, v0.46.0). Free-tier quota is essentially never hit, so pricing has been independently ruled out as the current bottleneck.
+**The number:** W1→W2 retention is **2.4%** (production read, 2026-07-15; 3 of 127 eligible activated users returned in week 2). This has been the core strategic constraint since v0.32.2 first flagged it (was 5.6% then) — it has **not meaningfully improved** despite three intervening feature releases aimed at it (v0.44.0, v0.46.0, v0.48.0). Free-tier quota is essentially never hit, so pricing is independently ruled out as the bottleneck.
 
-**The diagnosis (two independent Fable sessions, growth/retention lens + consumer-psychology lens, converged on the same read):** every content-rich retention trigger the product has (due-concepts digest, weak-concept nudge, weekly summary) shipped **default-OFF**, gated behind the exact engagement it's meant to create. Separately, the first study session ends in a psychologically "complete" feeling (a finished task, per the Zeigarnik effect) rather than an open loop that pulls the learner back — nothing in the first-session experience signals that spaced review exists or that forgetting is coming.
+**The diagnosis (two independent Fable sessions, growth/retention lens + consumer-psychology lens, converged):** every content-rich retention trigger the product has (due-concepts digest, weak-concept nudge, weekly summary) shipped **default-OFF**, gated behind the exact engagement it's meant to create. Separately, the first study session ends in a psychologically "complete" feeling (Zeigarnik effect) rather than an open loop that pulls the learner back.
 
-**What just shipped to test this (`v0.48.0`, merged 2026-07-15, cohort data now accruing):**
-1. **Open-loop first-quiz ending.** A learner's first-ever completed quiz, if concepts were missed, now ends on "N of M concepts secured — the rest are best reviewed tomorrow" instead of a terminal score screen.
-2. **Due-concepts digest trigger fix.** New signups now default to the digest email being ON (previously opt-in-only, rarely turned on), with a strengthened CTA (styled button, not a bare link) after production data showed domain-wide email click-through under 1%.
+**`v0.48.0` (merged 2026-07-15) tested the cheap fixes:** an open-loop first-quiz ending ("N of M concepts secured — best reviewed tomorrow" instead of a terminal score screen) and a due-concepts digest default-ON trigger fix. **Both remain UNPROVEN — mechanism shipped, lift not measured.** Do not describe either as a retention win in external-facing copy.
 
-**Both are UNPROVEN.** Mechanism shipped, lift not yet measured — a meaningful cohort read needs roughly two more weeks from the merge date. **Do not describe these as retention wins in any external-facing copy** until a real read confirms it.
+**The strategic pivot (2026-07-20/21) — read this before assuming "everything gates on the v0.48.0 cohort read":** the v0.48.0 read came back too weak to act on cleanly, and cold email outreach to already-churned users was judged unlikely to work (precedent: failed-payment recovery emails got zero response). Rather than wait on that one gate, the product owner explicitly repositioned the whole track — *"we're not chasing our previous users anymore, we're now chasing new users to retain"* — and the four releases since (`v0.52.0`, `v0.52.1`, `v0.53.0`, `v0.54.0`) all ship from that posture instead of from the retention-bet queue:
+- **Real-time friction capture from current users**, replacing cold outreach to churned ones: proactive in-app feedback prompts at first-quiz-ever and return-after-inactivity moments (`v0.52.0`), plus three more early-lifecycle placements aimed specifically at new users in their first sessions — Public Library browse-without-adopting, first non-onboarding Study Pack generation, second-ever completed quiz (`v0.52.1`).
+- **New-user acquisition**, not re-engagement: organic-search discoverability fixes (`v0.53.0`) and a fourth Exam Hub, CPALE (`v0.54.0`), both explicitly scoped under the "new users to retain" posture per a dedicated sequencing session (`next-priority-new-user-focus-out/01-next-priority-new-user-focus.md`, 2026-07-21).
+- **`v0.55.0`/`v0.56.0` are a third, distinct lane** — study-effectiveness/in-session learning-quality work (Companion excerpts and weak-concept explanation links on quiz result screens), explicitly scoped to answer "does the product help you learn right now, in this session," independent of both the acquisition work and the still-gated retention bet.
 
-**An open, unresolved question worth knowing about before writing anything exam-date-related:** exam-dated users (in theory the most motivated segment — they have a real deadline) actually retained *worse* under the status quo (0/35) than users with no exam date set (3/94, small sample). The comfortable explanation is "nothing currently acts on that field, so it has no behavioral effect either way." The uncomfortable explanation, not yet ruled out, is that even highly-motivated users didn't find the product worth a second visit — a **value** problem, not just a missing-trigger problem. Real user interviews (both retained and churned users) are queued to resolve this but have not been conducted yet as of this update.
+**Retention H1+H5 (commitment device + pre-decided return action) is still the pre-committed next move if data ever clears its gate — but that gate remains unresolved, not abandoned.** The rule from before the pivot still stands: any positive-or-ambiguous signal on a v0.48.0 cohort re-read triggers H1+H5 as one combined release (cohort size is too small to attribute single-variable tests separately). The re-read is **not yet reachable, let alone run**: the 14-day W1→W2 window for a cohort that actually experienced the v0.48.0 changes doesn't close until 2026-07-29 — still 6 days out as of this update (2026-07-23) — though the query is already written and ready (`next-priority-new-user-focus-out/02-h1-h5-cohort-recheck-and-cpale-depth.sql` Query 1).
 
-**What's next, and the pre-committed decision rule:** any positive-or-ambiguous signal on the v0.48.0 read triggers a combined follow-up release shipping a commitment device (ask the user to commit to a concrete return plan at peak motivation, right after their first quiz) together with a pre-decided return action (so "what do I even do when I come back" is answered in advance) — as one release, not sequential experiments, because the cohort size here is too small to cleanly attribute single-variable tests one at a time. (Note: this was earlier referred to under the working name `v0.50.0` before that version number was used for the unrelated Mobile Bottom Tab Bar release — the H1+H5 release is still unscoped and will get the next available version number, not v0.50.0.)
+**The retained/churned exam-dated user interview script is written and ready to run, zero engineering cost, and still hasn't been run as of this update.** It's the one open item on this whole track that can't happen from a keyboard — repeatedly displaced by codeable work across five releases now.
 
-**Full backlog, current status, and exactly what un-parks each item lives in `docs/product/ROADMAP.md`'s Backlog Index table — check it before proposing or resurfacing anything.** It exists specifically because a large, fully-designed exploration ("Smart Review Planning," a curriculum-driven Review Set curation system) sat forgotten across several release cycles before this table existed. Do not propose roadmap items from partial memory of past sessions; the index is the current source of truth for what's held, what's conditional, and why.
+**2026-07-22 interim-window production pulls** (run manually by the product owner, not by Claude — no prod DB access): device mix reconfirms ~75% mobile / 25% desktop (no new signal, already used to un-park `v0.50.0`'s tab bar); PDF export usage is unchanged at exactly 1 export ever (reinforces "parked, do not build" on PDF export surfacing); exactly 4 course/programs have a published top-level Official Review Set — Accountancy (74 notes), Architecture (52), Education (43), Nursing (63) — a 1:1 match with the 4 shipped Exam Hubs (CPALE/ALE/LET/PNLE), each with real depth, which is mild evidence *against* the strongest form of "no content for my exam" as a churn cause for those four specifically, though zero official coverage exists for any board exam outside them; the exam-date natural experiment reconfirmed at a larger, later sample — 0/41 (0%) exam-dated vs. 3/106 (2.83%) non-exam-dated, same direction as the original 0/35 vs. 3/94 read. **Still unresolved:** whether exam-dated users retaining worse is a *value* problem (they tried it and it wasn't worth a second visit) or a *discovery* problem (nothing surfaces the value that exists) — the interviews above are what's meant to resolve this, and they still haven't run.
+
+**Full backlog, current status, and exactly what un-parks each item lives in `docs/product/ROADMAP.md`'s Backlog Index table — check it before proposing or resurfacing anything**, and see "Fable Roadmap Candidates: Gated & Ungated" below for a synthesized, status-grouped view of that same table. The index exists specifically because a large, fully-designed exploration ("Smart Review Planning," a curriculum-driven Review Set curation system) sat forgotten across several release cycles before this table existed. Do not propose roadmap items from partial memory of past sessions; the index is the current source of truth for what's held, what's conditional, and why.
 
 ---
 
@@ -110,7 +113,7 @@ Profile-aware terminology — "Study Plan" (Student / Board Taker), "Lesson Plan
 
 ---
 
-## Learning Companion: Vision & Evolution (v0.41.0 → v0.43.1)
+## Learning Companion: Vision & Evolution (v0.41.0 → v0.43.1, plus a v0.55.0 fast-follow)
 
 **The organizing insight:** Review Centers aren't valuable because they provide PDFs or quizzes — they're valuable because they provide **guidance** (structure, direction, pacing, coaching, confidence). NoteLib had the knowledge layer (Notes), the learning engine (Study Packs), and the journey (Review Sets), but no guidance layer riding on top. The Companion is that layer — a persisted, curator-authored, profile-aware, statically-served guidance layer on a top-level Review Set.
 
@@ -144,7 +147,9 @@ Shipped as `TodaysFocusCard` (merges former countdown/primary-action/coach-intro
 - **PRO — personalization.** Genuinely adaptive/learning-pattern/LLM-informed guidance selection (future, gated) — explicitly **not** deterministic rule-based reordering, which follows the same FREE precedent as the weekly countdown (a common point of confusion recorded so it isn't re-derived wrong later).
 - Both future runtime tiers are gated on the persisted Companion existing; neither is scoped to a version yet.
 
-**Future, gated, not yet scoped:** AI-generated Review Sets (curator pipeline: public notes → suggest Subject Plans → generate Companion → human review → publish — gated on v0.42.0's authoring-assist pipeline proving out); Ask Companion (PLUS); Personalized/Adaptive guidance (PRO).
+**Result-Screen Companion Bridge (v0.55.0) — the Companion's guidance reaches beyond the Review Set page for the first time.** Quick Review, Challenge Quiz (both render branches, including Board Exam Mode), and Adaptive Practice result screens now show a labeled excerpt card ("From your Review Set's guide: ...") of the primary Review Set's Common Mistakes (falling back to Study Strategy) right where `WeeklyPacingEchoCard` already renders. Curator-published content only, no generation, no mid-exam coaching — reuses the same `primaryCollectionId` → `getCollectionGoal()` fetch the Echo already made, so this required no new note→collection lookup and no new endpoint. This was explicitly held back through two prior release cycles as an App Shape candidate on exactly that missing-lookup problem — resolving it by reusing an existing pattern is what un-parked it.
+
+**Future, gated, not yet scoped:** AI-generated Review Sets (curator pipeline: public notes → suggest Subject Plans → generate Companion → human review → publish — gated on v0.42.0's authoring-assist pipeline proving out); Ask Companion (PLUS); Personalized/Adaptive guidance (PRO). See "Fable Roadmap Candidates: Gated & Ungated" below for the full current status of these three.
 
 ---
 
@@ -223,20 +228,50 @@ Upgrade CTA rule:
 
 ---
 
-## Current Release: v0.50.0 - Mobile Bottom Tab Bar (plus v0.48.0's in-flight experiments)
+## Current Release: v0.56.0 - Weak-Concept Explanation Links
 
-**Status: Released.** No version is currently in progress. See the "Retention Is the Proven Constraint" section above for the strategic context — recent releases are small and isolated on purpose. v0.50.0 is the first exception: a real UI-shape change, explicitly navigation work rather than a retention experiment, gated on real device-mix data rather than routed around the experiment cycle.
+**Status: all planned scope merged onto `releases/v0.56.0`, pending signoff — not yet released, not yet on `main`.** Theme: close the loop from "you missed this" to "here's what it actually means, right now" on quiz result screens. Sourced from Fable's 2026-07-22 study-effectiveness session (`docs/claude-prompt/study-effectiveness-out/01-study-effectiveness-ui-pricing.md` §1 item 1), its top pick across that consultation — same study-effectiveness lane as `v0.55.0`, not the acquisition or retention-bet lanes. Anti-drift: no new schema, no new endpoint, no new generation — pure navigation over data that already exists; not a retention mechanic (same-session learning aid, not a return-trigger).
 
-**`v0.50.0` (2026-07-15) — new UI, plus retention-diagnosis groundwork and a search fix.**
-- **Persistent mobile bottom tab bar** — the headline UI change. Four icon+text tabs (Dashboard, Library, Review Sets — profile-aware collection navigation — and Public Library), shown only below the `md` breakpoint. Gated on real data: a production device-mix pull found ~75% mobile vs. 25% desktop by distinct users, meeting the bar originally set by a Fable App Shape proposal. Desktop sidebar and the mobile hamburger drawer are completely unchanged — this is additive, not a replacement (see the new Navigation note under Core Feature Surfaces). The bar auto-hides during exam focus and active assessment/review screens so it never stacks with another fixed-bottom element, and coordinates with the home-screen-install nudge (which now sits above the tab bar's safe-area height instead of overlapping it).
-- **Retention-diagnosis instrumentation (mid-release scope addition, collection-only).** Three previously-held measurement gaps were closed after an explicit decision to instrument: first-touch UTM/referral capture at signup (both email and Google OAuth paths, never overwritten by a later login), a best-effort anonymous event when the offline-fallback page actually serves, and a page-view event on the official Study Plan catalog. No new dashboard or report reads any of this yet — purely groundwork for a future analytics pass, and none of it is user-visible or confounds the concurrently-accruing v0.48.0 cohort read.
-- **Sitemap fix.** The three Exam Hub pages (`/exam/ale`, `/exam/pnle`, `/exam/let` — built specifically for exam-named search queries like "PNLE") were fully built and already emitting search-friendly structured data, but were entirely missing from `sitemap.ts`, invisible to the sitemap Google actually crawls. Found while scoping a broader SEO strategy question (a Fable brief for that is queued in the Backlog Index, not yet run); fixed immediately since it was same-day, isolated, and zero-risk.
+- **Weak/missed-concept explanation links.** Quick Review, Adaptive Practice, Challenge Quiz, and Board Exam Mode result lists now link weak concepts that match a source-note Key Concepts entry straight to that entry (`?tab=key-concepts#concept-*`, with scroll-and-highlight on Note Detail); unmatched concepts stay plain text.
+- **Mid-release addition: Quiz-tab Full Notes nudge + Key Concepts readiness sort.** Two more candidates from the same Fable session, folded in because they touch the same Note Detail area: a one-time `GuidanceTip` nudging a learner who hasn't visited Full Notes yet toward it from the Quiz tab (deliberately a nudge, not a tab reorder — the existing tab order is a locked prior decision); and the Key Concepts tab now sorts entries by readiness (struggling → due → not-started → mastered) once ConceptHealth loads.
 
-**`v0.49.0` (2026-07-15).** A small, deliberately non-retention-flavored fix filling the interim window while the v0.48.0 experiment cohort accrues data: Progress page's per-subject links and its "weakest subject" CTA now point at the learner's own private Library instead of Public Library, with copy corrected to match ("Study X in your Library" instead of "Browse X notes in the community").
+See `RELEASES.md` v0.56.0 for full scope and anti-drift detail.
 
-**`v0.48.0` (2026-07-15) — the strategically significant one, still the real gate.** Two isolated retention experiments — see the dedicated section above for full detail. Both unproven, cohort data still accruing.
+---
 
-**Next real decision point:** whatever the v0.48.0 read shows — the pre-committed rule is any positive-or-ambiguous signal ships a commitment device (H1) together with a pre-decided return action (H5) as one combined release, not sequential experiments. Also still outstanding and repeatedly displaced by codeable work: the retained/churned user interview script has not been run yet — it's the one open item that can't happen from a keyboard. See `docs/product/ROADMAP.md`'s Backlog Index for the full current state of everything queued behind both.
+## Previous Releases: v0.51.0 → v0.55.0 (condensed — see `RELEASES.md` for full detail)
+
+**v0.55.0 - Result-Screen Companion Bridge.** Brings curator-authored Companion guidance (Common Mistakes, falling back to Study Strategy) to the Quick Review / Challenge Quiz (both branches, including Board Exam Mode) / Adaptive Practice result screens, reusing the exact `primaryCollectionId` → `getCollectionGoal()` pattern the v0.46.0 Weekly Pacing Echo already shipped in the same slot — no new note→collection lookup, no new endpoint. Curator-published content only, no generation, no mid-exam coaching. Resolves the "premise problem" that held this back as an App Shape candidate for two release cycles.
+
+**v0.54.1 - Public Note Copy Correctness Fixes.** Two independent correctness fixes: `NoteService.copyNote()`'s existing-copy branch now backfills a copied Study Pack onto a previously pack-less copy once the source's Study Pack becomes ready (was returning it pack-less forever); the public note "Quiz yourself" CTA is now hidden for the note's own owner, matching the already-documented owner/non-owner action split. A user report of the AI-suggested-metadata modal flashing/bypassing on a self-copy-then-manual-generate flow was investigated but not reproduced or confirmed — logged as a known limitation, not fixed.
+
+**v0.54.0 - CPALE Exam Hub (Wave 2).** A fourth board-exam hub (`/exam/cpale`, Accountancy), reusing the Wave 1 hub template exactly — no route-level code change since `/exam/[slug]` and the sitemap already iterate the hub config. Gated on a production depth-count check clearing the ~25-30 note Wave 2 bar, confirmed 2026-07-21. Other Wave 2 candidates (Civil/Electrical/Mechanical Engineering, Pharmacy, Physical Therapy, Civil Service Exam) each still need their own depth confirmation — not extended to any of them.
+
+**v0.53.0 - SEO Discoverability: Exam Hub Depth & Organic Attribution.** Pure new-user acquisition work from an organic-search strategy session: a "Browse by Subject" breakdown + uncapped "More {Exam} Notes" section on each Exam Hub (previously capped at 18 visible cards); real `ItemList` structured data asserting the hub's actual member notes; a privacy-preserving, aggregate-only `referrerSource` bucket (`google`/`other-search`/`social`/`direct`, no raw URLs) feeding a new Admin organic-landing-attribution panel.
+
+**v0.52.1 - Early-Lifecycle Feedback Signals.** Three targeted proactive feedback prompts for *new* users specifically (not churned-user outreach): Public Library browsed-without-adopting, first non-onboarding Study Pack generation (both frontend-only, reuse the existing `SendFeedbackWidget`/`QuizFeedbackPanel`), and second-ever-completed-quiz difficulty/pacing (needed one new backend signal). A Fable session explicitly rejected a fuller app-wide build as the same "more listening infrastructure on a tiny population" anti-pattern the retention diagnosis already flagged.
+
+**v0.52.0 - Proactive In-App Feedback Prompts.** The pivot-defining release: instead of cold outreach to already-churned users (judged unlikely to work), surfaces the existing feedback pipeline proactively to *current* users at first-quiz-ever and return-after-inactivity moments. Mid-release scope addition: a feedback modal visual redesign, an Admin read-only detail view, and a strictly-optional screenshot attachment (new `feedback_image` table, deliberately not a column on `FeedbackEntity`, to protect the v0.51.0 read-path fix).
+
+**v0.51.0 / v0.51.1 - Read-Path Performance Pass II.** Fixed production slowness on Private Library, Public Library, Collection detail, and Dashboard via lean projections, a two-tier poller, waterfall flattening, a batched Dashboard fan-out endpoint, and real backend pagination for both Private and Public Library (F1–F8, all shipped; F9/F10 client-caching and denormalized-counts deliberately parked pending production evidence). v0.51.1 closed the one deferred follow-up — wiring Dashboard Stage-1's fetch to the bounded `limit` param F2 shipped unused.
+
+---
+
+## Previous Releases: v0.48.0 → v0.50.4 (condensed — see `RELEASES.md` for full detail, and "Retention Is the Proven Constraint" above for v0.48.0's strategic framing)
+
+**v0.50.4 - Exam Hub Discovery Polish.** Collapsed a duplicate "Browse {Hub} hub →" link; a "free reviewer" SEO vocabulary pass across Exam Hub and all Public Library subject pages; a defensive subject-page indexation gate (`SUBJECT_PAGE_INDEX_THRESHOLD = 6`) so the vocabulary pass didn't make thin 1-note pages indexable.
+
+**v0.50.3 - Public Note Copy Flow & Related-Notes Consistency.** Made copy-as-is the only behavior for the public "Quiz yourself" CTA (fixed a real navigation-vs-modal race condition); consistent "See all →" related-notes link wording/grid across sections.
+
+**v0.50.2 - Note Card Content Consistency.** One shared single-excerpt card cascade (note preview, else Study Pack summary fallback, else nothing) across all six note-card surfaces, replacing several years of shipping-drift duplication.
+
+**v0.50.1 - Mobile UI Polish.** Tab-bar fast-follows (filter-retaining Library/Public Library links, a persisted show/hide preference; an icon-only compact variant was implemented then reverted after a consumer-psychology review found it cut the accessible name for no real chrome benefit); Review Set description "Read more" expansion; Progress page milestone/Concept Mastery legibility fixes.
+
+**v0.50.0 - Mobile Bottom Tab Bar.** A persistent 4-tab mobile bottom nav (Dashboard, Library, Review Sets, Public Library), additive to the unchanged desktop sidebar and mobile drawer, gated on a production device-mix pull (~75% mobile). The first real UI-shape change of this cycle, not a retention experiment. See the Navigation note under Core Feature Surfaces.
+
+**v0.49.0 - Progress Page: Private Library Links.** Small non-retention-flavored fix filling the interim window: Progress's per-subject links and "weakest subject" CTA now point at the learner's private Library instead of Public Library.
+
+**v0.48.0 - Retention Experiment: Open Loop & Digest Trigger.** The two unproven retention experiments — full strategic framing is in "Retention Is the Proven Constraint" above, not repeated here.
 
 ---
 
@@ -294,6 +329,45 @@ Upgrade CTA rule:
 
 ---
 
+## Fable Roadmap Candidates: Gated & Ungated
+
+Synthesized from `docs/product/ROADMAP.md`'s Backlog Index — the authoritative table (currently ~45 rows). This section groups the same items by status so a UX conversation can reason about them without opening the repo; **treat the Backlog Index itself as the source of truth if the two ever disagree**, and don't resurface anything below without checking it first — it's been actively curated for months specifically so items don't get proposed from partial memory.
+
+### Active now — no gate, just not yet done
+- **User interviews (retained + churned exam-dated).** Script written, zero engineering cost. The one item on the entire retention track that can't happen from a keyboard — still not run, see the Retention section above.
+- **P1 (Google Search Console setup) and P3 (exam-named Learn guides).** Both non-engineering — P1 needs domain access, P3 needs a human curator. Handed back to the product owner as action items, not code work.
+
+### Gated — condition is close or partially cleared
+- **Retention H1+H5 (commitment device + pre-decided return action).** The pre-committed next move if the v0.48.0 cohort re-read is positive-or-ambiguous. Gate: the re-read window doesn't close until 2026-07-29 (6 days out as of this update); query is ready but can't run yet. See the Retention section above — do not scope this without that read.
+- **Wave 2 Exam Hubs beyond CPALE** (Civil/Electrical/Mechanical Engineering, Pharmacy, Physical Therapy, Civil Service Exam). Each needs its own production note-count depth check (~25-30 notes) before it's buildable — CPALE cleared this bar in v0.54.0, the rest haven't been checked yet.
+- **P7 (exam quick-facts block per hub)** — wait for GSC (P1) to confirm these queries even reach NoteLib before building a recurring editorial-maintenance surface.
+- **P8 (off-page community presence / backlinks)** — non-engineering, sequenced after the on-page SEO work (done); needs an owner to actually do outreach.
+- **L2 (earned-depth pathway for non-exam subjects)** — double-gated: needs both a subject showing real depth (~15-20+ notes) in a future inventory AND post-GSC data showing organic impressions actually landing there.
+- **F9/F10 (client-side caching, denormalized engagement counts)** — parked from the v0.51.0 performance pass, pending production evidence (post-bound-query slow-log signal, refetch pain) that hasn't been checked yet.
+- **Study Effectiveness remaining candidates** (Note Detail tab-order/reading-flow, Study Pack scope surfacing, Adaptive Practice per-question rationale tag, Review Set Detail + result-screen layout pass, collapsed-Companion teaser, twice-missed-concept re-explanation, Plus-tier review-timing-gate instrumentation). One item from this same Fable session shipped as `v0.56.0`; the rest are unscoped candidates needing individual scoping passes. **Difficulty Selection Pro→Plus** is its own item in this list — it's a pricing-structure decision (Plus currently has no qualitative differentiator since Free quota is non-binding), not a config flip, and needs explicit product sign-off before it's even scopeable.
+- **Parent Readiness Digest (New Capability Idea 4).** Conditional on the H1 read being positive AND an explicit product decision on shape (email-only vs. dashboard).
+- **Offline Study Pack access (Idea 9).** "Held, one leg down" — heavy mobile usage is confirmed (~75%), but still needs one more leg: PDF export volume is ruled out (essentially unused, 1 export ever), so it now needs either the offline-fallback hit rate (not yet instrumented) or a direct interview signal.
+- **Bulk Quiz Generation & Teacher-Flow Polish** (+ shared-results probe / class-groups ideas folded in). Auto-schedules once ≥5 active teacher accounts exist — deliberately not re-litigated every release cycle before then.
+
+### Held indefinitely — behind the retention constraint clearing
+- **App Shape Core** (Companion Live Milestones, Concept-to-Note Back-Annotation, "Struggle Map" evidence panel) and **App Shape Polish stragglers** (sticky-toolbar re-attempt, Review Set filter facet, feedback digest) — none touch the proven retention constraint, held until it clears.
+- **Photo Capture of handwritten notes (Idea 6).** The next recommended Core-Feature-sized bet (new image upload + vision-extraction infra) once the retention loop is actually proven (W1→W2 lift confirmed), not before.
+- **Smart Review Planning (Internal Curator, 7 fully-architected docs in `docs/claude-prompt/fable-out/`).** The single largest piece of paused planning material in the repo. Triple-gated: interviews confirm content-gap churn AND a manual coverage sprint proves lift AND hand-curation saturates. Do not propose this from memory — read the Backlog Index row first.
+- **Manual Official-coverage sprint (hand-curate ALE/PNLE/LET/CPALE gaps).** Conditional on interviews surfacing "no content for my exam" as an actual churn reason.
+- **Listen Mode / Bilingual UI / Study Buddy (Ideas 7, 10, 11).** Low priority, gated on an interview signal for language/social/loop demand. Study Buddy specifically confirmed lowest — a pairing mechanic multiplies churn risk at 2.4% W1→W2 rather than countering it.
+- **PDF export surfacing.** Parked, do not build — near-zero usage (1 export, ever) and the value-vs-discovery question is currently undeterminable.
+- **Conversion-audit deferred pair** (adoption-count social proof, "Trending this week" on Public Library plan cards) — held on windowed backend engagement counts that don't exist yet.
+
+### Parked — needs an explicit product go-decision, not a data gate
+- **AI-generated Review Sets.** Curator pipeline: public notes → suggest Subject Plans → generate Companion → human review → publish. Gated on the v0.42.0 authoring-assist pipeline proving out (it does) and an explicit go-decision that hasn't been made.
+- **Runtime Companion — Ask Companion (PLUS)** (grounded Q&A over authored Companion content, reusing the Interview Practice cost-control template) **and Personalization (PRO)** (genuinely adaptive/learning-pattern-driven guidance selection — explicitly not deterministic rule reordering, which is the same FREE precedent as the weekly countdown). Both gated on an explicit go-decision on top of the persisted Companion existing (it does, since v0.41.0); Personalization is additionally blocked by an open, unrelated Profile/Progress philosophy question (Primary Review Set vs. the older Study/Exam Focus mechanism, never reconciled).
+- **Review-Set-Centric Navigation** (Official Review Set catalog as the scalable replacement for hand-built per-profession Exam Hub pages; Dashboard/Progress reorganized around the Primary Review Set; eventual nav shape Dashboard / My Reviews / Library / Explore / Progress). Direction only, no release scoped, no gate stated beyond "the Primary Review Set concept proving useful in real usage" — which it has been used for since v0.40.0, so this is really just waiting on a deliberate scoping pass.
+- **Deeper plan nesting (3+ level Goal→Subject hierarchy).** Feasible but a real project (cycle detection, recursive readiness rollup, adopt-recursion) — nice-to-have, no gate stated.
+- **Note Detail readiness as its own tab.** Blocked on a mobile tab-overflow design pass — the current 4-tab bar already fills a standard iPhone viewport exactly.
+- **Legacy "Future Directions" block** (exam-mode work, billing, teacher items pre-v0.20 in `ROADMAP.md`). Explicitly flagged stale, largely pre-dates current architecture — needs a fresh audit before anything in it is trusted, not proposed as-is.
+
+---
+
 ## Core Feature Surfaces
 
 ### Navigation (App Shell) — updated v0.50.0
@@ -322,7 +396,8 @@ Do not add a 5th tab or otherwise expand the tab bar's scope without checking `R
 - Note creation/generation must respect profile setup, target audience defaults, and Study Pack usage rules.
 - Async generation saves the note first, marks it `GENERATING`, redirects to Note Detail, and lets Note Detail poll.
 - Failed generation preserves note content and exposes Retry Generate.
-- Note Detail is the owner study hub: summary, key concepts, quiz, full notes, practice actions, recent sessions, readiness signal, plus (v0.39.0) Flashcards/Memorization entry points on the Key Concepts tab.
+- Note Detail is the owner study hub: summary, key concepts, quiz, full notes, practice actions, recent sessions, readiness signal, plus (v0.39.0) Flashcards/Memorization entry points on the Key Concepts tab. Since v0.56.0, Key Concepts entries sort by readiness (struggling → due → not-started → mastered) once ConceptHealth loads, and the Quiz tab shows a one-time nudge toward Full Notes if the learner hasn't visited it yet this page visit — tab order itself (Summary, Key Concepts, Quiz, Full Notes) stays a locked prior decision, not reopened.
+- Quiz result screens (Quick Review, Challenge Quiz including Board Exam Mode, Adaptive Practice, and — for weak-concept links only — Board Exam Mode) now carry two authored/derived guidance surfaces: a `CompanionResultBridgeCard` excerpting the learner's primary Review Set's Common Mistakes/Study Strategy Companion content (v0.55.0), and (v0.56.0) deep-links from missed/weak concepts straight to their matching Key Concepts explanation on the source note. Both are same-session learning aids, not retention/return mechanics.
 
 ### Public Notes and Profiles
 

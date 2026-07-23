@@ -43,6 +43,7 @@ import {
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { isQuizSelectionCorrect, resolveQuizCorrectIndex, resolveQuizItemGroupAt } from "@/lib/quiz";
 import { mapPerformanceLevel } from "@/lib/challenge-quiz-results";
 
@@ -650,7 +651,18 @@ export default function AdaptivePracticePage() {
               </p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {adaptiveQuiz.weakConcepts.map((concept) => (
-                  <li key={concept}>{concept}</li>
+                  <li key={concept}>
+                    {note?.id && note.keyConcepts?.some((keyConcept) => (
+                      normalizeConceptKey(keyConcept) === normalizeConceptKey(concept)
+                    )) ? (
+                      <Link
+                        href={`/notes/${note.id}?tab=key-concepts#${buildConceptAnchorId(concept)}`}
+                        className="font-medium text-amber-700 underline underline-offset-4 dark:text-amber-300"
+                      >
+                        {concept}
+                      </Link>
+                    ) : concept}
+                  </li>
                 ))}
               </ul>
             </div>

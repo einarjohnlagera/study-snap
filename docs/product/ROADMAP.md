@@ -6,7 +6,9 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.55.0 - Result-Screen Companion Bridge` is the current released version (on `releases/v0.55.0`, cut from `main` after v0.54.1 merged) — see its section below.
+`v0.56.0 - Weak-Concept Explanation Links` is the most recently released version (on `releases/v0.56.0`, cut from `main` after v0.55.0 merged) — see its section below. No version is currently in progress.
+
+`v0.55.0 - Result-Screen Companion Bridge` is the previous released version — see its section below.
 
 `v0.54.1 - Public Note Copy Correctness Fixes` is the previous released version — see its section below.
 
@@ -90,7 +92,7 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | App Shape Core (Live Milestones, Concept-to-Note Back-Annotation, Struggle Map) | same | Held indefinitely | retention constraint clears | 2026-07-15 |
 | App Shape Polish stragglers (sticky toolbar re-attempt, Review Set filter facet, feedback digest) | same | Held / needs real scoping | Struggle Map (above) ships first for the digest item; others need a scoping pass | 2026-07-15 |
 | Result-Screen Companion Bridge — surface the relevant curator-authored Common Mistakes/Study Strategy excerpt on the quiz result screen | `app-shape-out/01-app-shape-features.md` item 4 | **Scoped into v0.55.0.** Premise problem resolved 2026-07-22 by reusing the `users.primaryCollectionId` pattern the v0.46.0 Weekly Pacing Echo already shipped for the same result-screen slot | none, in progress | 2026-07-22 |
-| Link missed/weak concepts on quiz result screens to their Study Pack explanation | `study-effectiveness-out/01-study-effectiveness-ui-pricing.md` §1 item 1 | **Scoped into v0.56.0.** Fable's top pick across the whole session — reuses existing per-concept explanation data and the already-shipped `#full-notes` hash-anchor pattern; no dependency on the in-flight retention/acquisition experiments | none, in progress | 2026-07-22 |
+| Link missed/weak concepts on quiz result screens to their Study Pack explanation | `study-effectiveness-out/01-study-effectiveness-ui-pricing.md` §1 item 1 | **Shipped — v0.56.0.** Quick Review, Adaptive Practice, Challenge Quiz, and Board Exam result weak-concept entries now deep-link to matching Key Concepts anchors on the source note; unmatched concepts remain plain text | no backend, schema, generation, scoring, or ConceptHealth-write changes | 2026-07-22 |
 | Study Effectiveness / UI Polish / Pricing Fit — remaining candidates (Note Detail tab-order/reading-flow mismatch, Study Pack scope surfacing, Key Concepts readiness sort, Adaptive Practice per-question rationale tag, Review Set Detail + result-screen card-accretion layout pass, collapsed-Companion teaser, twice-missed-concept re-explanation, Plus-tier review-timing-gate instrumentation, Difficulty Selection moved Pro→Plus) | `study-effectiveness-session-plan.md`, `study-effectiveness-out/01-study-effectiveness-ui-pricing.md` | Candidate, not yet scoped — one item (above) picked up for v0.56.0, rest unscoped. The Difficulty Selection Pro→Plus item is a pricing-structure decision (Plus currently has no qualitative reason to exist since Free quota is non-binding) needing product sign-off, not just a config flip | needs a scoping pass per item; Difficulty Selection item needs a pricing-strategy decision first | 2026-07-22 |
 | Bulk Quiz Generation & Teacher-Flow Polish (+ Ideas 2/3 folded in) | `ROADMAP.md` §Bulk Quiz Generation | Held | ≥5 active teacher accounts | 2026-07-15 |
 | Listen Mode / Bilingual UI / Study Buddy (Ideas 7, 10, 11) | `new-capability-out/01-new-capability-ideation.md` | Low priority | interview language/social/loop signal | 2026-07-15 |
@@ -114,6 +116,14 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 | Feedback system polish — Send Feedback modal visual redesign, optional screenshot/image attachment on bug reports, and a read-only Admin detail view for the "Recent Feedback" table (currently a static, truncated table) | `feedback-system-polish-out/01-modal-design-and-admin-detail.md` | **Folded into v0.52.0 as a mid-release scope addition.** Modal restyle + strictly-optional screenshot field (separate `feedback_image` table, not a column on `FeedbackEntity`, to avoid regressing the v0.51.0 read-path fix); Admin gets a "View" button reusing the existing Refund modal pattern. A status-update action is recommended as a separate fast-follow, not bundled in | none — see `RELEASES.md` v0.52.0 | 2026-07-20 |
 | Structured quiz feedback questions (quiz-results-card-only scope; too-easy/repetitive/confusing chips) | `quiz-feedback-microsurvey-out/01-structured-quiz-questions.md` | **Superseded** — product owner corrected scope to app-wide/new-user-focused mid-session; folded as one input into the app-wide session below, not a standalone answer | none — superseded | 2026-07-21 |
 | App-wide new-user early-lifecycle feedback signals (Public Library browse-without-adopt, first non-onboarding Study Pack generation, second-ever completed quiz) — explicitly a leading indicator for new-user friction, not a churn-diagnosis substitute for the unsent outbound interviews above | `app-wide-feedback-signals-out/01-app-wide-feedback-signals.md` | **Shipped — v0.52.1.** Fable's own verdict: build this small slice (2 of 3 placements zero-backend), hold anything larger — rejected a structured `quick_reason` field on volume grounds (~127 activated users), rejected the floated "is the UI hard to understand?" as too vague, explicitly does not touch or substitute for H1/H5 above | none — see `RELEASES.md` v0.52.1 | 2026-07-21 |
+
+## v0.56.0 - Weak-Concept Explanation Links (Released, base branch `releases/v0.56.0`)
+
+Origin: Fable's top pick from the 2026-07-22 study-effectiveness session (`docs/claude-prompt/study-effectiveness-out/01-study-effectiveness-ui-pricing.md` §1 item 1) — explicitly scoped to exclude retention-trigger mechanics and Smart Review Planning. Picked as the cheapest, most direct answer to "does the product help you learn right now, in this session" — no dependency on the in-flight retention/acquisition experiments.
+
+### Planned Scope
+
+See `RELEASES.md` v0.56.0 for scope and anti-drift rules.
 
 ## v0.55.0 - Result-Screen Companion Bridge (Released, base branch `releases/v0.55.0`)
 
