@@ -2,7 +2,7 @@
 
 ## v0.57.0 - Practice-First Activation Onboarding
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: for a board-exam learner whose target course/program already has a curated Official Review Set, get them from signup to a real first practice question with zero note-authoring and zero AI generation — matching the "start practicing immediately" activation model that motivated this release, instead of forcing every learner through the same generate-or-write-a-note onboarding path.
 
@@ -19,6 +19,7 @@ Anti-drift: no new backend entity, no new endpoint, no migration — this is an 
 
 - **Practice-first Board Taker onboarding (frontend).** A qualifying published Official Review Set now replaces note authoring and Study Pack generation immediately after Step 2. The learner adopts the existing set, completes onboarding, and lands on the adopted Review Set's detail page. Empty/zero-ready coverage and lookup failures preserve the existing create-first path, and other profile types are unchanged.
 - **Practice-first funnel instrumentation (backend + frontend).** Added the eligible and plan-adopted onboarding analytics events in both event contracts. Events are fire-and-forget; Quick Review start/completion remains covered by the existing generic quiz events.
+- **Step indicator fix (frontend).** The Confirm & Practice screen now displays "Step 5 of 5" with a full progress bar instead of the literal, misleading "Step 3 of 5" — display-only; the underlying step-machine state is unchanged so Back and transition logic are unaffected.
 
 ## v0.56.0 - Weak-Concept Explanation Links
 
