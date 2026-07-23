@@ -402,7 +402,7 @@ class NoteServiceTest {
     }
 
     @Test
-    void copyPublicNote_setsAttributionFields() {
+    void copyPublicNoteForPracticeFirst_copiesReadyStudyPackAndSetsAttributionFields() {
         UUID ownerUserId = UUID.randomUUID();
         UUID sourceOwnerUserId = UUID.randomUUID();
         UUID sourceNoteId = UUID.randomUUID();

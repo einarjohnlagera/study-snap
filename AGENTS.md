@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.55.0 - Result-Screen Companion Bridge` (In Progress); previous: `v0.54.1 - Public Note Copy Correctness Fixes` (Released)
+- `v0.57.0 - Practice-First Activation Onboarding` (In Progress); previous: `v0.56.0 - Weak-Concept Explanation Links` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -251,6 +251,7 @@ Use these skills before writing prompts, before starting new features, and after
   - `Study Pack Generation`
   - `Completion`
 - `Exam Date` is optional and shown inline on the Study Goal step for `BOARD_EXAM`.
+- After `BOARD_EXAM` Step 2 submits, if the collected course/program's top published Official Review Set has `itemCount > 0` and `readyCount > 0`, replace Steps 3–4 with Confirm & Practice: adopt the existing set, persist onboarding completion from `Start this plan`, and land on the adopted Review Set's detail page (not directly inside a quiz — Today's Focus / Continue Studying is one tap away from there). This branch must not author notes, invoke AI generation, launch another quiz mode, or render Step 5. Lookup failures and zero-depth sets fail open to the unchanged create-first flow; `STUDENT`, `TEACHER`, and `PROFESSIONAL` always retain that flow unchanged.
 - Onboarding persists `profileType`, optional `examDate`, and `onboardingCompletedAt`.
 - Profile Type is required before creating or generating study content. Client guards are UX only; backend content-creating mutations (note create, note-from-topic, Study Pack generation, note copy, bulk generation, batch import) must enforce this server-side through `ProfileSetupRequiredException` (`ONBOARDING_REQUIRED`) rather than silently defaulting null `profileType`. The guard (`OnboardingGuardService.assertProfileComplete`) fires only for the legacy completed-but-null cohort — `profileType == null && onboardingCompletedAt != null`. Do not narrow it to bare `profileType == null`: users mid-onboarding persist `profileType` only at the final step (after generating), and copy-on-signup runs pre-onboarding, so both are `onboardingCompletedAt`-null and must stay exempt or the activation funnel breaks.
 - Users with `onboardingCompletedAt != null` but `profileType == null` must be re-prompted only for Profile Type. Do not force them through learner level, course/program, exam-date, note creation, or Study Pack generation again.
@@ -1539,7 +1540,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.56.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.57.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

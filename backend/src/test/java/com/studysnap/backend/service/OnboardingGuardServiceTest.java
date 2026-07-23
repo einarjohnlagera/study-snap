@@ -51,7 +51,7 @@ class OnboardingGuardServiceTest {
     }
 
     @Test
-    void assertProfileComplete_exemptsUsersStillMidOnboarding() {
+    void assertProfileComplete_exemptsFreshPracticeFirstLearnersStillMidOnboarding() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
