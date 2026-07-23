@@ -76,6 +76,59 @@ describe("DashboardStudyPlanSection", () => {
     });
   });
 
+  it("shows an inline adoption error and allows a retry", async () => {
+    (adoptStudyPlan as jest.Mock)
+      .mockRejectedValueOnce(new Error("Could not adopt this plan."))
+      .mockResolvedValueOnce({
+        collectionId: "personal-plan-1",
+        copiedCount: 3,
+        skippedCount: 0,
+        alreadyAdopted: false,
+      });
+
+    render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" />);
+
+    const startButton = await screen.findByRole("button", { name: "Start this Study Plan" });
+    fireEvent.click(startButton);
+
+    expect(await screen.findByText("Could not adopt this plan.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
+
+    await waitFor(() => {
+      expect(adoptStudyPlan).toHaveBeenCalledTimes(2);
+      expect(pushMock).toHaveBeenCalledWith("/collections/personal-plan-1");
+    });
+  });
+
+  it("retries the post-adopt action without adopting the plan again", async () => {
+    const onPlanStarted = jest.fn()
+      .mockRejectedValueOnce(new Error("Could not save your profile."))
+      .mockResolvedValueOnce(undefined);
+    (adoptStudyPlan as jest.Mock).mockResolvedValue({
+      collectionId: "personal-plan-1",
+      copiedCount: 3,
+      skippedCount: 0,
+      alreadyAdopted: false,
+    });
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        onPlanStarted={onPlanStarted}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start this Study Plan" }));
+    expect(await screen.findByText("Could not save your profile.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
+
+    await waitFor(() => {
+      expect(adoptStudyPlan).toHaveBeenCalledTimes(1);
+      expect(onPlanStarted).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("resolves the CTA and subject-count labels through profile-aware terminology, not a hardcoded generic word", async () => {
     (adoptStudyPlan as jest.Mock).mockResolvedValue({
       collectionId: "personal-plan-1",

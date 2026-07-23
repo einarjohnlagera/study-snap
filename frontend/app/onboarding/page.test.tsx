@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import OnboardingPage from "./page";
 import {
+  adoptGoal,
   adoptStudyPlan,
   completeOnboarding,
   completeOnboardingProfileType,
@@ -106,6 +107,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  adoptGoal: jest.fn(),
   adoptStudyPlan: jest.fn(),
   completeOnboarding: jest.fn(),
   completeOnboardingProfileType: jest.fn(),
@@ -142,6 +144,7 @@ describe("OnboardingPage", () => {
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateLearningProfileContext as jest.Mock).mockReset();
     (adoptStudyPlan as jest.Mock).mockReset();
+    (adoptGoal as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockResolvedValue([]);
@@ -303,6 +306,158 @@ describe("OnboardingPage", () => {
     expect(await screen.findByText(
       "Required. This sets the default difficulty for quizzes you generate. You can change it per quiz.",
     )).toBeInTheDocument();
+  });
+
+  it("adopts a qualifying standalone official Review Set and lands on its detail page, without generation", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      {
+        id: "source-plan-1",
+        title: "LET Official Review Set",
+        description: "A curated LET review sequence.",
+        visibility: "PUBLIC",
+        courseProgram: "LET",
+        sourcePlanId: null,
+        itemCount: 3,
+        readyCount: 2,
+        childCount: 0,
+        notesPracticed: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+        updatedAt: "2026-07-01T00:00:00Z",
+      },
+    ]);
+    (adoptStudyPlan as jest.Mock).mockResolvedValue({
+      collectionId: "personal-plan-1",
+      copiedCount: 3,
+      skippedCount: 0,
+      alreadyAdopted: false,
+    });
+    (completeOnboarding as jest.Mock).mockResolvedValue({
+      ...baseMe,
+      profileType: "BOARD_EXAM",
+      onboardingCompletedAt: "2026-07-23T00:05:00Z",
+    });
+
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Exam Reviewer"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile("COLLEGE", "LET");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("You're preparing for LET.")).toBeInTheDocument();
+    expect(await screen.findByText("2 of 3 notes practice-ready")).toBeInTheDocument();
+    expect(screen.queryByText("How do you want to start?")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate Note" })).not.toBeInTheDocument();
+    expect(screen.getByText("Step 5 of 5")).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start this Review Set" }));
+
+    await waitFor(() => {
+      expect(adoptStudyPlan).toHaveBeenCalledWith("source-plan-1");
+      expect(completeOnboarding).toHaveBeenCalledWith({
+        profileType: "BOARD_EXAM",
+        examDate: null,
+      });
+      expect(routerMock.push).toHaveBeenCalledWith("/collections/personal-plan-1");
+    });
+    expect(createNote).not.toHaveBeenCalled();
+    expect(createStudyPackFromNote).not.toHaveBeenCalled();
+    expect(generateNoteFromTopic).not.toHaveBeenCalled();
+
+    const trackedEventTypes = (trackAnalyticsEvent as jest.Mock).mock.calls.map(([event]) => event.eventType);
+    expect(trackedEventTypes.filter((eventType) => eventType === "ONBOARDING_V2_PRACTICE_FIRST_ELIGIBLE")).toHaveLength(1);
+    expect(trackedEventTypes.filter((eventType) => eventType === "ONBOARDING_V2_PRACTICE_FIRST_PLAN_ADOPTED")).toHaveLength(1);
+  });
+
+  it("adopts a qualifying Goal-shaped Review Set and lands on the adopted Goal's detail page", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      {
+        id: "source-goal-1",
+        title: "LET Official Goal",
+        description: "A curated LET review sequence.",
+        visibility: "PUBLIC",
+        courseProgram: "LET",
+        sourcePlanId: null,
+        itemCount: 6,
+        readyCount: 4,
+        childCount: 2,
+        notesPracticed: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+        updatedAt: "2026-07-01T00:00:00Z",
+      },
+    ]);
+    (adoptGoal as jest.Mock).mockResolvedValue({
+      goalCollectionId: "personal-goal-1",
+      adoptedSubjectCount: 2,
+      skippedSubjectCount: 0,
+      totalNotesCopied: 6,
+      totalNotesSkipped: 0,
+      alreadyAdopted: false,
+    });
+    (completeOnboarding as jest.Mock).mockResolvedValue({
+      ...baseMe,
+      profileType: "BOARD_EXAM",
+      onboardingCompletedAt: "2026-07-23T00:05:00Z",
+    });
+
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Exam Reviewer"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile("COLLEGE", "LET");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start this Goal" }));
+
+    await waitFor(() => {
+      expect(adoptGoal).toHaveBeenCalledWith("source-goal-1");
+      expect(routerMock.push).toHaveBeenCalledWith("/collections/personal-goal-1");
+    });
+  });
+
+  it.each([
+    ["Student", "STUDENT"],
+    ["Teacher", "TEACHER"],
+    ["Professional", "PROFESSIONAL"],
+  ])("keeps the create-first Step 3 unchanged for %s", async (profileLabel) => {
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText(profileLabel));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate a note" })).toBeInTheDocument();
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+  });
+
+  it("falls through to the unchanged input step when a published Board Review Set has no ready notes", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      {
+        id: "source-plan-1",
+        title: "LET Official Review Set",
+        description: "A curated LET review sequence.",
+        visibility: "PUBLIC",
+        courseProgram: "LET",
+        sourcePlanId: null,
+        itemCount: 3,
+        readyCount: 0,
+        childCount: 0,
+        notesPracticed: 0,
+        createdAt: "2026-07-01T00:00:00Z",
+        updatedAt: "2026-07-01T00:00:00Z",
+      },
+    ]);
+
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Exam Reviewer"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile("COLLEGE", "LET");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
+    expect(screen.queryByText("You're preparing for LET.")).not.toBeInTheDocument();
   });
 
   it("completes the generate-note path and opens the first Study Pack", async () => {
