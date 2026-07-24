@@ -16,6 +16,7 @@ Anti-drift: this is the second of Phase 2's two separately-gated chunks (`docs/p
 ### Shipped
 
 - **Progress promoted to a first-class nav item (frontend) — turned out to be mostly already shipped.** `/progress` (and `/collections`/"My Reviews") were already unconditional entries in `app-shell.tsx`'s `MAIN_NAV` for every profile type — no nav-wiring work was needed. The only real gap was page-level: `ProgressHeader` still rendered an unconditional `← Dashboard` back link (a leftover from when Progress was documented as a Dashboard sub-page), and `navigation.md` still described it as one. Fixed: the default `← Dashboard` branch is removed; the contextual "reached via a specific plan's `Check readiness` deep-link" back link is unchanged and still shown when an explicit `?collectionId=` is present. `navigation.md` updated to list Progress (and Collections) among the main pages with no default back link. Defaulting `PlanPicker`'s selection to `primaryCollectionId` was already shipped separately (`progress-report-client.tsx`) — not new work here either.
+- **Adopt-sets-Primary default (backend).** A learner who has no Primary Review Set now receives the newly adopted top-level plan or Goal as Primary even when they already own other top-level collections. Existing primaries remain untouched; Goal adoption can only select the top-level Goal, never a child Subject plan, and the general delete/reparent exactly-one-collection invariant is unchanged.
 
 ## v0.58.0 - Reusable Practice Assets & the Return Loop
 
