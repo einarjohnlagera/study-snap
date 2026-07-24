@@ -280,7 +280,7 @@ class ExamQuestionPoolServiceTest {
     }
 
     @Test
-    void sampleQuestions_doesNotCreateAPoolWhenPrewarmDisabled() {
+    void sampleQuestions_createsUsageDrivenPoolWhenPrewarmDisabled() {
         properties.getPricing().setExamPoolPrewarmEnabled(false);
         UUID studyPackId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -301,8 +301,8 @@ class ExamQuestionPoolServiceTest {
         );
 
         assertThat(result).isEmpty();
-        verify(examQuestionPoolRepository, never()).save(any(ExamQuestionPoolEntity.class));
-        verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
+        verify(examQuestionPoolRepository).save(any(ExamQuestionPoolEntity.class));
+        verify(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
     }
 
     private ExamQuestionPoolEntity pool(

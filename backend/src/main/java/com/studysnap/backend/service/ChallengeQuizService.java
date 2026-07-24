@@ -163,6 +163,7 @@ public class ChallengeQuizService {
     private final ActivityTrackingService activityTrackingService;
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final ExamQuestionPoolService examQuestionPoolService;
+    private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     private final ConceptHealthService conceptHealthService;
 
     @Transactional
@@ -250,7 +251,6 @@ public class ChallengeQuizService {
                 }
             }
         }
-        aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
         QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
                 userId,
                 studyPackId,
@@ -260,13 +260,15 @@ public class ChallengeQuizService {
                 boardExamSourceNoteRefs
         ));
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
+        Set<String> disallowedQuestionKeys = QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions);
         if (generationContext == null) {
             generationContext = buildQuizGenerationContext(userId, studyPack);
         }
         try {
-            List<QuizItem> generatedQuiz;
+            List<QuizItem> challengeQuiz;
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
-                generatedQuiz = additionalBoardExamStudyPackIds.isEmpty()
+                aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
+                List<QuizItem> generatedQuiz = additionalBoardExamStudyPackIds.isEmpty()
                         ? quizGenerationService.generateBoardExamQuiz(
                                 studyPack.getTitle(),
                                 studyPack.getSummary(),
@@ -277,21 +279,45 @@ public class ChallengeQuizService {
                                 generationContext
                         )
                         : generateBoardExamQuizForSources(userId, boardExamSourceNoteRefs, profile.difficulty());
+                challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(generatedQuiz, disallowedQuestionKeys);
             } else {
-                generatedQuiz = quizGenerationService.generateChallengeQuiz(
-                        studyPack.getTitle(),
-                        studyPack.getSummary(),
-                        getKeyConcepts(studyPack),
-                        disallowedQuestions,
-                        quizCount,
-                        profile.difficulty(),
-                        generationContext
+                List<QuizItem> bankedQuestions = challengeQuizQuestionBankService.claimEligibleQuestions(
+                        userId,
+                        studyPackId,
+                        generationContext.learnerLevel(),
+                        session.getId(),
+                        disallowedQuestionKeys,
+                        quizCount
                 );
+                Set<String> combinedQuestionKeys = new LinkedHashSet<>(disallowedQuestionKeys);
+                combinedQuestionKeys.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(bankedQuestions));
+                int shortfall = quizCount - bankedQuestions.size();
+                List<QuizItem> generatedQuiz = List.of();
+                if (shortfall > 0) {
+                    aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
+                    generatedQuiz = quizGenerationService.generateChallengeQuiz(
+                            studyPack.getTitle(),
+                            studyPack.getSummary(),
+                            getKeyConcepts(studyPack),
+                            appendQuestionTexts(disallowedQuestions, bankedQuestions),
+                            shortfall,
+                            profile.difficulty(),
+                            generationContext
+                    );
+                }
+                List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(generatedQuiz, combinedQuestionKeys);
+                challengeQuiz = new ArrayList<>(bankedQuestions);
+                challengeQuiz.addAll(uniqueGeneratedQuiz);
+                if (!uniqueGeneratedQuiz.isEmpty()) {
+                    challengeQuizQuestionBankService.persistGeneratedQuestions(
+                            userId,
+                            studyPackId,
+                            session.getId(),
+                            generationContext.learnerLevel(),
+                            uniqueGeneratedQuiz
+                    );
+                }
             }
-            List<QuizItem> challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(
-                    generatedQuiz,
-                    QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
-            );
             if (challengeQuiz.size() != quizCount) {
                 throw new ChallengeQuizGenerationFailedException();
             }
@@ -320,6 +346,9 @@ public class ChallengeQuizService {
             }
             return toStartResponse(saved, studyPack, usedThisMonth + 1, planType);
         } catch (Exception ex) {
+            if (!MODE_BOARD_EXAM.equals(selectedMode)) {
+                challengeQuizQuestionBankService.releaseClaims(userId, studyPackId, session.getId());
+            }
             markSessionFailed(session);
             QuickReviewSessionEntity failed = quickReviewSessionRepository.save(session);
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
@@ -487,6 +516,18 @@ public class ChallengeQuizService {
                     quiz
             );
         }
+        if (MODE_CHALLENGE.equals(extractMode(saved.getSessionState()))) {
+            challengeQuizQuestionBankService.updateOutcomesAndReleaseClaims(
+                    userId,
+                    saved.getStudyPackId(),
+                    saved.getId(),
+                    quiz,
+                    selectedChoices,
+                    selectedMultiChoices,
+                    selectedIdentificationAnswers,
+                    selectedEnumerationAnswers
+            );
+        }
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, saved.getStudyPackId());
         return new ChallengeQuizSessionResponse(
                 saved.getId().toString(),
@@ -514,6 +555,9 @@ public class ChallengeQuizService {
 
         markSessionForfeited(session);
         quickReviewSessionRepository.save(session);
+        if (MODE_CHALLENGE.equals(extractMode(session.getSessionState()))) {
+            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+        }
         return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE);
     }
 
@@ -540,25 +584,53 @@ public class ChallengeQuizService {
 
         StudyPackEntity studyPack = findOwnedStudyPackOrThrow(session.getStudyPackId(), userId);
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
-
-        List<QuizItem> generated = quizGenerationService.generateMoreChallengeQuiz(
-                studyPack.getTitle(),
-                studyPack.getSummary(),
-                getKeyConcepts(studyPack),
-                disallowedQuestions,
-                existingConcepts,
-                batchSize,
-                difficulty,
-                generationContext
+        Set<String> disallowedQuestionKeys = QuizDeduplicationUtils.toNormalizedQuestionSet(existingQuiz);
+        List<QuizItem> bankedQuestions = challengeQuizQuestionBankService.claimEligibleQuestions(
+                userId,
+                session.getStudyPackId(),
+                generationContext.learnerLevel(),
+                session.getId(),
+                disallowedQuestionKeys,
+                batchSize
         );
+        Set<String> combinedQuestionKeys = new LinkedHashSet<>(disallowedQuestionKeys);
+        combinedQuestionKeys.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(bankedQuestions));
+        int shortfall = batchSize - bankedQuestions.size();
+        List<QuizItem> unique;
+        try {
+            List<QuizItem> generated = List.of();
+            if (shortfall > 0) {
+                generated = quizGenerationService.generateMoreChallengeQuiz(
+                        studyPack.getTitle(),
+                        studyPack.getSummary(),
+                        getKeyConcepts(studyPack),
+                        appendQuestionTexts(disallowedQuestions, bankedQuestions),
+                        existingConcepts,
+                        shortfall,
+                        difficulty,
+                        generationContext
+                );
+            }
 
-        List<QuizItem> unique = QuizDeduplicationUtils.uniqueQuestions(
-                generated,
-                QuizDeduplicationUtils.toNormalizedQuestionSet(existingQuiz)
-        );
+            List<QuizItem> uniqueGenerated = QuizDeduplicationUtils.uniqueQuestions(generated, combinedQuestionKeys);
+            unique = new ArrayList<>(bankedQuestions);
+            unique.addAll(uniqueGenerated);
 
-        if (unique.size() < MIN_NEW_QUESTIONS_AFTER_DEDUP) {
-            throw new NotEnoughNewQuestionsException();
+            if (unique.size() < MIN_NEW_QUESTIONS_AFTER_DEDUP) {
+                throw new NotEnoughNewQuestionsException();
+            }
+            if (!uniqueGenerated.isEmpty()) {
+                challengeQuizQuestionBankService.persistGeneratedQuestions(
+                        userId,
+                        session.getStudyPackId(),
+                        session.getId(),
+                        generationContext.learnerLevel(),
+                        uniqueGenerated
+                );
+            }
+        } catch (RuntimeException exception) {
+            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+            throw exception;
         }
 
         int previousQuizSize = existingQuiz.size();
@@ -874,6 +946,12 @@ public class ChallengeQuizService {
                 .map(QuizItem::question)
                 .filter(question -> question != null && !question.isBlank())
                 .toList();
+    }
+
+    private List<String> appendQuestionTexts(List<String> existingQuestionTexts, List<QuizItem> additionalQuestions) {
+        List<String> allQuestionTexts = new ArrayList<>(existingQuestionTexts == null ? List.of() : existingQuestionTexts);
+        allQuestionTexts.addAll(extractQuestionTexts(additionalQuestions));
+        return List.copyOf(allQuestionTexts);
     }
 
     private Set<String> extractConcepts(List<QuizItem> quiz) {

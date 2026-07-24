@@ -133,8 +133,8 @@ studysnap:
     # Kill-switch for eager exam-pool pre-warming (fires automatically on every Study
     # Pack generation, not on actual Long/Board Exam usage). Default off: with zero
     # Pro users today, this is pure LLM-fan-out cost/memory pressure for zero value.
-    # A real Long/Board Exam start still works when this is off — it live-generates
-    # on demand instead of serving from a pre-warmed pool (see LongExamService).
+    # A real Long/Board Exam start still works when this is off — its first use can
+    # live-generate and then create a per-user pool for later sessions.
     exam-pool-prewarm-enabled: ${EXAM_POOL_PREWARM_ENABLED:false}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}

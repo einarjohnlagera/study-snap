@@ -228,7 +228,11 @@ public class LongExamService {
         }
         if (createdSession.get() && !poolSourcedSession.get() && additionalStudyPackIds.isEmpty()) {
             studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                    .ifPresent(studyPack -> examQuestionPoolService.initiatePool(studyPack, userId));
+                    .ifPresent(studyPack -> examQuestionPoolService.initiatePoolForUsage(
+                            studyPack,
+                            userId,
+                            ExamQuestionPoolService.MODE_LONG_EXAM
+                    ));
         }
         return buildStartResponse(session);
     }

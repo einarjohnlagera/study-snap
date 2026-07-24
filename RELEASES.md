@@ -16,7 +16,11 @@ Anti-drift: this is **not** Phase 3 of the Company Redefinition roadmap (cross-u
 
 ### Shipped
 
-_(nothing yet)_
+- **Usage-driven exam-pool activation and Challenge question bank (backend).** The eager `examPoolPrewarmEnabled` kill switch still keeps ordinary Study Pack generation from prewarming pools, but actual Board Exam and Long Exam usage can now seed and reuse the learner's own pool after first use. This is forward-looking infrastructure because production currently has zero PRO users. Challenge Quiz now delivers the near-term retention value for the FREE-tier surge cohort: newly generated start and `+5 Questions` items persist in an owned per-user, per-Study-Pack bank, reuse eligible same-level questions before generating only a shortfall, and retain last-known outcomes on completion. No cross-user reuse, Adaptive Practice change, or quota/pricing change.
+
+**Known limitations (logged, not fixed this release):**
+- **Copies don't inherit the source's bank or pool.** `NoteService.copySourceStudyPack()` gives every copy a brand-new `studyPackId` with no lineage back to the source, and both the Challenge Quiz bank and `ExamQuestionPoolService` key strictly on `studyPackId`. A learner who copies a popular note (including adopting an Official Review Set, which is a copy under the hood) starts with an empty bank/pool and independently regenerates everything via the LLM, even though the content is identical to the source's. This is the gap Phase 3's cross-user pool (`resolvePoolKey`, gated on adoption-concurrency evidence) is meant to close later — not attempted here by design.
+- **No variety or outcome-awareness in repeat claims.** The bank's claim query (`findClaimableForUpdate`) returns eligible rows oldest-generated-first with no shuffling and no preference for previously-`INCORRECT`/`UNANSWERED` over `CORRECT`. A learner who never uses "give me more" will see the same initial batch, in the same order, on every subsequent Challenge Quiz session for that Study Pack, until their bank grows or their learner level changes. Deprioritized this release on the reasoning that repeat same-note Challenge Quiz visits are likely uncommon, and Adaptive Practice already targets missed concepts fresh.
 
 ## v0.57.0 - Practice-First Activation Onboarding
 
