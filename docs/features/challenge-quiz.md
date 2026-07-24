@@ -74,6 +74,13 @@ Study Plan / Review Set detail can launch the learner's profile-appropriate prem
 - Board Exam Mode does not use progressive generation; question count is fixed at session start
 - Board Exam Mode does not expose a difficulty selector; it defaults to Mixed to preserve exam-simulation framing
 
+### Per-user question bank (v0.58.0)
+
+- Challenge Quiz persists each newly LLM-generated question in an owned, per-user, per-Study-Pack bank. It never shares questions between users or Study Packs.
+- On both session start and `+5 Questions`, Challenge Quiz claims eligible banked questions before calling the LLM, then generates only the shortfall. A banked question must match the learner's current learner level and is deduplicated against the live session with `QuizDeduplicationUtils`.
+- Claims use a pessimistic lock and stay attached to the in-progress session, preventing two concurrent starts or add-more requests from receiving the same banked question. Completion records the question's last known correct, incorrect, or unanswered outcome and releases the claim; forfeiture and generation failure also release claims.
+- Bank persistence is best-effort: a bank read/write failure falls back to the existing fresh-generation path and never blocks a Challenge session. Adaptive Practice remains intentionally always-fresh and does not use this bank.
+
 ### AI Generation Spec
 
 - Challenge mode uses `challenge-quiz-*.txt` prompts for flexible practice with stakes.
@@ -105,7 +112,7 @@ Challenge mode supports on-demand question batching within a live session:
 - Backend minimum for a valid batch: 3 unique new questions after dedup (`MIN_NEW_QUESTIONS_AFTER_DEDUP = 3`)
 - Users see a `+5 Questions` / `Adding...` button in the action bar at the last answered question (when under max and `noMoreQuestions` is false)
 - Generates via `POST /challenge-quiz/sessions/{sessionId}/generate-more`; the response is `GenerateMoreChallengeQuizResponse { newQuestions, totalQuestions }`
-- Backend uses `QuizDeduplicationUtils.uniqueQuestions()` to deduplicate by normalized question text against all existing session questions
+- Backend first reuses eligible per-user banked questions, then uses `QuizDeduplicationUtils.uniqueQuestions()` to deduplicate any generated shortfall by normalized question text against all existing session questions
 - If fewer than 3 unique new questions survive dedup, backend returns `NOT_ENOUGH_NEW_QUESTIONS` (HTTP 409); frontend treats this as `noMoreQuestions = true`, not an error state
 - New questions are appended to the session JSONB state via `QuizSessionStateUtils.appendQuizItems()`; no schema changes required
 - Board Exam Mode is exempt — no generate-more button; fixed question count for the session

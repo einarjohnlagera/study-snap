@@ -60,8 +60,20 @@ public class ExamQuestionPoolService {
         if (studyPack == null || studyPack.getId() == null || ownerUserId == null) {
             return;
         }
-        initiatePoolForMode(studyPack, ownerUserId, MODE_LONG_EXAM);
-        initiatePoolForMode(studyPack, ownerUserId, MODE_BOARD_EXAM);
+        initiatePoolForMode(studyPack, ownerUserId, MODE_LONG_EXAM, true);
+        initiatePoolForMode(studyPack, ownerUserId, MODE_BOARD_EXAM, true);
+    }
+
+    /**
+     * Starts a pool only after a learner has used the corresponding PRO exam path. This is
+     * intentionally independent of the eager prewarm kill switch used by Study Pack generation.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void initiatePoolForUsage(StudyPackEntity studyPack, UUID ownerUserId, String mode) {
+        if (studyPack == null || studyPack.getId() == null || ownerUserId == null) {
+            return;
+        }
+        initiatePoolForMode(studyPack, ownerUserId, normalizeMode(mode), false);
     }
 
     public Optional<List<QuizItem>> sampleQuestions(
@@ -177,8 +189,13 @@ public class ExamQuestionPoolService {
         }
     }
 
-    private void initiatePoolForMode(StudyPackEntity studyPack, UUID ownerUserId, String mode) {
-        if (!properties.getPricing().isExamPoolPrewarmEnabled()) {
+    private void initiatePoolForMode(
+            StudyPackEntity studyPack,
+            UUID ownerUserId,
+            String mode,
+            boolean requireEagerPrewarmEnabled
+    ) {
+        if (requireEagerPrewarmEnabled && !properties.getPricing().isExamPoolPrewarmEnabled()) {
             return;
         }
         studyPackGenerationTransactionOperations.execute(status -> {
@@ -203,7 +220,7 @@ public class ExamQuestionPoolService {
 
     private void scheduleLazyInitiation(UUID studyPackId, String mode) {
         studyPackRepository.findById(studyPackId)
-                .ifPresent(studyPack -> initiatePoolForMode(studyPack, studyPack.getOwnerUserId(), mode));
+                .ifPresent(studyPack -> initiatePoolForUsage(studyPack, studyPack.getOwnerUserId(), mode));
     }
 
     private ExamQuestionPoolEntity newPool(UUID studyPackId, String mode) {
