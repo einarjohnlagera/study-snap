@@ -3,7 +3,9 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AdminRepairMalformedQuizzesResponse;
 import com.studysnap.backend.dto.AdminRegenerateSummariesResponse;
 import com.studysnap.backend.dto.AdminRegenerationStatusResponse;
+import com.studysnap.backend.dto.AdminSeedOfficialChallengeQuizTemplatesResponse;
 import com.studysnap.backend.service.AdminStudyPackService;
+import com.studysnap.backend.service.OfficialChallengeQuizTemplateService;
 import com.studysnap.backend.service.RegenerationProgressTracker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminStudyPackController {
     private final AdminStudyPackService adminStudyPackService;
+    private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final RegenerationProgressTracker progressTracker;
 
     @PostMapping("/regenerate-summaries")
@@ -28,6 +31,11 @@ public class AdminStudyPackController {
     @PostMapping("/repair-malformed-quizzes")
     public AdminRepairMalformedQuizzesResponse repairMalformedQuizzes() {
         return adminStudyPackService.repairMalformedQuizzes();
+    }
+
+    @PostMapping("/seed-official-challenge-quiz-templates")
+    public AdminSeedOfficialChallengeQuizTemplatesResponse seedOfficialChallengeQuizTemplates() {
+        return officialChallengeQuizTemplateService.queueBackfill();
     }
 
     @GetMapping("/regeneration-status")

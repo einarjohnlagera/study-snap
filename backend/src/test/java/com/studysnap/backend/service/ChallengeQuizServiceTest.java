@@ -91,6 +91,8 @@ class ChallengeQuizServiceTest {
     @Mock
     private ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     @Mock
+    private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
+    @Mock
     private ConceptHealthService conceptHealthService;
 
     private ChallengeQuizService challengeQuizService;
@@ -100,6 +102,9 @@ class ChallengeQuizServiceTest {
         lenient().when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
                 .thenReturn(Optional.empty());
         lenient().when(challengeQuizQuestionBankService.claimEligibleQuestions(
+                any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()
+        )).thenReturn(List.of());
+        lenient().when(officialChallengeQuizTemplateService.copyTemplateQuestions(
                 any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()
         )).thenReturn(List.of());
         lenient().when(noteRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
@@ -120,6 +125,7 @@ class ChallengeQuizServiceTest {
                 generationContextResolver,
                 examQuestionPoolService,
                 challengeQuizQuestionBankService,
+                officialChallengeQuizTemplateService,
                 conceptHealthService
         );
     }
@@ -301,6 +307,45 @@ class ChallengeQuizServiceTest {
         assertThat(response.quiz()).containsExactlyElementsOf(bankedQuiz);
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
+        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void startSession_usesOfficialTemplateQuestionsBeforeCallingLlmAndStillRecordsUsage() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        List<QuizItem> templateQuiz = buildQuizWithPrefix("Official", 5);
+        StudyPackGenerationContext generationContext = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Engineering", studyPack.getSubject(), List.of()
+        );
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId), eq(QuickReviewSessionMode.CHALLENGE), any(), any(OffsetDateTime.class), any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.FREE, BillingCycle.MONTHLY, OffsetDateTime.now().minusDays(5), OffsetDateTime.now().plusDays(25), 2026, 3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(generationContext);
+        when(officialChallengeQuizTemplateService.copyTemplateQuestions(
+                eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE), any(UUID.class), any(), eq(5)
+        )).thenReturn(templateQuiz);
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
+
+        assertThat(response.quiz()).containsExactlyElementsOf(templateQuiz);
+        verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
+        verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any());
     }
 
@@ -1115,6 +1160,7 @@ class ChallengeQuizServiceTest {
                 generationContextResolver,
                 examQuestionPoolService,
                 challengeQuizQuestionBankService,
+                officialChallengeQuizTemplateService,
                 conceptHealthService
         );
 
@@ -1774,6 +1820,49 @@ class ChallengeQuizServiceTest {
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
         assertThat(response.newQuestions()).containsExactlyElementsOf(bankedQuiz);
+        assertThat(response.totalQuestions()).isEqualTo(10);
+        verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
+        verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(
+                any(), any(), any(), any(), any()
+        );
+    }
+
+    @Test
+    void generateMoreQuestions_usesOfficialTemplateBeforeCallingLlm() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        List<QuizItem> existingQuiz = buildQuizWithPrefix("Existing", 5);
+        List<QuizItem> templateQuiz = buildQuizWithPrefix("Official", 5);
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(5);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                existingQuiz,
+                Map.of("mode", "challenge", "difficulty", "medium", "completed", false)
+        ));
+        StudyPackGenerationContext generationContext = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Engineering", studyPack.getSubject(), List.of()
+        );
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(generationContext);
+        when(officialChallengeQuizTemplateService.copyTemplateQuestions(
+                eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE), eq(sessionId), any(), eq(5)
+        )).thenReturn(templateQuiz);
+        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
+
+        assertThat(response.newQuestions()).containsExactlyElementsOf(templateQuiz);
         assertThat(response.totalQuestions()).isEqualTo(10);
         verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(

@@ -762,6 +762,11 @@ export type AdminRegenerationStatusResponse = {
   done: boolean;
 };
 
+export type AdminSeedOfficialChallengeQuizTemplatesResponse = {
+  queued: number;
+  skipped: number;
+};
+
 export type SubmitFeedbackRequest = {
   message: string;
 };
@@ -2332,6 +2337,21 @@ export async function regenerateAdminSummaries(): Promise<AdminRegenerateSummari
     true,
   );
   return parseApiResponse<AdminRegenerateSummariesResponse>(response, "Could not queue regeneration.");
+}
+
+export async function seedOfficialChallengeQuizTemplates(): Promise<AdminSeedOfficialChallengeQuizTemplatesResponse> {
+  const response = await fetchWithAuth(
+    "/admin/study-packs/seed-official-challenge-quiz-templates",
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminSeedOfficialChallengeQuizTemplatesResponse>(
+    response,
+    "Could not queue Official Challenge Quiz template seeding.",
+  );
 }
 
 export async function getAdminRegenerationStatus(): Promise<AdminRegenerationStatusResponse> {
