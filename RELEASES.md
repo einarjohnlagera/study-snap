@@ -2,7 +2,7 @@
 
 ## v0.58.0 - Reusable Practice Assets & the Return Loop
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: turn Challenge Quiz's always-fresh, disposable AI-generated questions — and Board/Long Exam's dormant per-user pool — into persisted, revisitable practice assets a learner can return to and redo what they missed, closing the one gap left in the product's "curation, never generation" identity.
 
