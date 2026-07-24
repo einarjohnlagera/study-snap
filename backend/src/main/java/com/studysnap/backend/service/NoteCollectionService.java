@@ -1122,6 +1122,19 @@ public class NoteCollectionService {
         }
     }
 
+    private void assignAdoptedCollectionAsPrimaryWhenMissing(UUID userId, NoteCollectionEntity adoptedCollection) {
+        if (adoptedCollection.getParentCollectionId() != null) {
+            return;
+        }
+        UserEntity user = getUserOrThrow(userId);
+        if (user.getPrimaryCollectionId() != null) {
+            return;
+        }
+        user.setPrimaryCollectionId(adoptedCollection.getId());
+        user.setUpdatedAt(OffsetDateTime.now());
+        userRepository.save(user);
+    }
+
     private boolean isValidPrimaryCollection(UUID collectionId, UUID userId) {
         return collectionRepository.findByIdAndOwnerUserId(collectionId, userId)
                 .map(collection -> collection.getParentCollectionId() == null)
@@ -1290,6 +1303,7 @@ public class NoteCollectionService {
             trackStudyPlanAdopted(userId, source.getId(), saved.getId(), items.size(), skippedCount, false);
             if (reassertPrimaryAfterPersist) {
                 reassertPrimaryInvariant(userId);
+                assignAdoptedCollectionAsPrimaryWhenMissing(userId, saved);
             }
             return new AdoptStudyPlanResponse(saved.getId(), items.size(), skippedCount, false);
         });
@@ -1321,7 +1335,9 @@ public class NoteCollectionService {
             collection.setSourcePlanId(source.getId());
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
-            return new AdoptedGoalPersistence(collectionRepository.saveAndFlush(collection), false);
+            NoteCollectionEntity saved = collectionRepository.saveAndFlush(collection);
+            assignAdoptedCollectionAsPrimaryWhenMissing(userId, saved);
+            return new AdoptedGoalPersistence(saved, false);
         });
     }
 

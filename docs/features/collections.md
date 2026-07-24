@@ -106,18 +106,19 @@ Rules:
 - setting the already-primary collection is a no-op success
 - clearing primary is always allowed and is a no-op when nothing is set
 - when a user has no primary and exactly one owned top-level Goal, that Goal is auto-set as primary
-- auto-set applies after top-level Goal creation, standalone public-plan adoption, first-time Goal adoption, deletion, and re-parenting changes that leave exactly one top-level Goal
+- first-time standalone public-plan adoption and first-time Goal adoption also set the newly adopted top-level collection as primary when the learner has no primary yet, regardless of how many other top-level collections they own; an existing primary is never overwritten
+- the general exactly-one-top-level auto-set remains unchanged for top-level Goal creation, deletion, and re-parenting; adoption's no-primary default is a separate adopt-time behavior, not a broader change to `reassertPrimaryInvariant`
 - an existing valid primary is never overwritten by auto-set
 - if the current primary stops being an owned top-level Goal, the reference clears before the exactly-one-top-level auto-set rule is considered
-- adopting child Subject plans inside `adoptGoal` does not run primary auto-set for those temporary standalone child copies; the invariant is reasserted once after the first-time Goal adoption is structurally settled
+- adopting child Subject plans inside `adoptGoal` never assigns primary to those temporary standalone child copies; the newly adopted top-level Goal is the only possible adopt-time primary target
 
 Structural collection mutations reassert this invariant in the same service operation that changes the top-level set:
 
 | Mutation | Primary behavior |
 |---|---|
 | `POST /collections` | Can auto-set the created collection when it is the user's first top-level Goal. |
-| `POST /collections/{id}/adopt` | Can auto-set the adopted standalone plan when it is the user's first top-level collection. |
-| `POST /collections/{id}/adopt-goal` | Can auto-set the adopted Goal on genuine first-time adoption; repeat `alreadyAdopted=true` calls do not alter primary. |
+| `POST /collections/{id}/adopt` | On genuine first-time adoption, sets the adopted standalone top-level plan when the user has no primary, regardless of top-level collection count; repeat `alreadyAdopted=true` calls do not alter primary. |
+| `POST /collections/{id}/adopt-goal` | On genuine first-time adoption, sets the adopted top-level Goal when the user has no primary, regardless of top-level collection count; its child Subject plans are never eligible. Repeat `alreadyAdopted=true` calls do not alter primary. |
 | `DELETE /collections/{id}` | If the deleted collection was top-level, clears an invalid primary and can auto-set the one remaining top-level Goal. |
 | `PATCH /collections/{id}/parent` | Attaching a primary Goal under another Goal invalidates it; detaching a child back to top-level can trigger auto-set. |
 
