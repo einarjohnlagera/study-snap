@@ -136,7 +136,7 @@ public class ChallengeQuizService {
     private static final int MID_SCORE_QUESTION_COUNT = 12;
     private static final int HIGH_SCORE_QUESTION_COUNT = 15;
     private static final int INITIAL_CHALLENGE_QUIZ_COUNT = 5;
-    private static final int MAX_CHALLENGE_QUIZ_QUESTIONS = 20;
+    public static final int MAX_CHALLENGE_QUIZ_QUESTIONS = 20;
     private static final int GENERATE_MORE_BATCH_SIZE = 5;
     private static final int MIN_NEW_QUESTIONS_AFTER_DEDUP = 3;
     private static final int BOARD_EXAM_QUESTIONS_PER_SOURCE = 12;
@@ -164,6 +164,7 @@ public class ChallengeQuizService {
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final ExamQuestionPoolService examQuestionPoolService;
     private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
+    private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final ConceptHealthService conceptHealthService;
 
     @Transactional
@@ -281,6 +282,16 @@ public class ChallengeQuizService {
                         disallowedQuestionKeys,
                         quizCount
                 );
+                List<QuizItem> templateQuestions = officialChallengeQuizTemplateService.copyTemplateQuestions(
+                        userId,
+                        studyPackId,
+                        generationContext.learnerLevel(),
+                        session.getId(),
+                        disallowedQuestionKeys,
+                        quizCount - bankedQuestions.size()
+                );
+                bankedQuestions = new ArrayList<>(bankedQuestions);
+                bankedQuestions.addAll(templateQuestions);
                 Set<String> combinedQuestionKeys = new LinkedHashSet<>(disallowedQuestionKeys);
                 combinedQuestionKeys.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(bankedQuestions));
                 int shortfall = quizCount - bankedQuestions.size();
@@ -632,6 +643,16 @@ public class ChallengeQuizService {
                 disallowedQuestionKeys,
                 batchSize
         );
+        List<QuizItem> templateQuestions = officialChallengeQuizTemplateService.copyTemplateQuestions(
+                userId,
+                session.getStudyPackId(),
+                generationContext.learnerLevel(),
+                session.getId(),
+                disallowedQuestionKeys,
+                batchSize - bankedQuestions.size()
+        );
+        bankedQuestions = new ArrayList<>(bankedQuestions);
+        bankedQuestions.addAll(templateQuestions);
         Set<String> combinedQuestionKeys = new LinkedHashSet<>(disallowedQuestionKeys);
         combinedQuestionKeys.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(bankedQuestions));
         int shortfall = batchSize - bankedQuestions.size();

@@ -88,6 +88,8 @@ class NoteServiceTest {
     private ContentModerationService contentModerationService;
     @Mock
     private OnboardingGuardService onboardingGuardService;
+    @Mock
+    private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private NoteService noteService;
 
     @BeforeEach
@@ -104,7 +106,8 @@ class NoteServiceTest {
                 featureGateService,
                 analyticsService,
                 contentModerationService,
-                onboardingGuardService
+                onboardingGuardService,
+                officialChallengeQuizTemplateService
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
@@ -272,6 +275,23 @@ class NoteServiceTest {
         NoteResponse failed = noteService.getById(noteId.toString(), ownerUserId);
 
         assertThat(failed.studyPackStatus()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void updateVisibility_queuesOfficialTemplateSeedWithTheSavedNoteAndLinkedStudyPack() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        StudyPackEntity linkedStudyPack = buildStudyPack(noteId, "Summary");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+        when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(linkedStudyPack));
+
+        noteService.updateVisibility(noteId.toString(), "PUBLIC", ownerUserId);
+
+        ArgumentCaptor<NoteEntity> noteCaptor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(officialChallengeQuizTemplateService).queueSeedIfEligible(noteCaptor.capture(), eq(linkedStudyPack));
+        assertThat(noteCaptor.getValue().getId()).isEqualTo(noteId);
+        assertThat(noteCaptor.getValue().getVisibility()).isEqualTo(NoteVisibility.PUBLIC);
     }
 
     @Test

@@ -3,7 +3,9 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AdminRepairMalformedQuizzesResponse;
 import com.studysnap.backend.dto.AdminRegenerateSummariesResponse;
 import com.studysnap.backend.dto.AdminRegenerationStatusResponse;
+import com.studysnap.backend.dto.AdminSeedOfficialChallengeQuizTemplatesResponse;
 import com.studysnap.backend.service.AdminStudyPackService;
+import com.studysnap.backend.service.OfficialChallengeQuizTemplateService;
 import com.studysnap.backend.service.RegenerationProgressTracker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,8 @@ class AdminStudyPackControllerTest {
     @Mock
     private AdminStudyPackService adminStudyPackService;
     @Mock
+    private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
+    @Mock
     private RegenerationProgressTracker progressTracker;
 
     @Test
@@ -33,7 +37,9 @@ class AdminStudyPackControllerTest {
 
     @Test
     void regenerateSummaries_returnsQueuedAndSkippedCounts() {
-        AdminStudyPackController controller = new AdminStudyPackController(adminStudyPackService, progressTracker);
+        AdminStudyPackController controller = new AdminStudyPackController(
+                adminStudyPackService, officialChallengeQuizTemplateService, progressTracker
+        );
         AdminRegenerateSummariesResponse expected = new AdminRegenerateSummariesResponse(3, 7);
         when(adminStudyPackService.regenerateOfficialSummaries()).thenReturn(expected);
 
@@ -45,7 +51,9 @@ class AdminStudyPackControllerTest {
 
     @Test
     void repairMalformedQuizzes_returnsQueuedAndSkippedCounts() {
-        AdminStudyPackController controller = new AdminStudyPackController(adminStudyPackService, progressTracker);
+        AdminStudyPackController controller = new AdminStudyPackController(
+                adminStudyPackService, officialChallengeQuizTemplateService, progressTracker
+        );
         AdminRepairMalformedQuizzesResponse expected = new AdminRepairMalformedQuizzesResponse(2, 5);
         when(adminStudyPackService.repairMalformedQuizzes()).thenReturn(expected);
 
@@ -56,8 +64,25 @@ class AdminStudyPackControllerTest {
     }
 
     @Test
+    void seedOfficialChallengeQuizTemplates_returnsQueuedAndSkippedCounts() {
+        AdminStudyPackController controller = new AdminStudyPackController(
+                adminStudyPackService, officialChallengeQuizTemplateService, progressTracker
+        );
+        AdminSeedOfficialChallengeQuizTemplatesResponse expected =
+                new AdminSeedOfficialChallengeQuizTemplatesResponse(4, 6);
+        when(officialChallengeQuizTemplateService.queueBackfill()).thenReturn(expected);
+
+        AdminSeedOfficialChallengeQuizTemplatesResponse response = controller.seedOfficialChallengeQuizTemplates();
+
+        assertThat(response).isEqualTo(expected);
+        verify(officialChallengeQuizTemplateService).queueBackfill();
+    }
+
+    @Test
     void regenerationStatus_returnsProgressTrackerStatus() {
-        AdminStudyPackController controller = new AdminStudyPackController(adminStudyPackService, progressTracker);
+        AdminStudyPackController controller = new AdminStudyPackController(
+                adminStudyPackService, officialChallengeQuizTemplateService, progressTracker
+        );
         AdminRegenerationStatusResponse expected = new AdminRegenerationStatusResponse(10, 4, 1, false);
         when(progressTracker.getStatus()).thenReturn(expected);
 

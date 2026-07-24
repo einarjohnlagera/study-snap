@@ -513,7 +513,8 @@ class NoteServiceLibraryPaginationIntegrationTest {
                 mock(FeatureGateService.class),
                 mock(AnalyticsService.class),
                 mock(ContentModerationService.class),
-                mock(OnboardingGuardService.class)
+                mock(OnboardingGuardService.class),
+                mock(OfficialChallengeQuizTemplateService.class)
         );
     }
 }

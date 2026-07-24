@@ -95,6 +95,8 @@ class StudyPackServiceTest {
     @Mock
     private ExamQuestionPoolService examQuestionPoolService;
     @Mock
+    private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
+    @Mock
     private OnboardingGuardService onboardingGuardService;
 
     private StudyPackService studyPackService;
@@ -127,6 +129,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
                 examQuestionPoolService,
+                officialChallengeQuizTemplateService,
                 onboardingGuardService
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -326,6 +329,59 @@ class StudyPackServiceTest {
     }
 
     @Test
+    void createFromText_queuesOfficialTemplateSeedForTheSavedStudyPack() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "Generated title",
+                "Generated summary",
+                "Biology",
+                List.of("cells", "review"),
+                List.of("Cell membrane", "Mitochondria"),
+                List.of(new QuizItem(
+                        "What powers the cell?",
+                        List.of("Nucleus", "Mitochondria", "Ribosome", "Golgi body"),
+                        "Mitochondria",
+                        "Cell biology",
+                        "Mitochondria generate ATP."
+                )),
+                "gpt-4.1-mini",
+                100,
+                220,
+                0,
+                new BigDecimal("0.0100")
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(generationContextResolver.resolve(userId, draftNote)).thenReturn(
+                new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE,
+                        "Biology",
+                        "Subject",
+                        List.of("draft")
+                )
+        );
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generated);
+
+        studyPackService.createFromText(new CreateStudyPackRequest(null, noteId.toString()), userId);
+
+        ArgumentCaptor<StudyPackEntity> studyPackCaptor = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(officialChallengeQuizTemplateService).queueSeedIfEligible(eq(draftNote), studyPackCaptor.capture());
+        assertThat(studyPackCaptor.getValue().getNoteId()).isEqualTo(noteId);
+    }
+
+    @Test
     void createFromText_reusesCanonicalSubjectWhenGeneratedSubjectMatchesExistingVariant() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -469,6 +525,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
                 examQuestionPoolService,
+                officialChallengeQuizTemplateService,
                 onboardingGuardService
         );
         MockMultipartFile image = new MockMultipartFile("image", "note.png", "image/png", "fake-image".getBytes());
@@ -511,6 +568,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(Runnable::run),
                 contentModerationService,
                 examQuestionPoolService,
+                officialChallengeQuizTemplateService,
                 onboardingGuardService
         );
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
@@ -588,6 +646,7 @@ class StudyPackServiceTest {
                 new StudyPackGenerationTaskDispatcher(generationTasks::add),
                 contentModerationService,
                 examQuestionPoolService,
+                officialChallengeQuizTemplateService,
                 onboardingGuardService
         );
 

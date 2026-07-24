@@ -293,7 +293,8 @@ class NoteServiceListProjectionIntegrationTest {
                 featureGateService,
                 analyticsService,
                 contentModerationService,
-                onboardingGuardService
+                onboardingGuardService,
+                mock(OfficialChallengeQuizTemplateService.class)
         );
     }
 }
