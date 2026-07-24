@@ -109,6 +109,61 @@ script's structure and question count as-is.
 - Query 6's cost figure is explicitly directional (assumed multipliers, clearly labeled) — read it
   as "is this roughly a cent or roughly a dollar per active user," not as a billing-grade number.
 
+## Results — Round 1 (run 2026-07-24/25)
+
+**Headline: the actual deliverable — W1→W2 retention on the real surge cohort — is still
+unavailable, and nothing below substitutes for it.** The 2026-07-23 surge (29 signups that day)
+doesn't close its 14-day eligibility window until roughly **2026-08-06**. Everything reported here
+either reads the pre-surge baseline or a same-day funnel snapshot — **re-read the retention queries
+after 2026-08-06** before drawing any conclusion about the surge cohort specifically.
+
+**What Round 1 actually found, held to what the sample size supports:**
+
+- Query 1 showed signup volume has been noisy-but-substantial since late June (bursts of 8-12/day),
+  with one clear spike on 07-23 (29) — not a clean step-change, more a volatile baseline with one
+  standout day.
+- Query 2 (signup-anchored, the 07-01–07-09 pre-surge window, n=39 eligible): 0/39 returned by any
+  signal. **This is not a new low** — at the historical ~2.4% rate, the expected returner count at
+  n=39 is under 1, so zero is what noise looks like at this size, not evidence of decline.
+- Query 3 (activation-anchored, all-time): old definition 150 eligible / 3 returned = 2.0%; widened
+  definition 151/3 = 1.99%. Matches the historical 2.4%/127 baseline within noise — **still flat,
+  no measurable change either direction.** The widened definition barely moved the count because
+  practice-first completions this recent aren't 14-day-eligible yet.
+- Query 4/5 (exam-proximity and LET/education cuts): all read ~0% across every bucket, because the
+  whole n=39 cohort is near-zero — **this cannot discriminate the three hypotheses**, since there's
+  no variance across cuts to compare. Not informative either way.
+- **The one real, well-supported finding: a chronic ~50% onboarding non-completion rate across
+  recent signups generally** — Query 7 found 59/117 (50.4%) non-surge-day signups (last 30 days)
+  have `onboarding_completed_at` set, versus 19/29 (65.5%) on the 07-23 surge day itself. **This is
+  not a surge-quality problem** — the surge day completed onboarding somewhat *better* than the
+  trailing baseline, not worse, so this finding is about the standing signup base generally, not
+  something newly caused by this traffic. Caveat: the 30-day baseline bucket includes very recent
+  signups who may still be mid-onboarding, so 50% likely overstates true permanent drop-off
+  somewhat — still worth its own follow-up look, tracked separately from the surge/retention
+  question.
+- Query 8 (onboarding step-funnel, event-dated 07-23+): raw counts logged (`ONBOARDING_V2_STARTED`
+  30, `PROFILE_SELECTED` 27, `COMPLETED` 20, `PRACTICE_FIRST_ELIGIBLE`/`PLAN_ADOPTED` 9/9,
+  `STUDY_PACK_GENERATED` 11, `TOPIC_SUBMITTED` 13, among others). **Two over-reads were caught and
+  retracted rather than reported as findings:** (1) "practice-first converts 9/9 = 100%" — n=9 is
+  too small to call this validated, and `ELIGIBLE`/`PLAN_ADOPTED` sit close together in the same
+  code path, so a clean match could partly be mechanical rather than proof of zero drop-off;
+  encouraging, not confirmed. (2) A theory that the standard path's `TOPIC_SUBMITTED`(13) →
+  `STUDY_PACK_GENERATED`(11) gap reflects UX friction rather than backend errors, argued from the
+  absence of `STUDY_PACK_ERROR` rows — that gap is two people, and "no error event logged" is weak
+  evidence given these are best-effort client-fired events; not enough to support a causal story.
+  **Log these step counts for re-reading once volume grows; don't interpret the shape yet.**
+- Query 6 (cost proxy) has a known bug: the `model_pricing` join used bare model names, and
+  production's `study_packs.model_used` almost certainly carries a date suffix, so it matched zero
+  rows and returned a blank cost — not a "$0 cost" finding. Fixed in the SQL file with a `SELECT
+  DISTINCT model_used` diagnostic step; re-run once the real model id strings are substituted in.
+
+**Net for this round:** no hypothesis verdict, no build decision — correctly, given the sample sizes
+and the 14-day timing constraint. The one durable, actionable takeaway is the chronic ~50%
+onboarding completion rate, which is real (n=117) but a separate, pre-existing issue from the surge
+or the retention question, and doesn't move any of Phase 2 / Reusable Practice Assets' status. Next
+concrete step: re-run the retention queries (2-5) after **2026-08-06** once the surge cohort's own
+14-day window has actually closed.
+
 ## What this does not do
 
 Does not decide, on its own, whether to proceed to Reusable Practice Assets & the Return Loop or

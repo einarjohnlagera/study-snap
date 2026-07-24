@@ -318,11 +318,25 @@ ORDER BY signups DESC;
 -- Step A: grounded average $/Study-Pack-generation from REAL token counts.
 -- VERIFY the per-1K-token rates below against current OpenAI pricing before
 -- trusting the output — they are placeholders, not fetched live.
+--
+-- KNOWN BUG (round 1, 2026-07-24): the first run of this query returned a
+-- blank grounded_cost_per_study_pack. Root cause: the model_pricing values
+-- below are bare model names, but production study_packs.model_used almost
+-- certainly stores a date-suffixed id (e.g. 'gpt-4.1-mini-2025-04-14'), so
+-- the exact-match JOIN below matched zero rows. RUN THIS FIRST and update
+-- the VALUES list to the exact strings found before trusting this query's
+-- output — do not guess a prefix/LIKE pattern instead, since 'gpt-4.1' is
+-- itself a text-prefix of 'gpt-4.1-mini...' and a fuzzy match would silently
+-- misattribute rows between the two models:
+--
+--   SELECT DISTINCT model_used, COUNT(*) FROM study_packs GROUP BY model_used;
 
 WITH model_pricing AS (
     -- $ per 1K tokens — REPLACE with current published OpenAI pricing for
     -- whatever LLM_MODEL_FREE / LLM_MODEL_PREMIUM actually resolve to in prod
     -- (see application.yaml; defaults gpt-4.1-mini / gpt-4.1 per CLAUDE.md).
+    -- REPLACE the model_used values below with the exact strings from the
+    -- DISTINCT query above before running.
     SELECT * FROM (VALUES
         ('gpt-4.1-mini', 0.00040::numeric, 0.00160::numeric),
         ('gpt-4.1',      0.00200::numeric, 0.00800::numeric)
@@ -380,3 +394,25 @@ LEFT JOIN weighted_usage wu ON wu.user_id = au.user_id;
 -- Read the assumed multipliers (0.5x / 1.0x / 2.0x / 3.0x above) as clearly
 -- labeled guesses, not measurements — the point is directional ("is this
 -- roughly a cent or roughly a dollar per active user"), not a billing figure.
+
+-- Query 7 — direct-field onboarding completion, baseline vs. the actual surge day
+-- (course_program is a muddied proxy; onboarding_completed_at + profile_type aren't)
+SELECT
+    (created_at::date = '2026-07-23') AS is_surge_day,
+    COUNT(*) AS signups,
+    COUNT(onboarding_completed_at) AS completed_onboarding,
+    COUNT(profile_type) AS has_profile_type,
+    ROUND(100.0 * COUNT(onboarding_completed_at) / NULLIF(COUNT(*), 0), 2) AS onboarding_completion_pct
+FROM users
+WHERE created_at >= now() - INTERVAL '30 days'
+GROUP BY is_surge_day
+ORDER BY is_surge_day;
+
+-- Query 8 — step-funnel on the surge days specifically, using instrumentation
+-- that already exists (cheaper and more useful than more retention slicing)
+SELECT event_type, COUNT(DISTINCT user_id) AS distinct_users
+FROM analytics_events
+WHERE event_type LIKE 'ONBOARDING_V2%'
+  AND created_at >= '2026-07-23'::timestamptz
+GROUP BY event_type
+ORDER BY distinct_users DESC;
