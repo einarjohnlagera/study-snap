@@ -352,8 +352,11 @@ public class ChallengeQuizService {
 
     /**
      * Starts a regular Challenge Quiz session from the learner's own previously incorrect banked
-     * questions. The session mode remains CHALLENGE and is intentionally quota-exempt because it
-     * incurs no new LLM generation cost.
+     * questions. The session mode remains CHALLENGE and is intentionally quota-exempt because
+     * starting it incurs no new LLM generation cost. Note: {@link #generateMoreQuestions} has no
+     * quota-exempt awareness, so a "+5 Questions" request on this session falls through to normal
+     * LLM generation like any other Challenge session — the zero-cost guarantee covers only the
+     * start of the session, not any subsequent generate-more request.
      */
     @Transactional
     public ChallengeQuizStartResponse startRedoMissedSession(String studyPackIdRaw, UUID userId) {
