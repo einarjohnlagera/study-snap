@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.58.0 — Reusable Practice Assets & the Return Loop** (In Progress, base branch `releases/v0.58.0`). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
+Current version: **v0.59.0 — Dashboard & Progress Reorg** (In Progress, base branch `releases/v0.59.0`). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 

@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.59.0 - Dashboard & Progress Reorg
+
+**Status: In Progress**
+
+Theme: reorganize Dashboard and Progress around the learner's Primary Review Set now that it has something stable to point at — Challenge Quiz and Board/Long Exam content stopped regenerating every session in v0.58.0, so Progress can be promoted to a first-class destination with a real, persistent story to tell.
+
+### Planned Scope
+
+- **Dashboard hero: Primary Review Set condensed card (frontend).** When `primaryCollectionId` is set, Dashboard's hero slot becomes a condensed version of the existing v0.41.1 Review-Set-detail hierarchy (Identity → Current Journey → Primary Action → Readiness), reusing that hierarchy at summary depth. No `primaryCollectionId` set → unchanged existing goal-prompt fallback (`GoalPromptBanner`/`DashboardGoalCard`). The full subject-by-subject stats block moves off Dashboard entirely — Progress is its only home now, not duplicated.
+- **Progress promoted to a first-class nav item (frontend).** Drop `/progress`'s `← Dashboard` back link; it joins the main-page list in `navigation.md`. Default `PlanPicker` selection changes to `primaryCollectionId` when one is set; `All Subjects` stays a first-class, always-visible peer option so notes outside any Review Set are never orphaned. Does not touch the underlying v0.36.0 readiness computation or `ConceptHealth` data source — only what `PlanPicker` defaults to.
+- **Adopt-sets-Primary default (backend + frontend).** A learner with no existing `primaryCollectionId` who adopts an Official Review Set has that adoption set as their Primary Review Set.
+
+Anti-drift: this is the second of Phase 2's two separately-gated chunks (`docs/product/ROADMAP.md`, "Company Redefinition Roadmap — Phase Detail," Phase 2 section) — **not** the Explore Convergence chunk (`v0.60.0`, renumbered from `v0.59.0` on 2026-07-24 since Dashboard's gate cleared first), which stays gated on the Diagnostic Read showing a discovery problem and is explicitly out of scope here. The new `Explore` nav item, the `Review Sets`/`Notes` segmented control, `My Reviews` nav promotion, and the Exam Hub `/exam/[slug]` additive official-set check all belong to `v0.60.0`, not this release. This release does not resolve the still-open Primary-Review-Set-vs-Study/Exam-Focus philosophy question — the adopt-sets-Primary behavior is a narrow recommendation for the specific "just adopted, has no Primary yet" case, not a resolution of that broader question. No new mastery/readiness signal; no change to quota/pricing. Full design in `docs/claude-prompt/company-redefinition-out/03-information-architecture.md` §3.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.58.0 - Reusable Practice Assets & the Return Loop
 
 **Status: Released**
