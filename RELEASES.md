@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.58.0 - Reusable Practice Assets & the Return Loop
+
+**Status: In Progress**
+
+Theme: turn Challenge Quiz's always-fresh, disposable AI-generated questions — and Board/Long Exam's dormant per-user pool — into persisted, revisitable practice assets a learner can return to and redo what they missed, closing the one gap left in the product's "curation, never generation" identity.
+
+### Planned Scope
+
+- **Per-user question pool activation for Board Exam Mode & Long Exam (backend).** Turn on the existing but dormant per-user pooling in `ExamQuestionPoolService` (`examPoolPrewarmEnabled=false` today) so both modes stop silently regenerating a fresh question set every session and instead reuse the learner's own previously-generated pool.
+- **Per-user pooling extended to Challenge Quiz (backend).** Wire Challenge Quiz into the same per-user pool pattern — today it regenerates fresh on start and on every "give me more" click, and the "give me more" path is completely unmetered (no quota decrement at all). Persist generated questions into an owned, revisitable set instead of discarding them each session.
+- **"Redo what you missed" surface (backend + frontend).** A revisit surface reusing the existing weak-concept/`ConceptHealth` machinery (v0.56.0's explanation links, readiness scoring) — no new mastery or readiness signal invented.
+
+Anti-drift: this is **not** Phase 3 of the Company Redefinition roadmap (cross-user pooling of Official content across many learners) — that stays parked at its own adoption-volume gate, unaffected. This is strictly **per-user, cross-session** reuse. Adaptive Practice stays explicitly excluded — its entire value is personalized reactivity to one learner's own misses, and it should keep regenerating fresh. No new mastery/readiness signal, no cross-user data sharing, no change to quota/pricing. Sourced from `docs/claude-prompt/company-redefinition-out/07-reprioritization.md`, ratified by the owner 2026-07-24; full design in `docs/product/ROADMAP.md`'s "Company Redefinition Roadmap — Phase Detail" section, "Reusable Practice Assets & the Return Loop" subsection.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.57.0 - Practice-First Activation Onboarding
 
 **Status: Released**
