@@ -1432,6 +1432,68 @@ class NoteCollectionServiceTest {
         assertThat(result.overallReadinessPercentage()).isEqualTo(50);
         assertThat(result.children()).extracting(GoalCollectionChildResponse::totalConcepts)
                 .containsExactly(2, 2);
+        verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(goalId);
+    }
+
+    @Test
+    void getGoal_usesDirectItemReadinessForChildlessCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        StudyPackEntity studyPack = buildStudyPack(noteId, List.of("Cell", "Mitosis"));
+        studyPack.setOwnerUserId(userId);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
+                .thenReturn(List.of(buildItem(collectionId, noteId, 0, null)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(studyPack));
+        when(progressReportService.buildSubjectProgressEntries(
+                anyList(),
+                eq(userId),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of(new SubjectProgressEntry("Biology", 10, 4, 2, 4, 40)));
+        when(itemRepository.countByCollectionId(collectionId)).thenReturn(1L);
+
+        GoalCollectionDetailResponse result = service.getGoal(collectionId, userId);
+        PlanReadinessResponse directItemReadiness = service.getReadiness(collectionId, userId);
+
+        assertThat(result.childCount()).isZero();
+        assertThat(result.totalConcepts()).isEqualTo(10);
+        assertThat(result.masteredConcepts()).isEqualTo(4);
+        assertThat(result.dueConcepts()).isEqualTo(2);
+        assertThat(result.notPracticedConcepts()).isEqualTo(4);
+        assertThat(result.overallReadinessPercentage()).isEqualTo(40);
+        assertThat(result.totalConcepts()).isEqualTo(directItemReadiness.totalConcepts());
+        assertThat(result.masteredConcepts()).isEqualTo(directItemReadiness.masteredConcepts());
+        assertThat(result.dueConcepts()).isEqualTo(directItemReadiness.dueConcepts());
+        assertThat(result.notPracticedConcepts()).isEqualTo(directItemReadiness.notPracticedConcepts());
+        assertThat(result.overallReadinessPercentage()).isEqualTo(directItemReadiness.overallReadinessPercentage());
+    }
+
+    @Test
+    void getGoal_returnsZeroReadinessForChildlessItemsWithoutStudyPacks() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
+                .thenReturn(List.of(buildItem(collectionId, noteId, 0, null)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+        when(itemRepository.countByCollectionId(collectionId)).thenReturn(1L);
+
+        GoalCollectionDetailResponse result = service.getGoal(collectionId, userId);
+
+        assertThat(result.totalConcepts()).isZero();
+        assertThat(result.masteredConcepts()).isZero();
+        assertThat(result.dueConcepts()).isZero();
+        assertThat(result.notPracticedConcepts()).isZero();
+        assertThat(result.overallReadinessPercentage()).isZero();
+        verify(progressReportService, never()).buildSubjectProgressEntries(anyList(), any(), any());
     }
 
     @Test
@@ -1443,6 +1505,7 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
                 .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
         when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
 
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
@@ -1588,7 +1651,6 @@ class NoteCollectionServiceTest {
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
         assertThat(result.companionMayBeOutdated()).isFalse();
-        verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(goalId);
     }
 
     @Test
@@ -1605,7 +1667,6 @@ class NoteCollectionServiceTest {
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
         assertThat(result.companionMayBeOutdated()).isFalse();
-        verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(goalId);
     }
 
     @Test

@@ -132,7 +132,7 @@ Structural collection mutations reassert this invariant in the same service oper
 
 The CTA verb (`Start`/`Continue this {label}`) and the child-count line (`N {label}s`) in `DashboardStudyPlanSection` and `PublicStudyPlanCard` (`frontend/components/study-plan/public-study-plan-card.tsx`) resolve through `labels.goalSingular`/`labels.singular`/`labels.subjectSingular`, same as `primarySingular` above. `PublicStudyPlanCard` takes an optional `profileType` prop for this purpose; `published-plans-page-client.tsx` passes the same `profileType` it already resolves for its own page-level labels.
 
-**Frontend consumption (Progress):** `/progress` also reads `primaryCollectionId` from `GET /auth/me`. When the URL has no explicit `?collectionId=`, it applies the Primary Review Set once as the initial scoped readiness view; explicit query-param selections and later `All subjects` picker changes win after that first resolution. Because a primary is always a top-level Goal, Progress uses `GET /collections/{id}/goal` for that default aggregate view, not `GET /collections/{id}/readiness` (which reads only direct note items and is reserved for explicit leaf/Subject plan selections).
+**Frontend consumption (Progress):** `/progress` also reads `primaryCollectionId` from `GET /auth/me`. When the URL has no explicit `?collectionId=`, it applies the Primary Review Set once as the initial scoped readiness view; explicit query-param selections and later `All subjects` picker changes win after that first resolution. Because a primary is always top-level, Progress uses `GET /collections/{id}/goal` for that default aggregate view: the response rolls up child Subject plans when present and reads direct items for a childless top-level plan. Explicit leaf/Subject plan selections still use `GET /collections/{id}/readiness`.
 
 ### Target Completion Date
 
@@ -544,11 +544,13 @@ Each child response contains:
 - `notPracticedConcepts`
 - `totalConcepts`
 
-Goal readiness is deliberately cheap and derived from child Subject readiness counts:
+Goal readiness is deliberately cheap and derived from child Subject readiness counts when the collection has children:
 
 `overallReadinessPercentage = round(100 * sum(child.masteredConcepts) / sum(child.totalConcepts))`, or `0` when the summed denominator is `0`.
 
-Do not re-run concept classification over the merged Goal subtree. That would collapse same-named concepts across subjects (for example, "Assessment" in Professional Education and General Education) and lose the subject-weighted curriculum shape. If one child readiness computation fails, that child degrades to a zero/unavailable shape and the Goal response still succeeds. Empty Goals and children with no Study Packs return zero shapes.
+For a childless top-level collection, the same response instead derives those existing readiness fields from its own direct note items, using the same owned-Study-Pack and `ProgressReportService` classification path as `GET /collections/{id}/readiness`. A genuinely empty childless collection, or one whose direct notes have no Study Packs, returns the existing zero shape.
+
+Do not re-run concept classification over a Goal's merged child subtree. That would collapse same-named concepts across subjects (for example, "Assessment" in Professional Education and General Education) and lose the subject-weighted curriculum shape. If one child readiness computation fails, that child degrades to a zero/unavailable shape and the Goal response still succeeds.
 
 ### Set / Clear Parent
 
