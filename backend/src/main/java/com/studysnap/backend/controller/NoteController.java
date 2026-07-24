@@ -362,6 +362,18 @@ public class NoteController {
         return challengeQuizService.startSession(studyPackId, userId, request);
     }
 
+    @PostMapping("/{id}/challenge-quiz/redo-missed")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public ChallengeQuizStartResponse startRedoMissedChallengeQuiz(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
+        return challengeQuizService.startRedoMissedSession(studyPackId, userId);
+    }
+
     @GetMapping("/{id}/challenge-quiz/in-progress")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public ChallengeQuizStartResponse getInProgressChallengeQuiz(

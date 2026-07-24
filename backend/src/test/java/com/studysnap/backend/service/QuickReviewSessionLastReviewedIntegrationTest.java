@@ -93,11 +93,13 @@ class QuickReviewSessionLastReviewedIntegrationTest {
                     confidence_level varchar(16),
                     session_metadata json,
                     session_state json,
+                    quota_exempt boolean not null default false,
                     created_at timestamp with time zone not null,
                     completed_at timestamp with time zone
                 )
                 """);
         jdbcTemplate.execute("delete from quick_review_sessions");
+        jdbcTemplate.execute("alter table quick_review_sessions add column if not exists quota_exempt boolean not null default false");
         jdbcTemplate.execute("delete from study_packs");
         SqlCaptureStatementInspector.clear();
     }

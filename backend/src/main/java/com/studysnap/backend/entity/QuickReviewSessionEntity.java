@@ -77,6 +77,9 @@ public class QuickReviewSessionEntity {
     @Column(name = "session_state", columnDefinition = "jsonb")
     private Map<String, Object> sessionState;
 
+    @Column(name = "quota_exempt", nullable = false)
+    private boolean quotaExempt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
