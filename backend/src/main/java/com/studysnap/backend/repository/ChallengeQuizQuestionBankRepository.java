@@ -28,6 +28,40 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select question
+            from ChallengeQuizQuestionBankEntity question
+            where question.userId = :userId
+              and question.studyPackId = :studyPackId
+              and ((:learnerLevel is null and question.learnerLevel is null) or question.learnerLevel = :learnerLevel)
+              and question.lastKnownOutcome = :outcome
+              and question.claimedSessionId is null
+            order by question.generatedAt asc
+            """)
+    List<ChallengeQuizQuestionBankEntity> findIncorrectClaimableForUpdate(
+            @Param("userId") UUID userId,
+            @Param("studyPackId") UUID studyPackId,
+            @Param("learnerLevel") String learnerLevel,
+            @Param("outcome") String outcome
+    );
+
+    @Query("""
+            select count(question)
+            from ChallengeQuizQuestionBankEntity question
+            where question.userId = :userId
+              and question.studyPackId = :studyPackId
+              and ((:learnerLevel is null and question.learnerLevel is null) or question.learnerLevel = :learnerLevel)
+              and question.lastKnownOutcome = :outcome
+              and question.claimedSessionId is null
+            """)
+    long countIncorrectEligibleQuestions(
+            @Param("userId") UUID userId,
+            @Param("studyPackId") UUID studyPackId,
+            @Param("learnerLevel") String learnerLevel,
+            @Param("outcome") String outcome
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<ChallengeQuizQuestionBankEntity> findByUserIdAndStudyPackIdAndClaimedSessionId(
             UUID userId,
             UUID studyPackId,

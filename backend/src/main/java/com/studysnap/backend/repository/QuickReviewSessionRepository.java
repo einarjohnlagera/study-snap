@@ -364,6 +364,14 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             OffsetDateTime createdAtEnd
     );
 
+    long countByUserIdAndSessionModeAndStatusInAndQuotaExemptTrueAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            UUID userId,
+            QuickReviewSessionMode sessionMode,
+            Collection<QuickReviewSessionStatus> statuses,
+            OffsetDateTime createdAtStart,
+            OffsetDateTime createdAtEnd
+    );
+
     @Query("""
             select max(q.scorePercentage)
             from QuickReviewSessionEntity q

@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -64,6 +65,8 @@ class PostSessionNextStepServiceTest {
     private NoteRepository noteRepository;
     @Mock
     private ProgressReportService progressReportService;
+    @Mock
+    private ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
 
     private StudySnapProperties properties;
     private PostSessionNextStepService postSessionNextStepService;
@@ -80,7 +83,8 @@ class PostSessionNextStepServiceTest {
                 properties,
                 userRepository,
                 noteRepository,
-                progressReportService
+                progressReportService,
+                challengeQuizQuestionBankService
         );
     }
 
@@ -336,6 +340,43 @@ class PostSessionNextStepServiceTest {
     }
 
     @Test
+    void getNextStep_offersRedoMissedQuestionsAsSecondaryAfterChallengeWithWeakConcepts() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of(FIRST_CONCEPT));
+        stubConceptHealth(userId, studyPack, List.of(conceptHealth(FIRST_CONCEPT, NOW.minusDays(7), true)));
+        when(challengeQuizQuestionBankService.countEligibleIncorrectQuestions(userId, studyPack.getId(), LearnerLevel.COLLEGE))
+                .thenReturn(3L);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
+        assertThat(response.secondaryAction()).isNotNull();
+        assertThat(response.secondaryAction().actionLabel()).isEqualTo("Redo Missed Questions");
+        assertThat(response.secondaryAction().actionHref()).endsWith("/challenge-quiz?entry=redo-missed");
+    }
+
+    @Test
+    void getNextStep_promotesRedoMissedQuestionsWhenChallengeHasNoWeakConcepts() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of());
+        stubConceptHealth(userId, studyPack, List.of(conceptHealth(FIRST_CONCEPT, NOW.minusDays(1), false)));
+        when(challengeQuizQuestionBankService.countEligibleIncorrectQuestions(userId, studyPack.getId(), LearnerLevel.COLLEGE))
+                .thenReturn(3L);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REDO_MISSED_QUESTIONS);
+        assertThat(response.actionLabel()).isEqualTo("Redo Missed Questions");
+        assertThat(response.actionHref()).endsWith("/challenge-quiz?entry=redo-missed");
+    }
+
+    @Test
     void getNextStep_returnsChallengeAfterChallengeWhenNoGenuineWeaknessRemains() {
         UUID userId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(userId);
@@ -542,6 +583,7 @@ class PostSessionNextStepServiceTest {
         UserEntity user = new UserEntity();
         user.setId(userId);
         user.setStudyGoal(studyGoal);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
         return user;
     }
 

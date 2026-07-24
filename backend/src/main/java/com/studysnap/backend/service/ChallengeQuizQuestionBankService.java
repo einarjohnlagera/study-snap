@@ -3,6 +3,8 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.exception.ChallengeQuizQuestionBankUnavailableException;
+import com.studysnap.backend.exception.NotEnoughMissedChallengeQuestionsException;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 @Slf4j
 public class ChallengeQuizQuestionBankService {
+    public static final int MINIMUM_REDO_MISSED_QUESTIONS = 3;
     private static final String OUTCOME_UNANSWERED = "UNANSWERED";
     private static final String OUTCOME_CORRECT = "CORRECT";
     private static final String OUTCOME_INCORRECT = "INCORRECT";
@@ -114,6 +117,60 @@ public class ChallengeQuizQuestionBankService {
             }
         } catch (RuntimeException exception) {
             log.warn("Challenge Quiz question-bank write failed for userId={}, studyPackId={}", userId, studyPackId, exception);
+        }
+    }
+
+    public long countEligibleIncorrectQuestions(UUID userId, UUID studyPackId, LearnerLevel learnerLevel) {
+        try {
+            return challengeQuizQuestionBankRepository.countIncorrectEligibleQuestions(
+                    userId,
+                    studyPackId,
+                    learnerLevelName(learnerLevel),
+                    OUTCOME_INCORRECT
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Challenge Quiz missed-question count failed for userId={}, studyPackId={}", userId, studyPackId, exception);
+            return 0L;
+        }
+    }
+
+    /**
+     * Claims only questions that the learner last answered incorrectly. Unlike ordinary Challenge
+     * starts, this has no LLM fallback: a bank failure or short race must fail closed.
+     */
+    public List<QuizItem> claimIncorrectQuestions(
+            UUID userId,
+            UUID studyPackId,
+            LearnerLevel learnerLevel,
+            UUID sessionId,
+            int count,
+            int minimumCount
+    ) {
+        try {
+            List<ChallengeQuizQuestionBankEntity> candidates = challengeQuizQuestionBankRepository
+                    .findIncorrectClaimableForUpdate(
+                            userId,
+                            studyPackId,
+                            learnerLevelName(learnerLevel),
+                            OUTCOME_INCORRECT
+                    );
+            int claimCount = Math.min(count, candidates.size());
+            if (claimCount < minimumCount) {
+                throw new NotEnoughMissedChallengeQuestionsException();
+            }
+            List<QuizItem> claimed = new ArrayList<>(claimCount);
+            for (int index = 0; index < claimCount; index++) {
+                ChallengeQuizQuestionBankEntity candidate = candidates.get(index);
+                candidate.setClaimedSessionId(sessionId);
+                claimed.add(candidate.getQuestion());
+            }
+            challengeQuizQuestionBankRepository.saveAll(candidates.subList(0, claimCount));
+            return List.copyOf(claimed);
+        } catch (NotEnoughMissedChallengeQuestionsException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            log.warn("Challenge Quiz missed-question claim failed for userId={}, studyPackId={}", userId, studyPackId, exception);
+            throw new ChallengeQuizQuestionBankUnavailableException();
         }
     }
 

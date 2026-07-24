@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.exception.NotEnoughMissedChallengeQuestionsException;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -80,6 +82,46 @@ class ChallengeQuizQuestionBankServiceTest {
         assertThat(correct.getClaimedSessionId()).isNull();
         assertThat(incorrect.getClaimedSessionId()).isNull();
         verify(questionBankRepository).saveAll(List.of(correct, incorrect));
+    }
+
+    @Test
+    void claimIncorrectQuestions_claimsOnlyIncorrectCurrentLevelQuestions() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        List<ChallengeQuizQuestionBankEntity> missedQuestions = List.of(
+                bankedQuestion("Missed one"), bankedQuestion("Missed two"), bankedQuestion("Missed three")
+        );
+        when(questionBankRepository.findIncorrectClaimableForUpdate(
+                userId, studyPackId, LearnerLevel.COLLEGE.name(), "INCORRECT"
+        )).thenReturn(missedQuestions);
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+
+        List<QuizItem> claimed = service.claimIncorrectQuestions(
+                userId, studyPackId, LearnerLevel.COLLEGE, sessionId, 5, 3
+        );
+
+        assertThat(claimed).extracting(QuizItem::question).containsExactly("Missed one", "Missed two", "Missed three");
+        assertThat(missedQuestions).allSatisfy(question -> assertThat(question.getClaimedSessionId()).isEqualTo(sessionId));
+        verify(questionBankRepository).saveAll(missedQuestions);
+    }
+
+    @Test
+    void claimIncorrectQuestions_rejectsBelowTheMinimumWithoutClaiming() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        List<ChallengeQuizQuestionBankEntity> missedQuestions = List.of(bankedQuestion("Only miss"));
+        when(questionBankRepository.findIncorrectClaimableForUpdate(
+                userId, studyPackId, LearnerLevel.COLLEGE.name(), "INCORRECT"
+        )).thenReturn(missedQuestions);
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+
+        assertThatThrownBy(() -> service.claimIncorrectQuestions(
+                userId, studyPackId, LearnerLevel.COLLEGE, sessionId, 5, 3
+        )).isInstanceOf(NotEnoughMissedChallengeQuestionsException.class);
+
+        assertThat(missedQuestions.getFirst().getClaimedSessionId()).isNull();
     }
 
     @Test
