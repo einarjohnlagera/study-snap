@@ -144,6 +144,7 @@ public class NoteService {
     private final AnalyticsService analyticsService;
     private final ContentModerationService contentModerationService;
     private final OnboardingGuardService onboardingGuardService;
+    private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
@@ -382,6 +383,7 @@ public class NoteService {
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(saved.getId());
+        officialChallengeQuizTemplateService.queueSeedIfEligible(saved, linkedStudyPack);
         return mapToResponse(saved, linkedStudyPack);
     }
 

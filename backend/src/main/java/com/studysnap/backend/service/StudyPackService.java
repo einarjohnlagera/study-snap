@@ -103,6 +103,7 @@ public class StudyPackService {
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
     private final ContentModerationService contentModerationService;
     private final ExamQuestionPoolService examQuestionPoolService;
+    private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final OnboardingGuardService onboardingGuardService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
@@ -141,6 +142,7 @@ public class StudyPackService {
                 requestedSourceNote != null
         ));
         examQuestionPoolService.initiatePool(saved, ownerUserId);
+        queueOfficialChallengeQuizTemplateSeed(saved);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
@@ -277,6 +279,7 @@ public class StudyPackService {
                 false
         ));
         examQuestionPoolService.initiatePool(saved, ownerUserId);
+        queueOfficialChallengeQuizTemplateSeed(saved);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
@@ -329,6 +332,7 @@ public class StudyPackService {
                 false
         ));
         examQuestionPoolService.initiatePool(saved, ownerUserId);
+        queueOfficialChallengeQuizTemplateSeed(saved);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=confirm_text latencyMs={}", requestId, latency);
@@ -647,6 +651,14 @@ public class StudyPackService {
         studyPackGenerationTaskDispatcher.execute(generationTask);
     }
 
+    private void queueOfficialChallengeQuizTemplateSeed(StudyPackEntity studyPack) {
+        if (studyPack == null || studyPack.getNoteId() == null) {
+            return;
+        }
+        noteRepository.findById(studyPack.getNoteId())
+                .ifPresent(note -> officialChallengeQuizTemplateService.queueSeedIfEligible(note, studyPack));
+    }
+
     private void generateStudyPackFromExistingNoteAsync(
             UUID noteId,
             UUID ownerUserId,
@@ -701,6 +713,7 @@ public class StudyPackService {
                     true
             ));
             examQuestionPoolService.initiatePool(saved, ownerUserId);
+            queueOfficialChallengeQuizTemplateSeed(saved);
             long latency = System.currentTimeMillis() - startedAt;
             log.info("requestId={} action=complete_async_studyPack_generation noteId={} latencyMs={}", requestId, noteId, latency);
         } catch (Exception ex) {

@@ -83,6 +83,13 @@ Study Plan / Review Set detail can launch the learner's profile-appropriate prem
 - When at least three eligible bank entries were last answered `INCORRECT`, the Challenge result handoff offers **Redo Missed Questions**. It starts a normal `CHALLENGE` session sourced only from those same-learner-level claimed questions, with no LLM call and no Challenge quota consumption to *start*. A bank failure or a claim race fails closed rather than starting a partial redo. Completion still records `ConceptHealth` through the ordinary Challenge path; this is an entry point, not a new quiz mode or sub-mode.
 - `+5 Questions` on a redo-missed session is not quota-exempt-aware: it falls through to normal LLM generation like any other Challenge session, so the zero-cost guarantee applies only to the session's start, not to any later add-more request. Whether to block `+5 Questions` on redo-missed sessions is an open product question, not yet decided.
 
+### Official template source (v0.60.0)
+
+- A currently `PUBLIC` Study Pack owned by an Official author (an `ADMIN`, excluding the deleted-user sentinel) receives one canonical Challenge Quiz template of up to 20 questions after the public-note or Study-Pack write commits. An admin-only idempotent backfill can seed already-published Official content; template generation failures are logged and never affect publishing or Study Pack generation.
+- When an adopter's ordinary Challenge start or `+5 Questions` claim has a shortfall, the bank resolves exactly one lineage hop through the adopter note's `copiedFromNoteId`. It uses a template only when that immediate parent is still currently `PUBLIC` and Official-owned; it never follows `sourceNoteId` or chases further copy hops.
+- Template rows are read-only and are never shared as a learner's live bank rows. Eligible unseen template questions are copied into fresh rows under the learner's own user id and copied Study Pack id, claimed by the live session, tagged with the learner's current level, and initialized as `UNANSWERED`. This preserves each learner's own outcomes and Redo Missed Questions history.
+- The source read intentionally ignores the Official author's learner level. The copied row uses the learner's own current level so ordinary same-level bank claims continue to work later. Any template shortfall still uses the existing LLM path; private/non-Official Study Packs, Adaptive Practice, quotas, and the redo-missed claim path are unchanged.
+
 ### AI Generation Spec
 
 - Challenge mode uses `challenge-quiz-*.txt` prompts for flexible practice with stakes.

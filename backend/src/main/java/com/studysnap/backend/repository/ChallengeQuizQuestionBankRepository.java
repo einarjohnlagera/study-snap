@@ -61,6 +61,24 @@ public interface ChallengeQuizQuestionBankRepository extends JpaRepository<Chall
             @Param("outcome") String outcome
     );
 
+    boolean existsByUserIdAndStudyPackId(UUID userId, UUID studyPackId);
+
+    List<ChallengeQuizQuestionBankEntity> findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(
+            UUID userId,
+            UUID studyPackId
+    );
+
+    @Query("""
+            select question.questionKey
+            from ChallengeQuizQuestionBankEntity question
+            where question.userId = :userId
+              and question.studyPackId = :studyPackId
+            """)
+    List<String> findQuestionKeysByUserIdAndStudyPackId(
+            @Param("userId") UUID userId,
+            @Param("studyPackId") UUID studyPackId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<ChallengeQuizQuestionBankEntity> findByUserIdAndStudyPackIdAndClaimedSessionId(
             UUID userId,
