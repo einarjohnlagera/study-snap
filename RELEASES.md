@@ -2,7 +2,7 @@
 
 ## v0.59.0 - Dashboard & Progress Reorg
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: reorganize Dashboard and Progress around the learner's Primary Review Set now that it has something stable to point at — Challenge Quiz and Board/Long Exam content stopped regenerating every session in v0.58.0, so Progress can be promoted to a first-class destination with a real, persistent story to tell.
 
