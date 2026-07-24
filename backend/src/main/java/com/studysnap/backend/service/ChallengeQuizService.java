@@ -175,22 +175,14 @@ public class ChallengeQuizService {
         String selectedMode = resolveSelectedMode(request);
         String selectedDifficulty = resolveSelectedDifficulty(planType, selectedMode, request);
 
-        QuickReviewSessionEntity existing = quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                        userId,
-                        studyPackId,
-                        QuickReviewSessionMode.CHALLENGE,
-                        ACTIVE_GENERATION_STATUSES
-                )
-                .orElse(null);
-        if (existing != null) {
-            if (existing.getStatus() == QuickReviewSessionStatus.GENERATING
-                    || !QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty()) {
-                int usedThisMonth = resolveUsedThisMonthForResponse(userId, existing);
-                return toStartResponse(existing, studyPack, usedThisMonth, planType);
-            }
-            markSessionForfeited(existing);
-            quickReviewSessionRepository.save(existing);
+        Optional<ChallengeQuizStartResponse> existingSession = resolveExistingChallengeSession(
+                userId,
+                studyPackId,
+                studyPack,
+                planType
+        );
+        if (existingSession.isPresent()) {
+            return existingSession.get();
         }
 
         List<UUID> additionalBoardExamStudyPackIds = MODE_BOARD_EXAM.equals(selectedMode)
@@ -356,6 +348,50 @@ public class ChallengeQuizService {
             }
             return toStartResponse(failed, studyPack, usedThisMonth, planType);
         }
+    }
+
+    /**
+     * Starts a regular Challenge Quiz session from the learner's own previously incorrect banked
+     * questions. The session mode remains CHALLENGE and is intentionally quota-exempt because it
+     * incurs no new LLM generation cost.
+     */
+    @Transactional
+    public ChallengeQuizStartResponse startRedoMissedSession(String studyPackIdRaw, UUID userId) {
+        authService.requireEmailVerified(userId);
+        UUID studyPackId = parseStudyPackId(studyPackIdRaw);
+        StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        Optional<ChallengeQuizStartResponse> existingSession = resolveExistingChallengeSession(
+                userId,
+                studyPackId,
+                studyPack,
+                planType
+        );
+        if (existingSession.isPresent()) {
+            return existingSession.get();
+        }
+
+        ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, null, MODE_CHALLENGE);
+        StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
+        QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
+                userId,
+                studyPackId,
+                studyPack,
+                profile.difficulty(),
+                MODE_CHALLENGE
+        ));
+        List<QuizItem> missedQuestions = challengeQuizQuestionBankService.claimIncorrectQuestions(
+                userId,
+                studyPackId,
+                generationContext.learnerLevel(),
+                session.getId(),
+                INITIAL_CHALLENGE_QUIZ_COUNT,
+                ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS
+        );
+        markSessionReady(session, missedQuestions, profile.difficulty());
+        session.setQuotaExempt(true);
+        QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        return toStartResponse(saved, studyPack, resolveUsedThisMonthForResponse(userId, saved), planType);
     }
 
     @Transactional(readOnly = true)
@@ -737,8 +773,16 @@ public class ChallengeQuizService {
                 usagePeriod.periodStart(),
                 usagePeriod.periodEnd()
         );
+        long quotaExemptSessions = quickReviewSessionRepository
+                .countByUserIdAndSessionModeAndStatusInAndQuotaExemptTrueAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                        userId,
+                        QuickReviewSessionMode.CHALLENGE,
+                        USAGE_COUNTED_STATUSES,
+                        usagePeriod.periodStart(),
+                        usagePeriod.periodEnd()
+                );
         long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).challengeQuizGenerations();
-        return Math.max(usedFromCountedSessions, usedFromUsage);
+        return Math.max(Math.max(0L, usedFromCountedSessions - quotaExemptSessions), usedFromUsage);
     }
 
     private int assertBoardExamQuotaAvailable(UUID userId, PlanType planType, int quotaUnits) {
@@ -798,6 +842,32 @@ public class ChallengeQuizService {
             return new ChallengeGenerationProfile(MID_SCORE_QUESTION_COUNT, DEFAULT_SELECTED_DIFFICULTY);
         }
         return new ChallengeGenerationProfile(HIGH_SCORE_QUESTION_COUNT, DIFFICULTY_HARD);
+    }
+
+    private Optional<ChallengeQuizStartResponse> resolveExistingChallengeSession(
+            UUID userId,
+            UUID studyPackId,
+            StudyPackEntity studyPack,
+            PlanType planType
+    ) {
+        QuickReviewSessionEntity existing = quickReviewSessionRepository
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                        userId,
+                        studyPackId,
+                        QuickReviewSessionMode.CHALLENGE,
+                        ACTIVE_GENERATION_STATUSES
+                )
+                .orElse(null);
+        if (existing == null) {
+            return Optional.empty();
+        }
+        if (existing.getStatus() == QuickReviewSessionStatus.GENERATING
+                || !QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty()) {
+            return Optional.of(toStartResponse(existing, studyPack, resolveUsedThisMonthForResponse(userId, existing), planType));
+        }
+        markSessionForfeited(existing);
+        quickReviewSessionRepository.save(existing);
+        return Optional.empty();
     }
 
     private int resolveQuestionCountForDifficulty(String difficulty) {

@@ -207,10 +207,12 @@ class DashboardServiceProjectionIntegrationTest {
                     confidence_level varchar(16),
                     session_metadata json,
                     session_state json,
+                    quota_exempt boolean not null default false,
                     created_at timestamp with time zone not null,
                     completed_at timestamp with time zone
                 )
                 """);
+        jdbcTemplate.execute("alter table quick_review_sessions add column if not exists quota_exempt boolean not null default false");
         jdbcTemplate.execute("""
                 create table if not exists user_activity_events (
                     id uuid primary key,

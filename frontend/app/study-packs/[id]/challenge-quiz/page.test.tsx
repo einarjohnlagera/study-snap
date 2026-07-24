@@ -9,6 +9,7 @@ import {
   getNote,
   getPostSessionNextStep,
   listNotes,
+  startRedoMissedChallengeQuizSession,
   startChallengeQuizSession,
   updateChallengeQuizSessionProgress,
 } from "@/lib/api";
@@ -68,6 +69,7 @@ jest.mock("@/lib/api", () => ({
   getPostSessionNextStep: jest.fn(),
   isEmailNotVerifiedError: () => false,
   listNotes: jest.fn(),
+  startRedoMissedChallengeQuizSession: jest.fn(),
   startChallengeQuizSession: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateChallengeQuizSessionProgress: jest.fn(),
@@ -116,6 +118,7 @@ describe("ChallengeQuizPage", () => {
     (forfeitChallengeQuizSession as jest.Mock).mockReset();
     (forfeitChallengeQuizSession as jest.Mock).mockResolvedValue({ message: "Challenge Quiz session forfeited." });
     (startChallengeQuizSession as jest.Mock).mockReset();
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockReset();
     (updateChallengeQuizSessionProgress as jest.Mock).mockReset();
     (updateChallengeQuizSessionProgress as jest.Mock).mockResolvedValue(undefined);
     (getPostSessionNextStep as jest.Mock).mockReset();
@@ -489,6 +492,37 @@ describe("ChallengeQuizPage", () => {
     await waitFor(() => {
       expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" });
     });
+  });
+
+  it("starts the missed-question redo entry through its dedicated zero-generation endpoint", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart(true, "STUDENT");
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "redo-session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 3,
+      timeLimitSeconds: 270,
+      usedThisMonth: 0,
+      monthlyLimit: 5,
+      difficultySelectionAvailable: true,
+      mode: "challenge",
+      selectedDifficulty: "medium",
+      quiz: [
+        { question: "Missed one", choices: ["A", "B", "C", "D"], correctIndex: 0, concept: "Concept", explanation: "Explanation" },
+        { question: "Missed two", choices: ["A", "B", "C", "D"], correctIndex: 0, concept: "Concept", explanation: "Explanation" },
+        { question: "Missed three", choices: ["A", "B", "C", "D"], correctIndex: 0, concept: "Concept", explanation: "Explanation" },
+      ],
+      currentQuestionIndex: 0,
+      sessionState: { timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+    });
+
+    render(<ChallengeQuizPage />);
+
+    await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledWith("note-1"));
+    expect(await screen.findByText("Missed one")).toBeInTheDocument();
+    expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
 
   it("starts Exam Reviewers on the shared mode-selection screen with Board Exam emphasized", async () => {

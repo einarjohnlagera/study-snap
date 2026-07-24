@@ -188,6 +188,7 @@ export type TodayFocusType =
   | "RETRY_REVIEW"
   | "DUE_CONCEPTS_REVIEW"
   | "PRACTICE_WEAK_CONCEPT"
+  | "REDO_MISSED_QUESTIONS"
   | "REVIEW_PACK"
   | "STUDY_SUGGESTION";
 
@@ -227,7 +228,7 @@ export type TodayFocusResponse = {
 };
 
 export type PostSessionNextStepResponse = {
-  type: Extract<TodayFocusType, "PRACTICE_WEAK_CONCEPT" | "RETRY_REVIEW" | "REVIEW_PACK">;
+  type: Extract<TodayFocusType, "PRACTICE_WEAK_CONCEPT" | "RETRY_REVIEW" | "REDO_MISSED_QUESTIONS" | "REVIEW_PACK">;
   studyPackId: string;
   noteId: string | null;
   title: string;
@@ -3334,6 +3335,20 @@ export async function startChallengeQuizSession(
     true,
   );
   return parseApiResponse<ChallengeQuizStartResponse>(response, "Could not start Challenge Quiz.");
+}
+
+export async function startRedoMissedChallengeQuizSession(
+  noteId: string,
+): Promise<ChallengeQuizStartResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/challenge-quiz/redo-missed`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ChallengeQuizStartResponse>(response, "Could not start missed-question redo.");
 }
 
 export async function getInProgressChallengeQuizSession(

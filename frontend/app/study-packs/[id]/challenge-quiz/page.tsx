@@ -51,6 +51,7 @@ import {
   listNotes,
   isEmailNotVerifiedError,
   isNotEnoughNewQuestionsError,
+  startRedoMissedChallengeQuizSession,
   startChallengeQuizSession,
   trackAnalyticsEvent,
   updateChallengeQuizSessionProgress,
@@ -90,6 +91,7 @@ import {
 import {
   CHALLENGE_QUIZ_ENTRY_QUERY_PARAM,
   isModeSelectionChallengeQuizEntry,
+  isRedoMissedChallengeQuizEntry,
 } from "@/lib/challenge-quiz-entry";
 import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { getAvailableExamModes } from "@/lib/exam-mode-visibility";
@@ -317,6 +319,7 @@ export default function ChallengeQuizPage() {
   const timeoutAutoSubmitRequestedRef = useRef(false);
   const weakConceptsRef = useRef<HTMLDivElement | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
+  const redoMissedStartRequestedRef = useRef(false);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
   const [result, setResult] = useState<ChallengeQuizSessionResponse | null>(null);
@@ -369,6 +372,10 @@ export default function ChallengeQuizPage() {
   }, [params]);
   const hasModeSelectionEntryQuery = useMemo(
     () => isModeSelectionChallengeQuizEntry(searchParams.get(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM)),
+    [searchParams],
+  );
+  const hasRedoMissedEntryQuery = useMemo(
+    () => isRedoMissedChallengeQuizEntry(searchParams.get(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM)),
     [searchParams],
   );
   const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
@@ -1097,7 +1104,7 @@ export default function ChallengeQuizPage() {
     };
   }, [deadlineEpochSeconds, handleSubmit, persistLatestProgress, phase]);
 
-  const handleStartChallenge = useCallback(async (modeOverride?: ChallengeQuizMode) => {
+  const handleStartChallenge = useCallback(async (modeOverride?: ChallengeQuizMode, redoMissed = false) => {
     if (!note || startInFlightRef.current) {
       return;
     }
@@ -1121,7 +1128,9 @@ export default function ChallengeQuizPage() {
       if (nextMode === BOARD_EXAM_MODE && selectedBoardExamAdditionalStudyPackIds.length > 0) {
         request.additionalStudyPackIds = selectedBoardExamAdditionalStudyPackIds;
       }
-      const started = await startChallengeQuizSession(note.id, request);
+      const started = redoMissed
+        ? await startRedoMissedChallengeQuizSession(note.id)
+        : await startChallengeQuizSession(note.id, request);
       if (!started.sessionId) {
         throw new Error(nextMode === BOARD_EXAM_MODE ? "Could not start Board Exam Mode." : "Could not start Challenge Quiz.");
       }
@@ -1156,6 +1165,21 @@ export default function ChallengeQuizPage() {
       setStarting(false);
     }
   }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedBoardExamAdditionalStudyPackIds, selectedDifficulty, selectedMode, viewerPlanType]);
+
+  useEffect(() => {
+    if (
+      !hasRedoMissedEntryQuery
+      || loading
+      || phase !== "prestart"
+      || !note
+      || challengeSession?.sessionId
+      || redoMissedStartRequestedRef.current
+    ) {
+      return;
+    }
+    redoMissedStartRequestedRef.current = true;
+    void handleStartChallenge(CHALLENGE_MODE, true);
+  }, [challengeSession?.sessionId, handleStartChallenge, hasRedoMissedEntryQuery, loading, note, phase]);
 
   const handleRetry = () => {
     timeoutAutoSubmitRequestedRef.current = false;

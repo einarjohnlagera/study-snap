@@ -80,6 +80,7 @@ Study Plan / Review Set detail can launch the learner's profile-appropriate prem
 - On both session start and `+5 Questions`, Challenge Quiz claims eligible banked questions before calling the LLM, then generates only the shortfall. A banked question must match the learner's current learner level and is deduplicated against the live session with `QuizDeduplicationUtils`.
 - Claims use a pessimistic lock and stay attached to the in-progress session, preventing two concurrent starts or add-more requests from receiving the same banked question. Completion records the question's last known correct, incorrect, or unanswered outcome and releases the claim; forfeiture and generation failure also release claims.
 - Bank persistence is best-effort: a bank read/write failure falls back to the existing fresh-generation path and never blocks a Challenge session. Adaptive Practice remains intentionally always-fresh and does not use this bank.
+- When at least three eligible bank entries were last answered `INCORRECT`, the Challenge result handoff offers **Redo Missed Questions**. It starts a normal `CHALLENGE` session sourced only from those same-learner-level claimed questions, with no LLM call and no Challenge quota consumption. A bank failure or a claim race fails closed rather than starting a partial redo. Completion still records `ConceptHealth` through the ordinary Challenge path; this is an entry point, not a new quiz mode or sub-mode.
 
 ### AI Generation Spec
 

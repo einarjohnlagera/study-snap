@@ -67,12 +67,14 @@ class QuizSessionHistoryServiceTest {
                     confidence_level varchar(16),
                     session_metadata json,
                     session_state json,
+                    quota_exempt boolean not null default false,
                     created_at timestamp with time zone not null,
                     completed_at timestamp with time zone
                 )
                 """);
         jdbcTemplate.execute("delete from quick_review_sessions");
         jdbcTemplate.execute("alter table quick_review_sessions alter column note_id set not null");
+        jdbcTemplate.execute("alter table quick_review_sessions add column if not exists quota_exempt boolean not null default false");
     }
 
     @Test

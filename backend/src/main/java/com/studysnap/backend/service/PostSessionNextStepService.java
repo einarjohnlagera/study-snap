@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.NextStepSecondaryActionResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -43,10 +44,12 @@ public class PostSessionNextStepService {
     private static final String ADAPTIVE_PRACTICE_PATH = "/notes/%s/adaptive-practice";
     private static final String QUICK_REVIEW_PATH = "/notes/%s/quick-review";
     private static final String CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz";
+    private static final String REDO_MISSED_CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz?entry=redo-missed";
     private static final String FALLBACK_PATH = "/library";
     private static final String TAKE_CHALLENGE_LABEL = "Take a Challenge";
     private static final String PRACTICE_WEAK_CONCEPTS_LABEL = "Practice Weak Concepts";
     private static final String RETRY_INCORRECT_QUESTIONS_LABEL = "Retry Incorrect Questions";
+    private static final String REDO_MISSED_QUESTIONS_LABEL = "Redo Missed Questions";
     // Promote Challenge to the primary next step at a strong-majority Quick Review (>= 4/5):
     // up to this many missed concepts still counts as "strong, step up" with retry kept available
     // as a secondary action. Two or more misses keeps retry as the primary action.
@@ -61,6 +64,7 @@ public class PostSessionNextStepService {
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
     private final ProgressReportService progressReportService;
+    private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
 
     @Transactional(readOnly = true)
     public NextStepResponse getNextStep(UUID userId, UUID studyPackId) {
@@ -73,7 +77,7 @@ public class PostSessionNextStepService {
         AdaptivePracticeQuota adaptivePracticeQuota = resolveAdaptivePracticeQuota(userId, planType);
         GoalNudgeResponse goalNudge = resolveGoalNudge(user, studyPack);
         try {
-            return resolveNextStep(userId, studyPack, adaptivePracticeQuota, goalNudge);
+            return resolveNextStep(userId, user.getLearnerLevel(), studyPack, adaptivePracticeQuota, goalNudge);
         } catch (RuntimeException ex) {
             log.warn(
                     "post_session_next_step_fallback userId={} studyPackId={} reason={}",
@@ -87,6 +91,7 @@ public class PostSessionNextStepService {
 
     private NextStepResponse resolveNextStep(
             UUID userId,
+            LearnerLevel learnerLevel,
             StudyPackEntity studyPack,
             AdaptivePracticeQuota adaptivePracticeQuota,
             GoalNudgeResponse goalNudge
@@ -113,14 +118,14 @@ public class PostSessionNextStepService {
                     adaptivePracticeQuota,
                     goalNudge
             );
-            case CHALLENGE -> genuineWeakConcepts.isEmpty()
-                    ? reviewPackResponse(studyPack, adaptivePracticeQuota, goalNudge)
-                    : practiceWeakConceptResponse(
-                            studyPack,
-                            genuineWeakConcepts,
-                            adaptivePracticeQuota,
-                            goalNudge
-                    );
+            case CHALLENGE -> resolveChallengeNextStep(
+                    userId,
+                    learnerLevel,
+                    studyPack,
+                    genuineWeakConcepts,
+                    adaptivePracticeQuota,
+                    goalNudge
+            );
             case ADAPTIVE -> reviewPackResponse(
                     studyPack,
                     adaptivePracticeQuota,
@@ -131,6 +136,34 @@ public class PostSessionNextStepService {
             );
             default -> reviewPackResponse(studyPack, adaptivePracticeQuota, goalNudge);
         };
+    }
+
+    private NextStepResponse resolveChallengeNextStep(
+            UUID userId,
+            LearnerLevel learnerLevel,
+            StudyPackEntity studyPack,
+            List<String> genuineWeakConcepts,
+            AdaptivePracticeQuota adaptivePracticeQuota,
+            GoalNudgeResponse goalNudge
+    ) {
+        boolean hasRedoMissedQuestions = challengeQuizQuestionBankService.countEligibleIncorrectQuestions(
+                userId,
+                studyPack.getId(),
+                learnerLevel
+        ) >= ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS;
+        if (!genuineWeakConcepts.isEmpty()) {
+            return practiceWeakConceptResponse(
+                    studyPack,
+                    genuineWeakConcepts,
+                    adaptivePracticeQuota,
+                    goalNudge,
+                    hasRedoMissedQuestions ? redoMissedQuestionsSecondaryAction(studyPack) : null
+            );
+        }
+        if (hasRedoMissedQuestions) {
+            return redoMissedQuestionsResponse(studyPack, adaptivePracticeQuota, goalNudge);
+        }
+        return reviewPackResponse(studyPack, adaptivePracticeQuota, goalNudge);
     }
 
     private NextStepResponse resolveQuickReviewNextStep(
@@ -195,6 +228,16 @@ public class PostSessionNextStepService {
             AdaptivePracticeQuota adaptivePracticeQuota,
             GoalNudgeResponse goalNudge
     ) {
+        return practiceWeakConceptResponse(studyPack, dueConcepts, adaptivePracticeQuota, goalNudge, null);
+    }
+
+    private NextStepResponse practiceWeakConceptResponse(
+            StudyPackEntity studyPack,
+            List<String> dueConcepts,
+            AdaptivePracticeQuota adaptivePracticeQuota,
+            GoalNudgeResponse goalNudge,
+            NextStepSecondaryActionResponse secondaryAction
+    ) {
         int conceptCount = dueConcepts.size();
         String conceptLabel = conceptCount == 1 ? "concept is" : "concepts are";
         return new NextStepResponse(
@@ -206,6 +249,27 @@ public class PostSessionNextStepService {
                 PRACTICE_WEAK_CONCEPTS_LABEL,
                 pathOrFallback(studyPack.getNoteId(), ADAPTIVE_PRACTICE_PATH),
                 dueConcepts,
+                adaptivePracticeQuota.available(),
+                adaptivePracticeQuota.remaining(),
+                goalNudge,
+                secondaryAction
+        );
+    }
+
+    private NextStepResponse redoMissedQuestionsResponse(
+            StudyPackEntity studyPack,
+            AdaptivePracticeQuota adaptivePracticeQuota,
+            GoalNudgeResponse goalNudge
+    ) {
+        return new NextStepResponse(
+                TodayFocusType.REDO_MISSED_QUESTIONS,
+                studyPack.getId().toString(),
+                stringify(studyPack.getNoteId()),
+                studyPack.getTitle(),
+                "Your missed Challenge Quiz questions are ready for another try.",
+                REDO_MISSED_QUESTIONS_LABEL,
+                pathOrFallback(studyPack.getNoteId(), REDO_MISSED_CHALLENGE_QUIZ_PATH),
+                List.of(),
                 adaptivePracticeQuota.available(),
                 adaptivePracticeQuota.remaining(),
                 goalNudge,
@@ -307,6 +371,14 @@ public class PostSessionNextStepService {
         return new NextStepSecondaryActionResponse(
                 RETRY_INCORRECT_QUESTIONS_LABEL,
                 pathOrFallback(studyPack.getNoteId(), QUICK_REVIEW_PATH),
+                false
+        );
+    }
+
+    private NextStepSecondaryActionResponse redoMissedQuestionsSecondaryAction(StudyPackEntity studyPack) {
+        return new NextStepSecondaryActionResponse(
+                REDO_MISSED_QUESTIONS_LABEL,
+                pathOrFallback(studyPack.getNoteId(), REDO_MISSED_CHALLENGE_QUIZ_PATH),
                 false
         );
     }
