@@ -17,6 +17,7 @@ import {
   getAdminRegenerationStatus,
   issueAdminRefund,
   regenerateAdminSummaries,
+  seedOfficialChallengeQuizTemplates,
   type AdminRecentUpgradeItemResponse,
   type AdminRecentFeedbackItemResponse,
   type AdminDashboardRecentEventsResponse,
@@ -192,6 +193,9 @@ export default function AdminPage() {
   const [regenerateSummariesError, setRegenerateSummariesError] = useState<string | null>(null);
   const [regenerateSummariesMessage, setRegenerateSummariesMessage] = useState<string | null>(null);
   const [regenerationProgress, setRegenerationProgress] = useState<AdminRegenerationStatusResponse | null>(null);
+  const [seedingOfficialTemplates, setSeedingOfficialTemplates] = useState(false);
+  const [seedOfficialTemplatesError, setSeedOfficialTemplatesError] = useState<string | null>(null);
+  const [seedOfficialTemplatesMessage, setSeedOfficialTemplatesMessage] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     if (!requireAdminUser(router)) {
@@ -245,6 +249,16 @@ export default function AdminPage() {
       globalThis.clearTimeout(timeoutId);
     };
   }, [regenerateSummariesMessage]);
+
+  useEffect(() => {
+    if (!seedOfficialTemplatesMessage) {
+      return;
+    }
+    const timeoutId = globalThis.setTimeout(() => setSeedOfficialTemplatesMessage(null), 4000);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [seedOfficialTemplatesMessage]);
 
   const handleOpenRefundModal = (item: AdminRecentUpgradeItemResponse) => {
     setRefundTarget(item);
@@ -369,6 +383,27 @@ export default function AdminPage() {
     }
   };
 
+  const handleSeedOfficialChallengeQuizTemplates = async () => {
+    setSeedingOfficialTemplates(true);
+    setSeedOfficialTemplatesError(null);
+    try {
+      const response = await seedOfficialChallengeQuizTemplates();
+      setSeedOfficialTemplatesMessage(
+        response.queued === 0
+          ? `No Official study packs to seed (${response.skipped} already seeded)`
+          : `Queued ${response.queued} Official template(s) for seeding (${response.skipped} already seeded)`,
+      );
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 403) {
+        router.replace("/dashboard");
+        return;
+      }
+      setSeedOfficialTemplatesError("Could not queue Official template seeding. Try again.");
+    } finally {
+      setSeedingOfficialTemplates(false);
+    }
+  };
+
   const overviewCards = useMemo(() => {
     if (!summary) {
       return [] as MetricCardProps[];
@@ -436,6 +471,7 @@ export default function AdminPage() {
     <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
       {refundSuccessMessage ? <ToastMessage message={refundSuccessMessage} tone="success" /> : null}
       {regenerateSummariesMessage ? <ToastMessage message={regenerateSummariesMessage} tone="success" /> : null}
+      {seedOfficialTemplatesMessage ? <ToastMessage message={seedOfficialTemplatesMessage} tone="success" /> : null}
       <header className="space-y-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-wrap items-center gap-4">
@@ -464,6 +500,18 @@ export default function AdminPage() {
             ) : null}
             {regenerateSummariesError ? (
               <p className="text-sm text-red-600 dark:text-red-400">{regenerateSummariesError}</p>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void handleSeedOfficialChallengeQuizTemplates()}
+              disabled={seedingOfficialTemplates}
+            >
+              {seedingOfficialTemplates ? "Processing..." : "Seed Official Challenge Quiz Templates"}
+            </Button>
+            {seedOfficialTemplatesError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{seedOfficialTemplatesError}</p>
             ) : null}
           </div>
         </div>
