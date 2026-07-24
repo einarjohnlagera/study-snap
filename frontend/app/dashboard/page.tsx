@@ -18,6 +18,7 @@ import {
   getContinueStudyingRecommendation,
   getDashboardOverview,
   getFeedbackPromptContext,
+  getCollectionGoal,
   getGoalSummary,
   getMe,
   getQuickReviewLastReviewedBatch,
@@ -25,6 +26,7 @@ import {
   listNotes,
   type ContinueStudyingResponse,
   type DashboardOverviewResponse,
+  type GoalCollectionDetailResponse,
   type GoalNudgeResponse,
   type FeedbackPromptContextResponse,
   type MeResponse,
@@ -51,6 +53,7 @@ import { DashboardActionCard } from "./dashboard-action-card";
 import { DashboardStrongestNotes } from "./dashboard-strongest-notes";
 import { DashboardCommunityNotesSection } from "./dashboard-community-notes-section";
 import { DashboardStudyPlanSection } from "./dashboard-study-plan-section";
+import { DashboardPrimaryCollectionHero, DashboardPrimaryCollectionHeroSkeleton } from "./dashboard-primary-collection-hero";
 import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
 import { DashboardGoalCard } from "@/components/dashboard/dashboard-goal-card";
 import { GoalPromptBanner } from "@/components/dashboard/goal-prompt-banner";
@@ -315,6 +318,8 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<MeResponse | null>(null);
   const [goalSummary, setGoalSummary] = useState<GoalNudgeResponse | null>(null);
   const [goalSummaryLoading, setGoalSummaryLoading] = useState(false);
+  const [primaryCollectionGoal, setPrimaryCollectionGoal] = useState<GoalCollectionDetailResponse | null>(null);
+  const [primaryCollectionGoalLoading, setPrimaryCollectionGoalLoading] = useState(false);
   const [continueStudying, setContinueStudying] = useState<ContinueStudyingResponse | null>(null);
   const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
   const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null);
@@ -356,6 +361,24 @@ export default function DashboardPage() {
       if (meResult.status === "fulfilled") {
         const me = meResult.value;
         setProfile(me);
+        if (me.primaryCollectionId) {
+          setPrimaryCollectionGoal(null);
+          setPrimaryCollectionGoalLoading(true);
+          void getCollectionGoal(me.primaryCollectionId)
+            .then((goal) => {
+              setPrimaryCollectionGoal(goal);
+            })
+            .catch((primaryCollectionError) => {
+              globalThis.console.warn("Could not load dashboard primary collection.", primaryCollectionError);
+              setPrimaryCollectionGoal(null);
+            })
+            .finally(() => {
+              setPrimaryCollectionGoalLoading(false);
+            });
+        } else {
+          setPrimaryCollectionGoal(null);
+          setPrimaryCollectionGoalLoading(false);
+        }
         if (me.studyGoal) {
           setGoalSummary(null);
           setGoalSummaryLoading(true);
@@ -430,6 +453,8 @@ export default function DashboardPage() {
       } else {
         setGoalSummary(null);
         setGoalSummaryLoading(false);
+        setPrimaryCollectionGoal(null);
+        setPrimaryCollectionGoalLoading(false);
         setTeacherGeneratedQuizzes([]);
         setRecentNoteMetaById({});
       }
@@ -662,6 +687,20 @@ export default function DashboardPage() {
       secondaryActionIcon="open"
     />
   );
+  const dashboardGoalFallback = profile?.studyGoal ? (
+    goalSummary ? (
+      <DashboardGoalCard goalSummary={goalSummary} />
+    ) : goalSummaryLoading ? (
+      <DashboardGoalCardSkeleton />
+    ) : null
+  ) : (
+    <GoalPromptBanner
+      studyGoal={profile?.studyGoal ?? null}
+      courseProgram={profile?.courseProgram ?? null}
+      profileType={profile?.profileType ?? null}
+    />
+  );
+  const hasPrimaryCollection = Boolean(profile?.primaryCollectionId);
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -697,6 +736,16 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
+          {hasPrimaryCollection ? (
+            primaryCollectionGoal ? (
+              <DashboardPrimaryCollectionHero
+                goal={primaryCollectionGoal}
+                profileType={profile?.profileType}
+              />
+            ) : primaryCollectionGoalLoading ? (
+              <DashboardPrimaryCollectionHeroSkeleton />
+            ) : dashboardGoalFallback
+          ) : null}
           {shouldShowNearLimitBanner ? (
             <NearLimitBanner
               planType={usageSummary?.plan ?? "FREE"}
@@ -706,19 +755,7 @@ export default function DashboardPage() {
             />
           ) : null}
           {shouldShowFreeUpgradeCard ? <FreePlanUpgradeCard /> : null}
-          {profile?.studyGoal ? (
-            goalSummary ? (
-              <DashboardGoalCard goalSummary={goalSummary} />
-            ) : goalSummaryLoading ? (
-              <DashboardGoalCardSkeleton />
-            ) : null
-          ) : (
-            <GoalPromptBanner
-              studyGoal={profile?.studyGoal ?? null}
-              courseProgram={profile?.courseProgram ?? null}
-              profileType={profile?.profileType ?? null}
-            />
-          )}
+          {!hasPrimaryCollection ? dashboardGoalFallback : null}
           {showWelcomeMessage && !showFirstStudyWelcomeModal ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <p className="text-sm text-foreground/80">
