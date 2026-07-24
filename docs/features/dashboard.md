@@ -14,6 +14,7 @@ Dashboard is a guidance surface, not a management screen. It should help users d
 
 **Frontend**
 - `frontend/app/dashboard/page.tsx` — main dashboard client; `SupportedDashboardProfileType` branching (STUDENT / BOARD_EXAM / TEACHER / PROFESSIONAL); all section composition per profile type
+- `frontend/app/dashboard/dashboard-primary-collection-hero.tsx` — condensed Primary Review Set identity, current-step, action, readiness card and its loading skeleton
 - `frontend/app/dashboard/continue-spotlight.tsx` — Continue Studying card
 - `frontend/app/dashboard/dashboard-focus-areas-card.tsx` — Focus Areas / weak concepts section
 - `frontend/app/dashboard/today-focus-card.tsx` — top-priority Today Focus card for resumable reviews and due concepts
@@ -26,6 +27,16 @@ Dashboard is a guidance surface, not a management screen. It should help users d
 - Continue Studying must use the `resumeType` label from the backend directly — do not infer mode labels on the frontend
 - Focus Areas shows `Revisit Note` for Free/Plus users when Adaptive Practice is gated; only show the upgrade prompt when no source note is resolvable
 - The Community Notes section (v0.21.0) uses `GET /notes/public?courseProgram=<value>&size=4` directly — no new dashboard backend endpoint
+
+## Primary Review Set hero
+
+When `GET /auth/me` returns a `primaryCollectionId`, Dashboard adds a condensed Primary Review Set hero above its existing cards and sections. It follows the Review Set detail hierarchy at summary depth: identity (profile-aware Primary Study Plan / Primary Review Set / Primary Lesson Plan label and title), a current-step summary, one `Continue Studying` action, and overall readiness percentage.
+
+- Dashboard resolves the card through the existing `getMe()` → `primaryCollectionId` → `getCollectionGoal(primaryCollectionId)` read path; it adds no Dashboard endpoint, write, AI call, quota, or mastery calculation.
+- The identity/title and `Continue Studying` action both open `/collections/{id}`. The detail page remains the owner of per-note next-action resolution, so this summary does not duplicate that more detailed logic.
+- While the primary collection read is pending, Dashboard shows a hero-shaped skeleton rather than an empty gap or the goal-prompt fallback.
+- If the read fails or the primary reference no longer resolves, the hero slot falls back to the existing `GoalPromptBanner` / `DashboardGoalCard` behavior. Learners with no `primaryCollectionId` stay on that existing fallback path unchanged.
+- This is additive: Continue Studying, Focus Areas, Today Focus, Recent Notes, Community Notes, Usage / Progress, and the matching Study Plan section retain their existing composition and links below the hero. It does not introduce or link to `/explore`.
 
 ## Current Personalization Prompt
 

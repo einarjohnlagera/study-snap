@@ -106,18 +106,19 @@ Rules:
 - setting the already-primary collection is a no-op success
 - clearing primary is always allowed and is a no-op when nothing is set
 - when a user has no primary and exactly one owned top-level Goal, that Goal is auto-set as primary
-- auto-set applies after top-level Goal creation, standalone public-plan adoption, first-time Goal adoption, deletion, and re-parenting changes that leave exactly one top-level Goal
+- first-time standalone public-plan adoption and first-time Goal adoption also set the newly adopted top-level collection as primary when the learner has no primary yet, regardless of how many other top-level collections they own; an existing primary is never overwritten
+- the general exactly-one-top-level auto-set remains unchanged for top-level Goal creation, deletion, and re-parenting; adoption's no-primary default is a separate adopt-time behavior, not a broader change to `reassertPrimaryInvariant`
 - an existing valid primary is never overwritten by auto-set
 - if the current primary stops being an owned top-level Goal, the reference clears before the exactly-one-top-level auto-set rule is considered
-- adopting child Subject plans inside `adoptGoal` does not run primary auto-set for those temporary standalone child copies; the invariant is reasserted once after the first-time Goal adoption is structurally settled
+- adopting child Subject plans inside `adoptGoal` never assigns primary to those temporary standalone child copies; the newly adopted top-level Goal is the only possible adopt-time primary target
 
 Structural collection mutations reassert this invariant in the same service operation that changes the top-level set:
 
 | Mutation | Primary behavior |
 |---|---|
 | `POST /collections` | Can auto-set the created collection when it is the user's first top-level Goal. |
-| `POST /collections/{id}/adopt` | Can auto-set the adopted standalone plan when it is the user's first top-level collection. |
-| `POST /collections/{id}/adopt-goal` | Can auto-set the adopted Goal on genuine first-time adoption; repeat `alreadyAdopted=true` calls do not alter primary. |
+| `POST /collections/{id}/adopt` | On genuine first-time adoption, sets the adopted standalone top-level plan when the user has no primary, regardless of top-level collection count; repeat `alreadyAdopted=true` calls do not alter primary. |
+| `POST /collections/{id}/adopt-goal` | On genuine first-time adoption, sets the adopted top-level Goal when the user has no primary, regardless of top-level collection count; its child Subject plans are never eligible. Repeat `alreadyAdopted=true` calls do not alter primary. |
 | `DELETE /collections/{id}` | If the deleted collection was top-level, clears an invalid primary and can auto-set the one remaining top-level Goal. |
 | `PATCH /collections/{id}/parent` | Attaching a primary Goal under another Goal invalidates it; detaching a child back to top-level can trigger auto-set. |
 
@@ -131,7 +132,7 @@ Structural collection mutations reassert this invariant in the same service oper
 
 The CTA verb (`Start`/`Continue this {label}`) and the child-count line (`N {label}s`) in `DashboardStudyPlanSection` and `PublicStudyPlanCard` (`frontend/components/study-plan/public-study-plan-card.tsx`) resolve through `labels.goalSingular`/`labels.singular`/`labels.subjectSingular`, same as `primarySingular` above. `PublicStudyPlanCard` takes an optional `profileType` prop for this purpose; `published-plans-page-client.tsx` passes the same `profileType` it already resolves for its own page-level labels.
 
-**Frontend consumption (Progress):** `/progress` also reads `primaryCollectionId` from `GET /auth/me`. When the URL has no explicit `?collectionId=`, it applies the Primary Review Set once as the initial scoped readiness view; explicit query-param selections and later `All subjects` picker changes win after that first resolution. Because a primary is always a top-level Goal, Progress uses `GET /collections/{id}/goal` for that default aggregate view, not `GET /collections/{id}/readiness` (which reads only direct note items and is reserved for explicit leaf/Subject plan selections).
+**Frontend consumption (Progress):** `/progress` also reads `primaryCollectionId` from `GET /auth/me`. When the URL has no explicit `?collectionId=`, it applies the Primary Review Set once as the initial scoped readiness view; explicit query-param selections and later `All subjects` picker changes win after that first resolution. Because a primary is always top-level, Progress uses `GET /collections/{id}/goal` for that default aggregate view: the response rolls up child Subject plans when present and reads direct items for a childless top-level plan. Explicit leaf/Subject plan selections still use `GET /collections/{id}/readiness`.
 
 ### Target Completion Date
 
@@ -543,11 +544,13 @@ Each child response contains:
 - `notPracticedConcepts`
 - `totalConcepts`
 
-Goal readiness is deliberately cheap and derived from child Subject readiness counts:
+Goal readiness is deliberately cheap and derived from child Subject readiness counts when the collection has children:
 
 `overallReadinessPercentage = round(100 * sum(child.masteredConcepts) / sum(child.totalConcepts))`, or `0` when the summed denominator is `0`.
 
-Do not re-run concept classification over the merged Goal subtree. That would collapse same-named concepts across subjects (for example, "Assessment" in Professional Education and General Education) and lose the subject-weighted curriculum shape. If one child readiness computation fails, that child degrades to a zero/unavailable shape and the Goal response still succeeds. Empty Goals and children with no Study Packs return zero shapes.
+For a childless top-level collection, the same response instead derives those existing readiness fields from its own direct note items, using the same owned-Study-Pack and `ProgressReportService` classification path as `GET /collections/{id}/readiness`. A genuinely empty childless collection, or one whose direct notes have no Study Packs, returns the existing zero shape.
+
+Do not re-run concept classification over a Goal's merged child subtree. That would collapse same-named concepts across subjects (for example, "Assessment" in Professional Education and General Education) and lose the subject-weighted curriculum shape. If one child readiness computation fails, that child degrades to a zero/unavailable shape and the Goal response still succeeds.
 
 ### Set / Clear Parent
 

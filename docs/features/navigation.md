@@ -33,7 +33,7 @@ Current public navigation order:
 All sub-pages use a `BackLink` component (`components/ui/back-link.tsx`) that renders `← {Destination}` using `ArrowLeft` icon + destination label text.
 
 Rules:
-- Back link appears on sub-pages only. Main pages (Dashboard, Library, Public Library, My Profile, Settings) have no back link.
+- Back link appears on sub-pages only. Main pages (Dashboard, Library, Collections/"My Reviews", Progress, Public Library, My Profile, Settings) have no default back link.
 - Back link uses explicit routing (not `router.back()`), so the destination is always predictable.
 - Back link label is the destination page name only — no "Back to" prefix.
 - Back link is positioned above the page header card, left-aligned.
@@ -46,11 +46,12 @@ Rules:
 | Quiz pages (Quick Review, Challenge Quiz, Adaptive Practice) | Note Details | Note |
 | Create Note | Library | Library |
 | Edit Note | Note Details | Note |
-| My Progress | Dashboard | Dashboard |
 | Profile (Edit Profile) | My Profile (public) | Profile |
 | Public Profile (non-owner) | Public Library | Public Library |
 | Learn articles | Learn index | Learn |
 | Shared Study Pack | Home | Home |
+
+**Progress is a main page (v0.59.0)** — reachable directly from primary nav (`/progress`), no default back link. It shows one exception: a contextual back link to the originating collection (`← {Plan Name}`, e.g. via a plan detail's `Check readiness` deep-link) only when reached with an explicit `?collectionId=` — this is a "return to where you came from" pattern, not the removed "Progress is a sub-page of Dashboard" pattern. Implemented in `ProgressHeader` (`frontend/app/progress/progress-report-client.tsx`).
 
 ## Public Profile Back Behavior
 

@@ -86,10 +86,8 @@ function ProgressHeader({
 }>) {
   return (
     <div className="space-y-4">
-      {scopedCollectionId ? (
+      {scopedCollectionId && (
         <BackLink href={`/collections/${scopedCollectionId}`} label={scopedCollectionLabel} />
-      ) : (
-        <BackLink href="/dashboard" label="Dashboard" />
       )}
       <PageHeader
         eyebrow="MY PROGRESS"

@@ -331,10 +331,18 @@ public class NoteCollectionService {
                         progressByChildId.get(child.getId())
                 ))
                 .toList();
-        int totalConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::totalConcepts).sum();
-        int masteredConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::masteredConcepts).sum();
-        int dueConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::dueConcepts).sum();
-        int notPracticedConcepts = childResponses.stream().mapToInt(GoalCollectionChildResponse::notPracticedConcepts).sum();
+        ReadinessConceptTotals readinessTotals = children.isEmpty()
+                ? getDirectItemReadinessConceptTotals(collectionId, userId)
+                : new ReadinessConceptTotals(
+                        childResponses.stream().mapToInt(GoalCollectionChildResponse::totalConcepts).sum(),
+                        childResponses.stream().mapToInt(GoalCollectionChildResponse::masteredConcepts).sum(),
+                        childResponses.stream().mapToInt(GoalCollectionChildResponse::dueConcepts).sum(),
+                        childResponses.stream().mapToInt(GoalCollectionChildResponse::notPracticedConcepts).sum()
+                );
+        int totalConcepts = readinessTotals.totalConcepts();
+        int masteredConcepts = readinessTotals.masteredConcepts();
+        int dueConcepts = readinessTotals.dueConcepts();
+        int notPracticedConcepts = readinessTotals.notPracticedConcepts();
         int itemCount = Math.toIntExact(itemRepository.countByCollectionId(collectionId));
         boolean companionMayBeOutdated = companionMayBeOutdated(collection, children, userId);
         WeeklyCountdown countdown = computeWeeklyCountdown(
@@ -380,6 +388,17 @@ public class NoteCollectionService {
                 collection.getUpdatedAt(),
                 scheduledChildResponses
         );
+    }
+
+    private ReadinessConceptTotals getDirectItemReadinessConceptTotals(UUID collectionId, UUID userId) {
+        List<UUID> noteIds = itemRepository.findByCollectionIdOrderByPositionAsc(collectionId).stream()
+                .map(NoteCollectionItemEntity::getNoteId)
+                .toList();
+        List<StudyPackProgressView> studyPacks = loadOwnedStudyPackProgressViews(noteIds, userId);
+        List<SubjectProgressEntry> subjects = studyPacks.isEmpty()
+                ? List.of()
+                : progressReportService.buildSubjectProgressEntries(studyPacks, userId, OffsetDateTime.now());
+        return summarizeReadinessConcepts(subjects);
     }
 
     private record WeeklyCountdown(
@@ -1122,6 +1141,19 @@ public class NoteCollectionService {
         }
     }
 
+    private void assignAdoptedCollectionAsPrimaryWhenMissing(UUID userId, NoteCollectionEntity adoptedCollection) {
+        if (adoptedCollection.getParentCollectionId() != null) {
+            return;
+        }
+        UserEntity user = getUserOrThrow(userId);
+        if (user.getPrimaryCollectionId() != null) {
+            return;
+        }
+        user.setPrimaryCollectionId(adoptedCollection.getId());
+        user.setUpdatedAt(OffsetDateTime.now());
+        userRepository.save(user);
+    }
+
     private boolean isValidPrimaryCollection(UUID collectionId, UUID userId) {
         return collectionRepository.findByIdAndOwnerUserId(collectionId, userId)
                 .map(collection -> collection.getParentCollectionId() == null)
@@ -1290,6 +1322,7 @@ public class NoteCollectionService {
             trackStudyPlanAdopted(userId, source.getId(), saved.getId(), items.size(), skippedCount, false);
             if (reassertPrimaryAfterPersist) {
                 reassertPrimaryInvariant(userId);
+                assignAdoptedCollectionAsPrimaryWhenMissing(userId, saved);
             }
             return new AdoptStudyPlanResponse(saved.getId(), items.size(), skippedCount, false);
         });
@@ -1321,7 +1354,9 @@ public class NoteCollectionService {
             collection.setSourcePlanId(source.getId());
             collection.setCreatedAt(now);
             collection.setUpdatedAt(now);
-            return new AdoptedGoalPersistence(collectionRepository.saveAndFlush(collection), false);
+            NoteCollectionEntity saved = collectionRepository.saveAndFlush(collection);
+            assignAdoptedCollectionAsPrimaryWhenMissing(userId, saved);
+            return new AdoptedGoalPersistence(saved, false);
         });
     }
 

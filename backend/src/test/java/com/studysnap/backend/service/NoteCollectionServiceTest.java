@@ -1432,6 +1432,68 @@ class NoteCollectionServiceTest {
         assertThat(result.overallReadinessPercentage()).isEqualTo(50);
         assertThat(result.children()).extracting(GoalCollectionChildResponse::totalConcepts)
                 .containsExactly(2, 2);
+        verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(goalId);
+    }
+
+    @Test
+    void getGoal_usesDirectItemReadinessForChildlessCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        StudyPackEntity studyPack = buildStudyPack(noteId, List.of("Cell", "Mitosis"));
+        studyPack.setOwnerUserId(userId);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
+                .thenReturn(List.of(buildItem(collectionId, noteId, 0, null)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(asProjections(studyPack));
+        when(progressReportService.buildSubjectProgressEntries(
+                anyList(),
+                eq(userId),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of(new SubjectProgressEntry("Biology", 10, 4, 2, 4, 40)));
+        when(itemRepository.countByCollectionId(collectionId)).thenReturn(1L);
+
+        GoalCollectionDetailResponse result = service.getGoal(collectionId, userId);
+        PlanReadinessResponse directItemReadiness = service.getReadiness(collectionId, userId);
+
+        assertThat(result.childCount()).isZero();
+        assertThat(result.totalConcepts()).isEqualTo(10);
+        assertThat(result.masteredConcepts()).isEqualTo(4);
+        assertThat(result.dueConcepts()).isEqualTo(2);
+        assertThat(result.notPracticedConcepts()).isEqualTo(4);
+        assertThat(result.overallReadinessPercentage()).isEqualTo(40);
+        assertThat(result.totalConcepts()).isEqualTo(directItemReadiness.totalConcepts());
+        assertThat(result.masteredConcepts()).isEqualTo(directItemReadiness.masteredConcepts());
+        assertThat(result.dueConcepts()).isEqualTo(directItemReadiness.dueConcepts());
+        assertThat(result.notPracticedConcepts()).isEqualTo(directItemReadiness.notPracticedConcepts());
+        assertThat(result.overallReadinessPercentage()).isEqualTo(directItemReadiness.overallReadinessPercentage());
+    }
+
+    @Test
+    void getGoal_returnsZeroReadinessForChildlessItemsWithoutStudyPacks() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId))
+                .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
+                .thenReturn(List.of(buildItem(collectionId, noteId, 0, null)));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(List.of(noteId))).thenReturn(List.of());
+        when(itemRepository.countByCollectionId(collectionId)).thenReturn(1L);
+
+        GoalCollectionDetailResponse result = service.getGoal(collectionId, userId);
+
+        assertThat(result.totalConcepts()).isZero();
+        assertThat(result.masteredConcepts()).isZero();
+        assertThat(result.dueConcepts()).isZero();
+        assertThat(result.notPracticedConcepts()).isZero();
+        assertThat(result.overallReadinessPercentage()).isZero();
+        verify(progressReportService, never()).buildSubjectProgressEntries(anyList(), any(), any());
     }
 
     @Test
@@ -1443,6 +1505,7 @@ class NoteCollectionServiceTest {
         when(collectionRepository.findByIdAndOwnerUserId(goalId, userId)).thenReturn(Optional.of(goal));
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(goalId, userId))
                 .thenReturn(List.of());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(goalId)).thenReturn(List.of());
         when(itemRepository.countByCollectionId(goalId)).thenReturn(0L);
 
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
@@ -1588,7 +1651,6 @@ class NoteCollectionServiceTest {
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
         assertThat(result.companionMayBeOutdated()).isFalse();
-        verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(goalId);
     }
 
     @Test
@@ -1605,7 +1667,6 @@ class NoteCollectionServiceTest {
         GoalCollectionDetailResponse result = service.getGoal(goalId, userId);
 
         assertThat(result.companionMayBeOutdated()).isFalse();
-        verify(itemRepository, never()).findByCollectionIdOrderByPositionAsc(goalId);
     }
 
     @Test
@@ -3057,6 +3118,56 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void adopt_setsPrimaryForNewlyAdoptedPlanWhenOtherTopLevelCollectionsExist() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        NoteCollectionEntity[] savedCollection = new NoteCollectionEntity[1];
+        NoteCollectionEntity source = buildCollection(sourcePlanId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> {
+            savedCollection[0] = invocation.getArgument(0);
+            return savedCollection[0];
+        });
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.countByOwnerUserIdAndParentCollectionIdIsNull(userId)).thenReturn(3L);
+
+        AdoptStudyPlanResponse result = service.adopt(sourcePlanId, userId);
+
+        assertThat(result.alreadyAdopted()).isFalse();
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(result.collectionId());
+    }
+
+    @Test
+    void adopt_doesNotOverwriteExistingPrimary() {
+        UUID userId = UUID.randomUUID();
+        UUID sourcePlanId = UUID.randomUUID();
+        UUID existingPrimaryId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        user.setPrimaryCollectionId(existingPrimaryId);
+        NoteCollectionEntity existingPrimary = buildCollection(existingPrimaryId, userId, "Existing Goal", Instant.now());
+        NoteCollectionEntity source = buildCollection(sourcePlanId, UUID.randomUUID(), COLLECTION_TITLE, Instant.now());
+        source.setVisibility(CollectionVisibility.PUBLIC);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(collectionRepository.findByIdAndVisibility(sourcePlanId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(source));
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourcePlanId)).thenReturn(Optional.empty());
+        when(collectionRepository.findByIdAndOwnerUserId(existingPrimaryId, userId)).thenReturn(Optional.of(existingPrimary));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(sourcePlanId)).thenReturn(List.of());
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.adopt(sourcePlanId, userId);
+
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(existingPrimaryId);
+    }
+
+    @Test
     void adoptGoal_copiesPublicChildrenAndNestsSubjectsUnderPersonalGoal() {
         UUID userId = UUID.randomUUID();
         UUID sourceOwnerId = UUID.randomUUID();
@@ -3067,6 +3178,8 @@ class NoteCollectionServiceTest {
         UUID secondSourceNoteId = UUID.randomUUID();
         UUID firstCopiedNoteId = UUID.randomUUID();
         UUID secondCopiedNoteId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        NoteCollectionEntity[] savedGoal = new NoteCollectionEntity[1];
         NoteCollectionEntity sourceGoal = buildCollection(sourceGoalId, sourceOwnerId, "LET Mastery", Instant.now());
         sourceGoal.setVisibility(CollectionVisibility.PUBLIC);
         sourceGoal.setCourseProgram(UPDATED_COURSE_PROGRAM);
@@ -3090,13 +3203,22 @@ class NoteCollectionServiceTest {
         personalSecondChild.setCompanion(companionContent());
         personalSecondChild.setCompanionStructureSnapshot(new CompanionStructureSnapshot(0, List.of()));
 
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(collectionRepository.findByIdAndVisibility(sourceGoalId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(sourceGoal));
         when(collectionRepository.countByParentCollectionId(sourceGoalId)).thenReturn(2L);
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, sourceGoalId)).thenReturn(Optional.empty());
         when(collectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(sourceGoalId, sourceOwnerId))
                 .thenReturn(List.of(firstChild, secondChild));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanIdForUpdate(userId, sourceGoalId)).thenReturn(Optional.empty());
-        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.saveAndFlush(any(NoteCollectionEntity.class))).thenAnswer(invocation -> {
+            NoteCollectionEntity saved = invocation.getArgument(0);
+            if (savedGoal[0] == null) {
+                savedGoal[0] = saved;
+            }
+            return saved;
+        });
+        when(collectionRepository.findByIdAndOwnerUserId(any(UUID.class), eq(userId)))
+                .thenAnswer(invocation -> Optional.ofNullable(savedGoal[0]));
         when(collectionRepository.findByIdAndVisibility(firstChildId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(firstChild));
         when(collectionRepository.findByIdAndVisibility(secondChildId, CollectionVisibility.PUBLIC)).thenReturn(Optional.of(secondChild));
         when(collectionRepository.findByOwnerUserIdAndSourcePlanId(userId, firstChildId))
@@ -3125,6 +3247,10 @@ class NoteCollectionServiceTest {
         assertThat(result.skippedSubjectCount()).isZero();
         assertThat(result.totalNotesCopied()).isEqualTo(2);
         assertThat(result.totalNotesSkipped()).isZero();
+        assertThat(user.getPrimaryCollectionId()).isEqualTo(result.goalCollectionId());
+        assertThat(user.getPrimaryCollectionId())
+                .isNotEqualTo(personalFirstChild.getId())
+                .isNotEqualTo(personalSecondChild.getId());
         assertThat(personalFirstChild.getParentCollectionId()).isEqualTo(result.goalCollectionId());
         assertThat(personalSecondChild.getParentCollectionId()).isEqualTo(result.goalCollectionId());
         assertThat(personalFirstChild.getSiblingPosition()).isZero();

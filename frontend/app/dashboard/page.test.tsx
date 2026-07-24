@@ -6,6 +6,7 @@ import {
   getContinueStudyingRecommendation,
   getDashboardOverview,
   getFeedbackPromptContext,
+  getCollectionGoal,
   getGoalSummary,
   getMe,
   getNote,
@@ -52,6 +53,7 @@ jest.mock("@/lib/api", () => ({
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
   getFeedbackPromptContext: jest.fn(),
+  getCollectionGoal: jest.fn(),
   getGoalSummary: jest.fn(),
   getMe: jest.fn(),
   getNote: jest.fn(),
@@ -125,6 +127,46 @@ const overview = {
   mostRecentReadyNoteId: "note-1",
 };
 
+const primaryCollectionGoal = {
+  collectionId: "primary-review-set-1",
+  title: "PNLE Mastery",
+  description: "A focused nursing review journey.",
+  visibility: "PRIVATE",
+  courseProgram: "PNLE",
+  targetCompletionDate: null,
+  companion: null,
+  companionMayBeOutdated: false,
+  sourcePlanId: "official-pnle-set-1",
+  parentCollectionId: null,
+  itemCount: 0,
+  childCount: 2,
+  overallReadinessPercentage: 64,
+  masteredConcepts: 32,
+  dueConcepts: 5,
+  notPracticedConcepts: 8,
+  totalConcepts: 50,
+  weeksRemaining: null,
+  conceptsRemaining: null,
+  todaysConceptBudget: null,
+  weeklyFocusByDay: [],
+  createdAt: "2026-07-24T00:00:00Z",
+  updatedAt: "2026-07-24T00:00:00Z",
+  children: [
+    {
+      collectionId: "primary-subject-1",
+      title: "Foundations",
+      description: null,
+      itemCount: 3,
+      overallReadinessPercentage: 40,
+      masteredConcepts: 10,
+      dueConcepts: 5,
+      notPracticedConcepts: 4,
+      totalConcepts: 25,
+      todaysConceptBudget: null,
+    },
+  ],
+};
+
 const publicNotes = [
   {
     id: "public-note-1",
@@ -166,6 +208,7 @@ describe("DashboardPage profile variants", () => {
     (getContinueStudyingRecommendation as jest.Mock).mockReset();
     (getDashboardOverview as jest.Mock).mockReset();
     (getFeedbackPromptContext as jest.Mock).mockReset();
+    (getCollectionGoal as jest.Mock).mockReset();
     (getGoalSummary as jest.Mock).mockReset();
     (getQuickReviewLastReviewedBatch as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
@@ -252,6 +295,94 @@ describe("DashboardPage profile variants", () => {
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
     expect(screen.queryByText("Create Quiz")).not.toBeInTheDocument();
     expect(listNotes).toHaveBeenCalledWith(20);
+  });
+
+  it("renders the primary review set hero above unchanged dashboard sections", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Board",
+      displayName: "Board",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
+      primaryCollectionId: primaryCollectionGoal.collectionId,
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getCollectionGoal as jest.Mock).mockResolvedValue(primaryCollectionGoal);
+
+    render(<DashboardPage />);
+
+    const identityLink = await screen.findByRole("link", { name: "PNLE Mastery" });
+    expect(screen.getByText("Primary Review Set")).toBeInTheDocument();
+    expect(screen.getByText("Review due concepts")).toBeInTheDocument();
+    expect(screen.getByText("64%")).toBeInTheDocument();
+    expect(identityLink).toHaveAttribute("href", "/collections/primary-review-set-1");
+    expect(screen.getByRole("link", { name: "Continue Studying" })).toHaveAttribute(
+      "href",
+      "/collections/primary-review-set-1",
+    );
+    expect(getCollectionGoal).toHaveBeenCalledWith("primary-review-set-1");
+
+    const boardExamHeading = screen.getByRole("heading", { name: "Start Board Exam" });
+    expect(identityLink.compareDocumentPosition(boardExamHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Weak Areas" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Adaptive Practice" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Study Activity This Week" })).toBeInTheDocument();
+  });
+
+  it("shows a primary review set skeleton while its details load", async () => {
+    let resolvePrimaryCollection: (goal: typeof primaryCollectionGoal) => void = () => undefined;
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Board",
+      displayName: "Board",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "BOARD_EXAM",
+      courseProgram: "PNLE",
+      primaryCollectionId: primaryCollectionGoal.collectionId,
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getCollectionGoal as jest.Mock).mockReturnValue(new Promise<typeof primaryCollectionGoal>((resolve) => {
+      resolvePrimaryCollection = resolve;
+    }));
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByLabelText("Loading primary review set")).toBeInTheDocument();
+    expect(screen.queryByText("Studying for a board exam?")).not.toBeInTheDocument();
+
+    resolvePrimaryCollection(primaryCollectionGoal);
+    expect(await screen.findByRole("link", { name: "PNLE Mastery" })).toBeInTheDocument();
+  });
+
+  it("falls back to the existing goal prompt when the primary review set cannot load", async () => {
+    const warnSpy = jest.spyOn(globalThis.console, "warn").mockImplementation(() => undefined);
+    let rejectPrimaryCollection: (error: Error) => void = () => undefined;
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      courseProgram: "Mathematics",
+      primaryCollectionId: primaryCollectionGoal.collectionId,
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getCollectionGoal as jest.Mock).mockReturnValue(new Promise<typeof primaryCollectionGoal>((_, reject) => {
+      rejectPrimaryCollection = reject;
+    }));
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByLabelText("Loading primary review set")).toBeInTheDocument();
+    rejectPrimaryCollection(new Error("not found"));
+    expect(await screen.findByText("Track your progress in Mathematics.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Loading primary review set")).not.toBeInTheDocument();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("shows the one-time welcome-back feedback ask from the inactivity context", async () => {
@@ -651,7 +782,9 @@ describe("DashboardPage profile variants", () => {
     expect(await screen.findByText("Track your progress in Mathematics.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set as my focus" })).toBeInTheDocument();
     expect(getGoalSummary).not.toHaveBeenCalled();
+    expect(getCollectionGoal).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Loading study goal")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Loading primary review set")).not.toBeInTheDocument();
   });
 
   it("hides the dashboard goal slot when goal summary loading fails", async () => {

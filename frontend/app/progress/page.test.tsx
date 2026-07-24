@@ -193,7 +193,7 @@ describe("ProgressPage", () => {
     expect(screen.getByText(/7 mastered.*2 due.*1 not started/)).toBeInTheDocument();
     expect(screen.queryByText(/due for review/)).not.toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Pharmacology readiness" })).toHaveAttribute("aria-valuenow", "70");
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
+    expect(screen.queryByRole("link", { name: "Dashboard" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Pharmacology[\s\S]*concepts tracked/ })).toHaveAttribute("href", "/library?subject=Pharmacology");
 
     const subjectHeading = screen.getByRole("heading", { name: "Pharmacology" });
@@ -533,7 +533,7 @@ describe("ProgressPage", () => {
     expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
     expect(getPlanReadiness).not.toHaveBeenCalled();
     expect(getProgressReport).not.toHaveBeenCalled();
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
+    expect(screen.queryByRole("link", { name: "Dashboard" })).not.toBeInTheDocument();
   });
 
   it("falls back to all subjects when no primary goal is set", async () => {
