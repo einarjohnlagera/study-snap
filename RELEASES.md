@@ -2,7 +2,7 @@
 
 ## v0.60.0 - Shared Official Pool Foundation
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: replace per-adopter Challenge Quiz regeneration with a seeded Official template pool, now that production data confirms both halves of the case — real, concentrated, currently-active adoption of a small number of shared Official plans, and zero existing bank content for the LLM to reuse today (so a seed step is additive, not redundant). Phase 3a of the Company Redefinition roadmap, ratified 2026-07-24 on evidence. **Retargeted 2026-07-24 from the original kickoff scope** (a `resolvePoolKey`/`exam_question_pool_progress` design for `ExamQuestionPoolService`, i.e. Long/Board Exam pools) after confirming Long/Board Exam is PRO-gated with ~zero production load — the adopters the gate evidence measured are FREE-tier and almost certainly hitting Challenge Quiz instead. See `docs/claude-prompt/company-redefinition-out/11-phase3-cq-bank-seed-check.sql` and `12-phase3-cq-template-seed-diagnostic.sql` for the diagnostic trail.
 
@@ -17,6 +17,12 @@ Anti-drift: this reconciles with, and does not reverse, the existing "do not pre
 ### Shipped
 
 - **Official Challenge Quiz template seeding and copy-on-claim (backend).** Public Study Packs owned by an Official author now queue a one-time, after-commit seed of up to 20 Challenge questions, with an admin-only idempotent backfill for existing Official content. Normal Challenge starts and `+5 Questions` first claim the learner's own bank, then copy unseen questions from the immediate currently-public Official source into fresh learner-owned rows before using live LLM generation for any shortfall. The template is read-only, learner-level-neutral only at source read, and copied rows are tagged to the learner's current level; regular Challenge usage accounting, per-user outcomes, and Redo Missed Questions remain unchanged.
+- **Admin backfill trigger (frontend).** Added a "Seed Official Challenge Quiz Templates" button to `/admin`, mirroring the existing Regenerate Summaries action, so the one-time backfill for already-published Official content can be triggered without a raw API call.
+
+**Known limitations (logged, not fixed this release):**
+- **Backfill requires one manual trigger post-deploy.** The two eager-seed hooks (note publish, Study Pack generation) only fire on a state *transition* — they never fire again for content that was already `PUBLIC` and `GENERATED` before this release shipped (this includes the LET/PNLE content the gate evidence was based on). An admin must click the new `/admin` button (or call `POST /admin/study-packs/seed-official-challenge-quiz-templates` directly) once after this release is live for that existing content to actually benefit. All *new* Official content going forward seeds itself automatically with no manual step, regardless of whether the note is published before or after its Study Pack is generated.
+- **Template seeded at a fixed `medium` difficulty.** Copy-on-claim serves every adopter the same difficulty-`medium` questions regardless of their own difficulty selection, until the template is exhausted for them and they fall through to live LLM generation at their real difficulty. Same class of deliberate concession as the learner-level one above — not a bug, revisit only if usage data shows it matters.
+- A proposal to also front-load Challenge Quiz sessions to their full question count for Official content (instead of the existing 5-then-`+5` progressive reveal) was considered and explicitly rejected for this release — see `docs/product/ROADMAP.md`'s Backlog Index ("Challenge Quiz default question count") for the reasoning. Progressive reveal is unchanged for all content.
 
 ## v0.59.0 - Dashboard & Progress Reorg
 
