@@ -2,7 +2,7 @@
 
 ## v0.60.1 - Challenge Quiz Fix Pass
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: fix five Challenge Quiz defects surfaced while exercising v0.60.0's Official template sharing in production — an executor-saturation bug blocking the backfill, a never-implemented shuffle, silently-inert manual difficulty selection, silent auto-submission of abandoned sessions, and a non-functional "Redo Missed Questions" button. Patch release off `v0.60.0`, following this project's existing patch-release convention (e.g. v0.51.1, v0.52.1, v0.54.1).
 
