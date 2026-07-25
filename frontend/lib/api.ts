@@ -765,6 +765,7 @@ export type AdminRegenerationStatusResponse = {
 export type AdminSeedOfficialChallengeQuizTemplatesResponse = {
   queued: number;
   skipped: number;
+  rejected: number;
 };
 
 export type SubmitFeedbackRequest = {
