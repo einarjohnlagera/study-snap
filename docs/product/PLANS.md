@@ -92,7 +92,7 @@ The ladder reflects the user's *study stage*, not just price:
 
 - **Free** is for users who are exploring NoteLib and need basic note → Study Pack → Quick Review, with a small Adaptive Practice allowance to close the weak-area loop.
 - **Plus** is for *regular study* — users who study consistently and want Adaptive Practice on weak areas without committing to exam-prep volume.
-- **Pro** is for *exam preparation* — board exam takers and serious learners who need difficulty selection, Board Exam Mode, and the highest generation limits.
+- **Pro** is for *exam preparation* — board exam takers and serious learners who need Board Exam Mode and the highest generation limits.
 
 Upgrade CTAs must respect the ladder:
 
@@ -144,7 +144,7 @@ This applies to **DOCX exports only** (the Teacher Flow format). PDF exports use
 
 **Rationale:**
 - A Teacher on Plus (₱179/mo PH) gets a complete, professional quiz-authoring workflow with no export ceiling.
-- Advanced exam-prep features that teachers do not need — Board Exam Mode, Long Exam Mode, Difficulty Selection, Interview Practice, and higher Adaptive Practice volume — remain paid-plan differentiators. The Pro ladder is intact.
+- Advanced exam-prep features that teachers do not need — Board Exam Mode, Long Exam Mode, Interview Practice, and higher Adaptive Practice volume — remain paid-plan differentiators. The Pro ladder is intact.
 - The export override costs nothing in LLM spend. The risk of abuse (non-teachers claiming Teacher profile to get unlimited exports) is low and the downside is limited to a cost-free feature.
 - This reflects a deliberate product value: NoteLib should be genuinely useful to Filipino teachers, for whom ₱249/mo Pro is proportionally steep relative to a government teacher's salary.
 

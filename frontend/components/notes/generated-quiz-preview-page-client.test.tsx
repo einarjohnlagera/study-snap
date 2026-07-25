@@ -87,7 +87,6 @@ describe("GeneratedQuizPreviewPageClient", () => {
       quickReviewAvailable: false,
       challengeQuizAvailable: false,
       adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: false,
     });
     (getGeneratedQuiz as jest.Mock).mockResolvedValue({
       id: "quiz-1",
@@ -144,7 +143,6 @@ describe("GeneratedQuizPreviewPageClient", () => {
         },
         features: {
           adaptivePracticeAvailable: false,
-          difficultySelectionAvailable: false,
           fileUploadAvailable: true,
           ocrAvailable: true,
         },
@@ -277,7 +275,6 @@ describe("GeneratedQuizPreviewPageClient", () => {
         },
         features: {
           adaptivePracticeAvailable: false,
-          difficultySelectionAvailable: false,
           fileUploadAvailable: true,
           ocrAvailable: true,
         },

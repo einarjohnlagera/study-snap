@@ -92,7 +92,6 @@ describe("PricingPage", () => {
     expect(screen.getAllByText("Summary + Key Concepts")).not.toHaveLength(0);
     expect(screen.getAllByText("Higher note generation limits")).not.toHaveLength(0);
     expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
-    expect(screen.getAllByText("Difficulty selection")).not.toHaveLength(0);
     expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
     expect(screen.getByRole("button", { name: "Get Plus" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Get Pro" })).not.toHaveLength(0);

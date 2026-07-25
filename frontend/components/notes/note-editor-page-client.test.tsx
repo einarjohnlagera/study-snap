@@ -97,7 +97,6 @@ const baseNote = {
   quickReviewAvailable: false,
   challengeQuizAvailable: false,
   adaptivePracticeAvailable: false,
-  difficultySelectionAvailable: false,
 };
 
 async function selectImportNotesMode() {
@@ -153,7 +152,6 @@ describe("NoteEditorPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -691,7 +689,6 @@ describe("NoteEditorPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -795,7 +792,6 @@ describe("NoteEditorPageClient", () => {
       keyConcepts: ["Concept"],
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
-      difficultySelectionAvailable: false,
     });
 
     render(<NoteEditorPageClient noteId="note-generated" />);
@@ -879,7 +875,6 @@ describe("NoteEditorPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -918,7 +913,6 @@ describe("NoteEditorPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -958,7 +952,6 @@ describe("NoteEditorPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -1248,7 +1241,6 @@ describe("NoteEditorPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: true,
-        difficultySelectionAvailable: true,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },

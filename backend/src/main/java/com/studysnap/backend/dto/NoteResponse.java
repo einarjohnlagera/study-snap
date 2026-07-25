@@ -29,8 +29,7 @@ public record NoteResponse(
         Integer quizCount,
         boolean quickReviewAvailable,
         boolean challengeQuizAvailable,
-        boolean adaptivePracticeAvailable,
-        boolean difficultySelectionAvailable
+        boolean adaptivePracticeAvailable
 ) {
     public NoteResponse(
             String id,
@@ -57,8 +56,7 @@ public record NoteResponse(
             Integer quizCount,
             boolean quickReviewAvailable,
             boolean challengeQuizAvailable,
-            boolean adaptivePracticeAvailable,
-            boolean difficultySelectionAvailable
+            boolean adaptivePracticeAvailable
     ) {
         this(
                 id,
@@ -86,8 +84,7 @@ public record NoteResponse(
                 quizCount,
                 quickReviewAvailable,
                 challengeQuizAvailable,
-                adaptivePracticeAvailable,
-                difficultySelectionAvailable
+                adaptivePracticeAvailable
         );
     }
 }

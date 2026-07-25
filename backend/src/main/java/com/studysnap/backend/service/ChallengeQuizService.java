@@ -19,7 +19,6 @@ import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -31,7 +30,6 @@ import com.studysnap.backend.exception.ChallengeQuizNotAvailableException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
-import com.studysnap.backend.exception.InvalidChallengeQuizDifficultyException;
 import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.exception.InvalidChallengeQuizResultException;
 import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
@@ -153,7 +151,6 @@ public class ChallengeQuizService {
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final QuizGenerationService quizGenerationService;
     private final SubscriptionService subscriptionService;
-    private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
     private final UserUsageService userUsageService;
     private final BillingUsagePeriodService billingUsagePeriodService;
@@ -174,7 +171,7 @@ public class ChallengeQuizService {
         StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
         String selectedMode = resolveSelectedMode(request);
-        String selectedDifficulty = resolveSelectedDifficulty(planType, selectedMode, request);
+        String selectedDifficulty = resolveSelectedDifficulty(selectedMode);
 
         Optional<ChallengeQuizStartResponse> existingSession = resolveExistingChallengeSession(
                 userId,
@@ -841,9 +838,6 @@ public class ChallengeQuizService {
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
             return new ChallengeGenerationProfile(MID_SCORE_QUESTION_COUNT, DIFFICULTY_MIXED);
         }
-        if (selectedDifficulty != null) {
-            return new ChallengeGenerationProfile(resolveQuestionCountForDifficulty(selectedDifficulty), selectedDifficulty);
-        }
         QuickReviewSessionEntity latestQuickReview = quickReviewSessionRepository
                 .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
@@ -1091,7 +1085,6 @@ public class ChallengeQuizService {
                 limit,
                 boardExamUsedThisMonth,
                 properties.getPricing().resolveMonthlyBoardExamLimit(planType),
-                isDifficultySelectionAvailable(planType),
                 mode,
                 extractDifficulty(session.getSessionState()),
                 quiz,
@@ -1101,19 +1094,11 @@ public class ChallengeQuizService {
         );
     }
 
-    private String resolveSelectedDifficulty(PlanType planType, String selectedMode, ChallengeQuizStartRequest request) {
+    private String resolveSelectedDifficulty(String selectedMode) {
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
             return DIFFICULTY_MIXED;
         }
-        if (request == null || request.difficulty() == null || request.difficulty().isBlank()) {
-            return null;
-        }
-        featureGateService.checkFeatureAccess(planType, Feature.DIFFICULTY_SELECTION);
-        String normalized = request.difficulty().trim().toLowerCase();
-        return switch (normalized) {
-            case DIFFICULTY_EASY, DIFFICULTY_MEDIUM, DIFFICULTY_HARD -> normalized;
-            default -> throw new InvalidChallengeQuizDifficultyException();
-        };
+        return null;
     }
 
     private String resolveSelectedMode(ChallengeQuizStartRequest request) {
@@ -1646,10 +1631,6 @@ public class ChallengeQuizService {
         return properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
     }
 
-    private boolean isDifficultySelectionAvailable(PlanType planType) {
-        return properties.getPricing().isDifficultySelectionAvailable(planType);
-    }
-
     private ChallengeQuizStartResponse buildEmptyStartResponse(
             StudyPackEntity studyPack,
             int usedThisMonth,
@@ -1666,7 +1647,6 @@ public class ChallengeQuizService {
                 resolveMonthlyChallengeQuizLimit(planType),
                 (int) countBoardExamUsedThisMonth(studyPack.getOwnerUserId()),
                 properties.getPricing().resolveMonthlyBoardExamLimit(planType),
-                isDifficultySelectionAvailable(planType),
                 MODE_CHALLENGE,
                 DEFAULT_SELECTED_DIFFICULTY,
                 List.of(),

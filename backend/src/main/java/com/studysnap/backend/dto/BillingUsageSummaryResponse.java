@@ -17,7 +17,6 @@ public record BillingUsageSummaryResponse(
         int boardExamUsed,
         int boardExamLimit,
         boolean adaptivePracticeAvailable,
-        boolean interviewPracticeAvailable,
-        boolean difficultySelectionAvailable
+        boolean interviewPracticeAvailable
 ) {
 }

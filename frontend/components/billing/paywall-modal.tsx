@@ -50,7 +50,6 @@ const PAYWALL_REASSURANCE = "Access activates immediately after payment";
 const PRO_ONLY_PAYWALL_CONTEXT_TYPES = new Set<PaywallContext["type"]>([
   "BOARD_EXAM_MODE_LOCKED",
   "LONG_EXAM_MODE_LOCKED",
-  "DIFFICULTY_SELECTION_LOCKED",
   "INTERVIEW_PRACTICE_LOCKED",
 ]);
 
@@ -118,9 +117,6 @@ function resolveUpgradeCtaContext(
   }
   if (contextType === "LONG_EXAM_MODE_LOCKED") {
     return "long-exam-mode";
-  }
-  if (contextType === "DIFFICULTY_SELECTION_LOCKED") {
-    return "difficulty-selection";
   }
   if (contextType === "CONCEPT_REVIEW_TIMING_LOCKED") {
     return "concept-review-timing";

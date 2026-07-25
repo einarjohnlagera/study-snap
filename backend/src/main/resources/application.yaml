@@ -127,7 +127,6 @@ studysnap:
     pro-monthly-pdf-export-limit: ${PRO_MONTHLY_PDF_EXPORT_LIMIT:-1}
     adaptive-practice-pro-only: ${ADAPTIVE_PRACTICE_PRO_ONLY:false}
     interview-practice-pro-only: ${INTERVIEW_PRACTICE_PRO_ONLY:true}
-    difficulty-selection-pro-only: ${DIFFICULTY_SELECTION_PRO_ONLY:true}
     long-exam-pool-size: ${LONG_EXAM_POOL_SIZE:48}
     board-exam-pool-size: ${BOARD_EXAM_POOL_SIZE:24}
     # Kill-switch for eager exam-pool pre-warming (fires automatically on every Study
