@@ -53,6 +53,7 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -110,6 +111,7 @@ public class ChallengeQuizService {
     private static final String MODE_CHALLENGE = "challenge";
     private static final String MODE_BOARD_EXAM = "board_exam";
     private static final String HISTORY_MODE_BOARD_EXAM = "BOARD_EXAM";
+    private static final String MATCHING_FORMAT = "MATCHING";
     private static final List<QuickReviewSessionStatus> ACTIVE_GENERATION_STATUSES = List.of(
             QuickReviewSessionStatus.GENERATING,
             QuickReviewSessionStatus.IN_PROGRESS
@@ -321,6 +323,9 @@ public class ChallengeQuizService {
             if (challengeQuiz.size() != quizCount) {
                 throw new ChallengeQuizGenerationFailedException();
             }
+            if (!MODE_BOARD_EXAM.equals(selectedMode)) {
+                challengeQuiz = shuffleQuestionOrderPreservingMatchingGroups(challengeQuiz);
+            }
 
             markSessionReady(session, challengeQuiz, profile.difficulty());
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
@@ -399,6 +404,7 @@ public class ChallengeQuizService {
                 INITIAL_CHALLENGE_QUIZ_COUNT,
                 ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS
         );
+        missedQuestions = shuffleQuestionOrderPreservingMatchingGroups(missedQuestions);
         markSessionReady(session, missedQuestions, profile.difficulty());
         session.setQuotaExempt(true);
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
@@ -672,6 +678,7 @@ public class ChallengeQuizService {
             List<QuizItem> uniqueGenerated = QuizDeduplicationUtils.uniqueQuestions(generated, combinedQuestionKeys);
             unique = new ArrayList<>(bankedQuestions);
             unique.addAll(uniqueGenerated);
+            unique = shuffleQuestionOrderPreservingMatchingGroups(unique);
 
             if (unique.size() < MIN_NEW_QUESTIONS_AFTER_DEDUP) {
                 throw new NotEnoughNewQuestionsException();
@@ -1731,6 +1738,43 @@ public class ChallengeQuizService {
                 state
         ));
         session.setCompletedAt(null);
+    }
+
+    /**
+     * Shuffles question order without ever splitting a MATCHING block apart — the frontend
+     * (`lib/quiz.ts`) groups consecutive same-{@code questionGroup} MATCHING items by scanning the
+     * array in order, so scattering them would silently break that rendering.
+     */
+    private List<QuizItem> shuffleQuestionOrderPreservingMatchingGroups(List<QuizItem> questions) {
+        if (questions == null || questions.size() < 2) {
+            return questions == null ? List.of() : List.copyOf(questions);
+        }
+        List<List<QuizItem>> blocks = new ArrayList<>();
+        int index = 0;
+        while (index < questions.size()) {
+            String questionGroup = resolveMatchingQuestionGroup(questions.get(index));
+            int endIndex = index + 1;
+            if (questionGroup != null) {
+                while (endIndex < questions.size()
+                        && questionGroup.equals(resolveMatchingQuestionGroup(questions.get(endIndex)))) {
+                    endIndex += 1;
+                }
+            }
+            blocks.add(new ArrayList<>(questions.subList(index, endIndex)));
+            index = endIndex;
+        }
+        Collections.shuffle(blocks);
+        List<QuizItem> shuffled = new ArrayList<>(questions.size());
+        blocks.forEach(shuffled::addAll);
+        return shuffled;
+    }
+
+    private String resolveMatchingQuestionGroup(QuizItem question) {
+        if (question == null || !MATCHING_FORMAT.equals(question.questionFormat()) || question.questionGroup() == null) {
+            return null;
+        }
+        String normalized = question.questionGroup().trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private void markSessionFailed(QuickReviewSessionEntity session) {
