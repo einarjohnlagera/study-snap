@@ -240,9 +240,11 @@ Files: `backend/src/main/java/com/studysnap/backend/service/OfficialChallengeQui
 
 Sequencing: fully independent — land first, in parallel with everything else. **The v0.60.0 production backfill still has not successfully completed — re-running it is blocked on this fix landing.**
 
-### Item 2 — Whole-array shuffle
+### Item 2 — Whole-array shuffle — Shipped, see `RELEASES.md`
 
 **Classification: small, direct implementation — but with a data-safety constraint that must be respected.**
+
+**Shipped with one refinement beyond this plan:** Challenge Quiz can include a MATCHING block (2–4 consecutive questions sharing a `questionGroup`, confirmed in `challenge-quiz-developer.txt`), which the frontend (`lib/quiz.ts`) groups by scanning the array for adjacency. A flat `Collections.shuffle` on the whole list — as originally planned below — would silently scatter a MATCHING block apart and break that grouping. The shipped fix shuffles at the block level instead: MATCHING runs are treated as one atomic unit that moves together, everything else shuffles freely. This was caught by re-verifying the plan against current code before implementing, not by re-deriving the plan itself — the injection points and data-safety constraint below are otherwise exactly as planned.
 
 Confirmed: no shuffle exists anywhere in the Challenge Quiz path (grepped for `shuffle`/`Random`/`nextInt` across `ChallengeQuizService.java`, `ChallengeQuizQuestionBankService.java`, `OfficialChallengeQuizTemplateService.java`, `QuizSessionStateUtils.java`, `ChallengeQuizQuestionBankRepository.java` — zero hits). `persistGeneratedQuestions` stamps one shared `generatedAt` per batch (`ChallengeQuizQuestionBankService.java:94,112`), and `findClaimableForUpdate` orders strictly `generatedAt asc` with no tiebreaker (`ChallengeQuizQuestionBankRepository.java:14-22`) — so batches (original 5, each "+5") always sort as fixed blocks, forever, across every future session.
 
@@ -309,7 +311,7 @@ Sequencing: land after Item 4 (shared file region) — consider combining into o
 
 1. **PR A — Item 1** (executor fix). Independent, land anytime, can go first. Unblocks re-running the still-incomplete v0.60.0 production backfill. **Shipped.**
 2. **PR B — Item 3** (difficulty removal, Codex prompt). Land early to reduce conflict churn for C/D.
-3. **PR C — Item 2** (shuffle). Rebase on B.
+3. **PR C — Item 2** (shuffle). Rebase on B. **Shipped**, block-aware (see Item 2's note above).
 4. **PR D — Items 4 + 5 combined** (session entry hardening: expiration/forfeit + redo-missed retrigger; Item 4's portion is the Codex prompt, Item 5 folds in as a small direct addition). Rebase on B.
 
 After each Codex-scoped PR (B, D): run `/audit-diff` before committing, per this project's standard Codex-delivery process. Update `RELEASES.md` v0.60.1 and `docs/features/challenge-quiz.md` as each item ships (Item 3 in particular changes documented, user-visible behavior — Plus/Pro plan comparison copy needs updating too, see Item 3's Files list).
