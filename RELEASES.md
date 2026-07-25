@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.60.1 - Challenge Quiz Fix Pass
+
+**Status: In Progress**
+
+Theme: fix five Challenge Quiz defects surfaced while exercising v0.60.0's Official template sharing in production — an executor-saturation bug blocking the backfill, a never-implemented shuffle, silently-inert manual difficulty selection, silent auto-submission of abandoned sessions, and a non-functional "Redo Missed Questions" button. Patch release off `v0.60.0`, following this project's existing patch-release convention (e.g. v0.51.1, v0.52.1, v0.54.1).
+
+### Planned Scope
+
+- **Executor saturation fix (backend).** Move Official Challenge Quiz template seeding (`OfficialChallengeQuizTemplateService.dispatchSeedAfterCommit`, used by both the backfill and the per-note eager-seed hooks) off the live-generation `studyPackGenerationTaskExecutor` and onto `llmParallelTaskExecutor`, with a `RejectedExecutionException` guard and a `rejected` count added to the backfill response. Unblocks re-running the still-incomplete v0.60.0 production backfill.
+- **Whole-array shuffle (backend).** Shuffle the fully assembled Challenge Quiz question list once at initial session start (and in `startRedoMissedSession`'s assembly), before any answers are recorded. "+5" growth shuffles only the newly-appended batch, never the whole array, to avoid corrupting existing index-keyed answer maps. Board Exam ordering is unchanged.
+- **Remove manual difficulty selection from Challenge Quiz (backend + frontend).** Product decision: remove the Easy/Medium/Hard selector entirely rather than re-engineer the bank/template claim path to respect it — Adaptive Practice already covers personalized difficulty, and the reusable-pool architecture doesn't fit a manual per-request override. Removes the `DIFFICULTY_SELECTION` feature gate and all associated pricing/paywall copy. Board Exam's fixed `DIFFICULTY_MIXED` path and the score-based automatic Challenge difficulty fallback are unaffected.
+- **Abandoned-session expiration handling (backend + frontend).** `resolveExistingChallengeSession` gains expiration awareness — an expired in-progress session is auto-forfeited server-side instead of resumed. Frontend adds a "Resume / Start Fresh" prompt (ported from Long Exam's existing pattern) instead of silently resuming a session whose timer has already lapsed and immediately auto-submitting it.
+- **"Redo Missed Questions" fix (frontend).** Fixes a same-route navigation bug where the button's query-only link never remounted the page, so the redo-missed start never fired and the user just saw the prior session's stale result. Adds the missing `NOT_ENOUGH_MISSED_CHALLENGE_QUESTIONS` error state.
+
+Anti-drift: this is a bug-fix pass on Challenge Quiz's existing architecture, not a redesign — no schema change, no change to Adaptive Practice, no change to quota/pricing beyond removing the difficulty-selection gate itself, no change to Board Exam Mode's ordering or difficulty behavior. The already-documented v0.58.0 redo-missed-session-matching limitation (matches only on session type, not sub-mode) is explicitly deferred, not bundled into Item 5's fix.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.60.0 - Shared Official Pool Foundation
 
 **Status: Released**
