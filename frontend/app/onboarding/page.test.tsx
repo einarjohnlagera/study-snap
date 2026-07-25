@@ -89,7 +89,6 @@ const readyNote = {
   quickReviewAvailable: true,
   challengeQuizAvailable: true,
   adaptivePracticeAvailable: false,
-  difficultySelectionAvailable: false,
 };
 
 jest.mock("next/navigation", () => ({
@@ -190,7 +189,6 @@ describe("OnboardingPage", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -671,7 +669,6 @@ describe("OnboardingPage", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },

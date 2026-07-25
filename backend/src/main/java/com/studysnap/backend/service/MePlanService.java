@@ -101,7 +101,6 @@ public class MePlanService {
                 new MePlanResponse.Features(
                         properties.getPricing().isAdaptivePracticeAvailable(planType),
                         properties.getPricing().isInterviewPracticeAvailable(planType),
-                        properties.getPricing().isDifficultySelectionAvailable(planType),
                         true,
                         ocrLimit > 0,
                         isExportAvailable(docxExportLimit) || isExportAvailable(pdfExportLimit)

@@ -433,7 +433,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Welcome email copy must reflect the current Free / Plus / Pro plan:
   - Free includes `10` Study Packs/month, Quick Review, limited Challenge Quiz, and Public Library access
   - Plus messaging highlights higher monthly limits and exports for regular study
-  - Pro messaging highlights Adaptive Practice, Weak Concept Training, Difficulty Selection, Board Exam Mode, and the highest limits
+  - Pro messaging highlights Adaptive Practice, Weak Concept Training, Board Exam Mode, and the highest limits
 - Do not describe Challenge Quiz as paid-only in onboarding, welcome, or reminder emails.
 
 ### Admin Dashboard Rule
@@ -762,7 +762,7 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - Board Exam setup must also explain that the mode is a focused, distraction-free exam simulation, results are delayed until completion, and navigation will be limited intentionally during the session.
 - Tapping `Start Exam` must show a confirmation modal before quiz generation starts so users understand the stricter flow.
 - Board Exam Mode uses the same Challenge Quiz quota and credit rules as standard Challenge Quiz in the current product stage; do not create a separate billing gate for Board Exam Mode.
-- Difficulty selection may remain plan-gated, but Board Exam Mode itself must still work with recommended difficulty/question count when difficulty selection is unavailable.
+- Board Exam Mode always uses a fixed recommended difficulty/question count (`DIFFICULTY_MIXED`) — it never exposes a difficulty selector (v0.60.1 removed Challenge Quiz's manual selector entirely; Board Exam Mode never had one).
 - Do not render "Correct" / "Incorrect" labels, green/red highlights, or explanations while the quiz is in progress.
 - Standard Challenge Quiz may keep a lighter practice-oriented answering UI, but Board Exam Mode must use a more formal neutral selected-answer state and cleaner hierarchy.
 - Board Exam running state should reinforce the mode visibly with `Board Exam Mode`, `Exam in progress`, and subtle copy that limited navigation is intentional.
@@ -1212,7 +1212,6 @@ Rules:
 - Pro Adaptive Practice: 30/month
 - Pro OCR: backend-configured monthly quota
 - Adaptive Practice is Pro-only and still quota-limited.
-- Difficulty Selection is Pro-only and feature-gated.
 - Weak concepts remain visible to Free users.
 - File upload is available on Free, Plus, and Pro.
 - Study Pack, Challenge Quiz, and Adaptive Practice quotas are separate from each other.

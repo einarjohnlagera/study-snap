@@ -45,7 +45,6 @@ public class FeatureGateService {
         }
         return switch (feature) {
             case ADAPTIVE_QUIZ -> properties.getPricing().isAdaptivePracticeAvailable(planType);
-            case DIFFICULTY_SELECTION -> properties.getPricing().isDifficultySelectionAvailable(planType);
             case LONG_EXAM_SESSION -> properties.getPricing().isLongExamAvailable(planType);
             case INTERVIEW_PRACTICE -> properties.getPricing().isInterviewPracticeAvailable(planType);
             case WEAK_CONCEPT_DETECTION -> true;

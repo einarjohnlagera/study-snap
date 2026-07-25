@@ -1394,7 +1394,6 @@ Welcome email requirements:
 - Pro includes:
   - Adaptive Practice
   - Weak Concept Training
-  - Difficulty Selection
   - Board Exam Mode
   - Highest monthly limits
 - welcome copy must not say Challenge Quiz is paid-only
@@ -1432,11 +1431,11 @@ Plan limits:
 
 - Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 3 Adaptive Practice sessions/month, 2 exports/month, Summary + Key Concepts
 - Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 10 Adaptive Practice sessions/month, 15 exports/month, higher note generation limits
-- Pro: 100 Study Packs/month, 50 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, difficulty selection, Board Exam Mode
+- Pro: 100 Study Packs/month, 50 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, Board Exam Mode
 - Current enforcement truth:
   - Adaptive Practice is quota-gated by plan: Free 3/month, Plus 10/month, Pro 30/month
-  - Difficulty selection is Pro-only
   - Board Exam Mode is Pro-only
+  - Challenge Quiz has no manual difficulty selector (removed v0.60.1); difficulty is fully automatic from the last Quick Review score
 - Pricing surfaces may still position Plus as the regular-study tier through shared plan messaging, but backend plan enforcement and `GET /api/me/plan` remain the behavior source of truth
 - Usage windows are billing-cycle-based:
   - Free resets monthly from account creation date

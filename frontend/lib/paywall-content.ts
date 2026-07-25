@@ -9,7 +9,6 @@ export type PaywallContextType =
   | "EXPORT_LIMIT"
   | "BOARD_EXAM_MODE_LOCKED"
   | "LONG_EXAM_MODE_LOCKED"
-  | "DIFFICULTY_SELECTION_LOCKED"
   | "CONCEPT_REVIEW_TIMING_LOCKED"
   | "OCR_LIMIT"
   | "TEACHER_QUIZ_QUESTION_COUNT_LOCKED"
@@ -38,7 +37,6 @@ export type PaywallModalVariant =
   | "board-exam-mode"
   | "board-exam-limit"
   | "long-exam-mode"
-  | "difficulty-selection"
   | "concept-timing-locked"
   | "challenge-quiz-limit"
   | "quiz-generation-limit"
@@ -91,8 +89,6 @@ export function resolvePaywallContextTypeFromVariant(variant: PaywallModalVarian
       return "QUIZ_LIMIT";
     case "long-exam-mode":
       return "LONG_EXAM_MODE_LOCKED";
-    case "difficulty-selection":
-      return "DIFFICULTY_SELECTION_LOCKED";
     case "concept-timing-locked":
       return "CONCEPT_REVIEW_TIMING_LOCKED";
     case "ocr-limit":
@@ -210,17 +206,6 @@ export function resolvePaywallPresentation(
         headline: "Long Exam Mode",
         body: "Test your mastery with a comprehensive, full-length exam tailored to your notes. Pro unlocks fixed long exams, pause and resume, and mastery reports with domain breakdowns.",
         feature: "long_exam",
-        primaryPlanType: "PRO",
-        secondaryPlanType: "PLUS",
-        primaryCtaLabel: PRIMARY_CTA_LABEL,
-        secondaryCtaLabel: SECONDARY_CTA_LABEL,
-        lastAction: "QUIZ",
-      };
-    case "DIFFICULTY_SELECTION_LOCKED":
-      return {
-        headline: "Unlock Difficulty Selection",
-        body: "Choose easier or harder question sets so each review session matches your confidence level.",
-        feature: "difficulty",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
         primaryCtaLabel: PRIMARY_CTA_LABEL,

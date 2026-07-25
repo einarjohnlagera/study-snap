@@ -57,7 +57,7 @@ export default async function BillingSuccessPage({ searchParams }: Readonly<Bill
           </h1>
           <p className="text-sm leading-relaxed text-foreground/75 sm:text-base">
             {planLabel === "Pro"
-              ? "You now have the highest limits, Adaptive Practice, difficulty selection, Board Exam Mode, and unlimited exports."
+              ? "You now have the highest limits, Adaptive Practice, Board Exam Mode, and unlimited exports."
               : "You now have higher monthly limits, more exports, and more room to keep studying without hitting Free plan caps."}
           </p>
           <p className="text-xs text-foreground/60 sm:text-sm">

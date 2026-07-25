@@ -1113,7 +1113,6 @@ export type NotePerformanceSummaryResponse = {
 export type QuizStartSessionMode = "LEARNING" | "PREVIEW";
 
 export type ChallengeQuizStartRequest = {
-  difficulty?: "easy" | "medium" | "hard";
   mode?: ChallengeQuizMode;
   sessionMode?: QuizStartSessionMode;
   additionalStudyPackIds?: string[];
@@ -1130,7 +1129,6 @@ export type ChallengeQuizStartResponse = {
   monthlyLimit: number;
   boardExamUsedThisMonth: number;
   boardExamMonthlyLimit: number;
-  difficultySelectionAvailable: boolean;
   mode: ChallengeQuizMode;
   selectedDifficulty: "easy" | "medium" | "hard" | "mixed";
   quiz: QuizItem[];
@@ -1388,7 +1386,6 @@ export type BillingUsageSummaryResponse = {
   boardExamLimit: number;
   adaptivePracticeAvailable: boolean;
   interviewPracticeAvailable: boolean;
-  difficultySelectionAvailable: boolean;
 };
 
 export type BillingHistoryItemResponse = {
@@ -1458,7 +1455,6 @@ export type NoteResponse = {
   quickReviewAvailable: boolean;
   challengeQuizAvailable: boolean;
   adaptivePracticeAvailable: boolean;
-  difficultySelectionAvailable: boolean;
 };
 
 export type NoteStudyPackStatus = "DRAFT" | "GENERATING" | "FAILED" | "STUDY_PACK_READY";

@@ -70,9 +70,10 @@ Study Plan / Review Set detail can launch the learner's profile-appropriate prem
 - an existing `GENERATING` or `IN_PROGRESS` session must be reused instead of creating duplicates
 - active generation uses the shared generation lock and recovery flow
 - Challenge mode starts with **5 questions** (`INITIAL_CHALLENGE_QUIZ_COUNT = 5`)
+- Challenge mode has no user-facing difficulty selector. Its difficulty is fully automatic and comes only from the latest completed Quick Review score on the same Study Pack: below 50 → Easy, 50–79 → Default/Medium, 80 or above → Hard; no prior score also uses Default/Medium.
 - Board Exam Mode question count scales with source count: `min(12 × sourceCount, 30)` — single-note: 12, two-note: 24, three-note: 30
 - Board Exam Mode does not use progressive generation; question count is fixed at session start
-- Board Exam Mode does not expose a difficulty selector; it defaults to Mixed to preserve exam-simulation framing
+- Board Exam Mode's separate difficulty behavior is unchanged: it does not expose a selector and remains fixed at `DIFFICULTY_MIXED` to preserve exam-simulation framing
 
 ### Per-user question bank (v0.58.0)
 

@@ -176,7 +176,6 @@ function resolvePaywallFeature(variant: PaywallModalVariant): string {
     case "teacher-quiz-question-count": return "teacher_quiz_question_count";
     case "study-pack-limit": return "study_pack_limit";
     case "board-exam-mode": return "board_exam";
-    case "difficulty-selection": return "difficulty";
     case "concept-timing-locked": return "concept_review_timing";
     case "ocr-limit": return "ocr_limit";
     default: return "study_pack_limit";

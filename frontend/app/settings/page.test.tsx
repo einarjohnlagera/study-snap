@@ -167,7 +167,6 @@ const proUsageSummary = {
   },
   features: {
     adaptivePracticeAvailable: true,
-    difficultySelectionAvailable: true,
     fileUploadAvailable: true,
     ocrAvailable: true,
   },
@@ -205,7 +204,6 @@ const freeUsageSummary = {
   },
   features: {
     adaptivePracticeAvailable: false,
-    difficultySelectionAvailable: false,
     fileUploadAvailable: true,
     ocrAvailable: true,
   },

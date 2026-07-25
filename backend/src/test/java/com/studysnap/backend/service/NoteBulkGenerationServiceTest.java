@@ -645,7 +645,6 @@ class NoteBulkGenerationServiceTest {
                 0,
                 false,
                 false,
-                false,
                 false
         );
     }

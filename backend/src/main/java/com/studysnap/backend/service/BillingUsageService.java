@@ -31,8 +31,7 @@ public class BillingUsageService {
                 plan.usage().boardExamUsed(),
                 plan.limits().boardExamPerMonth(),
                 plan.features().adaptivePracticeAvailable(),
-                plan.features().interviewPracticeAvailable(),
-                plan.features().difficultySelectionAvailable()
+                plan.features().interviewPracticeAvailable()
         );
     }
 }

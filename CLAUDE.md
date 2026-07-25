@@ -144,7 +144,7 @@ Teacher detection in services uses: `user.getProfileType() == ProfileType.TEACHE
 
 ### Feature gating
 
-`FeatureGateService` is the single source of truth for plan-based access control. Monthly quotas live in `UserUsageEntity` (reset by `BillingUsageResetJob`). The `Feature` enum values are `ADAPTIVE_QUIZ`, `DIFFICULTY_SELECTION`, `WEAK_CONCEPT_DETECTION`.
+`FeatureGateService` is the single source of truth for plan-based access control. Monthly quotas live in `UserUsageEntity` (reset by `BillingUsageResetJob`). The `Feature` enum values are `ADAPTIVE_QUIZ`, `LONG_EXAM_SESSION`, `INTERVIEW_PRACTICE`, `WEAK_CONCEPT_DETECTION` (`DIFFICULTY_SELECTION` removed in v0.60.1 — Challenge Quiz's manual difficulty selector was removed entirely).
 
 Plan tiers: `FREE / PLUS / PRO`. Payments via Xendit hosted checkout (manual renewal, no auto-charge). Webhook-confirmed activation only — never trust frontend-reported payment state.
 

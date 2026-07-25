@@ -409,7 +409,6 @@ class NoteControllerTest {
                 0,
                 false,
                 false,
-                false,
                 false
         );
         when(noteService.getById("note-1", userId)).thenReturn(expected);
@@ -449,7 +448,6 @@ class NoteControllerTest {
                 List.of(),
                 null,
                 0,
-                false,
                 false,
                 false,
                 false
@@ -948,7 +946,6 @@ class NoteControllerTest {
                 List.of(),
                 null,
                 0,
-                false,
                 false,
                 false,
                 false

@@ -247,7 +247,7 @@ Profile Type does not affect:
   - monthly limits for Study Packs, Challenge Quiz, Adaptive Practice, and OCR
   - current monthly usage counters
   - remaining usage counters
-  - Pro-only feature flags such as Adaptive Practice and Difficulty Selection
+  - Pro-only feature flags such as Adaptive Practice and Interview Practice
 - Usage periods are enforced from `BillingUsagePeriodService`:
   - Free users anchor monthly cycles to `users.created_at`
   - paid users use the active subscription billing window

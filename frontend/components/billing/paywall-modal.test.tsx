@@ -84,7 +84,6 @@ const billingPricingFixture = {
 const proOnlyPaywallContexts = [
   { type: "BOARD_EXAM_MODE_LOCKED" as const, ctaLabel: "Unlock Board Exam Mode" },
   { type: "LONG_EXAM_MODE_LOCKED" as const, ctaLabel: "Unlock the Long Exam" },
-  { type: "DIFFICULTY_SELECTION_LOCKED" as const, ctaLabel: "Unlock Difficulty Selection" },
   { type: "INTERVIEW_PRACTICE_LOCKED" as const, ctaLabel: "Unlock Interview Practice" },
 ];
 

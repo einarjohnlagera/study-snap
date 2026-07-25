@@ -95,7 +95,6 @@ Plus and Pro are **one-time, time-boxed passes with no auto-charge**, not recurr
 - `100` Study Packs / month
 - `50` Quizzes / month
 - unlimited exports
-- difficulty selection
 - Board Exam Mode
 - Adaptive Practice: Free `3` sessions / month, Plus `10`, Pro `30`
 

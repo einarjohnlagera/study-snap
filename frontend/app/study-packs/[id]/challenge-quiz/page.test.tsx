@@ -177,7 +177,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -188,7 +187,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 50,
-      difficultySelectionAvailable: true,
       mode,
       selectedDifficulty: mode === "board_exam" ? "mixed" : "medium",
       quiz: [
@@ -209,7 +207,7 @@ describe("ChallengeQuizPage", () => {
   }
 
   function setupChallengePrestart(
-    difficultySelectionAvailable = true,
+    useProDefaults = true,
     profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL" = "STUDENT",
     planType?: "FREE" | "PLUS" | "PRO",
     options: {
@@ -219,7 +217,7 @@ describe("ChallengeQuizPage", () => {
       boardExamMonthlyLimit?: number;
     } = {},
   ) {
-    const resolvedPlanType = planType ?? (difficultySelectionAvailable ? "PRO" : "FREE");
+    const resolvedPlanType = planType ?? (useProDefaults ? "PRO" : "FREE");
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       profileType,
@@ -249,7 +247,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: false,
-      difficultySelectionAvailable,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: null,
@@ -259,10 +256,9 @@ describe("ChallengeQuizPage", () => {
       totalQuestions: 0,
       timeLimitSeconds: 600,
       usedThisMonth: options.usedThisMonth ?? 0,
-      monthlyLimit: options.monthlyLimit ?? (difficultySelectionAvailable ? 50 : 5),
+      monthlyLimit: options.monthlyLimit ?? (useProDefaults ? 50 : 5),
       boardExamUsedThisMonth: options.boardExamUsedThisMonth ?? 0,
       boardExamMonthlyLimit: options.boardExamMonthlyLimit ?? 10,
-      difficultySelectionAvailable,
       mode: "challenge",
       selectedDifficulty: "medium",
       quiz: [],
@@ -304,7 +300,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -315,7 +310,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 50,
-      difficultySelectionAvailable: true,
       mode: "board_exam",
       selectedDifficulty: "mixed",
       quiz: [
@@ -432,23 +426,6 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
   });
 
-  it("shows Pro difficulty selection after students choose Challenge Quiz", async () => {
-    setupChallengePrestart(true, "STUDENT");
-
-    render(<ChallengeQuizPage />);
-
-    fireEvent.click(await getModeCard("Challenge Quiz"));
-    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "easy" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "medium" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "hard" })).toBeInTheDocument();
-    expect(screen.getByText("Pro lets you choose the level before you start.")).toBeInTheDocument();
-    expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
-    expect(screen.getByText("Counts toward your monthly quiz limit.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose another mode" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start Quiz" })).toBeInTheDocument();
-  });
-
   it("shows the free Challenge Quiz prescreen before starting", async () => {
     setupChallengePrestart(false, "STUDENT");
 
@@ -456,8 +433,6 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await getModeCard("Challenge Quiz"));
     expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
-    expect(screen.getByText("Recommended difficulty: Medium")).toBeInTheDocument();
-    expect(screen.getByText("Choose difficulty (Pro)")).toBeInTheDocument();
     expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
     expect(screen.getByText("Recommended based on your recent performance.")).toBeInTheDocument();
     expect(screen.getByText("Counts toward your monthly quiz limit.")).toBeInTheDocument();
@@ -476,7 +451,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 1,
       monthlyLimit: 5,
-      difficultySelectionAvailable: false,
       mode: "challenge",
       selectedDifficulty: "medium",
       quiz: [],
@@ -506,7 +480,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 270,
       usedThisMonth: 0,
       monthlyLimit: 5,
-      difficultySelectionAvailable: true,
       mode: "challenge",
       selectedDifficulty: "medium",
       quiz: [
@@ -987,7 +960,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -998,7 +970,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 50,
-      difficultySelectionAvailable: true,
       mode: "challenge",
       selectedDifficulty: "medium",
       quiz: [
@@ -1115,35 +1086,6 @@ describe("ChallengeQuizPage", () => {
     dashboardLink.remove();
   });
 
-  it("locks difficulty controls and prevents duplicate Challenge Quiz starts", async () => {
-    setupChallengePrestart(true, "STUDENT");
-    (startChallengeQuizSession as jest.Mock).mockImplementation(() => new Promise(() => {}));
-
-    render(<ChallengeQuizPage />);
-
-    fireEvent.click(await getModeCard("Challenge Quiz"));
-    const hardButton = await screen.findByRole("button", { name: "hard" });
-    fireEvent.click(hardButton);
-    expect(hardButton).toHaveClass("border-blue-500");
-
-    const startButton = screen.getByRole("button", { name: "Start Quiz" });
-    fireEvent.click(startButton);
-    fireEvent.click(startButton);
-
-    await waitFor(() => {
-      expect(startChallengeQuizSession).toHaveBeenCalledTimes(1);
-    });
-    expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { difficulty: "hard", mode: "challenge" });
-    expect(screen.getByRole("button", { name: "easy" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "medium" })).toBeDisabled();
-    expect(hardButton).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
-    expect(screen.getByRole("alertdialog", { name: "Generating your quiz..." })).toBeInTheDocument();
-    expect(screen.getByText("Creating personalized questions from your notes")).toBeInTheDocument();
-    expect(screen.getByText("Please keep this page open")).toBeInTheDocument();
-    expect(screen.getByText("Preparing your Challenge Quiz...")).toBeInTheDocument();
-  });
-
   it("shows the first-quiz completion banner after completing the first challenge quiz", async () => {
     window.localStorage.setItem("notelib-first-study-onboarding:user-1", JSON.stringify({ step: "study-pack-ready" }));
     (getAuthUser as jest.Mock).mockReturnValue({
@@ -1174,7 +1116,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -1184,7 +1125,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 5,
-      difficultySelectionAvailable: true,
       mode: "challenge",
       selectedDifficulty: "medium",
       quiz: [
@@ -1290,7 +1230,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: true,
-      difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -1300,7 +1239,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 50,
-      difficultySelectionAvailable: true,
       mode: "board_exam",
       selectedDifficulty: "mixed",
       quiz: [
@@ -1453,7 +1391,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: true,
-      difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -1463,7 +1400,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 50,
-      difficultySelectionAvailable: true,
       mode: "board_exam",
       selectedDifficulty: "mixed",
       quiz: [
@@ -1542,7 +1478,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: true,
-      difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -1552,7 +1487,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 50,
-      difficultySelectionAvailable: true,
       mode: "board_exam",
       selectedDifficulty: "mixed",
       quiz: [
@@ -1645,7 +1579,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: false,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -1655,7 +1588,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 5,
-      difficultySelectionAvailable: false,
       mode: "challenge",
       selectedDifficulty: "medium",
       quiz: [
@@ -1723,7 +1655,6 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: true,
-      difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -1733,7 +1664,6 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 50,
-      difficultySelectionAvailable: true,
       mode: "challenge",
       selectedDifficulty: "medium",
       quiz: [
