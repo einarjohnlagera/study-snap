@@ -76,7 +76,6 @@ Designed for serious learners preparing for board and entrance exams.
 - Interview Practice (`10` sessions / month, Professional profile)
 - Long Exam Mode (`12` sessions / month)
 - Board Exam Mode (`10` sessions / month, also uses the shared Quiz budget)
-- Difficulty selection (Easy / Medium / Hard)
 - Highest note generation limits (`100` topic notes / month)
 - Everything in Plus
 
@@ -106,7 +105,7 @@ This rule applies to quiz result pages, the paywall modal, limit-reached screens
 
 ## Runtime Feature Gates
 
-These limits and feature toggles are enforced in the backend; the frontend reads `GET /billing/usage` and `note.adaptivePracticeAvailable` / `note.difficultySelectionAvailable` flags to decide what UI to show.
+These limits and feature toggles are enforced in the backend; the frontend reads `GET /billing/usage` and `note.adaptivePracticeAvailable` flags to decide what UI to show.
 
 | Capability | Free | Plus | Pro |
 | --- | --- | --- | --- |
@@ -117,7 +116,6 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Topic note generation | Limited | Higher | Highest |
 | Adaptive Practice | 3 sessions | 10 sessions | 30 sessions |
 | Interview Practice | — | — | 10 sessions |
-| Difficulty selection | — | — | ✓ |
 | Board Exam Mode | — | — | 10 sessions |
 | Long Exam Mode | — | — | 12 sessions |
 | Summary + Key Concepts | ✓ | ✓ | ✓ |

@@ -112,7 +112,7 @@ No identity changes from `quick-review.md`; included here for completeness.
 | **Navigation** | Standard `Leave Quiz` modal; forfeit available | `Forfeit Exam` modal with stronger language; full-screen request; confirmed leaves are recorded as forfeits with timestamp |
 | **Scoring** | Score against answered questions (early submit fair) | Score against full question count (unanswered = wrong, like a real exam) |
 | **Pacing** | Per-question or freeform | Fixed total timer; section markers if multi-domain; no pause |
-| **Difficulty** | User-selectable for eligible plans | No selector; defaults to Mixed to preserve simulation framing |
+| **Difficulty** | No manual selector (removed v0.60.1); fully automatic from the last Quick Review score | No selector; defaults to Mixed to preserve simulation framing |
 | **Result** | "Practice Weak Concepts" / retry / keep going | A *score report*: overall result, domain breakdown, study-plan recommendation, optional `Schedule re-take`. No inline learner-level pill |
 | **Psychological** | Encouraging, low-friction | Serious, consequential, premium |
 
@@ -299,8 +299,9 @@ Direction:
 | Quick Review | ✓ | ✓ | ✓ |
 | Challenge Quiz | quota | quota | quota |
 | Adaptive Practice | — | 10 / mo | 30 / mo |
-| Difficulty selection | — | — | ✓ |
 | Board Exam Mode | — | — | ✓ |
+
+Manual difficulty selection was removed in v0.60.1 (no plan tier gates it); Challenge Quiz difficulty is now fully automatic from the last Quick Review score.
 
 ### Recommended positioning for new modes
 

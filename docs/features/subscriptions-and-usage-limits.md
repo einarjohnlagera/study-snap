@@ -19,6 +19,8 @@ Do not derive plan access from:
 
 ## Current enforced plan behavior
 
+Challenge Quiz has no manual difficulty selector (removed v0.60.1) on any plan; difficulty is fully automatic from the last Quick Review score.
+
 ### Free
 
 - `10` Study Packs / month
@@ -30,7 +32,6 @@ Do not derive plan access from:
 - Challenge Quiz available
 - weak concepts visible after quiz completion
 - Adaptive Practice available and quota-limited (`3` / month by default)
-- Difficulty selection unavailable
 - Board Exam Mode unavailable
 
 ### Plus
@@ -42,7 +43,6 @@ Do not derive plan access from:
 - exports: `15` / month
 - higher usage limits than Free
 - Adaptive Practice available and quota-limited (`10` / month by default)
-- Difficulty selection unavailable
 - Board Exam Mode unavailable
 
 ### Pro
@@ -55,7 +55,6 @@ Do not derive plan access from:
 - exports: unlimited
 - Adaptive Practice available and quota-limited (`30` / month by default)
 - Long Exam available and quota-limited (`12` source-note units / month by default; quota is deducted per source note)
-- Difficulty selection available
 - Board Exam Mode available
 
 For actual behavior and gating decisions:

@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.60.0 - Shared Official Pool Foundation` (In Progress); previous: `v0.59.0 - Dashboard & Progress Reorg` (Released)
+- `v0.60.1 - Challenge Quiz Fix Pass` (In Progress); previous: `v0.60.0 - Shared Official Pool Foundation` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 

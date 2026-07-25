@@ -107,7 +107,7 @@ System behavior is still enforced from backend plan rules and `GET /api/me/plan`
 Current enforcement truth:
 
 - Board Exam Mode is Pro-only
-- Difficulty selection is Pro-only
+- Challenge Quiz has no manual difficulty selector (removed v0.60.1); difficulty is fully automatic from the last Quick Review score
 - Adaptive Practice is quota-gated by plan: Free `3` sessions / month, Plus `10`, Pro `30`
 
 If pricing copy and backend feature gates diverge, backend gating remains the behavior source of truth until the product intentionally changes it.

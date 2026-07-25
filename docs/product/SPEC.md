@@ -1079,7 +1079,7 @@ Page responsibilities:
 - The Challenge Quiz screen presents both `Challenge Quiz` and `Board Exam Mode` as explicit mode choices.
 - Board Exam Mode uses a dedicated `Board Exam setup` confirmation state with timer/question/result summary plus `Cancel` and `Start Exam`.
 - Board Exam Mode may request fullscreen/focus mode as a best-effort browser enhancement.
-- Difficulty selection remains Pro-gated, and Board Exam Mode remains a Pro feature.
+- Challenge Quiz has no manual difficulty selector (removed v0.60.1); difficulty is fully automatic from the last Quick Review score. Board Exam Mode remains a Pro feature.
 - Reuse existing in-progress session to avoid duplicate LLM calls
 - Persist in-progress state (answers, index, timer basis)
 - Usage limit: 50/month (separate from Study Pack generation quota)
