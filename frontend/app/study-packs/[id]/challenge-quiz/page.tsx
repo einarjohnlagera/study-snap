@@ -50,6 +50,7 @@ import {
   getPostSessionNextStep,
   listNotes,
   isEmailNotVerifiedError,
+  isNotEnoughMissedChallengeQuestionsError,
   isNotEnoughNewQuestionsError,
   startRedoMissedChallengeQuizSession,
   startChallengeQuizSession,
@@ -205,6 +206,19 @@ function getNowEpochSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+function isChallengeQuizSessionExpired(activeSession: ChallengeQuizStartResponse): boolean {
+  const sessionState = (activeSession.sessionState ?? {}) as ChallengeSessionStatePayload;
+  if (!activeSession.timeLimitSeconds || !sessionState.timerStartedAtEpochSeconds) {
+    return false;
+  }
+  const deadline = resolveDeadlineEpochSeconds(
+    activeSession.timeLimitSeconds,
+    { timerStartedAtEpochSeconds: sessionState.timerStartedAtEpochSeconds },
+    getNowEpochSeconds(),
+  );
+  return resolveRemainingSecondsFromDeadline(deadline, getNowEpochSeconds()) <= 0;
+}
+
 function normalizeSubjectForMatch(subject?: string | null): string {
   return subject?.trim().toLocaleLowerCase("en") ?? "";
 }
@@ -302,6 +316,7 @@ export default function ChallengeQuizPage() {
   const redoMissedStartRequestedRef = useRef(false);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
+  const [resumeCandidate, setResumeCandidate] = useState<ChallengeQuizStartResponse | null>(null);
   const [result, setResult] = useState<ChallengeQuizSessionResponse | null>(null);
   const [phase, setPhase] = useState<ChallengePhase>("prestart");
   const [prestartStep, setPrestartStep] = useState<ChallengePrestartStep>(resolveInitialPrestartStep);
@@ -340,6 +355,7 @@ export default function ChallengeQuizPage() {
   const [selectedBoardExamAdditionalStudyPackIds, setSelectedBoardExamAdditionalStudyPackIds] = useState<string[]>([]);
   const [sourceNotesLoading, setSourceNotesLoading] = useState(false);
   const [sourceNotesError, setSourceNotesError] = useState<string | null>(null);
+  const [forfeitingExistingSession, setForfeitingExistingSession] = useState(false);
   const [isMobileNavigatorViewport, setIsMobileNavigatorViewport] = useState(isMobileQuestionNavigatorViewport);
   const { usageSummary } = useBillingUsageSummary();
 
@@ -359,6 +375,7 @@ export default function ChallengeQuizPage() {
   );
   const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
   const [sharedModeSelectionEntryRequested, setSharedModeSelectionEntryRequested] = useState(hasModeSelectionEntryQuery);
+  const [redoMissedEntryRequested, setRedoMissedEntryRequested] = useState(hasRedoMissedEntryQuery);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
   const [primaryCollectionCompanion, setPrimaryCollectionCompanion] = useState<CompanionContent | null>(null);
@@ -445,6 +462,22 @@ export default function ChallengeQuizPage() {
     nextSearchParams.delete(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM);
     router.replace(nextSearchParams.size > 0 ? `${pathname}?${nextSearchParams.toString()}` : pathname, { scroll: false });
   }, [hasModeSelectionEntryQuery, pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!hasRedoMissedEntryQuery) {
+      return;
+    }
+    setRedoMissedEntryRequested(true);
+  }, [hasRedoMissedEntryQuery]);
+
+  useEffect(() => {
+    if (!hasRedoMissedEntryQuery) {
+      return;
+    }
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM);
+    router.replace(nextSearchParams.size > 0 ? `${pathname}?${nextSearchParams.toString()}` : pathname, { scroll: false });
+  }, [hasRedoMissedEntryQuery, pathname, router, searchParams]);
 
   useEffect(() => {
     if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId) {
@@ -665,6 +698,31 @@ export default function ChallengeQuizPage() {
     setPhase(forceRunning || Boolean(started.sessionId) ? "running" : "prestart");
   }, [syncProgressRef]);
 
+  const resetToPrestart = useCallback((mode = challengeSession?.mode ?? selectedMode) => {
+    timeoutAutoSubmitRequestedRef.current = false;
+    syncProgressRef(0, {}, {}, {}, {});
+    setChallengeSession(null);
+    setResumeCandidate(null);
+    setResult(null);
+    setSelectedChoices({});
+    setSelectedMultiChoices({});
+    setSelectedIdentificationAnswers({});
+    setSelectedEnumerationAnswers({});
+    setCurrentIndex(0);
+    setDeadlineEpochSeconds(null);
+    setRemainingSeconds(0);
+    setTimedOut(false);
+    setError(null);
+    setShowAnswerReview(false);
+    setShowBoardExamStartModal(false);
+    setGeneratingMore(false);
+    setNoMoreQuestions(false);
+    setGenerateMoreToast(null);
+    setNextStepResponse(null);
+    setPrestartStep(resolveRecoveryPrestartStep(mode));
+    setPhase("prestart");
+  }, [challengeSession?.mode, selectedMode, syncProgressRef]);
+
   const persistProgress = useCallback(
     (
       nextIndex: number,
@@ -735,6 +793,7 @@ export default function ChallengeQuizPage() {
       if (!authUser?.emailVerifiedAt) {
         syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
+        setResumeCandidate(null);
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
@@ -755,9 +814,23 @@ export default function ChallengeQuizPage() {
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
       setBoardExamUsedThisMonth(inProgress.boardExamUsedThisMonth ?? 0);
       setBoardExamMonthlyLimit(inProgress.boardExamMonthlyLimit ?? 0);
+      const isExpiredInProgressSession = inProgress.status === "IN_PROGRESS"
+        && isChallengeQuizSessionExpired(inProgress);
       if (sharedModeSelectionEntryRequested) {
+        if (isExpiredInProgressSession && inProgress.sessionId) {
+          try {
+            await forfeitChallengeQuizSession(inProgress.sessionId);
+          } catch {
+            // Treat expired sessions as gone locally even if the cleanup request fails.
+          }
+        }
         syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
+        setResumeCandidate(
+          inProgress.sessionId && inProgress.status === "IN_PROGRESS" && !isExpiredInProgressSession
+            ? inProgress
+            : null,
+        );
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
@@ -777,12 +850,21 @@ export default function ChallengeQuizPage() {
       }
 
       setSelectedMode(inProgress.mode ?? preferredMode);
-      if (inProgress.sessionId) {
+      if (isExpiredInProgressSession && inProgress.sessionId) {
+        try {
+          await forfeitChallengeQuizSession(inProgress.sessionId);
+        } catch {
+          // Treat expired sessions as gone locally even if the cleanup request fails.
+        }
+      }
+      if (inProgress.sessionId && !isExpiredInProgressSession) {
         setActivePaywallModal(null);
+        setResumeCandidate(null);
         applyStartedSession(inProgress, true);
       } else {
         syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
+        setResumeCandidate(null);
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
@@ -1114,6 +1196,13 @@ export default function ChallengeQuizPage() {
           : nextMode === BOARD_EXAM_MODE
             ? "Could not start Board Exam Mode."
             : "Could not start Challenge Quiz.";
+      if (redoMissed && isNotEnoughMissedChallengeQuestionsError(err)) {
+        redoMissedStartRequestedRef.current = false;
+        setRedoMissedEntryRequested(false);
+        resetToPrestart(CHALLENGE_MODE);
+        setError(message);
+        return;
+      }
       if (isEmailNotVerifiedError(err)) {
         setShowVerifyEmailModal(true);
       }
@@ -1134,45 +1223,52 @@ export default function ChallengeQuizPage() {
       startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedBoardExamAdditionalStudyPackIds, selectedMode, viewerPlanType]);
+  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, resetToPrestart, selectedBoardExamAdditionalStudyPackIds, selectedMode, viewerPlanType]);
 
   useEffect(() => {
     if (
-      !hasRedoMissedEntryQuery
+      !redoMissedEntryRequested
       || loading
-      || phase !== "prestart"
       || !note
-      || challengeSession?.sessionId
       || redoMissedStartRequestedRef.current
     ) {
       return;
     }
+    if (phase !== "prestart" || challengeSession?.sessionId) {
+      resetToPrestart(CHALLENGE_MODE);
+      return;
+    }
     redoMissedStartRequestedRef.current = true;
+    setRedoMissedEntryRequested(false);
     void handleStartChallenge(CHALLENGE_MODE, true);
-  }, [challengeSession?.sessionId, handleStartChallenge, hasRedoMissedEntryQuery, loading, note, phase]);
+  }, [challengeSession?.sessionId, handleStartChallenge, loading, note, phase, redoMissedEntryRequested, resetToPrestart]);
 
   const handleRetry = () => {
-    timeoutAutoSubmitRequestedRef.current = false;
-    syncProgressRef(0, {}, {}, {}, {});
-    setChallengeSession(null);
-    setResult(null);
-    setSelectedChoices({});
-    setSelectedMultiChoices({});
-    setSelectedIdentificationAnswers({});
-    setSelectedEnumerationAnswers({});
-    setCurrentIndex(0);
-    setDeadlineEpochSeconds(null);
-    setRemainingSeconds(0);
-    setTimedOut(false);
+    resetToPrestart();
+  };
+
+  const handleResumeExistingSession = () => {
+    if (!resumeCandidate) {
+      return;
+    }
+    setResumeCandidate(null);
+    applyStartedSession(resumeCandidate, true);
+  };
+
+  const handleStartFreshExistingSession = async () => {
+    if (!resumeCandidate?.sessionId || forfeitingExistingSession) {
+      return;
+    }
+    setForfeitingExistingSession(true);
     setError(null);
-    setShowAnswerReview(false);
-    setShowBoardExamStartModal(false);
-    setGeneratingMore(false);
-    setNoMoreQuestions(false);
-    setGenerateMoreToast(null);
-    setNextStepResponse(null);
-    setPrestartStep(resolveRecoveryPrestartStep(challengeSession?.mode ?? selectedMode));
-    setPhase("prestart");
+    try {
+      await forfeitChallengeQuizSession(resumeCandidate.sessionId);
+      resetToPrestart(resumeCandidate.mode ?? selectedMode);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not forfeit the active session. Please try again.");
+    } finally {
+      setForfeitingExistingSession(false);
+    }
   };
 
   const handleGenerateMore = useCallback(async () => {
@@ -1483,6 +1579,32 @@ export default function ChallengeQuizPage() {
                 ? `Choose how you want to prepare with ${note?.title ?? "this note"}. Board Exam Mode emphasizes exam simulation, while Challenge Quiz stays flexible for regular practice.`
                 : `Choose how you want to study ${note?.title ?? "this note"} today.`}
             </p>
+            {resumeCandidate ? (
+              <div className="space-y-4 rounded-xl border border-border bg-background p-4">
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">You have an active quiz session.</p>
+                  <p className="text-sm text-foreground/70">
+                    Resume where you left off, or start fresh to forfeit this session and choose a new quiz mode.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button type="button" className="w-full sm:w-auto" onClick={handleResumeExistingSession}>
+                    Resume
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => void handleStartFreshExistingSession()}
+                    disabled={forfeitingExistingSession}
+                  >
+                    {forfeitingExistingSession ? "Starting..." : "Start Fresh"}
+                  </Button>
+                </div>
+                {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+              </div>
+            ) : (
+              <>
             <div className="grid gap-3 sm:grid-cols-2">
               {challengeModeCard ? (
                 <button
@@ -1630,6 +1752,8 @@ export default function ChallengeQuizPage() {
               <p className="text-sm text-foreground/75">Preparing your {quizModeLabel.toLowerCase()}...</p>
             ) : null}
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+              </>
+            )}
           </Card>
         ) : prestartStep === "challenge-setup" ? (
           <Card className="space-y-4 p-4 sm:p-6">

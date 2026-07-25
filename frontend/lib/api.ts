@@ -4736,6 +4736,10 @@ export function isNotEnoughNewQuestionsError(error: unknown): error is ApiReques
   return error instanceof ApiRequestError && error.code === "NOT_ENOUGH_NEW_QUESTIONS";
 }
 
+export function isNotEnoughMissedChallengeQuestionsError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "NOT_ENOUGH_MISSED_CHALLENGE_QUESTIONS";
+}
+
 export async function updateNoteVisibility(noteId: string, visibility: NoteVisibility): Promise<NoteResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/visibility`,

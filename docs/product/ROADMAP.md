@@ -276,7 +276,9 @@ Land as one atomic backend+frontend PR (single monorepo release, no cross-servic
 
 Sequencing: land **first** among the three items touching `challenge-quiz/page.tsx` (Items 3, 4, 5) — it simplifies the file for the other two and reduces merge churn.
 
-### Item 4 — Abandoned sessions silently resumed and auto-submitted
+### Item 4 — Abandoned sessions silently resumed and auto-submitted — Shipped, see `RELEASES.md`
+
+**Shipped refinement:** expiry handling now runs in both layers documented below: the frontend read-path check prevents a stale fetched session from entering the running timer, while `resolveExistingChallengeSession` auto-forfeits expired explicit-start sessions. Server-side Challenge-mode cleanup also releases live bank claims; Board Exam follows the same expiry and prompt behavior without claim release.
 
 **Classification: large — write a Codex prompt, don't implement directly.** Multi-system (backend service-logic change + new frontend UI states ported from an existing pattern).
 
@@ -292,7 +294,9 @@ Files: `backend/src/main/java/com/studysnap/backend/service/ChallengeQuizService
 
 Sequencing: land after Item 3 (shared file). Land before/combined with Item 5 (shares the same method and page region).
 
-### Item 5 — "Redo Missed Questions" does nothing
+### Item 5 — "Redo Missed Questions" does nothing — Shipped, see `RELEASES.md`
+
+**Shipped:** the query entry is preserved in state while its URL parameter is stripped, resets a stale result/session to prestart, then starts the dedicated redo endpoint. The fewer-than-three-missed conflict now renders the backend message on a clean, retryable prestart.
 
 **Classification: small, direct implementation (no Codex prompt needed).** Frontend-only, one file, mirrors an existing in-file pattern.
 
@@ -312,7 +316,7 @@ Sequencing: land after Item 4 (shared file region) — consider combining into o
 1. **PR A — Item 1** (executor fix). Independent, land anytime, can go first. Unblocks re-running the still-incomplete v0.60.0 production backfill. **Shipped.**
 2. **PR B — Item 3** (difficulty removal, Codex prompt). Land early to reduce conflict churn for C/D.
 3. **PR C — Item 2** (shuffle). Rebase on B. **Shipped**, block-aware (see Item 2's note above).
-4. **PR D — Items 4 + 5 combined** (session entry hardening: expiration/forfeit + redo-missed retrigger; Item 4's portion is the Codex prompt, Item 5 folds in as a small direct addition). Rebase on B.
+4. **PR D — Items 4 + 5 combined** (session entry hardening: expiration/forfeit + redo-missed retrigger; Item 4's portion is the Codex prompt, Item 5 folds in as a small direct addition). **Shipped.**
 
 After each Codex-scoped PR (B, D): run `/audit-diff` before committing, per this project's standard Codex-delivery process. Update `RELEASES.md` v0.60.1 and `docs/features/challenge-quiz.md` as each item ships (Item 3 in particular changes documented, user-visible behavior — Plus/Pro plan comparison copy needs updating too, see Item 3's Files list).
 

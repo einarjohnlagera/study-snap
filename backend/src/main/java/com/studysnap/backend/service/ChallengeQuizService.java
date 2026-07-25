@@ -44,6 +44,7 @@ import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +69,7 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class ChallengeQuizService {
     private static final String SESSION_STATE_TIME_LIMIT_SECONDS = "timeLimitSeconds";
     private static final String SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS = "timerStartedAtEpochSeconds";
@@ -886,13 +888,45 @@ public class ChallengeQuizService {
         if (existing == null) {
             return Optional.empty();
         }
-        if (existing.getStatus() == QuickReviewSessionStatus.GENERATING
-                || !QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty()) {
+        if (existing.getStatus() == QuickReviewSessionStatus.GENERATING) {
+            return Optional.of(toStartResponse(existing, studyPack, resolveUsedThisMonthForResponse(userId, existing), planType));
+        }
+        if (!QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty()) {
+            if (isSessionExpired(existing)) {
+                forfeitExpiredSession(existing, userId);
+                return Optional.empty();
+            }
             return Optional.of(toStartResponse(existing, studyPack, resolveUsedThisMonthForResponse(userId, existing), planType));
         }
         markSessionForfeited(existing);
         quickReviewSessionRepository.save(existing);
         return Optional.empty();
+    }
+
+    private boolean isSessionExpired(QuickReviewSessionEntity session) {
+        long timerStartedAtEpochSeconds = extractTimerStartedAtEpochSeconds(session.getSessionState());
+        if (timerStartedAtEpochSeconds <= 0L) {
+            return false;
+        }
+        long deadlineEpochSeconds = timerStartedAtEpochSeconds + extractTimeLimitSeconds(session.getSessionState());
+        return OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond() >= deadlineEpochSeconds;
+    }
+
+    private void forfeitExpiredSession(QuickReviewSessionEntity session, UUID userId) {
+        markSessionForfeited(session);
+        try {
+            quickReviewSessionRepository.save(session);
+        } catch (RuntimeException exception) {
+            log.warn("Could not persist expired Challenge Quiz session forfeit for session {}.", session.getId(), exception);
+        }
+        if (!MODE_CHALLENGE.equals(extractMode(session.getSessionState()))) {
+            return;
+        }
+        try {
+            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+        } catch (RuntimeException exception) {
+            log.warn("Could not release Challenge Quiz claims for expired session {}.", session.getId(), exception);
+        }
     }
 
     private int resolveQuestionCountForDifficulty(String difficulty) {

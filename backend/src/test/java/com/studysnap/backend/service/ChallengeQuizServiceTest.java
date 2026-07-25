@@ -128,7 +128,7 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void startSession_reusesExistingInProgressSession_withoutCreatingDuplicate() {
+    void startSession_resumesNonExpiredInProgressSession_withoutCreatingDuplicate() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -159,7 +159,8 @@ class ChallengeQuizServiceTest {
                 )),
                 Map.of(
                         "timeLimitSeconds", 600,
-                        "timerStartedAtEpochSeconds", 0L,
+                        "timerStartedAtEpochSeconds", OffsetDateTime.now().minusSeconds(60).toEpochSecond(),
+                        "mode", "challenge",
                         "selectedChoices", Map.of("0", "A"),
                         "completed", false
                 )
@@ -204,7 +205,75 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void startSession_reusesExistingGeneratingSession_withoutCallingLlmAgain() {
+    void startSession_forfeitsExpiredInProgressSessionReleasesClaimsAndStartsFresh() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID expiredSessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity expired = new QuickReviewSessionEntity();
+        expired.setId(expiredSessionId);
+        expired.setUserId(userId);
+        expired.setStudyPackId(studyPackId);
+        expired.setNoteId(noteId);
+        expired.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        expired.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        expired.setCurrentRound(QuickReviewRound.INITIAL);
+        expired.setCurrentQuestionIndex(0);
+        expired.setTotalQuestions(1);
+        expired.setCreatedAt(OffsetDateTime.now().minusMinutes(15));
+        expired.setSessionState(QuizSessionStateUtils.withQuiz(
+                buildQuiz(1),
+                Map.of(
+                        "mode", "challenge",
+                        "timeLimitSeconds", 60,
+                        "timerStartedAtEpochSeconds", OffsetDateTime.now().minusMinutes(10).toEpochSecond(),
+                        "completed", false
+                )
+        ));
+        StudyPackGenerationContext generationContext = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Engineering", studyPack.getSubject(), List.of()
+        );
+        List<QuizItem> freshQuiz = buildQuizWithPrefix("Fresh", 5);
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
+        )).thenReturn(Optional.of(expired));
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId), eq(QuickReviewSessionMode.CHALLENGE), any(), any(OffsetDateTime.class), any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.FREE, BillingCycle.MONTHLY, OffsetDateTime.now().minusDays(5), OffsetDateTime.now().plusDays(25), 2026, 3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.QUICK_REVIEW), any()
+        )).thenReturn(List.of());
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(generationContext);
+        when(challengeQuizQuestionBankService.claimEligibleQuestions(
+                eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE), any(UUID.class), any(), eq(5)
+        )).thenReturn(freshQuiz);
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> {
+            QuickReviewSessionEntity saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(UUID.randomUUID());
+            }
+            return saved;
+        });
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
+
+        assertThat(expired.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(response.sessionId()).isNotEqualTo(expiredSessionId.toString());
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(freshQuiz);
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, expiredSessionId);
+    }
+
+    @Test
+    void startSession_leavesGeneratingSessionUntouched_withoutCallingLlmAgain() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
