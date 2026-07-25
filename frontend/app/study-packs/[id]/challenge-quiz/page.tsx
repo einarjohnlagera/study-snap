@@ -480,12 +480,12 @@ export default function ChallengeQuizPage() {
   }, [hasRedoMissedEntryQuery, pathname, router, searchParams]);
 
   useEffect(() => {
-    if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId) {
+    if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId || resumeCandidate) {
       return;
     }
     setSelectedMode(collectionId ? BOARD_EXAM_MODE : resolvePreferredChallengeMode(viewerProfileType));
     setPrestartStep(collectionId ? "board-exam-setup" : resolveInitialPrestartStep(viewerProfileType));
-  }, [challengeSession?.sessionId, collectionId, phase, sharedModeSelectionEntryRequested, viewerProfileType]);
+  }, [challengeSession?.sessionId, collectionId, phase, resumeCandidate, sharedModeSelectionEntryRequested, viewerProfileType]);
 
   useEffect(() => {
     challengeSessionRef.current = challengeSession;
@@ -606,6 +606,7 @@ export default function ChallengeQuizPage() {
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     timeoutAutoSubmitRequestedRef.current = false;
+    redoMissedStartRequestedRef.current = false;
     setNextStepResponse(null);
     setSelectedMode(started.mode ?? CHALLENGE_MODE);
     setBoardExamUsedThisMonth(started.boardExamUsedThisMonth ?? 0);
@@ -824,13 +825,12 @@ export default function ChallengeQuizPage() {
             // Treat expired sessions as gone locally even if the cleanup request fails.
           }
         }
+        const hasResumeCandidate = Boolean(
+          inProgress.sessionId && inProgress.status === "IN_PROGRESS" && !isExpiredInProgressSession,
+        );
         syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
-        setResumeCandidate(
-          inProgress.sessionId && inProgress.status === "IN_PROGRESS" && !isExpiredInProgressSession
-            ? inProgress
-            : null,
-        );
+        setResumeCandidate(hasResumeCandidate ? inProgress : null);
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
@@ -842,7 +842,10 @@ export default function ChallengeQuizPage() {
         setTimedOut(false);
         setShowAnswerReview(false);
         setSelectedMode(requestedPrestartMode);
-        setPrestartStep(requestedPrestartStep);
+        // A live resumable session must always surface the Resume/Start Fresh
+        // choice, even for profiles (e.g. TEACHER) whose initial step otherwise
+        // skips mode-selection entirely.
+        setPrestartStep(hasResumeCandidate ? "mode-selection" : requestedPrestartStep);
         setChallengeQuizLimitReached(inProgress.usedThisMonth >= inProgress.monthlyLimit);
         setPhase("prestart");
         setActivePaywallModal(null);
@@ -1189,6 +1192,9 @@ export default function ChallengeQuizPage() {
       }
       applyStartedSession(started, true);
     } catch (err) {
+      if (redoMissed) {
+        redoMissedStartRequestedRef.current = false;
+      }
       const message = isEmailNotVerifiedError(err)
         ? "Verify your email to use this feature."
         : err instanceof Error
@@ -1197,7 +1203,6 @@ export default function ChallengeQuizPage() {
             ? "Could not start Board Exam Mode."
             : "Could not start Challenge Quiz.";
       if (redoMissed && isNotEnoughMissedChallengeQuestionsError(err)) {
-        redoMissedStartRequestedRef.current = false;
         setRedoMissedEntryRequested(false);
         resetToPrestart(CHALLENGE_MODE);
         setError(message);

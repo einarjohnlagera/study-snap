@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
 import com.studysnap.backend.exception.NotEnoughNewQuestionsException;
 import com.studysnap.backend.entity.ActivityType;
@@ -687,19 +688,35 @@ class ChallengeQuizServiceTest {
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
+        // shuffleQuestionOrderPreservingMatchingGroups groups the MATCHING block into a single unit before
+        // shuffling, so a correct implementation always keeps it contiguous and in order on every draw — this
+        // loop doesn't compute an escape-rate reduction against the current code. It exists to catch a future
+        // regression to a flat/naive shuffle, where each of the 30 independently-randomized draws is another
+        // chance to expose scattering (an initial batch is always exactly 5 questions, so a single draw alone
+        // would have a real chance of accidentally landing contiguous — the flat-shuffle regression it guards
+        // is caught only across many draws, not the first one).
+        for (int attempt = 0; attempt < 30; attempt++) {
+            ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(generatedQuiz);
-        List<Integer> groupIndices = new java.util.ArrayList<>();
-        for (int index = 0; index < response.quiz().size(); index++) {
-            if ("group-1".equals(response.quiz().get(index).questionGroup())) {
-                groupIndices.add(index);
+            assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(generatedQuiz);
+            List<Integer> groupIndices = new java.util.ArrayList<>();
+            for (int index = 0; index < response.quiz().size(); index++) {
+                if ("group-1".equals(response.quiz().get(index).questionGroup())) {
+                    groupIndices.add(index);
+                }
             }
+            assertThat(groupIndices).hasSize(3);
+            assertThat(java.util.Collections.max(groupIndices) - java.util.Collections.min(groupIndices))
+                    .as("MATCHING block must stay contiguous after shuffling")
+                    .isEqualTo(2);
+            List<String> orderedGroupQuestions = groupIndices.stream()
+                    .sorted()
+                    .map(index -> response.quiz().get(index).question())
+                    .toList();
+            assertThat(orderedGroupQuestions)
+                    .as("MATCHING block must preserve its original internal order after shuffling")
+                    .containsExactly("Match 1", "Match 2", "Match 3");
         }
-        assertThat(groupIndices).hasSize(3);
-        assertThat(java.util.Collections.max(groupIndices) - java.util.Collections.min(groupIndices))
-                .as("MATCHING block must stay contiguous after shuffling")
-                .isEqualTo(2);
     }
 
     @Test
@@ -2084,6 +2101,44 @@ class ChallengeQuizServiceTest {
         assertThatThrownBy(() -> challengeQuizService.generateMoreQuestions(id, userId))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("maximum");
+    }
+
+    @Test
+    void generateMoreQuestions_rejectsAndForfeitsAlreadyExpiredSessionInsteadOfExtendingIt() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(5);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                buildQuiz(5),
+                Map.of(
+                        "mode", "challenge",
+                        "difficulty", "medium",
+                        "timeLimitSeconds", 60,
+                        "timerStartedAtEpochSeconds", OffsetDateTime.now().minusMinutes(10).toEpochSecond(),
+                        "completed", false
+                )
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        String id = sessionId.toString();
+        assertThatThrownBy(() -> challengeQuizService.generateMoreQuestions(id, userId))
+                .isInstanceOf(ChallengeQuizSessionNotInProgressException.class);
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, sessionId);
+        verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
     }
 
     @Test

@@ -424,6 +424,74 @@ describe("ChallengeQuizPage", () => {
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
   });
 
+  it("offers Resume or Start Fresh for a TEACHER with a live session, even though TEACHER otherwise skips mode-selection", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      profileType: "TEACHER",
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Challenge Note",
+      subject: "Biology",
+      tags: ["cells"],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: "2026-03-21T10:30:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: "sp-1",
+      studyPackStatus: "STUDY_PACK_READY",
+      summary: "Summary",
+      keyConcepts: ["Concept"],
+      quiz: [],
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 1,
+      timeLimitSeconds: 600,
+      usedThisMonth: 0,
+      monthlyLimit: 50,
+      mode: "challenge",
+      selectedDifficulty: "medium",
+      quiz: [
+        {
+          question: "What powers the cell?",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
+          concept: "Concept",
+          explanation: "Explanation",
+        },
+      ],
+      currentQuestionIndex: 0,
+      sessionState: {
+        selectedChoices: {},
+        timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000),
+      },
+    });
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(screen.getByText("You have an active quiz session.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Fresh" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Challenge Quiz Setup" })).not.toBeInTheDocument();
+  });
+
   it("resumes the live mode-selection session without another request", async () => {
     searchParamsMock = new URLSearchParams("entry=mode-selection");
     setupInProgressChallengeQuiz("challenge");
@@ -592,6 +660,68 @@ describe("ChallengeQuizPage", () => {
 
     await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledWith("note-1"));
     expect(await screen.findByText("Redo missed one")).toBeInTheDocument();
+  });
+
+  it("allows a second missed-question redo request after the first redo session also completes", async () => {
+    setupInProgressChallengeQuiz("challenge");
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 1,
+      correctAnswers: 0,
+      scorePercentage: 0,
+      performanceLevel: "Needs Improvement",
+      conceptBreakdown: [],
+      weakConcepts: ["Concept"],
+      durationSeconds: 24,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:10:00Z",
+    });
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "redo-session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 1,
+      timeLimitSeconds: 270,
+      usedThisMonth: 0,
+      monthlyLimit: 5,
+      mode: "challenge",
+      selectedDifficulty: "medium",
+      quiz: [
+        { question: "Redo missed one", choices: ["A", "B", "C", "D"], correctIndex: 0, concept: "Concept", explanation: "Explanation" },
+      ],
+      currentQuestionIndex: 0,
+      sessionState: { timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+    });
+
+    const page = render(<ChallengeQuizPage />);
+
+    // First cycle: complete the initial session, then redo the missed question.
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+    await screen.findByText("Keep going. Focus on the weak concepts below to build confidence.");
+
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    page.rerender(<ChallengeQuizPage />);
+    await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Redo missed one")).toBeInTheDocument();
+
+    // Second cycle: complete the redo session, then request a redo again. In production the
+    // one-time entry query gets stripped from the URL right after the first request, so simulate
+    // that here before re-adding it for the second CTA click. Without clearing
+    // redoMissedStartRequestedRef on success, this second request would silently never fire.
+    fireEvent.click(await screen.findByRole("button", { name: "Complete Quiz" }));
+    await screen.findByText("Keep going. Focus on the weak concepts below to build confidence.");
+
+    searchParamsMock = new URLSearchParams();
+    page.rerender(<ChallengeQuizPage />);
+
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    page.rerender(<ChallengeQuizPage />);
+
+    await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledTimes(2));
   });
 
   it("shows the missed-question eligibility error on a clean retryable prestart screen", async () => {

@@ -620,6 +620,11 @@ public class ChallengeQuizService {
         QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         assertSessionInProgress(session);
 
+        if (isSessionExpired(session)) {
+            forfeitExpiredSession(session, userId);
+            throw new ChallengeQuizSessionNotInProgressException();
+        }
+
         if (MODE_BOARD_EXAM.equals(extractMode(session.getSessionState()))) {
             throw new AppException("BOARD_EXAM_MODE_NOT_SUPPORTED",
                     "Generate more is not available in Board Exam Mode.", org.springframework.http.HttpStatus.CONFLICT);
