@@ -765,6 +765,7 @@ export type AdminRegenerationStatusResponse = {
 export type AdminSeedOfficialChallengeQuizTemplatesResponse = {
   queued: number;
   skipped: number;
+  rejected: number;
 };
 
 export type SubmitFeedbackRequest = {
@@ -1112,7 +1113,6 @@ export type NotePerformanceSummaryResponse = {
 export type QuizStartSessionMode = "LEARNING" | "PREVIEW";
 
 export type ChallengeQuizStartRequest = {
-  difficulty?: "easy" | "medium" | "hard";
   mode?: ChallengeQuizMode;
   sessionMode?: QuizStartSessionMode;
   additionalStudyPackIds?: string[];
@@ -1129,7 +1129,6 @@ export type ChallengeQuizStartResponse = {
   monthlyLimit: number;
   boardExamUsedThisMonth: number;
   boardExamMonthlyLimit: number;
-  difficultySelectionAvailable: boolean;
   mode: ChallengeQuizMode;
   selectedDifficulty: "easy" | "medium" | "hard" | "mixed";
   quiz: QuizItem[];
@@ -1387,7 +1386,6 @@ export type BillingUsageSummaryResponse = {
   boardExamLimit: number;
   adaptivePracticeAvailable: boolean;
   interviewPracticeAvailable: boolean;
-  difficultySelectionAvailable: boolean;
 };
 
 export type BillingHistoryItemResponse = {
@@ -1457,7 +1455,6 @@ export type NoteResponse = {
   quickReviewAvailable: boolean;
   challengeQuizAvailable: boolean;
   adaptivePracticeAvailable: boolean;
-  difficultySelectionAvailable: boolean;
 };
 
 export type NoteStudyPackStatus = "DRAFT" | "GENERATING" | "FAILED" | "STUDY_PACK_READY";
@@ -4737,6 +4734,10 @@ export function isQuizShareLinkLimitExceededError(error: unknown): error is ApiR
 
 export function isNotEnoughNewQuestionsError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "NOT_ENOUGH_NEW_QUESTIONS";
+}
+
+export function isNotEnoughMissedChallengeQuestionsError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "NOT_ENOUGH_MISSED_CHALLENGE_QUESTIONS";
 }
 
 export async function updateNoteVisibility(noteId: string, visibility: NoteVisibility): Promise<NoteResponse> {

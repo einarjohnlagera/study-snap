@@ -141,4 +141,4 @@ Copy remains one-time-pass framing: no automatic renewal claim or recurring `/mo
 - No invoice download or receipt UI yet
 - Billing history is read-only
 - Plus annual plan not yet available (annual toggle sends monthly checkout for Plus)
-- Adaptive Practice, Difficulty Selection, and Board Exam Mode are still enforced from backend plan rules; current pricing-surface messaging does not override runtime feature gates
+- Adaptive Practice and Board Exam Mode are still enforced from backend plan rules; current pricing-surface messaging does not override runtime feature gates

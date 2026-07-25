@@ -19,7 +19,6 @@ import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -31,7 +30,6 @@ import com.studysnap.backend.exception.ChallengeQuizNotAvailableException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
-import com.studysnap.backend.exception.InvalidChallengeQuizDifficultyException;
 import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.exception.InvalidChallengeQuizResultException;
 import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
@@ -46,6 +44,7 @@ import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +54,7 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -69,6 +69,7 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class ChallengeQuizService {
     private static final String SESSION_STATE_TIME_LIMIT_SECONDS = "timeLimitSeconds";
     private static final String SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS = "timerStartedAtEpochSeconds";
@@ -112,6 +113,7 @@ public class ChallengeQuizService {
     private static final String MODE_CHALLENGE = "challenge";
     private static final String MODE_BOARD_EXAM = "board_exam";
     private static final String HISTORY_MODE_BOARD_EXAM = "BOARD_EXAM";
+    private static final String MATCHING_FORMAT = "MATCHING";
     private static final List<QuickReviewSessionStatus> ACTIVE_GENERATION_STATUSES = List.of(
             QuickReviewSessionStatus.GENERATING,
             QuickReviewSessionStatus.IN_PROGRESS
@@ -153,7 +155,6 @@ public class ChallengeQuizService {
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final QuizGenerationService quizGenerationService;
     private final SubscriptionService subscriptionService;
-    private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
     private final UserUsageService userUsageService;
     private final BillingUsagePeriodService billingUsagePeriodService;
@@ -174,7 +175,7 @@ public class ChallengeQuizService {
         StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
         String selectedMode = resolveSelectedMode(request);
-        String selectedDifficulty = resolveSelectedDifficulty(planType, selectedMode, request);
+        String selectedDifficulty = resolveSelectedDifficulty(selectedMode);
 
         Optional<ChallengeQuizStartResponse> existingSession = resolveExistingChallengeSession(
                 userId,
@@ -324,6 +325,9 @@ public class ChallengeQuizService {
             if (challengeQuiz.size() != quizCount) {
                 throw new ChallengeQuizGenerationFailedException();
             }
+            if (!MODE_BOARD_EXAM.equals(selectedMode)) {
+                challengeQuiz = shuffleQuestionOrderPreservingMatchingGroups(challengeQuiz);
+            }
 
             markSessionReady(session, challengeQuiz, profile.difficulty());
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
@@ -402,6 +406,7 @@ public class ChallengeQuizService {
                 INITIAL_CHALLENGE_QUIZ_COUNT,
                 ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS
         );
+        missedQuestions = shuffleQuestionOrderPreservingMatchingGroups(missedQuestions);
         markSessionReady(session, missedQuestions, profile.difficulty());
         session.setQuotaExempt(true);
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
@@ -615,6 +620,11 @@ public class ChallengeQuizService {
         QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         assertSessionInProgress(session);
 
+        if (isSessionExpired(session)) {
+            forfeitExpiredSession(session, userId);
+            throw new ChallengeQuizSessionNotInProgressException();
+        }
+
         if (MODE_BOARD_EXAM.equals(extractMode(session.getSessionState()))) {
             throw new AppException("BOARD_EXAM_MODE_NOT_SUPPORTED",
                     "Generate more is not available in Board Exam Mode.", org.springframework.http.HttpStatus.CONFLICT);
@@ -675,6 +685,7 @@ public class ChallengeQuizService {
             List<QuizItem> uniqueGenerated = QuizDeduplicationUtils.uniqueQuestions(generated, combinedQuestionKeys);
             unique = new ArrayList<>(bankedQuestions);
             unique.addAll(uniqueGenerated);
+            unique = shuffleQuestionOrderPreservingMatchingGroups(unique);
 
             if (unique.size() < MIN_NEW_QUESTIONS_AFTER_DEDUP) {
                 throw new NotEnoughNewQuestionsException();
@@ -841,9 +852,6 @@ public class ChallengeQuizService {
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
             return new ChallengeGenerationProfile(MID_SCORE_QUESTION_COUNT, DIFFICULTY_MIXED);
         }
-        if (selectedDifficulty != null) {
-            return new ChallengeGenerationProfile(resolveQuestionCountForDifficulty(selectedDifficulty), selectedDifficulty);
-        }
         QuickReviewSessionEntity latestQuickReview = quickReviewSessionRepository
                 .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
@@ -885,13 +893,45 @@ public class ChallengeQuizService {
         if (existing == null) {
             return Optional.empty();
         }
-        if (existing.getStatus() == QuickReviewSessionStatus.GENERATING
-                || !QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty()) {
+        if (existing.getStatus() == QuickReviewSessionStatus.GENERATING) {
+            return Optional.of(toStartResponse(existing, studyPack, resolveUsedThisMonthForResponse(userId, existing), planType));
+        }
+        if (!QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty()) {
+            if (isSessionExpired(existing)) {
+                forfeitExpiredSession(existing, userId);
+                return Optional.empty();
+            }
             return Optional.of(toStartResponse(existing, studyPack, resolveUsedThisMonthForResponse(userId, existing), planType));
         }
         markSessionForfeited(existing);
         quickReviewSessionRepository.save(existing);
         return Optional.empty();
+    }
+
+    private boolean isSessionExpired(QuickReviewSessionEntity session) {
+        long timerStartedAtEpochSeconds = extractTimerStartedAtEpochSeconds(session.getSessionState());
+        if (timerStartedAtEpochSeconds <= 0L) {
+            return false;
+        }
+        long deadlineEpochSeconds = timerStartedAtEpochSeconds + extractTimeLimitSeconds(session.getSessionState());
+        return OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond() >= deadlineEpochSeconds;
+    }
+
+    private void forfeitExpiredSession(QuickReviewSessionEntity session, UUID userId) {
+        markSessionForfeited(session);
+        try {
+            quickReviewSessionRepository.save(session);
+        } catch (RuntimeException exception) {
+            log.warn("Could not persist expired Challenge Quiz session forfeit for session {}.", session.getId(), exception);
+        }
+        if (!MODE_CHALLENGE.equals(extractMode(session.getSessionState()))) {
+            return;
+        }
+        try {
+            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+        } catch (RuntimeException exception) {
+            log.warn("Could not release Challenge Quiz claims for expired session {}.", session.getId(), exception);
+        }
     }
 
     private int resolveQuestionCountForDifficulty(String difficulty) {
@@ -1091,7 +1131,6 @@ public class ChallengeQuizService {
                 limit,
                 boardExamUsedThisMonth,
                 properties.getPricing().resolveMonthlyBoardExamLimit(planType),
-                isDifficultySelectionAvailable(planType),
                 mode,
                 extractDifficulty(session.getSessionState()),
                 quiz,
@@ -1101,19 +1140,11 @@ public class ChallengeQuizService {
         );
     }
 
-    private String resolveSelectedDifficulty(PlanType planType, String selectedMode, ChallengeQuizStartRequest request) {
+    private String resolveSelectedDifficulty(String selectedMode) {
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
             return DIFFICULTY_MIXED;
         }
-        if (request == null || request.difficulty() == null || request.difficulty().isBlank()) {
-            return null;
-        }
-        featureGateService.checkFeatureAccess(planType, Feature.DIFFICULTY_SELECTION);
-        String normalized = request.difficulty().trim().toLowerCase();
-        return switch (normalized) {
-            case DIFFICULTY_EASY, DIFFICULTY_MEDIUM, DIFFICULTY_HARD -> normalized;
-            default -> throw new InvalidChallengeQuizDifficultyException();
-        };
+        return null;
     }
 
     private String resolveSelectedMode(ChallengeQuizStartRequest request) {
@@ -1646,10 +1677,6 @@ public class ChallengeQuizService {
         return properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
     }
 
-    private boolean isDifficultySelectionAvailable(PlanType planType) {
-        return properties.getPricing().isDifficultySelectionAvailable(planType);
-    }
-
     private ChallengeQuizStartResponse buildEmptyStartResponse(
             StudyPackEntity studyPack,
             int usedThisMonth,
@@ -1666,7 +1693,6 @@ public class ChallengeQuizService {
                 resolveMonthlyChallengeQuizLimit(planType),
                 (int) countBoardExamUsedThisMonth(studyPack.getOwnerUserId()),
                 properties.getPricing().resolveMonthlyBoardExamLimit(planType),
-                isDifficultySelectionAvailable(planType),
                 MODE_CHALLENGE,
                 DEFAULT_SELECTED_DIFFICULTY,
                 List.of(),
@@ -1751,6 +1777,43 @@ public class ChallengeQuizService {
                 state
         ));
         session.setCompletedAt(null);
+    }
+
+    /**
+     * Shuffles question order without ever splitting a MATCHING block apart — the frontend
+     * (`lib/quiz.ts`) groups consecutive same-{@code questionGroup} MATCHING items by scanning the
+     * array in order, so scattering them would silently break that rendering.
+     */
+    private List<QuizItem> shuffleQuestionOrderPreservingMatchingGroups(List<QuizItem> questions) {
+        if (questions == null || questions.size() < 2) {
+            return questions == null ? List.of() : List.copyOf(questions);
+        }
+        List<List<QuizItem>> blocks = new ArrayList<>();
+        int index = 0;
+        while (index < questions.size()) {
+            String questionGroup = resolveMatchingQuestionGroup(questions.get(index));
+            int endIndex = index + 1;
+            if (questionGroup != null) {
+                while (endIndex < questions.size()
+                        && questionGroup.equals(resolveMatchingQuestionGroup(questions.get(endIndex)))) {
+                    endIndex += 1;
+                }
+            }
+            blocks.add(new ArrayList<>(questions.subList(index, endIndex)));
+            index = endIndex;
+        }
+        Collections.shuffle(blocks);
+        List<QuizItem> shuffled = new ArrayList<>(questions.size());
+        blocks.forEach(shuffled::addAll);
+        return shuffled;
+    }
+
+    private String resolveMatchingQuestionGroup(QuizItem question) {
+        if (question == null || !MATCHING_FORMAT.equals(question.questionFormat()) || question.questionGroup() == null) {
+            return null;
+        }
+        String normalized = question.questionGroup().trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private void markSessionFailed(QuickReviewSessionEntity session) {

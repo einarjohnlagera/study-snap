@@ -112,7 +112,7 @@ No identity changes from `quick-review.md`; included here for completeness.
 | **Navigation** | Standard `Leave Quiz` modal; forfeit available | `Forfeit Exam` modal with stronger language; full-screen request; confirmed leaves are recorded as forfeits with timestamp |
 | **Scoring** | Score against answered questions (early submit fair) | Score against full question count (unanswered = wrong, like a real exam) |
 | **Pacing** | Per-question or freeform | Fixed total timer; section markers if multi-domain; no pause |
-| **Difficulty** | User-selectable for eligible plans | No selector; defaults to Mixed to preserve simulation framing |
+| **Difficulty** | No manual selector (removed v0.60.1); fully automatic from the last Quick Review score | No selector; defaults to Mixed to preserve simulation framing |
 | **Result** | "Practice Weak Concepts" / retry / keep going | A *score report*: overall result, domain breakdown, study-plan recommendation, optional `Schedule re-take`. No inline learner-level pill |
 | **Psychological** | Encouraging, low-friction | Serious, consequential, premium |
 
@@ -151,7 +151,7 @@ Identification and Enumeration are new **question formats on the existing Quiz S
 | Identification | Shipped (v0.39.0) | Challenge Quiz first; Long Exam fast-follow | Free-text input matched against a generation-time `acceptableAnswers[]` list (normalized, case-insensitive). No per-submission LLM call. |
 | Enumeration | Shipped (v0.39.0) | Challenge Quiz | Fixed-N free-text inputs (N = required item count), each matched order-independently against a generation-time `acceptableAnswerGroups: List<List<String>>` (one synonym group per required item) via exhaustive bipartite matching — a naive first-match-greedy assignment can wrongly reject a valid answer when synonym groups overlap. **All-or-nothing**: every required item must match a distinct group for the question to count correct — same boolean correct/incorrect model as every other format, no partial credit. Same normalization, no per-submission LLM call. |
 
-- **Ungated — available to every plan tier.** Per the product principle "gate control/workflows, not learning quality": question-format variety is a learning-quality dimension, so it is not a Plus/Pro differentiator. This applies to both formats regardless of which mode they later reach. Monetization continues to live in existing mode-level and quota-level differentiation (Board Exam Pro-only, Adaptive Practice quota tiers, Difficulty Selection Pro-only) — not in which question formats a user can see.
+- **Ungated — available to every plan tier.** Per the product principle "gate control/workflows, not learning quality": question-format variety is a learning-quality dimension, so it is not a Plus/Pro differentiator. This applies to both formats regardless of which mode they later reach. Monetization continues to live in existing mode-level and quota-level differentiation (Board Exam Pro-only, Adaptive Practice quota tiers) — not in which question formats a user can see.
 - **Consistent mix per progressive-generation batch.** Challenge Quiz's 5→20 progressive batches must each carry the same format mix (some MCQ, some Identification) rather than segregating by type across batches (e.g. never "first 5 MCQ, then next 5 Identification") — segregating by batch reads as arbitrary rather than intentional variety.
 - **Board Exam**: excluded pending a real-exam-fidelity check — if the board exams a given Board Exam session models are MCQ-only in reality, adding free-text formats breaks the simulation and the format should stay excluded there.
 - **Quick Review**: out of scope for v1. Quick Review is a locked review-only surface (see above); adding assessment formats there is a separate decision, not required to make Free's experience feel rich (Free already reaches these formats via Challenge Quiz and its Adaptive Practice quota).
@@ -299,8 +299,9 @@ Direction:
 | Quick Review | ✓ | ✓ | ✓ |
 | Challenge Quiz | quota | quota | quota |
 | Adaptive Practice | — | 10 / mo | 30 / mo |
-| Difficulty selection | — | — | ✓ |
 | Board Exam Mode | — | — | ✓ |
+
+Manual difficulty selection was removed in v0.60.1 (no plan tier gates it); Challenge Quiz difficulty is now fully automatic from the last Quick Review score.
 
 ### Recommended positioning for new modes
 

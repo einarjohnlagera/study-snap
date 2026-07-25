@@ -1,8 +1,10 @@
 package com.studysnap.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -23,11 +25,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -52,7 +56,7 @@ class OfficialChallengeQuizTemplateServiceTest {
     @Mock
     private TransactionOperations transactionOperations;
     @Mock
-    private StudyPackGenerationTaskDispatcher taskDispatcher;
+    private AsyncTaskExecutor llmParallelTaskExecutor;
 
     @Test
     void copyTemplateQuestions_usesOfficialTemplateAcrossLearnerLevelsAndTagsTheCallerRows() {
@@ -155,7 +159,8 @@ class OfficialChallengeQuizTemplateServiceTest {
                 eq("Official pack"), eq("Summary"), eq(List.of("Concept")), eq(List.of()), eq(20), eq("medium"), eq(context)
         )).thenReturn(List.of(new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")));
 
-        service(immediateTransactions(), new StudyPackGenerationTaskDispatcher(Runnable::run))
+        AsyncTaskExecutor directExecutor = Runnable::run;
+        service(immediateTransactions(), directExecutor)
                 .queueSeedIfEligible(officialNote, officialStudyPack);
 
         verify(questionBankService).persistGeneratedQuestions(
@@ -180,17 +185,55 @@ class OfficialChallengeQuizTemplateServiceTest {
 
         assertThat(first.queued()).isZero();
         assertThat(first.skipped()).isEqualTo(1);
+        assertThat(first.rejected()).isZero();
         assertThat(second).isEqualTo(first);
-        verifyNoInteractions(taskDispatcher);
+        verifyNoInteractions(llmParallelTaskExecutor);
+    }
+
+    @Test
+    void queueBackfill_reportsRejectedInsteadOfFailingWhenTheSeedExecutorQueueIsFull() {
+        UUID officialId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity officialNote = note(noteId, officialId, NoteVisibility.PUBLIC);
+        StudyPackEntity officialStudyPack = studyPack(UUID.randomUUID(), noteId, officialId);
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(officialNote));
+        when(studyPackRepository.findByNoteIdIn(List.of(noteId))).thenReturn(List.of(officialStudyPack));
+        when(userRepository.findById(officialId)).thenReturn(Optional.of(officialAuthor(officialId)));
+        when(questionBankRepository.existsByUserIdAndStudyPackId(officialId, officialStudyPack.getId())).thenReturn(false);
+        doThrow(new RejectedExecutionException("queue full")).when(llmParallelTaskExecutor).execute(any());
+
+        var response = service().queueBackfill();
+
+        assertThat(response.queued()).isZero();
+        assertThat(response.skipped()).isZero();
+        assertThat(response.rejected()).isEqualTo(1);
+        verifyNoInteractions(quizGenerationService);
+    }
+
+    @Test
+    void queueSeedIfEligible_doesNotFailTheWritePathWhenTheSeedExecutorQueueIsFull() {
+        UUID officialId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        NoteEntity officialNote = note(noteId, officialId, NoteVisibility.PUBLIC);
+        StudyPackEntity officialStudyPack = studyPack(studyPackId, noteId, officialId);
+        when(userRepository.findById(officialId)).thenReturn(Optional.of(officialAuthor(officialId)));
+        when(questionBankRepository.existsByUserIdAndStudyPackId(officialId, studyPackId)).thenReturn(false);
+        doThrow(new RejectedExecutionException("queue full")).when(llmParallelTaskExecutor).execute(any());
+
+        OfficialChallengeQuizTemplateService service = service();
+
+        assertThatCode(() -> service.queueSeedIfEligible(officialNote, officialStudyPack)).doesNotThrowAnyException();
+        verifyNoInteractions(quizGenerationService);
     }
 
     private OfficialChallengeQuizTemplateService service() {
-        return service(transactionOperations, taskDispatcher);
+        return service(transactionOperations, llmParallelTaskExecutor);
     }
 
     private OfficialChallengeQuizTemplateService service(
             TransactionOperations transactionOperations,
-            StudyPackGenerationTaskDispatcher taskDispatcher
+            AsyncTaskExecutor taskExecutor
     ) {
         return new OfficialChallengeQuizTemplateService(
                 questionBankRepository,
@@ -201,7 +244,7 @@ class OfficialChallengeQuizTemplateServiceTest {
                 quizGenerationService,
                 generationContextResolver,
                 transactionOperations,
-                taskDispatcher
+                taskExecutor
         );
     }
 

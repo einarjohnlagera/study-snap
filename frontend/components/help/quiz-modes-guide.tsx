@@ -26,7 +26,6 @@ const SECTIONS: Section[] = [
     title: "Challenge Quiz",
     description: "Generates new timed questions to simulate test conditions.",
     bullets: [
-      "Three difficulty levels: Easy, Medium, Hard",
       "Progressive — starts at 5 questions, add 5 at a time up to 20",
       "Tracks your best score per note and identifies Weak Concepts",
     ],

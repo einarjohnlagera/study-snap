@@ -289,7 +289,6 @@ class NoteBulkImportServiceTest {
                 0,
                 false,
                 false,
-                false,
                 false
         );
     }

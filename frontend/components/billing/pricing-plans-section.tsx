@@ -360,7 +360,7 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           {[
             { q: "Is NoteLib free?", a: "Yes. You can use the core note-to-study workflow for free up to the monthly limits." },
             { q: "Who is Plus for?", a: "Plus is for regular study sessions when Free limits start to feel tight but you do not need the advanced Pro features yet." },
-            { q: "Who is Pro for?", a: "Pro is built for serious review and exam prep with Adaptive Practice, difficulty selection, Board Exam Mode, and the highest limits." },
+            { q: "Who is Pro for?", a: "Pro is built for serious review and exam prep with Adaptive Practice, Board Exam Mode, and the highest limits." },
             { q: "Will I be charged again?", a: "No. Plus and Pro are one-time, time-boxed passes — they never auto-renew. Buy another pass when your next exam is near. Your usage limits refresh each month while a pass is active." },
             { q: "What happens when my pass ends?", a: "Your notes, Study Packs, and progress stay in your library. You simply return to Free limits until you grab another pass." },
             { q: "How do I renew a pass?", a: "NoteLib never auto-renews. When you are ready, choose another Plus or Pro pass from Settings and complete the hosted checkout." },

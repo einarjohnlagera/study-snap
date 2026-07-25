@@ -120,7 +120,6 @@ const baseNote = {
   quickReviewAvailable: false,
   challengeQuizAvailable: false,
   adaptivePracticeAvailable: false,
-  difficultySelectionAvailable: false,
 };
 
 describe("PrivateNoteDetailPageClient", () => {
@@ -188,7 +187,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -654,7 +652,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -700,7 +697,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: true,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -745,7 +741,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: true,
-        difficultySelectionAvailable: true,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -925,7 +920,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: true,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -1246,7 +1240,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: true,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -1304,7 +1297,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -1744,7 +1736,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: true,
-        difficultySelectionAvailable: true,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -1792,7 +1783,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: false,
-        difficultySelectionAvailable: false,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -2190,7 +2180,6 @@ describe("PrivateNoteDetailPageClient", () => {
       },
       features: {
         adaptivePracticeAvailable: true,
-        difficultySelectionAvailable: true,
         fileUploadAvailable: true,
         ocrAvailable: true,
       },
@@ -2202,7 +2191,6 @@ describe("PrivateNoteDetailPageClient", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: true,
-      difficultySelectionAvailable: true,
     });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);

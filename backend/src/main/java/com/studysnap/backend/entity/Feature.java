@@ -7,9 +7,6 @@ public enum Feature {
     ADAPTIVE_QUIZ(
             "Adaptive Practice is not available on your current plan."
     ),
-    DIFFICULTY_SELECTION(
-            "Difficulty selection is a Pro feature. Upgrade to Pro to continue."
-    ),
     LONG_EXAM_SESSION(
             "Long Exam Mode requires a Pro plan."
     ),

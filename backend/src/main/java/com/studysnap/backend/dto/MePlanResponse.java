@@ -129,14 +129,12 @@ public record MePlanResponse(
     public record Features(
             boolean adaptivePracticeAvailable,
             boolean interviewPracticeAvailable,
-            boolean difficultySelectionAvailable,
             boolean fileUploadAvailable,
             boolean ocrAvailable,
             boolean exportAvailable
     ) {
         public Features(
                 boolean adaptivePracticeAvailable,
-                boolean difficultySelectionAvailable,
                 boolean fileUploadAvailable,
                 boolean ocrAvailable,
                 boolean exportAvailable
@@ -144,7 +142,6 @@ public record MePlanResponse(
             this(
                     adaptivePracticeAvailable,
                     false,
-                    difficultySelectionAvailable,
                     fileUploadAvailable,
                     ocrAvailable,
                     exportAvailable

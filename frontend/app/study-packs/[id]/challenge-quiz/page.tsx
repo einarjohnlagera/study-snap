@@ -50,6 +50,7 @@ import {
   getPostSessionNextStep,
   listNotes,
   isEmailNotVerifiedError,
+  isNotEnoughMissedChallengeQuestionsError,
   isNotEnoughNewQuestionsError,
   startRedoMissedChallengeQuizSession,
   startChallengeQuizSession,
@@ -109,7 +110,6 @@ type ChallengeSessionStatePayload = {
   selectedEnumerationAnswers?: Record<string, string[]>;
   timerStartedAtEpochSeconds?: number;
 };
-type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
 type ChallengeViewerProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL" | null;
 type ChallengeViewerPlanType = "FREE" | "PLUS" | "PRO" | null;
 type ChallengePaywallVariant =
@@ -117,7 +117,6 @@ type ChallengePaywallVariant =
   | "board-exam-limit"
   | "long-exam-mode"
   | "interview-practice-limit"
-  | "difficulty-selection"
   | "challenge-quiz-limit"
   | "adaptive-practice";
 
@@ -153,24 +152,6 @@ function shouldCollapseQuestionNavigatorByDefault(
   return isMobileViewport;
 }
 
-
-function getQuestionCountSummary(
-  difficultySelectionAvailable: boolean | undefined,
-): string {
-  if (difficultySelectionAvailable) {
-    return "Starts with 5 questions. Generate more after answering.";
-  }
-  return "Starts with 5 questions. Generate more after answering.";
-}
-
-function normalizePracticeDifficulty(
-  difficulty: ChallengeQuizStartResponse["selectedDifficulty"] | null | undefined,
-): ChallengeDifficulty {
-  if (difficulty === "easy" || difficulty === "hard") {
-    return difficulty;
-  }
-  return "medium";
-}
 
 function resolveRecoveryPrestartStep(mode: ChallengeQuizMode): ChallengePrestartStep {
   if (mode === BOARD_EXAM_MODE) {
@@ -223,6 +204,19 @@ function formatTimer(seconds: number): string {
 
 function getNowEpochSeconds(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+function isChallengeQuizSessionExpired(activeSession: ChallengeQuizStartResponse): boolean {
+  const sessionState = (activeSession.sessionState ?? {}) as ChallengeSessionStatePayload;
+  if (!activeSession.timeLimitSeconds || !sessionState.timerStartedAtEpochSeconds) {
+    return false;
+  }
+  const deadline = resolveDeadlineEpochSeconds(
+    activeSession.timeLimitSeconds,
+    { timerStartedAtEpochSeconds: sessionState.timerStartedAtEpochSeconds },
+    getNowEpochSeconds(),
+  );
+  return resolveRemainingSecondsFromDeadline(deadline, getNowEpochSeconds()) <= 0;
 }
 
 function normalizeSubjectForMatch(subject?: string | null): string {
@@ -322,6 +316,7 @@ export default function ChallengeQuizPage() {
   const redoMissedStartRequestedRef = useRef(false);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
+  const [resumeCandidate, setResumeCandidate] = useState<ChallengeQuizStartResponse | null>(null);
   const [result, setResult] = useState<ChallengeQuizSessionResponse | null>(null);
   const [phase, setPhase] = useState<ChallengePhase>("prestart");
   const [prestartStep, setPrestartStep] = useState<ChallengePrestartStep>(resolveInitialPrestartStep);
@@ -350,7 +345,6 @@ export default function ChallengeQuizPage() {
   const [challengeQuizLimitReached, setChallengeQuizLimitReached] = useState(false);
   const [boardExamUsedThisMonth, setBoardExamUsedThisMonth] = useState(0);
   const [boardExamMonthlyLimit, setBoardExamMonthlyLimit] = useState(0);
-  const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
   const [selectedMode, setSelectedMode] = useState<ChallengeQuizMode>(() => (
     resolvePreferredChallengeMode(getAuthUser()?.profileType)
   ));
@@ -361,6 +355,7 @@ export default function ChallengeQuizPage() {
   const [selectedBoardExamAdditionalStudyPackIds, setSelectedBoardExamAdditionalStudyPackIds] = useState<string[]>([]);
   const [sourceNotesLoading, setSourceNotesLoading] = useState(false);
   const [sourceNotesError, setSourceNotesError] = useState<string | null>(null);
+  const [forfeitingExistingSession, setForfeitingExistingSession] = useState(false);
   const [isMobileNavigatorViewport, setIsMobileNavigatorViewport] = useState(isMobileQuestionNavigatorViewport);
   const { usageSummary } = useBillingUsageSummary();
 
@@ -380,6 +375,7 @@ export default function ChallengeQuizPage() {
   );
   const collectionId = useMemo(() => searchParams.get("collectionId")?.trim() || null, [searchParams]);
   const [sharedModeSelectionEntryRequested, setSharedModeSelectionEntryRequested] = useState(hasModeSelectionEntryQuery);
+  const [redoMissedEntryRequested, setRedoMissedEntryRequested] = useState(hasRedoMissedEntryQuery);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
   const [primaryCollectionCompanion, setPrimaryCollectionCompanion] = useState<CompanionContent | null>(null);
@@ -411,19 +407,17 @@ export default function ChallengeQuizPage() {
   }, []);
   const openLockedFeaturePaywall = useCallback(
     (variant: ChallengePaywallVariant, source: string) => {
-      const feature = variant === "difficulty-selection"
-        ? "difficulty"
-        : variant === "challenge-quiz-limit"
-          ? "quiz_limit"
-          : variant === "board-exam-limit"
-            ? "board_exam_limit"
-            : variant === "adaptive-practice"
-              ? "adaptive"
-              : variant === "long-exam-mode"
-                ? "long_exam"
-                : variant === "interview-practice-limit"
-                  ? "interview_practice"
-                  : "board_exam";
+      const feature = variant === "challenge-quiz-limit"
+        ? "quiz_limit"
+        : variant === "board-exam-limit"
+          ? "board_exam_limit"
+          : variant === "adaptive-practice"
+            ? "adaptive"
+            : variant === "long-exam-mode"
+              ? "long_exam"
+              : variant === "interview-practice-limit"
+                ? "interview_practice"
+                : "board_exam";
       void trackAnalyticsEvent({
         eventType: "FEATURE_LOCKED_CLICKED",
         metadata: {
@@ -470,12 +464,28 @@ export default function ChallengeQuizPage() {
   }, [hasModeSelectionEntryQuery, pathname, router, searchParams]);
 
   useEffect(() => {
-    if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId) {
+    if (!hasRedoMissedEntryQuery) {
+      return;
+    }
+    setRedoMissedEntryRequested(true);
+  }, [hasRedoMissedEntryQuery]);
+
+  useEffect(() => {
+    if (!hasRedoMissedEntryQuery) {
+      return;
+    }
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM);
+    router.replace(nextSearchParams.size > 0 ? `${pathname}?${nextSearchParams.toString()}` : pathname, { scroll: false });
+  }, [hasRedoMissedEntryQuery, pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId || resumeCandidate) {
       return;
     }
     setSelectedMode(collectionId ? BOARD_EXAM_MODE : resolvePreferredChallengeMode(viewerProfileType));
     setPrestartStep(collectionId ? "board-exam-setup" : resolveInitialPrestartStep(viewerProfileType));
-  }, [challengeSession?.sessionId, collectionId, phase, sharedModeSelectionEntryRequested, viewerProfileType]);
+  }, [challengeSession?.sessionId, collectionId, phase, resumeCandidate, sharedModeSelectionEntryRequested, viewerProfileType]);
 
   useEffect(() => {
     challengeSessionRef.current = challengeSession;
@@ -596,9 +606,9 @@ export default function ChallengeQuizPage() {
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     timeoutAutoSubmitRequestedRef.current = false;
+    redoMissedStartRequestedRef.current = false;
     setNextStepResponse(null);
     setSelectedMode(started.mode ?? CHALLENGE_MODE);
-    setSelectedDifficulty(normalizePracticeDifficulty(started.selectedDifficulty));
     setBoardExamUsedThisMonth(started.boardExamUsedThisMonth ?? 0);
     setBoardExamMonthlyLimit(started.boardExamMonthlyLimit ?? 0);
 
@@ -689,6 +699,31 @@ export default function ChallengeQuizPage() {
     setPhase(forceRunning || Boolean(started.sessionId) ? "running" : "prestart");
   }, [syncProgressRef]);
 
+  const resetToPrestart = useCallback((mode = challengeSession?.mode ?? selectedMode) => {
+    timeoutAutoSubmitRequestedRef.current = false;
+    syncProgressRef(0, {}, {}, {}, {});
+    setChallengeSession(null);
+    setResumeCandidate(null);
+    setResult(null);
+    setSelectedChoices({});
+    setSelectedMultiChoices({});
+    setSelectedIdentificationAnswers({});
+    setSelectedEnumerationAnswers({});
+    setCurrentIndex(0);
+    setDeadlineEpochSeconds(null);
+    setRemainingSeconds(0);
+    setTimedOut(false);
+    setError(null);
+    setShowAnswerReview(false);
+    setShowBoardExamStartModal(false);
+    setGeneratingMore(false);
+    setNoMoreQuestions(false);
+    setGenerateMoreToast(null);
+    setNextStepResponse(null);
+    setPrestartStep(resolveRecoveryPrestartStep(mode));
+    setPhase("prestart");
+  }, [challengeSession?.mode, selectedMode, syncProgressRef]);
+
   const persistProgress = useCallback(
     (
       nextIndex: number,
@@ -759,6 +794,7 @@ export default function ChallengeQuizPage() {
       if (!authUser?.emailVerifiedAt) {
         syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
+        setResumeCandidate(null);
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
@@ -779,10 +815,22 @@ export default function ChallengeQuizPage() {
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
       setBoardExamUsedThisMonth(inProgress.boardExamUsedThisMonth ?? 0);
       setBoardExamMonthlyLimit(inProgress.boardExamMonthlyLimit ?? 0);
+      const isExpiredInProgressSession = inProgress.status === "IN_PROGRESS"
+        && isChallengeQuizSessionExpired(inProgress);
       if (sharedModeSelectionEntryRequested) {
-        setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
+        if (isExpiredInProgressSession && inProgress.sessionId) {
+          try {
+            await forfeitChallengeQuizSession(inProgress.sessionId);
+          } catch {
+            // Treat expired sessions as gone locally even if the cleanup request fails.
+          }
+        }
+        const hasResumeCandidate = Boolean(
+          inProgress.sessionId && inProgress.status === "IN_PROGRESS" && !isExpiredInProgressSession,
+        );
         syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
+        setResumeCandidate(hasResumeCandidate ? inProgress : null);
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
@@ -794,7 +842,10 @@ export default function ChallengeQuizPage() {
         setTimedOut(false);
         setShowAnswerReview(false);
         setSelectedMode(requestedPrestartMode);
-        setPrestartStep(requestedPrestartStep);
+        // A live resumable session must always surface the Resume/Start Fresh
+        // choice, even for profiles (e.g. TEACHER) whose initial step otherwise
+        // skips mode-selection entirely.
+        setPrestartStep(hasResumeCandidate ? "mode-selection" : requestedPrestartStep);
         setChallengeQuizLimitReached(inProgress.usedThisMonth >= inProgress.monthlyLimit);
         setPhase("prestart");
         setActivePaywallModal(null);
@@ -802,14 +853,21 @@ export default function ChallengeQuizPage() {
       }
 
       setSelectedMode(inProgress.mode ?? preferredMode);
-      if (inProgress.sessionId) {
-        setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
+      if (isExpiredInProgressSession && inProgress.sessionId) {
+        try {
+          await forfeitChallengeQuizSession(inProgress.sessionId);
+        } catch {
+          // Treat expired sessions as gone locally even if the cleanup request fails.
+        }
+      }
+      if (inProgress.sessionId && !isExpiredInProgressSession) {
         setActivePaywallModal(null);
+        setResumeCandidate(null);
         applyStartedSession(inProgress, true);
       } else {
-        setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
         syncProgressRef(0, {}, {}, {}, {});
         setChallengeSession(null);
+        setResumeCandidate(null);
         setResult(null);
         setSelectedChoices({});
         setSelectedMultiChoices({});
@@ -1122,9 +1180,7 @@ export default function ChallengeQuizPage() {
       void requestBoardExamFullscreen();
     }
     try {
-      const request: ChallengeQuizStartRequest = nextMode === CHALLENGE_MODE && note.difficultySelectionAvailable
-        ? { difficulty: selectedDifficulty, mode: nextMode }
-        : { mode: nextMode };
+      const request: ChallengeQuizStartRequest = { mode: nextMode };
       if (nextMode === BOARD_EXAM_MODE && selectedBoardExamAdditionalStudyPackIds.length > 0) {
         request.additionalStudyPackIds = selectedBoardExamAdditionalStudyPackIds;
       }
@@ -1134,9 +1190,11 @@ export default function ChallengeQuizPage() {
       if (!started.sessionId) {
         throw new Error(nextMode === BOARD_EXAM_MODE ? "Could not start Board Exam Mode." : "Could not start Challenge Quiz.");
       }
-      setSelectedDifficulty(normalizePracticeDifficulty(started.selectedDifficulty));
       applyStartedSession(started, true);
     } catch (err) {
+      if (redoMissed) {
+        redoMissedStartRequestedRef.current = false;
+      }
       const message = isEmailNotVerifiedError(err)
         ? "Verify your email to use this feature."
         : err instanceof Error
@@ -1144,6 +1202,12 @@ export default function ChallengeQuizPage() {
           : nextMode === BOARD_EXAM_MODE
             ? "Could not start Board Exam Mode."
             : "Could not start Challenge Quiz.";
+      if (redoMissed && isNotEnoughMissedChallengeQuestionsError(err)) {
+        setRedoMissedEntryRequested(false);
+        resetToPrestart(CHALLENGE_MODE);
+        setError(message);
+        return;
+      }
       if (isEmailNotVerifiedError(err)) {
         setShowVerifyEmailModal(true);
       }
@@ -1164,45 +1228,52 @@ export default function ChallengeQuizPage() {
       startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedBoardExamAdditionalStudyPackIds, selectedDifficulty, selectedMode, viewerPlanType]);
+  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, resetToPrestart, selectedBoardExamAdditionalStudyPackIds, selectedMode, viewerPlanType]);
 
   useEffect(() => {
     if (
-      !hasRedoMissedEntryQuery
+      !redoMissedEntryRequested
       || loading
-      || phase !== "prestart"
       || !note
-      || challengeSession?.sessionId
       || redoMissedStartRequestedRef.current
     ) {
       return;
     }
+    if (phase !== "prestart" || challengeSession?.sessionId) {
+      resetToPrestart(CHALLENGE_MODE);
+      return;
+    }
     redoMissedStartRequestedRef.current = true;
+    setRedoMissedEntryRequested(false);
     void handleStartChallenge(CHALLENGE_MODE, true);
-  }, [challengeSession?.sessionId, handleStartChallenge, hasRedoMissedEntryQuery, loading, note, phase]);
+  }, [challengeSession?.sessionId, handleStartChallenge, loading, note, phase, redoMissedEntryRequested, resetToPrestart]);
 
   const handleRetry = () => {
-    timeoutAutoSubmitRequestedRef.current = false;
-    syncProgressRef(0, {}, {}, {}, {});
-    setChallengeSession(null);
-    setResult(null);
-    setSelectedChoices({});
-    setSelectedMultiChoices({});
-    setSelectedIdentificationAnswers({});
-    setSelectedEnumerationAnswers({});
-    setCurrentIndex(0);
-    setDeadlineEpochSeconds(null);
-    setRemainingSeconds(0);
-    setTimedOut(false);
+    resetToPrestart();
+  };
+
+  const handleResumeExistingSession = () => {
+    if (!resumeCandidate) {
+      return;
+    }
+    setResumeCandidate(null);
+    applyStartedSession(resumeCandidate, true);
+  };
+
+  const handleStartFreshExistingSession = async () => {
+    if (!resumeCandidate?.sessionId || forfeitingExistingSession) {
+      return;
+    }
+    setForfeitingExistingSession(true);
     setError(null);
-    setShowAnswerReview(false);
-    setShowBoardExamStartModal(false);
-    setGeneratingMore(false);
-    setNoMoreQuestions(false);
-    setGenerateMoreToast(null);
-    setNextStepResponse(null);
-    setPrestartStep(resolveRecoveryPrestartStep(challengeSession?.mode ?? selectedMode));
-    setPhase("prestart");
+    try {
+      await forfeitChallengeQuizSession(resumeCandidate.sessionId);
+      resetToPrestart(resumeCandidate.mode ?? selectedMode);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not forfeit the active session. Please try again.");
+    } finally {
+      setForfeitingExistingSession(false);
+    }
   };
 
   const handleGenerateMore = useCallback(async () => {
@@ -1281,8 +1352,6 @@ export default function ChallengeQuizPage() {
   const generationOverlayMessage = isBoardExamMode
     ? "Creating a stricter exam simulation from your notes"
     : "Creating personalized questions from your notes";
-  const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable);
-  const canChooseChallengeDifficulty = Boolean(note?.difficultySelectionAvailable);
   const boardExamAvailable = viewerPlanType === "PRO";
   const availableExamModes = useMemo(
     () => getAvailableExamModes(viewerProfileType),
@@ -1515,6 +1584,32 @@ export default function ChallengeQuizPage() {
                 ? `Choose how you want to prepare with ${note?.title ?? "this note"}. Board Exam Mode emphasizes exam simulation, while Challenge Quiz stays flexible for regular practice.`
                 : `Choose how you want to study ${note?.title ?? "this note"} today.`}
             </p>
+            {resumeCandidate ? (
+              <div className="space-y-4 rounded-xl border border-border bg-background p-4">
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">You have an active quiz session.</p>
+                  <p className="text-sm text-foreground/70">
+                    Resume where you left off, or start fresh to forfeit this session and choose a new quiz mode.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button type="button" className="w-full sm:w-auto" onClick={handleResumeExistingSession}>
+                    Resume
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => void handleStartFreshExistingSession()}
+                    disabled={forfeitingExistingSession}
+                  >
+                    {forfeitingExistingSession ? "Starting..." : "Start Fresh"}
+                  </Button>
+                </div>
+                {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+              </div>
+            ) : (
+              <>
             <div className="grid gap-3 sm:grid-cols-2">
               {challengeModeCard ? (
                 <button
@@ -1540,9 +1635,7 @@ export default function ChallengeQuizPage() {
                     {challengeModeCard.description}
                   </p>
                   <p className="mt-3 text-xs text-foreground/60">
-                    {canChooseChallengeDifficulty
-                      ? "Pro users can choose the challenge difficulty before generation."
-                      : "Review the recommended setup before you start."}
+                    Review the recommended setup before you start.
                   </p>
                 </button>
               ) : null}
@@ -1664,6 +1757,8 @@ export default function ChallengeQuizPage() {
               <p className="text-sm text-foreground/75">Preparing your {quizModeLabel.toLowerCase()}...</p>
             ) : null}
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+              </>
+            )}
           </Card>
         ) : prestartStep === "challenge-setup" ? (
           <Card className="space-y-4 p-4 sm:p-6">
@@ -1675,49 +1770,14 @@ export default function ChallengeQuizPage() {
               Review the quiz setup for {note?.title ?? "this note"} before you begin.
             </p>
             <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">Difficulty</p>
-                {canChooseChallengeDifficulty ? (
-                  <p>Pro lets you choose the level before you start.</p>
-                ) : (
-                  <>
-                    <p>Recommended difficulty: Medium</p>
-                    <p className="text-foreground/65">Choose difficulty (Pro)</p>
-                  </>
-                )}
-              </div>
-              {canChooseChallengeDifficulty ? (
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {(["easy", "medium", "hard"] as const).map((difficulty) => (
-                    <button
-                      key={difficulty}
-                      type="button"
-                      className={cn(
-                        "rounded-md border px-3 py-2 text-left capitalize transition",
-                        selectedDifficulty === difficulty
-                          ? "border-blue-500 bg-blue-500/10 text-foreground"
-                          : "border-border bg-background",
-                      )}
-                      onClick={() => {
-                        if (!starting) {
-                          setSelectedDifficulty(difficulty);
-                        }
-                      }}
-                      disabled={challengeGenerationLocked}
-                    >
-                      {difficulty}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">Timer</p>
                   <p>10 minutes. Timer runs until submission or expiration.</p>
                 </div>
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">Question count</p>
-                  <p>{canChooseChallengeDifficulty ? questionCountSummary : "Recommended based on your recent performance."}</p>
+                  <p>Recommended based on your recent performance.</p>
                 </div>
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">Monthly limit</p>

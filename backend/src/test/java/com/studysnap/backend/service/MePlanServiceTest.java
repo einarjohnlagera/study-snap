@@ -54,7 +54,6 @@ class MePlanServiceTest {
         properties.getPricing().setPlusMonthlyPdfExportLimit(15);
         properties.getPricing().setProMonthlyPdfExportLimit(-1);
         properties.getPricing().setAdaptivePracticeProOnly(false);
-        properties.getPricing().setDifficultySelectionProOnly(true);
         FeatureGateService featureGateService = new FeatureGateService(subscriptionService, properties);
         mePlanService = new MePlanService(
                 subscriptionService,
@@ -121,7 +120,6 @@ class MePlanServiceTest {
         assertThat(response.remaining().docxExportsRemaining()).isEqualTo(1);
         assertThat(response.remaining().pdfExportsRemaining()).isEqualTo(2);
         assertThat(response.features().adaptivePracticeAvailable()).isTrue();
-        assertThat(response.features().difficultySelectionAvailable()).isFalse();
         assertThat(response.features().fileUploadAvailable()).isTrue();
         assertThat(response.features().ocrAvailable()).isTrue();
         assertThat(response.features().exportAvailable()).isTrue();
@@ -177,7 +175,6 @@ class MePlanServiceTest {
         assertThat(response.remaining().docxExportsRemaining()).isNull();
         assertThat(response.remaining().pdfExportsRemaining()).isNull();
         assertThat(response.features().adaptivePracticeAvailable()).isTrue();
-        assertThat(response.features().difficultySelectionAvailable()).isTrue();
         assertThat(response.features().exportAvailable()).isTrue();
     }
 

@@ -69,7 +69,6 @@ const readyNote = {
   quickReviewAvailable: true,
   challengeQuizAvailable: true,
   adaptivePracticeAvailable: true,
-  difficultySelectionAvailable: false,
 };
 
 describe("MemorizationPageClient", () => {

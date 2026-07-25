@@ -388,10 +388,14 @@ export default function AdminPage() {
     setSeedOfficialTemplatesError(null);
     try {
       const response = await seedOfficialChallengeQuizTemplates();
-      setSeedOfficialTemplatesMessage(
-        response.queued === 0
+      const baseMessage =
+        response.queued === 0 && response.rejected === 0
           ? `No Official study packs to seed (${response.skipped} already seeded)`
-          : `Queued ${response.queued} Official template(s) for seeding (${response.skipped} already seeded)`,
+          : `Queued ${response.queued} Official template(s) for seeding (${response.skipped} already seeded)`;
+      setSeedOfficialTemplatesMessage(
+        response.rejected > 0
+          ? `${baseMessage} (${response.rejected} rejected — queue full, retry later)`
+          : baseMessage,
       );
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 403) {

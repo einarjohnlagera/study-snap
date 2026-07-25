@@ -4034,7 +4034,6 @@ class NoteCollectionServiceTest {
                 null,
                 false,
                 false,
-                false,
                 false
         );
     }

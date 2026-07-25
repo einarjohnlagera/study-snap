@@ -76,7 +76,6 @@ Designed for serious learners preparing for board and entrance exams.
 - Interview Practice (`10` sessions / month, Professional profile)
 - Long Exam Mode (`12` sessions / month)
 - Board Exam Mode (`10` sessions / month, also uses the shared Quiz budget)
-- Difficulty selection (Easy / Medium / Hard)
 - Highest note generation limits (`100` topic notes / month)
 - Everything in Plus
 
@@ -92,7 +91,7 @@ The ladder reflects the user's *study stage*, not just price:
 
 - **Free** is for users who are exploring NoteLib and need basic note → Study Pack → Quick Review, with a small Adaptive Practice allowance to close the weak-area loop.
 - **Plus** is for *regular study* — users who study consistently and want Adaptive Practice on weak areas without committing to exam-prep volume.
-- **Pro** is for *exam preparation* — board exam takers and serious learners who need difficulty selection, Board Exam Mode, and the highest generation limits.
+- **Pro** is for *exam preparation* — board exam takers and serious learners who need Board Exam Mode and the highest generation limits.
 
 Upgrade CTAs must respect the ladder:
 
@@ -106,7 +105,7 @@ This rule applies to quiz result pages, the paywall modal, limit-reached screens
 
 ## Runtime Feature Gates
 
-These limits and feature toggles are enforced in the backend; the frontend reads `GET /billing/usage` and `note.adaptivePracticeAvailable` / `note.difficultySelectionAvailable` flags to decide what UI to show.
+These limits and feature toggles are enforced in the backend; the frontend reads `GET /billing/usage` and `note.adaptivePracticeAvailable` flags to decide what UI to show.
 
 | Capability | Free | Plus | Pro |
 | --- | --- | --- | --- |
@@ -117,7 +116,6 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Topic note generation | Limited | Higher | Highest |
 | Adaptive Practice | 3 sessions | 10 sessions | 30 sessions |
 | Interview Practice | — | — | 10 sessions |
-| Difficulty selection | — | — | ✓ |
 | Board Exam Mode | — | — | 10 sessions |
 | Long Exam Mode | — | — | 12 sessions |
 | Summary + Key Concepts | ✓ | ✓ | ✓ |
@@ -144,7 +142,7 @@ This applies to **DOCX exports only** (the Teacher Flow format). PDF exports use
 
 **Rationale:**
 - A Teacher on Plus (₱179/mo PH) gets a complete, professional quiz-authoring workflow with no export ceiling.
-- Advanced exam-prep features that teachers do not need — Board Exam Mode, Long Exam Mode, Difficulty Selection, Interview Practice, and higher Adaptive Practice volume — remain paid-plan differentiators. The Pro ladder is intact.
+- Advanced exam-prep features that teachers do not need — Board Exam Mode, Long Exam Mode, Interview Practice, and higher Adaptive Practice volume — remain paid-plan differentiators. The Pro ladder is intact.
 - The export override costs nothing in LLM spend. The risk of abuse (non-teachers claiming Teacher profile to get unlimited exports) is low and the downside is limited to a cost-free feature.
 - This reflects a deliberate product value: NoteLib should be genuinely useful to Filipino teachers, for whom ₱249/mo Pro is proportionally steep relative to a government teacher's salary.
 

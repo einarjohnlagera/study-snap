@@ -140,7 +140,7 @@ const landingFaqs = [
   {
     question: "What's the difference between Free, Plus, and Pro?",
     answer:
-      "Free covers the core note-to-quiz loop at lighter monthly limits. Plus raises those limits for regular study. Pro adds Board Exam Mode, Long Exam, difficulty selection, and the highest limits for serious exam prep.",
+      "Free covers the core note-to-quiz loop at lighter monthly limits. Plus raises those limits for regular study. Pro adds Board Exam Mode, Long Exam, and the highest limits for serious exam prep.",
   },
 ] as const;
 

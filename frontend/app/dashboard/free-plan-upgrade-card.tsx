@@ -16,7 +16,7 @@ export function FreePlanUpgradeCard() {
             You are using the Free Plan.
           </h2>
           <p className="max-w-2xl text-sm leading-relaxed text-foreground/80">
-            Free includes a small Adaptive Practice allowance. Choose Plus for higher limits, or go Pro for difficulty selection and Board Exam Mode.
+            Free includes a small Adaptive Practice allowance. Choose Plus for higher limits, or go Pro for Board Exam Mode and the highest limits.
           </p>
         </div>
         <div className="w-full sm:w-auto">

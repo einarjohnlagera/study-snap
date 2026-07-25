@@ -53,7 +53,6 @@ export const PLANS: Record<AppPlanType, {
     ],
     upgradeHighlights: [
       `Adaptive Practice (${pricingConfig.free.adaptivePracticePerMonth} free sessions / month)`,
-      "Difficulty selection",
       "Board Exam Mode",
       "Higher note generation limits",
     ],
@@ -89,7 +88,6 @@ export const PLANS: Record<AppPlanType, {
       { label: `Rehearse real answers with ${pricingConfig.pro.interviewPracticePerMonth} Interview Practice sessions each month` },
       { label: `Build stamina with ${pricingConfig.pro.longExamPerMonth} Long Exam sessions each month` },
       { label: `Prepare for boards with ${pricingConfig.pro.boardExamPerMonth} Board Exam sessions each month` },
-      { label: "Set the quiz difficulty that matches your exam" },
     ],
   },
 };
@@ -168,14 +166,6 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     },
   },
   {
-    label: "Difficulty selection",
-    values: {
-      FREE: null,
-      PLUS: null,
-      PRO: "check",
-    },
-  },
-  {
     label: "Board Exam Mode",
     values: {
       FREE: null,
@@ -216,7 +206,6 @@ export type UpgradeCtaContext =
   | "note-generation-limit"
   | "adaptive-practice"
   | "interview-practice"
-  | "difficulty-selection"
   | "board-exam-mode"
   | "long-exam-mode"
   | "concept-review-timing"
@@ -301,12 +290,6 @@ export function getUpgradeCtas(
         secondary: null,
       };
     }
-    if (context === "difficulty-selection") {
-      return {
-        primary: { label: "Unlock Difficulty Selection", targetPlan: "PRO" },
-        secondary: null,
-      };
-    }
     if (context === "study-pack-limit") {
       return {
         primary: { label: "Get More Study Packs", targetPlan: "PLUS" },
@@ -346,12 +329,6 @@ export function getUpgradeCtas(
     if (context === "long-exam-mode") {
       return {
         primary: { label: "Unlock the Long Exam", targetPlan: "PRO" },
-        secondary: null,
-      };
-    }
-    if (context === "difficulty-selection") {
-      return {
-        primary: { label: "Unlock Difficulty Selection", targetPlan: "PRO" },
         secondary: null,
       };
     }

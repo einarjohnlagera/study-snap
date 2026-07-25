@@ -1395,8 +1395,7 @@ public class NoteService {
                 quizCount,
                 hasGeneratedQuiz,
                 hasGeneratedQuiz,
-                hasGeneratedQuiz && featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ),
-                hasGeneratedQuiz && featureGateService.hasFeatureAccess(planType, Feature.DIFFICULTY_SELECTION)
+                hasGeneratedQuiz && featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ)
         );
     }
 

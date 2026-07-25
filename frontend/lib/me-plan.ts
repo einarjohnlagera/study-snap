@@ -45,7 +45,6 @@ export type MePlanResponse = {
   features: {
     adaptivePracticeAvailable: boolean;
     interviewPracticeAvailable?: boolean;
-    difficultySelectionAvailable: boolean;
     fileUploadAvailable: boolean;
     ocrAvailable: boolean;
     exportAvailable?: boolean;

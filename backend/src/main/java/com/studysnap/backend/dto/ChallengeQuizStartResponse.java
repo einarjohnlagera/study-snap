@@ -16,7 +16,6 @@ public record ChallengeQuizStartResponse(
         int monthlyLimit,
         int boardExamUsedThisMonth,
         int boardExamMonthlyLimit,
-        boolean difficultySelectionAvailable,
         String mode,
         String selectedDifficulty,
         List<QuizItem> quiz,
