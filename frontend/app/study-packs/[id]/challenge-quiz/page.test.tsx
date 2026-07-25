@@ -68,6 +68,9 @@ jest.mock("@/lib/api", () => ({
   getNote: jest.fn(),
   getPostSessionNextStep: jest.fn(),
   isEmailNotVerifiedError: () => false,
+  isNotEnoughMissedChallengeQuestionsError: (error: { code?: string }) => (
+    error?.code === "NOT_ENOUGH_MISSED_CHALLENGE_QUESTIONS"
+  ),
   listNotes: jest.fn(),
   startRedoMissedChallengeQuizSession: jest.fn(),
   startChallengeQuizSession: jest.fn(),
@@ -148,7 +151,10 @@ describe("ChallengeQuizPage", () => {
     return card as HTMLButtonElement;
   }
 
-  function setupInProgressChallengeQuiz(mode: "challenge" | "board_exam" = "challenge") {
+  function setupInProgressChallengeQuiz(
+    mode: "challenge" | "board_exam" = "challenge",
+    timerStartedAtEpochSeconds = Math.floor(Date.now() / 1000),
+  ) {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       planType: "PRO",
@@ -201,7 +207,7 @@ describe("ChallengeQuizPage", () => {
       currentQuestionIndex: 0,
       sessionState: {
         selectedChoices: {},
-        timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000),
+        timerStartedAtEpochSeconds,
       },
     });
   }
@@ -402,17 +408,58 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("dialog", { name: "Unlock Interview Practice" })).not.toBeInTheDocument();
   });
 
-  it("keeps Note Detail Challenge Quiz entry on the shared mode-selection screen for students even when an in-progress session exists", async () => {
+  it("offers Resume or Start Fresh for a live session from the mode-selection entry", async () => {
     searchParamsMock = new URLSearchParams("entry=mode-selection");
     setupInProgressChallengeQuiz("challenge");
 
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    expect(await getModeCard("Challenge Quiz")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("You have an active quiz session.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Fresh" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Challenge Quiz" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Challenge Quiz Setup" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("challenge-quiz-top-bar")).not.toBeInTheDocument();
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
+  });
+
+  it("resumes the live mode-selection session without another request", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupInProgressChallengeQuiz("challenge");
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Resume" }));
+
+    expect(await screen.findByText("What powers the cell?")).toBeInTheDocument();
+    expect(forfeitChallengeQuizSession).not.toHaveBeenCalled();
+    expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("forfeits the live mode-selection session before starting fresh", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupInProgressChallengeQuiz("challenge");
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Fresh" }));
+
+    await waitFor(() => expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1"));
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+  });
+
+  it("forfeits an expired in-progress session on load instead of resuming and auto-submitting it", async () => {
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_601_000);
+    setupInProgressChallengeQuiz("challenge", 1_720_000_000);
+
+    render(<ChallengeQuizPage />);
+
+    await waitFor(() => expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1"));
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(screen.queryByText("What powers the cell?")).not.toBeInTheDocument();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    nowSpy.mockRestore();
   });
 
   it("lets students choose either setup from the shared mode-selection screen", async () => {
@@ -498,6 +545,85 @@ describe("ChallengeQuizPage", () => {
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
 
+  it("starts a missed-question redo after the current session has completed", async () => {
+    setupInProgressChallengeQuiz("challenge");
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 1,
+      correctAnswers: 0,
+      scorePercentage: 0,
+      performanceLevel: "Needs Improvement",
+      conceptBreakdown: [],
+      weakConcepts: ["Concept"],
+      durationSeconds: 24,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:10:00Z",
+    });
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "redo-session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 3,
+      timeLimitSeconds: 270,
+      usedThisMonth: 0,
+      monthlyLimit: 5,
+      mode: "challenge",
+      selectedDifficulty: "medium",
+      quiz: [
+        { question: "Redo missed one", choices: ["A", "B", "C", "D"], correctIndex: 0, concept: "Concept", explanation: "Explanation" },
+        { question: "Redo missed two", choices: ["A", "B", "C", "D"], correctIndex: 0, concept: "Concept", explanation: "Explanation" },
+        { question: "Redo missed three", choices: ["A", "B", "C", "D"], correctIndex: 0, concept: "Concept", explanation: "Explanation" },
+      ],
+      currentQuestionIndex: 0,
+      sessionState: { timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+    });
+
+    const page = render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+    await screen.findByText("Keep going. Focus on the weak concepts below to build confidence.");
+
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    page.rerender(<ChallengeQuizPage />);
+
+    await waitFor(() => expect(startRedoMissedChallengeQuizSession).toHaveBeenCalledWith("note-1"));
+    expect(await screen.findByText("Redo missed one")).toBeInTheDocument();
+  });
+
+  it("shows the missed-question eligibility error on a clean retryable prestart screen", async () => {
+    searchParamsMock = new URLSearchParams("entry=redo-missed");
+    setupChallengePrestart(true, "STUDENT");
+    (startRedoMissedChallengeQuizSession as jest.Mock).mockRejectedValue(Object.assign(
+      new Error("Answer at least 3 Challenge Quiz questions incorrectly before redoing missed questions."),
+      { code: "NOT_ENOUGH_MISSED_CHALLENGE_QUESTIONS" },
+    ));
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-2",
+      status: "GENERATING",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 0,
+      timeLimitSeconds: 600,
+      usedThisMonth: 1,
+      monthlyLimit: 5,
+      mode: "challenge",
+      selectedDifficulty: "medium",
+      quiz: [],
+      currentQuestionIndex: 0,
+      sessionState: {},
+    });
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByText("Answer at least 3 Challenge Quiz questions incorrectly before redoing missed questions.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
+    await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" }));
+  });
+
   it("starts Exam Reviewers on the shared mode-selection screen with Board Exam emphasized", async () => {
     setupChallengePrestart(true, "BOARD_EXAM", "PRO");
 
@@ -510,7 +636,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText(/Board Exam Mode emphasizes exam simulation/)).toBeInTheDocument();
   });
 
-  it("keeps Note Detail Challenge Quiz entry on the shared mode-selection screen for Exam Reviewers even when an in-progress session exists", async () => {
+  it("offers Exam Reviewers the same Resume or Start Fresh choice for a live Board Exam session", async () => {
     searchParamsMock = new URLSearchParams("entry=mode-selection");
     setupInProgressChallengeQuiz("board_exam");
     (getAuthUser as jest.Mock).mockReturnValue({
@@ -523,8 +649,9 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    expect(await getModeCard("Board Exam Mode")).toHaveAttribute("aria-pressed", "true");
-    expect(await getModeCard("Challenge Quiz")).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("You have an active quiz session.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Fresh" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Board Exam Setup" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("board-exam-timer")).not.toBeInTheDocument();
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
@@ -808,41 +935,18 @@ describe("ChallengeQuizPage", () => {
     nowSpy.mockRestore();
   });
 
-  it("auto-submits Board Exam when the timer expires", async () => {
+  it("forfeits an expired Board Exam on load instead of auto-submitting it", async () => {
     const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_601_000);
     setupBoardExamSession({
       selectedChoices: { "0": 0 },
       timerStartedAtEpochSeconds: 1_720_000_000,
     });
-    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
-      sessionId: "session-1",
-      studyPackId: "sp-1",
-      status: "COMPLETED",
-      totalQuestions: 2,
-      correctAnswers: 1,
-      scorePercentage: 50,
-      performanceLevel: "Fair",
-      conceptBreakdown: [
-        { concept: "Cell Biology", correctAnswers: 1, totalQuestions: 1, accuracyPercentage: 100 },
-        { concept: "Cell Structure", correctAnswers: 0, totalQuestions: 1, accuracyPercentage: 0 },
-      ],
-      weakConcepts: ["Cell Structure"],
-      durationSeconds: 600,
-      createdAt: "2026-03-21T10:00:00Z",
-      completedAt: "2026-03-21T10:10:00Z",
-    });
 
     render(<ChallengeQuizPage />);
 
-    await waitFor(() => {
-      expect(completeChallengeQuizSession).toHaveBeenCalledWith("session-1", {
-        correctAnswers: 1,
-        totalQuestions: 2,
-        durationSeconds: 600,
-      });
-    });
-    expect(await screen.findByText("Board Exam Result")).toBeInTheDocument();
-    expect(screen.getByText("Time ran out. Your answers were submitted automatically.")).toBeInTheDocument();
+    await waitFor(() => expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1"));
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
 
     nowSpy.mockRestore();
   });
@@ -875,34 +979,18 @@ describe("ChallengeQuizPage", () => {
     nowSpy.mockRestore();
   });
 
-  it("does not retry timeout auto-submit on every tick after a timeout submission failure", async () => {
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date(1_720_000_601_000));
+  it("does not attempt a timeout submission when a stale Board Exam is forfeited on load", async () => {
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_601_000);
     setupBoardExamSession({
       selectedChoices: { "0": 0 },
       timerStartedAtEpochSeconds: 1_720_000_000,
     });
-    (completeChallengeQuizSession as jest.Mock).mockRejectedValue(new Error("Could not save Challenge Quiz results."));
 
     render(<ChallengeQuizPage />);
 
-    await waitFor(() => {
-      expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1);
-    });
-    await waitFor(() => {
-      expect(screen.getByText("Could not save Challenge Quiz results.")).toBeInTheDocument();
-    });
-    expect(screen.getByRole("button", { name: "Submit Exam" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Mitochondria/i })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /Question Navigator/i }));
-    expect(screen.getByRole("button", { name: "Go to question 2 (unanswered)" })).toBeDisabled();
-
-    await act(async () => {
-      jest.advanceTimersByTime(5_000);
-    });
-
-    expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1);
-    jest.useRealTimers();
+    await waitFor(() => expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1"));
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    nowSpy.mockRestore();
   });
 
   it("does not double-submit when manual submit is already in flight as the timer expires", async () => {
@@ -1286,8 +1374,7 @@ describe("ChallengeQuizPage", () => {
   });
 
   it("links only Board Exam weak-concept chips that have a Key Concepts explanation", async () => {
-    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_601_000);
-    setupBoardExamSession({ timerStartedAtEpochSeconds: 1_720_000_000 });
+    setupBoardExamSession();
     (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
       studyPackId: "sp-1",
@@ -1307,6 +1394,10 @@ describe("ChallengeQuizPage", () => {
     });
     render(<ChallengeQuizPage />);
 
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
+
     await screen.findByText("Board Exam Result");
 
     expect(screen.getByRole("link", { name: /CELL BIOLOGY/i })).toHaveAttribute(
@@ -1314,7 +1405,6 @@ describe("ChallengeQuizPage", () => {
       "/notes/note-1?tab=key-concepts#concept-cell-biology",
     );
     expect(screen.getByText("Unmapped concept").closest("a")).toBeNull();
-    nowSpy.mockRestore();
   });
 
   it("fetches and renders the server-resolved next step after regular Challenge completion", async () => {
