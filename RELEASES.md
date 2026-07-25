@@ -18,7 +18,7 @@ Anti-drift: this is a bug-fix pass on Challenge Quiz's existing architecture, no
 
 ### Shipped
 
-_(nothing yet)_
+- **Executor saturation fix (backend).** Official Challenge Quiz template seed dispatch (both the eager per-note hook and the admin backfill) now runs on the shared `llmParallelTaskExecutor` bulk-fan-out pool instead of the live-generation `studyPackGenerationTaskExecutor`, so a large backfill can no longer delay or reject real user-facing Study Pack generation. A `RejectedExecutionException` on dispatch is now caught and logged instead of propagating; the admin backfill response gained a `rejected` count (`AdminSeedOfficialChallengeQuizTemplatesResponse`) reported distinctly from `queued`/`skipped`, surfaced in the `/admin` seed-templates message.
 
 ## v0.60.0 - Shared Official Pool Foundation
 

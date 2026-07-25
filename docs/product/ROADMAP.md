@@ -224,7 +224,7 @@ Two decisions were made by the product owner before this plan was finalized — 
 - **Difficulty (Item 3): remove the manual Easy/Medium/Hard selector from Challenge Quiz entirely**, rather than re-engineer the bank/template claim path to respect it. Reasoning: doesn't fit the reusable-pool architecture, Adaptive Practice already covers personalized difficulty better, and its pedagogical value as a manual picker (vs. a historical Plus/Pro differentiator) is doubtful. Board Exam Mode is unaffected — it already uses a fixed `DIFFICULTY_MIXED` value and never touches this gate.
 - **Abandoned sessions (Item 4): reuse the existing Long Exam pattern** (expiry detection + "Resume / Start Fresh" prompt, on the setup page's existing load-time fetch) rather than build new card-level pre-check logic that no quiz mode in this app has today.
 
-### Item 1 — Executor saturation (`TaskRejectedException` on backfill)
+### Item 1 — Executor saturation (`TaskRejectedException` on backfill) — Shipped, see `RELEASES.md`
 
 **Classification: small, direct implementation (no Codex prompt needed).**
 
@@ -307,7 +307,7 @@ Sequencing: land after Item 4 (shared file region) — consider combining into o
 
 ### Overall Sequencing
 
-1. **PR A — Item 1** (executor fix). Independent, land anytime, can go first. Unblocks re-running the still-incomplete v0.60.0 production backfill.
+1. **PR A — Item 1** (executor fix). Independent, land anytime, can go first. Unblocks re-running the still-incomplete v0.60.0 production backfill. **Shipped.**
 2. **PR B — Item 3** (difficulty removal, Codex prompt). Land early to reduce conflict churn for C/D.
 3. **PR C — Item 2** (shuffle). Rebase on B.
 4. **PR D — Items 4 + 5 combined** (session entry hardening: expiration/forfeit + redo-missed retrigger; Item 4's portion is the Codex prompt, Item 5 folds in as a small direct addition). Rebase on B.

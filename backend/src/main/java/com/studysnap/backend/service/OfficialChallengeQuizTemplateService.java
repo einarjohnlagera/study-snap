@@ -23,8 +23,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.RejectedExecutionException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
@@ -50,7 +53,8 @@ public class OfficialChallengeQuizTemplateService {
     private final QuizGenerationService quizGenerationService;
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final TransactionOperations studyPackGenerationTransactionOperations;
-    private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
+    @Qualifier("llmParallelTaskExecutor")
+    private final AsyncTaskExecutor llmParallelTaskExecutor;
 
     /**
      * Queues seeding only for a currently public Study Pack owned by an Official author. The task
@@ -72,9 +76,10 @@ public class OfficialChallengeQuizTemplateService {
     public AdminSeedOfficialChallengeQuizTemplatesResponse queueBackfill() {
         int queued = 0;
         int skipped = 0;
+        int rejected = 0;
         List<NoteEntity> publicNotes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
         if (publicNotes.isEmpty()) {
-            return new AdminSeedOfficialChallengeQuizTemplatesResponse(queued, skipped);
+            return new AdminSeedOfficialChallengeQuizTemplatesResponse(queued, skipped, rejected);
         }
 
         java.util.Map<UUID, StudyPackEntity> packsByNoteId = studyPackRepository.findByNoteIdIn(
@@ -87,10 +92,13 @@ public class OfficialChallengeQuizTemplateService {
                 skipped++;
                 continue;
             }
-            dispatchSeedAfterCommit(note.getId(), studyPack.getId());
-            queued++;
+            if (dispatchSeedAfterCommit(note.getId(), studyPack.getId())) {
+                queued++;
+            } else {
+                rejected++;
+            }
         }
-        return new AdminSeedOfficialChallengeQuizTemplatesResponse(queued, skipped);
+        return new AdminSeedOfficialChallengeQuizTemplatesResponse(queued, skipped, rejected);
     }
 
     /**
@@ -263,19 +271,36 @@ public class OfficialChallengeQuizTemplateService {
                 .orElse(false);
     }
 
-    private void dispatchSeedAfterCommit(UUID noteId, UUID studyPackId) {
+    /**
+     * Seeding runs on the bulk LLM fan-out pool, never on the live Study Pack generation pool, so a
+     * large backfill can never starve or reject a user-facing generation request. Returns whether an
+     * immediate dispatch was accepted; a transaction-deferred dispatch always reports {@code true}
+     * because its outcome is only known after the caller has already returned.
+     */
+    private boolean dispatchSeedAfterCommit(UUID noteId, UUID studyPackId) {
         Runnable seedTask = () -> seedTemplateAsync(noteId, studyPackId);
         if (TransactionSynchronizationManager.isSynchronizationActive()
                 && TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    studyPackGenerationTaskDispatcher.execute(seedTask);
+                    submitSeedTask(seedTask, noteId, studyPackId);
                 }
             });
-            return;
+            return true;
         }
-        studyPackGenerationTaskDispatcher.execute(seedTask);
+        return submitSeedTask(seedTask, noteId, studyPackId);
+    }
+
+    private boolean submitSeedTask(Runnable seedTask, UUID noteId, UUID studyPackId) {
+        try {
+            llmParallelTaskExecutor.execute(seedTask);
+            return true;
+        } catch (RejectedExecutionException exception) {
+            log.warn("Official Challenge template seed dispatch rejected for noteId={}, studyPackId={} "
+                    + "— executor queue full", noteId, studyPackId);
+            return false;
+        }
     }
 
     public record OfficialTemplateKey(UUID ownerUserId, UUID studyPackId) {

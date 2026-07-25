@@ -69,7 +69,7 @@ class AdminStudyPackControllerTest {
                 adminStudyPackService, officialChallengeQuizTemplateService, progressTracker
         );
         AdminSeedOfficialChallengeQuizTemplatesResponse expected =
-                new AdminSeedOfficialChallengeQuizTemplatesResponse(4, 6);
+                new AdminSeedOfficialChallengeQuizTemplatesResponse(4, 6, 1);
         when(officialChallengeQuizTemplateService.queueBackfill()).thenReturn(expected);
 
         AdminSeedOfficialChallengeQuizTemplatesResponse response = controller.seedOfficialChallengeQuizTemplates();
