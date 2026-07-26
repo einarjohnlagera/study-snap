@@ -1,5 +1,19 @@
 # RELEASES.md - NoteLib
 
+## v0.60.2 - Challenge Quiz Known-Limitations Cleanup
+
+**Status: In Progress**
+
+Theme: close three narrow, ungated concurrency and entry-point gaps logged as Known Limitations in v0.60.1 — a claim-release rollback that can leave bank rows stuck claimed, an expiry-vs-completion race that can silently overwrite a completed session as forfeited, and a Resume/Start Fresh prompt that never appears when a live session is found via the collection/Review Set premium-exam launch. Patch release off `v0.60.1`, following this project's existing patch-release convention (e.g. v0.50.1–v0.50.4, v0.51.1, v0.52.1, v0.54.1, v0.60.1).
+
+### Planned Scope
+
+- **Claim-release rollback fix (backend).** `ChallengeQuizQuestionBankService.releaseClaims` gains its own `@Transactional(propagation = Propagation.REQUIRES_NEW)`, so `generateMoreQuestions`'s mid-batch-failure catch block can release claimed bank rows even though the outer class-level `@Transactional` transaction is about to roll back. Confirmed via direct file read: `releaseClaims` has no transactional annotation today and silently inherits the caller's transaction, so its own write was being undone by the very rollback it existed to counteract.
+- **Expiry-vs-completion lock race fix (backend).** `resolveExistingChallengeSession`'s unlocked "top session" lookup is followed by a re-fetch of that same session id through the existing `findByIdAndUserIdAndSessionModeForUpdate` (`PESSIMISTIC_WRITE`) query already used by `completeSession`/`generateMoreQuestions`, with a mandatory re-check that the session is still `IN_PROGRESS` after the lock is acquired before any forfeit write happens. Verified this doesn't introduce new deadlock risk: every path locks the same single session row in the same order (session row only, no second resource), so contention becomes a lock wait, not a cross-order deadlock.
+- **Collection premium-exam entry-point fix (frontend).** `collection-detail-page-client.tsx`'s `openCollectionPremiumExam` now appends `entry=mode-selection` (via the existing `CHALLENGE_QUIZ_ENTRY_QUERY_PARAM`/`CHALLENGE_QUIZ_MODE_SELECTION_ENTRY` constants from `lib/challenge-quiz-entry.ts`) to its Challenge Quiz navigation only, so a live session found through this entry point gets the same Resume/Start Fresh prompt the note detail page's Challenge Quiz card already offers, instead of silently auto-resuming. Long Exam and Interview Practice branches of the same function are untouched — out of scope, they don't read this param.
+
+Anti-drift: all three are isolated fixes to existing v0.60.0/v0.60.1 mechanisms — no schema change, no new entity, no change to Board Exam Mode, no change to quota/pricing, no change to any other quiz mode. Full technical detail (root causes, fix designs, file:line anchors) is in `docs/product/ROADMAP.md`'s own "v0.60.2 — Challenge Quiz Known-Limitations Cleanup" section.
+
 ## v0.60.1 - Challenge Quiz Fix Pass
 
 **Status: Released**
