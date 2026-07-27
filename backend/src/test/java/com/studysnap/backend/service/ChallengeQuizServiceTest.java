@@ -174,6 +174,9 @@ class ChallengeQuizServiceTest {
                 eq(QuickReviewSessionMode.CHALLENGE),
                 any()
         )).thenReturn(Optional.of(inProgress));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(inProgress));
         when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 eq(userId),
                 eq(QuickReviewSessionMode.CHALLENGE),
@@ -242,6 +245,9 @@ class ChallengeQuizServiceTest {
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
         )).thenReturn(Optional.of(expired));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                expiredSessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(expired));
         when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 eq(userId), eq(QuickReviewSessionMode.CHALLENGE), any(), any(OffsetDateTime.class), any(OffsetDateTime.class)
         )).thenReturn(0L);
@@ -271,6 +277,38 @@ class ChallengeQuizServiceTest {
         assertThat(response.sessionId()).isNotEqualTo(expiredSessionId.toString());
         assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(freshQuiz);
         verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, expiredSessionId);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"challenge", "board_exam"})
+    void resolveExistingChallengeSession_doesNotForfeitACompletedSessionObservedBeforeTheLock(String mode) throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity unlocked = activeChallengeSession(
+                sessionId, userId, studyPackId, noteId, mode, QuickReviewSessionStatus.IN_PROGRESS
+        );
+        QuickReviewSessionEntity completed = activeChallengeSession(
+                sessionId, userId, studyPackId, noteId, mode, QuickReviewSessionStatus.COMPLETED
+        );
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
+        )).thenReturn(Optional.of(unlocked));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                eq(sessionId), eq(userId), eq(QuickReviewSessionMode.CHALLENGE)
+        )).thenReturn(Optional.of(completed));
+
+        Optional<ChallengeQuizStartResponse> resolved = resolveExistingChallengeSession(
+                userId, studyPackId, studyPack, PlanType.FREE
+        );
+
+        assertThat(resolved).isEmpty();
+        assertThat(completed.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
+        verify(quickReviewSessionRepository, never()).save(completed);
+        verify(challengeQuizQuestionBankService, never()).releaseClaims(userId, studyPackId, sessionId);
     }
 
     @Test
@@ -308,6 +346,9 @@ class ChallengeQuizServiceTest {
                 eq(studyPackId),
                 eq(QuickReviewSessionMode.CHALLENGE),
                 any()
+        )).thenReturn(Optional.of(generating));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(generating));
         when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 eq(userId),
@@ -478,6 +519,9 @@ class ChallengeQuizServiceTest {
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
+        )).thenReturn(Optional.of(existing));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(existing));
         when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new BillingUsagePeriodService.UsagePeriod(
@@ -2306,6 +2350,45 @@ class ChallengeQuizServiceTest {
                 )
         ));
         return session;
+    }
+
+    private QuickReviewSessionEntity activeChallengeSession(
+            UUID sessionId,
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            String mode,
+            QuickReviewSessionStatus status
+    ) {
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId, userId, studyPackId, noteId, mode, buildQuiz(1), Map.of()
+        );
+        session.setStatus(status);
+        return session;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<ChallengeQuizStartResponse> resolveExistingChallengeSession(
+            UUID userId,
+            UUID studyPackId,
+            StudyPackEntity studyPack,
+            PlanType planType
+    ) throws Exception {
+        java.lang.reflect.Method resolver = ChallengeQuizService.class.getDeclaredMethod(
+                "resolveExistingChallengeSession",
+                UUID.class,
+                UUID.class,
+                StudyPackEntity.class,
+                PlanType.class
+        );
+        resolver.setAccessible(true);
+        return (Optional<ChallengeQuizStartResponse>) resolver.invoke(
+                challengeQuizService,
+                userId,
+                studyPackId,
+                studyPack,
+                planType
+        );
     }
 
     private void stubBoardExamStartDependencies(UUID userId, UUID studyPackId, StudyPackEntity studyPack) {

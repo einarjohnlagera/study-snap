@@ -14,6 +14,12 @@ Theme: close three narrow, ungated concurrency and entry-point gaps logged as Kn
 
 Anti-drift: all three are isolated fixes to existing v0.60.0/v0.60.1 mechanisms — no schema change, no new entity, no change to Board Exam Mode, no change to quota/pricing, no change to any other quiz mode. Full technical detail (root causes, fix designs, file:line anchors) is in `docs/product/ROADMAP.md`'s own "v0.60.2 — Challenge Quiz Known-Limitations Cleanup" section.
 
+### Shipped
+
+- **Claim-release rollback fix (backend).** `releaseClaims` now runs in its own `REQUIRES_NEW` transaction, so a failed `generateMoreQuestions` batch still frees its claimed question-bank rows after the caller's transaction rolls back.
+- **Expiry-vs-completion lock race fix (backend).** Existing-session resolution locks the selected session row and verifies that its status is unchanged before applying expiry cleanup. A completion that wins the lock is therefore left `COMPLETED`, while genuinely expired in-progress Challenge Quiz and Board Exam sessions retain their existing forfeit behavior.
+- **Collection premium-exam entry fix (frontend).** The Challenge Quiz collection/Review Set launch now includes `entry=mode-selection`, giving a live session the established Resume/Start Fresh choice. Long Exam and Interview Practice links remain unchanged.
+
 ## v0.60.1 - Challenge Quiz Fix Pass
 
 **Status: Released**
