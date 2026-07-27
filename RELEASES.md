@@ -2,7 +2,7 @@
 
 ## v0.60.2 - Challenge Quiz Known-Limitations Cleanup
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close three narrow, ungated concurrency and entry-point gaps logged as Known Limitations in v0.60.1 — a claim-release rollback that can leave bank rows stuck claimed, an expiry-vs-completion race that can silently overwrite a completed session as forfeited, and a Resume/Start Fresh prompt that never appears when a live session is found via the collection/Review Set premium-exam launch. Patch release off `v0.60.1`, following this project's existing patch-release convention (e.g. v0.50.1–v0.50.4, v0.51.1, v0.52.1, v0.54.1, v0.60.1).
 
