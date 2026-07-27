@@ -2473,7 +2473,9 @@ describe("CollectionDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Take the Board Exam" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/study-packs/sp-2/challenge-quiz?collectionId=collection-1");
+    expect(pushMock).toHaveBeenCalledWith(
+      "/study-packs/sp-2/challenge-quiz?collectionId=collection-1&entry=mode-selection",
+    );
   });
 
   it("disables the board exam collection CTA when the primary studyPackId cannot be resolved", async () => {
