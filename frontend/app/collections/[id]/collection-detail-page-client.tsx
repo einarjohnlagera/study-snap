@@ -67,6 +67,10 @@ import {
   type PlanReadinessResponse,
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
+import {
+  CHALLENGE_QUIZ_ENTRY_QUERY_PARAM,
+  CHALLENGE_QUIZ_MODE_SELECTION_ENTRY,
+} from "@/lib/challenge-quiz-entry";
 import { getJustAdoptedNotice } from "@/lib/just-adopted-notice";
 import { setCollectionActionNotice } from "@/lib/collection-action-notice";
 import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
@@ -3116,6 +3120,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     if (!primaryExamStudyPackId) {
       return;
     }
+    params.set(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM, CHALLENGE_QUIZ_MODE_SELECTION_ENTRY);
     router.push(`/study-packs/${primaryExamStudyPackId}/challenge-quiz?${params.toString()}`);
   }, [collectionId, premiumExamDisabled, primaryExamItem, primaryExamStudyPackId, router, terminalAction]);
 

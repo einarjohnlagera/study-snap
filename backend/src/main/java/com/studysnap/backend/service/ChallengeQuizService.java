@@ -893,18 +893,35 @@ public class ChallengeQuizService {
         if (existing == null) {
             return Optional.empty();
         }
-        if (existing.getStatus() == QuickReviewSessionStatus.GENERATING) {
-            return Optional.of(toStartResponse(existing, studyPack, resolveUsedThisMonthForResponse(userId, existing), planType));
+        QuickReviewSessionStatus observedStatus = existing.getStatus();
+        QuickReviewSessionEntity lockedExisting = quickReviewSessionRepository
+                .findByIdAndUserIdAndSessionModeForUpdate(existing.getId(), userId, QuickReviewSessionMode.CHALLENGE)
+                .orElse(null);
+        if (lockedExisting == null || lockedExisting.getStatus() != observedStatus) {
+            return Optional.empty();
         }
-        if (!QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty()) {
-            if (isSessionExpired(existing)) {
-                forfeitExpiredSession(existing, userId);
+        if (lockedExisting.getStatus() == QuickReviewSessionStatus.GENERATING) {
+            return Optional.of(toStartResponse(
+                    lockedExisting,
+                    studyPack,
+                    resolveUsedThisMonthForResponse(userId, lockedExisting),
+                    planType
+            ));
+        }
+        if (!QuizSessionStateUtils.extractQuiz(lockedExisting.getSessionState()).isEmpty()) {
+            if (isSessionExpired(lockedExisting)) {
+                forfeitExpiredSession(lockedExisting, userId);
                 return Optional.empty();
             }
-            return Optional.of(toStartResponse(existing, studyPack, resolveUsedThisMonthForResponse(userId, existing), planType));
+            return Optional.of(toStartResponse(
+                    lockedExisting,
+                    studyPack,
+                    resolveUsedThisMonthForResponse(userId, lockedExisting),
+                    planType
+            ));
         }
-        markSessionForfeited(existing);
-        quickReviewSessionRepository.save(existing);
+        markSessionForfeited(lockedExisting);
+        quickReviewSessionRepository.save(lockedExisting);
         return Optional.empty();
     }
 

@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,6 +29,16 @@ import static org.mockito.Mockito.when;
 class ChallengeQuizQuestionBankServiceTest {
     @Mock
     private ChallengeQuizQuestionBankRepository questionBankRepository;
+
+    @Test
+    void releaseClaims_runsInANewTransactionSoOuterGenerationRollbackCannotUndoIt() throws NoSuchMethodException {
+        Transactional transactional = ChallengeQuizQuestionBankService.class
+                .getMethod("releaseClaims", UUID.class, UUID.class, UUID.class)
+                .getAnnotation(Transactional.class);
+
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
+    }
 
     @Test
     void claimEligibleQuestions_locksAndClaimsOnlyMatchingLearnerLevelQuestions() {
