@@ -71,7 +71,7 @@ Study Plan / Review Set detail can launch the learner's profile-appropriate prem
 - when the mode-selection entry (`?entry=mode-selection`) finds a live in-progress Challenge Quiz or Board Exam session, it offers **Resume** or **Start Fresh** rather than silently discarding progress; expired sessions return to a clean prestart and are never resumed into an immediate timeout. The note detail Challenge Quiz card and collection/Review Set premium-exam launch both add this entry marker, so their explicit "start" intent gets the same choice. This prompt is forced onto the mode-selection step even for profiles (Teacher) whose initial step otherwise skips it, so a live session is never silently re-entered without the choice (v0.60.1, collection launch aligned in v0.60.2). Direct/bookmarked URLs, page refresh, and Dashboard's Continue widget still auto-resume a live non-expired session with no prompt by design — that is deliberate "continue where you left off" behavior.
 - `+5 Questions` (`generateMoreQuestions`) checks the session's own expiry before extending `timeLimitSeconds`; an already-expired session is forfeited and rejected instead of having its deadline pushed back into the future (v0.60.1)
 - active generation uses the shared generation lock and recovery flow
-- Challenge mode starts with **5 questions** (`INITIAL_CHALLENGE_QUIZ_COUNT = 5`)
+- Standard Challenge mode starts with a score-adaptive question count from the learner's latest completed Quick Review on the same Study Pack: below 50 → 10 questions, 50–79 → 12 questions, and 80 or above → 15 questions; no prior score starts with 12. Redo Missed Questions remains fixed at up to 5 claimed questions.
 - Challenge mode's assembled question pool (banked + Official template + freshly generated) is shuffled once at initial session start (and at `startRedoMissedSession`'s assembly), so batches never present in fixed `generatedAt` order. A MATCHING block (2–4 consecutive questions sharing a `questionGroup`) always shuffles as one contiguous unit — never split apart — since the frontend (`lib/quiz.ts`) groups them by scanning for adjacency. `+5 Questions` shuffles only the newly-appended batch, never the whole array, to avoid remapping already-recorded index-keyed answers (`selectedChoices` et al. are keyed by array index, not question identity). Board Exam Mode's ordering is unaffected (v0.60.1).
 - Challenge mode has no user-facing difficulty selector. Its difficulty is fully automatic and comes only from the latest completed Quick Review score on the same Study Pack: below 50 → Easy, 50–79 → Default/Medium, 80 or above → Hard; no prior score also uses Default/Medium.
 - Board Exam Mode question count scales with source count: `min(12 × sourceCount, 30)` — single-note: 12, two-note: 24, three-note: 30
@@ -84,7 +84,7 @@ Study Plan / Review Set detail can launch the learner's profile-appropriate prem
 - On both session start and `+5 Questions`, Challenge Quiz claims eligible banked questions before calling the LLM, then generates only the shortfall. A banked question must match the learner's current learner level and is deduplicated against the live session with `QuizDeduplicationUtils`.
 - Claims use a pessimistic lock and stay attached to the in-progress session, preventing two concurrent starts or add-more requests from receiving the same banked question. Completion records the question's last known correct, incorrect, or unanswered outcome and releases the claim; forfeiture and generation failure also release claims.
 - Bank persistence is best-effort: a bank read/write failure falls back to the existing fresh-generation path and never blocks a Challenge session. Adaptive Practice remains intentionally always-fresh and does not use this bank.
-- When at least three eligible bank entries were last answered `INCORRECT`, the Challenge result handoff offers **Redo Missed Questions**. It starts a normal `CHALLENGE` session sourced only from those same-learner-level claimed questions, with no LLM call and no Challenge quota consumption to *start*. The same-route handoff resets the completed result and reliably starts the redo session; if fewer than three entries remain eligible, it returns to a clean prestart with the backend's message. A bank failure or a claim race fails closed rather than starting a partial redo. Completion still records `ConceptHealth` through the ordinary Challenge path; this is an entry point, not a new quiz mode or sub-mode. The frontend's one-shot retrigger guard resets on every start outcome (success or error), so requesting Redo Missed Questions again later in the same page session (e.g. after redoing once, then missing questions again) reliably fires a second time instead of silently no-op'ing (v0.60.1)
+- When at least three eligible bank entries were last answered `INCORRECT`, the Challenge result handoff offers **Redo Missed Questions**. It starts a normal `CHALLENGE` session sourced only from those same-learner-level claimed questions, with no LLM call and no Challenge quota consumption to *start*. The same-route handoff resets the completed result and reliably starts the redo session; if fewer than three entries remain eligible, it returns to a clean prestart with the backend's message. A bank failure or a claim race fails closed rather than starting a partial redo. Completion still records `ConceptHealth` through the ordinary Challenge path; this is an entry point, not a new quiz mode or sub-mode. The frontend's one-shot retrigger guard resets on every start outcome (success or error), so requesting Redo Missed Questions again later in the same page session (e.g. after redoing once, then missing questions again) reliably fires a second time instead of silently no-op'ing (v0.60.1). Redo session matching uses a dedicated provenance marker: a marked prior redo session still resumes, while an unrelated active Challenge session on the same Study Pack is forfeited and replaced with a fresh missed-only session instead of silently returning its original full question set (v0.60.3).
 - `+5 Questions` on a redo-missed session is not quota-exempt-aware: it falls through to normal LLM generation like any other Challenge session, so the zero-cost guarantee applies only to the session's start, not to any later add-more request. Whether to block `+5 Questions` on redo-missed sessions is an open product question, not yet decided.
 
 ### Official template source (v0.60.0)
@@ -120,7 +120,7 @@ Challenge Quiz can generate:
 
 Challenge mode supports on-demand question batching within a live session:
 
-- **Initial count**: 5 questions
+- **Initial count**: 10, 12, or 15 questions from the learner's latest Quick Review score band (below 50, 50–79, or 80+); 12 with no prior score
 - **Batch size**: +5 questions per request
 - **Maximum**: 20 questions per session (`MAX_CHALLENGE_QUIZ_QUESTIONS = 20`)
 - Backend minimum for a valid batch: 3 unique new questions after dedup (`MIN_NEW_QUESTIONS_AFTER_DEDUP = 3`)
@@ -172,7 +172,7 @@ Helper text explains the distinction. When all questions were answered, only Ans
 
 Running state (Challenge mode only):
 
-- Banner at top of quiz: `Start with 5 questions. Generate more as you go (up to 20).`
+- Banner at top of quiz: `Your starting question set adapts to your recent performance. Generate more as you go (up to 20).`
 - Below choice list at last question: `You can finish anytime. Score is based on answered questions.`
 - Action bar hint at last question: `What would you like to do next?`
 - Toast on successful generate-more: `5 more questions added!` (auto-clears after 3 seconds)
@@ -282,3 +282,10 @@ Explanations should sound like a tutor, explain why the correct answer is correc
 - `onConfirmLeave` reads session state from `challengeSessionRef.current` (not `challengeSession` state) to keep its deps stable while still seeing the latest session value
 - Board Exam Mode confirm leave submits the session (`finalizeChallengeSession`) and counts it as completed
 - Standard Challenge mode confirm leave calls `forfeitChallengeQuizSession`
+
+## Incomplete-submission guard
+
+- Manual `Complete Quiz` / `Submit Exam` checks the existing answered-question state before finalizing.
+- With unanswered questions, an `AppModal` names the unanswered count and lets the learner go back to the first unanswered question or submit anyway with the existing incomplete-answer scoring behavior.
+- This is a submit-time guard, separate from the navigation-away leave guard.
+- Timer-triggered auto-submit bypasses this confirmation and continues to finalize immediately.

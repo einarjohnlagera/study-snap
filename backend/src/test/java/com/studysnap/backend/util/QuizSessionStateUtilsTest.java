@@ -173,6 +173,20 @@ class QuizSessionStateUtilsTest {
     }
 
     @Test
+    void withRedoMissedSource_andExtractRedoMissedSource_roundTripAndSupportStringValues() {
+        Map<String, Object> state = QuizSessionStateUtils.withRedoMissedSource(
+                Map.of("mode", "challenge"),
+                true
+        );
+
+        assertThat(state).containsEntry("mode", "challenge");
+        assertThat(QuizSessionStateUtils.extractRedoMissedSource(state)).isTrue();
+        assertThat(QuizSessionStateUtils.extractRedoMissedSource(Map.of("redoMissedSource", "true"))).isTrue();
+        assertThat(QuizSessionStateUtils.extractRedoMissedSource(null)).isFalse();
+        assertThat(QuizSessionStateUtils.extractRedoMissedSource(Map.of())).isFalse();
+    }
+
+    @Test
     void extractQuiz_supportsLegacyAnswerIndexPayloads() {
         Map<String, Object> state = Map.of(
                 "quiz",
