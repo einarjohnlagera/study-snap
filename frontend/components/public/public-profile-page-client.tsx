@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { NoteQualityBadges } from "@/components/notes/note-quality-badge";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -16,9 +17,11 @@ import { formatLearnerLevel, normalizeCourseProgram } from "@/lib/learning-profi
 import { buildPublicLibraryUrl } from "@/lib/public-library-url";
 import {
   ApiRequestError,
+  getCreatorImpact,
   getPublicCreatorProfile,
   getPublicProfile,
   trackAnalyticsEvent,
+  type CreatorImpactResponse,
   type ProfileType,
   type PublicProfileResponse,
   updatePublicProfileVisibility,
@@ -34,6 +37,8 @@ type PublicProfilePageClientProps = {
   lookupType?: "userId" | "username";
   initialResult: ServerPublicProfileResult;
 };
+
+type ImpactLoadState = "idle" | "loading" | "ready" | "error";
 
 const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
   STUDENT: "Student",
@@ -77,6 +82,106 @@ function formatLabelList(values: string[]): string {
   return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
 }
 
+function CreatorImpactSection({
+  creatorUserId,
+  impact,
+  impactState,
+  onRetry,
+}: Readonly<{
+  creatorUserId: string;
+  impact: CreatorImpactResponse | null;
+  impactState: ImpactLoadState;
+  onRetry: () => void;
+}>) {
+  return (
+    <section aria-labelledby="your-impact-heading">
+      <AnalyticsPageViewTracker
+        eventType="KNOWLEDGE_IMPACT_DASHBOARD_VIEWED"
+        entityId={creatorUserId}
+      />
+      <Card className="space-y-5 border-emerald-500/20 bg-emerald-500/5 p-4 sm:p-6">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+            Private to you
+          </p>
+          <h2 id="your-impact-heading" className="text-xl font-semibold">Your Impact</h2>
+          <p className="text-sm text-foreground/70">
+            See how your published notes have helped learners complete real study sessions.
+          </p>
+        </div>
+
+        {impactState === "loading" || impactState === "idle" ? (
+          <p className="text-sm text-foreground/65">Loading your impact...</p>
+        ) : null}
+
+        {impactState === "error" ? (
+          <div className="space-y-3 rounded-2xl border border-border bg-background/70 p-4">
+            <p className="text-sm font-medium">Could not load your impact.</p>
+            <p className="text-xs text-foreground/60">Your public profile and notes are still available.</p>
+            <Button type="button" variant="outline" onClick={onRetry}>Retry</Button>
+          </div>
+        ) : null}
+
+        {impactState === "ready" && impact ? (
+          <>
+            <div className="rounded-2xl border border-emerald-500/25 bg-background/80 p-5">
+              {impact.distinctLearnersHelped > 0 ? (
+                <>
+                  <p className="text-4xl font-semibold tracking-tight text-emerald-700 dark:text-emerald-300">
+                    {impact.distinctLearnersHelped.toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {impact.distinctLearnersHelped === 1 ? "learner helped" : "distinct learners helped"}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xl font-semibold">No learners yet</p>
+                  <p className="mt-1 text-sm text-foreground/65">
+                    Completed quiz sessions from copies of your published notes will appear here.
+                  </p>
+                </>
+              )}
+              <p className="mt-3 text-xs leading-relaxed text-foreground/55">
+                Each learner is counted once in this headline, even if they studied more than one of your notes.
+                Per-note learner counts can therefore add up to more than the headline total.
+              </p>
+            </div>
+
+            {impact.notes.length > 0 ? (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Impact by note</h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {impact.notes.map((note) => (
+                    <div key={note.noteId} className="rounded-2xl border border-border bg-background/70 p-4">
+                      <p className="line-clamp-2 text-sm font-semibold">{note.title?.trim() || "Untitled note"}</p>
+                      <p className="mt-3 text-2xl font-semibold text-emerald-700 dark:text-emerald-300">
+                        {note.distinctLearnersHelped.toLocaleString()}
+                      </p>
+                      <p className="text-xs font-medium text-foreground/75">
+                        {note.distinctLearnersHelped === 1 ? "learner helped" : "learners helped"}
+                      </p>
+                      <p className="mt-2 text-xs text-foreground/50">
+                        {note.viewCount.toLocaleString()} {note.viewCount === 1 ? "view" : "views"}
+                        {" · "}
+                        {note.copyCount.toLocaleString()} {note.copyCount === 1 ? "copy" : "copies"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-foreground/65">
+                Publish a note to start building your impact history.
+              </p>
+            )}
+          </>
+        ) : null}
+      </Card>
+    </section>
+  );
+}
+
 export function PublicProfilePageClient({
   userId,
   lookupType = "userId",
@@ -104,10 +209,46 @@ export function PublicProfilePageClient({
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
+  const [impact, setImpact] = useState<CreatorImpactResponse | null>(null);
+  const [impactState, setImpactState] = useState<ImpactLoadState>("idle");
+  const impactRequestIdRef = useRef(0);
 
   const isOwner = Boolean(profile?.isCurrentUser)
     || (lookupType === "userId" && currentUserId === userId)
     || (lookupType === "username" && currentUsername?.toLowerCase() === userId.toLowerCase());
+
+  const loadImpact = useCallback(async () => {
+    const requestId = impactRequestIdRef.current + 1;
+    impactRequestIdRef.current = requestId;
+    setImpactState("loading");
+    try {
+      const nextImpact = await getCreatorImpact();
+      if (impactRequestIdRef.current !== requestId) {
+        return;
+      }
+      setImpact(nextImpact);
+      setImpactState("ready");
+    } catch {
+      if (impactRequestIdRef.current !== requestId) {
+        return;
+      }
+      setImpact(null);
+      setImpactState("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOwner) {
+      impactRequestIdRef.current += 1;
+      setImpact(null);
+      setImpactState("idle");
+      return;
+    }
+    void loadImpact();
+    return () => {
+      impactRequestIdRef.current += 1;
+    };
+  }, [isOwner, loadImpact]);
 
   useEffect(() => {
     const syncAuthUser = () => {
@@ -595,6 +736,15 @@ export function PublicProfilePageClient({
           ) : null}
         </div>
       </header>
+
+      {isOwner ? (
+        <CreatorImpactSection
+          creatorUserId={profile.userId}
+          impact={impact}
+          impactState={impactState}
+          onRetry={() => void loadImpact()}
+        />
+      ) : null}
 
       {featuredNote ? (
         <section aria-labelledby="featured-note" className="space-y-3">

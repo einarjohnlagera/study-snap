@@ -294,6 +294,58 @@ class NoteServiceTest {
     }
 
     @Test
+    void updateVisibility_tracksPrivateToPublicPublicationExactlyOnce() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+
+        noteService.updateVisibility(noteId.toString(), "PUBLIC", ownerUserId);
+
+        verify(analyticsService).trackEvent(
+                eq(ownerUserId),
+                eq(AnalyticsEventType.PUBLIC_NOTE_PUBLISHED),
+                eq(noteId),
+                argThat(metadata -> "PRIVATE".equals(metadata.get("previousVisibility"))
+                        && "PUBLIC".equals(metadata.get("newVisibility")))
+        );
+    }
+
+    @Test
+    void updateVisibility_doesNotTrackPublicToPublicResave() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+
+        noteService.updateVisibility(noteId.toString(), "PUBLIC", ownerUserId);
+
+        verify(analyticsService, never()).trackEvent(
+                eq(ownerUserId),
+                eq(AnalyticsEventType.PUBLIC_NOTE_PUBLISHED),
+                eq(noteId),
+                any()
+        );
+    }
+
+    @Test
+    void updateVisibility_doesNotTrackPublicToPrivateTransition() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity existing = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(existing));
+
+        noteService.updateVisibility(noteId.toString(), "PRIVATE", ownerUserId);
+
+        verify(analyticsService, never()).trackEvent(
+                eq(ownerUserId),
+                eq(AnalyticsEventType.PUBLIC_NOTE_PUBLISHED),
+                eq(noteId),
+                any()
+        );
+    }
+
+    @Test
     void create_reusesCanonicalSubjectFormattingWhenEquivalentSubjectAlreadyExists() {
         UUID ownerUserId = UUID.randomUUID();
         when(noteRepository.findAllSubjectValues()).thenReturn(List.of("Biology – Cell Division"));

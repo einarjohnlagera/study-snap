@@ -1,7 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PublicProfilePageClient } from "./public-profile-page-client";
 import { getAuthUser } from "@/lib/auth";
-import { getPublicCreatorProfile, getPublicProfile, updatePublicProfileVisibility, type PublicProfileResponse } from "@/lib/api";
+import {
+  getCreatorImpact,
+  getPublicCreatorProfile,
+  getPublicProfile,
+  trackAnalyticsEvent,
+  updatePublicProfileVisibility,
+  type CreatorImpactResponse,
+  type PublicProfileResponse,
+} from "@/lib/api";
 import { buildPublicLibraryNotePathFromSlug } from "@/lib/public-note-path";
 
 const pushMock = jest.fn();
@@ -20,8 +28,10 @@ jest.mock("@/lib/api", () => {
   const actual = jest.requireActual("@/lib/api");
   return {
     ...actual,
+    getCreatorImpact: jest.fn(),
     getPublicProfile: jest.fn(),
     getPublicCreatorProfile: jest.fn(),
+    trackAnalyticsEvent: jest.fn(),
     updatePublicProfileVisibility: jest.fn(),
   };
 });
@@ -61,16 +71,33 @@ const baseProfile: PublicProfileResponse = {
   ],
 };
 
+const baseImpact: CreatorImpactResponse = {
+  distinctLearnersHelped: 3,
+  notes: [
+    {
+      noteId: "note-1",
+      title: "Plant Cells",
+      distinctLearnersHelped: 3,
+      viewCount: 9,
+      copyCount: 5,
+    },
+  ],
+};
+
 describe("PublicProfilePageClient", () => {
   const clipboardWriteText = jest.fn();
 
   beforeEach(() => {
     (getAuthUser as jest.Mock).mockReset();
+    (getCreatorImpact as jest.Mock).mockReset();
     (getPublicProfile as jest.Mock).mockReset();
     (getPublicCreatorProfile as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (updatePublicProfileVisibility as jest.Mock).mockReset();
     pushMock.mockReset();
     clipboardWriteText.mockReset();
+    (getCreatorImpact as jest.Mock).mockResolvedValue(baseImpact);
+    (trackAnalyticsEvent as jest.Mock).mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: clipboardWriteText },
       configurable: true,
@@ -106,6 +133,16 @@ describe("PublicProfilePageClient", () => {
     expect(screen.getAllByText("5 copies")).not.toHaveLength(0);
     expect(screen.getAllByText("9 views")).not.toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your Impact" })).toBeInTheDocument();
+    expect(screen.getByText("distinct learners helped")).toBeInTheDocument();
+    expect(screen.getByText(/Per-note learner counts can therefore add up/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledTimes(1);
+    });
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "KNOWLEDGE_IMPACT_DASHBOARD_VIEWED",
+      entityId: "user-1",
+    }));
 
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
     const dialog = await screen.findByRole("dialog", { name: "Share this profile" });
@@ -235,6 +272,77 @@ describe("PublicProfilePageClient", () => {
     expect(screen.getByRole("button", { name: "Share Profile" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse more notes from Study Buddy →" }))
       .toHaveAttribute("href", "/public/library?creator=studybuddy");
+    expect(screen.queryByRole("heading", { name: "Your Impact" })).not.toBeInTheDocument();
+    expect(getCreatorImpact).not.toHaveBeenCalled();
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "KNOWLEDGE_IMPACT_DASHBOARD_VIEWED",
+    }));
+  });
+
+  it("shows a retryable impact error without hiding the rest of the owner profile", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
+    (getCreatorImpact as jest.Mock)
+      .mockRejectedValueOnce(new Error("Network error"))
+      .mockResolvedValueOnce(baseImpact);
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "ok", profile: baseProfile }}
+      />,
+    );
+
+    expect(await screen.findByText("Could not load your impact.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Study Buddy" })).toBeInTheDocument();
+    expect(screen.getByText("Total Views")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText("distinct learners helped")).toBeInTheDocument();
+    expect(getCreatorImpact).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a neutral empty impact state when no downstream learner completed a session", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
+    (getCreatorImpact as jest.Mock).mockResolvedValue({
+      distinctLearnersHelped: 0,
+      notes: [{ ...baseImpact.notes[0], distinctLearnersHelped: 0 }],
+    });
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "ok", profile: baseProfile }}
+      />,
+    );
+
+    expect(await screen.findByText("No learners yet")).toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+  });
+
+  it("reloads impact data when the owner page is mounted again", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
+
+    const firstRender = render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "ok", profile: baseProfile }}
+      />,
+    );
+    expect(await screen.findByText("distinct learners helped")).toBeInTheDocument();
+    firstRender.unmount();
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "ok", profile: baseProfile }}
+      />,
+    );
+    expect(await screen.findByText("distinct learners helped")).toBeInTheDocument();
+
+    expect(getCreatorImpact).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the closing browse affordance out of the owner's profile view", async () => {
