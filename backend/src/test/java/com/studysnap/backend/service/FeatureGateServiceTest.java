@@ -23,7 +23,7 @@ class FeatureGateServiceTest {
         StudySnapProperties properties = new StudySnapProperties();
         FeatureGateService featureGateService = new FeatureGateService(mock(SubscriptionService.class), properties);
 
-        assertThat(featureGateService.canStartChallengeQuiz(PlanType.FREE, 4)).isTrue();
-        assertThat(featureGateService.canStartChallengeQuiz(PlanType.FREE, 5)).isFalse();
+        assertThat(featureGateService.canStartChallengeQuiz(PlanType.FREE, 19)).isTrue();
+        assertThat(featureGateService.canStartChallengeQuiz(PlanType.FREE, 20)).isFalse();
     }
 }

@@ -25,6 +25,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -52,6 +54,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -432,7 +435,7 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void startSession_usesOfficialTemplateQuestionsBeforeCallingLlmAndStillRecordsUsage() {
+    void startSession_usesOfficialTemplateQuestionsBeforeCallingLlmAndKeepsLlmUsageNull() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -469,10 +472,66 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
         assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(templateQuiz);
+        ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor = ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
+        verify(quickReviewSessionRepository, atLeastOnce()).save(sessionCaptor.capture());
+        QuickReviewSessionEntity savedSession = sessionCaptor.getAllValues().getLast();
+        assertThat(savedSession.getModelUsed()).isNull();
+        assertThat(savedSession.getInputTokens()).isNull();
+        assertThat(savedSession.getOutputTokens()).isNull();
+        assertThat(savedSession.getCachedInputTokens()).isNull();
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "FREE, 20",
+            "PLUS, 100",
+            "PRO, 200"
+    })
+    void startSession_returnsRaisedMonthlyChallengeQuizLimitForEachPlan(
+            PlanType planType,
+            int expectedMonthlyLimit
+    ) {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        StudyPackGenerationContext generationContext = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Engineering", studyPack.getSubject(), List.of()
+        );
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId), eq(QuickReviewSessionMode.CHALLENGE), any(), any(OffsetDateTime.class), any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(planType);
+        stubChallengeUsagePeriod(userId, planType);
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(generationContext);
+        when(challengeQuizQuestionBankService.claimEligibleQuestions(
+                eq(userId),
+                eq(studyPackId),
+                eq(LearnerLevel.COLLEGE),
+                any(UUID.class),
+                any(),
+                eq(DEFAULT_ADAPTIVE_QUESTION_COUNT)
+        )).thenReturn(buildQuizWithPrefix("Banked", DEFAULT_ADAPTIVE_QUESTION_COUNT));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                studyPackId.toString(),
+                userId,
+                null
+        );
+
+        assertThat(response.monthlyLimit()).isEqualTo(expectedMonthlyLimit);
     }
 
     @Test
@@ -792,7 +851,7 @@ class ChallengeQuizServiceTest {
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT - 3),
                 any(),
                 eq(generationContext)
-        )).thenReturn(generatedQuiz);
+        )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedQuiz));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -886,7 +945,13 @@ class ChallengeQuizServiceTest {
                 expectedQuestionCount,
                 expectedDifficulty,
                 generationContext
-        )).thenReturn(buildQuizWithPrefix("Adaptive", expectedQuestionCount));
+        )).thenReturn(new GeneratedChallengeQuizContent(
+                buildQuizWithPrefix("Adaptive", expectedQuestionCount),
+                "gpt-4.1-mini",
+                120,
+                60,
+                30
+        ));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -897,6 +962,13 @@ class ChallengeQuizServiceTest {
         assertThat(response.selectedDifficulty()).isEqualTo(expectedDifficulty);
         assertThat(response.quiz()).hasSize(expectedQuestionCount);
         assertThat(response.timeLimitSeconds()).isEqualTo(expectedQuestionCount * CHALLENGE_SECONDS_PER_QUESTION);
+        ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor = ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
+        verify(quickReviewSessionRepository, atLeastOnce()).save(sessionCaptor.capture());
+        QuickReviewSessionEntity savedSession = sessionCaptor.getAllValues().getLast();
+        assertThat(savedSession.getModelUsed()).isEqualTo("gpt-4.1-mini");
+        assertThat(savedSession.getInputTokens()).isEqualTo(120);
+        assertThat(savedSession.getOutputTokens()).isEqualTo(60);
+        assertThat(savedSession.getCachedInputTokens()).isEqualTo(30);
         verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         verify(quizGenerationService, never()).generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
@@ -950,7 +1022,7 @@ class ChallengeQuizServiceTest {
                 DEFAULT_ADAPTIVE_QUESTION_COUNT,
                 "medium",
                 generationContext
-        )).thenReturn(generatedQuiz);
+        )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedQuiz));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -1526,7 +1598,7 @@ class ChallengeQuizServiceTest {
                 any(),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
-        )).thenReturn(50L);
+        )).thenReturn(200L);
         when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new BillingUsagePeriodService.UsagePeriod(
                         PlanType.PRO,
@@ -2159,6 +2231,10 @@ class ChallengeQuizServiceTest {
         session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setTotalQuestions(5);
+        session.setModelUsed("gpt-4.1-mini");
+        session.setInputTokens(100);
+        session.setOutputTokens(50);
+        session.setCachedInputTokens(20);
         session.setSessionState(QuizSessionStateUtils.withQuiz(
                 existingQuiz,
                 Map.of("mode", "challenge", "difficulty", "medium", "completed", false)
@@ -2176,12 +2252,18 @@ class ChallengeQuizServiceTest {
         ));
         when(quizGenerationService.generateMoreChallengeQuiz(
                 any(), any(), any(), any(), any(), eq(5), eq("medium"), any()
-        )).thenReturn(List.of(
-                new QuizItem("Q6 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
-                new QuizItem("Q7 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
-                new QuizItem("Q8 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
-                new QuizItem("Q9 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
-                new QuizItem("Q10 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation")
+        )).thenReturn(new GeneratedChallengeQuizContent(
+                List.of(
+                        new QuizItem("Q6 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
+                        new QuizItem("Q7 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
+                        new QuizItem("Q8 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
+                        new QuizItem("Q9 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
+                        new QuizItem("Q10 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation")
+                ),
+                "gpt-4.1-mini",
+                40,
+                20,
+                5
         ));
         when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -2191,6 +2273,10 @@ class ChallengeQuizServiceTest {
         verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         assertThat(response.totalQuestions()).isEqualTo(10);
         assertThat(session.getTotalQuestions()).isEqualTo(10);
+        assertThat(session.getModelUsed()).isEqualTo("gpt-4.1-mini");
+        assertThat(session.getInputTokens()).isEqualTo(140);
+        assertThat(session.getOutputTokens()).isEqualTo(70);
+        assertThat(session.getCachedInputTokens()).isEqualTo(25);
         verify(challengeQuizQuestionBankService).persistGeneratedQuestions(
                 eq(userId), eq(studyPackId), eq(sessionId), eq(LearnerLevel.COLLEGE), any()
         );
@@ -2233,7 +2319,7 @@ class ChallengeQuizServiceTest {
         List<QuizItem> generatedBatch = buildQuizWithPrefix("New", 5);
         when(quizGenerationService.generateMoreChallengeQuiz(
                 any(), any(), any(), any(), any(), eq(5), eq("medium"), any()
-        )).thenReturn(generatedBatch);
+        )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedBatch));
         when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
@@ -2332,6 +2418,10 @@ class ChallengeQuizServiceTest {
 
         assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(templateQuiz);
         assertThat(response.totalQuestions()).isEqualTo(10);
+        assertThat(session.getModelUsed()).isNull();
+        assertThat(session.getInputTokens()).isNull();
+        assertThat(session.getOutputTokens()).isNull();
+        assertThat(session.getCachedInputTokens()).isNull();
         verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(
                 any(), any(), any(), any(), any()
@@ -2448,10 +2538,10 @@ class ChallengeQuizServiceTest {
         ));
         when(quizGenerationService.generateMoreChallengeQuiz(
                 any(), any(), any(), any(), any(), anyInt(), any(), any()
-        )).thenReturn(List.of(
+        )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
                 new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
-        ));
+        )));
 
         String id = sessionId.toString();
         assertThatThrownBy(() -> challengeQuizService.generateMoreQuestions(id, userId))

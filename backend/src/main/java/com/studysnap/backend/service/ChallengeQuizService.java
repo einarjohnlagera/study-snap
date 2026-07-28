@@ -39,6 +39,7 @@ import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
@@ -297,9 +298,10 @@ public class ChallengeQuizService {
                 combinedQuestionKeys.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(bankedQuestions));
                 int shortfall = quizCount - bankedQuestions.size();
                 List<QuizItem> generatedQuiz = List.of();
+                GeneratedChallengeQuizContent generatedContent = null;
                 if (shortfall > 0) {
                     aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-                    generatedQuiz = quizGenerationService.generateChallengeQuiz(
+                    generatedContent = quizGenerationService.generateChallengeQuiz(
                             studyPack.getTitle(),
                             studyPack.getSummary(),
                             getKeyConcepts(studyPack),
@@ -308,6 +310,7 @@ public class ChallengeQuizService {
                             profile.difficulty(),
                             generationContext
                     );
+                    generatedQuiz = generatedContent.quizItems();
                 }
                 List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(generatedQuiz, combinedQuestionKeys);
                 challengeQuiz = new ArrayList<>(bankedQuestions);
@@ -321,6 +324,7 @@ public class ChallengeQuizService {
                             uniqueGeneratedQuiz
                     );
                 }
+                accumulateLlmUsage(session, generatedContent);
             }
             if (challengeQuiz.size() != quizCount) {
                 throw new ChallengeQuizGenerationFailedException();
@@ -673,10 +677,11 @@ public class ChallengeQuizService {
         combinedQuestionKeys.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(bankedQuestions));
         int shortfall = batchSize - bankedQuestions.size();
         List<QuizItem> unique;
+        GeneratedChallengeQuizContent generatedContent = null;
         try {
             List<QuizItem> generated = List.of();
             if (shortfall > 0) {
-                generated = quizGenerationService.generateMoreChallengeQuiz(
+                generatedContent = quizGenerationService.generateMoreChallengeQuiz(
                         studyPack.getTitle(),
                         studyPack.getSummary(),
                         getKeyConcepts(studyPack),
@@ -686,6 +691,7 @@ public class ChallengeQuizService {
                         difficulty,
                         generationContext
                 );
+                generated = generatedContent.quizItems();
             }
 
             List<QuizItem> uniqueGenerated = QuizDeduplicationUtils.uniqueQuestions(generated, combinedQuestionKeys);
@@ -720,6 +726,7 @@ public class ChallengeQuizService {
         nextSessionState.put(SESSION_STATE_TIME_LIMIT_SECONDS, newTimeLimitSeconds);
         session.setSessionState(nextSessionState);
         session.setTotalQuestions(newTotal);
+        accumulateLlmUsage(session, generatedContent);
         quickReviewSessionRepository.save(session);
 
         return new GenerateMoreChallengeQuizResponse(
@@ -1724,6 +1731,31 @@ public class ChallengeQuizService {
     private void markSessionForfeited(QuickReviewSessionEntity session) {
         session.setStatus(QuickReviewSessionStatus.FORFEITED);
         session.setCompletedAt(null);
+    }
+
+    private void accumulateLlmUsage(
+            QuickReviewSessionEntity session,
+            GeneratedChallengeQuizContent generatedContent
+    ) {
+        if (generatedContent == null) {
+            return;
+        }
+        if (session.getModelUsed() == null && generatedContent.modelUsed() != null) {
+            session.setModelUsed(generatedContent.modelUsed());
+        }
+        session.setInputTokens(addTokenUsage(session.getInputTokens(), generatedContent.inputTokens()));
+        session.setOutputTokens(addTokenUsage(session.getOutputTokens(), generatedContent.outputTokens()));
+        session.setCachedInputTokens(addTokenUsage(
+                session.getCachedInputTokens(),
+                generatedContent.cachedInputTokens()
+        ));
+    }
+
+    private Integer addTokenUsage(Integer accumulatedTokens, Integer additionalTokens) {
+        if (additionalTokens == null) {
+            return accumulatedTokens;
+        }
+        return accumulatedTokens == null ? additionalTokens : accumulatedTokens + additionalTokens;
     }
 
     private List<String> getKeyConcepts(StudyPackEntity studyPack) {

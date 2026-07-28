@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -32,7 +33,7 @@ class StubLlmStudyPackServiceTest {
 
     @Test
     void generateChallengeQuiz_includesWellFormedIdentificationAndEnumerationItems() {
-        List<QuizItem> quiz = service.generateChallengeQuiz(
+        GeneratedChallengeQuizContent generated = service.generateChallengeQuiz(
                 "Study Pack",
                 "Summary",
                 List.of("Photosynthesis", "Cell Division"),
@@ -41,6 +42,7 @@ class StubLlmStudyPackServiceTest {
                 "medium",
                 null
         );
+        List<QuizItem> quiz = generated.quizItems();
 
         QuizItem identificationItem = quiz.get(0);
         assertThat(identificationItem.questionFormat()).isEqualTo("IDENTIFICATION");
@@ -62,5 +64,9 @@ class StubLlmStudyPackServiceTest {
         assertThat(quiz).hasSize(10);
         assertThat(quiz.subList(2, quiz.size()))
                 .allSatisfy(item -> assertThat(item.questionFormat()).isNull());
+        assertThat(generated.modelUsed()).isNull();
+        assertThat(generated.inputTokens()).isNull();
+        assertThat(generated.outputTokens()).isNull();
+        assertThat(generated.cachedInputTokens()).isNull();
     }
 }

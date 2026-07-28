@@ -17,6 +17,8 @@ Anti-drift: no change to Board Exam Mode, Long Exam, or Adaptive Practice quotas
 ### Shipped
 
 - **Onboarding abandonment analytics fix (frontend).** `ONBOARDING_V2_ABANDONED` now fires only when an in-progress onboarding component truly unmounts, at most once per component lifetime, and only after that same lifetime emitted `ONBOARDING_V2_STARTED`. Step transitions no longer create false abandonment events, and redirect-only visits that never start onboarding cannot emit abandonment.
+- **Challenge Quiz monthly quota increase (backend + frontend).** The rolling monthly Challenge Quiz limits are now FREE 20 / PLUS 100 / PRO 200 across backend enforcement and the shared frontend pricing configuration. The existing env-var overrides and rolling billing-period model remain intact; no other mode quota or price changed.
+- **Challenge Quiz LLM usage telemetry (backend).** Real-LLM Challenge Quiz shortfalls now persist nullable model, input-token, output-token, and cached-input-token usage on `quick_review_sessions`, accumulating across successful `+5 Questions` growth. Fully bank/template-served sessions remain null, malformed or missing usage metadata never blocks quiz generation, and Board Exam, Long Exam, and Adaptive Practice telemetry remain unchanged.
 
 ## v0.60.3 - Challenge Quiz Shaping
 

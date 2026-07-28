@@ -890,7 +890,7 @@ class DashboardServiceTest {
                         periodStart,
                         periodEnd,
                         0,
-                        50,
+                        200,
                         0,
                         0,
                         0,

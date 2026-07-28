@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -47,7 +48,7 @@ public interface LlmStudyPackService {
 			int selectedChoiceIndex
 	);
 
-	List<QuizItem> generateChallengeQuiz(
+	GeneratedChallengeQuizContent generateChallengeQuiz(
 			String studyPackTitle,
 			String studyPackSummary,
 			List<String> keyConcepts,
@@ -88,7 +89,7 @@ public interface LlmStudyPackService {
 			AsyncTaskExecutor taskExecutor
 	);
 
-	default List<QuizItem> generateMoreChallengeQuiz(
+	default GeneratedChallengeQuizContent generateMoreChallengeQuiz(
 			String studyPackTitle,
 			String studyPackSummary,
 			List<String> keyConcepts,

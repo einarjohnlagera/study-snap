@@ -17,6 +17,7 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -567,6 +568,25 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 LlmResponseUtils.asNullableInt(usage.get("output_tokens")),
                 LlmResponseUtils.asNullableInt(usage.path("input_tokens_details").get("cached_tokens"))
         );
+    }
+
+    private UsageMetadata extractUsageMetadataOrNull(
+            JsonNode responseJson,
+            String fallbackModel,
+            String operationLabel
+    ) {
+        try {
+            UsageMetadata usageMetadata = extractUsageMetadata(responseJson, fallbackModel);
+            if (usageMetadata.inputTokens() == null
+                    && usageMetadata.outputTokens() == null
+                    && usageMetadata.cachedInputTokens() == null) {
+                return null;
+            }
+            return usageMetadata;
+        } catch (RuntimeException exception) {
+            log.warn("Skipping LLM usage recording because {} returned unexpected usage metadata.", operationLabel, exception);
+            return null;
+        }
     }
 
     private ArrayNode buildQuickReviewStudyTipInputMessages(String incorrectQuestionSummaries) {
@@ -1689,7 +1709,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     @Override
-    public List<QuizItem> generateChallengeQuiz(
+    public GeneratedChallengeQuizContent generateChallengeQuiz(
             String studyPackTitle,
             String studyPackSummary,
             List<String> keyConcepts,
@@ -1700,7 +1720,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     ) {
         List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
         List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
-        return generateQuizWithSchema(
+        return generateChallengeQuizWithSchema(
                 buildChallengeQuizInputMessages(
                         studyPackSummary == null ? "" : studyPackSummary,
                         normalizedKeyConcepts,
@@ -1718,7 +1738,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     @Override
-    public List<QuizItem> generateMoreChallengeQuiz(
+    public GeneratedChallengeQuizContent generateMoreChallengeQuiz(
             String studyPackTitle,
             String studyPackSummary,
             List<String> keyConcepts,
@@ -1731,7 +1751,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
         List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
         List<String> normalizedExistingConcepts = sanitizeConceptList(existingConcepts);
-        return generateQuizWithSchema(
+        return generateChallengeQuizWithSchema(
                 buildChallengeQuizInputMessages(
                         studyPackSummary == null ? "" : studyPackSummary,
                         normalizedKeyConcepts,
@@ -2048,6 +2068,63 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> keyConceptEnum,
             boolean allowTrueFalse
     ) {
+        return generateQuizWithSchemaResponse(
+                model,
+                inputMessages,
+                questionCount,
+                schemaName,
+                operationLabel,
+                conceptFallbackPool,
+                keyConceptEnum,
+                allowTrueFalse
+        ).quizItems();
+    }
+
+    private GeneratedChallengeQuizContent generateChallengeQuizWithSchema(
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool
+    ) {
+        String model = requireConfiguredModel();
+        GeneratedQuizResponse generated = generateQuizWithSchemaResponse(
+                model,
+                inputMessages,
+                questionCount,
+                schemaName,
+                operationLabel,
+                conceptFallbackPool,
+                List.of(),
+                true
+        );
+        UsageMetadata usageMetadata = extractUsageMetadataOrNull(
+                generated.responseJson(),
+                model,
+                operationLabel
+        );
+        if (usageMetadata == null) {
+            return GeneratedChallengeQuizContent.withoutUsage(generated.quizItems());
+        }
+        return new GeneratedChallengeQuizContent(
+                generated.quizItems(),
+                usageMetadata.modelUsed(),
+                usageMetadata.inputTokens(),
+                usageMetadata.outputTokens(),
+                usageMetadata.cachedInputTokens()
+        );
+    }
+
+    private GeneratedQuizResponse generateQuizWithSchemaResponse(
+            String model,
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool,
+            List<String> keyConceptEnum,
+            boolean allowTrueFalse
+    ) {
         return retryOnceOnInvalidOutput(() -> generateQuizWithSchemaOnce(
                 model,
                 inputMessages,
@@ -2060,7 +2137,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ));
     }
 
-    private List<QuizItem> generateQuizWithSchemaOnce(
+    private GeneratedQuizResponse generateQuizWithSchemaOnce(
             String model,
             ArrayNode inputMessages,
             int questionCount,
@@ -2120,7 +2197,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     item.acceptableAnswerGroups()
             ));
         }
-        return normalizeMatchingGroups(quizItems, operationLabel);
+        return new GeneratedQuizResponse(
+                normalizeMatchingGroups(quizItems, operationLabel),
+                response.responseJson()
+        );
     }
 
     private void validateGeneratedQuizItem(PromptGeneratedQuizItem item, String operationLabel) {
@@ -2595,6 +2675,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private record JsonSchemaResponse<T>(
             T payload,
+            JsonNode responseJson
+    ) {
+    }
+
+    private record GeneratedQuizResponse(
+            List<QuizItem> quizItems,
             JsonNode responseJson
     ) {
     }

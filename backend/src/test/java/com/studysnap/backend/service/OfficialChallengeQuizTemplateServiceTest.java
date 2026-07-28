@@ -21,6 +21,7 @@ import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -157,7 +158,9 @@ class OfficialChallengeQuizTemplateServiceTest {
         when(generationContextResolver.resolveForStudyPack(officialId, officialStudyPack)).thenReturn(context);
         when(quizGenerationService.generateChallengeQuiz(
                 eq("Official pack"), eq("Summary"), eq(List.of("Concept")), eq(List.of()), eq(20), eq("medium"), eq(context)
-        )).thenReturn(List.of(new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")));
+        )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
+                new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
+        )));
 
         AsyncTaskExecutor directExecutor = Runnable::run;
         service(immediateTransactions(), directExecutor)

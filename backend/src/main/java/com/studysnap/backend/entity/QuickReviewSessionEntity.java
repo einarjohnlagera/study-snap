@@ -80,6 +80,18 @@ public class QuickReviewSessionEntity {
     @Column(name = "quota_exempt", nullable = false)
     private boolean quotaExempt;
 
+    @Column(name = "model_used", length = 64)
+    private String modelUsed;
+
+    @Column(name = "input_tokens")
+    private Integer inputTokens;
+
+    @Column(name = "output_tokens")
+    private Integer outputTokens;
+
+    @Column(name = "cached_input_tokens")
+    private Integer cachedInputTokens;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

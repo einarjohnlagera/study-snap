@@ -231,7 +231,7 @@ public class OfficialChallengeQuizTemplateService {
                     ChallengeQuizService.MAX_CHALLENGE_QUIZ_QUESTIONS,
                     TEMPLATE_DIFFICULTY,
                     target.context()
-            );
+            ).quizItems();
             studyPackGenerationTransactionOperations.execute(status -> {
                 NoteEntity note = noteRepository.findById(noteId).orElse(null);
                 StudyPackEntity studyPack = studyPackRepository.findById(studyPackId).orElse(null);

@@ -13,6 +13,7 @@ import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -1017,7 +1018,7 @@ class OpenAiLlmStudyPackServiceTest {
         stubResponsesCall();
         when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload()));
 
-        List<QuizItem> quizItems = service.generateChallengeQuiz(
+        GeneratedChallengeQuizContent generated = service.generateChallengeQuiz(
             "Cell Respiration Review",
             "Cell respiration summary",
             List.of("ATP production"),
@@ -1031,12 +1032,17 @@ class OpenAiLlmStudyPackServiceTest {
                 List.of("cells", "respiration")
             )
         );
+        List<QuizItem> quizItems = generated.quizItems();
 
         assertThat(quizItems).hasSize(2);
         assertThat(quizItems.getFirst().answer()).isEqualTo("Electron transport chain");
         assertThat(quizItems.getFirst().concept()).isEqualTo("ATP production");
         assertThat(quizItems.getFirst().explanation()).isEqualTo(
             "The electron transport chain produces most ATP during aerobic respiration.");
+        assertThat(generated.modelUsed()).isNull();
+        assertThat(generated.inputTokens()).isNull();
+        assertThat(generated.outputTokens()).isNull();
+        assertThat(generated.cachedInputTokens()).isNull();
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
         verify(requestSpec).body(requestCaptor.capture());
@@ -1047,6 +1053,30 @@ class OpenAiLlmStudyPackServiceTest {
                 .contains("\"TRUE_FALSE\"")
                 .contains("[\\\"True\\\", \\\"False\\\"]")
                 .doesNotContain("{LEARNER_LEVEL}");
+    }
+
+    @Test
+    void generateChallengeQuiz_extractsLlmUsageMetadata() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJsonWithUsage(buildGeneratedQuizPayload())
+        );
+
+        GeneratedChallengeQuizContent generated = service.generateChallengeQuiz(
+                "Cell Respiration Review",
+                "Cell respiration summary",
+                List.of("ATP production"),
+                List.of(),
+                2,
+                "hard",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Biology", List.of())
+        );
+
+        assertThat(generated.quizItems()).hasSize(2);
+        assertThat(generated.modelUsed()).isEqualTo("gpt-4.1-mini");
+        assertThat(generated.inputTokens()).isEqualTo(42);
+        assertThat(generated.outputTokens()).isEqualTo(84);
+        assertThat(generated.cachedInputTokens()).isEqualTo(7);
     }
 
     @Test
@@ -1073,7 +1103,7 @@ class OpenAiLlmStudyPackServiceTest {
                 1,
                 "medium",
                 new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Electrical Engineering", "Physics", List.of())
-        );
+        ).quizItems();
 
         assertThat(quizItems).hasSize(1);
         assertThat(quizItems.getFirst().questionFormat()).isEqualTo("TRUE_FALSE");
@@ -1284,7 +1314,7 @@ class OpenAiLlmStudyPackServiceTest {
                 "Calculus",
                 List.of("derivatives")
             )
-        );
+        ).quizItems();
 
         assertThat(quizItems).hasSize(2);
         assertThat(quizItems.getFirst().choices())
@@ -1316,7 +1346,7 @@ class OpenAiLlmStudyPackServiceTest {
             2,
             "medium",
             new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives"))
-        );
+        ).quizItems();
 
         assertThat(quizItems).hasSize(2);
         verify(responseSpec, times(2)).body(String.class);
@@ -1342,14 +1372,14 @@ class OpenAiLlmStudyPackServiceTest {
         );
 
         List<QuizItem> quizItems = service.generateChallengeQuiz(
-                "Cell Respiration Review",
+            "Cell Respiration Review",
                 "Cell respiration summary",
                 List.of("ATP production"),
                 List.of(),
                 2,
                 "medium",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
-        );
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
+        ).quizItems();
 
         assertThat(quizItems).hasSize(2);
         verify(responseSpec, times(2)).body(String.class);
@@ -1542,6 +1572,15 @@ class OpenAiLlmStudyPackServiceTest {
         ObjectNode responseJson = objectMapper.createObjectNode();
         responseJson.put("model", "gpt-4.1-mini");
         responseJson.put("output_text", objectMapper.writeValueAsString(payload));
+        return objectMapper.writeValueAsString(responseJson);
+    }
+
+    private String generatedQuizResponseJsonWithUsage(ObjectNode payload) throws JsonProcessingException {
+        ObjectNode responseJson = objectMapper.readValue(generatedQuizResponseJson(payload), ObjectNode.class);
+        ObjectNode usage = responseJson.putObject("usage");
+        usage.put("input_tokens", 42);
+        usage.put("output_tokens", 84);
+        usage.putObject("input_tokens_details").put("cached_tokens", 7);
         return objectMapper.writeValueAsString(responseJson);
     }
 

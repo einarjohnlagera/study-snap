@@ -37,8 +37,9 @@ class MePlanServiceTest {
         StudySnapProperties properties = new StudySnapProperties();
         properties.getPricing().setFreeMonthlyStudyPackLimit(10);
         properties.getPricing().setProMonthlyStudyPackLimit(100);
-        properties.getPricing().setFreeMonthlyChallengeQuizLimit(5);
-        properties.getPricing().setProMonthlyChallengeQuizLimit(50);
+        properties.getPricing().setFreeMonthlyChallengeQuizLimit(20);
+        properties.getPricing().setPlusMonthlyChallengeQuizLimit(100);
+        properties.getPricing().setProMonthlyChallengeQuizLimit(200);
         properties.getPricing().setFreeMonthlyAdaptivePracticeLimit(3);
         properties.getPricing().setProMonthlyAdaptivePracticeLimit(30);
         properties.getPricing().setProMonthlyLongExamLimit(10);
@@ -93,7 +94,7 @@ class MePlanServiceTest {
         assertThat(response.usageCycle().startsAt()).isEqualTo(OffsetDateTime.parse("2026-03-10T00:00:00Z"));
         assertThat(response.usageCycle().endsAt()).isEqualTo(OffsetDateTime.parse("2026-04-10T00:00:00Z"));
         assertThat(response.limits().studyPacksPerMonth()).isEqualTo(10);
-        assertThat(response.limits().challengeQuizzesPerMonth()).isEqualTo(5);
+        assertThat(response.limits().challengeQuizzesPerMonth()).isEqualTo(20);
         assertThat(response.limits().adaptivePracticePerMonth()).isEqualTo(3);
         assertThat(response.limits().longExamPerMonth()).isZero();
         assertThat(response.limits().boardExamPerMonth()).isZero();
@@ -111,7 +112,7 @@ class MePlanServiceTest {
         assertThat(response.usage().docxExportsUsed()).isEqualTo(1);
         assertThat(response.usage().pdfExportsUsed()).isZero();
         assertThat(response.remaining().studyPacksRemaining()).isEqualTo(7);
-        assertThat(response.remaining().challengeQuizzesRemaining()).isEqualTo(3);
+        assertThat(response.remaining().challengeQuizzesRemaining()).isEqualTo(18);
         assertThat(response.remaining().adaptivePracticeRemaining()).isEqualTo(3);
         assertThat(response.remaining().longExamRemaining()).isZero();
         assertThat(response.remaining().boardExamRemaining()).isZero();
@@ -134,7 +135,7 @@ class MePlanServiceTest {
                         OffsetDateTime.parse("2026-03-20T00:00:00Z"),
                         OffsetDateTime.parse("2026-04-20T00:00:00Z"),
                         101,
-                        50,
+                        201,
                         33,
                         0,
                         120,
@@ -155,7 +156,7 @@ class MePlanServiceTest {
         assertThat(response.plan()).isEqualTo(PlanType.PRO);
         assertThat(response.usageCycle().endsAt()).isEqualTo(OffsetDateTime.parse("2026-04-20T00:00:00Z"));
         assertThat(response.limits().studyPacksPerMonth()).isEqualTo(100);
-        assertThat(response.limits().challengeQuizzesPerMonth()).isEqualTo(50);
+        assertThat(response.limits().challengeQuizzesPerMonth()).isEqualTo(200);
         assertThat(response.limits().adaptivePracticePerMonth()).isEqualTo(30);
         assertThat(response.limits().longExamPerMonth()).isEqualTo(10);
         assertThat(response.limits().boardExamPerMonth()).isEqualTo(5);

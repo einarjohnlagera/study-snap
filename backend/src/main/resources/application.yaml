@@ -100,9 +100,9 @@ studysnap:
     free-monthly-study-pack-limit: ${FREE_MONTHLY_STUDY_PACK_LIMIT:10}
     plus-monthly-study-pack-limit: ${PLUS_MONTHLY_STUDY_PACK_LIMIT:50}
     pro-monthly-study-pack-limit: ${PRO_MONTHLY_STUDY_PACK_LIMIT:${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}}
-    free-monthly-challenge-quiz-limit: ${FREE_MONTHLY_CHALLENGE_QUIZ_LIMIT:5}
-    plus-monthly-challenge-quiz-limit: ${PLUS_MONTHLY_CHALLENGE_QUIZ_LIMIT:25}
-    pro-monthly-challenge-quiz-limit: ${PRO_MONTHLY_CHALLENGE_QUIZ_LIMIT:${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}}
+    free-monthly-challenge-quiz-limit: ${FREE_MONTHLY_CHALLENGE_QUIZ_LIMIT:20}
+    plus-monthly-challenge-quiz-limit: ${PLUS_MONTHLY_CHALLENGE_QUIZ_LIMIT:100}
+    pro-monthly-challenge-quiz-limit: ${PRO_MONTHLY_CHALLENGE_QUIZ_LIMIT:${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:200}}
     free-monthly-adaptive-practice-limit: ${FREE_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:3}
     plus-monthly-adaptive-practice-limit: ${PLUS_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:10}
     pro-monthly-adaptive-practice-limit: ${PRO_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}}
