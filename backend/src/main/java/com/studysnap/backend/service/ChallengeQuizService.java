@@ -201,7 +201,7 @@ public class ChallengeQuizService {
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty, selectedMode);
         int quizCount = MODE_BOARD_EXAM.equals(selectedMode)
                 ? resolveBoardExamQuestionCount(boardExamSourceCount)
-                : INITIAL_CHALLENGE_QUIZ_COUNT;
+                : profile.questionCount();
         List<LongExamSourceNoteRef> boardExamSourceNoteRefs = MODE_BOARD_EXAM.equals(selectedMode)
                 ? resolveBoardExamSourceNoteRefs(studyPack, userId, additionalBoardExamStudyPackIds, quizCount)
                 : List.of();
@@ -383,7 +383,8 @@ public class ChallengeQuizService {
                 userId,
                 studyPackId,
                 studyPack,
-                planType
+                planType,
+                true
         );
         if (existingSession.isPresent()) {
             return existingSession.get();
@@ -391,13 +392,17 @@ public class ChallengeQuizService {
 
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, null, MODE_CHALLENGE);
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
-        QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
+        QuickReviewSessionEntity generatingSession = buildGeneratingSession(
                 userId,
                 studyPackId,
                 studyPack,
                 profile.difficulty(),
                 MODE_CHALLENGE
-        ));
+        );
+        generatingSession.setSessionState(
+                QuizSessionStateUtils.withRedoMissedSource(generatingSession.getSessionState(), true)
+        );
+        QuickReviewSessionEntity session = quickReviewSessionRepository.save(generatingSession);
         List<QuizItem> missedQuestions = challengeQuizQuestionBankService.claimIncorrectQuestions(
                 userId,
                 studyPackId,
@@ -409,6 +414,7 @@ public class ChallengeQuizService {
         missedQuestions = shuffleQuestionOrderPreservingMatchingGroups(missedQuestions);
         markSessionReady(session, missedQuestions, profile.difficulty());
         session.setQuotaExempt(true);
+        session.setSessionState(QuizSessionStateUtils.withRedoMissedSource(session.getSessionState(), true));
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
         return toStartResponse(saved, studyPack, resolveUsedThisMonthForResponse(userId, saved), planType);
     }
@@ -882,6 +888,16 @@ public class ChallengeQuizService {
             StudyPackEntity studyPack,
             PlanType planType
     ) {
+        return resolveExistingChallengeSession(userId, studyPackId, studyPack, planType, false);
+    }
+
+    private Optional<ChallengeQuizStartResponse> resolveExistingChallengeSession(
+            UUID userId,
+            UUID studyPackId,
+            StudyPackEntity studyPack,
+            PlanType planType,
+            boolean requireRedoMissedSource
+    ) {
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         userId,
@@ -901,6 +917,11 @@ public class ChallengeQuizService {
             return Optional.empty();
         }
         if (lockedExisting.getStatus() == QuickReviewSessionStatus.GENERATING) {
+            if (requireRedoMissedSource
+                    && !QuizSessionStateUtils.extractRedoMissedSource(lockedExisting.getSessionState())) {
+                forfeitStaleOrdinarySession(lockedExisting, userId);
+                return Optional.empty();
+            }
             return Optional.of(toStartResponse(
                     lockedExisting,
                     studyPack,
@@ -909,6 +930,11 @@ public class ChallengeQuizService {
             ));
         }
         if (!QuizSessionStateUtils.extractQuiz(lockedExisting.getSessionState()).isEmpty()) {
+            if (requireRedoMissedSource
+                    && !QuizSessionStateUtils.extractRedoMissedSource(lockedExisting.getSessionState())) {
+                forfeitStaleOrdinarySession(lockedExisting, userId);
+                return Optional.empty();
+            }
             if (isSessionExpired(lockedExisting)) {
                 forfeitExpiredSession(lockedExisting, userId);
                 return Optional.empty();
@@ -923,6 +949,20 @@ public class ChallengeQuizService {
         markSessionForfeited(lockedExisting);
         quickReviewSessionRepository.save(lockedExisting);
         return Optional.empty();
+    }
+
+    private void forfeitStaleOrdinarySession(QuickReviewSessionEntity session, UUID userId) {
+        markSessionForfeited(session);
+        try {
+            quickReviewSessionRepository.save(session);
+        } catch (RuntimeException exception) {
+            log.warn("Could not persist stale Challenge Quiz session forfeit for session {}.", session.getId(), exception);
+        }
+        try {
+            challengeQuizQuestionBankService.releaseClaims(userId, session.getStudyPackId(), session.getId());
+        } catch (RuntimeException exception) {
+            log.warn("Could not release Challenge Quiz claims for stale session {}.", session.getId(), exception);
+        }
     }
 
     private boolean isSessionExpired(QuickReviewSessionEntity session) {

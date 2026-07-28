@@ -45,6 +45,7 @@ public class QuizSessionStateUtils {
     private static final String IDENTIFICATION_FORMAT = "IDENTIFICATION";
     private static final String ENUMERATION_FORMAT = "ENUMERATION";
     public static final String SESSION_STATE_POOL_SOURCED = "poolSourced";
+    private static final String SESSION_STATE_REDO_MISSED_SOURCE = "redoMissedSource";
 
     public Map<String, Object> appendQuizItems(Map<String, Object> sessionState, List<QuizItem> newItems) {
         List<QuizItem> existing = extractQuiz(sessionState);
@@ -222,6 +223,26 @@ public class QuizSessionStateUtils {
             return false;
         }
         Object raw = sessionState.get(SESSION_STATE_POOL_SOURCED);
+        if (raw instanceof Boolean value) {
+            return value;
+        }
+        return raw instanceof String value && Boolean.parseBoolean(value);
+    }
+
+    public Map<String, Object> withRedoMissedSource(Map<String, Object> sessionState, boolean redoMissedSource) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+        state.put(SESSION_STATE_REDO_MISSED_SOURCE, redoMissedSource);
+        return state;
+    }
+
+    public boolean extractRedoMissedSource(Map<String, Object> sessionState) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return false;
+        }
+        Object raw = sessionState.get(SESSION_STATE_REDO_MISSED_SOURCE);
         if (raw instanceof Boolean value) {
             return value;
         }

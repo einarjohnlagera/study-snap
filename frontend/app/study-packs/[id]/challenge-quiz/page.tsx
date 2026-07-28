@@ -350,6 +350,7 @@ export default function ChallengeQuizPage() {
   ));
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
   const [showBoardExamStartModal, setShowBoardExamStartModal] = useState(false);
+  const [showIncompleteSubmitModal, setShowIncompleteSubmitModal] = useState(false);
   const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
   const [availableBoardExamSourceNotes, setAvailableBoardExamSourceNotes] = useState<NoteListItemResponse[]>([]);
   const [selectedBoardExamAdditionalStudyPackIds, setSelectedBoardExamAdditionalStudyPackIds] = useState<string[]>([]);
@@ -607,6 +608,7 @@ export default function ChallengeQuizPage() {
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     timeoutAutoSubmitRequestedRef.current = false;
     redoMissedStartRequestedRef.current = false;
+    setShowIncompleteSubmitModal(false);
     setNextStepResponse(null);
     setSelectedMode(started.mode ?? CHALLENGE_MODE);
     setBoardExamUsedThisMonth(started.boardExamUsedThisMonth ?? 0);
@@ -716,6 +718,7 @@ export default function ChallengeQuizPage() {
     setError(null);
     setShowAnswerReview(false);
     setShowBoardExamStartModal(false);
+    setShowIncompleteSubmitModal(false);
     setGeneratingMore(false);
     setNoMoreQuestions(false);
     setGenerateMoreToast(null);
@@ -915,18 +918,24 @@ export default function ChallengeQuizPage() {
 
   const quiz = useMemo(() => challengeSession?.quiz ?? [], [challengeSession]);
   const totalQuestions = quiz.length;
-  const answeredCount = useMemo(() => new Set([
-    ...Object.keys(selectedChoices),
+  const answeredQuestionIndexes = useMemo(() => new Set([
+    ...Object.keys(selectedChoices).map(Number),
     ...Object.entries(selectedMultiChoices)
       .filter(([, value]) => value.length > 0)
-      .map(([key]) => key),
+      .map(([key]) => Number(key)),
     ...Object.entries(selectedIdentificationAnswers)
       .filter(([, value]) => value.trim().length > 0)
-      .map(([key]) => key),
+      .map(([key]) => Number(key)),
     ...Object.entries(selectedEnumerationAnswers)
       .filter(([, values]) => values.some((value) => value.trim().length > 0))
-      .map(([key]) => key),
-  ]).size, [selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers]);
+      .map(([key]) => Number(key)),
+  ]), [selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers]);
+  const answeredCount = answeredQuestionIndexes.size;
+  const unansweredCount = Math.max(0, totalQuestions - answeredCount);
+  const firstUnansweredQuestionIndex = useMemo(
+    () => quiz.findIndex((_, index) => !answeredQuestionIndexes.has(index)),
+    [answeredQuestionIndexes, quiz],
+  );
   const activeMode = challengeSession?.mode ?? selectedMode;
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
   const activeSourceNoteRefs = challengeSession?.sourceNoteRefs ?? [];
@@ -1070,6 +1079,44 @@ export default function ChallengeQuizPage() {
       // Submission errors are surfaced through the shared page error state.
     }
   }, [finalizeChallengeSession]);
+
+  const handleManualSubmit = useCallback(() => {
+    if (unansweredCount === 0) {
+      void handleSubmit(false);
+      return;
+    }
+    setShowIncompleteSubmitModal(true);
+  }, [handleSubmit, unansweredCount]);
+
+  const handleReturnToFirstUnansweredQuestion = useCallback(() => {
+    setShowIncompleteSubmitModal(false);
+    if (firstUnansweredQuestionIndex < 0) {
+      return;
+    }
+    syncProgressRef(
+      firstUnansweredQuestionIndex,
+      selectedChoices,
+      selectedMultiChoices,
+      selectedIdentificationAnswers,
+      selectedEnumerationAnswers,
+    );
+    setCurrentIndex(firstUnansweredQuestionIndex);
+    persistProgress(
+      firstUnansweredQuestionIndex,
+      selectedChoices,
+      selectedMultiChoices,
+      selectedIdentificationAnswers,
+      selectedEnumerationAnswers,
+    );
+  }, [
+    firstUnansweredQuestionIndex,
+    persistProgress,
+    selectedChoices,
+    selectedEnumerationAnswers,
+    selectedIdentificationAnswers,
+    selectedMultiChoices,
+    syncProgressRef,
+  ]);
 
   useEffect(() => {
     if (phase !== "running" || !challengeSession || submitting || deadlineEpochSeconds === null) {
@@ -2011,7 +2058,7 @@ export default function ChallengeQuizPage() {
         <div className="space-y-4">
           {!isBoardExamMode ? (
             <p className="text-xs text-foreground/55">
-              Start with 5 questions. Generate more as you go (up to {MAX_SESSION_QUESTIONS}).
+              Your starting question set adapts to your recent performance. Generate more as you go (up to {MAX_SESSION_QUESTIONS}).
             </p>
           ) : null}
           {isBoardExamMode && showBoardExamFocusTip ? (
@@ -2155,10 +2202,7 @@ export default function ChallengeQuizPage() {
                 <QuestionNavigator
                   total={totalQuestions}
                   currentIndex={currentIndex}
-                  isAnswered={(index) => selectedChoices[index] != null
-                    || (selectedMultiChoices[index]?.length ?? 0) > 0
-                    || (selectedIdentificationAnswers[index]?.trim().length ?? 0) > 0
-                    || (selectedEnumerationAnswers[index]?.some((value) => value.trim().length > 0) ?? false)}
+                  isAnswered={(index) => answeredQuestionIndexes.has(index)}
                   onSelect={(index) => {
                     syncProgressRef(index, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers);
                     setCurrentIndex(index);
@@ -2229,7 +2273,7 @@ export default function ChallengeQuizPage() {
                   <Button
                     type="button"
                     className="flex-1 sm:w-auto sm:flex-none"
-                    onClick={() => void handleSubmit(false)}
+                    onClick={handleManualSubmit}
                     disabled={submitting}
                   >
                     {submitting ? "Submitting..." : submitButtonLabel}
@@ -2250,7 +2294,7 @@ export default function ChallengeQuizPage() {
                     <Button
                       type="button"
                       className="flex-1 sm:w-auto sm:flex-none"
-                      onClick={() => void handleSubmit(false)}
+                      onClick={handleManualSubmit}
                       disabled={submitting || generatingMore}
                     >
                       {submitting ? "Submitting..." : "Complete Quiz"}
@@ -2725,6 +2769,43 @@ export default function ChallengeQuizPage() {
         </Card>
       ) : null}
 
+      <AppModal
+        isOpen={showIncompleteSubmitModal}
+        title="Submit with unanswered questions?"
+        onClose={() => {
+          if (!submitting) {
+            setShowIncompleteSubmitModal(false);
+          }
+        }}
+        contentClassName="space-y-2"
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleReturnToFirstUnansweredQuestion}
+              disabled={submitting}
+            >
+              Go back
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowIncompleteSubmitModal(false);
+                void handleSubmit(false);
+              }}
+              disabled={submitting}
+            >
+              {submitting ? "Submitting..." : "Submit anyway"}
+            </Button>
+          </div>
+        )}
+      >
+        <p className="text-sm leading-relaxed text-foreground/80">
+          You have {unansweredCount} unanswered {unansweredCount === 1 ? "question" : "questions"}.
+          You can go back to review them or submit anyway.
+        </p>
+      </AppModal>
       <AppModal
         isOpen={showBoardExamStartModal}
         title={BOARD_EXAM_START_CONFIRM_TITLE}
