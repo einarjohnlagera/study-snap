@@ -231,12 +231,51 @@ describe("OnboardingPage", () => {
       refreshTokenExpiresAt: "2026-05-27T01:00:00Z",
     });
 
-    render(<OnboardingPage />);
+    const { unmount } = render(<OnboardingPage />);
 
     await waitFor(() => {
       expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
     });
     expect(getMe).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "ONBOARDING_V2_ABANDONED" }),
+    );
+  });
+
+  it("tracks abandonment once on unmount after multiple in-progress step changes", async () => {
+    const { unmount } = render(<OnboardingPage />);
+
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "ONBOARDING_V2_STARTED" }),
+      );
+    });
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
+
+    fillLearningProfile();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
+
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "ONBOARDING_V2_ABANDONED" }),
+    );
+
+    unmount();
+
+    const abandonmentEvents = (trackAnalyticsEvent as jest.Mock).mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.eventType === "ONBOARDING_V2_ABANDONED");
+    expect(abandonmentEvents).toEqual([
+      expect.objectContaining({
+        metadata: { last_step: 3 },
+      }),
+    ]);
   });
 
   it("shows only profile-type setup for completed users missing profileType", async () => {
