@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -202,7 +203,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
     }
 
     @Override
-    public List<QuizItem> generateChallengeQuiz(
+    public GeneratedChallengeQuizContent generateChallengeQuiz(
             String studyPackTitle,
             String studyPackSummary,
             List<String> keyConcepts,
@@ -215,7 +216,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                 ? List.of("Core Concept")
                 : keyConcepts;
         int normalizedCount = Math.clamp(questionCount, 10, 15);
-        return IntStream.range(0, normalizedCount)
+        List<QuizItem> quizItems = IntStream.range(0, normalizedCount)
                 .mapToObj(index -> {
                     String concept = concepts.get(index % concepts.size());
                     if (index == 0) {
@@ -239,6 +240,7 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                     );
                 })
                 .toList();
+        return GeneratedChallengeQuizContent.withoutUsage(quizItems);
     }
 
     private QuizItem buildStubIdentificationItem(String concept) {

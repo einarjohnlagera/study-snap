@@ -73,7 +73,7 @@ Plus and Pro are **one-time, time-boxed passes with no auto-charge**, not recurr
 ### Free
 
 - `10` Study Packs / month
-- `5` Quizzes / month
+- `20` Quizzes / month
 - `3` Adaptive Practice sessions / month
 - `2` exports / month
 - `Summary + Key Concepts`
@@ -83,7 +83,7 @@ Plus and Pro are **one-time, time-boxed passes with no auto-charge**, not recurr
 - `₱149 for your first 1-month pass · ₱179 after` in PH when intro pricing is eligible
 - positioned as the regular-study tier
 - `50` Study Packs / month
-- `25` Quizzes / month
+- `100` Quizzes / month
 - `15` exports / month
 - higher note-generation limits
 
@@ -93,7 +93,7 @@ Plus and Pro are **one-time, time-boxed passes with no auto-charge**, not recurr
 - `₱1,999 / 1 year` in PH for the annual pass; `₱599 / 3 months` for the exam pass (hero CTA; internally a 90-day pass)
 - positioned as the exam-prep tier
 - `100` Study Packs / month
-- `50` Quizzes / month
+- `200` Quizzes / month
 - unlimited exports
 - Board Exam Mode
 - Adaptive Practice: Free `3` sessions / month, Plus `10`, Pro `30`

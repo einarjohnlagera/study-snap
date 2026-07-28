@@ -164,7 +164,7 @@ class AdminFunnelServiceTest {
         when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
                 .thenReturn(List.of());
         UserUsageEntity usage = buildUsage(freeUserId, 0);
-        usage.setChallengeQuizGenerations(5);
+        usage.setChallengeQuizGenerations(20);
         usage.setAdaptiveQuizGenerations(0);
         when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
                 .thenReturn(List.of(usage));

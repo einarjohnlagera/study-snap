@@ -1429,9 +1429,9 @@ Plans: `FREE`, `PLUS`, `PRO`
 
 Plan limits:
 
-- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 3 Adaptive Practice sessions/month, 2 exports/month, Summary + Key Concepts
-- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 10 Adaptive Practice sessions/month, 15 exports/month, higher note generation limits
-- Pro: 100 Study Packs/month, 50 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, Board Exam Mode
+- Free: unlimited notes, 10 Study Packs/month, 20 Challenge Quizzes/month, 3 Adaptive Practice sessions/month, 2 exports/month, Summary + Key Concepts
+- Plus: 50 Study Packs/month, 100 Challenge Quizzes/month, 10 Adaptive Practice sessions/month, 15 exports/month, higher note generation limits
+- Pro: 100 Study Packs/month, 200 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, Board Exam Mode
 - Current enforcement truth:
   - Adaptive Practice is quota-gated by plan: Free 3/month, Plus 10/month, Pro 30/month
   - Board Exam Mode is Pro-only

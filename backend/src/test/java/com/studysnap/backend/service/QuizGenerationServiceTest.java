@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,8 +33,12 @@ class QuizGenerationServiceTest {
                 "Physics",
                 List.of("Ohm's Law")
         );
-        List<QuizItem> llmQuiz = List.of(
-                new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Concept", "Explanation")
+        GeneratedChallengeQuizContent llmQuiz = new GeneratedChallengeQuizContent(
+                List.of(new QuizItem("Q1", List.of("A", "B", "C", "D"), 0, "Concept", "Explanation")),
+                "gpt-4.1-mini",
+                100,
+                50,
+                25
         );
 
         when(llmStudyPackService.generateChallengeQuiz(
@@ -46,7 +51,7 @@ class QuizGenerationServiceTest {
                 context
         )).thenReturn(llmQuiz);
 
-        List<QuizItem> response = service.generateChallengeQuiz(
+        GeneratedChallengeQuizContent response = service.generateChallengeQuiz(
                 "Pack title",
                 "Summary",
                 List.of("Concept"),
@@ -126,7 +131,7 @@ class QuizGenerationServiceTest {
                 List.of("Electric Circuits")
         );
 
-        List<QuizItem> response = service.generateChallengeQuiz(
+        GeneratedChallengeQuizContent response = service.generateChallengeQuiz(
                 "Electric Circuits Midterm Review",
                 "Summary",
                 List.of("Ohm's Law", "Voltage", "Resistance"),
@@ -136,8 +141,12 @@ class QuizGenerationServiceTest {
                 context
         );
 
-        assertCompatibleQuiz(response, 12);
-        assertThat(response).extracting(QuizItem::concept).contains("Ohm's Law", "Voltage", "Resistance");
+        assertCompatibleQuiz(response.quizItems(), 12);
+        assertThat(response.quizItems()).extracting(QuizItem::concept).contains("Ohm's Law", "Voltage", "Resistance");
+        assertThat(response.modelUsed()).isNull();
+        assertThat(response.inputTokens()).isNull();
+        assertThat(response.outputTokens()).isNull();
+        assertThat(response.cachedInputTokens()).isNull();
         verify(llmStudyPackService, never()).generateChallengeQuiz(
                 "Electric Circuits Midterm Review",
                 "Summary",

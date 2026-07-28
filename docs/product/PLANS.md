@@ -11,7 +11,7 @@ Create notes, generate Study Packs, and review basic concepts.
 **Monthly limits**
 
 - `10` Study Packs / month
-- `5` Quizzes / month
+- `20` Quizzes / month
 - `3` Adaptive Practice sessions / month
 - `2` exports / month (PDF / DOCX)
 - `3` shareable quiz links / month
@@ -37,7 +37,7 @@ Perfect for students who want consistent review and better retention.
 **Monthly limits**
 
 - `50` Study Packs / month
-- `25` Quizzes / month
+- `100` Quizzes / month
 - `15` exports / month
 - `10` Adaptive Practice sessions / month
 - `10` shareable quiz links / month
@@ -62,7 +62,7 @@ Designed for serious learners preparing for board and entrance exams.
 **Monthly limits**
 
 - `100` Study Packs / month
-- `50` Quizzes / month
+- `200` Quizzes / month
 - `30` Adaptive Practice sessions / month
 - `10` Interview Practice sessions / month
 - `12` Long Exam sessions / month
@@ -110,7 +110,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Capability | Free | Plus | Pro |
 | --- | --- | --- | --- |
 | Study Packs / month | 10 | 50 | 100 |
-| Quizzes / month | 5 | 25 | 50 |
+| Quizzes / month | 20 | 100 | 200 |
 | Exports / month | 2 | 15 | Unlimited |
 | Shareable quiz links / month | 3 | 10 | Unlimited |
 | Topic note generation | Limited | Higher | Highest |
@@ -161,8 +161,8 @@ This applies to **DOCX exports only** (the Teacher Flow format). PDF exports use
 
 For Teacher-profile users, the upgrade story is about **generation volume**, not quiz modes:
 
-- **Free → Plus:** more exports (10 → unlimited), more Study Packs (10 → 50), more quiz generation (5 → 25), longer teacher quizzes (20 or 30 questions instead of the Free 10-question format), and multiple deterministic exam versions for anti-cheating DOCX exports
-- **Plus → Pro:** highest generation limits (50 Study Packs → 100, 25 quizzes → 50), multi-note Exam Builder without session limits
+- **Free → Plus:** more exports (10 → unlimited), more Study Packs (10 → 50), more quiz generation (20 → 100), longer teacher quizzes (20 or 30 questions instead of the Free 10-question format), and multiple deterministic exam versions for anti-cheating DOCX exports
+- **Plus → Pro:** highest generation limits (50 Study Packs → 100, 100 quizzes → 200), multi-note Exam Builder without session limits
 
 The standard exam-prep framing ("Board Exam Mode", "Adaptive Practice") does not resonate with teachers. Upgrade CTAs shown to Teacher-profile users must use teacher-framed copy. Use `getUpgradeCtas(currentPlan, { profileType })` so Teacher Plus nudges focus on generation volume instead of export headroom.
 

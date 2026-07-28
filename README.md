@@ -49,20 +49,20 @@ NoteLib uses a 3-tier learning-focused plan structure:
 
 - Free
   - 10 Study Packs / month
-  - 5 Quizzes / month
+  - 20 Quizzes / month
   - 2 exports / month
   - Summary + Key Concepts
 - Plus
   - ₱149 first month, then ₱179/month in the Philippines when intro pricing applies
   - 50 Study Packs / month
-  - 25 Quizzes / month
+  - 100 Quizzes / month
   - 15 exports / month
   - Adaptive Practice (10 sessions / month)
   - Higher note generation limits
 - Pro
   - ₱199 first month, then ₱249/month in the Philippines when intro pricing applies
   - 100 Study Packs / month
-  - 50 Quizzes / month
+  - 200 Quizzes / month
   - Unlimited exports
   - Adaptive Practice (30 sessions / month)
   - Difficulty selection
