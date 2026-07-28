@@ -244,6 +244,8 @@ Public Library filters:
 
 Learner Level is not a current Public Library filter; it remains owner/profile metadata rather than a More Filters control.
 
+**Official/Community classification (v0.62.0 fix):** a note's owner counts as an "official" author when `role = ADMIN` **or** their email matches the reserved official account — not admin-role alone. `PublicLibraryRepositoryImpl.officialAuthorPredicate()` (backend SQL, feeds the `Official`/`Community` `source` filter above) now matches the same rule `PublicProfileService.isOfficialAuthor` and `OfficialChallengeQuizTemplateService.isOfficialAuthor` already use — previously the SQL form checked admin-role only, which could mis-bucket a personally-authored official-account note as Community. Confirmed a no-op against production data at the time of the fix (the official account already held `ADMIN`); kept in sync going forward so a future non-admin official-curation account doesn't silently drift the three checks apart again.
+
 Filter mode renders the first server-selected page and appends subsequent pages through `Load more`; no client-side post-filtering, re-sorting, or slicing is applied to a fetched page.
 
 The in-app `?subject=` filter and the canonical `/public/library/{subject}` landing page intentionally serve different purposes. Filter mode is a flat, query-driven browsing list; the subject landing page is a curated Featured / Popular / Recent discovery surface with its own `CollectionPage` SEO markup. They should not be merged into one component without a dedicated future refactor.
