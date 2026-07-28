@@ -2,7 +2,7 @@
 
 ## v0.61.0 - Challenge Quiz Quota Increase
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: raise Challenge Quiz's monthly quota substantially (FREE 5→20, PLUS 25→100, PRO 50→200) so a learner rarely thinks about running out, and capture Challenge Quiz's LLM token/cost usage for the first time so the increase's effect on spend is observable rather than blind. Reclaims the `v0.61.0` minor-version slot from `Explore Convergence` (renumbered to `v0.62.0`) since this item's gate — owner ratification — cleared 2026-07-28, while Explore's Diagnostic Read gate remains unmet.
 
