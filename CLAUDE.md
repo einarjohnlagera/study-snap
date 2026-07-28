@@ -202,6 +202,13 @@ When closing a release (marking it Released), commit the closure directly on the
 - **Otherwise**, a single `advisor()` call summarizing what shipped is enough — cheaper, and still catches anti-drift violations.
 - Fix or explicitly document (in `RELEASES.md`, as a "Known limitations" note) every finding before signing off — never silently drop a finding.
 
+**Escalate to a fresh, independently-instructed review for hard-to-find bugs — gate it, don't default to it.** `advisor()` stays the default check before presenting any non-trivial root-cause finding as settled (call it before declaring something done, per its own instructions — the actual failure mode in practice is skipping that checkpoint, not lacking a stronger option). Escalate past `advisor()` to a fresh agent with no inherited context (Agent tool, `model: "opus"`, explicitly told to read the real code/data rather than trust a summary) only when a root-cause claim meets one of these:
+- a data/metric relationship that shouldn't be mathematically or logically possible under the stated explanation (e.g. one `COUNT(DISTINCT ...)` exceeding another it should be bounded by);
+- the bug class is inherently hard to reason about serially — concurrency, async ordering, effect/component lifecycle timing, migrations, anything where the mechanism has to be traced through indirect state rather than observed directly;
+- the fix is about to ship and touches something that already feeds, or will feed, a real product/business decision (e.g. a metric behind a retention read).
+
+A typical isolated bug fix needs neither — direct verification or a single `advisor()` call is enough. This escalation is expensive when used (tens of thousands of tokens, several minutes) — the trigger conditions above are the gate, not general caution.
+
 **Always kick off a version before any implementation.** The kickoff checklist below is the **first commit** on a new `releases/vX.Y.Z` branch — committed directly to that branch — and must land **before** any feature/fix branch is cut or any code is written for the release. Do not start implementation on a version that has not been kicked off. If you find yourself implementing and the version is not yet opened (no `RELEASES.md` section, version refs not bumped), stop and run the kickoff first.
 
 **Release kickoff checklist** (do this when opening a new version, before the first feature commit; commit these directly on the `releases/vX.Y.Z` branch — no separate branch/PR):
