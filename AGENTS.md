@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.60.3 - Challenge Quiz Shaping & Onboarding Coverage Capture` (In Progress); previous: `v0.60.2 - Challenge Quiz Known-Limitations Cleanup` (Released)
+- `v0.60.3 - Challenge Quiz Shaping` (Released); previous: `v0.60.2 - Challenge Quiz Known-Limitations Cleanup` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
