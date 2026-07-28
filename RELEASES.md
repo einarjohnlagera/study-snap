@@ -1,5 +1,26 @@
 # RELEASES.md - NoteLib
 
+## v0.60.3 - Challenge Quiz Shaping
+
+**Status: Released**
+
+Theme: shape Challenge Quiz's pacing and correctness (adaptive initial question count, a Redo Missed Questions session-matching fix, an incomplete-submission guard). Patch release off `v0.60.2`, following this project's existing patch-release convention — does not consume the `v0.61.0` minor-version slot.
+
+### Planned Scope
+
+- **Adaptive initial question count (backend).** Challenge Quiz sessions start with a flat 5 questions today regardless of the learner's last score; a score-adaptive count (10/12/15 for low/mid/high) is already computed by `resolveGenerationProfile` but never read. Wires `startSession`'s question count to that existing value for the Challenge (non-Board-Exam) branch only — Board Exam Mode and `startRedoMissedSession`'s own fixed count are explicitly unaffected.
+- **Redo Missed Questions session-matching fix (backend).** `startRedoMissedSession` currently reuses the same unscoped session-resolution method `startSession` does, so a stale ordinary in-progress session on the same study pack gets silently returned instead of a fresh missed-questions session. Adds a dedicated `sessionState` provenance marker (mirroring the existing `withPoolSourced` pattern) so a stale ordinary session is correctly forfeited and replaced, while `quotaExempt` is left untouched for its existing billing role.
+- **Incomplete-submission guard (frontend).** Manual Submit on a Challenge Quiz currently finalizes immediately with zero warning about unanswered questions. Adds a lightweight confirmation on manual submit only (never on a timeout-triggered auto-submit) — go back to the first unanswered question, or submit anyway with today's existing incomplete-scoring behavior.
+- **Onboarding coverage-gap capture (frontend). Deferred** — gate query run 2026-07-28 found real `STUDENT`-profile presence in the surge cohort (2/29, 6.9%), failing the effectively-zero bar required to proceed while the Diagnostic Read is mid-measurement. Moved out of this release to the Backlog Index in `docs/product/ROADMAP.md`; the full design (extend the existing `BOARD_EXAM` practice-first coverage check's *check*, not its adoption fast-path, to `STUDENT`, capture a miss through the existing `POST /feedback` pipeline) is unchanged and still valid — it stays parked until the Diagnostic Read closes (~2026-08-06) and its own gate clears.
+
+Anti-drift: no schema change, no change to Board Exam question count, ordering, or progressive-generation exemption, no change to quota/pricing. Full technical detail (root causes, fix designs, file:line anchors, second-opinion review outcome) is in `docs/product/ROADMAP.md`'s own "v0.60.3 — Challenge Quiz Shaping" section.
+
+### Shipped
+
+- **Adaptive initial question count (backend + frontend).** Standard Challenge Quiz starts now use the existing last-Quick-Review profile to assemble 10, 12, or 15 questions for low, mid, or high score bands, with the ready-session timer scaling from the actual assembled count. Board Exam Mode and Redo Missed Questions retain their separate fixed counts, and the running banner no longer promises a flat five-question start.
+- **Redo Missed Questions session-matching fix (backend).** Redo-created sessions now keep both their billing-only `quotaExempt` flag and a dedicated `redoMissedSource` session-state marker. Redo entry resumes only a marked prior redo session; an unrelated active Challenge session is forfeited with best-effort claim release before a fresh missed-only session starts. Pre-release redo sessions have no marker and therefore receive this one-time self-healing replacement behavior rather than a backfill.
+- **Incomplete-submission guard (frontend).** Manual Complete Quiz / Submit Exam actions now identify unanswered questions before finalization and offer either a return to the first unanswered question or Submit anyway through the existing modal pattern. Fully answered sessions still submit immediately, submit errors still use the page's existing error state, and timer-triggered auto-submit remains unguarded and unchanged.
+
 ## v0.60.2 - Challenge Quiz Known-Limitations Cleanup
 
 **Status: Released**

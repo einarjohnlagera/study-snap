@@ -154,7 +154,28 @@ describe("ChallengeQuizPage", () => {
   function setupInProgressChallengeQuiz(
     mode: "challenge" | "board_exam" = "challenge",
     timerStartedAtEpochSeconds = Math.floor(Date.now() / 1000),
+    options: {
+      quiz?: Array<{
+        question: string;
+        choices: string[];
+        correctIndex: number;
+        concept: string;
+        explanation: string;
+      }>;
+      currentQuestionIndex?: number;
+      selectedChoices?: Record<string, number>;
+      timeLimitSeconds?: number;
+    } = {},
   ) {
+    const quiz = options.quiz ?? [
+      {
+        question: "What powers the cell?",
+        choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+        correctIndex: 0,
+        concept: "Concept",
+        explanation: "Explanation",
+      },
+    ];
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       planType: "PRO",
@@ -189,24 +210,16 @@ describe("ChallengeQuizPage", () => {
       status: "IN_PROGRESS",
       studyPackId: "sp-1",
       title: "Challenge Note",
-      totalQuestions: 1,
-      timeLimitSeconds: 600,
+      totalQuestions: quiz.length,
+      timeLimitSeconds: options.timeLimitSeconds ?? 600,
       usedThisMonth: 0,
       monthlyLimit: 50,
       mode,
       selectedDifficulty: mode === "board_exam" ? "mixed" : "medium",
-      quiz: [
-        {
-          question: "What powers the cell?",
-          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
-          correctIndex: 0,
-          concept: "Concept",
-          explanation: "Explanation",
-        },
-      ],
-      currentQuestionIndex: 0,
+      quiz,
+      currentQuestionIndex: options.currentQuestionIndex ?? 0,
       sessionState: {
-        selectedChoices: {},
+        selectedChoices: options.selectedChoices ?? {},
         timerStartedAtEpochSeconds,
       },
     });
@@ -339,6 +352,46 @@ describe("ChallengeQuizPage", () => {
         selectedChoices: options.selectedChoices ?? {},
         timerStartedAtEpochSeconds: options.timerStartedAtEpochSeconds ?? Math.floor(Date.now() / 1000),
       },
+    });
+  }
+
+  function twoQuestionChallengeQuiz() {
+    return [
+      {
+        question: "What powers the cell?",
+        choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+        correctIndex: 0,
+        concept: "Cell Biology",
+        explanation: "Mitochondria produce ATP.",
+      },
+      {
+        question: "What protects the plant cell?",
+        choices: ["Cell wall", "Mitochondria", "Nucleus", "Ribosome"],
+        correctIndex: 0,
+        concept: "Cell Structure",
+        explanation: "The cell wall protects plant cells.",
+      },
+    ];
+  }
+
+  function mockCompletedChallengeQuiz(
+    totalQuestions = 1,
+    correctAnswers = 1,
+    scorePercentage = 100,
+  ) {
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions,
+      correctAnswers,
+      scorePercentage,
+      performanceLevel: scorePercentage >= 80 ? "Excellent" : "Needs Improvement",
+      conceptBreakdown: [],
+      weakConcepts: [],
+      durationSeconds: 10,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:01:00Z",
     });
   }
 
@@ -712,6 +765,9 @@ describe("ChallengeQuizPage", () => {
     // one-time entry query gets stripped from the URL right after the first request, so simulate
     // that here before re-adding it for the second CTA click. Without clearing
     // redoMissedStartRequestedRef on success, this second request would silently never fire.
+    const redoChoice = screen.getAllByRole("button").find((button) => button.getAttribute("aria-pressed") === "false");
+    expect(redoChoice).toBeDefined();
+    fireEvent.click(redoChoice!);
     fireEvent.click(await screen.findByRole("button", { name: "Complete Quiz" }));
     await screen.findByText("Keep going. Focus on the weak concepts below to build confidence.");
 
@@ -1128,7 +1184,7 @@ describe("ChallengeQuizPage", () => {
     jest.setSystemTime(new Date(1_720_000_598_000));
     setupBoardExamSession({
       currentQuestionIndex: 1,
-      selectedChoices: { "0": 0 },
+      selectedChoices: { "0": 0, "1": 0 },
       timerStartedAtEpochSeconds: 1_720_000_000,
     });
     (completeChallengeQuizSession as jest.Mock).mockImplementation(() => new Promise(() => {}));
@@ -1146,6 +1202,137 @@ describe("ChallengeQuizPage", () => {
     });
 
     expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it("submits immediately on manual submit when every question is answered", async () => {
+    setupInProgressChallengeQuiz();
+    mockCompletedChallengeQuiz();
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    expect(screen.getByText(/starting question set adapts/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Start with 5 questions/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+
+    await waitFor(() => expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog", { name: "Submit with unanswered questions?" })).not.toBeInTheDocument();
+  });
+
+  it("blocks manual submit and shows the unanswered count", async () => {
+    setupInProgressChallengeQuiz(
+      "challenge",
+      Math.floor(Date.now() / 1000),
+      {
+        quiz: twoQuestionChallengeQuiz(),
+        currentQuestionIndex: 1,
+        selectedChoices: { "0": 0 },
+      },
+    );
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Complete Quiz" }));
+
+    expect(screen.getByRole("dialog", { name: "Submit with unanswered questions?" })).toBeInTheDocument();
+    expect(screen.getByText("You have 1 unanswered question. You can go back to review them or submit anyway.")).toBeInTheDocument();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("returns to the first unanswered question without submitting", async () => {
+    setupInProgressChallengeQuiz(
+      "challenge",
+      Math.floor(Date.now() / 1000),
+      {
+        quiz: twoQuestionChallengeQuiz(),
+        currentQuestionIndex: 1,
+        selectedChoices: { "1": 0 },
+      },
+    );
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Complete Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+
+    expect(await screen.findByText("What powers the cell?")).toBeInTheDocument();
+    expect(screen.getByText("Question 1 of 2")).toBeInTheDocument();
+    expect(completeChallengeQuizSession).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Submit with unanswered questions?" })).not.toBeInTheDocument();
+  });
+
+  it("submits anyway with unanswered questions counted as incomplete", async () => {
+    setupInProgressChallengeQuiz(
+      "challenge",
+      Math.floor(Date.now() / 1000),
+      {
+        quiz: twoQuestionChallengeQuiz(),
+        currentQuestionIndex: 1,
+        selectedChoices: { "0": 0 },
+      },
+    );
+    mockCompletedChallengeQuiz(1, 1, 100);
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Complete Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit anyway" }));
+
+    await waitFor(() => {
+      expect(completeChallengeQuizSession).toHaveBeenCalledWith("session-1", expect.objectContaining({
+        correctAnswers: 1,
+        totalQuestions: 2,
+      }));
+    });
+    expect(await screen.findByText("Overall Completion Score")).toBeInTheDocument();
+  });
+
+  it("surfaces the existing page error when submit anyway fails", async () => {
+    setupInProgressChallengeQuiz(
+      "challenge",
+      Math.floor(Date.now() / 1000),
+      {
+        quiz: twoQuestionChallengeQuiz(),
+        currentQuestionIndex: 1,
+        selectedChoices: { "0": 0 },
+      },
+    );
+    (completeChallengeQuizSession as jest.Mock).mockRejectedValue(new Error("Could not finalize this quiz."));
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Complete Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit anyway" }));
+
+    expect(await screen.findByText("Could not finalize this quiz.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Submit with unanswered questions?" })).not.toBeInTheDocument();
+  });
+
+  it("auto-submits unanswered questions at timeout without opening the manual guard", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(1_720_000_598_000));
+    setupInProgressChallengeQuiz(
+      "challenge",
+      1_720_000_000,
+      {
+        quiz: twoQuestionChallengeQuiz(),
+        currentQuestionIndex: 1,
+        selectedChoices: {},
+        timeLimitSeconds: 600,
+      },
+    );
+    mockCompletedChallengeQuiz(2, 0, 0);
+
+    render(<ChallengeQuizPage />);
+    await screen.findByRole("button", { name: "Complete Quiz" });
+
+    await act(async () => {
+      jest.advanceTimersByTime(3_000);
+    });
+
+    await waitFor(() => expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog", { name: "Submit with unanswered questions?" })).not.toBeInTheDocument();
     jest.useRealTimers();
   });
 
@@ -1527,6 +1714,7 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit anyway" }));
 
     await screen.findByText("Board Exam Result");
 
