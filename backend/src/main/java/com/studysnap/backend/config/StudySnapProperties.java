@@ -102,9 +102,9 @@ public class StudySnapProperties {
         private int freeMonthlyStudyPackLimit = 10;
         private int plusMonthlyStudyPackLimit = 50;
         private int proMonthlyStudyPackLimit = 100;
-        private int freeMonthlyChallengeQuizLimit = 5;
-        private int plusMonthlyChallengeQuizLimit = 25;
-        private int proMonthlyChallengeQuizLimit = 50;
+        private int freeMonthlyChallengeQuizLimit = 20;
+        private int plusMonthlyChallengeQuizLimit = 100;
+        private int proMonthlyChallengeQuizLimit = 200;
         private int freeMonthlyAdaptivePracticeLimit = 3;
         private int plusMonthlyAdaptivePracticeLimit = 10;
         private int proMonthlyAdaptivePracticeLimit = 30;

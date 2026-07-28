@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.InterviewPracticeCritique;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.MockQuizGenerationUtils;
@@ -29,7 +30,7 @@ public class QuizGenerationService {
     private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
 
-    public List<QuizItem> generateChallengeQuiz(
+    public GeneratedChallengeQuizContent generateChallengeQuiz(
             String studyPackTitle,
             String studyPackSummary,
             List<String> keyConcepts,
@@ -52,17 +53,19 @@ public class QuizGenerationService {
 
         log.info(MOCK_GENERATION_LOG_MESSAGE, QUIZ_TYPE_CHALLENGE);
         maybeApplyMockDelay();
-        return MockQuizGenerationUtils.generateChallengeQuiz(
-                studyPackTitle,
-                keyConcepts,
-                disallowedQuestions,
-                questionCount,
-                difficulty,
-                context
+        return GeneratedChallengeQuizContent.withoutUsage(
+                MockQuizGenerationUtils.generateChallengeQuiz(
+                        studyPackTitle,
+                        keyConcepts,
+                        disallowedQuestions,
+                        questionCount,
+                        difficulty,
+                        context
+                )
         );
     }
 
-    public List<QuizItem> generateMoreChallengeQuiz(
+    public GeneratedChallengeQuizContent generateMoreChallengeQuiz(
             String studyPackTitle,
             String studyPackSummary,
             List<String> keyConcepts,
@@ -87,13 +90,15 @@ public class QuizGenerationService {
 
         log.info(MOCK_GENERATION_LOG_MESSAGE, QUIZ_TYPE_CHALLENGE);
         maybeApplyMockDelay();
-        return MockQuizGenerationUtils.generateChallengeQuiz(
-                studyPackTitle,
-                keyConcepts,
-                disallowedQuestions,
-                questionCount,
-                difficulty,
-                context
+        return GeneratedChallengeQuizContent.withoutUsage(
+                MockQuizGenerationUtils.generateChallengeQuiz(
+                        studyPackTitle,
+                        keyConcepts,
+                        disallowedQuestions,
+                        questionCount,
+                        difficulty,
+                        context
+                )
         );
     }
 

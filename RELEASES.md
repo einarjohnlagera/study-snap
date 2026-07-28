@@ -1,5 +1,29 @@
 # RELEASES.md - NoteLib
 
+## v0.61.0 - Challenge Quiz Quota Increase
+
+**Status: Released**
+
+Theme: raise Challenge Quiz's monthly quota substantially (FREE 5→20, PLUS 25→100, PRO 50→200) so a learner rarely thinks about running out, and capture Challenge Quiz's LLM token/cost usage for the first time so the increase's effect on spend is observable rather than blind. Reclaims the `v0.61.0` minor-version slot from `Explore Convergence` (renumbered to `v0.62.0`) since this item's gate — owner ratification — cleared 2026-07-28, while Explore's Diagnostic Read gate remains unmet.
+
+### Planned Scope
+
+- **Monthly quota increase (backend + frontend).** Challenge Quiz's monthly limits go from FREE 5 / PLUS 25 / PRO 50 to FREE 20 / PLUS 100 / PRO 200 — a uniform 4x, preserving today's 1:5:10 tier ratio. Reuses the existing rolling-billing-period tracking as-is; no new infrastructure. A genuinely daily-reset model was considered and rejected — real study behavior is bursty around exams, and a daily quota would force the product to dictate the learner's study schedule rather than let them study when they need to.
+- **Challenge Quiz LLM token/cost telemetry (backend).** Challenge Quiz's generation path never records token usage today, unlike Study Pack generation which already does via `extractUsageMetadata`/`StudyPackEntity`'s existing columns. Wires the same extraction into the Challenge Quiz path and persists it on `quick_review_sessions` (new nullable columns, accumulated across a session's lifetime including "+5" growth) so a cost blowup from the quota increase is visible in the data, not only after the invoice. Board Exam Mode, Long Exam, and Adaptive Practice are out of scope.
+- Price decrease (the other half of the original held proposal) is explicitly deferred, not part of this release — see `docs/product/ROADMAP.md`'s Backlog Index for the reasoning.
+
+Anti-drift: Long Exam and Adaptive Practice quotas unchanged. **Board Exam Mode's own dedicated 10-source-note-units/month cap is unchanged** — Board Exam sessions also draw from the shared Challenge Quiz counter this release raised, but that dedicated cap remains the binding constraint in every realistic path (10 units vs. a 200-quiz PRO ceiling), so this release strictly improves Board Exam's effective headroom rather than changing its own limit. No new tracking infrastructure (reuses the existing rolling-period `UserUsageEntity` model); no pricing change. Full technical detail (root causes, fix designs, file:line anchors) is in `docs/product/ROADMAP.md`'s own "v0.61.0 — Challenge Quiz Quota Increase" section.
+
+### Shipped
+
+- **Onboarding abandonment analytics fix (frontend).** `ONBOARDING_V2_ABANDONED` now fires only when an in-progress onboarding component truly unmounts, at most once per component lifetime, and only after that same lifetime emitted `ONBOARDING_V2_STARTED`. Step transitions no longer create false abandonment events, and redirect-only visits that never start onboarding cannot emit abandonment.
+- **Challenge Quiz monthly quota increase (backend + frontend).** The rolling monthly Challenge Quiz limits are now FREE 20 / PLUS 100 / PRO 200 across backend enforcement and the shared frontend pricing configuration. The existing env-var overrides and rolling billing-period model remain intact; no other mode quota or price changed.
+- **Challenge Quiz LLM token/cost telemetry (backend).** Challenge Quiz's two real-LLM shortfall paths (session start, "+5 More") now extract and accumulate model/token usage onto `quick_review_sessions` via a new `V98` migration, mirroring `StudyPackEntity`'s existing column shape. Bank/template-only sessions correctly stay null; a usage-extraction failure is caught and logged, never blocks generation.
+
+### Known limitations
+
+- **Telemetry has no reader yet.** This release's justification for shipping usage telemetry was making the quota increase's spend effect "observable rather than blind" — what shipped is the columns themselves, not a baseline, a threshold, or a query against them. Nobody is reading this data yet. Separately, by correct design the columns stay null for every bank/template-served session, which after `v0.60.0`'s Official template sharing is likely a large share of Challenge Quiz volume — a naive read of "mostly null" could be misread as "spend is low" rather than "most sessions never call the LLM at all." Next step: a read of these columns roughly 30 days post-deploy, with that null-for-pooled caveat stated up front.
+
 ## v0.60.3 - Challenge Quiz Shaping
 
 **Status: Released**

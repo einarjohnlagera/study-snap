@@ -6,7 +6,7 @@ export type PricingExportPlan = "FREE" | "PLUS" | "PRO";
 export const pricingConfig = {
   free: {
     studyPacksPerMonth: 10,
-    challengeQuizzesPerMonth: 5,
+    challengeQuizzesPerMonth: 20,
     adaptivePracticePerMonth: 3,
     ocrPerMonth: 20,
     docxExportsPerMonth: 2,
@@ -16,7 +16,7 @@ export const pricingConfig = {
   },
   plus: {
     studyPacksPerMonth: 50,
-    challengeQuizzesPerMonth: 25,
+    challengeQuizzesPerMonth: 100,
     noteGenerationsPerMonth: 25,
     docxExportsPerMonth: 15,
     teacherDocxExportsPerMonth: null,
@@ -26,7 +26,7 @@ export const pricingConfig = {
   },
   pro: {
     studyPacksPerMonth: 100,
-    challengeQuizzesPerMonth: 50,
+    challengeQuizzesPerMonth: 200,
     adaptivePracticePerMonth: 30,
     interviewPracticePerMonth: 10,
     longExamPerMonth: 12,

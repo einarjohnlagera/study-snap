@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.60.3 — Challenge Quiz Shaping** (Released, base branch `releases/v0.60.3`). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
+Current version: **v0.61.0 — Challenge Quiz Quota Increase** (In Progress, base branch `releases/v0.61.0`). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -201,6 +201,13 @@ When closing a release (marking it Released), commit the closure directly on the
 - **Full pressure test** (multiple Explore agents inventorying every backend/frontend file touched this release, synthesized and pressure-tested via `advisor`) when the release has a single concept/entity touching 3+ surfaces (e.g. backend + several frontend consumers), OR roughly 6+ PRs, OR more than one PR touched the same pre-existing shared method/component.
 - **Otherwise**, a single `advisor()` call summarizing what shipped is enough — cheaper, and still catches anti-drift violations.
 - Fix or explicitly document (in `RELEASES.md`, as a "Known limitations" note) every finding before signing off — never silently drop a finding.
+
+**Escalate to a fresh, independently-instructed review for hard-to-find bugs — gate it, don't default to it.** `advisor()` stays the default check before presenting any non-trivial root-cause finding as settled (call it before declaring something done, per its own instructions — the actual failure mode in practice is skipping that checkpoint, not lacking a stronger option). Escalate past `advisor()` to a fresh agent with no inherited context (Agent tool, `model: "opus"`, explicitly told to read the real code/data rather than trust a summary) only when a root-cause claim meets one of these:
+- a data/metric relationship that shouldn't be mathematically or logically possible under the stated explanation (e.g. one `COUNT(DISTINCT ...)` exceeding another it should be bounded by);
+- the bug class is inherently hard to reason about serially — concurrency, async ordering, effect/component lifecycle timing, migrations, anything where the mechanism has to be traced through indirect state rather than observed directly;
+- the fix is about to ship and touches something that already feeds, or will feed, a real product/business decision (e.g. a metric behind a retention read).
+
+A typical isolated bug fix needs neither — direct verification or a single `advisor()` call is enough. This escalation is expensive when used (tens of thousands of tokens, several minutes) — the trigger conditions above are the gate, not general caution.
 
 **Always kick off a version before any implementation.** The kickoff checklist below is the **first commit** on a new `releases/vX.Y.Z` branch — committed directly to that branch — and must land **before** any feature/fix branch is cut or any code is written for the release. Do not start implementation on a version that has not been kicked off. If you find yourself implementing and the version is not yet opened (no `RELEASES.md` section, version refs not bumped), stop and run the kickoff first.
 

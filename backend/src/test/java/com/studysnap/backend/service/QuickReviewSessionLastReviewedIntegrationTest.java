@@ -94,6 +94,10 @@ class QuickReviewSessionLastReviewedIntegrationTest {
                     session_metadata json,
                     session_state json,
                     quota_exempt boolean not null default false,
+                    model_used varchar(64),
+                    input_tokens integer,
+                    output_tokens integer,
+                    cached_input_tokens integer,
                     created_at timestamp with time zone not null,
                     completed_at timestamp with time zone
                 )

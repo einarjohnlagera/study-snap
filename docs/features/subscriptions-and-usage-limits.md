@@ -24,7 +24,7 @@ Challenge Quiz has no manual difficulty selector (removed v0.60.1) on any plan; 
 ### Free
 
 - `10` Study Packs / month
-- `5` Challenge Quizzes / month
+- `20` Challenge Quizzes / month
 - topic note generation: backend-configured Free limit (`5` by default)
 - OCR: backend-configured Free limit (`20` by default)
 - exports: `2` / month
@@ -37,7 +37,7 @@ Challenge Quiz has no manual difficulty selector (removed v0.60.1) on any plan; 
 ### Plus
 
 - `50` Study Packs / month
-- `25` Challenge Quizzes / month
+- `100` Challenge Quizzes / month
 - topic note generation: backend-configured Plus limit (`25` by default)
 - OCR: backend-configured Plus limit (`50` by default)
 - exports: `15` / month
@@ -48,7 +48,7 @@ Challenge Quiz has no manual difficulty selector (removed v0.60.1) on any plan; 
 ### Pro
 
 - `100` Study Packs / month
-- `50` Challenge Quizzes / month
+- `200` Challenge Quizzes / month
 - Board Exam Mode uses the shared Challenge Quiz budget and has a dedicated `10` source-note units / month hard cap; quota is deducted per source note (a 3-note session costs 3 units)
 - topic note generation: backend-configured Pro limit (`100` by default)
 - OCR: backend-configured Pro limit (`100` by default)
