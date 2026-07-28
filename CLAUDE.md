@@ -220,3 +220,4 @@ A typical isolated bug fix needs neither — direct verification or a single `ad
 6. Update release baseline line in `README.md`.
 7. Write release notes to `docs/releases/v{X.Y.Z}.md` for the version just closed.
 8. Scan `ROADMAP.md`'s Backlog Index: bump `Last reviewed`, check whether any `Gate` condition became true, and verify every `docs/claude-prompt/*-out/` planning directory still has a row — this is the only enforced checkpoint against a large planning effort (a multi-document Fable session, a paused exploration) silently going unindexed across release cycles.
+9. Scan the Backlog Index for `[CHECKPOINT — due YYYY-MM-DD]` rows past their due date (see "Gate types" in the Backlog Index intro) — a checkpoint that's overdue and unactioned is the same silent-drift risk step 8 guards against, just for vision-driven work shipped ahead of evidence instead of unindexed planning docs.
