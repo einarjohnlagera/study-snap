@@ -1,5 +1,20 @@
 # RELEASES.md - NoteLib
 
+## v0.60.3 - Challenge Quiz Shaping & Onboarding Coverage Capture
+
+**Status: In Progress**
+
+Theme: shape Challenge Quiz's pacing and correctness (adaptive initial question count, a Redo Missed Questions session-matching fix, an incomplete-submission guard) and add a lightweight onboarding demand-signal capture for Students with no matching Official content. Patch release off `v0.60.2`, following this project's existing patch-release convention — does not consume the `v0.61.0` minor-version slot.
+
+### Planned Scope
+
+- **Adaptive initial question count (backend).** Challenge Quiz sessions start with a flat 5 questions today regardless of the learner's last score; a score-adaptive count (10/12/15 for low/mid/high) is already computed by `resolveGenerationProfile` but never read. Wires `startSession`'s question count to that existing value for the Challenge (non-Board-Exam) branch only — Board Exam Mode and `startRedoMissedSession`'s own fixed count are explicitly unaffected.
+- **Redo Missed Questions session-matching fix (backend).** `startRedoMissedSession` currently reuses the same unscoped session-resolution method `startSession` does, so a stale ordinary in-progress session on the same study pack gets silently returned instead of a fresh missed-questions session. Adds a dedicated `sessionState` provenance marker (mirroring the existing `withPoolSourced` pattern) so a stale ordinary session is correctly forfeited and replaced, while `quotaExempt` is left untouched for its existing billing role.
+- **Incomplete-submission guard (frontend).** Manual Submit on a Challenge Quiz currently finalizes immediately with zero warning about unanswered questions. Adds a lightweight confirmation on manual submit only (never on a timeout-triggered auto-submit) — go back to the first unanswered question, or submit anyway with today's existing incomplete-scoring behavior.
+- **Onboarding coverage-gap capture (frontend).** The existing practice-first coverage check at onboarding only runs for `BOARD_EXAM` profiles today; on a miss, it silently discards the signal for every profile type. Extends the *check* (not the adoption fast-path) to `STUDENT`, and on a miss shows a small, skippable, non-blocking "tell us what you need" free-text prompt, submitted through the existing `POST /feedback` pipeline. **Gated at kickoff of this item specifically**, not the release as a whole: requires a prod query confirming effectively-zero `STUDENT`-profile presence in the Diagnostic Read's signup-surge measurement cohort, to avoid contaminating that read's funnel data mid-measurement. Owner-run (requires prod `DB_USER` access). Items above are unaffected and clear to implement now.
+
+Anti-drift: no schema change, no new endpoint/table for the onboarding item (reuses the existing feedback pipeline as-is), no change to Board Exam Mode, no change to quota/pricing, no change to the adoption fast-path itself. Full technical detail (root causes, fix designs, file:line anchors, second-opinion review outcome) is in `docs/product/ROADMAP.md`'s own "v0.60.3 — Challenge Quiz Shaping & Onboarding Coverage Capture" section.
+
 ## v0.60.2 - Challenge Quiz Known-Limitations Cleanup
 
 **Status: Released**
