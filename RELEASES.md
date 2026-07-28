@@ -16,7 +16,7 @@ Anti-drift: no change to Board Exam Mode, Long Exam, or Adaptive Practice quotas
 
 ### Shipped
 
-_(nothing yet)_
+- **Onboarding abandonment analytics fix (frontend).** `ONBOARDING_V2_ABANDONED` now fires only when an in-progress onboarding component truly unmounts, at most once per component lifetime, and only after that same lifetime emitted `ONBOARDING_V2_STARTED`. Step transitions no longer create false abandonment events, and redirect-only visits that never start onboarding cannot emit abandonment.
 
 ## v0.60.3 - Challenge Quiz Shaping
 

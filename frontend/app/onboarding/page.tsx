@@ -266,6 +266,7 @@ export default function OnboardingPage() {
   const practiceFirstEligibleTrackedRef = useRef(new Set<string>());
   const practiceFirstPlanAdoptedTrackedRef = useRef(new Set<string>());
   const shouldTrackAbandonmentRef = useRef(true);
+  const currentStepRef = useRef(draft.currentStep);
   const userIdRef = useRef<string | null>(null);
 
   const profileType = draft.profileType;
@@ -520,15 +521,19 @@ export default function OnboardingPage() {
   }, [draft.courseProgram, isPracticeFirstScreen, practiceFirstPlan]);
 
   useEffect(() => {
+    currentStepRef.current = draft.currentStep;
+  }, [draft.currentStep]);
+
+  useEffect(() => {
     return () => {
-      if (!shouldTrackAbandonmentRef.current) {
+      if (!startedTrackedRef.current || !shouldTrackAbandonmentRef.current) {
         return;
       }
       trackOnboardingEvent("ONBOARDING_V2_ABANDONED", {
-        last_step: draft.currentStep,
+        last_step: currentStepRef.current,
       });
     };
-  }, [draft.currentStep]);
+  }, []);
 
   useEffect(() => {
     if (!note?.id || !studyPackGenerating) {
