@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.61.0 - Challenge Quiz Quota Increase
+
+**Status: In Progress**
+
+Theme: raise Challenge Quiz's monthly quota substantially (FREE 5→20, PLUS 25→100, PRO 50→200) so a learner rarely thinks about running out, and capture Challenge Quiz's LLM token/cost usage for the first time so the increase's effect on spend is observable rather than blind. Reclaims the `v0.61.0` minor-version slot from `Explore Convergence` (renumbered to `v0.62.0`) since this item's gate — owner ratification — cleared 2026-07-28, while Explore's Diagnostic Read gate remains unmet.
+
+### Planned Scope
+
+- **Monthly quota increase (backend + frontend).** Challenge Quiz's monthly limits go from FREE 5 / PLUS 25 / PRO 50 to FREE 20 / PLUS 100 / PRO 200 — a uniform 4x, preserving today's 1:5:10 tier ratio. Reuses the existing rolling-billing-period tracking as-is; no new infrastructure. A genuinely daily-reset model was considered and rejected — real study behavior is bursty around exams, and a daily quota would force the product to dictate the learner's study schedule rather than let them study when they need to.
+- **Challenge Quiz LLM token/cost telemetry (backend).** Challenge Quiz's generation path never records token usage today, unlike Study Pack generation which already does via `extractUsageMetadata`/`StudyPackEntity`'s existing columns. Wires the same extraction into the Challenge Quiz path and persists it on `quick_review_sessions` (new nullable columns, accumulated across a session's lifetime including "+5" growth) so a cost blowup from the quota increase is visible in the data, not only after the invoice. Board Exam Mode, Long Exam, and Adaptive Practice are out of scope.
+- Price decrease (the other half of the original held proposal) is explicitly deferred, not part of this release — see `docs/product/ROADMAP.md`'s Backlog Index for the reasoning.
+
+Anti-drift: no change to Board Exam Mode, Long Exam, or Adaptive Practice quotas; no new tracking infrastructure (reuses the existing rolling-period `UserUsageEntity` model); no pricing change. Full technical detail (root causes, fix designs, file:line anchors) is in `docs/product/ROADMAP.md`'s own "v0.61.0 — Challenge Quiz Quota Increase" section.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.60.3 - Challenge Quiz Shaping
 
 **Status: Released**
