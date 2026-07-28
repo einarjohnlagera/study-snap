@@ -1,5 +1,29 @@
 # RELEASES.md - NoteLib
 
+## v0.62.0 - Knowledge Impact
+
+**Status: In Progress**
+
+Theme: give creators (currently 3 non-official public-note authors) a passive, retrospective view of the impact their published notes have had — "your notes helped N learners" — testing whether a recognition mechanism can move a community-publish rate that's gone to zero, rather than waiting for evidence the rate is already moving on its own.
+
+### Planned Scope
+
+- **Knowledge Impact dashboard (backend + frontend).** A passive/pull surface (not push notifications) on the creator's own profile, showing retrospective, aggregate framing only — "helped," never "ranked." Weights downstream signal (views/copies that led to N actual study sessions) over raw view/copy counts. Nothing comparative, ranked, real-time, or identifying across creators; private to the creator themselves; no streaks, badges, or leaderboards. Optional low-frequency opt-in digest reusing the existing Email Preferences category system. Design brief: `docs/claude-prompt/company-redefinition-out/09-knowledge-impact.md`, "Answers to the memo's 12 questions" and "Risks to avoid, if/when this is un-parked."
+- **Conditional-rate analytics event (backend).** A new `AnalyticsEventType` tracking whether a creator who viewed their own impact dashboard published again within N days — not a repeat of the raw 3-creator-count gate query. This is what makes the 2026-09-11 checkpoint (below) actually measurable instead of re-running an unreadable small-n count.
+- Fix, if in scope once the surface is built: `PublicLibraryRepositoryImpl`'s SQL-level official-author predicate checks admin-role only, missing the email-based check `PublicProfileService.isOfficialAuthor` (Java) uses — the OFFICIAL/COMMUNITY filter likely mis-buckets the owner's own public notes as community today, which would distort whose impact this dashboard is even measuring.
+
+Anti-drift: nothing comparative/ranked/real-time/identifying across creators; no push notifications; no new mastery or ConceptHealth signal; reuses the existing Email Preferences category system rather than a new notification channel.
+
+**Ratification and gate history:** this release proceeds despite its own data gate failing (3 distinct non-official public-note creators against a 20-30+ un-park threshold) — see `docs/product/ROADMAP.md`'s Backlog Index "Knowledge Impact" row for the full reasoning, the bootstrap-test check that validated proceeding anyway, and the 2026-09-11 checkpoint with its stated kill criterion.
+
+### Not yet done — next step before implementation
+
+**Technical scoping.** No file:line anchors, schema design, or endpoint design exist yet — this kickoff opens the version slot, it does not scope the feature. `09-knowledge-impact.md`'s design brief is the starting point; a scoping pass (Claude Code, per the task-routing table — architecture/UX work) needs to happen before a Codex prompt can be written.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.61.0 - Challenge Quiz Quota Increase
 
 **Status: Released**
