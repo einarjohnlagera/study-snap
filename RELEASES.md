@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.63.0 - Ask Companion
+
+**Status: In Progress**
+
+Theme: give PLUS a genuinely distinct capability — grounded Q&A over a Review Set's curator-authored Companion content — rather than more quota than FREE, using the cheapest, lowest-risk runtime-AI shape available (retrieval over static content, not generation). Reclaims the `v0.63.0` minor-version slot from `Explore Convergence` (renumbered to `v0.64.0`) since this item's gate — owner ratification — cleared 2026-07-29, while Explore's Diagnostic Read gate remains unmet (due after 2026-08-06). Sixth time a slot has changed hands this way, following `v0.58.0`, `v0.59.0`, `v0.60.0`, `v0.61.0`, and `v0.62.0`.
+
+### Planned Scope
+
+- **Ask Companion (backend + frontend).** Grounded Q&A over a top-level Review Set's authored Companion content (`note_collections.companion`), reusing the Interview Practice cost-control template: new `Feature.ASK_COMPANION` enum value, feature gate at PLUS+PRO (not FREE), a new monthly quota (`UserUsageEntity` field + migration) at 20 sessions/month, a per-session 6-turn cap (new mechanism — Interview Practice's fixed-question-set flow has no existing turn-cap code to reuse), the existing `AiRateLimitService` per-minute limit, and the CRITIQUE model tier. Only available on collections where `companion` is non-null — mirrors `CompanionDisplayCard`'s existing render-gating; no content to ground answers in otherwise.
+- **Design brief:** `docs/product/ROADMAP.md`'s "Future, gated — Runtime Companion (Ask Companion, Personalization)" section and its `v0.63.0 — Ask Companion` section below.
+
+Anti-drift: no mid-exam coaching (`EXAM_MODES.md`'s locked interactive-AI constraint is unaffected — this is a Companion-detail-page feature, not a quiz-session feature); grounded retrieval only, no free-generation; Personalization (PRO adaptive/learning-pattern guidance) is explicitly **not** in scope for this release — it stays gated on the separate, still-open Primary-Review-Set-vs-Study/Exam-Focus philosophy question (Post-v0.40.0 Polish Backlog).
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.62.0 - Knowledge Impact
 
 **Status: Released**
