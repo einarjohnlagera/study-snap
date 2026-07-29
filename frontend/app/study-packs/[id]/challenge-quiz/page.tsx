@@ -22,6 +22,7 @@ import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { CompanionResultBridgeCard } from "@/components/study-pack/companion-result-bridge-card";
+import { TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -379,6 +380,7 @@ export default function ChallengeQuizPage() {
   const [redoMissedEntryRequested, setRedoMissedEntryRequested] = useState(hasRedoMissedEntryQuery);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
+  const [primaryCollectionId, setPrimaryCollectionId] = useState<string | null>(null);
   const [primaryCollectionCompanion, setPrimaryCollectionCompanion] = useState<CompanionContent | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
@@ -522,14 +524,25 @@ export default function ChallengeQuizPage() {
         setCurrentLearnerLevel(me.learnerLevel);
       }
       if (me.primaryCollectionId) {
+        setPrimaryCollectionId(me.primaryCollectionId);
+        setPrimaryCollectionCompanion(null);
         void getCollectionGoal(me.primaryCollectionId)
           .then((goal) => {
             setWeeklyPacingWeeksRemaining(goal.weeksRemaining);
             setPrimaryCollectionCompanion(goal.companion);
           })
-          .catch(() => undefined);
+          .catch(() => {
+            setPrimaryCollectionId(null);
+            setPrimaryCollectionCompanion(null);
+          });
+      } else {
+        setPrimaryCollectionId(null);
+        setPrimaryCollectionCompanion(null);
       }
-    }).catch(() => undefined);
+    }).catch(() => {
+      setPrimaryCollectionId(null);
+      setPrimaryCollectionCompanion(null);
+    });
   }, [phase]);
 
   useEffect(() => {
@@ -2616,6 +2629,12 @@ export default function ChallengeQuizPage() {
             <CompanionResultBridgeCard
               companion={primaryCollectionCompanion}
               reviewSetLabel={getCollectionLabels(viewerProfileType).singular}
+            />
+            <TwiceMissedAskCompanionCard
+              twiceMissedConcepts={result.twiceMissedConcepts ?? []}
+              currentPlan={currentPlan}
+              primaryCollectionId={primaryCollectionId}
+              companion={primaryCollectionCompanion}
             />
             {nextStepResponse === null ? (
               <>

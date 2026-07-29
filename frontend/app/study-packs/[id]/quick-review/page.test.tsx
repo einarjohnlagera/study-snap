@@ -430,6 +430,37 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
   });
 
+  it("links a twice-missed Quick Review concept to the resolved Primary Review Set Companion", async () => {
+    setupCompleteState();
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "PLUS",
+        limits: { adaptivePracticePerMonth: 10 },
+        usage: { adaptivePracticeUsed: 0 },
+        remaining: { adaptivePracticeRemaining: 10 },
+      },
+    });
+    (completeQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseResult,
+      twiceMissedConcepts: ["Cell organelles"],
+    });
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });
+    (getCollectionGoal as jest.Mock).mockResolvedValue({
+      weeksRemaining: null,
+      companion: { overview: "Review how organelles work together." },
+    });
+
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    expect(await screen.findByRole("link", { name: "Ask Companion about this" })).toHaveAttribute(
+      "href",
+      "/collections/goal-1?askCompanionDraft=Can+you+explain+Cell+organelles+a+different+way%3F",
+    );
+  });
+
   it("does not show a Companion excerpt when the primary Review Set has no Companion content", async () => {
     setupCompleteState();
     (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });

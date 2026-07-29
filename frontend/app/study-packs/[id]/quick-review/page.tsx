@@ -18,6 +18,7 @@ import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { CompanionResultBridgeCard } from "@/components/study-pack/companion-result-bridge-card";
+import { TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { useBottomViewportClaim } from "@/components/exam-mode/exam-focus-context";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
@@ -204,6 +205,7 @@ export default function QuickReviewPage() {
   const [multiSelectSubmitted, setMultiSelectSubmitted] = useState(false);
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
+  const [primaryCollectionId, setPrimaryCollectionId] = useState<string | null>(null);
   const [primaryCollectionCompanion, setPrimaryCollectionCompanion] = useState<CompanionContent | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
@@ -477,14 +479,25 @@ export default function QuickReviewPage() {
         setCurrentLearnerLevel(me.learnerLevel);
       }
       if (me.primaryCollectionId) {
+        setPrimaryCollectionId(me.primaryCollectionId);
+        setPrimaryCollectionCompanion(null);
         void getCollectionGoal(me.primaryCollectionId)
           .then((goal) => {
             setWeeklyPacingWeeksRemaining(goal.weeksRemaining);
             setPrimaryCollectionCompanion(goal.companion);
           })
-          .catch(() => undefined);
+          .catch(() => {
+            setPrimaryCollectionId(null);
+            setPrimaryCollectionCompanion(null);
+          });
+      } else {
+        setPrimaryCollectionId(null);
+        setPrimaryCollectionCompanion(null);
       }
-    }).catch(() => undefined);
+    }).catch(() => {
+      setPrimaryCollectionId(null);
+      setPrimaryCollectionCompanion(null);
+    });
   }, [isComplete]);
 
   useEffect(() => {
@@ -910,7 +923,10 @@ export default function QuickReviewPage() {
     setConfidenceError(null);
     try {
       const updated = await saveQuickReviewConfidence(currentSessionId, level);
-      setPersistedResult(updated);
+      setPersistedResult((current) => ({
+        ...updated,
+        twiceMissedConcepts: current?.twiceMissedConcepts ?? [],
+      }));
       setConfidenceLevel(updated.confidenceLevel ?? level);
       setConfidenceAcknowledged(true);
     } catch (err) {
@@ -1083,6 +1099,12 @@ export default function QuickReviewPage() {
           <CompanionResultBridgeCard
             companion={primaryCollectionCompanion}
             reviewSetLabel={getCollectionLabels(viewerProfileType as ProfileType | null).singular}
+          />
+          <TwiceMissedAskCompanionCard
+            twiceMissedConcepts={persistedResult?.twiceMissedConcepts ?? []}
+            currentPlan={currentPlan as AppPlanType}
+            primaryCollectionId={primaryCollectionId}
+            companion={primaryCollectionCompanion}
           />
 
           {nextStepResponse === null ? (

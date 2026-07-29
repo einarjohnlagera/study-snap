@@ -182,8 +182,9 @@ Rules:
 
 Concept-level review signals:
 
-- `concept_health` stores `user_id`, `study_pack_id`, `concept`, and `last_correct_at`
+- `concept_health` stores `user_id`, `study_pack_id`, `concept`, `last_correct_at`, `last_incorrect_at`, and `incorrect_streak`
 - Quick Review, Challenge Quiz, and Adaptive Practice completion write correct and missed concepts from their persisted quiz selections; a concept is correct only when every question for that concept is answered correctly
+- `incorrect_streak` increments when a missed concept is recorded and resets to `0` when that concept is recorded correct; the scoped result flows return a concept once its updated streak reaches `2` so Ask Companion can own the "I still don't get it" path
 - data is scoped per user per study pack; never mix concept health across notes or Study Packs
 - v1 due logic is intentionally lightweight: never reviewed or last correct answer 3+ days ago means due
 - Adaptive Practice resolves due concepts from the source Study Pack key concepts and merges them before weak concepts

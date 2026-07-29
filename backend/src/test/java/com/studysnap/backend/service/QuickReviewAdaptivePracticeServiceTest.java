@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.AdaptivePracticeCompleteResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
@@ -464,8 +465,14 @@ class QuickReviewAdaptivePracticeServiceTest {
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        when(conceptHealthService.recordIncorrectAnswers(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Needs Practice")),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of("Needs Practice"));
 
-        adaptivePracticeService.completeAdaptiveSession(
+        AdaptivePracticeCompleteResponse response = adaptivePracticeService.completeAdaptiveSession(
                 sessionId.toString(),
                 userId,
                 1,
@@ -486,6 +493,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(List.of("Needs Practice")),
                 any(OffsetDateTime.class)
         );
+        assertThat(response.twiceMissedConcepts()).containsExactly("Needs Practice");
     }
 
     @Test

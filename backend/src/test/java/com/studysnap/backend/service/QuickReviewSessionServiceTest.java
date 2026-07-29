@@ -272,8 +272,14 @@ class QuickReviewSessionServiceTest {
 
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(conceptHealthService.recordIncorrectAnswers(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Needs Practice")),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of("Needs Practice"));
 
-        quickReviewSessionService.completeSession(
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(
                 sessionId.toString(),
                 userId,
                 new QuickReviewSessionCompleteRequest(2, 3, 0, 120, null)
@@ -285,6 +291,7 @@ class QuickReviewSessionServiceTest {
         verify(conceptHealthService).recordIncorrectAnswers(
                 eq(userId), eq(studyPackId), eq(List.of("Needs Practice")), any(OffsetDateTime.class)
         );
+        assertThat(response.twiceMissedConcepts()).containsExactly("Needs Practice");
     }
 
     @Test

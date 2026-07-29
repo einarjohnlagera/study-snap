@@ -5,7 +5,9 @@ import {
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
   getCollection,
+  getCollectionGoal,
   getInProgressChallengeQuizSession,
+  getMe,
   getNote,
   getPostSessionNextStep,
   listNotes,
@@ -62,6 +64,7 @@ jest.mock("@/lib/api", () => ({
   completeChallengeQuizSession: jest.fn(),
   forfeitChallengeQuizSession: jest.fn(),
   getCollection: jest.fn(),
+  getCollectionGoal: jest.fn(),
   getInProgressChallengeQuizSession: jest.fn(),
   getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
@@ -113,6 +116,9 @@ describe("ChallengeQuizPage", () => {
     (getAuthUser as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockResolvedValue({ id: "collection-1", items: [] });
+    (getCollectionGoal as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE" });
     (getNote as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockResolvedValue([]);
@@ -378,6 +384,7 @@ describe("ChallengeQuizPage", () => {
     totalQuestions = 1,
     correctAnswers = 1,
     scorePercentage = 100,
+    twiceMissedConcepts: string[] = [],
   ) {
     (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -392,8 +399,32 @@ describe("ChallengeQuizPage", () => {
       durationSeconds: 10,
       createdAt: "2026-03-21T10:00:00Z",
       completedAt: "2026-03-21T10:01:00Z",
+      twiceMissedConcepts,
     });
   }
+
+  it("links a twice-missed Challenge concept to the resolved Primary Review Set Companion", async () => {
+    setupInProgressChallengeQuiz();
+    mockCompletedChallengeQuiz(1, 0, 0, ["Cell Biology"]);
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
+      primaryCollectionId: "goal-1",
+    });
+    (getCollectionGoal as jest.Mock).mockResolvedValue({
+      weeksRemaining: null,
+      companion: { overview: "Review cell structures before energy pathways." },
+    });
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
+
+    expect(await screen.findByRole("link", { name: "Ask Companion about this" })).toHaveAttribute(
+      "href",
+      "/collections/goal-1?askCompanionDraft=Can+you+explain+Cell+Biology+a+different+way%3F",
+    );
+  });
 
   it("starts students on the shared mode-selection screen with Challenge Quiz emphasized", async () => {
     setupChallengePrestart(true, "STUDENT");

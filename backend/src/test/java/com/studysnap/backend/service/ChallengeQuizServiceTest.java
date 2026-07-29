@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.GenerateMoreChallengeQuizResponse;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
@@ -52,6 +53,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.atLeastOnce;
@@ -1885,8 +1887,14 @@ class ChallengeQuizServiceTest {
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        when(conceptHealthService.recordIncorrectAnswers(
+                any(UUID.class),
+                any(UUID.class),
+                anyList(),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of("Weak"));
 
-        challengeQuizService.completeSession(
+        ChallengeQuizSessionResponse response = challengeQuizService.completeSession(
                 sessionId.toString(),
                 userId,
                 new ChallengeQuizCompleteRequest(2, 3, 120)
@@ -1903,6 +1911,54 @@ class ChallengeQuizServiceTest {
                 studyPackId,
                 List.of("Weak"),
                 session.getCompletedAt()
+        );
+        assertThat(response.twiceMissedConcepts()).containsExactly("Weak");
+    }
+
+    @Test
+    void completeSession_boardExamModeNeverSurfacesTwiceMissedConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId,
+                userId,
+                studyPackId,
+                noteId,
+                "board_exam",
+                List.of(
+                        new QuizItem("Question 1", List.of("A", "B", "C", "D"), "A", "Mastered", "Explanation"),
+                        new QuizItem("Question 2", List.of("A", "B", "C", "D"), "B", "Weak", "Explanation"),
+                        new QuizItem("Question 3", List.of("A", "B", "C", "D"), "D", "Mastered", "Explanation")
+                ),
+                Map.of("0", "A", "1", "C", "2", "D")
+        );
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(conceptHealthService.recordIncorrectAnswers(
+                any(UUID.class),
+                any(UUID.class),
+                anyList(),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of("Weak"));
+
+        ChallengeQuizSessionResponse response = challengeQuizService.completeSession(
+                sessionId.toString(),
+                userId,
+                new ChallengeQuizCompleteRequest(2, 3, 120)
+        );
+
+        assertThat(response.twiceMissedConcepts()).isEmpty();
+        verify(challengeQuizQuestionBankService, never()).updateOutcomesAndReleaseClaims(
+                any(), any(), any(), any(), any(), any(), any(), any()
         );
     }
 

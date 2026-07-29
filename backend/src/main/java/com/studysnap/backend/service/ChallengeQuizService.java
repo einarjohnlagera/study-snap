@@ -570,8 +570,17 @@ public class ChallengeQuizService {
         if (!correctConcepts.isEmpty()) {
             conceptHealthService.recordCorrectAnswers(userId, saved.getStudyPackId(), correctConcepts, now);
         }
+        List<String> twiceMissedConcepts = List.of();
         if (!missedConcepts.isEmpty()) {
-            conceptHealthService.recordIncorrectAnswers(userId, saved.getStudyPackId(), missedConcepts, now);
+            List<String> qualifyingConcepts = conceptHealthService.recordIncorrectAnswers(
+                    userId,
+                    saved.getStudyPackId(),
+                    missedConcepts,
+                    now
+            );
+            if (MODE_CHALLENGE.equals(extractMode(saved.getSessionState()))) {
+                twiceMissedConcepts = qualifyingConcepts;
+            }
         }
         if (MODE_BOARD_EXAM.equals(extractMode(saved.getSessionState()))
                 && QuizSessionStateUtils.extractPoolSourced(saved.getSessionState())) {
@@ -608,7 +617,8 @@ public class ChallengeQuizService {
                 saved.getCreatedAt(),
                 saved.getCompletedAt(),
                 isFirstCompletedSessionEver,
-                isSecondCompletedSessionEver
+                isSecondCompletedSessionEver,
+                twiceMissedConcepts
         );
     }
 
