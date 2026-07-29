@@ -26,6 +26,7 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndWeeklySummaryRemindersEnabledTrue(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus status);
+    List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndKnowledgeImpactDigestRemindersEnabledTrue(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndMarketingEmailsEnabledTrue(UserStatus status);
     List<UserEntity> findByStatusAndDeletedAtLessThanEqual(UserStatus status, OffsetDateTime deletedAt);
 

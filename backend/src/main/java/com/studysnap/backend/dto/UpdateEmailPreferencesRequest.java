@@ -5,6 +5,7 @@ public record UpdateEmailPreferencesRequest(
         boolean weakConceptRemindersEnabled,
         boolean weeklySummaryRemindersEnabled,
         boolean dueConceptsDigestRemindersEnabled,
+        boolean knowledgeImpactDigestRemindersEnabled,
         boolean marketingEmailsEnabled
 ) {
 }

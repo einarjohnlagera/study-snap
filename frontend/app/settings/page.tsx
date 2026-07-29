@@ -23,6 +23,7 @@ import {
   downloadMyData,
   getBillingPricing,
   getBillingHistory,
+  getCreatorImpact,
   getMyPlan,
   getMe,
   isEmailNotVerifiedError,
@@ -201,6 +202,8 @@ export default function SettingsPage() {
   const [weakConceptRemindersEnabled, setWeakConceptRemindersEnabled] = useState(false);
   const [weeklySummaryRemindersEnabled, setWeeklySummaryRemindersEnabled] = useState(false);
   const [dueConceptsDigestRemindersEnabled, setDueConceptsDigestRemindersEnabled] = useState(false);
+  const [knowledgeImpactDigestRemindersEnabled, setKnowledgeImpactDigestRemindersEnabled] = useState(false);
+  const [hasPublicNotes, setHasPublicNotes] = useState(false);
   const [marketingEmailsEnabled, setMarketingEmailsEnabled] = useState(false);
   const [mobileTabBarEnabled, setMobileTabBarEnabled] = useState(true);
   const [savingMobileTabBarPreference, setSavingMobileTabBarPreference] = useState(false);
@@ -253,11 +256,12 @@ export default function SettingsPage() {
     setEmailPreferencesMessage(null);
     setMobileTabBarPreferenceMessage(null);
     try {
-      const [me, usage, history, pricing] = await Promise.all([
+      const [me, usage, history, pricing, impact] = await Promise.all([
         getMe(),
         getMyPlan(),
         getBillingHistory(),
         getBillingPricing().catch(() => null),
+        getCreatorImpact().catch(() => null),
       ]);
       setProfile(me);
       setUsageSummary(usage);
@@ -268,6 +272,8 @@ export default function SettingsPage() {
       setWeakConceptRemindersEnabled(me.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(me.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(me.dueConceptsDigestRemindersEnabled);
+      setKnowledgeImpactDigestRemindersEnabled(me.knowledgeImpactDigestRemindersEnabled);
+      setHasPublicNotes(Boolean(impact?.notes.length));
       setMarketingEmailsEnabled(me.marketingEmailsEnabled);
       setMobileTabBarEnabled(me.mobileTabBarEnabled !== false);
     } catch (err) {
@@ -277,6 +283,7 @@ export default function SettingsPage() {
       setUsageSummary(null);
       setBillingHistory(null);
       setBillingPricing(null);
+      setHasPublicNotes(false);
     } finally {
       setLoading(false);
     }
@@ -335,6 +342,7 @@ export default function SettingsPage() {
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(updated.dueConceptsDigestRemindersEnabled);
+      setKnowledgeImpactDigestRemindersEnabled(updated.knowledgeImpactDigestRemindersEnabled);
       setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEngagementModeMessage("Learning style updated.");
     } catch (err) {
@@ -354,6 +362,7 @@ export default function SettingsPage() {
         weakConceptRemindersEnabled,
         weeklySummaryRemindersEnabled,
         dueConceptsDigestRemindersEnabled,
+        knowledgeImpactDigestRemindersEnabled,
         marketingEmailsEnabled,
       });
       setProfile(updated);
@@ -362,6 +371,7 @@ export default function SettingsPage() {
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(updated.dueConceptsDigestRemindersEnabled);
+      setKnowledgeImpactDigestRemindersEnabled(updated.knowledgeImpactDigestRemindersEnabled);
       setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEmailPreferencesMessage("Email preferences updated.");
     } catch (err) {
@@ -916,6 +926,22 @@ export default function SettingsPage() {
                   disabled={savingEmailPreferences}
                 />
               </div>
+              {hasPublicNotes ? (
+                <div className="flex items-start justify-between gap-4 p-4">
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium">Knowledge Impact digest</span>
+                    <span className="block text-xs text-foreground/60">
+                      A monthly update when new learners complete a quiz from your public notes. Nothing is sent when there is no new activity.
+                    </span>
+                  </span>
+                  <Checkbox
+                    ariaLabel="Knowledge Impact digest"
+                    checked={knowledgeImpactDigestRemindersEnabled}
+                    onChange={setKnowledgeImpactDigestRemindersEnabled}
+                    disabled={savingEmailPreferences}
+                  />
+                </div>
+              ) : null}
               <div className="flex items-start justify-between gap-4 p-4">
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">Product news &amp; tips</span>

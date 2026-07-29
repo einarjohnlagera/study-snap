@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
 import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
@@ -43,6 +44,15 @@ import java.util.UUID;
 @Slf4j
 public class RetentionService {
     private static final int SESSION_LOOKBACK_LIMIT = 10;
+    private static final int KNOWLEDGE_IMPACT_WINDOW_DAYS = 30;
+    private static final String FIRST_NAME_PARAMETER = "firstName";
+    private static final String DASHBOARD_URL_PARAMETER = "dashboardUrl";
+    private static final String DASHBOARD_PATH = "/dashboard";
+    private static final String DEFAULT_STUDY_PACK_TITLE = "your study pack";
+    private static final String KNOWLEDGE_IMPACT_DIGEST_TEMPLATE = "knowledge-impact-digest";
+    private static final String PUBLIC_CREATOR_PATH_PREFIX = "/public/creator/";
+    private static final String PUBLIC_PROFILE_PATH_PREFIX = "/public/profile/";
+    private static final String IMPACT_SECTION_FRAGMENT = "#your-impact-heading";
     private static final ZoneId EMAIL_BUDGET_ZONE = ZoneId.of("Asia/Manila");
     private static final List<QuickReviewSessionMode> WEEKLY_SUMMARY_QUIZ_MODES = List.of(
             QuickReviewSessionMode.QUICK_REVIEW,
@@ -51,6 +61,7 @@ public class RetentionService {
 
     private final StudySnapProperties properties;
     private final UserRepository userRepository;
+    private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ActivityEventRepository activityEventRepository;
@@ -85,6 +96,11 @@ public class RetentionService {
         return findDueConceptsDigestUsers(OffsetDateTime.now(ZoneOffset.UTC));
     }
 
+    @Transactional(readOnly = true)
+    public List<KnowledgeImpactDigestReminder> findKnowledgeImpactDigestUsers() {
+        return findKnowledgeImpactDigestUsers(OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
     @Transactional
     public DailyRetentionDispatchSummary sendDailyEmails() {
         return sendDailyEmails(OffsetDateTime.now(ZoneOffset.UTC));
@@ -110,6 +126,11 @@ public class RetentionService {
         return sendDueConceptsDigestEmails(OffsetDateTime.now(ZoneOffset.UTC));
     }
 
+    @Transactional
+    public int sendKnowledgeImpactDigestEmails() {
+        return sendKnowledgeImpactDigestEmails(OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
     List<InactiveUserReminder> findInactiveUsers(OffsetDateTime now) {
         return userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE).stream()
                 .filter(user -> isReturningAfterInactivity(user.getId(), now))
@@ -123,7 +144,7 @@ public class RetentionService {
                         user.getId(),
                         user.getEmail(),
                         resolveFirstName(user),
-                        buildAbsoluteUrl("/dashboard")
+                        buildAbsoluteUrl(DASHBOARD_PATH)
                 ))
                 .toList();
     }
@@ -161,6 +182,22 @@ public class RetentionService {
                 .toList();
     }
 
+    List<KnowledgeImpactDigestReminder> findKnowledgeImpactDigestUsers(OffsetDateTime now) {
+        OffsetDateTime windowStart = now.minusDays(KNOWLEDGE_IMPACT_WINDOW_DAYS);
+        return userRepository
+                .findByStatusAndEmailVerifiedAtIsNotNullAndKnowledgeImpactDigestRemindersEnabledTrue(UserStatus.ACTIVE)
+                .stream()
+                .filter(user -> cooldownElapsed(
+                        user.getId(),
+                        RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST,
+                        properties.getRetention().getKnowledgeImpactDigestCooldownDays(),
+                        now
+                ))
+                .map(user -> buildKnowledgeImpactDigestReminder(user, windowStart))
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
     DailyRetentionDispatchSummary sendDailyEmails(OffsetDateTime now) {
         InactivityDispatchResult inactivityDispatchResult = dispatchBudgetedInactivityEmails(now);
         int weakConceptSent = dispatchWeakConceptEmails(findUsersWithWeakConcepts(now), now);
@@ -181,6 +218,10 @@ public class RetentionService {
 
     int sendDueConceptsDigestEmails(OffsetDateTime now) {
         return dispatchDueConceptsDigestEmails(findDueConceptsDigestUsers(now), now);
+    }
+
+    int sendKnowledgeImpactDigestEmails(OffsetDateTime now) {
+        return dispatchKnowledgeImpactDigestEmails(findKnowledgeImpactDigestUsers(now), now);
     }
 
     private Optional<WeakConceptReminder> findWeakConceptReminderForUser(UserEntity user, OffsetDateTime now) {
@@ -237,7 +278,7 @@ public class RetentionService {
         String noteTitle = studyPackRepository.findById(latestChallenge.studyPackId())
                 .map(StudyPackEntity::getTitle)
                 .filter(value -> !value.isBlank())
-                .orElse("your study pack");
+                .orElse(DEFAULT_STUDY_PACK_TITLE);
 
         return Optional.of(new WeakConceptReminder(
                 user.getId(),
@@ -278,7 +319,7 @@ public class RetentionService {
                 quizzesTaken,
                 adaptiveSessions,
                 averageQuizScore,
-                buildAbsoluteUrl("/dashboard")
+                buildAbsoluteUrl(DASHBOARD_PATH)
         );
     }
 
@@ -314,16 +355,39 @@ public class RetentionService {
         List<String> studyPackTitles = dueConceptsByStudyPackId.entrySet().stream()
                 .filter(entry -> !entry.getValue().isEmpty())
                 .sorted((left, right) -> Integer.compare(right.getValue().size(), left.getValue().size()))
-                .map(entry -> titlesByStudyPackId.getOrDefault(entry.getKey(), "your study pack"))
+                .map(entry -> titlesByStudyPackId.getOrDefault(entry.getKey(), DEFAULT_STUDY_PACK_TITLE))
                 .limit(3)
                 .toList();
         return Optional.of(new DueConceptsDigestReminder(
-                user.getId(), user.getEmail(), resolveFirstName(user), dueConceptCount, studyPackTitles, buildAbsoluteUrl("/dashboard")
+                user.getId(), user.getEmail(), resolveFirstName(user), dueConceptCount, studyPackTitles,
+                buildAbsoluteUrl(DASHBOARD_PATH)
+        ));
+    }
+
+    private Optional<KnowledgeImpactDigestReminder> buildKnowledgeImpactDigestReminder(
+            UserEntity user,
+            OffsetDateTime windowStart
+    ) {
+        long newLearnersCount = noteRepository.countDistinctLearnersHelpedByCreatorUserIdSince(
+                user.getId(),
+                windowStart
+        );
+        if (newLearnersCount == 0) {
+            return Optional.empty();
+        }
+        return Optional.of(new KnowledgeImpactDigestReminder(
+                user.getId(),
+                user.getEmail(),
+                resolveFirstName(user),
+                newLearnersCount,
+                buildPublicProfileImpactUrl(user)
         ));
     }
 
     private String resolveStudyPackTitle(StudyPackEntity studyPack) {
-        return studyPack.getTitle() == null || studyPack.getTitle().isBlank() ? "your study pack" : studyPack.getTitle();
+        return studyPack.getTitle() == null || studyPack.getTitle().isBlank()
+                ? DEFAULT_STUDY_PACK_TITLE
+                : studyPack.getTitle();
     }
 
     private int dispatchInactivityEmails(List<InactiveUserReminder> candidates, OffsetDateTime now) {
@@ -335,7 +399,7 @@ public class RetentionService {
                     RetentionEmailType.INACTIVITY,
                     "retention-inactivity-reminder",
                     Map.of(
-                            "firstName", candidate.firstName(),
+                            FIRST_NAME_PARAMETER, candidate.firstName(),
                             "resumeUrl", candidate.resumeUrl()
                     ),
                     UnsubscribeCategory.STUDY_REMINDERS,
@@ -394,7 +458,7 @@ public class RetentionService {
                     RetentionEmailType.WEAK_CONCEPT,
                     "retention-weak-concept-reminder",
                     Map.of(
-                            "firstName", candidate.firstName(),
+                            FIRST_NAME_PARAMETER, candidate.firstName(),
                             "weakConceptList", formatWeakConcepts(candidate.weakConcepts()),
                             "adaptivePracticeUrl", candidate.adaptivePracticeUrl()
                     ),
@@ -416,12 +480,12 @@ public class RetentionService {
                     RetentionEmailType.WEEKLY_SUMMARY,
                     "retention-weekly-summary",
                     Map.of(
-                            "firstName", candidate.firstName(),
+                            FIRST_NAME_PARAMETER, candidate.firstName(),
                             "studyPacksCreated", Integer.toString(candidate.studyPacksCreated()),
                             "quizzesTaken", Integer.toString(candidate.quizzesTaken()),
                             "adaptiveSessions", Integer.toString(candidate.adaptiveSessions()),
                             "averageQuizScore", Integer.toString(candidate.averageQuizScore()),
-                            "dashboardUrl", candidate.dashboardUrl()
+                            DASHBOARD_URL_PARAMETER, candidate.dashboardUrl()
                     ),
                     UnsubscribeCategory.WEEKLY_SUMMARY,
                     now
@@ -439,12 +503,38 @@ public class RetentionService {
                     candidate.userId(), candidate.email(), RetentionEmailType.DUE_CONCEPTS_DIGEST,
                     "retention-due-concepts-digest",
                     Map.of(
-                            "firstName", candidate.firstName(),
+                            FIRST_NAME_PARAMETER, candidate.firstName(),
                             "dueConceptCount", Integer.toString(candidate.dueConceptCount()),
                             "studyPackList", formatStudyPackTitles(candidate.studyPackTitles()),
-                            "dashboardUrl", candidate.dashboardUrl()
+                            DASHBOARD_URL_PARAMETER, candidate.dashboardUrl()
                     ),
                     UnsubscribeCategory.DUE_CONCEPTS_DIGEST,
+                    now
+            )) {
+                sent += 1;
+            }
+        }
+        return sent;
+    }
+
+    private int dispatchKnowledgeImpactDigestEmails(
+            List<KnowledgeImpactDigestReminder> candidates,
+            OffsetDateTime now
+    ) {
+        int sent = 0;
+        for (KnowledgeImpactDigestReminder candidate : candidates) {
+            if (sendRetentionEmail(
+                    candidate.userId(),
+                    candidate.email(),
+                    RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST,
+                    KNOWLEDGE_IMPACT_DIGEST_TEMPLATE,
+                    Map.of(
+                            FIRST_NAME_PARAMETER, candidate.firstName(),
+                            "newLearnersCount", Long.toString(candidate.newLearnersCount()),
+                            "learnerLabel", candidate.newLearnersCount() == 1 ? "learner" : "learners",
+                            "impactUrl", candidate.impactUrl()
+                    ),
+                    UnsubscribeCategory.KNOWLEDGE_IMPACT_DIGEST,
                     now
             )) {
                 sent += 1;
@@ -613,6 +703,13 @@ public class RetentionService {
         return normalizedBase + path;
     }
 
+    private String buildPublicProfileImpactUrl(UserEntity user) {
+        String path = user.getUsername() == null || user.getUsername().isBlank()
+                ? PUBLIC_PROFILE_PATH_PREFIX + user.getId()
+                : PUBLIC_CREATOR_PATH_PREFIX + user.getUsername();
+        return buildAbsoluteUrl(path + IMPACT_SECTION_FRAGMENT);
+    }
+
     public record InactiveUserReminder(
             UUID userId,
             String email,
@@ -651,6 +748,15 @@ public class RetentionService {
             int dueConceptCount,
             List<String> studyPackTitles,
             String dashboardUrl
+    ) {
+    }
+
+    public record KnowledgeImpactDigestReminder(
+            UUID userId,
+            String email,
+            String firstName,
+            long newLearnersCount,
+            String impactUrl
     ) {
     }
 

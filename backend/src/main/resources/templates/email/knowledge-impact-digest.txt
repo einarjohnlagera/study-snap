@@ -1,0 +1,14 @@
+Hi {{firstName}},
+
+{{newLearnersCount}} {{learnerLabel}} completed a quiz from your public notes in the past 30 days.
+
+Your notes are continuing to help people study and review what they learned.
+
+View Your Impact:
+{{impactUrl}}
+
+{{unsubscribeFooterText}}
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app
