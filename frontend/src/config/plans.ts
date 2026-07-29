@@ -69,6 +69,7 @@ export const PLANS: Record<AppPlanType, {
       { label: `Take ${pricingConfig.plus.docxExportsPerMonth} study resources offline each month`, helper: EXPORT_HELPER },
       { label: `Share ${pricingConfig.plus.quizShareLinksPerMonth} quizzes with classmates each month` },
       { label: `Target weak areas with ${pricingConfig.plus.adaptivePracticePerMonth} Adaptive Practice sessions each month` },
+      { label: `Ask questions grounded in your Review Set Companion (${pricingConfig.plus.askCompanionPerMonth} sessions / month)` },
       { label: "Create more notes when your study load grows" },
     ],
   },
@@ -86,6 +87,7 @@ export const PLANS: Record<AppPlanType, {
       { label: "Share unlimited quizzes with classmates" },
       { label: `Keep improving weak areas with ${pricingConfig.pro.adaptivePracticePerMonth} Adaptive Practice sessions each month` },
       { label: `Rehearse real answers with ${pricingConfig.pro.interviewPracticePerMonth} Interview Practice sessions each month` },
+      { label: `Ask questions grounded in your Review Set Companion (${pricingConfig.pro.askCompanionPerMonth} sessions / month)` },
       { label: `Build stamina with ${pricingConfig.pro.longExamPerMonth} Long Exam sessions each month` },
       { label: `Prepare for boards with ${pricingConfig.pro.boardExamPerMonth} Board Exam sessions each month` },
     ],
@@ -158,6 +160,14 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     },
   },
   {
+    label: "Ask Companion",
+    values: {
+      FREE: null,
+      PLUS: `${pricingConfig.plus.askCompanionPerMonth} sessions`,
+      PRO: `${pricingConfig.pro.askCompanionPerMonth} sessions`,
+    },
+  },
+  {
     label: "Interview Practice",
     values: {
       FREE: null,
@@ -206,6 +216,7 @@ export type UpgradeCtaContext =
   | "note-generation-limit"
   | "adaptive-practice"
   | "interview-practice"
+  | "ask-companion"
   | "board-exam-mode"
   | "long-exam-mode"
   | "concept-review-timing"
@@ -276,6 +287,12 @@ export function getUpgradeCtas(
       return {
         primary: { label: "Unlock Interview Practice", targetPlan: "PRO" },
         secondary: null,
+      };
+    }
+    if (context === "ask-companion") {
+      return {
+        primary: { label: "Unlock Ask Companion — get Plus", targetPlan: "PLUS" },
+        secondary: { label: "Go Pro", targetPlan: "PRO" },
       };
     }
     if (context === "board-exam-mode") {

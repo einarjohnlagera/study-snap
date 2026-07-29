@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -76,7 +76,13 @@ import { setCollectionActionNotice } from "@/lib/collection-action-notice";
 import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
+import {
+  ASK_COMPANION_DRAFT_QUERY_PARAM,
+  hasRenderableCompanionContent,
+} from "@/lib/companion";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
+import { AskCompanionPanel } from "@/components/collections/ask-companion-panel";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
 type ReadinessLoadState = "idle" | "loading" | "ready" | "error";
@@ -963,24 +969,6 @@ function formatLocalDate(isoDate: string): string {
 
 function renderableCompanionText(value: string | null | undefined): string {
   return value?.trim() ?? "";
-}
-
-function hasRenderableCompanionContent(companion: CompanionContent | null): boolean {
-  if (!companion) {
-    return false;
-  }
-  const hasFaqContent = (companion.faq ?? []).some(
-    (item) => renderableCompanionText(item.question) || renderableCompanionText(item.answer),
-  );
-  const hasMentorTips = (companion.mentorTips ?? []).some(hasRenderableMentorTip);
-  return Boolean(
-    renderableCompanionText(companion.overview)
-    || renderableCompanionText(companion.studyStrategy)
-    || renderableCompanionText(companion.commonMistakes)
-    || renderableCompanionText(companion.resources)
-    || hasFaqContent
-    || hasMentorTips,
-  );
 }
 
 // Coach-voice framing over the curator-authored Companion sections. Purely presentational —
@@ -2566,11 +2554,14 @@ function SortableCollectionItemRow({
 
 export function CollectionDetailPageClient({ collectionId }: Readonly<{ collectionId: string }>) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialAskCompanionDraft = searchParams.get(ASK_COMPANION_DRAFT_QUERY_PARAM)?.trim() || undefined;
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   useEffect(() => {
     setAuthUser(getAuthUser());
   }, []);
-  const currentPlan = (authUser?.planType ?? "FREE") as AppPlanType;
+  const { usageSummary } = useBillingUsageSummary();
+  const currentPlan = (usageSummary?.plan ?? authUser?.planType ?? "FREE") as AppPlanType;
   const isAdmin = authUser?.role === "ADMIN";
   const showWeakAreas = canViewConceptHealth(currentPlan);
   const upgradeCtas = useMemo(() => getUpgradeCtas(currentPlan), [currentPlan]);
@@ -3293,6 +3284,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           />
         ) : null}
         <CompanionDisplayCard companion={collection.companion} labels={labels} />
+        {hasRenderableCompanionContent(collection.companion) ? (
+          <AskCompanionPanel
+            collectionId={collectionId}
+            currentPlan={currentPlan}
+            initialDraft={initialAskCompanionDraft}
+          />
+        ) : null}
 
         {mutationError ? (
           <Card className="flex items-start justify-between gap-4 border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
@@ -3465,6 +3463,13 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       />
 
       <CompanionDisplayCard companion={collection.companion} labels={labels} />
+      {hasRenderableCompanionContent(collection.companion) ? (
+        <AskCompanionPanel
+          collectionId={collectionId}
+          currentPlan={currentPlan}
+          initialDraft={initialAskCompanionDraft}
+        />
+      ) : null}
 
       <Card className="space-y-4 p-4 sm:p-6">
         <div>

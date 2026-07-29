@@ -51,6 +51,18 @@ public interface NoteCollectionRepository extends JpaRepository<NoteCollectionEn
 
     Optional<NoteCollectionEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select collection
+            from NoteCollectionEntity collection
+            where collection.id = :id
+              and collection.ownerUserId = :ownerUserId
+            """)
+    Optional<NoteCollectionEntity> findByIdAndOwnerUserIdForUpdate(
+            @Param("id") UUID id,
+            @Param("ownerUserId") UUID ownerUserId
+    );
+
     Optional<NoteCollectionEntity> findByIdAndVisibility(UUID id, CollectionVisibility visibility);
 
     List<NoteCollectionEntity> findByVisibilityOrderByUpdatedAtDesc(CollectionVisibility visibility);

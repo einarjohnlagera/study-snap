@@ -107,6 +107,9 @@ studysnap:
     plus-monthly-adaptive-practice-limit: ${PLUS_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:10}
     pro-monthly-adaptive-practice-limit: ${PRO_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}
     pro-monthly-interview-practice-limit: ${PRO_MONTHLY_INTERVIEW_PRACTICE_LIMIT:10}
+    free-monthly-ask-companion-limit: ${FREE_MONTHLY_ASK_COMPANION_LIMIT:0}
+    plus-monthly-ask-companion-limit: ${PLUS_MONTHLY_ASK_COMPANION_LIMIT:20}
+    pro-monthly-ask-companion-limit: ${PRO_MONTHLY_ASK_COMPANION_LIMIT:20}
     free-monthly-ocr-limit: ${FREE_MONTHLY_OCR_LIMIT:20}
     plus-monthly-ocr-limit: ${PLUS_MONTHLY_OCR_LIMIT:50}
     pro-monthly-ocr-limit: ${PRO_MONTHLY_OCR_LIMIT:100}

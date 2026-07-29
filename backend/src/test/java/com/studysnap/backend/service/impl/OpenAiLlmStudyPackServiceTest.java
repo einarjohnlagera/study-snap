@@ -95,6 +95,8 @@ class OpenAiLlmStudyPackServiceTest {
                 "Interview practice developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE}",
                 "Interview critique system prompt",
                 "Interview critique developer prompt {QUESTION} {CHOICES} {SELECTED_CHOICE} {CORRECT_CHOICE} {CONCEPT} {EXPLANATION}",
+                "Ask Companion system prompt",
+                "Ask Companion developer prompt {COMPANION_CONTENT}",
                 "Long exam system prompt",
                 "Long exam developer prompt for {QUESTION_COUNT}. {BATCH_HINT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}"
             )

@@ -291,7 +291,12 @@ public class QuickReviewAdaptivePracticeService {
             .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
-            return new AdaptivePracticeCompleteResponse(ADAPTIVE_PRACTICE_SESSION_ALREADY_COMPLETED_MESSAGE, false, false);
+            return new AdaptivePracticeCompleteResponse(
+                ADAPTIVE_PRACTICE_SESSION_ALREADY_COMPLETED_MESSAGE,
+                false,
+                false,
+                List.of()
+            );
         }
 
         int safeTotalQuestions = session.getTotalQuestions() == null
@@ -341,13 +346,20 @@ public class QuickReviewAdaptivePracticeService {
         if (!correctConcepts.isEmpty()) {
             conceptHealthService.recordCorrectAnswers(userId, session.getStudyPackId(), correctConcepts, now);
         }
+        List<String> twiceMissedConcepts = List.of();
         if (!missedConcepts.isEmpty()) {
-            conceptHealthService.recordIncorrectAnswers(userId, session.getStudyPackId(), missedConcepts, now);
+            twiceMissedConcepts = conceptHealthService.recordIncorrectAnswers(
+                userId,
+                session.getStudyPackId(),
+                missedConcepts,
+                now
+            );
         }
         return new AdaptivePracticeCompleteResponse(
             ADAPTIVE_PRACTICE_SESSION_COMPLETED_MESSAGE,
             isFirstCompletedSessionEver,
-            isSecondCompletedSessionEver
+            isSecondCompletedSessionEver,
+            twiceMissedConcepts
         );
     }
 

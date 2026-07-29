@@ -84,6 +84,7 @@ class ConceptHealthServiceTest {
         assertThat(saved.getStudyPackId()).isEqualTo(studyPackId);
         assertThat(saved.getConcept()).isEqualTo(OHMS_LAW_CONCEPT);
         assertThat(saved.getLastCorrectAt()).isEqualTo(now);
+        assertThat(saved.getIncorrectStreak()).isZero();
         assertThat(saved.getCreatedAt()).isEqualTo(now);
         assertThat(saved.getUpdatedAt()).isEqualTo(now);
     }
@@ -96,6 +97,7 @@ class ConceptHealthServiceTest {
         OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
         ConceptHealthEntity existing = conceptHealth(userId, studyPackId, RECURSION_CONCEPT, previous);
         existing.setLastIncorrectAt(now.minusDays(1));
+        existing.setIncorrectStreak(2);
 
         when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, RECURSION_CONCEPT))
             .thenReturn(Optional.of(existing));
@@ -105,6 +107,7 @@ class ConceptHealthServiceTest {
         verify(conceptHealthRepository).save(existing);
         assertThat(existing.getLastCorrectAt()).isEqualTo(now);
         assertThat(existing.getLastIncorrectAt()).isEqualTo(now.minusDays(1));
+        assertThat(existing.getIncorrectStreak()).isZero();
         assertThat(existing.getUpdatedAt()).isEqualTo(now);
         assertThat(existing.getCreatedAt()).isEqualTo(previous);
     }
@@ -120,12 +123,19 @@ class ConceptHealthServiceTest {
         when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, MISSED_CONCEPT))
             .thenReturn(Optional.of(existing));
 
-        conceptHealthService.recordIncorrectAnswers(userId, studyPackId, List.of(MISSED_CONCEPT), now);
+        List<String> twiceMissedConcepts = conceptHealthService.recordIncorrectAnswers(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            now
+        );
 
         verify(conceptHealthRepository).save(existing);
         assertThat(existing.getLastCorrectAt()).isEqualTo(previous);
         assertThat(existing.getLastIncorrectAt()).isEqualTo(now);
+        assertThat(existing.getIncorrectStreak()).isEqualTo(1);
         assertThat(existing.getUpdatedAt()).isEqualTo(now);
+        assertThat(twiceMissedConcepts).isEmpty();
     }
 
     @Test
@@ -144,8 +154,119 @@ class ConceptHealthServiceTest {
         ConceptHealthEntity saved = captor.getValue();
         assertThat(saved.getLastCorrectAt()).isNull();
         assertThat(saved.getLastIncorrectAt()).isEqualTo(now);
+        assertThat(saved.getIncorrectStreak()).isEqualTo(1);
         assertThat(saved.getCreatedAt()).isEqualTo(now);
         assertThat(saved.getUpdatedAt()).isEqualTo(now);
+    }
+
+    @Test
+    void recordIncorrectAnswers_returnsConceptAfterTwoConsecutiveMisses() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime firstMiss = OffsetDateTime.of(2026, 5, 27, 8, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime secondMiss = firstMiss.plusDays(1);
+        ConceptHealthEntity existing = conceptHealthWithSignals(
+            userId,
+            studyPackId,
+            MISSED_CONCEPT,
+            null,
+            null,
+            firstMiss
+        );
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, MISSED_CONCEPT))
+            .thenReturn(Optional.of(existing));
+
+        List<String> firstResult = conceptHealthService.recordIncorrectAnswers(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            firstMiss
+        );
+        List<String> secondResult = conceptHealthService.recordIncorrectAnswers(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            secondMiss
+        );
+
+        assertThat(firstResult).isEmpty();
+        assertThat(secondResult).containsExactly(MISSED_CONCEPT);
+        assertThat(existing.getIncorrectStreak()).isEqualTo(2);
+        assertThat(existing.getLastIncorrectAt()).isEqualTo(secondMiss);
+    }
+
+    @Test
+    void recordCorrectAnswers_resetsStreakSoTheNextMissDoesNotQualify() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        ConceptHealthEntity existing = conceptHealthWithSignals(
+            userId,
+            studyPackId,
+            MISSED_CONCEPT,
+            now.minusDays(2),
+            now.minusDays(1),
+            now.minusDays(2)
+        );
+        existing.setIncorrectStreak(2);
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, MISSED_CONCEPT))
+            .thenReturn(Optional.of(existing));
+
+        conceptHealthService.recordCorrectAnswers(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            now
+        );
+        List<String> result = conceptHealthService.recordIncorrectAnswers(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            now.plusMinutes(1)
+        );
+
+        assertThat(result).isEmpty();
+        assertThat(existing.getIncorrectStreak()).isEqualTo(1);
+    }
+
+    @Test
+    void recordIncorrectAnswers_missCorrectMissSequenceNeverReachesThreshold() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.of(2026, 5, 28, 8, 0, 0, 0, ZoneOffset.UTC);
+        ConceptHealthEntity existing = conceptHealthWithSignals(
+            userId,
+            studyPackId,
+            MISSED_CONCEPT,
+            null,
+            null,
+            now
+        );
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, MISSED_CONCEPT))
+            .thenReturn(Optional.of(existing));
+
+        List<String> firstMiss = conceptHealthService.recordIncorrectAnswers(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            now
+        );
+        conceptHealthService.recordCorrectAnswers(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            now.plusMinutes(1)
+        );
+        List<String> secondMiss = conceptHealthService.recordIncorrectAnswers(
+            userId,
+            studyPackId,
+            List.of(MISSED_CONCEPT),
+            now.plusMinutes(2)
+        );
+
+        assertThat(firstMiss).isEmpty();
+        assertThat(secondMiss).isEmpty();
+        assertThat(existing.getIncorrectStreak()).isEqualTo(1);
     }
 
     @Test

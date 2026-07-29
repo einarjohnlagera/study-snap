@@ -89,6 +89,23 @@ Ownership rule:
 - summaries, key concepts, quizzes, and practice/performance data are owned by `note_id`
 - legacy `study_pack_id` references can remain for compatibility, but `note_id` is canonical
 
+## Concept Health
+
+`concept_health` stores per-user, per-Study-Pack review signals for one normalized concept.
+
+Relevant fields:
+
+- `user_id`
+- `study_pack_id`
+- `concept`
+- `last_correct_at`
+- `last_incorrect_at`
+- `incorrect_streak` (`NOT NULL DEFAULT 0`)
+- `created_at`
+- `updated_at`
+
+`incorrect_streak` is consecutive, not cumulative. Recording a miss increments it in the same transaction as `last_incorrect_at`; recording a correct answer resets it to `0` in the same transaction as `last_correct_at`.
+
 ## Copy-Based Versioning
 
 Copy creates a new Note row.
@@ -353,6 +370,14 @@ Adaptive Practice sessions:
 - linked to Note and user
 - store generated adaptive payload, progress/completion, score data
 
+Ask Companion sessions:
+
+- live in the dedicated `ask_companion_sessions` table rather than quiz-session persistence
+- link one owned top-level collection and one user
+- store `ACTIVE` / `ENDED` status, a bounded `turn_count`, timestamps, and JSONB question/answer turn history
+- allow at most one `ACTIVE` row per user/collection through a partial unique index
+- end after six successful turns; a later question starts a new row and consumes another monthly session
+
 ## Usage Tracking
 
 Track usage buckets independently:
@@ -360,6 +385,7 @@ Track usage buckets independently:
 - Study Pack generation quota
 - Challenge Quiz quota
 - Adaptive Practice quota
+- Ask Companion session quota
 
 Possible schemas:
 
@@ -371,6 +397,7 @@ Current implementation notes:
 - `user_usage` is period-based:
   - includes `period_start` and `period_end`
   - counters are incremented against the resolved active billing window
+  - `ask_companion_used_this_month` counts conversation starts, not individual turns
 - `webhook_events` stores provider webhook idempotency state:
   - `provider`, `event_id`, `event_type`, `status`, timestamps
   - unique `(provider, event_id)` prevents duplicate processing
@@ -404,6 +431,7 @@ Recommended fields:
 - Note -> AdaptiveSession: one-to-many
 - Note/StudyPack -> ShareLink: one-to-many over time
 - User -> Subscription: one-to-many history (typically one active)
+- User/Collection -> AskCompanionSession: one-to-many over time, at most one active
 
 ## JSON Structures
 

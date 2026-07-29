@@ -63,4 +63,16 @@ class StudySnapPropertiesTest {
         assertThat(pricing.resolveMonthlyAdaptivePracticeLimit(PlanType.PRO)).isEqualTo(30);
         assertThat(pricing.isAdaptivePracticeAvailable(PlanType.PRO)).isTrue();
     }
+
+    @Test
+    void askCompanionIsAvailableToPlusAndProWithTwentyMonthlySessions() {
+        StudySnapProperties.Pricing pricing = new StudySnapProperties().getPricing();
+
+        assertThat(pricing.resolveMonthlyAskCompanionLimit(PlanType.FREE)).isZero();
+        assertThat(pricing.isAskCompanionAvailable(PlanType.FREE)).isFalse();
+        assertThat(pricing.resolveMonthlyAskCompanionLimit(PlanType.PLUS)).isEqualTo(20);
+        assertThat(pricing.isAskCompanionAvailable(PlanType.PLUS)).isTrue();
+        assertThat(pricing.resolveMonthlyAskCompanionLimit(PlanType.PRO)).isEqualTo(20);
+        assertThat(pricing.isAskCompanionAvailable(PlanType.PRO)).isTrue();
+    }
 }

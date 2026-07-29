@@ -47,6 +47,7 @@ public class FeatureGateService {
             case ADAPTIVE_QUIZ -> properties.getPricing().isAdaptivePracticeAvailable(planType);
             case LONG_EXAM_SESSION -> properties.getPricing().isLongExamAvailable(planType);
             case INTERVIEW_PRACTICE -> properties.getPricing().isInterviewPracticeAvailable(planType);
+            case ASK_COMPANION -> properties.getPricing().isAskCompanionAvailable(planType);
             case WEAK_CONCEPT_DETECTION -> true;
         };
     }

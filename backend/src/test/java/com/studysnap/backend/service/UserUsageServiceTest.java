@@ -58,6 +58,7 @@ class UserUsageServiceTest {
                 eq(0),
                 eq(0),
                 eq(0),
+                eq(0),
                 any(OffsetDateTime.class)
         );
     }
@@ -82,6 +83,7 @@ class UserUsageServiceTest {
                 eq(0),
                 eq(0),
                 eq(4),
+                eq(0),
                 eq(0),
                 eq(0),
                 eq(0),

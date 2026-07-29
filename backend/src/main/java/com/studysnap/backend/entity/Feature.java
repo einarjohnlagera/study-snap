@@ -13,6 +13,9 @@ public enum Feature {
     INTERVIEW_PRACTICE(
             "Interview Practice is a Pro feature. Upgrade to Pro to continue."
     ),
+    ASK_COMPANION(
+            "Ask Companion is available on Plus and Pro plans."
+    ),
     WEAK_CONCEPT_DETECTION(
             "Weak concepts are available."
     );

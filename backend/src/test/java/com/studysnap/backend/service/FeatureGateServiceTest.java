@@ -26,4 +26,14 @@ class FeatureGateServiceTest {
         assertThat(featureGateService.canStartChallengeQuiz(PlanType.FREE, 19)).isTrue();
         assertThat(featureGateService.canStartChallengeQuiz(PlanType.FREE, 20)).isFalse();
     }
+
+    @Test
+    void askCompanionIsGatedToPlusAndPro() {
+        StudySnapProperties properties = new StudySnapProperties();
+        FeatureGateService featureGateService = new FeatureGateService(mock(SubscriptionService.class), properties);
+
+        assertThat(featureGateService.hasFeatureAccess(PlanType.FREE, Feature.ASK_COMPANION)).isFalse();
+        assertThat(featureGateService.hasFeatureAccess(PlanType.PLUS, Feature.ASK_COMPANION)).isTrue();
+        assertThat(featureGateService.hasFeatureAccess(PlanType.PRO, Feature.ASK_COMPANION)).isTrue();
+    }
 }

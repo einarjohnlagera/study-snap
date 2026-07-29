@@ -40,11 +40,13 @@ Perfect for students who want consistent review and better retention.
 - `100` Quizzes / month
 - `15` exports / month
 - `10` Adaptive Practice sessions / month
+- `20` Ask Companion sessions / month
 - `10` shareable quiz links / month
 
 **Features**
 
 - Adaptive Practice (limited — `10` sessions / month)
+- Ask Companion grounded in curator-authored Review Set guidance (`20` sessions / month, up to `6` questions each)
 - Higher note generation limits (`25` topic notes / month)
 - Everything in Free
 
@@ -65,6 +67,7 @@ Designed for serious learners preparing for board and entrance exams.
 - `200` Quizzes / month
 - `30` Adaptive Practice sessions / month
 - `10` Interview Practice sessions / month
+- `20` Ask Companion sessions / month
 - `12` Long Exam sessions / month
 - `10` Board Exam sessions / month
 - Unlimited exports
@@ -74,6 +77,7 @@ Designed for serious learners preparing for board and entrance exams.
 
 - Adaptive Practice (higher limit — `30` sessions / month)
 - Interview Practice (`10` sessions / month, Professional profile)
+- Ask Companion grounded in curator-authored Review Set guidance (`20` sessions / month, up to `6` questions each)
 - Long Exam Mode (`12` sessions / month)
 - Board Exam Mode (`10` sessions / month, also uses the shared Quiz budget)
 - Highest note generation limits (`100` topic notes / month)
@@ -90,7 +94,7 @@ Free → Plus → Pro
 The ladder reflects the user's *study stage*, not just price:
 
 - **Free** is for users who are exploring NoteLib and need basic note → Study Pack → Quick Review, with a small Adaptive Practice allowance to close the weak-area loop.
-- **Plus** is for *regular study* — users who study consistently and want Adaptive Practice on weak areas without committing to exam-prep volume.
+- **Plus** is for *regular study* — users who study consistently, want Adaptive Practice on weak areas, and want grounded interaction with their Review Set Companion without committing to exam-prep volume.
 - **Pro** is for *exam preparation* — board exam takers and serious learners who need Board Exam Mode and the highest generation limits.
 
 Upgrade CTAs must respect the ladder:
@@ -115,6 +119,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Shareable quiz links / month | 3 | 10 | Unlimited |
 | Topic note generation | Limited | Higher | Highest |
 | Adaptive Practice | 3 sessions | 10 sessions | 30 sessions |
+| Ask Companion | — | 20 sessions | 20 sessions |
 | Interview Practice | — | — | 10 sessions |
 | Board Exam Mode | — | — | 10 sessions |
 | Long Exam Mode | — | — | 12 sessions |

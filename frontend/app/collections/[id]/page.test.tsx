@@ -13,6 +13,7 @@ import {
   generateCompanion,
   getCollection,
   getCollectionGoal,
+  getActiveAskCompanionSession,
   getMe,
   getNoteConceptCounts,
   getPlanReadiness,
@@ -39,6 +40,7 @@ const routerMock = {
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -71,6 +73,9 @@ jest.mock("@/lib/api", () => {
     deleteCollection: jest.fn(),
     getCollection: jest.fn(),
     getCollectionGoal: jest.fn(),
+    getActiveAskCompanionSession: jest.fn(),
+    startAskCompanionSession: jest.fn(),
+    askCompanionQuestion: jest.fn(),
     getMe: jest.fn(),
     getNoteConceptCounts: jest.fn(),
     getPlanReadiness: jest.fn(),
@@ -286,6 +291,7 @@ describe("CollectionDetailPageClient", () => {
     (generateCompanion as jest.Mock).mockReset();
     (getCollection as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
+    (getActiveAskCompanionSession as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (getNoteConceptCounts as jest.Mock).mockReset();
     (getPlanReadiness as jest.Mock).mockReset();
@@ -329,6 +335,7 @@ describe("CollectionDetailPageClient", () => {
     (trackAnalyticsEvent as jest.Mock).mockResolvedValue(undefined);
     (getCollection as jest.Mock).mockResolvedValue(collection());
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+    (getActiveAskCompanionSession as jest.Mock).mockResolvedValue(null);
     (getMe as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null, primaryCollectionId: null });
     (updateStudyDaysPerWeek as jest.Mock).mockResolvedValue({ studyDaysPerWeek: null });
     (getNoteConceptCounts as jest.Mock).mockResolvedValue({});

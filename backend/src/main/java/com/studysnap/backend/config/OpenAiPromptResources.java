@@ -22,6 +22,8 @@ public record OpenAiPromptResources(
         String interviewPracticeDeveloperPromptTemplate,
         String interviewCritiqueSystemPrompt,
         String interviewCritiqueDeveloperPromptTemplate,
+        String askCompanionSystemPrompt,
+        String askCompanionDeveloperPromptTemplate,
         String longExamSystemPrompt,
         String longExamDeveloperPromptTemplate
 ) {

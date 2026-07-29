@@ -18,6 +18,7 @@ import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { CompanionResultBridgeCard } from "@/components/study-pack/companion-result-bridge-card";
+import { TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -46,6 +47,7 @@ import { getCollectionLabels } from "@/lib/collection-labels";
 import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { isQuizSelectionCorrect, resolveQuizCorrectIndex, resolveQuizItemGroupAt } from "@/lib/quiz";
 import { mapPerformanceLevel } from "@/lib/challenge-quiz-results";
+import type { AppPlanType } from "@/src/config/plans";
 
 function AdaptivePracticeLoading() {
   return (
@@ -89,6 +91,7 @@ export default function AdaptivePracticePage() {
   const [showLimitReachedState, setShowLimitReachedState] = useState(false);
   const [nextStepResponse, setNextStepResponse] = useState<PostSessionNextStepResponse | null>(null);
   const [weeklyPacingWeeksRemaining, setWeeklyPacingWeeksRemaining] = useState<number | null>(null);
+  const [primaryCollectionId, setPrimaryCollectionId] = useState<string | null>(null);
   const [primaryCollectionCompanion, setPrimaryCollectionCompanion] = useState<CompanionContent | null>(null);
   const { usageSummary } = useBillingUsageSummary();
 
@@ -298,14 +301,25 @@ export default function AdaptivePracticePage() {
     }
     void getMe().then((me) => {
       if (me.primaryCollectionId) {
+        setPrimaryCollectionId(me.primaryCollectionId);
+        setPrimaryCollectionCompanion(null);
         void getCollectionGoal(me.primaryCollectionId)
           .then((goal) => {
             setWeeklyPacingWeeksRemaining(goal.weeksRemaining);
             setPrimaryCollectionCompanion(goal.companion);
           })
-          .catch(() => undefined);
+          .catch(() => {
+            setPrimaryCollectionId(null);
+            setPrimaryCollectionCompanion(null);
+          });
+      } else {
+        setPrimaryCollectionId(null);
+        setPrimaryCollectionCompanion(null);
       }
-    }).catch(() => undefined);
+    }).catch(() => {
+      setPrimaryCollectionId(null);
+      setPrimaryCollectionCompanion(null);
+    });
   }, [isComplete]);
 
   useEffect(() => {
@@ -690,6 +704,12 @@ export default function AdaptivePracticePage() {
           <CompanionResultBridgeCard
             companion={primaryCollectionCompanion}
             reviewSetLabel={getCollectionLabels(getAuthUser()?.profileType ?? null).singular}
+          />
+          <TwiceMissedAskCompanionCard
+            twiceMissedConcepts={completionResult?.twiceMissedConcepts ?? []}
+            currentPlan={currentPlan as AppPlanType}
+            primaryCollectionId={primaryCollectionId}
+            companion={primaryCollectionCompanion}
           />
           <div className="flex flex-col gap-2 sm:flex-row">
             {nextStepResponse === null ? (

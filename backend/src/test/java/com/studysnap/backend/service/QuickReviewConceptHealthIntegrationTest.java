@@ -60,12 +60,16 @@ class QuickReviewConceptHealthIntegrationTest {
                     concept varchar(500) not null,
                     last_correct_at timestamp with time zone,
                     last_incorrect_at timestamp with time zone,
+                    incorrect_streak integer not null default 0,
                     created_at timestamp with time zone not null,
                     updated_at timestamp with time zone not null,
                     constraint uq_concept_health_user_study_pack_concept
                         unique (user_id, study_pack_id, concept)
                 )
                 """);
+        jdbcTemplate.execute(
+                "alter table concept_health add column if not exists incorrect_streak integer not null default 0"
+        );
         jdbcTemplate.execute("delete from concept_health");
 
         quickReviewSessionRepository = mock(QuickReviewSessionRepository.class);
