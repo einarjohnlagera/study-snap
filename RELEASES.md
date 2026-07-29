@@ -2,7 +2,7 @@
 
 ## v0.64.0 - Add to Review Set
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close a genuine capability gap surfaced while discussing v0.63.0's Companion scoping question — a user reading a Note who wants it organized into a Review Set has no way to do that from Note Detail today. Reclaims the `v0.64.0` minor-version slot from `Explore Convergence` (renumbered to `v0.65.0`), since this item is small, ungated, and ready now, while Explore's Diagnostic Read gate remains unmet — the fifth time a slot has changed hands this way, following `v0.60.0`, `v0.61.0`, `v0.62.0`, and `v0.63.0`.
 
@@ -16,7 +16,14 @@ Anti-drift: no Companion content on standalone Notes, ever (holds, on corrected 
 
 ### Shipped
 
-_(nothing yet)_
+- **"Add to {Review Set}" on Note Detail (frontend only).** Extracted the existing `AddImportedDraftsModal` (previously local to `bulk-import-page-client.tsx`) into a shared `AddToCollectionModal` component and mounted it from Note Detail's overflow menu with the single viewed note. A learner can now add an already-existing note to an existing or new Review Set without leaving the page — closing a friction point noticed while discussing Companion's scoping, not a response to any measured adoption data (no query was run to size the gap). `itemNoun` (the copy noun describing what's being added — "imported draft" for Bulk Import, "note" for Note Detail) is a required prop with no default, so a future third caller must choose its own wording rather than silently inheriting Bulk Import's.
+- **Companion scoping correction (docs only).** Corrected `docs/features/companion.md`'s framing: Companion is not "Review-Set-scoped" but admin-authored-Official-collection-scoped (`assertAdmin` gates every write path) — a structural fact, not a permanent philosophical stance — and recorded the three-layer guidance model (content explanation / diagnostic guidance / editorial guidance).
+- **Roadmap resolution (docs only).** Folded "what does a no-Review-Set learner's guidance surface look like" into the existing, still-open Primary-Review-Set-vs-Study/Exam-Focus Backlog Index row rather than opening a new sibling item.
+- **Companion Guidance Doctrine — considered and narrowed (docs only, no code).** A follow-on owner question asked whether "Ask Companion" should become a cross-cutting "Companion" guidance system spanning Dashboard, Review Set, Progress, and Readiness. Pressure-tested with Opus against the real codebase (8 existing, deliberately parallel "what's next" resolvers; the Coach/Companion doctrine already in `ROADMAP.md`; the `assertAdmin` scoping fact this release itself established). Verdict: the taxonomy is right, the literal merge is not — "Companion" currently names three structurally different things (authored/static, derived/reactive, LLM-chat), and branding them under one name would create a real bug (a learner sees Companion guidance on Dashboard, then is told it isn't available on a Review Set with no authored content). Adopted as doctrine only: one learning-responsibility per feature, one question per surface, an explicit de-duplication rule, and a new deterministic-*derived*-guidance anti-drift line distinct from the existing deterministic-*selection* one. Rejected: any backend merge of the 8 resolvers, any rename of Ask Companion or its infrastructure, any reopening of this release's no-Note-Detail-nudge decision. Recorded in full in `docs/product/ROADMAP.md`'s Backlog Index ("Companion Guidance Doctrine") as future, phased, go/no-go-gated work — not scoped or kicked off in this release.
+
+### Known Limitations
+
+- None.
 
 ## v0.63.0 - Ask Companion
 
