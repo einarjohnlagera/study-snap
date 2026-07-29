@@ -204,6 +204,7 @@ export default function SettingsPage() {
   const [dueConceptsDigestRemindersEnabled, setDueConceptsDigestRemindersEnabled] = useState(false);
   const [knowledgeImpactDigestRemindersEnabled, setKnowledgeImpactDigestRemindersEnabled] = useState(false);
   const [hasPublicNotes, setHasPublicNotes] = useState(false);
+  const [impactCheckFailed, setImpactCheckFailed] = useState(false);
   const [marketingEmailsEnabled, setMarketingEmailsEnabled] = useState(false);
   const [mobileTabBarEnabled, setMobileTabBarEnabled] = useState(true);
   const [savingMobileTabBarPreference, setSavingMobileTabBarPreference] = useState(false);
@@ -261,7 +262,9 @@ export default function SettingsPage() {
         getMyPlan(),
         getBillingHistory(),
         getBillingPricing().catch(() => null),
-        getCreatorImpact().catch(() => null),
+        getCreatorImpact()
+          .then((value) => ({ ok: true as const, value }))
+          .catch(() => ({ ok: false as const, value: null })),
       ]);
       setProfile(me);
       setUsageSummary(usage);
@@ -273,7 +276,8 @@ export default function SettingsPage() {
       setWeeklySummaryRemindersEnabled(me.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(me.dueConceptsDigestRemindersEnabled);
       setKnowledgeImpactDigestRemindersEnabled(me.knowledgeImpactDigestRemindersEnabled);
-      setHasPublicNotes(Boolean(impact?.notes.length));
+      setHasPublicNotes(Boolean(impact.value?.notes.length));
+      setImpactCheckFailed(!impact.ok);
       setMarketingEmailsEnabled(me.marketingEmailsEnabled);
       setMobileTabBarEnabled(me.mobileTabBarEnabled !== false);
     } catch (err) {
@@ -284,6 +288,7 @@ export default function SettingsPage() {
       setBillingHistory(null);
       setBillingPricing(null);
       setHasPublicNotes(false);
+      setImpactCheckFailed(false);
     } finally {
       setLoading(false);
     }
@@ -926,6 +931,16 @@ export default function SettingsPage() {
                   disabled={savingEmailPreferences}
                 />
               </div>
+              {impactCheckFailed ? (
+                <div className="flex items-center justify-between gap-4 p-4">
+                  <span className="text-xs text-foreground/60">
+                    Couldn&apos;t check your public notes, so the Knowledge Impact digest option isn&apos;t shown.
+                  </span>
+                  <Button type="button" variant="outline" onClick={() => void loadProfile()}>
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
               {hasPublicNotes ? (
                 <div className="flex items-start justify-between gap-4 p-4">
                   <span className="space-y-1">

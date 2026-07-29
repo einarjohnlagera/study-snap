@@ -862,6 +862,29 @@ describe("Settings page cancellation flow", () => {
     expect(screen.getByRole("checkbox", { name: "Due-concepts digest" })).toBeInTheDocument();
   });
 
+  it("shows a retryable notice instead of silently hiding the digest option when the impact check fails", async () => {
+    (getCreatorImpact as jest.Mock).mockRejectedValueOnce(new Error("Network error"));
+
+    render(<SettingsPage />);
+
+    expect(
+      await screen.findByText("Couldn't check your public notes, so the Knowledge Impact digest option isn't shown."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Knowledge Impact digest" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Weekly summary" })).toBeInTheDocument();
+
+    (getCreatorImpact as jest.Mock).mockResolvedValueOnce({
+      distinctLearnersHelped: 0,
+      notes: [{ noteId: "public-note-1", title: "Public note", distinctLearnersHelped: 0, viewCount: 0, copyCount: 0 }],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByRole("checkbox", { name: "Knowledge Impact digest" })).toBeInTheDocument();
+    expect(
+      screen.queryByText("Couldn't check your public notes, so the Knowledge Impact digest option isn't shown."),
+    ).not.toBeInTheDocument();
+  });
+
   it("persists the mobile navigation preference without optimistically changing the toggle", async () => {
     (updateMobileTabBarPreference as jest.Mock).mockResolvedValue({
       ...proProfile,

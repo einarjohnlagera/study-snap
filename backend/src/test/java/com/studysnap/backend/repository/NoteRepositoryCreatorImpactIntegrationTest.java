@@ -155,6 +155,26 @@ class NoteRepositoryCreatorImpactIntegrationTest {
     }
 
     @Test
+    void impactQueriesExcludeAForfeitedSessionEvenThoughCompletedAtIsSet() {
+        // Long Exam and Interview Practice both set completedAt on forfeit (LongExamService,
+        // InterviewPracticeService) — completedAt alone is not a valid completion signal.
+        UUID creatorId = UUID.randomUUID();
+        UUID forfeitedLearnerId = UUID.randomUUID();
+        NoteEntity source = saveNote(creatorId, "Forfeit source", NoteVisibility.PUBLIC, null, false);
+        NoteEntity forfeitedCopy = saveNote(forfeitedLearnerId, "Forfeited copy", NoteVisibility.PRIVATE, source, true);
+        saveForfeitedSessionWithCompletedAt(forfeitedLearnerId, forfeitedCopy.getId(), BASE_TIME.plusMinutes(5));
+        entityManager.flush();
+        entityManager.clear();
+
+        List<NoteLearnersHelpedProjection> perNote = noteRepository.countDistinctLearnersHelpedBySourceNoteIds(
+                List.of(source.getId())
+        );
+
+        assertThat(perNote).isEmpty();
+        assertThat(noteRepository.countDistinctLearnersHelpedByCreatorUserId(creatorId)).isZero();
+    }
+
+    @Test
     void windowedCreatorImpactQueryExcludesOldSessionsAndIncludesRecentSessions() {
         UUID creatorId = UUID.randomUUID();
         UUID oldLearnerId = UUID.randomUUID();
@@ -183,6 +203,23 @@ class NoteRepositoryCreatorImpactIntegrationTest {
         OffsetDateTime now = BASE_TIME.plusDays(40);
         OffsetDateTime since = now.minusDays(30);
         saveSession(incompleteLearnerId, incompleteCopy.getId(), false);
+        entityManager.flush();
+        entityManager.clear();
+
+        long learnersHelped = noteRepository.countDistinctLearnersHelpedByCreatorUserIdSince(creatorId, since);
+
+        assertThat(learnersHelped).isZero();
+    }
+
+    @Test
+    void windowedCreatorImpactQueryExcludesAForfeitedSessionInsideTheWindow() {
+        UUID creatorId = UUID.randomUUID();
+        UUID forfeitedLearnerId = UUID.randomUUID();
+        NoteEntity source = saveNote(creatorId, "Windowed forfeit source", NoteVisibility.PUBLIC, null, false);
+        NoteEntity forfeitedCopy = saveNote(forfeitedLearnerId, "Forfeited copy", NoteVisibility.PRIVATE, source, true);
+        OffsetDateTime now = BASE_TIME.plusDays(40);
+        OffsetDateTime since = now.minusDays(30);
+        saveForfeitedSessionWithCompletedAt(forfeitedLearnerId, forfeitedCopy.getId(), since.plusMinutes(1));
         entityManager.flush();
         entityManager.clear();
 
@@ -232,6 +269,23 @@ class NoteRepositoryCreatorImpactIntegrationTest {
         session.setTotalQuestions(5);
         session.setRetryCount(0);
         session.setCreatedAt(completedAt == null ? BASE_TIME : completedAt.minusMinutes(5));
+        session.setCompletedAt(completedAt);
+        quickReviewSessionRepository.save(session);
+    }
+
+    private void saveForfeitedSessionWithCompletedAt(UUID learnerUserId, UUID noteId, OffsetDateTime completedAt) {
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(UUID.randomUUID());
+        session.setUserId(learnerUserId);
+        session.setStudyPackId(UUID.randomUUID());
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.ADAPTIVE);
+        session.setStatus(QuickReviewSessionStatus.FORFEITED);
+        session.setCurrentQuestionIndex(0);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+        session.setTotalQuestions(5);
+        session.setRetryCount(0);
+        session.setCreatedAt(completedAt.minusMinutes(5));
         session.setCompletedAt(completedAt);
         quickReviewSessionRepository.save(session);
     }

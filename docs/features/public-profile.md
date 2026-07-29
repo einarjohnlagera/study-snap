@@ -173,7 +173,7 @@ The dashboard shows:
 - a per-note breakdown of distinct learners helped
 - raw per-note views and copies as smaller secondary context
 
-`Helped` has a deliberately stronger definition than copied or opened: a learner must copy the public note and complete at least one quiz session on that copied note (`quick_review_sessions.completed_at IS NOT NULL`). A session that was merely started does not count. The same learner is counted once in the creator-level headline even when they completed sessions from multiple notes, so per-note counts may add up to more than the headline.
+`Helped` has a deliberately stronger definition than copied or opened: a learner must copy the public note and genuinely complete at least one quiz session on that copied note (`quick_review_sessions.status = COMPLETED and completed_at IS NOT NULL` — both are required; `completed_at` alone is not sufficient because Long Exam and Interview Practice forfeit paths also set `completed_at` on a `FORFEITED` session). A session that was merely started, or one that was forfeited despite still recording a `completed_at` timestamp, does not count. The same learner is counted once in the creator-level headline even when they completed sessions from multiple notes, so per-note counts may add up to more than the headline.
 
 The section has neutral zero and retryable error states. An Impact API failure does not hide or break the public profile header, existing public stats, notes, or owner controls. The existing public `totalViews` / `totalCopies` / `totalShares` block is unchanged and remains visible to all eligible profile visitors.
 
