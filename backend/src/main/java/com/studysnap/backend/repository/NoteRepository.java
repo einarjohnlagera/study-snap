@@ -224,6 +224,7 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
             where source.id in :noteIds
               and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
               and copy.copiedFromPublic = true
+              and session.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
               and session.completedAt is not null
             group by source.id
             """)
@@ -239,6 +240,7 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
             where source.ownerUserId = :creatorUserId
               and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
               and copy.copiedFromPublic = true
+              and session.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
               and session.completedAt is not null
             """)
     long countDistinctLearnersHelpedByCreatorUserId(@Param("creatorUserId") UUID creatorUserId);
@@ -251,6 +253,7 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
             where source.ownerUserId = :creatorUserId
               and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
               and copy.copiedFromPublic = true
+              and session.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
               and session.completedAt >= :since
             """)
     long countDistinctLearnersHelpedByCreatorUserIdSince(
