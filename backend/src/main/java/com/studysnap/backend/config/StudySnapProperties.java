@@ -109,6 +109,9 @@ public class StudySnapProperties {
         private int plusMonthlyAdaptivePracticeLimit = 10;
         private int proMonthlyAdaptivePracticeLimit = 30;
         private int proMonthlyInterviewPracticeLimit = 10;
+        private int freeMonthlyAskCompanionLimit = 0;
+        private int plusMonthlyAskCompanionLimit = 20;
+        private int proMonthlyAskCompanionLimit = 20;
         private int proMonthlyLongExamLimit = 12;
         private int proMonthlyBoardExamLimit = 10;
         private int freeMonthlyOcrLimit = 20;
@@ -173,6 +176,14 @@ public class StudySnapProperties {
                 return 0;
             }
             return normalizedPlanType == PlanType.PRO ? proMonthlyInterviewPracticeLimit : 0;
+        }
+
+        public int resolveMonthlyAskCompanionLimit(PlanType planType) {
+            return switch (normalizePlanType(planType)) {
+                case PLUS -> plusMonthlyAskCompanionLimit;
+                case PRO -> proMonthlyAskCompanionLimit;
+                case FREE -> freeMonthlyAskCompanionLimit;
+            };
         }
 
         public int resolveMonthlyLongExamLimit(PlanType planType) {
@@ -247,6 +258,10 @@ public class StudySnapProperties {
                 return normalizedPlanType != PlanType.FREE;
             }
             return normalizedPlanType == PlanType.PRO;
+        }
+
+        public boolean isAskCompanionAvailable(PlanType planType) {
+            return resolveMonthlyAskCompanionLimit(planType) > 0;
         }
 
         private PlanType normalizePlanType(PlanType planType) {

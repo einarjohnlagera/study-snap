@@ -8,6 +8,7 @@ export const pricingConfig = {
     studyPacksPerMonth: 10,
     challengeQuizzesPerMonth: 20,
     adaptivePracticePerMonth: 3,
+    askCompanionPerMonth: 0,
     ocrPerMonth: 20,
     docxExportsPerMonth: 2,
     teacherDocxExportsPerMonth: 10,
@@ -22,6 +23,7 @@ export const pricingConfig = {
     teacherDocxExportsPerMonth: null,
     pdfExportsPerMonth: 15,
     adaptivePracticePerMonth: 10,
+    askCompanionPerMonth: 20,
     quizShareLinksPerMonth: 10,
   },
   pro: {
@@ -29,6 +31,7 @@ export const pricingConfig = {
     challengeQuizzesPerMonth: 200,
     adaptivePracticePerMonth: 30,
     interviewPracticePerMonth: 10,
+    askCompanionPerMonth: 20,
     longExamPerMonth: 12,
     boardExamPerMonth: 10,
     ocrPerMonth: 100,

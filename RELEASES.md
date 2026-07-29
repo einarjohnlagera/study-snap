@@ -8,14 +8,14 @@ Theme: give PLUS a genuinely distinct capability — grounded Q&A over a Review 
 
 ### Planned Scope
 
-- **Ask Companion (backend + frontend).** Grounded Q&A over a top-level Review Set's authored Companion content (`note_collections.companion`), reusing the Interview Practice cost-control template: new `Feature.ASK_COMPANION` enum value, feature gate at PLUS+PRO (not FREE), a new monthly quota (`UserUsageEntity` field + migration) at 20 sessions/month, a per-session 6-turn cap (new mechanism — Interview Practice's fixed-question-set flow has no existing turn-cap code to reuse), the existing `AiRateLimitService` per-minute limit, and the CRITIQUE model tier. Only available on collections where `companion` is non-null — mirrors `CompanionDisplayCard`'s existing render-gating; no content to ground answers in otherwise.
+- **Ask Companion (backend + frontend).** Grounded Q&A over a top-level Review Set's authored Companion content (`note_collections.companion`), reusing the Interview Practice cost-control template: new `Feature.ASK_COMPANION` enum value, feature gate at PLUS+PRO (not FREE), a new monthly quota (`UserUsageEntity` field + migration) at 20 sessions/month, a per-session 6-turn cap (new mechanism — Interview Practice's fixed-question-set flow has no existing turn-cap code to reuse), the existing `AiRateLimitService` per-minute limit, and the CRITIQUE model tier. Only available on collections whose `companion` has renderable authored content — exactly mirrors `CompanionDisplayCard`'s existing gate; no content to ground answers in otherwise.
 - **Design brief:** `docs/product/ROADMAP.md`'s "Future, gated — Runtime Companion (Ask Companion, Personalization)" section and its `v0.63.0 — Ask Companion` section below.
 
 Anti-drift: no mid-exam coaching (`EXAM_MODES.md`'s locked interactive-AI constraint is unaffected — this is a Companion-detail-page feature, not a quiz-session feature); grounded retrieval only, no free-generation; Personalization (PRO adaptive/learning-pattern guidance) is explicitly **not** in scope for this release — it stays gated on the separate, still-open Primary-Review-Set-vs-Study/Exam-Focus philosophy question (Post-v0.40.0 Polish Backlog).
 
 ### Shipped
 
-_(nothing yet)_
+- **Ask Companion grounded Q&A (backend + frontend).** PLUS and PRO learners can now ask up to six questions per conversation from a top-level owned Review Set's renderable curator-authored Companion, directly beside the static guide on collection detail. A dedicated `ask_companion_sessions` aggregate preserves turn history across refreshes, resumes the single active user/collection session idempotently, ends at six turns, and starts the next question in a fresh quota-counted conversation; the 20-session rolling monthly limit, per-minute AI rate limit, and CRITIQUE-tier model bound runtime cost. FREE sees a plan-aware Plus upgrade prompt, while missing-Companion, transient-load, send, monthly-quota, and turn-cap states remain distinct; ownership failures return 404 and the system prompt refuses unsupported/outside-knowledge answers.
 
 ## v0.62.0 - Knowledge Impact
 

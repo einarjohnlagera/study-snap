@@ -353,6 +353,25 @@ export type CompanionContent = {
 
 export type CompanionSection = "OVERVIEW" | "STUDY_STRATEGY" | "COMMON_MISTAKES" | "FAQ" | "MENTOR_TIPS";
 
+export type AskCompanionTurn = {
+  question: string;
+  answer: string;
+  createdAt: string;
+};
+
+export type AskCompanionSessionResponse = {
+  sessionId: string;
+  collectionId: string;
+  status: "ACTIVE" | "ENDED";
+  turnCount: number;
+  turnLimit: number;
+  turnsRemaining: number;
+  turns: AskCompanionTurn[];
+  usedThisMonth: number;
+  monthlyLimit: number;
+  usagePeriodEndsAt: string;
+};
+
 export type GoalCollectionDetailResponse = {
   collectionId: string;
   title: string;
@@ -499,6 +518,9 @@ export type AnalyticsEventType =
   | "INTERVIEW_PRACTICE_COMPLETED"
   | "INTERVIEW_PRACTICE_FORFEITED"
   | "INTERVIEW_PRACTICE_QUOTA_EXHAUSTED"
+  | "ASK_COMPANION_STARTED"
+  | "ASK_COMPANION_MESSAGE_SENT"
+  | "ASK_COMPANION_QUOTA_EXHAUSTED"
   | "PAYWALL_VIEWED"
   | "PAYWALL_DISMISSED"
   | "FEATURE_LOCKED_CLICKED"
@@ -4291,6 +4313,62 @@ export async function getCollectionGoal(id: string): Promise<GoalCollectionDetai
     true,
   );
   return parseApiResponse<GoalCollectionDetailResponse>(response, "Could not load goal details.");
+}
+
+export async function getActiveAskCompanionSession(
+  collectionId: string,
+): Promise<AskCompanionSessionResponse | null> {
+  const response = await fetchWithAuth(
+    `/collections/${collectionId}/ask-companion/sessions/active`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (response.status === 204) {
+    return null;
+  }
+  return parseApiResponse<AskCompanionSessionResponse>(
+    response,
+    "Could not load your Ask Companion conversation.",
+  );
+}
+
+export async function startAskCompanionSession(
+  collectionId: string,
+): Promise<AskCompanionSessionResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${collectionId}/ask-companion/sessions`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AskCompanionSessionResponse>(
+    response,
+    "Could not start Ask Companion.",
+  );
+}
+
+export async function askCompanionQuestion(
+  sessionId: string,
+  question: string,
+): Promise<AskCompanionSessionResponse> {
+  const response = await fetchWithAuth(
+    `/ask-companion/sessions/${sessionId}/messages`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ question }),
+    },
+    true,
+  );
+  return parseApiResponse<AskCompanionSessionResponse>(
+    response,
+    "Ask Companion could not answer right now.",
+  );
 }
 
 export async function setPrimaryCollection(id: string): Promise<void> {
