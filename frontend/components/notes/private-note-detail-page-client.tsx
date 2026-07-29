@@ -23,6 +23,7 @@ import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-
 import { QuizSessionHistory } from "@/components/notes/quiz-session-history";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { SubjectBadge } from "@/components/notes/subject-badge";
+import { AddToCollectionModal } from "@/components/notes/add-to-collection-modal";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { StudyPackGeneratedFeedbackPrompt } from "@/components/feedback/study-pack-generated-feedback-prompt";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
@@ -398,6 +399,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [addToCollectionModalOpen, setAddToCollectionModalOpen] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
@@ -1896,6 +1898,22 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         >
                           <ResponsiveActionContent action="share" label={sharing ? "Sharing..." : "Share"} showTextOnMobile iconClassName="h-4 w-4" />
                         </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                          onClick={() => {
+                            setNoteActionsMenuOpen(false);
+                            setAddToCollectionModalOpen(true);
+                          }}
+                        >
+                          <ResponsiveActionContent
+                            action="collections"
+                            label={`Add to ${getCollectionLabels(profileType).singular}`}
+                            showTextOnMobile
+                            iconClassName="h-4 w-4"
+                          />
+                        </button>
                         {isStudyPackReady ? (
                           <button
                             type="button"
@@ -2693,6 +2711,20 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           </div>
         )}
       />
+
+      {note ? (
+        <AddToCollectionModal
+          isOpen={addToCollectionModalOpen}
+          noteIds={[note.id]}
+          singularLabel={getCollectionLabels(profileType).singular}
+          itemNoun="note"
+          onClose={() => setAddToCollectionModalOpen(false)}
+          onAdded={(collection) => {
+            setAddToCollectionModalOpen(false);
+            setToast(`Added to ${collection.title}.`);
+          }}
+        />
+      ) : null}
 
       <DeleteConfirmationModal
         isOpen={showDeleteConfirm}

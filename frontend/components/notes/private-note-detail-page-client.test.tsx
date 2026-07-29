@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
 import {
+  addCollectionItems,
   createStudyPackFromNote,
   completeProductOnboarding,
   copyNote,
+  createCollection,
   createPremiumCheckoutSession,
   deleteNote,
   generateGeneratedQuiz,
@@ -17,6 +19,7 @@ import {
   getMyStudyPack,
   getQuickReviewPerformanceSummary,
   getQuickReviewSessionReview,
+  listCollections,
   listCoursePrograms,
   listRecentQuizSessions,
   listSubjects,
@@ -67,8 +70,11 @@ jest.mock("@/components/ui/summary-markdown", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  addCollectionItems: jest.fn(),
   completeProductOnboarding: jest.fn(),
   copyNote: jest.fn(),
+  createCollection: jest.fn(),
+  listCollections: jest.fn(),
   createPremiumCheckoutSession: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   deleteNote: jest.fn(),
@@ -607,6 +613,54 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
     expect(screen.getByText("Delete this note?")).toBeInTheDocument();
+  });
+
+  it("adds the note to an existing Study Plan from the note actions menu", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "collection-1", title: "Cell Biology", itemCount: 2 },
+    ]);
+    (addCollectionItems as jest.Mock).mockResolvedValue({ id: "collection-1", title: "Cell Biology" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Add to Study Plan" }));
+
+    await screen.findByText("Cell Biology");
+    fireEvent.click(screen.getByRole("button", { name: "Add here" }));
+
+    await waitFor(() => {
+      expect(addCollectionItems).toHaveBeenCalledWith("collection-1", ["note-1"]);
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/Add to a Study Plan/)).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Added to Cell Biology.")).toBeInTheDocument();
+  });
+
+  it("creates a new Study Plan from the note actions menu when none exist", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+    (listCollections as jest.Mock).mockResolvedValue([]);
+    (createCollection as jest.Mock).mockResolvedValue({ id: "collection-2", title: "New Plan" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Add to Study Plan" }));
+
+    await screen.findByPlaceholderText("Study Plan title");
+    fireEvent.change(screen.getByPlaceholderText("Study Plan title"), { target: { value: "New Plan" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create new Study Plan" }));
+
+    await waitFor(() => {
+      expect(createCollection).toHaveBeenCalledWith({ title: "New Plan", noteIds: ["note-1"] });
+    });
+    expect(screen.getByText("Added to New Plan.")).toBeInTheDocument();
   });
 
   it("routes free users into the shared Challenge Quiz mode-selection entry without showing the premium modal", async () => {
