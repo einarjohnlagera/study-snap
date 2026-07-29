@@ -352,6 +352,7 @@ export function BulkImportPageClient() {
         isOpen={collectionModalOpen}
         noteIds={createdNoteIds}
         singularLabel={collectionLabels.singular}
+        itemNoun="imported draft"
         onClose={() => setCollectionModalOpen(false)}
         onAdded={(collection) => {
           setCollectionSuccess(collection);

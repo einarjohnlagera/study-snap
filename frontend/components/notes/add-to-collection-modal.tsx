@@ -21,14 +21,14 @@ export function AddToCollectionModal({
   isOpen,
   noteIds,
   singularLabel,
-  itemNoun = "imported draft",
+  itemNoun,
   onClose,
   onAdded,
 }: Readonly<{
   isOpen: boolean;
   noteIds: string[];
   singularLabel: string;
-  itemNoun?: string;
+  itemNoun: string;
   onClose: () => void;
   onAdded: (collection: CollectionSuccess) => void;
 }>) {
