@@ -7,6 +7,7 @@ import {
   downloadMyData,
   getBillingPricing,
   getBillingHistory,
+  getCreatorImpact,
   getMyPlan,
   getMe,
   requestEmailVerification,
@@ -70,6 +71,7 @@ jest.mock("@/lib/api", () => ({
   downloadMyData: jest.fn(),
   getBillingPricing: jest.fn(),
   getBillingHistory: jest.fn(),
+  getCreatorImpact: jest.fn(),
   getMyPlan: jest.fn(),
   getMe: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
@@ -94,6 +96,8 @@ const proProfile = {
   inactivityRemindersEnabled: false,
   weakConceptRemindersEnabled: false,
   weeklySummaryRemindersEnabled: false,
+  dueConceptsDigestRemindersEnabled: false,
+  knowledgeImpactDigestRemindersEnabled: false,
   marketingEmailsEnabled: false,
   mobileTabBarEnabled: true,
   emailVerifiedAt: "2026-03-20T00:00:00Z",
@@ -217,6 +221,7 @@ describe("Settings page cancellation flow", () => {
     (getMyPlan as jest.Mock).mockReset();
     (getBillingHistory as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
+    (getCreatorImpact as jest.Mock).mockReset();
     (cancelPremiumSubscription as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
     (deleteAccount as jest.Mock).mockReset();
@@ -240,6 +245,18 @@ describe("Settings page cancellation flow", () => {
       transactions: [],
     });
     (getBillingPricing as jest.Mock).mockResolvedValue(proBillingPricing);
+    (getCreatorImpact as jest.Mock).mockResolvedValue({
+      distinctLearnersHelped: 0,
+      notes: [
+        {
+          noteId: "public-note-1",
+          title: "Public note",
+          distinctLearnersHelped: 0,
+          viewCount: 0,
+          copyCount: 0,
+        },
+      ],
+    });
     (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
       checkoutUrl: "https://checkout.xendit.test/invoice_123",
     });
@@ -792,6 +809,7 @@ describe("Settings page cancellation flow", () => {
       weakConceptRemindersEnabled: true,
       weeklySummaryRemindersEnabled: true,
       dueConceptsDigestRemindersEnabled: true,
+      knowledgeImpactDigestRemindersEnabled: true,
       marketingEmailsEnabled: true,
     });
 
@@ -805,6 +823,7 @@ describe("Settings page cancellation flow", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Weak-concept nudges/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Weekly summary/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Due-concepts digest/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Knowledge Impact digest/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Product news & tips/i }));
     fireEvent.click(screen.getByRole("button", { name: "Save email preferences" }));
 
@@ -814,10 +833,56 @@ describe("Settings page cancellation flow", () => {
         weakConceptRemindersEnabled: true,
         weeklySummaryRemindersEnabled: true,
         dueConceptsDigestRemindersEnabled: true,
+        knowledgeImpactDigestRemindersEnabled: true,
         marketingEmailsEnabled: true,
       });
     });
     expect(await screen.findByText("Email preferences updated.")).toBeInTheDocument();
+  });
+
+  it("loads the Knowledge Impact digest preference for creators with public notes", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...proProfile,
+      knowledgeImpactDigestRemindersEnabled: true,
+    });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByRole("checkbox", { name: "Knowledge Impact digest" })).toBeChecked();
+  });
+
+  it("hides the Knowledge Impact digest preference when the account has no public notes", async () => {
+    (getCreatorImpact as jest.Mock).mockResolvedValue({ distinctLearnersHelped: 0, notes: [] });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByRole("heading", { name: "Email Preferences" })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Knowledge Impact digest" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Weekly summary" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Due-concepts digest" })).toBeInTheDocument();
+  });
+
+  it("shows a retryable notice instead of silently hiding the digest option when the impact check fails", async () => {
+    (getCreatorImpact as jest.Mock).mockRejectedValueOnce(new Error("Network error"));
+
+    render(<SettingsPage />);
+
+    expect(
+      await screen.findByText("Couldn't check your public notes, so the Knowledge Impact digest option isn't shown."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Knowledge Impact digest" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Weekly summary" })).toBeInTheDocument();
+
+    (getCreatorImpact as jest.Mock).mockResolvedValueOnce({
+      distinctLearnersHelped: 0,
+      notes: [{ noteId: "public-note-1", title: "Public note", distinctLearnersHelped: 0, viewCount: 0, copyCount: 0 }],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByRole("checkbox", { name: "Knowledge Impact digest" })).toBeInTheDocument();
+    expect(
+      screen.queryByText("Couldn't check your public notes, so the Knowledge Impact digest option isn't shown."),
+    ).not.toBeInTheDocument();
   });
 
   it("persists the mobile navigation preference without optimistically changing the toggle", async () => {

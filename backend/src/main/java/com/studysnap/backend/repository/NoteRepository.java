@@ -215,4 +215,49 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
             group by n.copiedFromNoteId
             """)
     List<NoteCopyCountProjection> countCopiedPublicNotesBySourceNoteIds(@Param("noteIds") List<UUID> noteIds);
+
+    @Query("""
+            select source.id as noteId, count(distinct copy.ownerUserId) as learnerCount
+            from NoteEntity source
+            join NoteEntity copy on copy.copiedFromNoteId = source.id
+            join QuickReviewSessionEntity session on session.noteId = copy.id
+            where source.id in :noteIds
+              and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
+              and copy.copiedFromPublic = true
+              and session.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
+              and session.completedAt is not null
+            group by source.id
+            """)
+    List<NoteLearnersHelpedProjection> countDistinctLearnersHelpedBySourceNoteIds(
+            @Param("noteIds") List<UUID> noteIds
+    );
+
+    @Query("""
+            select count(distinct copy.ownerUserId)
+            from NoteEntity source
+            join NoteEntity copy on copy.copiedFromNoteId = source.id
+            join QuickReviewSessionEntity session on session.noteId = copy.id
+            where source.ownerUserId = :creatorUserId
+              and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
+              and copy.copiedFromPublic = true
+              and session.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
+              and session.completedAt is not null
+            """)
+    long countDistinctLearnersHelpedByCreatorUserId(@Param("creatorUserId") UUID creatorUserId);
+
+    @Query("""
+            select count(distinct copy.ownerUserId)
+            from NoteEntity source
+            join NoteEntity copy on copy.copiedFromNoteId = source.id
+            join QuickReviewSessionEntity session on session.noteId = copy.id
+            where source.ownerUserId = :creatorUserId
+              and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
+              and copy.copiedFromPublic = true
+              and session.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
+              and session.completedAt >= :since
+            """)
+    long countDistinctLearnersHelpedByCreatorUserIdSince(
+            @Param("creatorUserId") UUID creatorUserId,
+            @Param("since") OffsetDateTime since
+    );
 }

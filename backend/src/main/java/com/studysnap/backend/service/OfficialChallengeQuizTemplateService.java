@@ -44,6 +44,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class OfficialChallengeQuizTemplateService {
     private static final String TEMPLATE_DIFFICULTY = "medium";
     private static final String OUTCOME_UNANSWERED = "UNANSWERED";
+    private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
 
     private final ChallengeQuizQuestionBankRepository questionBankRepository;
     private final ChallengeQuizQuestionBankService questionBankService;
@@ -267,7 +268,8 @@ public class OfficialChallengeQuizTemplateService {
     private boolean isOfficialAuthor(UUID userId) {
         return userId != null && !AccountPurgeService.DELETED_USER_ID.equals(userId)
                 && userRepository.findById(userId)
-                .map(user -> user.getRole() == UserRole.ADMIN)
+                .map(user -> user.getRole() == UserRole.ADMIN
+                        || OFFICIAL_AUTHOR_EMAIL.equalsIgnoreCase(user.getEmail()))
                 .orElse(false);
     }
 

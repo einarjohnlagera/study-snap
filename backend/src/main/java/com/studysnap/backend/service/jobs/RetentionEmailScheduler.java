@@ -32,4 +32,10 @@ public class RetentionEmailScheduler {
         int dueConceptsDigestSent = retentionService.sendDueConceptsDigestEmails();
         log.info("retention.email.scheduler.weekly sent weeklySummary={} dueConceptsDigest={}", summary.weeklySummarySent(), dueConceptsDigestSent);
     }
+
+    @Scheduled(cron = "${studysnap.retention.knowledge-impact-digest-monthly-cron:0 0 9 1 * *}")
+    public void runMonthly() {
+        int knowledgeImpactDigestSent = retentionService.sendKnowledgeImpactDigestEmails();
+        log.info("retention.email.scheduler.monthly sent knowledgeImpactDigest={}", knowledgeImpactDigestSent);
+    }
 }

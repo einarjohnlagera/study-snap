@@ -173,6 +173,45 @@ class OfficialChallengeQuizTemplateServiceTest {
     }
 
     @Test
+    void queueSeedIfEligible_treatsTheOfficialEmailAccountAsOfficialEvenWithoutAdminRole() {
+        UUID officialId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        NoteEntity officialNote = note(noteId, officialId, NoteVisibility.PUBLIC);
+        StudyPackEntity officialStudyPack = studyPack(studyPackId, noteId, officialId);
+        officialStudyPack.setTitle("Official pack");
+        officialStudyPack.setSummary("Summary");
+        officialStudyPack.setKeyConcepts(List.of("Concept"));
+        UserEntity officialAuthorByEmail = new UserEntity();
+        officialAuthorByEmail.setId(officialId);
+        officialAuthorByEmail.setRole(UserRole.USER);
+        officialAuthorByEmail.setEmail("einar.lagera@gmail.com");
+        com.studysnap.backend.service.model.StudyPackGenerationContext context =
+                new com.studysnap.backend.service.model.StudyPackGenerationContext(
+                        LearnerLevel.BOARD_EXAM_REVIEW, "Nursing", "Nursing", List.of()
+                );
+
+        when(userRepository.findById(officialId)).thenReturn(Optional.of(officialAuthorByEmail));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(officialNote));
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(officialStudyPack));
+        when(generationContextResolver.resolveForStudyPack(officialId, officialStudyPack)).thenReturn(context);
+        when(quizGenerationService.generateChallengeQuiz(
+                eq("Official pack"), eq("Summary"), eq(List.of("Concept")), eq(List.of()), eq(20), eq("medium"), eq(context)
+        )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(List.of(
+                new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
+        )));
+
+        AsyncTaskExecutor directExecutor = Runnable::run;
+        service(immediateTransactions(), directExecutor)
+                .queueSeedIfEligible(officialNote, officialStudyPack);
+
+        verify(questionBankService).persistGeneratedQuestions(
+                officialId, studyPackId, null, LearnerLevel.BOARD_EXAM_REVIEW,
+                List.of(new QuizItem("Official question", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"))
+        );
+    }
+
+    @Test
     void queueBackfill_isIdempotentForAnAlreadySeededOfficialStudyPack() {
         UUID officialId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();

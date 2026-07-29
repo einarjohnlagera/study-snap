@@ -99,20 +99,20 @@ studysnap:
   pricing:
     free-monthly-study-pack-limit: ${FREE_MONTHLY_STUDY_PACK_LIMIT:10}
     plus-monthly-study-pack-limit: ${PLUS_MONTHLY_STUDY_PACK_LIMIT:50}
-    pro-monthly-study-pack-limit: ${PRO_MONTHLY_STUDY_PACK_LIMIT:${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}}
+    pro-monthly-study-pack-limit: ${PRO_MONTHLY_STUDY_PACK_LIMIT:100}
     free-monthly-challenge-quiz-limit: ${FREE_MONTHLY_CHALLENGE_QUIZ_LIMIT:20}
     plus-monthly-challenge-quiz-limit: ${PLUS_MONTHLY_CHALLENGE_QUIZ_LIMIT:100}
-    pro-monthly-challenge-quiz-limit: ${PRO_MONTHLY_CHALLENGE_QUIZ_LIMIT:${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:200}}
+    pro-monthly-challenge-quiz-limit: ${PRO_MONTHLY_CHALLENGE_QUIZ_LIMIT:200}
     free-monthly-adaptive-practice-limit: ${FREE_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:3}
     plus-monthly-adaptive-practice-limit: ${PLUS_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:10}
-    pro-monthly-adaptive-practice-limit: ${PRO_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}}
+    pro-monthly-adaptive-practice-limit: ${PRO_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}
     pro-monthly-interview-practice-limit: ${PRO_MONTHLY_INTERVIEW_PRACTICE_LIMIT:10}
     free-monthly-ocr-limit: ${FREE_MONTHLY_OCR_LIMIT:20}
     plus-monthly-ocr-limit: ${PLUS_MONTHLY_OCR_LIMIT:50}
-    pro-monthly-ocr-limit: ${PRO_MONTHLY_OCR_LIMIT:${PREMIUM_MONTHLY_OCR_LIMIT:100}}
+    pro-monthly-ocr-limit: ${PRO_MONTHLY_OCR_LIMIT:100}
     free-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_FREE:10}
     plus-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PLUS:25}
-    pro-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PRO:${NOTELIB_NOTE_GENERATION_LIMIT_PREMIUM:100}}
+    pro-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PRO:100}
     free-monthly-docx-export-limit: ${FREE_MONTHLY_DOCX_EXPORT_LIMIT:2}
     plus-monthly-docx-export-limit: ${PLUS_MONTHLY_DOCX_EXPORT_LIMIT:15}
     pro-monthly-docx-export-limit: ${PRO_MONTHLY_DOCX_EXPORT_LIMIT:-1}
@@ -403,6 +403,7 @@ studysnap:
   retention:
     daily-cron: ${RETENTION_DAILY_CRON:0 45 2 * * *}
     weekly-cron: ${RETENTION_WEEKLY_CRON:0 0 18 * * SUN}
+    knowledge-impact-digest-monthly-cron: ${RETENTION_KNOWLEDGE_IMPACT_DIGEST_MONTHLY_CRON:0 0 9 1 * *}
     inactivity-days: ${RETENTION_INACTIVITY_DAYS:3}
     inactivity-cooldown-days: ${RETENTION_INACTIVITY_COOLDOWN_DAYS:3}
     weak-concept-inactivity-days: ${RETENTION_WEAK_CONCEPT_INACTIVITY_DAYS:3}
@@ -410,6 +411,7 @@ studysnap:
     unfinished-note-days: ${RETENTION_UNFINISHED_NOTE_DAYS:2}
     unfinished-note-cooldown-days: ${RETENTION_UNFINISHED_NOTE_COOLDOWN_DAYS:3}
     weekly-cooldown-days: ${RETENTION_WEEKLY_COOLDOWN_DAYS:7}
+    knowledge-impact-digest-cooldown-days: ${RETENTION_KNOWLEDGE_IMPACT_DIGEST_COOLDOWN_DAYS:30}
     weak-concept-threshold-percent: ${RETENTION_WEAK_CONCEPT_THRESHOLD_PERCENT:60}
   security:
     google:

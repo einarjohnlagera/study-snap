@@ -507,11 +507,13 @@ export type AnalyticsEventType =
   | "SUBSCRIPTION_STARTED"
   | "PUBLIC_NOTE_VIEWED"
   | "PUBLIC_NOTE_COPIED"
+  | "PUBLIC_NOTE_PUBLISHED"
   | "PUBLIC_NOTE_COPY_CLICKED"
   | "PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED"
   | "PUBLIC_NOTE_FLASHCARDS_CLICKED"
   | "PUBLIC_NOTE_SHARED"
   | "PUBLIC_PROFILE_SHARED"
+  | "KNOWLEDGE_IMPACT_DASHBOARD_VIEWED"
   | "EXAM_HUB_VIEWED"
   | "EXAM_HUB_CTA_CLICKED"
   | "PUBLISHED_PLANS_VIEWED"
@@ -850,6 +852,7 @@ export type MeResponse = {
   weakConceptRemindersEnabled: boolean;
   weeklySummaryRemindersEnabled: boolean;
   dueConceptsDigestRemindersEnabled: boolean;
+  knowledgeImpactDigestRemindersEnabled: boolean;
   marketingEmailsEnabled: boolean;
   mobileTabBarEnabled: boolean;
   themePreference?: ThemePreference | null;
@@ -886,6 +889,7 @@ export type UpdateEmailPreferencesRequest = {
   weakConceptRemindersEnabled: boolean;
   weeklySummaryRemindersEnabled: boolean;
   dueConceptsDigestRemindersEnabled: boolean;
+  knowledgeImpactDigestRemindersEnabled: boolean;
   marketingEmailsEnabled: boolean;
 };
 
@@ -1748,6 +1752,19 @@ export type PublicProfileResponse = {
   notesBySubject: SubjectCountResponse[];
   totalPublicSubjectCount: number;
   publicNotes: PublicProfileNoteResponse[];
+};
+
+export type CreatorImpactNoteResponse = {
+  noteId: string;
+  title: string | null;
+  distinctLearnersHelped: number;
+  viewCount: number;
+  copyCount: number;
+};
+
+export type CreatorImpactResponse = {
+  distinctLearnersHelped: number;
+  notes: CreatorImpactNoteResponse[];
 };
 
 type ApiErrorPayload = {
@@ -4665,6 +4682,18 @@ export async function getPublicCreatorProfile(username: string): Promise<PublicP
     headers: buildAuthHeaders(),
   });
   return parseApiResponse<PublicProfileResponse>(response, "Could not load this public profile.");
+}
+
+export async function getCreatorImpact(): Promise<CreatorImpactResponse> {
+  const response = await fetchWithAuth(
+    "/creator-impact/me",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<CreatorImpactResponse>(response, "Could not load your impact.");
 }
 
 export async function updateNote(

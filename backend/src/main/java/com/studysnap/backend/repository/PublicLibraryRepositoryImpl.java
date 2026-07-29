@@ -32,6 +32,7 @@ import java.util.UUID;
 @Repository
 public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     private static final String POSTGRES_DATABASE_PRODUCT_NAME = "PostgreSQL";
+    private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
     private static final String ID_ALIAS = "id";
     private static final String OWNER_USER_ID_ALIAS = "ownerUserId";
     private static final String TITLE_ALIAS = "title";
@@ -295,6 +296,7 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                 .anyMatch(source -> source == PublicLibrarySource.BY_YOU || source == PublicLibrarySource.COMMUNITY);
         if (needsOfficialPredicate) {
             parameters.put("deletedUserId", criteria.deletedUserId());
+            parameters.put("officialAuthorEmail", OFFICIAL_AUTHOR_EMAIL);
         }
         if (needsViewerPredicate) {
             parameters.put("viewerUserId", criteria.viewerUserId());
@@ -322,7 +324,7 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                 exists (
                     select 1 from users official_user
                     where official_user.id = n.owner_user_id
-                      and official_user.role = 'ADMIN'
+                      and (official_user.role = 'ADMIN' or lower(official_user.email) = lower(:officialAuthorEmail))
                       and official_user.id <> :deletedUserId
                 )
                 """;

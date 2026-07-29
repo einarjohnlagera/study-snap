@@ -23,6 +23,7 @@ import {
   downloadMyData,
   getBillingPricing,
   getBillingHistory,
+  getCreatorImpact,
   getMyPlan,
   getMe,
   isEmailNotVerifiedError,
@@ -201,6 +202,9 @@ export default function SettingsPage() {
   const [weakConceptRemindersEnabled, setWeakConceptRemindersEnabled] = useState(false);
   const [weeklySummaryRemindersEnabled, setWeeklySummaryRemindersEnabled] = useState(false);
   const [dueConceptsDigestRemindersEnabled, setDueConceptsDigestRemindersEnabled] = useState(false);
+  const [knowledgeImpactDigestRemindersEnabled, setKnowledgeImpactDigestRemindersEnabled] = useState(false);
+  const [hasPublicNotes, setHasPublicNotes] = useState(false);
+  const [impactCheckFailed, setImpactCheckFailed] = useState(false);
   const [marketingEmailsEnabled, setMarketingEmailsEnabled] = useState(false);
   const [mobileTabBarEnabled, setMobileTabBarEnabled] = useState(true);
   const [savingMobileTabBarPreference, setSavingMobileTabBarPreference] = useState(false);
@@ -253,11 +257,14 @@ export default function SettingsPage() {
     setEmailPreferencesMessage(null);
     setMobileTabBarPreferenceMessage(null);
     try {
-      const [me, usage, history, pricing] = await Promise.all([
+      const [me, usage, history, pricing, impact] = await Promise.all([
         getMe(),
         getMyPlan(),
         getBillingHistory(),
         getBillingPricing().catch(() => null),
+        getCreatorImpact()
+          .then((value) => ({ ok: true as const, value }))
+          .catch(() => ({ ok: false as const, value: null })),
       ]);
       setProfile(me);
       setUsageSummary(usage);
@@ -268,6 +275,9 @@ export default function SettingsPage() {
       setWeakConceptRemindersEnabled(me.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(me.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(me.dueConceptsDigestRemindersEnabled);
+      setKnowledgeImpactDigestRemindersEnabled(me.knowledgeImpactDigestRemindersEnabled);
+      setHasPublicNotes(Boolean(impact.value?.notes.length));
+      setImpactCheckFailed(!impact.ok);
       setMarketingEmailsEnabled(me.marketingEmailsEnabled);
       setMobileTabBarEnabled(me.mobileTabBarEnabled !== false);
     } catch (err) {
@@ -277,6 +287,8 @@ export default function SettingsPage() {
       setUsageSummary(null);
       setBillingHistory(null);
       setBillingPricing(null);
+      setHasPublicNotes(false);
+      setImpactCheckFailed(false);
     } finally {
       setLoading(false);
     }
@@ -335,6 +347,7 @@ export default function SettingsPage() {
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(updated.dueConceptsDigestRemindersEnabled);
+      setKnowledgeImpactDigestRemindersEnabled(updated.knowledgeImpactDigestRemindersEnabled);
       setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEngagementModeMessage("Learning style updated.");
     } catch (err) {
@@ -354,6 +367,7 @@ export default function SettingsPage() {
         weakConceptRemindersEnabled,
         weeklySummaryRemindersEnabled,
         dueConceptsDigestRemindersEnabled,
+        knowledgeImpactDigestRemindersEnabled,
         marketingEmailsEnabled,
       });
       setProfile(updated);
@@ -362,6 +376,7 @@ export default function SettingsPage() {
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(updated.dueConceptsDigestRemindersEnabled);
+      setKnowledgeImpactDigestRemindersEnabled(updated.knowledgeImpactDigestRemindersEnabled);
       setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEmailPreferencesMessage("Email preferences updated.");
     } catch (err) {
@@ -916,6 +931,32 @@ export default function SettingsPage() {
                   disabled={savingEmailPreferences}
                 />
               </div>
+              {impactCheckFailed ? (
+                <div className="flex items-center justify-between gap-4 p-4">
+                  <span className="text-xs text-foreground/60">
+                    Couldn&apos;t check your public notes, so the Knowledge Impact digest option isn&apos;t shown.
+                  </span>
+                  <Button type="button" variant="outline" onClick={() => void loadProfile()}>
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
+              {hasPublicNotes ? (
+                <div className="flex items-start justify-between gap-4 p-4">
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium">Knowledge Impact digest</span>
+                    <span className="block text-xs text-foreground/60">
+                      A monthly update when new learners complete a quiz from your public notes. Nothing is sent when there is no new activity.
+                    </span>
+                  </span>
+                  <Checkbox
+                    ariaLabel="Knowledge Impact digest"
+                    checked={knowledgeImpactDigestRemindersEnabled}
+                    onChange={setKnowledgeImpactDigestRemindersEnabled}
+                    disabled={savingEmailPreferences}
+                  />
+                </div>
+              ) : null}
               <div className="flex items-start justify-between gap-4 p-4">
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">Product news &amp; tips</span>

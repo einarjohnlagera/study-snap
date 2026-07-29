@@ -36,6 +36,7 @@ public record MeResponse(
         boolean weakConceptRemindersEnabled,
         boolean weeklySummaryRemindersEnabled,
         boolean dueConceptsDigestRemindersEnabled,
+        boolean knowledgeImpactDigestRemindersEnabled,
         boolean marketingEmailsEnabled,
         boolean mobileTabBarEnabled,
         ThemePreference themePreference,

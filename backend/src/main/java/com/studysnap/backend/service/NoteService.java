@@ -113,6 +113,8 @@ public class NoteService {
     private static final String PUBLIC_SORT_MOST_COPIED = "most_copied";
     private static final String PUBLIC_SORT_RECOMMENDED = "recommended";
     private static final String SORT_PARAMETER_NAME = "sort";
+    private static final String ANALYTICS_METADATA_PREVIOUS_VISIBILITY = "previousVisibility";
+    private static final String ANALYTICS_METADATA_NEW_VISIBILITY = "newVisibility";
     private static final String PUBLIC_RANKING_PLACEHOLDER = "available";
     private static final int PUBLIC_DISCOVERY_SECTION_LIMIT = 6;
     private static final String LIBRARY_SUBJECT_FALLBACK = "General";
@@ -379,9 +381,23 @@ public class NoteService {
                 .orElseThrow(NoteNotFoundException::new);
 
         NoteVisibility visibility = parseVisibility(visibilityRaw);
+        NoteVisibility previousVisibility = entity.getVisibility();
         entity.setVisibility(visibility);
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
+        if (previousVisibility != NoteVisibility.PUBLIC && visibility == NoteVisibility.PUBLIC) {
+            analyticsService.trackEvent(
+                    ownerUserId,
+                    AnalyticsEventType.PUBLIC_NOTE_PUBLISHED,
+                    noteId,
+                    buildMetadata(
+                            ANALYTICS_METADATA_PREVIOUS_VISIBILITY,
+                            previousVisibility == null ? null : previousVisibility.name(),
+                            ANALYTICS_METADATA_NEW_VISIBILITY,
+                            visibility.name()
+                    )
+            );
+        }
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(saved.getId());
         officialChallengeQuizTemplateService.queueSeedIfEligible(saved, linkedStudyPack);
         return mapToResponse(saved, linkedStudyPack);

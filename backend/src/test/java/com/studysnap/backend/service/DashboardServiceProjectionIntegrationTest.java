@@ -116,6 +116,7 @@ class DashboardServiceProjectionIntegrationTest {
                     weak_concept_reminders_enabled boolean not null,
                     weekly_summary_reminders_enabled boolean not null,
                     due_concepts_digest_reminders_enabled boolean not null,
+                    knowledge_impact_digest_reminders_enabled boolean not null default false,
                     marketing_emails_enabled boolean not null,
                     mobile_tab_bar_enabled boolean,
                     theme_preference varchar(16) not null,
