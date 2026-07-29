@@ -2,7 +2,7 @@
 
 ## v0.63.0 - Ask Companion
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: give PLUS a genuinely distinct capability — grounded Q&A over a Review Set's curator-authored Companion content — rather than more quota than FREE, using the cheapest, lowest-risk runtime-AI shape available (retrieval over static content, not generation). Reclaims the `v0.63.0` minor-version slot from `Explore Convergence` (renumbered to `v0.64.0`) since this item's gate — owner ratification — cleared 2026-07-29, while Explore's Diagnostic Read gate remains unmet (due after 2026-08-06). Sixth time a slot has changed hands this way, following `v0.58.0`, `v0.59.0`, `v0.60.0`, `v0.61.0`, and `v0.62.0`.
 
