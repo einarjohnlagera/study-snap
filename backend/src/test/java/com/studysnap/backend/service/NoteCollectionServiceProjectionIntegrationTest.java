@@ -201,10 +201,14 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     concept varchar(500) not null,
                     last_correct_at timestamp with time zone,
                     last_incorrect_at timestamp with time zone,
+                    incorrect_streak integer not null default 0,
                     created_at timestamp with time zone not null,
                     updated_at timestamp with time zone not null
                 )
                 """);
+        jdbcTemplate.execute(
+                "alter table concept_health add column if not exists incorrect_streak integer not null default 0"
+        );
         jdbcTemplate.execute("delete from generated_quizzes");
         jdbcTemplate.execute("delete from concept_health");
         jdbcTemplate.execute("delete from study_packs");

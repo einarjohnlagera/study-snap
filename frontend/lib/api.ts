@@ -1048,6 +1048,7 @@ export type QuickReviewSessionSummaryResponse = {
   isFirstCompletedQuiz?: boolean;
   isFirstCompletedSessionEver?: boolean;
   isSecondCompletedSessionEver?: boolean;
+  twiceMissedConcepts?: string[];
 };
 
 export type QuickReviewPerformanceSummaryResponse = {
@@ -1098,6 +1099,7 @@ export type AdaptivePracticeCompleteRequest = {
 export type AdaptivePracticeCompleteResponse = SimpleMessageResponse & {
   isFirstCompletedSessionEver?: boolean;
   isSecondCompletedSessionEver?: boolean;
+  twiceMissedConcepts?: string[];
 };
 
 export type ConceptHealthEntry = {
@@ -1194,6 +1196,7 @@ export type ChallengeQuizSessionResponse = {
   completedAt: string | null;
   isFirstCompletedSessionEver?: boolean;
   isSecondCompletedSessionEver?: boolean;
+  twiceMissedConcepts?: string[];
 };
 
 export type GenerateMoreChallengeQuizResponse = {

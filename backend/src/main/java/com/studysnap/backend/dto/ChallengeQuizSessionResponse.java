@@ -20,6 +20,7 @@ public record ChallengeQuizSessionResponse(
         OffsetDateTime createdAt,
         OffsetDateTime completedAt,
         boolean isFirstCompletedSessionEver,
-        boolean isSecondCompletedSessionEver
+        boolean isSecondCompletedSessionEver,
+        List<String> twiceMissedConcepts
 ) {
 }

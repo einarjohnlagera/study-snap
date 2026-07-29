@@ -564,7 +564,10 @@ describe("AdaptivePracticePage", () => {
         },
       ],
     });
-    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      message: "Saved",
+      twiceMissedConcepts: ["Derivatives"],
+    });
     (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", primaryCollectionId: "goal-1" });
     (getCollectionGoal as jest.Mock).mockResolvedValue({
       weeksRemaining: null,
@@ -583,6 +586,10 @@ describe("AdaptivePracticePage", () => {
 
     expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
     expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
+    expect(screen.getByRole("link", { name: "Ask Companion about this" })).toHaveAttribute(
+      "href",
+      "/collections/goal-1?askCompanionDraft=Can+you+explain+Derivatives+a+different+way%3F",
+    );
   });
 
   it('result screen does not contain a "Note" button', async () => {

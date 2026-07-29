@@ -73,6 +73,22 @@ describe("AskCompanionPanel", () => {
     expect(screen.getByText("4 turns remaining")).toBeInTheDocument();
   });
 
+  it("prefills a deep-linked question without starting a session or sending it", async () => {
+    render(
+      <AskCompanionPanel
+        collectionId="collection-1"
+        currentPlan="PLUS"
+        initialDraft="Can you explain Cell respiration a different way?"
+      />,
+    );
+
+    expect(await screen.findByLabelText("Your question")).toHaveValue(
+      "Can you explain Cell respiration a different way?",
+    );
+    expect(startMock).not.toHaveBeenCalled();
+    expect(askMock).not.toHaveBeenCalled();
+  });
+
   it("shows a retry state when loading the active session fails", async () => {
     getActiveMock.mockRejectedValueOnce(new Error("Network unavailable"));
     getActiveMock.mockResolvedValueOnce(null);

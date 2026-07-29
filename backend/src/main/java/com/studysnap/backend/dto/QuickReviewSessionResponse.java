@@ -27,6 +27,7 @@ public record QuickReviewSessionResponse(
         OffsetDateTime completedAt,
         boolean isFirstCompletedQuiz,
         boolean isFirstCompletedSessionEver,
-        boolean isSecondCompletedSessionEver
+        boolean isSecondCompletedSessionEver,
+        List<String> twiceMissedConcepts
 ) {
 }

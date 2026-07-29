@@ -29,6 +29,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ConceptHealthService {
     static final int DUE_THRESHOLD_DAYS = 3;
+    static final int TWICE_MISSED_STREAK_THRESHOLD = 2;
 
     private final ConceptHealthRepository conceptHealthRepository;
     private final StudyPackRepository studyPackRepository;
@@ -46,13 +47,13 @@ public class ConceptHealthService {
     }
 
     @Transactional
-    public void recordIncorrectAnswers(
+    public List<String> recordIncorrectAnswers(
         UUID userId,
         UUID studyPackId,
         List<String> incorrectConceptNames,
         OffsetDateTime now
     ) {
-        recordAnswers(userId, studyPackId, incorrectConceptNames, now, false);
+        return recordAnswers(userId, studyPackId, incorrectConceptNames, now, false);
     }
 
     @Transactional
@@ -248,7 +249,7 @@ public class ConceptHealthService {
         );
     }
 
-    private void recordAnswers(
+    private List<String> recordAnswers(
         UUID userId,
         UUID studyPackId,
         List<String> conceptNames,
@@ -256,26 +257,33 @@ public class ConceptHealthService {
         boolean correct
     ) {
         if (conceptNames == null || conceptNames.isEmpty()) {
-            return;
+            return List.of();
         }
 
-        for (String rawConcept : conceptNames) {
-            String concept = normalizeConcept(rawConcept);
-            if (concept == null) {
-                continue;
-            }
-
+        List<String> normalizedConcepts = conceptNames.stream()
+            .map(this::normalizeConcept)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        List<String> twiceMissedConcepts = new java.util.ArrayList<>();
+        for (String concept : normalizedConcepts) {
             ConceptHealthEntity entity = conceptHealthRepository
                 .findByUserIdAndStudyPackIdAndConcept(userId, studyPackId, concept)
                 .orElseGet(() -> buildConceptHealth(userId, studyPackId, concept, now));
             if (correct) {
                 entity.setLastCorrectAt(now);
+                entity.setIncorrectStreak(0);
             } else {
                 entity.setLastIncorrectAt(now);
+                entity.setIncorrectStreak(entity.getIncorrectStreak() + 1);
+                if (entity.getIncorrectStreak() >= TWICE_MISSED_STREAK_THRESHOLD) {
+                    twiceMissedConcepts.add(concept);
+                }
             }
             entity.setUpdatedAt(now);
             conceptHealthRepository.save(entity);
         }
+        return List.copyOf(twiceMissedConcepts);
     }
 
     private List<String> filterKnownConcepts(List<String> conceptNames, List<String> keyConcepts) {

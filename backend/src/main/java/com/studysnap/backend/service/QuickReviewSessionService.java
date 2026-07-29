@@ -219,8 +219,14 @@ public class QuickReviewSessionService {
         if (!correctConcepts.isEmpty()) {
             conceptHealthService.recordCorrectAnswers(userId, saved.getStudyPackId(), correctConcepts, now);
         }
+        List<String> twiceMissedConcepts = List.of();
         if (!missedConcepts.isEmpty()) {
-            conceptHealthService.recordIncorrectAnswers(userId, saved.getStudyPackId(), missedConcepts, now);
+            twiceMissedConcepts = conceptHealthService.recordIncorrectAnswers(
+                    userId,
+                    saved.getStudyPackId(),
+                    missedConcepts,
+                    now
+            );
         }
 
         boolean isFirstCompletedQuiz = !activityEventRepository.existsByUserIdAndActivityTypeIn(
@@ -229,7 +235,14 @@ public class QuickReviewSessionService {
         );
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_QUICK_REVIEW, saved.getStudyPackId());
 
-        return toResponse(saved, planType, isFirstCompletedQuiz, isFirstCompletedSessionEver, isSecondCompletedSessionEver);
+        return toResponse(
+                saved,
+                planType,
+                isFirstCompletedQuiz,
+                isFirstCompletedSessionEver,
+                isSecondCompletedSessionEver,
+                twiceMissedConcepts
+        );
     }
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
@@ -429,7 +442,7 @@ public class QuickReviewSessionService {
     }
 
     private QuickReviewSessionResponse toResponse(QuickReviewSessionEntity session, PlanType planType) {
-        return toResponse(session, planType, false, false, false);
+        return toResponse(session, planType, false, false, false, List.of());
     }
 
     private QuickReviewSessionResponse toResponse(
@@ -437,7 +450,8 @@ public class QuickReviewSessionService {
             PlanType planType,
             boolean isFirstCompletedQuiz,
             boolean isFirstCompletedSessionEver,
-            boolean isSecondCompletedSessionEver
+            boolean isSecondCompletedSessionEver,
+            List<String> twiceMissedConcepts
     ) {
         return new QuickReviewSessionResponse(
                 session.getId().toString(),
@@ -457,7 +471,8 @@ public class QuickReviewSessionService {
                 session.getCompletedAt(),
                 isFirstCompletedQuiz,
                 isFirstCompletedSessionEver,
-                isSecondCompletedSessionEver
+                isSecondCompletedSessionEver,
+                twiceMissedConcepts
         );
     }
 

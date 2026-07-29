@@ -35,6 +35,9 @@ public class ConceptHealthEntity {
     @Column(name = "last_incorrect_at")
     private OffsetDateTime lastIncorrectAt;
 
+    @Column(name = "incorrect_streak", nullable = false)
+    private int incorrectStreak;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

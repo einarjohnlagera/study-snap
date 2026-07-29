@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
@@ -36,21 +36,46 @@ function classifyError(error: unknown): AskErrorKind {
   return "generic";
 }
 
+export function AskCompanionUpgradeNudge({
+  currentPlan,
+}: Readonly<{
+  currentPlan: AppPlanType;
+}>) {
+  const upgradeCtas = getUpgradeCtas(currentPlan, "ask-companion");
+  return (
+    <Card className="space-y-4 border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Ask Companion</p>
+        <CardTitle>Ask about this Review Set</CardTitle>
+        <CardDescription>
+          Get quick answers grounded in this Review Set&apos;s curator-authored Companion.
+        </CardDescription>
+      </div>
+      {upgradeCtas.primary ? (
+        <Link
+          href="/settings?section=plans"
+          className="inline-flex text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
+        >
+          {upgradeCtas.primary.label}
+        </Link>
+      ) : null}
+    </Card>
+  );
+}
+
 export function AskCompanionPanel({
   collectionId,
   currentPlan,
+  initialDraft,
 }: Readonly<{
   collectionId: string;
   currentPlan: AppPlanType;
+  initialDraft?: string;
 }>) {
   const isAvailableOnPlan = currentPlan === "PLUS" || currentPlan === "PRO";
-  const upgradeCtas = useMemo(
-    () => getUpgradeCtas(currentPlan, "ask-companion"),
-    [currentPlan],
-  );
   const [loadState, setLoadState] = useState<LoadState>(isAvailableOnPlan ? "loading" : "ready");
   const [session, setSession] = useState<AskCompanionSessionResponse | null>(null);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(() => initialDraft?.trim() ?? "");
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<AskErrorKind>(null);
@@ -100,25 +125,7 @@ export function AskCompanionPanel({
   };
 
   if (!isAvailableOnPlan) {
-    return (
-      <Card className="space-y-4 border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Ask Companion</p>
-          <CardTitle>Ask about this Review Set</CardTitle>
-          <CardDescription>
-            Get quick answers grounded in this Review Set&apos;s curator-authored Companion.
-          </CardDescription>
-        </div>
-        {upgradeCtas.primary ? (
-          <Link
-            href="/settings?section=plans"
-            className="inline-flex text-sm font-semibold text-blue-700 hover:underline dark:text-blue-300"
-          >
-            {upgradeCtas.primary.label}
-          </Link>
-        ) : null}
-      </Card>
-    );
+    return <AskCompanionUpgradeNudge currentPlan={currentPlan} />;
   }
 
   if (loadState === "loading") {

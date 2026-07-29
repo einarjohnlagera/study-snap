@@ -89,6 +89,23 @@ Ownership rule:
 - summaries, key concepts, quizzes, and practice/performance data are owned by `note_id`
 - legacy `study_pack_id` references can remain for compatibility, but `note_id` is canonical
 
+## Concept Health
+
+`concept_health` stores per-user, per-Study-Pack review signals for one normalized concept.
+
+Relevant fields:
+
+- `user_id`
+- `study_pack_id`
+- `concept`
+- `last_correct_at`
+- `last_incorrect_at`
+- `incorrect_streak` (`NOT NULL DEFAULT 0`)
+- `created_at`
+- `updated_at`
+
+`incorrect_streak` is consecutive, not cumulative. Recording a miss increments it in the same transaction as `last_incorrect_at`; recording a correct answer resets it to `0` in the same transaction as `last_correct_at`.
+
 ## Copy-Based Versioning
 
 Copy creates a new Note row.

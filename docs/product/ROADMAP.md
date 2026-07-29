@@ -281,6 +281,8 @@ Anti-drift: no mid-exam coaching (`EXAM_MODES.md`'s locked interactive-AI constr
 
 **Scoped same day, after Ask Companion shipped.** Source: the Study Effectiveness backlog's "on-demand re-explanation" candidate (`study-effectiveness-out/01-study-effectiveness-ui-pricing.md` Flow #6), which explicitly deferred itself pending Ask Companion existing — "decide which surface owns 'I still don't get it' before scoping either." That decision is now made: Ask Companion owns it, no separate re-explanation mechanism gets built.
 
+**Implemented in the v0.63.0 release worktree.** The three scoped completion responses now carry only the concepts whose persisted consecutive incorrect streak reached the threshold. Their existing result-page Primary Review Set resolver feeds one shared CTA component; the paid deep link initializes a collection-detail draft without starting a conversation or consuming quota.
+
 **Verified before scoping, not assumed:**
 - The collection-resolution problem is already solved. `CompanionResultBridgeCard` (rendered today on Adaptive Practice, Challenge Quiz, and Quick Review result screens) already resolves `getMe()` → `primaryCollectionId` → `getCollectionGoal()`, and the product already accepts that this doesn't guarantee the just-completed note belongs to the Primary collection (`docs/features/collections.md`'s Countdown & Pacing section). This item reuses that exact resolver and tradeoff — no new note→collection resolution path needed.
 - "Missed twice" is not a signal that exists anywhere today. `ConceptHealthEntity` stores only `lastCorrectAt`/`lastIncorrectAt` timestamps, no incorrect count. This needs new backend tracking, which is why this item is backend + frontend, not a frontend-only deep-link.
