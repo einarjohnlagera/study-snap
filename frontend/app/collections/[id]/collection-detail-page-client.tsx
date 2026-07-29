@@ -82,6 +82,7 @@ import {
 } from "@/lib/companion";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 import { AskCompanionPanel } from "@/components/collections/ask-companion-panel";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
 type ReadinessLoadState = "idle" | "loading" | "ready" | "error";
@@ -2559,7 +2560,8 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   useEffect(() => {
     setAuthUser(getAuthUser());
   }, []);
-  const currentPlan = (authUser?.planType ?? "FREE") as AppPlanType;
+  const { usageSummary } = useBillingUsageSummary();
+  const currentPlan = (usageSummary?.plan ?? authUser?.planType ?? "FREE") as AppPlanType;
   const isAdmin = authUser?.role === "ADMIN";
   const showWeakAreas = canViewConceptHealth(currentPlan);
   const upgradeCtas = useMemo(() => getUpgradeCtas(currentPlan), [currentPlan]);

@@ -43,6 +43,38 @@ describe("TwiceMissedAskCompanionCard", () => {
     );
   });
 
+  it.each(["Unknown", "Uncategorized", "  "])(
+    "renders nothing for a paid learner when the only twice-missed entry is the placeholder label %s",
+    (placeholder) => {
+      const { container } = render(
+        <TwiceMissedAskCompanionCard
+          twiceMissedConcepts={[placeholder]}
+          currentPlan="PLUS"
+          primaryCollectionId="collection-1"
+          companion={RENDERABLE_COMPANION}
+        />,
+      );
+
+      expect(container).toBeEmptyDOMElement();
+    },
+  );
+
+  it("skips a placeholder label and links to the next real twice-missed concept", () => {
+    render(
+      <TwiceMissedAskCompanionCard
+        twiceMissedConcepts={["Unknown", "Cell respiration"]}
+        currentPlan="PLUS"
+        primaryCollectionId="collection-1"
+        companion={RENDERABLE_COMPANION}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Ask Companion about this" })).toHaveAttribute(
+      "href",
+      "/collections/collection-1?askCompanionDraft=Can+you+explain+Cell+respiration+a+different+way%3F",
+    );
+  });
+
   it.each([
     { concepts: [], collectionId: "collection-1", companion: RENDERABLE_COMPANION },
     { concepts: ["Cell respiration"], collectionId: null, companion: RENDERABLE_COMPANION },

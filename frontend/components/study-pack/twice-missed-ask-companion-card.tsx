@@ -10,6 +10,10 @@ import {
 } from "@/lib/companion";
 import type { AppPlanType } from "@/src/config/plans";
 
+// Backend concept normalizers fall back to a placeholder label ("Unknown" / "Uncategorized")
+// when a quiz item has no concept tag. Neither is a real, askable concept name.
+const UNNAMED_CONCEPT_LABELS = new Set(["unknown", "uncategorized"]);
+
 export function TwiceMissedAskCompanionCard({
   twiceMissedConcepts,
   currentPlan,
@@ -21,7 +25,9 @@ export function TwiceMissedAskCompanionCard({
   primaryCollectionId: string | null;
   companion: CompanionContent | null;
 }>) {
-  const concept = twiceMissedConcepts.find((value) => value.trim())?.trim();
+  const concept = twiceMissedConcepts
+    .map((value) => value.trim())
+    .find((value) => value && !UNNAMED_CONCEPT_LABELS.has(value.toLowerCase()));
   if (!concept) {
     return null;
   }

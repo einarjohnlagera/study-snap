@@ -29,7 +29,9 @@ FREE users see a context-specific upgrade prompt built through `getUpgradeCtas(c
 - a concept qualifies for the result CTA when the updated streak is at least `2`
 - a miss-correct-miss sequence ends at streak `1` and does not qualify
 
-Adaptive Practice, Challenge Quiz, and Quick Review completion responses return the qualifying concepts from that completion as `twiceMissedConcepts`. Long Exam, Board Exam, and Interview Practice do not expose this field as an Ask Companion entry point and render no CTA.
+Adaptive Practice, Challenge Quiz, and Quick Review completion responses return the qualifying concepts from that completion as `twiceMissedConcepts`. Long Exam, Board Exam, and Interview Practice do not expose this field as an Ask Companion entry point and render no CTA — but `incorrect_streak` has no mode discriminator, so those three still increment/reset the same counter the exposing modes later read.
+
+A quiz item with no concept tag normalizes to a placeholder label (`"Unknown"` in the shared review-utils normalizer, `"Uncategorized"` in Challenge Quiz's own — the two normalizers are not unified) rather than a real concept name. The card filters out any known placeholder label and falls through to the next qualifying concept, or renders nothing if none remain, so the CTA never offers to explain a placeholder.
 
 Each scoped result page reuses its existing `getMe()` → `primaryCollectionId` → `getCollectionGoal()` resolution and already-fetched Companion content:
 
@@ -37,7 +39,7 @@ Each scoped result page reuses its existing `getMe()` → `primaryCollectionId` 
 - PLUS/PRO with a Primary Review Set whose Companion has renderable content see `Ask Companion about this`
 - PLUS/PRO without an eligible Primary Review Set render nothing
 
-The paid CTA navigates to `/collections/{id}` with a pre-filled draft such as `Can you explain {concept} a different way?`. The learner must press send. Loading collection detail may resume/read an active conversation, but navigation alone never starts a session, calls the LLM, or consumes monthly quota.
+The paid CTA navigates to `/collections/{id}` with a pre-filled draft such as `Can you explain {concept} a different way?`. The learner must press send. Loading collection detail may resume/read an active conversation, but navigation alone never starts a session, calls the LLM, or consumes monthly quota. **The CTA does not verify the missed concept's note actually belongs to the Primary Review Set** — the same tradeoff `CompanionResultBridgeCard` accepts, but pressing send here starts a real session and consumes 1 of 20 monthly sessions even if the Primary Review Set's Companion never covered the concept and the model refuses, where `CompanionResultBridgeCard`'s version of this tradeoff costs nothing.
 
 ## Data Model
 

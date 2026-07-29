@@ -26,6 +26,7 @@ public class OpenAiAskCompanionLlmService implements AskCompanionLlmService {
     private static final String SCHEMA_NAME = "note_lib_ask_companion_answer";
     private static final String COMPANION_PLACEHOLDER = "{COMPANION_CONTENT}";
     private static final String ROLE_USER = "user";
+    private static final String ROLE_ASSISTANT = "assistant";
 
     private final StudySnapProperties properties;
     private final ObjectMapper objectMapper;
@@ -92,7 +93,7 @@ public class OpenAiAskCompanionLlmService implements AskCompanionLlmService {
         if (turnHistory != null) {
             for (AskCompanionTurn turn : turnHistory) {
                 input.add(buildMessage(ROLE_USER, turn.question()));
-                input.add(buildMessage("assistant", turn.answer()));
+                input.add(buildMessage(ROLE_ASSISTANT, turn.answer()));
             }
         }
         input.add(buildMessage(ROLE_USER, question));
@@ -112,7 +113,7 @@ public class OpenAiAskCompanionLlmService implements AskCompanionLlmService {
         ObjectNode message = objectMapper.createObjectNode();
         message.put("role", role);
         ObjectNode content = message.putArray("content").addObject();
-        content.put("type", "input_text");
+        content.put("type", ROLE_ASSISTANT.equals(role) ? "output_text" : "input_text");
         content.put("text", text);
         return message;
     }

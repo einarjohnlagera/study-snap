@@ -109,6 +109,25 @@ class AskCompanionServiceTest {
     }
 
     @Test
+    void startOrResumeReportsPostIncrementUsageNotStaleCachedValue() {
+        // userUsageService.getMonthlyUsage is a native @Modifying-backed read; a real Hibernate
+        // persistence context returns the same (pre-increment) managed entity on a second call
+        // within the same transaction. The mock here always answers with the pre-increment value
+        // regardless of call order, standing in for that stale first-level-cache read — the
+        // response must still report usedThisMonth incremented by one, not the raw stubbed value.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, renderableCompanion());
+        stubEligibleStart(userId, collectionId, collection, 5);
+        when(sessionRepository.save(any(AskCompanionSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        AskCompanionSessionResponse response = service.startOrResume(collectionId, userId);
+
+        assertThat(response.usedThisMonth()).isEqualTo(6);
+    }
+
+    @Test
     void startOrResumeReturnsExistingActiveSessionWithoutDoubleCounting() {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();

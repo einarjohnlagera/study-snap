@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClient;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -78,6 +79,49 @@ class OpenAiAskCompanionLlmServiceTest {
                 .contains(UNRELATED_QUESTION)
                 .contains("Use only this authored content")
                 .contains("do not use outside knowledge");
+    }
+
+    @Test
+    void answerSendsPriorAssistantTurnsAsOutputTextNotInputText() throws Exception {
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        when(restClient.post()).thenReturn(requestSpec);
+        when(requestSpec.uri("/responses")).thenReturn(requestSpec);
+        when(requestSpec.body(bodyCaptor.capture())).thenReturn(requestSpec);
+        when(requestSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.body(String.class)).thenReturn("""
+                {"output_text":"{\\\"answer\\\":\\\"Follow-up answer.\\\"}"}
+                """);
+        CompanionContent companion = new CompanionContent(
+                COMPANION_OVERVIEW,
+                "Practice retrieval after each section.",
+                "Avoid passive reading.",
+                null,
+                List.of(),
+                List.of()
+        );
+        List<AskCompanionTurn> turnHistory = List.of(
+                new AskCompanionTurn("First question?", "First answer.", OffsetDateTime.now())
+        );
+
+        service.answer(companion, turnHistory, "Follow-up question?");
+
+        JsonNode request = objectMapper.readTree(bodyCaptor.getValue());
+        JsonNode input = request.path("input");
+        JsonNode assistantMessage = null;
+        JsonNode userFollowUpMessage = null;
+        for (JsonNode message : input) {
+            String text = message.path("content").path(0).path("text").asText();
+            if ("assistant".equals(message.path("role").asText())) {
+                assistantMessage = message;
+            } else if ("Follow-up question?".equals(text)) {
+                userFollowUpMessage = message;
+            }
+        }
+
+        assertThat(assistantMessage).isNotNull();
+        assertThat(assistantMessage.path("content").path(0).path("type").asText()).isEqualTo("output_text");
+        assertThat(userFollowUpMessage).isNotNull();
+        assertThat(userFollowUpMessage.path("content").path(0).path("type").asText()).isEqualTo("input_text");
     }
 
     private OpenAiPromptResources prompts() {
