@@ -79,7 +79,7 @@ public class AskCompanionService {
 
         userRepository.findByIdForUpdate(userId).orElseThrow(UserNotFoundException::new);
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        assertQuotaAvailable(userId, planType, collectionId, now);
+        int usedThisMonthBeforeIncrement = assertQuotaAvailable(userId, planType, collectionId, now);
 
         AskCompanionSessionEntity session = new AskCompanionSessionEntity();
         session.setId(UUID.randomUUID());
@@ -96,7 +96,7 @@ public class AskCompanionService {
                 METADATA_SESSION_ID, saved.getId().toString(),
                 METADATA_COLLECTION_ID, collectionId.toString()
         ));
-        return toResponse(saved, userId, planType);
+        return toResponse(saved, userId, planType, usedThisMonthBeforeIncrement + 1);
     }
 
     @Transactional(readOnly = true)
@@ -190,11 +190,11 @@ public class AskCompanionService {
         return normalized;
     }
 
-    private void assertQuotaAvailable(UUID userId, PlanType planType, UUID collectionId, OffsetDateTime now) {
+    private int assertQuotaAvailable(UUID userId, PlanType planType, UUID collectionId, OffsetDateTime now) {
         int monthlyLimit = properties.getPricing().resolveMonthlyAskCompanionLimit(planType);
         int usedThisMonth = userUsageService.getMonthlyUsage(userId, now).askCompanionUsedThisMonth();
         if (monthlyLimit > 0 && usedThisMonth < monthlyLimit) {
-            return;
+            return usedThisMonth;
         }
         BillingUsagePeriodService.UsagePeriod period = billingUsagePeriodService.resolveUsagePeriod(userId, now);
         trackAnalytics(userId, AnalyticsEventType.ASK_COMPANION_QUOTA_EXHAUSTED, collectionId, Map.of(
@@ -209,10 +209,26 @@ public class AskCompanionService {
             UUID userId,
             PlanType planType
     ) {
+        return toResponse(session, userId, planType, null);
+    }
+
+    /**
+     * usedThisMonthOverride must be passed whenever this is called in the same transaction as a
+     * prior userUsageService.incrementAskCompanionSession(...) — the native @Modifying upsert
+     * bypasses the persistence context, so a re-query here would otherwise return the stale
+     * pre-increment cached UserUsageEntity (Hibernate first-level cache).
+     */
+    private AskCompanionSessionResponse toResponse(
+            AskCompanionSessionEntity session,
+            UUID userId,
+            PlanType planType,
+            Integer usedThisMonthOverride
+    ) {
         UserUsageService.MonthlyUsage usage = userUsageService.getMonthlyUsage(
                 userId,
                 OffsetDateTime.now(ZoneOffset.UTC)
         );
+        int usedThisMonth = usedThisMonthOverride != null ? usedThisMonthOverride : usage.askCompanionUsedThisMonth();
         int turnCount = session.getTurnCount() == null ? 0 : session.getTurnCount();
         return new AskCompanionSessionResponse(
                 session.getId(),
@@ -222,7 +238,7 @@ public class AskCompanionService {
                 TURN_LIMIT,
                 Math.clamp(TURN_LIMIT - turnCount, 0, TURN_LIMIT),
                 session.getTurns() == null ? List.of() : List.copyOf(session.getTurns()),
-                usage.askCompanionUsedThisMonth(),
+                usedThisMonth,
                 properties.getPricing().resolveMonthlyAskCompanionLimit(planType),
                 usage.periodEnd()
         );
