@@ -2,9 +2,21 @@
 
 ## Goal
 
-The Learning Companion is curated guidance attached to an Official top-level Review Set. It gives a future frontend a static, authored layer for how to use the Review Set without adding runtime LLM cost or a new top-level entity.
+The Learning Companion is curated guidance attached to an admin-curated, top-level Review Set. It gives a future frontend a static, authored layer for how to use the Review Set without adding runtime LLM cost or a new top-level entity.
 
 This feature mirrors the top-level collection concepts documented in `docs/features/collections.md`, especially Primary Review Set and target completion date.
+
+**Scoping correction (2026-07-29):** Companion is not "Review-Set-scoped" in the sense that any Review Set can eventually have one — it's **admin-authored-Official-collection-scoped**. Every write path (`setCompanion`, `clearCompanion`, `generateCompanion`) requires `assertAdmin(user)` before it touches `collection.companion`. A learner-created Review Set can never have a Companion, structurally, because nobody curated it — this is not a permanent philosophical stance about curriculum-vs-note altitude, it's a direct consequence of who is allowed to write the column. Do not "fix" this by exposing Companion authoring to non-admin owners without a deliberate, separate product decision.
+
+This scoping fact is also why standalone Notes have no Companion and never will under the current model: there is no admin curating individual learner notes. The actual guidance picture is three layers, not a Companion-vs-nothing binary:
+
+| Layer | What it is | Scope | Who gets it |
+|---|---|---|---|
+| Content explanation | Study Pack (summary, key concepts, quiz) | Every Note | Everyone |
+| Diagnostic guidance | ConceptHealth, readiness, weak/twice-missed concepts | Every Note + aggregate | Everyone, personalized |
+| Editorial guidance | Companion (this feature) | Curated Official collections only | Adopters of an Official set |
+
+A note-only learner (no Review Set adopted) isn't excluded from "guidance" generally — they get the first two layers in full. They're missing only the layer that structurally requires a human curator to exist at all.
 
 ## Data Model
 
