@@ -179,6 +179,8 @@ The section has neutral zero and retryable error states. An Impact API failure d
 
 Owner views emit `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` once per page load. Publishing a note from a non-public state emits `PUBLIC_NOTE_PUBLISHED`; re-saving an already-public note does not emit it again.
 
+Creators with at least one public note can opt into the `Knowledge Impact digest` under Settings → Email Preferences. The digest runs monthly and reports the distinct learners who completed a quiz from the creator's public notes during the trailing 30 days. It is off by default, sends nothing when that window has zero learners, and uses the existing Email Preferences unsubscribe flow. Its copy stays retrospective and aggregate, with no rankings, comparisons, streaks, badges, or urgency framing.
+
 ## Notes
 
 - Public Profile remains a learning profile, not a social-media profile.

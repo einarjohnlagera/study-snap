@@ -242,4 +242,19 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
               and session.completedAt is not null
             """)
     long countDistinctLearnersHelpedByCreatorUserId(@Param("creatorUserId") UUID creatorUserId);
+
+    @Query("""
+            select count(distinct copy.ownerUserId)
+            from NoteEntity source
+            join NoteEntity copy on copy.copiedFromNoteId = source.id
+            join QuickReviewSessionEntity session on session.noteId = copy.id
+            where source.ownerUserId = :creatorUserId
+              and source.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
+              and copy.copiedFromPublic = true
+              and session.completedAt >= :since
+            """)
+    long countDistinctLearnersHelpedByCreatorUserIdSince(
+            @Param("creatorUserId") UUID creatorUserId,
+            @Param("since") OffsetDateTime since
+    );
 }

@@ -139,6 +139,7 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getWeakConceptRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getDueConceptsDigestRemindersEnabled()).isTrue();
+        assertThat(savedUser.getValue().getKnowledgeImpactDigestRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
@@ -239,6 +240,7 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getWeakConceptRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getWeeklySummaryRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getDueConceptsDigestRemindersEnabled()).isTrue();
+        assertThat(savedUser.getValue().getKnowledgeImpactDigestRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         verify(userAuthProviderRepository).save(any(UserAuthProviderEntity.class));
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
@@ -792,18 +794,20 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateEmailPreferences(
             userId,
-            new UpdateEmailPreferencesRequest(true, true, true, true, true)
+            new UpdateEmailPreferencesRequest(true, true, true, true, true, true)
         );
 
         assertThat(response.inactivityRemindersEnabled()).isTrue();
         assertThat(response.weakConceptRemindersEnabled()).isTrue();
         assertThat(response.weeklySummaryRemindersEnabled()).isTrue();
         assertThat(response.dueConceptsDigestRemindersEnabled()).isTrue();
+        assertThat(response.knowledgeImpactDigestRemindersEnabled()).isTrue();
         assertThat(response.marketingEmailsEnabled()).isTrue();
         assertThat(user.getInactivityRemindersEnabled()).isTrue();
         assertThat(user.getWeakConceptRemindersEnabled()).isTrue();
         assertThat(user.getWeeklySummaryRemindersEnabled()).isTrue();
         assertThat(user.getDueConceptsDigestRemindersEnabled()).isTrue();
+        assertThat(user.getKnowledgeImpactDigestRemindersEnabled()).isTrue();
         assertThat(user.getMarketingEmailsEnabled()).isTrue();
     }
 

@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
 import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
@@ -50,6 +51,8 @@ class RetentionServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private NoteRepository noteRepository;
+    @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
@@ -77,9 +80,11 @@ class RetentionServiceTest {
         properties.getRetention().setWeakConceptInactivityDays(3);
         properties.getRetention().setWeakConceptCooldownDays(5);
         properties.getRetention().setWeeklyCooldownDays(7);
+        properties.getRetention().setKnowledgeImpactDigestCooldownDays(30);
         retentionService = new RetentionService(
                 properties,
                 userRepository,
+                noteRepository,
                 studyPackRepository,
                 quickReviewSessionRepository,
                 activityEventRepository,
@@ -388,6 +393,7 @@ class RetentionServiceTest {
         RetentionService budgetedService = new RetentionService(
                 properties,
                 userRepository,
+                noteRepository,
                 studyPackRepository,
                 quickReviewSessionRepository,
                 activityEventRepository,
@@ -485,6 +491,7 @@ class RetentionServiceTest {
         RetentionService disabledService = new RetentionService(
                 properties,
                 userRepository,
+                noteRepository,
                 studyPackRepository,
                 quickReviewSessionRepository,
                 activityEventRepository,
@@ -653,6 +660,118 @@ class RetentionServiceTest {
         verify(emailLogRepository, never()).save(any(EmailLogEntity.class));
     }
 
+    @Test
+    void findKnowledgeImpactDigestUsers_excludesCreatorWithZeroNewLearners() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-07-29T01:00:00Z");
+        UserEntity creator = verifiedUser();
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndKnowledgeImpactDigestRemindersEnabledTrue(
+                UserStatus.ACTIVE
+        )).thenReturn(List.of(creator));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                creator.getId(),
+                RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST,
+                now.minusDays(30)
+        )).thenReturn(false);
+        when(noteRepository.countDistinctLearnersHelpedByCreatorUserIdSince(
+                creator.getId(),
+                now.minusDays(30)
+        )).thenReturn(0L);
+
+        List<RetentionService.KnowledgeImpactDigestReminder> candidates =
+                retentionService.findKnowledgeImpactDigestUsers(now);
+
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    void findKnowledgeImpactDigestUsers_includesOptedInCreatorWithNewLearners() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-07-29T01:00:00Z");
+        UserEntity creator = verifiedUser();
+        creator.setUsername("note-creator");
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndKnowledgeImpactDigestRemindersEnabledTrue(
+                UserStatus.ACTIVE
+        )).thenReturn(List.of(creator));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                creator.getId(),
+                RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST,
+                now.minusDays(30)
+        )).thenReturn(false);
+        when(noteRepository.countDistinctLearnersHelpedByCreatorUserIdSince(
+                creator.getId(),
+                now.minusDays(30)
+        )).thenReturn(2L);
+
+        List<RetentionService.KnowledgeImpactDigestReminder> candidates =
+                retentionService.findKnowledgeImpactDigestUsers(now);
+
+        assertThat(candidates).hasSize(1);
+        assertThat(candidates.getFirst().newLearnersCount()).isEqualTo(2);
+        assertThat(candidates.getFirst().impactUrl())
+                .isEqualTo("https://www.notelib.app/public/creator/note-creator#your-impact-heading");
+    }
+
+    @Test
+    void findKnowledgeImpactDigestUsers_excludesCreatorWithinCooldown() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-07-29T01:00:00Z");
+        UserEntity creator = verifiedUser();
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndKnowledgeImpactDigestRemindersEnabledTrue(
+                UserStatus.ACTIVE
+        )).thenReturn(List.of(creator));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                creator.getId(),
+                RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST,
+                now.minusDays(30)
+        )).thenReturn(true);
+
+        List<RetentionService.KnowledgeImpactDigestReminder> candidates =
+                retentionService.findKnowledgeImpactDigestUsers(now);
+
+        assertThat(candidates).isEmpty();
+        verify(noteRepository, never()).countDistinctLearnersHelpedByCreatorUserIdSince(any(), any());
+    }
+
+    @Test
+    void sendKnowledgeImpactDigestEmails_continuesAfterOneCandidateFails() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-07-29T01:00:00Z");
+        UserEntity firstCreator = verifiedUser(
+                UUID.fromString("00000000-0000-0000-0000-000000000011"),
+                "first@example.com"
+        );
+        UserEntity secondCreator = verifiedUser(
+                UUID.fromString("00000000-0000-0000-0000-000000000012"),
+                "second@example.com"
+        );
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndKnowledgeImpactDigestRemindersEnabledTrue(
+                UserStatus.ACTIVE
+        )).thenReturn(List.of(firstCreator, secondCreator));
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                any(UUID.class),
+                eq(RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST),
+                eq(now.minusDays(30))
+        )).thenReturn(false);
+        when(noteRepository.countDistinctLearnersHelpedByCreatorUserIdSince(
+                any(UUID.class),
+                eq(now.minusDays(30))
+        )).thenReturn(1L);
+        when(emailTemplateService.render(eq("knowledge-impact-digest"), any()))
+                .thenReturn(new EmailTemplateService.RenderedEmailTemplate("Subject", "<p>Body</p>", "Body"));
+        when(emailService.sendEmail(any(EmailMessage.class)))
+                .thenThrow(new IllegalStateException("provider unavailable"))
+                .thenReturn(true);
+
+        int sent = retentionService.sendKnowledgeImpactDigestEmails(now);
+
+        assertThat(sent).isEqualTo(1);
+        verify(emailTemplateService, org.mockito.Mockito.times(2)).render(eq("knowledge-impact-digest"), any());
+        ArgumentCaptor<EmailLogEntity> logCaptor = ArgumentCaptor.forClass(EmailLogEntity.class);
+        verify(emailLogRepository).save(logCaptor.capture());
+        assertThat(logCaptor.getValue().getUserId()).isEqualTo(secondCreator.getId());
+        assertThat(logCaptor.getValue().getEmailType()).isEqualTo(RetentionEmailType.KNOWLEDGE_IMPACT_DIGEST);
+    }
+
     private StudyPackEntity studyPackWithConcepts(UUID id, String title, List<String> keyConcepts) {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(id);
@@ -677,6 +796,7 @@ class RetentionServiceTest {
         user.setWeakConceptRemindersEnabled(true);
         user.setWeeklySummaryRemindersEnabled(true);
         user.setDueConceptsDigestRemindersEnabled(true);
+        user.setKnowledgeImpactDigestRemindersEnabled(true);
         return user;
     }
 

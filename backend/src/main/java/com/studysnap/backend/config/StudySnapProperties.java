@@ -368,6 +368,7 @@ public class StudySnapProperties {
     public static class Retention {
         private String dailyCron = "0 45 2 * * *";
         private String weeklyCron = "0 0 18 * * SUN";
+        private String knowledgeImpactDigestMonthlyCron = "0 0 9 1 * *";
         private int inactivityDays = 3;
         private int inactivityCooldownDays = 3;
         private int weakConceptInactivityDays = 3;
@@ -376,6 +377,7 @@ public class StudySnapProperties {
         private int unfinishedNoteCooldownDays = 3;
         private int weeklyCooldownDays = 7;
         private int dueConceptsDigestCooldownDays = 7;
+        private int knowledgeImpactDigestCooldownDays = 30;
         private int weakConceptThresholdPercent = 60;
     }
 

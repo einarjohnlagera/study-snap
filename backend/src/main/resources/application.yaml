@@ -403,6 +403,7 @@ studysnap:
   retention:
     daily-cron: ${RETENTION_DAILY_CRON:0 45 2 * * *}
     weekly-cron: ${RETENTION_WEEKLY_CRON:0 0 18 * * SUN}
+    knowledge-impact-digest-monthly-cron: ${RETENTION_KNOWLEDGE_IMPACT_DIGEST_MONTHLY_CRON:0 0 9 1 * *}
     inactivity-days: ${RETENTION_INACTIVITY_DAYS:3}
     inactivity-cooldown-days: ${RETENTION_INACTIVITY_COOLDOWN_DAYS:3}
     weak-concept-inactivity-days: ${RETENTION_WEAK_CONCEPT_INACTIVITY_DAYS:3}
@@ -410,6 +411,7 @@ studysnap:
     unfinished-note-days: ${RETENTION_UNFINISHED_NOTE_DAYS:2}
     unfinished-note-cooldown-days: ${RETENTION_UNFINISHED_NOTE_COOLDOWN_DAYS:3}
     weekly-cooldown-days: ${RETENTION_WEEKLY_COOLDOWN_DAYS:7}
+    knowledge-impact-digest-cooldown-days: ${RETENTION_KNOWLEDGE_IMPACT_DIGEST_COOLDOWN_DAYS:30}
     weak-concept-threshold-percent: ${RETENTION_WEAK_CONCEPT_THRESHOLD_PERCENT:60}
   security:
     google:

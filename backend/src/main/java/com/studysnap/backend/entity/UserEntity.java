@@ -114,6 +114,9 @@ public class UserEntity {
     @Column(name = "due_concepts_digest_reminders_enabled", nullable = false)
     private Boolean dueConceptsDigestRemindersEnabled;
 
+    @Column(name = "knowledge_impact_digest_reminders_enabled", nullable = false)
+    private Boolean knowledgeImpactDigestRemindersEnabled = false;
+
     @Column(name = "marketing_emails_enabled", nullable = false)
     private Boolean marketingEmailsEnabled;
 

@@ -154,6 +154,43 @@ class NoteRepositoryCreatorImpactIntegrationTest {
         assertThat(noteRepository.countDistinctLearnersHelpedByCreatorUserId(secondCreatorId)).isEqualTo(1);
     }
 
+    @Test
+    void windowedCreatorImpactQueryExcludesOldSessionsAndIncludesRecentSessions() {
+        UUID creatorId = UUID.randomUUID();
+        UUID oldLearnerId = UUID.randomUUID();
+        UUID recentLearnerId = UUID.randomUUID();
+        NoteEntity source = saveNote(creatorId, "Windowed source", NoteVisibility.PUBLIC, null, false);
+        NoteEntity oldCopy = saveNote(oldLearnerId, "Old copy", NoteVisibility.PRIVATE, source, true);
+        NoteEntity recentCopy = saveNote(recentLearnerId, "Recent copy", NoteVisibility.PRIVATE, source, true);
+        OffsetDateTime now = BASE_TIME.plusDays(40);
+        OffsetDateTime since = now.minusDays(30);
+        saveSession(oldLearnerId, oldCopy.getId(), since.minusMinutes(1));
+        saveSession(recentLearnerId, recentCopy.getId(), since.plusMinutes(1));
+        entityManager.flush();
+        entityManager.clear();
+
+        long learnersHelped = noteRepository.countDistinctLearnersHelpedByCreatorUserIdSince(creatorId, since);
+
+        assertThat(learnersHelped).isEqualTo(1);
+    }
+
+    @Test
+    void windowedCreatorImpactQueryExcludesAnIncompleteSession() {
+        UUID creatorId = UUID.randomUUID();
+        UUID incompleteLearnerId = UUID.randomUUID();
+        NoteEntity source = saveNote(creatorId, "Windowed source", NoteVisibility.PUBLIC, null, false);
+        NoteEntity incompleteCopy = saveNote(incompleteLearnerId, "Incomplete copy", NoteVisibility.PRIVATE, source, true);
+        OffsetDateTime now = BASE_TIME.plusDays(40);
+        OffsetDateTime since = now.minusDays(30);
+        saveSession(incompleteLearnerId, incompleteCopy.getId(), false);
+        entityManager.flush();
+        entityManager.clear();
+
+        long learnersHelped = noteRepository.countDistinctLearnersHelpedByCreatorUserIdSince(creatorId, since);
+
+        assertThat(learnersHelped).isZero();
+    }
+
     private NoteEntity saveNote(
             UUID ownerUserId,
             String title,
@@ -179,19 +216,23 @@ class NoteRepositoryCreatorImpactIntegrationTest {
     }
 
     private void saveSession(UUID learnerUserId, UUID noteId, boolean completed) {
+        saveSession(learnerUserId, noteId, completed ? BASE_TIME.plusMinutes(5) : null);
+    }
+
+    private void saveSession(UUID learnerUserId, UUID noteId, OffsetDateTime completedAt) {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
         session.setId(UUID.randomUUID());
         session.setUserId(learnerUserId);
         session.setStudyPackId(UUID.randomUUID());
         session.setNoteId(noteId);
         session.setSessionMode(QuickReviewSessionMode.QUICK_REVIEW);
-        session.setStatus(completed ? QuickReviewSessionStatus.COMPLETED : QuickReviewSessionStatus.IN_PROGRESS);
+        session.setStatus(completedAt != null ? QuickReviewSessionStatus.COMPLETED : QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
         session.setTotalQuestions(5);
         session.setRetryCount(0);
-        session.setCreatedAt(BASE_TIME);
-        session.setCompletedAt(completed ? BASE_TIME.plusMinutes(5) : null);
+        session.setCreatedAt(completedAt == null ? BASE_TIME : completedAt.minusMinutes(5));
+        session.setCompletedAt(completedAt);
         quickReviewSessionRepository.save(session);
     }
 }

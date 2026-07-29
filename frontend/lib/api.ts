@@ -852,6 +852,7 @@ export type MeResponse = {
   weakConceptRemindersEnabled: boolean;
   weeklySummaryRemindersEnabled: boolean;
   dueConceptsDigestRemindersEnabled: boolean;
+  knowledgeImpactDigestRemindersEnabled: boolean;
   marketingEmailsEnabled: boolean;
   mobileTabBarEnabled: boolean;
   themePreference?: ThemePreference | null;
@@ -888,6 +889,7 @@ export type UpdateEmailPreferencesRequest = {
   weakConceptRemindersEnabled: boolean;
   weeklySummaryRemindersEnabled: boolean;
   dueConceptsDigestRemindersEnabled: boolean;
+  knowledgeImpactDigestRemindersEnabled: boolean;
   marketingEmailsEnabled: boolean;
 };
 

@@ -78,6 +78,16 @@ class EmailUnsubscribeServiceTest {
     }
 
     @Test
+    void unsubscribe_disablesKnowledgeImpactDigest() {
+        UserEntity user = optedInUser();
+        stubVerifiedToken("token", user.getId(), UnsubscribeCategory.KNOWLEDGE_IMPACT_DIGEST, user);
+
+        service().unsubscribe("token");
+
+        assertThat(user.getKnowledgeImpactDigestRemindersEnabled()).isFalse();
+    }
+
+    @Test
     void unsubscribe_isIdempotentWhenAlreadyDisabled() {
         UserEntity user = optedInUser();
         user.setMarketingEmailsEnabled(false);
@@ -119,6 +129,7 @@ class EmailUnsubscribeServiceTest {
         user.setWeeklySummaryRemindersEnabled(true);
         user.setInactivityRemindersEnabled(true);
         user.setWeakConceptRemindersEnabled(true);
+        user.setKnowledgeImpactDigestRemindersEnabled(true);
         return user;
     }
 }
