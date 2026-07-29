@@ -2,7 +2,7 @@
 
 ## v0.62.0 - Knowledge Impact
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: give creators (currently 3 non-official public-note authors) a passive, retrospective view of the impact their published notes have had — "your notes helped N learners" — testing whether a recognition mechanism can move a community-publish rate that's gone to zero, rather than waiting for evidence the rate is already moving on its own.
 
@@ -23,6 +23,12 @@ Full technical detail (root causes, fix designs, file:line anchors, the actual c
 - **Official-author predicate fix (backend).** `PublicLibraryRepositoryImpl`'s SQL-level official-author predicate and `OfficialChallengeQuizTemplateService`'s own Java check both checked admin-role only, missing the email-based check `PublicProfileService.isOfficialAuthor` uses — a three-way inconsistency, not two. Both now match the reference form (`role = ADMIN` or the reserved official email). Confirmed a no-op against production data (the official account already holds `ADMIN`) — no visible change to Public Library COMMUNITY-filter results or Official Challenge Quiz template eligibility today; the fix prevents future drift if a non-admin official-curation account is ever added.
 - **Knowledge Impact dashboard + measurable publish loop (backend + frontend).** Creators with public notes now get a private, retry-safe `Your Impact` section on their own public profile, backed by authenticated-only `GET /creator-impact/me`. The headline counts distinct learners across the creator's catalog only after a copied note leads to a genuinely completed quiz session (`status = COMPLETED`, not just a `completedAt` timestamp — a pre-signoff pressure test found and fixed a case where a forfeited Long Exam or Interview Practice session still set `completedAt` and would have been miscounted); per-note rows show helped counts with views/copies kept secondary. The owner-only dashboard view and private→public publication transition now emit `KNOWLEDGE_IMPACT_DASHBOARD_VIEWED` and idempotent `PUBLIC_NOTE_PUBLISHED` events for the 2026-09-11 conditional-rate checkpoint; the existing public stats block and non-owner profile experience are unchanged.
 - **Opt-in Knowledge Impact digest (backend + frontend).** Creators with at least one public note can now opt into a monthly Email Preferences digest showing the distinct learners who completed a quiz from their public notes in the trailing 30 days, subject to the same genuine-completion fix above. The preference defaults off, zero-learner months are skipped, a 30-day cooldown prevents duplicate sends, and the dispatch reuses the existing per-recipient failure isolation and unsubscribe infrastructure. Settings now shows a retryable notice instead of silently hiding the toggle when the underlying impact check fails, matching the dashboard's existing error handling.
+- **Bonus fix, unrelated to Knowledge Impact:** production had legacy `PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT`/`PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT`/`PREMIUM_MONTHLY_STUDY_PACK_LIMIT` environment variables still set from before the "Premium" tier was renamed "Pro," silently overriding the current correct Pro quota defaults (200 and 30 for Challenge Quiz and Adaptive Practice) with stale ones (50 and 50) on the Settings and Dashboard usage widgets — found while investigating an owner-reported production discrepancy. Removed the legacy `${PREMIUM_MONTHLY_*}`/`${..._PREMIUM}` fallback layer entirely from `application.yaml` (study-pack, challenge-quiz, adaptive-practice, ocr, note-generation) so an orphaned legacy env var can no longer silently override current behavior, even if left set on a host.
+
+### Known Limitations
+
+- **The 2026-09-11 conditional-rate checkpoint hasn't run yet.** This release ships the measurement infrastructure, not the result — see `docs/product/ROADMAP.md`'s Backlog Index "Knowledge Impact" row for the stated kill criterion.
+- **Built and shipped against a 3-creator base**, proceeding despite the feature's own data gate failing — a deliberate, ratified bet, not an oversight.
 
 ## v0.61.0 - Challenge Quiz Quota Increase
 
