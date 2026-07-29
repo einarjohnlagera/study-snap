@@ -267,13 +267,13 @@ Design brief and original tiering rationale: "Future, gated — Runtime Companio
 **v1 scope, signed off by the owner at kickoff:**
 - Grounded Q&A over a top-level Review Set's authored Companion content (`note_collections.companion`) — retrieval over static curator-authored text, not generation.
 - Access: PLUS and PRO (not FREE). PRO does not lose anything PLUS gains.
-- Scope boundary: only available on a collection where `companion` is non-null — mirrors `CompanionDisplayCard`'s existing render-gating (hidden when Companion is null or only empty draft fields). No content to ground answers in otherwise.
+- Scope boundary: only available on a collection whose `companion` has renderable authored content — exactly mirrors `CompanionDisplayCard`'s existing gate (hidden when Companion is null or only empty draft fields). No content to ground answers in otherwise.
 - Monthly quota: 20 sessions/user. Higher than Interview Practice's PRO-tier 10/month since grounded retrieval is cheaper than generative simulation.
 - Per-session cap: 6 turns. New mechanism — Interview Practice is a fixed-question-set flow with no existing open-ended turn-cap code to reuse; only the feature-gate/quota/rate-limit/cheap-model *pattern* carries over, not literal code.
 - Model: CRITIQUE tier (`gpt-4.1-mini` default), same cost class as Interview Practice's feedback generation.
 - Reuses the existing `AiRateLimitService` per-minute rate-limit pattern.
 
-Not yet scoped to file-level detail or handed to Codex — that pass happens next, via a Codex prompt per this project's task-routing table (new `Feature` enum value, `UserUsageEntity` quota field + migration, `FeatureGateService` wiring, new capped-turn endpoint, prompts — a new-feature-touching-backend change, past the isolated-fix bar).
+**Implemented in the v0.63.0 release worktree.** The shipped shape uses a dedicated `ask_companion_sessions` aggregate with JSONB question/answer turn history (not quiz-session persistence), one partial-unique ACTIVE session per user/collection, rolling-period usage in `user_usage`, three authenticated endpoints, and a collection-detail-only chat panel. See `docs/features/ask-companion.md` and `RELEASES.md` for the runtime contract and shipped summary.
 
 Anti-drift: no mid-exam coaching (`EXAM_MODES.md`'s locked interactive-AI constraint is unaffected — this is a Companion-detail-page feature, not a quiz-session feature); grounded retrieval only, no free-form generation; does not touch Personalization, which stays gated separately.
 

@@ -47,6 +47,9 @@ public class UserUsageEntity {
     @Column(name = "interview_practice_used_this_month", nullable = false)
     private Integer interviewPracticeUsedThisMonth;
 
+    @Column(name = "ask_companion_used_this_month", nullable = false)
+    private Integer askCompanionUsedThisMonth;
+
     @Column(name = "long_exam_used_this_month", nullable = false)
     private Integer longExamUsedThisMonth;
 
@@ -75,6 +78,12 @@ public class UserUsageEntity {
         interviewPracticeUsedThisMonth = interviewPracticeUsedThisMonth == null
                 ? 1
                 : interviewPracticeUsedThisMonth + 1;
+    }
+
+    public void incrementAskCompanionUsedThisMonth() {
+        askCompanionUsedThisMonth = askCompanionUsedThisMonth == null
+                ? 1
+                : askCompanionUsedThisMonth + 1;
     }
 
     public void incrementLongExamUsedThisMonth() {

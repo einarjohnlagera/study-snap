@@ -77,6 +77,7 @@ import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
+import { AskCompanionPanel } from "@/components/collections/ask-companion-panel";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
 type ReadinessLoadState = "idle" | "loading" | "ready" | "error";
@@ -3293,6 +3294,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           />
         ) : null}
         <CompanionDisplayCard companion={collection.companion} labels={labels} />
+        {hasRenderableCompanionContent(collection.companion) ? (
+          <AskCompanionPanel collectionId={collectionId} currentPlan={currentPlan} />
+        ) : null}
 
         {mutationError ? (
           <Card className="flex items-start justify-between gap-4 border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
@@ -3465,6 +3469,9 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       />
 
       <CompanionDisplayCard companion={collection.companion} labels={labels} />
+      {hasRenderableCompanionContent(collection.companion) ? (
+        <AskCompanionPanel collectionId={collectionId} currentPlan={currentPlan} />
+      ) : null}
 
       <Card className="space-y-4 p-4 sm:p-6">
         <div>

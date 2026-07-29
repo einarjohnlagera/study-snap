@@ -96,6 +96,8 @@ There is no separate read endpoint.
 
 The collection detail page renders a Companion card in both top-level view branches when renderable content exists; the whole card is hidden when the Companion is null or only contains empty draft fields. As of the "View Full Guide" collapse (see Coach Experience, below), the card's long-form sections and Mentor Tips do not render inline — the card shows only its header and a "View Full Guide" toggle by default, and the sections render only once expanded. Overview, Study Strategy, Common Mistakes, Resources, and FAQ answers use the shared `SummaryMarkdown` renderer. Empty individual sections are skipped.
 
+PLUS/PRO runtime Q&A over this authored content is documented separately in `docs/features/ask-companion.md`; its entry point uses this same renderable-content gate.
+
 Mentor Tips also participate in the Coach surface. At render time, the page selects the first authored tip whose condition is eligible:
 
 - `surfacingCondition == null`: always eligible.
