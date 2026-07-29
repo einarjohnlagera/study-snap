@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.64.0 - Add to Review Set
+
+**Status: In Progress**
+
+Theme: close a genuine capability gap surfaced while discussing v0.63.0's Companion scoping question — a user reading a Note who wants it organized into a Review Set has no way to do that from Note Detail today. Reclaims the `v0.64.0` minor-version slot from `Explore Convergence` (renumbered to `v0.65.0`), since this item is small, ungated, and ready now, while Explore's Diagnostic Read gate remains unmet — the fifth time a slot has changed hands this way, following `v0.60.0`, `v0.61.0`, `v0.62.0`, and `v0.63.0`.
+
+### Planned Scope
+
+- **"Add to {Review Set}" on Note Detail (frontend only).** Extracts the existing, already-built `AddImportedDraftsModal` (`frontend/components/notes/bulk-import-page-client.tsx`) into a shared component and mounts it from Note Detail with the single viewed note, giving a user-initiated way to add an existing note to an existing or new collection without leaving the page. No backend changes — reuses `listCollections`, `addCollectionItems`, and `createCollection` as-is.
+- **Companion scoping correction (docs only).** Prompted by the owner's pre-v0.63.0-signoff question ("do we really surface Companion only in Review Set?") and a GPT second opinion, pressure-tested with Opus. Corrects `docs/features/companion.md`'s framing: Companion is not "Review-Set-scoped" but admin-authored-Official-collection-scoped (`assertAdmin` gates every write path) — a structural fact, not a permanent philosophical stance — and records the three-layer guidance model (content explanation / diagnostic guidance / editorial guidance) so a note-only user is understood as missing only the one layer that requires a human curator to exist at all.
+- **Roadmap resolution (docs only).** Folds "what does a no-Review-Set learner's guidance surface look like" into the existing, still-open Primary-Review-Set-vs-Study/Exam-Focus Backlog Index row rather than opening a new sibling item — that question already commits to Study/Exam Focus as the load-bearing no-Goal fallback, so answering it a second time from the Note Detail side would just recreate an uncoordinated second answer.
+
+Anti-drift: no Companion content on standalone Notes, ever (holds, on corrected reasoning); no Note Detail nudge/recommendation surface (the population already gets four elsewhere — Onboarding, Dashboard, Collections, Library — and Note Detail is deliberately the one surface that stays focused); no subject-level Official-Review-Set matching (a "browse sets covering this topic" idea was considered and explicitly rejected for this release — it needs matching capability that doesn't exist yet and duplicates scope already owned by `v0.65.0` Explore Convergence).
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.63.0 - Ask Companion
 
 **Status: Released**
