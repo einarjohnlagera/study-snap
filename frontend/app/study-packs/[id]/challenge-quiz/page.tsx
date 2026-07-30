@@ -2550,17 +2550,17 @@ export default function ChallengeQuizPage() {
                   } : undefined}
                   tone="challenge-quiz"
                 />
+                {hasUnansweredQuestions ? (
+                  <p className="text-center text-xs text-foreground/60">
+                    Answered Accuracy shows performance on attempted questions. Overall Completion Score counts unanswered questions as incomplete.
+                  </p>
+                ) : null}
                 <p className="text-center text-sm text-foreground/75">
                   {getChallengeResultMessage(result.scorePercentage, activeMode)}
                 </p>
                 {timedOut ? (
                   <p className="text-center text-sm text-foreground/75">
                     Time ran out. Your answers were submitted automatically.
-                  </p>
-                ) : null}
-                {hasUnansweredQuestions ? (
-                  <p className="text-center text-xs text-foreground/60">
-                    Answered Accuracy shows performance on attempted questions. Overall Completion Score counts unanswered questions as incomplete.
                   </p>
                 ) : null}
               </>

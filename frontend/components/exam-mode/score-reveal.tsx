@@ -80,10 +80,7 @@ export function ScoreReveal({
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">
             {secondaryMetric.label}
           </p>
-          <p
-            className="text-3xl font-semibold tracking-tight tabular-nums text-foreground/70 sm:text-4xl"
-            aria-label={`${secondaryMetric.label}, ${secondaryClamped} percent`}
-          >
+          <p className="text-3xl font-semibold tracking-tight tabular-nums text-foreground/70 sm:text-4xl">
             {secondaryClamped}
             <span className="ml-0.5 text-xl font-medium text-foreground/45 sm:text-2xl">%</span>
           </p>

@@ -54,8 +54,7 @@ describe("ScoreReveal", () => {
     );
 
     expect(screen.getByText("Overall Completion Score")).toBeInTheDocument();
-    expect(screen.getByTestId("score-reveal-secondary-metric")).toBeInTheDocument();
-    expect(screen.getByLabelText("Overall Completion Score, 60 percent")).toHaveTextContent("60%");
+    expect(screen.getByTestId("score-reveal-secondary-metric")).toHaveTextContent("60%");
     expect(screen.getByText("6 correct of 10 total")).toBeInTheDocument();
   });
 
