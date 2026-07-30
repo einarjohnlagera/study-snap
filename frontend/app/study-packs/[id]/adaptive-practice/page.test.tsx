@@ -421,6 +421,8 @@ describe("AdaptivePracticePage", () => {
     expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Generate New Set" })).toBeInTheDocument();
+    expect(screen.queryByTestId("adaptive-next-step-guidance")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("adaptive-companion-guidance")).not.toBeInTheDocument();
   });
 
   it("links only targeted weak areas that have a Key Concepts explanation", async () => {
@@ -529,6 +531,7 @@ describe("AdaptivePracticePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
 
     expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
+    expect(screen.getByTestId("adaptive-next-step-guidance")).toHaveAttribute("aria-label", "What to do next");
     expect(screen.getByRole("link", { name: "Take a Challenge" })).toHaveAttribute(
       "href",
       "/notes/note-1/challenge-quiz",
@@ -585,6 +588,7 @@ describe("AdaptivePracticePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
 
     expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
+    expect(screen.getByTestId("adaptive-companion-guidance")).toHaveAttribute("aria-label", "Companion guidance");
     expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
     expect(screen.getByRole("link", { name: "Ask Companion about this" })).toHaveAttribute(
       "href",

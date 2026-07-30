@@ -10,9 +10,10 @@ type GoalNudge = NonNullable<PostSessionNextStepResponse["goalNudge"]>;
 type GoalNudgeCardProps = {
   goalNudge: GoalNudge;
   noteId: string | null;
+  contained?: boolean;
 };
 
-export function GoalNudgeCard({ goalNudge, noteId }: Readonly<GoalNudgeCardProps>) {
+export function GoalNudgeCard({ goalNudge, noteId, contained = false }: Readonly<GoalNudgeCardProps>) {
   useEffect(() => {
     void trackAnalyticsEvent({
       eventType: "GOAL_NUDGE_SHOWN",
@@ -24,8 +25,8 @@ export function GoalNudgeCard({ goalNudge, noteId }: Readonly<GoalNudgeCardProps
     ? "You've reviewed all current goal concepts."
     : `${goalNudge.dueConcepts} ${goalNudge.dueConcepts === 1 ? "concept" : "concepts"} due`;
 
-  return (
-    <Card className="space-y-4 border-blue-500/20 bg-blue-500/5 p-4">
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
@@ -50,6 +51,16 @@ export function GoalNudgeCard({ goalNudge, noteId }: Readonly<GoalNudgeCardProps
       >
         View {goalNudge.goalName} progress &rarr;
       </Link>
+    </>
+  );
+
+  return contained ? (
+    <section className="space-y-4 p-4" data-result-guidance-item="goal-nudge">
+      {content}
+    </section>
+  ) : (
+    <Card className="space-y-4 border-blue-500/20 bg-blue-500/5 p-4">
+      {content}
     </Card>
   );
 }

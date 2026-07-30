@@ -24,6 +24,10 @@ Shared session status values:
 - `COMPLETED` — session has been submitted and scored
 - `FORFEITED` — session was abandoned through an explicit forfeit flow
 
+## Result-screen hierarchy
+
+Quick Review, standard Challenge Quiz, Adaptive Practice, and Board Exam Mode's own result branch preserve their mode-owned score and weak-area outcome content, then group the existing post-session cards by the learner decision they support: `PostSessionNextStep`, `GoalNudgeCard`, and `WeeklyPacingEchoCard` share one "what to do next" visual block; `CompanionResultBridgeCard` and (outside Board Exam Mode) `TwiceMissedAskCompanionCard` share a separate Companion-guidance block. Board Exam Mode's Companion-guidance block only ever contains `CompanionResultBridgeCard` — it has never shown the twice-missed CTA, and this pass does not change that. Each child keeps its own existing condition (`hasCompanionResultBridgeExcerpt`/`getAskableTwiceMissedConcept` exported from their respective components so pages can pre-check without duplicating each card's internal gate) and can render independently inside its group, so a result with no applicable guidance renders no empty block. Answer review and back actions remain after these groups. This is presentation-only: it does not change actions, data fetches, session state, scoring, or analytics. Board Exam Mode's feedback-free *in-session* view (not its result screen) and Long Exam's forfeit-only flow do not use this grouped result treatment.
+
 ## Dashboard Resume Metadata
 
 Dashboard resume recommendations must stay note-based even though session data lives on quiz-session rows.

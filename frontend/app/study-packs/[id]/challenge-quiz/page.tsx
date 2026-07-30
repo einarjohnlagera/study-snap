@@ -21,8 +21,9 @@ import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
-import { CompanionResultBridgeCard } from "@/components/study-pack/companion-result-bridge-card";
-import { TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
+import { CompanionResultBridgeCard, hasCompanionResultBridgeExcerpt } from "@/components/study-pack/companion-result-bridge-card";
+import { ResultGuidanceGroup } from "@/components/study-pack/result-guidance-group";
+import { shouldRenderTwiceMissedCta, TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
 import { StickyAssessmentFooter } from "@/components/ui/sticky-assessment-footer";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -389,6 +390,15 @@ export default function ChallengeQuizPage() {
   const planBackHref = collectionId ? `/collections/${collectionId}` : noteDetailHref;
   const planBackLabel = collectionId ? getCollectionLabels(getAuthUser()?.profileType).singular : "Note";
   const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
+  const hasNextStepGuidance = nextStepResponse !== null || weeklyPacingWeeksRemaining !== null;
+  const hasCompanionExcerpt = hasCompanionResultBridgeExcerpt(primaryCollectionCompanion);
+  const hasTwiceMissedCompanionGuidance = shouldRenderTwiceMissedCta(
+    result?.twiceMissedConcepts ?? [],
+    currentPlan,
+    primaryCollectionId,
+    primaryCollectionCompanion,
+  );
+  const hasCompanionGuidance = hasCompanionExcerpt || hasTwiceMissedCompanionGuidance;
   const groupedLearnerLevels = useMemo(
     () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
     [viewerProfileType],
@@ -2369,23 +2379,38 @@ export default function ChallengeQuizPage() {
           </div>
 
           <div ref={weakConceptsRef} className="space-y-4">
-            <PostSessionNextStep
-              response={nextStepResponse}
-              currentPlan={currentPlan}
-              noteId={note?.id ?? null}
-              onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "board_exam_results_next_step")}
-            />
-            {nextStepResponse?.goalNudge ? (
-              <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
+            {hasNextStepGuidance ? (
+              <ResultGuidanceGroup label="What to do next" testId="board-exam-next-step-guidance">
+                <PostSessionNextStep
+                  response={nextStepResponse}
+                  currentPlan={currentPlan}
+                  noteId={note?.id ?? null}
+                  onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "board_exam_results_next_step")}
+                  contained
+                />
+                {nextStepResponse?.goalNudge ? (
+                  <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} contained />
+                ) : null}
+                <WeeklyPacingEchoCard
+                  weeksRemaining={weeklyPacingWeeksRemaining}
+                  goalLabel={getCollectionLabels(viewerProfileType).goalSingular}
+                  contained
+                />
+              </ResultGuidanceGroup>
             ) : null}
-            <WeeklyPacingEchoCard
-              weeksRemaining={weeklyPacingWeeksRemaining}
-              goalLabel={getCollectionLabels(viewerProfileType).goalSingular}
-            />
-            <CompanionResultBridgeCard
-              companion={primaryCollectionCompanion}
-              reviewSetLabel={getCollectionLabels(viewerProfileType).singular}
-            />
+            {/* Deliberately gated on hasCompanionExcerpt alone, not hasCompanionGuidance: Board
+                Exam Mode has never shown the twice-missed CTA, and this branch renders only
+                CompanionResultBridgeCard. Switching to hasCompanionGuidance would render an empty
+                group whenever a twice-missed concept exists but no excerpt does. */}
+            {hasCompanionExcerpt ? (
+              <ResultGuidanceGroup label="Companion guidance" testId="board-exam-companion-guidance">
+                <CompanionResultBridgeCard
+                  companion={primaryCollectionCompanion}
+                  reviewSetLabel={getCollectionLabels(viewerProfileType).singular}
+                  contained
+                />
+              </ResultGuidanceGroup>
+            ) : null}
             {nextStepResponse === null ? (
               <>
                 <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
@@ -2613,29 +2638,41 @@ export default function ChallengeQuizPage() {
             )}
           </Card>
           <div ref={weakConceptsRef} className="space-y-4">
-            <PostSessionNextStep
-              response={nextStepResponse}
-              currentPlan={currentPlan}
-              noteId={note?.id ?? null}
-              onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "challenge_quiz_results_next_step")}
-            />
-            {nextStepResponse?.goalNudge ? (
-              <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
+            {hasNextStepGuidance ? (
+              <ResultGuidanceGroup label="What to do next" testId="challenge-quiz-next-step-guidance">
+                <PostSessionNextStep
+                  response={nextStepResponse}
+                  currentPlan={currentPlan}
+                  noteId={note?.id ?? null}
+                  onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "challenge_quiz_results_next_step")}
+                  contained
+                />
+                {nextStepResponse?.goalNudge ? (
+                  <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} contained />
+                ) : null}
+                <WeeklyPacingEchoCard
+                  weeksRemaining={weeklyPacingWeeksRemaining}
+                  goalLabel={getCollectionLabels(viewerProfileType).goalSingular}
+                  contained
+                />
+              </ResultGuidanceGroup>
             ) : null}
-            <WeeklyPacingEchoCard
-              weeksRemaining={weeklyPacingWeeksRemaining}
-              goalLabel={getCollectionLabels(viewerProfileType).goalSingular}
-            />
-            <CompanionResultBridgeCard
-              companion={primaryCollectionCompanion}
-              reviewSetLabel={getCollectionLabels(viewerProfileType).singular}
-            />
-            <TwiceMissedAskCompanionCard
-              twiceMissedConcepts={result.twiceMissedConcepts ?? []}
-              currentPlan={currentPlan}
-              primaryCollectionId={primaryCollectionId}
-              companion={primaryCollectionCompanion}
-            />
+            {hasCompanionGuidance ? (
+              <ResultGuidanceGroup label="Companion guidance" testId="challenge-quiz-companion-guidance">
+                <CompanionResultBridgeCard
+                  companion={primaryCollectionCompanion}
+                  reviewSetLabel={getCollectionLabels(viewerProfileType).singular}
+                  contained
+                />
+                <TwiceMissedAskCompanionCard
+                  twiceMissedConcepts={result.twiceMissedConcepts ?? []}
+                  currentPlan={currentPlan}
+                  primaryCollectionId={primaryCollectionId}
+                  companion={primaryCollectionCompanion}
+                  contained
+                />
+              </ResultGuidanceGroup>
+            ) : null}
             {nextStepResponse === null ? (
               <>
                 <Card className="space-y-3 p-4">

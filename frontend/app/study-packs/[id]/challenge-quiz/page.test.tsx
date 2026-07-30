@@ -1317,6 +1317,8 @@ describe("ChallengeQuizPage", () => {
       }));
     });
     expect(await screen.findByText("Overall Completion Score")).toBeInTheDocument();
+    expect(screen.queryByTestId("challenge-quiz-next-step-guidance")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("challenge-quiz-companion-guidance")).not.toBeInTheDocument();
   });
 
   it("surfaces the existing page error when submit anyway fails", async () => {
@@ -1756,6 +1758,53 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText("Unmapped concept").closest("a")).toBeNull();
   });
 
+  it("groups the next-step guidance on Board Exam Mode's own result branch, without a twice-missed CTA", async () => {
+    setupBoardExamSession();
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 2,
+      correctAnswers: 2,
+      scorePercentage: 100,
+      performanceLevel: "Excellent",
+      conceptBreakdown: [
+        { concept: "Cell Biology", correctAnswers: 1, totalQuestions: 1, accuracyPercentage: 100 },
+        { concept: "Cell Structure", correctAnswers: 1, totalQuestions: 1, accuracyPercentage: 100 },
+      ],
+      weakConcepts: [],
+      durationSeconds: 10,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:01:00Z",
+      isFirstCompletedSessionEver: false,
+    });
+    (getPostSessionNextStep as jest.Mock).mockResolvedValue({
+      type: "REVIEW_PACK",
+      studyPackId: "sp-1",
+      noteId: "note-1",
+      title: "Board Exam Note",
+      message: "Solid result. Review the note when ready.",
+      actionLabel: "Review the Note",
+      actionHref: "/notes/note-1",
+      concepts: [],
+      adaptivePracticeAvailable: false,
+      adaptivePracticeRemaining: null,
+      goalNudge: null,
+    });
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Cell wall/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
+    await screen.findByText("Board Exam Result");
+
+    expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
+    expect(screen.getByTestId("board-exam-next-step-guidance")).toHaveAttribute("aria-label", "What to do next");
+    expect(screen.queryByRole("link", { name: "Ask Companion about this" })).not.toBeInTheDocument();
+  });
+
   it("fetches and renders the server-resolved next step after regular Challenge completion", async () => {
     setupInProgressChallengeQuiz("challenge");
     (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
@@ -1794,6 +1843,7 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
 
     expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
+    expect(screen.getByTestId("challenge-quiz-next-step-guidance")).toHaveAttribute("aria-label", "What to do next");
     expect(screen.getByRole("link", { name: "Take a Challenge" })).toHaveAttribute(
       "href",
       "/notes/note-1/challenge-quiz",

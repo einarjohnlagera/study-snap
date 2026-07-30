@@ -372,6 +372,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
+    expect(screen.getByTestId("quick-review-next-step-guidance")).toHaveAttribute("aria-label", "What to do next");
     expect(screen.getByText("Cell organelles")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Take a Challenge" })).toHaveAttribute(
       "href",
@@ -410,6 +411,8 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     expect(getCollectionGoal).not.toHaveBeenCalled();
     expect(screen.queryByText(/That's another session toward this week's target/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("quick-review-next-step-guidance")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("quick-review-companion-guidance")).not.toBeInTheDocument();
   });
 
   it("shows the primary Review Set's Companion excerpt when it has Common Mistakes content", async () => {
@@ -426,6 +429,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
+    expect(screen.getByTestId("quick-review-companion-guidance")).toHaveAttribute("aria-label", "Companion guidance");
     expect(screen.getByText(/Common Mistakes/)).toBeInTheDocument();
     expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
   });
