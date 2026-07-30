@@ -156,18 +156,12 @@ Challenge mode supports on-demand question batching within a live session:
 
 ### Dual score display (Challenge mode only)
 
-When the user skips questions (`hasUnansweredQuestions = !isBoardExamMode && quiz.length > result.totalQuestions`), the result screen shows two scores side by side:
+When the user skips questions (`hasUnansweredQuestions = !isBoardExamMode && quiz.length > result.totalQuestions`), the result screen shows two scores in one outcome hierarchy:
 
 - **Answered Accuracy** (`result.scorePercentage`) — correct out of answered; primary metric
 - **Overall Completion Score** (`Math.round(correctAnswers / totalGenerated * 100)`) — correct out of all generated questions
 
-Helper text explains the distinction. When all questions were answered, only Answered Accuracy is shown (same as before).
-
-**Score Summary** columns when `hasUnansweredQuestions`:
-- Correct, Answered Questions, Total Questions, Answered Accuracy (4 columns)
-
-**Score Summary** columns when all answered:
-- Correct, Answered Questions, Percentage (3 columns, same layout as before)
+Both values live in one shared `ScoreReveal` outcome block: Answered Accuracy uses the primary large percentage, while Overall Completion Score uses the optional, visually subordinate `secondaryMetric` slot with `correct of total` description text. The explanatory helper line remains below the reveal. When all questions were answered, `ScoreReveal` shows the single primary `Score` metric and no secondary slot. There is no separate Score Summary grid card.
 
 ## UX microcopy
 
@@ -183,7 +177,7 @@ Running state (Challenge mode only):
 
 Current result screen sections:
 
-1. score summary
+1. shared `ScoreReveal` outcome block (score, correct/answered count, duration, and performance level; optional Overall Completion Score when questions are unanswered)
 2. concept breakdown
 3. shared post-session next step
 4. secondary actions
