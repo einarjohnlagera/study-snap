@@ -2,7 +2,7 @@
 
 ## v0.66.0 - Challenge Quiz Result Clarity
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: consolidate the standard Challenge Quiz result screen's score/Score Summary/Concept Breakdown into a single coherent outcome hierarchy, closing the gap flagged as a Known Limitation while signing off `v0.65.0`. Reclaims the `v0.66.0` minor-version slot from `Explore Convergence` (renumbered to `v0.67.0`), since this item is small, ungated, and ready now, while Explore's Diagnostic Read gate remains unmet (due after 2026-08-06) — the seventh time a slot has changed hands this way, following `v0.60.0`, `v0.61.0`, `v0.62.0`, `v0.63.0`, `v0.64.0`, and `v0.65.0`.
 
