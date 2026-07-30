@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.InterviewSourceNoteRef;
 import com.studysnap.backend.dto.QuizItem;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -144,6 +145,24 @@ class QuizSessionStateUtilsTest {
         assertThat(QuizSessionStateUtils.extractQuiz(null)).isEmpty();
         assertThat(QuizSessionStateUtils.extractQuiz(Map.of())).isEmpty();
         assertThat(QuizSessionStateUtils.extractQuiz(Map.of("quiz", "invalid"))).isEmpty();
+    }
+
+    @Test
+    void withConceptSelectionReasons_andExtractConceptSelectionReasons_roundTripAndStayQuizAligned() {
+        List<String> reasons = new ArrayList<>();
+        reasons.add("DUE");
+        reasons.add(null);
+        reasons.add("WEAK");
+        Map<String, Object> state = QuizSessionStateUtils.withConceptSelectionReasons(
+                Map.of("mode", "adaptive"),
+                reasons
+        );
+
+        assertThat(state).containsEntry("mode", "adaptive");
+        assertThat(QuizSessionStateUtils.extractConceptSelectionReasons(state, 4))
+                .containsExactly("DUE", null, "WEAK", null);
+        assertThat(QuizSessionStateUtils.extractConceptSelectionReasons(state, 2))
+                .containsExactly("DUE", null);
     }
 
     @Test

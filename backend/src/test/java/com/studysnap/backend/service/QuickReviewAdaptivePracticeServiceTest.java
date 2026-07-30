@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -284,6 +285,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
         assertThat(response.weakConcepts()).containsExactly("Old Concept");
         assertThat(response.quiz()).hasSize(5);
+        assertThat(response.conceptSelectionReasons()).containsOnly("DUE");
         verify(quizGenerationService).generateAdaptivePracticeQuiz(
                 eq("Pack"),
                 eq("Summary"),
@@ -314,7 +316,10 @@ class QuickReviewAdaptivePracticeServiceTest {
         when(conceptHealthService.getDueConcepts(eq(userId), eq(studyPackId), eq(List.of("Old Concept", "Current Concept")), any(OffsetDateTime.class)))
                 .thenReturn(List.of("Old Concept"));
 
-        adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId);
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(
+                studyPackId.toString(),
+                userId
+        );
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> focusConceptsCaptor = ArgumentCaptor.forClass(List.class);
@@ -328,6 +333,88 @@ class QuickReviewAdaptivePracticeServiceTest {
                 any()
         );
         assertThat(focusConceptsCaptor.getValue()).containsExactly("Old Concept", "Weak Concept");
+        assertThat(response.conceptSelectionReasons()).containsOnly("BOTH");
+    }
+
+    @Test
+    void generateAdaptiveQuiz_persistsParallelDueWeakBothAndUnmatchedSelectionReasons() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        studyPack.setKeyConcepts(List.of("Due Concept", "Both Concept", "Unmatched Concept"));
+        QuickReviewSessionEntity latestQuickReview = buildCompletedSourceSession(
+                userId,
+                studyPackId,
+                noteId,
+                List.of("Weak Concept", "Both Concept")
+        );
+        List<QuizItem> generatedQuiz = buildGeneratedQuiz(List.of(
+                "Due Concept",
+                "Weak Concept",
+                "Both Concept",
+                "Unmatched Concept",
+                "Due Concept",
+                "Weak Concept",
+                "Both Concept"
+        ));
+
+        stubAdaptiveGeneration(userId, studyPackId, studyPack, latestQuickReview, generatedQuiz);
+        when(conceptHealthService.getDueConcepts(
+                eq(userId),
+                eq(studyPackId),
+                eq(List.of("Due Concept", "Both Concept", "Unmatched Concept")),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of("Due Concept", "Both Concept"));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(
+                studyPackId.toString(),
+                userId
+        );
+
+        assertThat(response.conceptSelectionReasons())
+                .hasSameSizeAs(response.quiz())
+                .containsExactly("DUE", "WEAK", "BOTH", null, "DUE", "WEAK", "BOTH");
+        assertThat(QuizSessionStateUtils.extractConceptSelectionReasons(
+                responseSessionState(),
+                response.quiz().size()
+        )).containsExactlyElementsOf(response.conceptSelectionReasons());
+    }
+
+    @Test
+    void getAdaptiveQuizSession_restoresSelectionReasonsFromSessionState() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(
+                sessionId,
+                userId,
+                studyPackId,
+                noteId
+        );
+        session.setSessionState(QuizSessionStateUtils.withConceptSelectionReasons(
+                session.getSessionState(),
+                List.of("BOTH")
+        ));
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.ADAPTIVE),
+                any()
+        )).thenReturn(Optional.of(session));
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.getAdaptiveQuizSession(
+                studyPackId.toString(),
+                userId
+        );
+
+        assertThat(response.sessionId()).isEqualTo(sessionId.toString());
+        assertThat(response.conceptSelectionReasons()).containsExactly("BOTH");
     }
 
     @Test
@@ -644,7 +731,7 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     private List<QuizItem> buildGeneratedQuiz(String concept, int questionCount) {
-        List<QuizItem> quiz = new java.util.ArrayList<>();
+        List<QuizItem> quiz = new ArrayList<>();
         for (int index = 0; index < questionCount; index++) {
             quiz.add(new QuizItem(
                     "Generated Q " + index,
@@ -655,6 +742,29 @@ class QuickReviewAdaptivePracticeServiceTest {
             ));
         }
         return quiz;
+    }
+
+    private List<QuizItem> buildGeneratedQuiz(List<String> concepts) {
+        List<QuizItem> quiz = new ArrayList<>();
+        for (int index = 0; index < concepts.size(); index++) {
+            quiz.add(new QuizItem(
+                    "Generated Q " + index,
+                    List.of("A", "B", "C", "D"),
+                    "A",
+                    concepts.get(index),
+                    "Explanation"
+            ));
+        }
+        return quiz;
+    }
+
+    private Map<String, Object> responseSessionState() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor = ArgumentCaptor.forClass(
+                QuickReviewSessionEntity.class
+        );
+        verify(quickReviewSessionRepository, org.mockito.Mockito.atLeastOnce()).save(sessionCaptor.capture());
+        return sessionCaptor.getValue().getSessionState();
     }
 
     private QuickReviewSessionEntity buildInProgressAdaptiveSession(UUID sessionId, UUID userId, UUID studyPackId, UUID noteId) {

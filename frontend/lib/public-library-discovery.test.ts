@@ -33,6 +33,7 @@ function makeNote(
     studyPackId: null,
     studyPackStatus: "STUDY_PACK_READY",
     quizCount: 2,
+    keyConceptCount: 2,
     copyCount: 0,
     likeCount: 0,
     shareCount: 0,

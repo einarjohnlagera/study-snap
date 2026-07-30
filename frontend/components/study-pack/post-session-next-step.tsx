@@ -11,6 +11,7 @@ type PostSessionNextStepProps = {
   currentPlan: string;
   noteId: string | null;
   onOpenPaywall: () => void;
+  contained?: boolean;
 };
 
 function normalizePlan(plan: string): AppPlanType {
@@ -22,6 +23,7 @@ export function PostSessionNextStep({
   currentPlan,
   noteId,
   onOpenPaywall,
+  contained = false,
 }: Readonly<PostSessionNextStepProps>) {
   if (!response) {
     return null;
@@ -38,8 +40,8 @@ export function PostSessionNextStep({
     && adaptiveQuotaExhausted;
   const actionHref = response.actionHref || (noteId ? `/notes/${noteId}` : "/library");
 
-  return (
-    <Card className="space-y-4 border-blue-500/25 bg-blue-500/5 p-4">
+  const content = (
+    <>
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
           Recommended next step
@@ -88,6 +90,16 @@ export function PostSessionNextStep({
           )
         ) : null}
       </div>
+    </>
+  );
+
+  return contained ? (
+    <section className="space-y-4 p-4" data-result-guidance-item="next-step">
+      {content}
+    </section>
+  ) : (
+    <Card className="space-y-4 border-blue-500/25 bg-blue-500/5 p-4">
+      {content}
     </Card>
   );
 }

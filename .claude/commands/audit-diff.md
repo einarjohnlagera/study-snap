@@ -73,6 +73,15 @@ Cross-reference the original prompt's CONTEXT anti-drift rules:
 | Async job | No user-visible failure state |
 | Public page | Anonymous session state persisted (must not be) |
 
+## Escalating Beyond This Checklist
+
+Run this checklist **inline, in the current session** — it already has the Codex prompt, the diff, and the surrounding code in context, so the checklist above is cheap. Do not default to spawning an independent fresh-context agent to redo this audit: a fresh agent has to re-read the prompt, every changed file, and the anti-drift rules from zero before it can even start, and that rediscovery cost — not model tier — is what makes a full independent re-audit expensive (tens of thousands of tokens, several minutes), regardless of which model runs it.
+
+- **Long-mode Codex prompts:** after the checklist above is clean, call `advisor()` once for a second opinion before committing. `advisor()` reads this session's full transcript for free (no rediscovery), so it's the cheap way to get a stronger read on top of the checklist.
+- **Short-mode Codex prompts:** the checklist plus a normal build/test pass is enough. Skip `advisor()` unless something specific is bothering you.
+- **Escalate past `advisor()` to a fresh, independently-instructed agent** (Agent tool, `model: "opus"`, explicitly told to read the real code rather than trust a summary) only when the diff meets one of the trigger conditions in `CLAUDE.md`'s "Escalate to a fresh, independently-instructed review for hard-to-find bugs" section — a data/metric relationship that shouldn't be mathematically possible, a bug class inherently hard to reason about serially (concurrency, async ordering, lifecycle timing, migrations), or a fix that's about to ship and feeds a real product/business decision. Reuse that section's exact criteria rather than re-deciding them here — don't drift the two lists apart.
+- A typical Codex delivery (one PR, additive change, no shared-method collision) needs none of the above beyond the checklist itself. Gate the escalation on the diff's actual risk shape, not on "let's be extra careful this time."
+
 ## After the Audit
 
 Fix any gaps, re-run tests, then commit. Do not commit a diff that fails any checked item above.

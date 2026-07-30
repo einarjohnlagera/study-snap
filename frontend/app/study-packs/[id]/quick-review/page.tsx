@@ -17,8 +17,9 @@ import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
-import { CompanionResultBridgeCard } from "@/components/study-pack/companion-result-bridge-card";
-import { TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
+import { CompanionResultBridgeCard, hasCompanionResultBridgeExcerpt } from "@/components/study-pack/companion-result-bridge-card";
+import { ResultGuidanceGroup } from "@/components/study-pack/result-guidance-group";
+import { shouldRenderTwiceMissedCta, TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { useBottomViewportClaim } from "@/components/exam-mode/exam-focus-context";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
@@ -434,6 +435,15 @@ export default function QuickReviewPage() {
   const showChallengeGuidedCta = !isStruggling;
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
   const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
+  const hasNextStepGuidance = nextStepResponse !== null || weeklyPacingWeeksRemaining !== null;
+  const hasCompanionExcerpt = hasCompanionResultBridgeExcerpt(primaryCollectionCompanion);
+  const hasTwiceMissedCompanionGuidance = shouldRenderTwiceMissedCta(
+    persistedResult?.twiceMissedConcepts ?? [],
+    currentPlan as AppPlanType,
+    primaryCollectionId,
+    primaryCollectionCompanion,
+  );
+  const hasCompanionGuidance = hasCompanionExcerpt || hasTwiceMissedCompanionGuidance;
   const groupedLearnerLevels = useMemo(
     () => getGroupedLearnerLevels(viewerProfileType as Parameters<typeof getGroupedLearnerLevels>[0]),
     [viewerProfileType],
@@ -1083,29 +1093,41 @@ export default function QuickReviewPage() {
             ) : null}
           </div>
 
-          <PostSessionNextStep
-            response={nextStepResponse}
-            currentPlan={currentPlan}
-            noteId={note?.id ?? null}
-            onOpenPaywall={() => openAdaptivePracticePaywall("quick_review_results_next_step")}
-          />
-          {nextStepResponse?.goalNudge ? (
-            <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
+          {hasNextStepGuidance ? (
+            <ResultGuidanceGroup label="What to do next" testId="quick-review-next-step-guidance">
+              <PostSessionNextStep
+                response={nextStepResponse}
+                currentPlan={currentPlan}
+                noteId={note?.id ?? null}
+                onOpenPaywall={() => openAdaptivePracticePaywall("quick_review_results_next_step")}
+                contained
+              />
+              {nextStepResponse?.goalNudge ? (
+                <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} contained />
+              ) : null}
+              <WeeklyPacingEchoCard
+                weeksRemaining={weeklyPacingWeeksRemaining}
+                goalLabel={getCollectionLabels(viewerProfileType as ProfileType | null).goalSingular}
+                contained
+              />
+            </ResultGuidanceGroup>
           ) : null}
-          <WeeklyPacingEchoCard
-            weeksRemaining={weeklyPacingWeeksRemaining}
-            goalLabel={getCollectionLabels(viewerProfileType as ProfileType | null).goalSingular}
-          />
-          <CompanionResultBridgeCard
-            companion={primaryCollectionCompanion}
-            reviewSetLabel={getCollectionLabels(viewerProfileType as ProfileType | null).singular}
-          />
-          <TwiceMissedAskCompanionCard
-            twiceMissedConcepts={persistedResult?.twiceMissedConcepts ?? []}
-            currentPlan={currentPlan as AppPlanType}
-            primaryCollectionId={primaryCollectionId}
-            companion={primaryCollectionCompanion}
-          />
+          {hasCompanionGuidance ? (
+            <ResultGuidanceGroup label="Companion guidance" testId="quick-review-companion-guidance">
+              <CompanionResultBridgeCard
+                companion={primaryCollectionCompanion}
+                reviewSetLabel={getCollectionLabels(viewerProfileType as ProfileType | null).singular}
+                contained
+              />
+              <TwiceMissedAskCompanionCard
+                twiceMissedConcepts={persistedResult?.twiceMissedConcepts ?? []}
+                currentPlan={currentPlan as AppPlanType}
+                primaryCollectionId={primaryCollectionId}
+                companion={primaryCollectionCompanion}
+                contained
+              />
+            </ResultGuidanceGroup>
+          ) : null}
 
           {nextStepResponse === null ? (
             <>

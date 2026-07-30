@@ -1637,7 +1637,7 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
     const toggle = screen.getByRole("button", { name: "View Full Guide" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Start with the foundations.")).not.toBeInTheDocument();
+    expect(screen.getByText("Start with the foundations.")).toBeInTheDocument();
 
     fireEvent.click(toggle);
 
@@ -1648,7 +1648,39 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.click(hideButton);
 
     expect(screen.getByRole("button", { name: "View Full Guide" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Start with the foundations.")).not.toBeInTheDocument();
+    expect(screen.getByText("Start with the foundations.")).toBeInTheDocument();
+  });
+
+  it("shows a one-line teaser of the collapsed companion guide's overview", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "**Start** with the foundations before moving on.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.getByText("Start with the foundations before moving on.")).toBeInTheDocument();
+  });
+
+  it("falls back to Study Strategy for the collapsed teaser when Overview is empty", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: "Review one chapter per day.",
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.getByText("Review one chapter per day.")).toBeInTheDocument();
   });
 
   it("renders the companion after Goal-view readiness content", async () => {
@@ -1834,6 +1866,30 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
     expect(screen.getByText("Set a target completion date to see your weekly countdown and daily study budget.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set target date" })).toBeInTheDocument();
+    expect(screen.getByTestId("goal-focus-readiness-stack")).toHaveAttribute("aria-label", "Plan focus and readiness");
+    // No companion on this fixture — the wrapper itself must be absent, not just empty inside,
+    // or it leaves a double gap in the parent's spacing rhythm between Readiness and Subject Plans.
+    expect(screen.queryByTestId("goal-companion-guidance-stack")).not.toBeInTheDocument();
+  });
+
+  it("renders the Companion guidance stack only when the Goal has renderable Companion content", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      childCount: 2,
+      items: [],
+      companion: {
+        overview: "Start with the foundations.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "LET Mastery" })).toBeInTheDocument();
+    expect(screen.getByTestId("goal-companion-guidance-stack")).toHaveAttribute("aria-label", "Companion guidance");
   });
 
   it("does not show the post-adopt target-date tip when the Goal already has a target date", async () => {

@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { TwiceMissedAskCompanionCard } from "./twice-missed-ask-companion-card";
+import { shouldRenderTwiceMissedCta, TwiceMissedAskCompanionCard } from "./twice-missed-ask-companion-card";
 
 const RENDERABLE_COMPANION = {
   overview: "Review the core concepts in order.",
@@ -94,5 +94,26 @@ describe("TwiceMissedAskCompanionCard", () => {
     );
 
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("shouldRenderTwiceMissedCta", () => {
+  // Mirrors the component's own render matrix above one-for-one — this predicate exists so
+  // pages can pre-check without duplicating TwiceMissedAskCompanionCard's internal gate, so it
+  // must never drift from what the component actually renders.
+  it("agrees with the component: FREE always renders (the upgrade nudge) once a real concept exists", () => {
+    expect(shouldRenderTwiceMissedCta(["Cell respiration"], "FREE", null, null)).toBe(true);
+    expect(shouldRenderTwiceMissedCta(["Unknown"], "FREE", null, null)).toBe(false);
+  });
+
+  it("agrees with the component: paid plans need a real concept, a collection, and renderable companion content", () => {
+    expect(shouldRenderTwiceMissedCta(["Cell respiration"], "PLUS", "collection-1", RENDERABLE_COMPANION)).toBe(true);
+    expect(shouldRenderTwiceMissedCta([], "PRO", "collection-1", RENDERABLE_COMPANION)).toBe(false);
+    expect(shouldRenderTwiceMissedCta(["Cell respiration"], "PRO", null, RENDERABLE_COMPANION)).toBe(false);
+    expect(shouldRenderTwiceMissedCta(["Cell respiration"], "PRO", "collection-1", null)).toBe(false);
+  });
+
+  it("agrees with the component: a placeholder-only concept list never renders, even on FREE", () => {
+    expect(shouldRenderTwiceMissedCta(["Unknown", "Uncategorized"], "FREE", null, null)).toBe(false);
   });
 });

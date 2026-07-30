@@ -38,12 +38,14 @@ function classifyError(error: unknown): AskErrorKind {
 
 export function AskCompanionUpgradeNudge({
   currentPlan,
+  contained = false,
 }: Readonly<{
   currentPlan: AppPlanType;
+  contained?: boolean;
 }>) {
   const upgradeCtas = getUpgradeCtas(currentPlan, "ask-companion");
-  return (
-    <Card className="space-y-4 border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
+  const content = (
+    <>
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Ask Companion</p>
         <CardTitle>Ask about this Review Set</CardTitle>
@@ -59,6 +61,16 @@ export function AskCompanionUpgradeNudge({
           {upgradeCtas.primary.label}
         </Link>
       ) : null}
+    </>
+  );
+
+  return contained ? (
+    <section className="space-y-4 p-4 sm:p-5" data-result-guidance-item="ask-companion-upgrade">
+      {content}
+    </section>
+  ) : (
+    <Card className="space-y-4 border-blue-500/20 bg-blue-500/5 p-4 sm:p-5">
+      {content}
     </Card>
   );
 }

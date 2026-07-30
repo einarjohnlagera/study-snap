@@ -160,6 +160,63 @@ describe("AdaptivePracticePage", () => {
     });
   }
 
+  it.each([
+    ["DUE", "Reviewing: Trigonometric derivatives — due for review"],
+    ["WEAK", "Reviewing: Trigonometric derivatives — missed last time"],
+    ["BOTH", "Reviewing: Trigonometric derivatives — missed last time and due for review"],
+  ])("restores and renders the %s question rationale from an in-progress session", async (reason, expectedLabel) => {
+    setupGeneratedAdaptiveQuiz();
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Trigonometric derivatives"],
+      conceptSelectionReasons: [reason],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Trigonometric derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByText(expectedLabel)).toBeInTheDocument();
+  });
+
+  it("renders no rationale tag when the resumed question has no selection reason", async () => {
+    setupGeneratedAdaptiveQuiz();
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Trigonometric derivatives"],
+      conceptSelectionReasons: [null],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Trigonometric derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+
+    render(<AdaptivePracticePage />);
+
+    await screen.findByText("1. What is the derivative of sin(x)?");
+    expect(screen.queryByLabelText("Why these questions")).not.toBeInTheDocument();
+  });
+
   it("keeps answer correctness after displayed choice shuffling", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -421,6 +478,8 @@ describe("AdaptivePracticePage", () => {
     expect(screen.queryByText("How did your first quiz go?")).not.toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: "Generate New Set" })).toBeInTheDocument();
+    expect(screen.queryByTestId("adaptive-next-step-guidance")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("adaptive-companion-guidance")).not.toBeInTheDocument();
   });
 
   it("links only targeted weak areas that have a Key Concepts explanation", async () => {
@@ -529,6 +588,7 @@ describe("AdaptivePracticePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
 
     expect(await screen.findByText("Recommended next step")).toBeInTheDocument();
+    expect(screen.getByTestId("adaptive-next-step-guidance")).toHaveAttribute("aria-label", "What to do next");
     expect(screen.getByRole("link", { name: "Take a Challenge" })).toHaveAttribute(
       "href",
       "/notes/note-1/challenge-quiz",
@@ -585,6 +645,7 @@ describe("AdaptivePracticePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
 
     expect(await screen.findByText(/Watch out for mixing up mitosis and meiosis\./)).toBeInTheDocument();
+    expect(screen.getByTestId("adaptive-companion-guidance")).toHaveAttribute("aria-label", "Companion guidance");
     expect(getCollectionGoal).toHaveBeenCalledWith("goal-1");
     expect(screen.getByRole("link", { name: "Ask Companion about this" })).toHaveAttribute(
       "href",

@@ -14,32 +14,56 @@ import type { AppPlanType } from "@/src/config/plans";
 // when a quiz item has no concept tag. Neither is a real, askable concept name.
 const UNNAMED_CONCEPT_LABELS = new Set(["unknown", "uncategorized"]);
 
+export function getAskableTwiceMissedConcept(twiceMissedConcepts: string[]): string | null {
+  return twiceMissedConcepts
+    .map((value) => value.trim())
+    .find((value) => value && !UNNAMED_CONCEPT_LABELS.has(value.toLowerCase())) ?? null;
+}
+
+// Mirrors TwiceMissedAskCompanionCard's own render logic exactly, so callers can pre-check
+// whether it will render (e.g. to decide whether to show an enclosing group) without
+// duplicating the plan/collection/companion gate inline at each call site.
+export function shouldRenderTwiceMissedCta(
+  twiceMissedConcepts: string[],
+  currentPlan: AppPlanType,
+  primaryCollectionId: string | null,
+  companion: CompanionContent | null,
+): boolean {
+  if (!getAskableTwiceMissedConcept(twiceMissedConcepts)) {
+    return false;
+  }
+  if (currentPlan === "FREE") {
+    return true;
+  }
+  return Boolean(primaryCollectionId) && hasRenderableCompanionContent(companion);
+}
+
 export function TwiceMissedAskCompanionCard({
   twiceMissedConcepts,
   currentPlan,
   primaryCollectionId,
   companion,
+  contained = false,
 }: Readonly<{
   twiceMissedConcepts: string[];
   currentPlan: AppPlanType;
   primaryCollectionId: string | null;
   companion: CompanionContent | null;
+  contained?: boolean;
 }>) {
-  const concept = twiceMissedConcepts
-    .map((value) => value.trim())
-    .find((value) => value && !UNNAMED_CONCEPT_LABELS.has(value.toLowerCase()));
+  const concept = getAskableTwiceMissedConcept(twiceMissedConcepts);
   if (!concept) {
     return null;
   }
   if (currentPlan === "FREE") {
-    return <AskCompanionUpgradeNudge currentPlan={currentPlan} />;
+    return <AskCompanionUpgradeNudge currentPlan={currentPlan} contained={contained} />;
   }
   if (!primaryCollectionId || !hasRenderableCompanionContent(companion)) {
     return null;
   }
 
-  return (
-    <Card className="space-y-3 border-blue-500/25 bg-blue-500/5 p-4">
+  const content = (
+    <>
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
           Still working on {concept}?
@@ -54,6 +78,16 @@ export function TwiceMissedAskCompanionCard({
       >
         Ask Companion about this
       </Link>
+    </>
+  );
+
+  return contained ? (
+    <section className="space-y-3 p-4" data-result-guidance-item="twice-missed-companion">
+      {content}
+    </section>
+  ) : (
+    <Card className="space-y-3 border-blue-500/25 bg-blue-500/5 p-4">
+      {content}
     </Card>
   );
 }

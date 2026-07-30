@@ -33,6 +33,18 @@ If the user cannot access it:
 - page load must not automatically trigger a new generation request
 - new generation starts only from the visible CTA
 
+## Active-question rationale
+
+Each targeted question may show a compact `Reviewing: {concept} — {reason}` tag above the question:
+
+- due-only concepts use `due for review`
+- concepts missed in the latest completed Quick Review or Challenge Quiz use `missed last time`
+- concepts in both groups use `missed last time and due for review`
+
+The reason is deterministic selection metadata, not LLM-authored guidance. `QuickReviewAdaptivePracticeService` captures the due / weak / both distinction before the focus lists merge, then stores a nullable `conceptSelectionReasons` array beside the generated quiz in `sessionState`. The response returns that array in quiz order on both initial start and resume, so refreshes preserve the same tag.
+
+Selection provenance does not belong to `QuizItem`: the same question model also represents generated and persisted Study Pack content, while this reason is specific to one Adaptive Practice run. If a generated question's concept does not match the selected focus map, its parallel reason is `null` and the UI renders no tag rather than guessing.
+
 ## Result screen
 
 Primary CTA:
