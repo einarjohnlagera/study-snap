@@ -3254,46 +3254,50 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
           )}
         />
 
-        <TodaysFocusCard
-          action={primaryStudyAction}
-          terminalAction={terminalSecondaryAction}
-          dueConceptReviewHref={dueConceptReviewHref}
-          todaysConceptBudget={todaysConceptBudget}
-          hasTargetDate={hasTargetDate}
-          mentorTip={surfacedMentorTip}
-        />
-
-        <ReadinessSummary
-          variant="compact"
-          title={`${goalDetail.title} readiness`}
-          eyebrow={`${labels.goalSingular} readiness`}
-          overallReadinessPercentage={goalDetail.overallReadinessPercentage}
-          totalConcepts={goalDetail.totalConcepts}
-          masteredConcepts={goalDetail.masteredConcepts}
-          dueConcepts={goalDetail.dueConcepts}
-          notPracticedConcepts={goalDetail.notPracticedConcepts}
-          subjects={[]}
-          emptyTitle="No readiness yet"
-          emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
-          countdown={countdownLine}
-          footer={<ReadinessCardFooter collectionId={collectionId} />}
-        />
-
-        {activePostAdoptTip ? (
-          <GuidanceTip
-            tipId={activePostAdoptTip.id}
-            message={activePostAdoptTip.message}
-            trackAnalytics
-            action={{ label: "Set target date", onClick: () => setEditOpen(true) }}
+        <section aria-label="Plan focus and readiness" data-testid="goal-focus-readiness-stack" className="space-y-3">
+          <TodaysFocusCard
+            action={primaryStudyAction}
+            terminalAction={terminalSecondaryAction}
+            dueConceptReviewHref={dueConceptReviewHref}
+            todaysConceptBudget={todaysConceptBudget}
+            hasTargetDate={hasTargetDate}
+            mentorTip={surfacedMentorTip}
           />
-        ) : null}
-        <CompanionDisplayCard companion={collection.companion} labels={labels} />
+
+          <ReadinessSummary
+            variant="compact"
+            title={`${goalDetail.title} readiness`}
+            eyebrow={`${labels.goalSingular} readiness`}
+            overallReadinessPercentage={goalDetail.overallReadinessPercentage}
+            totalConcepts={goalDetail.totalConcepts}
+            masteredConcepts={goalDetail.masteredConcepts}
+            dueConcepts={goalDetail.dueConcepts}
+            notPracticedConcepts={goalDetail.notPracticedConcepts}
+            subjects={[]}
+            emptyTitle="No readiness yet"
+            emptyDescription={`Add ${labels.subjectSingular.toLowerCase()}s with ready Study Packs to see this ${labels.goalSingular.toLowerCase()} readiness.`}
+            countdown={countdownLine}
+            footer={<ReadinessCardFooter collectionId={collectionId} />}
+          />
+
+          {activePostAdoptTip ? (
+            <GuidanceTip
+              tipId={activePostAdoptTip.id}
+              message={activePostAdoptTip.message}
+              trackAnalytics
+              action={{ label: "Set target date", onClick: () => setEditOpen(true) }}
+            />
+          ) : null}
+        </section>
         {hasRenderableCompanionContent(collection.companion) ? (
-          <AskCompanionPanel
-            collectionId={collectionId}
-            currentPlan={currentPlan}
-            initialDraft={initialAskCompanionDraft}
-          />
+          <section aria-label="Companion guidance" data-testid="goal-companion-guidance-stack" className="space-y-3">
+            <CompanionDisplayCard companion={collection.companion} labels={labels} />
+            <AskCompanionPanel
+              collectionId={collectionId}
+              currentPlan={currentPlan}
+              initialDraft={initialAskCompanionDraft}
+            />
+          </section>
         ) : null}
 
         {mutationError ? (

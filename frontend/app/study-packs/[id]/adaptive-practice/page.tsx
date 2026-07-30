@@ -17,8 +17,9 @@ import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
-import { CompanionResultBridgeCard } from "@/components/study-pack/companion-result-bridge-card";
-import { TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
+import { CompanionResultBridgeCard, hasCompanionResultBridgeExcerpt } from "@/components/study-pack/companion-result-bridge-card";
+import { ResultGuidanceGroup } from "@/components/study-pack/result-guidance-group";
+import { shouldRenderTwiceMissedCta, TwiceMissedAskCompanionCard } from "@/components/study-pack/twice-missed-ask-companion-card";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -103,6 +104,15 @@ export default function AdaptivePracticePage() {
   }, [params]);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
   const currentPlan = usageSummary?.plan ?? getAuthUser()?.planType ?? "FREE";
+  const hasNextStepGuidance = nextStepResponse !== null || weeklyPacingWeeksRemaining !== null;
+  const hasCompanionExcerpt = hasCompanionResultBridgeExcerpt(primaryCollectionCompanion);
+  const hasTwiceMissedCompanionGuidance = shouldRenderTwiceMissedCta(
+    completionResult?.twiceMissedConcepts ?? [],
+    currentPlan as AppPlanType,
+    primaryCollectionId,
+    primaryCollectionCompanion,
+  );
+  const hasCompanionGuidance = hasCompanionExcerpt || hasTwiceMissedCompanionGuidance;
   const adaptivePracticeRemaining = usageSummary
     ? resolveRemainingUsageCredits(
       usageSummary.usage.adaptivePracticeUsed,
@@ -688,29 +698,41 @@ export default function AdaptivePracticePage() {
               </p>
             </div>
           )}
-          <PostSessionNextStep
-            response={nextStepResponse}
-            currentPlan={currentPlan}
-            noteId={note?.id ?? null}
-            onOpenPaywall={() => openAdaptivePracticePaywall("adaptive_practice_results_next_step")}
-          />
-          {nextStepResponse?.goalNudge ? (
-            <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} />
+          {hasNextStepGuidance ? (
+            <ResultGuidanceGroup label="What to do next" testId="adaptive-next-step-guidance">
+              <PostSessionNextStep
+                response={nextStepResponse}
+                currentPlan={currentPlan}
+                noteId={note?.id ?? null}
+                onOpenPaywall={() => openAdaptivePracticePaywall("adaptive_practice_results_next_step")}
+                contained
+              />
+              {nextStepResponse?.goalNudge ? (
+                <GoalNudgeCard goalNudge={nextStepResponse.goalNudge} noteId={note?.id ?? null} contained />
+              ) : null}
+              <WeeklyPacingEchoCard
+                weeksRemaining={weeklyPacingWeeksRemaining}
+                goalLabel={getCollectionLabels(getAuthUser()?.profileType ?? null).goalSingular}
+                contained
+              />
+            </ResultGuidanceGroup>
           ) : null}
-          <WeeklyPacingEchoCard
-            weeksRemaining={weeklyPacingWeeksRemaining}
-            goalLabel={getCollectionLabels(getAuthUser()?.profileType ?? null).goalSingular}
-          />
-          <CompanionResultBridgeCard
-            companion={primaryCollectionCompanion}
-            reviewSetLabel={getCollectionLabels(getAuthUser()?.profileType ?? null).singular}
-          />
-          <TwiceMissedAskCompanionCard
-            twiceMissedConcepts={completionResult?.twiceMissedConcepts ?? []}
-            currentPlan={currentPlan as AppPlanType}
-            primaryCollectionId={primaryCollectionId}
-            companion={primaryCollectionCompanion}
-          />
+          {hasCompanionGuidance ? (
+            <ResultGuidanceGroup label="Companion guidance" testId="adaptive-companion-guidance">
+              <CompanionResultBridgeCard
+                companion={primaryCollectionCompanion}
+                reviewSetLabel={getCollectionLabels(getAuthUser()?.profileType ?? null).singular}
+                contained
+              />
+              <TwiceMissedAskCompanionCard
+                twiceMissedConcepts={completionResult?.twiceMissedConcepts ?? []}
+                currentPlan={currentPlan as AppPlanType}
+                primaryCollectionId={primaryCollectionId}
+                companion={primaryCollectionCompanion}
+                contained
+              />
+            </ResultGuidanceGroup>
+          ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             {nextStepResponse === null ? (
               <Button
