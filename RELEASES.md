@@ -17,7 +17,7 @@ Anti-drift: none of these four touch `EXAM_MODES.md`'s locked no-mid-exam-coachi
 
 ### Shipped
 
-_(nothing yet)_
+- **Collapsed-Companion teaser (frontend only).** `CompanionDisplayCard` now shows a single-line plain-text excerpt (first non-empty of Overview / Study Strategy / Common Mistakes, markdown stripped, CSS line-clamped) under the toggle while collapsed, instead of rendering nothing until a learner clicks "View Full Guide." The collapse-by-default decision is unchanged; a Companion with only FAQ/Resources populated still shows no teaser.
 
 ## v0.64.0 - Add to Review Set
 
