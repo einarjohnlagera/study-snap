@@ -849,6 +849,7 @@ class NoteControllerTest {
                         null,
                         "STUDY_PACK_READY",
                         4,
+                        2,
                         2L,
                         0L,
                         1L,

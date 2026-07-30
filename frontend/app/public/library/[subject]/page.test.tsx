@@ -25,6 +25,7 @@ function buildNote(overrides: Partial<TestNote> & Pick<TestNote, "id" | "title" 
     studyPackId: "study-pack-1",
     studyPackStatus: "STUDY_PACK_READY",
     quizCount: 3,
+    keyConceptCount: 3,
     copyCount: 0,
     likeCount: 0,
     shareCount: 0,

@@ -49,6 +49,7 @@ Shared note-card layout:
 - private-library visibility icon near the title when relevant
 - subject badge
 - Study Pack status badge
+- private Library cards with a ready Study Pack also show a compact scope readout inline in the card's badge row (alongside the Study Pack status badge and, when applicable, the "Quiz Ready" pill — not on its own separate line): non-zero concept count, non-zero quiz-question count, and a rough `~N min` review estimate. It's omitted for DRAFT, GENERATING, FAILED, and empty-pack states — including a note mid-regeneration, whose prior pack's counts stay attached to the response even though status has flipped away from ready; public/discovery Library cards do not show it.
 - `Note Preview`
 - `Summary Preview`
 - tags

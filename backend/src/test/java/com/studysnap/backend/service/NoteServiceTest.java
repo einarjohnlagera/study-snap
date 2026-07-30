@@ -25,6 +25,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
+import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
@@ -738,6 +739,35 @@ class NoteServiceTest {
         assertThat(noteService.listMineStatuses(ownerUserId)).isEmpty();
 
         verify(studyPackRepository, never()).findProgressViewsByNoteIdIn(any());
+    }
+
+    @Test
+    void listMine_mapsStudyPackKeyConceptCountAndKeepsItNullWithoutAStudyPack() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID readyNoteId = UUID.randomUUID();
+        UUID draftNoteId = UUID.randomUUID();
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(UUID.randomUUID());
+        studyPack.setNoteId(readyNoteId);
+        studyPack.setKeyConcepts(List.of("Cells", "Genetics", "Evolution"));
+        studyPack.setQuiz(List.of(
+                new QuizItem("Question one", List.of("A", "B"), 0, "Cells", "Explanation"),
+                new QuizItem("Question two", List.of("A", "B"), 0, "Genetics", "Explanation")
+        ));
+
+        NoteListItemProjection readyProjection = buildListItemProjection(readyNoteId, ownerUserId, NoteStatus.GENERATED);
+        NoteListItemProjection draftProjection = buildListItemProjection(draftNoteId, ownerUserId, NoteStatus.DRAFT);
+        when(noteRepository.findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(eq(ownerUserId), any()))
+                .thenReturn(List.of(readyProjection, draftProjection));
+        when(studyPackRepository.findByNoteIdIn(List.of(readyNoteId, draftNoteId))).thenReturn(List.of(studyPack));
+
+        List<NoteListItemResponse> response = noteService.listMine(ownerUserId);
+
+        // Distinct counts (3 concepts, 2 questions) deliberately, not equal — these are adjacent
+        // Integer params in a 31-arg positional constructor, populated on adjacent lines; a swap
+        // between them would slip through if both fixture values were the same.
+        assertThat(response).extracting(NoteListItemResponse::keyConceptCount).containsExactly(3, null);
+        assertThat(response).extracting(NoteListItemResponse::quizCount).containsExactly(2, null);
     }
 
     @Test
@@ -1545,5 +1575,22 @@ class NoteServiceTest {
         note.setCreatedAt(OffsetDateTime.now().minusDays(1));
         note.setUpdatedAt(OffsetDateTime.now().minusHours(1));
         return note;
+    }
+
+    private NoteListItemProjection buildListItemProjection(UUID noteId, UUID ownerUserId, NoteStatus status) {
+        NoteListItemProjection projection = mock(NoteListItemProjection.class);
+        when(projection.getId()).thenReturn(noteId);
+        when(projection.getOwnerUserId()).thenReturn(ownerUserId);
+        when(projection.getTitle()).thenReturn("Title");
+        when(projection.getCourseProgram()).thenReturn("Course");
+        when(projection.getTargetProfileType()).thenReturn(NoteTargetProfileType.STUDENT);
+        when(projection.getSubject()).thenReturn("Subject");
+        when(projection.getTags()).thenReturn(new String[]{"tag"});
+        when(projection.getContent()).thenReturn("content");
+        when(projection.getStatus()).thenReturn(status);
+        when(projection.getVisibility()).thenReturn(NoteVisibility.PRIVATE);
+        when(projection.getCreatedAt()).thenReturn(OffsetDateTime.now().minusDays(1));
+        when(projection.getUpdatedAt()).thenReturn(OffsetDateTime.now());
+        return projection;
     }
 }

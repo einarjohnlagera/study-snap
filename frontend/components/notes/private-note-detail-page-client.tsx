@@ -2228,6 +2228,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide."
                         : (note.summary ?? "No summary available.")
                 }
+                studyPackReady={note.studyPackStatus === "STUDY_PACK_READY"}
+                keyConceptCount={note.keyConcepts?.length}
+                quizCount={note.quiz?.length}
                 onViewFullNotes={() => handleChangeStudyPackTab("full-notes")}
               />
             ) : null}

@@ -172,6 +172,7 @@ class PublicNotesScoringUtilsTest {
                 "study-pack-id",
                 studyPackStatus,
                 quizCount,
+                null,
                 copyCount,
                 likeCount,
                 0L,

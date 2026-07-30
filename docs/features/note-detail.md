@@ -122,6 +122,7 @@ Rules:
 - switching `?tab=` state must not refetch the note or remount Note Detail into a loading state
 - `Full Notes` should render the complete original note content so users can review the source note without leaving Note Detail
 - the `Summary` tab should include a subtle `View Full Notes →` CTA above the summary text that switches to `Full Notes` without reloading the page
+- when the Study Pack is ready, the Summary tab shows a compact scope row below its header: non-zero concept count, non-zero quiz-question count, and a rough `~N min` review estimate. The estimate is derived client-side from the already-loaded arrays (`1 minute` per quiz question plus `0.5 minutes` per concept, rounded with a one-minute floor); no extra request or persisted estimate is used. DRAFT, GENERATING, FAILED, and empty-pack states show no scope row, and a degenerate ready pack omits any zero-valued count.
 - the `Quiz` tab shows a one-time `GuidanceTip` nudging the learner to `View Full Notes` if they haven't visited that tab yet this page visit, once the Study Pack is ready — this is deliberately a nudge, not a tab reorder; the "use the order" rule above is a prior, deliberate decision (v0.7.0's `View Full Notes →` Summary CTA already exists to serve the reading flow) and should not be reopened without a fresh product decision
 
 ### Key Concepts deep links

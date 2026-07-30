@@ -1505,6 +1505,7 @@ export type NoteListItemResponse = {
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
   quizCount: number | null;
+  keyConceptCount: number | null;
   copyCount: number | null;
   likeCount: number | null;
   shareCount: number | null;

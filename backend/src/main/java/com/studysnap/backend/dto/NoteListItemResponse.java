@@ -17,6 +17,7 @@ public record NoteListItemResponse(
         String studyPackId,
         String studyPackStatus,
         Integer quizCount,
+        Integer keyConceptCount,
         Long copyCount,
         Long likeCount,
         Long shareCount,
