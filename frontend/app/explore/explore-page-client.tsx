@@ -9,23 +9,26 @@ import { PageHeader } from "@/components/page-header";
 import { PublicLibraryPageClient } from "@/components/notes/public-library-page-client";
 import { Card } from "@/components/ui/card";
 import { trackAnalyticsEvent } from "@/lib/api";
+import {
+  EXPLORE_PATH,
+  EXPLORE_SOURCE_QUERY_PARAM,
+  EXPLORE_TAB_QUERY_PARAM,
+  resolveExploreTab,
+  type ExploreTab,
+} from "@/lib/explore-url";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
-
-const EXPLORE_PATH = "/explore";
-const EXPLORE_TAB_QUERY_PARAM = "tab";
-
-type ExploreTab = "notes" | "review-sets";
-
-function resolveExploreTab(value: string | null): ExploreTab {
-  return value === "notes" ? "notes" : "review-sets";
-}
 
 export function ExplorePageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [routeReady, setRouteReady] = useState(false);
   const activeTab = resolveExploreTab(searchParams.get(EXPLORE_TAB_QUERY_PARAM));
+  const source = searchParams.get(EXPLORE_SOURCE_QUERY_PARAM);
+  const pageViewMetadata = useMemo(
+    () => source === null ? undefined : { source },
+    [source],
+  );
   const tabs = useMemo<Array<{ id: ExploreTab; label: string }>>(() => [
     { id: "review-sets", label: "Review Sets" },
     { id: "notes", label: "Notes" },
@@ -62,7 +65,7 @@ export function ExplorePageClient() {
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-      <AnalyticsPageViewTracker eventType="EXPLORE_VIEWED" />
+      <AnalyticsPageViewTracker eventType="EXPLORE_VIEWED" metadata={pageViewMetadata} />
       <PageHeader
         eyebrow="DISCOVER"
         title="Explore"

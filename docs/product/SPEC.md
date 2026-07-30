@@ -1031,10 +1031,7 @@ Dashboard guidance rules:
 
 ### Navigation
 
-Sidebar groups:
-
-- Main: Dashboard, Library, Public Library
-- Account: Profile, Settings
+Authenticated navigation grouping and page-responsibility doctrine are canonical in `AGENTS.md` under `## Navigation Structure` and `### Page Responsibility Rule`. Do not duplicate those lists here; update the canonical rules instead.
 
 Primary routes:
 
@@ -1044,15 +1041,6 @@ Primary routes:
 - `/public/library/{subject}` (Public Subject Listing, SEO)
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only, SEO)
 - `/public/profile/{userId}` (Public Profile, public/non-canonical V1 route)
-
-Page responsibilities:
-
-- Dashboard = what to do now
-- Library = private workspace
-- Public Library = discovery
-- Public Profile = public showcase
-- Profile = identity
-- Settings = app preferences
 
 ### Quick Review
 
