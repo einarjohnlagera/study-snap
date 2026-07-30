@@ -29,6 +29,7 @@ public class QuizSessionStateUtils {
     private static final String WORKING_SOLUTION_KEY = "workingSolution";
     private static final String QUESTION_GROUP_KEY = "questionGroup";
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
+    private static final String CONCEPT_SELECTION_REASONS_KEY = "conceptSelectionReasons";
     private static final String SELECTED_MULTI_CHOICES_KEY = "selectedMultiChoices";
     private static final String SELECTED_IDENTIFICATION_ANSWERS_KEY = "selectedIdentificationAnswers";
     private static final String SELECTED_ENUMERATION_ANSWERS_KEY = "selectedEnumerationAnswers";
@@ -61,6 +62,51 @@ public class QuizSessionStateUtils {
         }
         state.put(QUIZ_KEY, serializeQuiz(quiz));
         return state;
+    }
+
+    public Map<String, Object> withConceptSelectionReasons(
+            Map<String, Object> sessionState,
+            List<String> conceptSelectionReasons
+    ) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        if (sessionState != null && !sessionState.isEmpty()) {
+            state.putAll(sessionState);
+        }
+        state.put(
+                CONCEPT_SELECTION_REASONS_KEY,
+                conceptSelectionReasons == null ? List.of() : new ArrayList<>(conceptSelectionReasons)
+        );
+        return state;
+    }
+
+    public List<String> extractConceptSelectionReasons(
+            Map<String, Object> sessionState,
+            int questionCount
+    ) {
+        if (questionCount <= 0) {
+            return List.of();
+        }
+
+        List<String> conceptSelectionReasons = new ArrayList<>(questionCount);
+        for (int index = 0; index < questionCount; index++) {
+            conceptSelectionReasons.add(null);
+        }
+        if (sessionState == null || sessionState.isEmpty()) {
+            return conceptSelectionReasons;
+        }
+
+        Object raw = sessionState.get(CONCEPT_SELECTION_REASONS_KEY);
+        if (!(raw instanceof List<?> rawReasons)) {
+            return conceptSelectionReasons;
+        }
+        int upperBound = Math.min(questionCount, rawReasons.size());
+        for (int index = 0; index < upperBound; index++) {
+            Object rawReason = rawReasons.get(index);
+            if (rawReason instanceof String reason && !reason.isBlank()) {
+                conceptSelectionReasons.set(index, reason);
+            }
+        }
+        return conceptSelectionReasons;
     }
 
     public Map<String, Object> withSelectedChoice(
