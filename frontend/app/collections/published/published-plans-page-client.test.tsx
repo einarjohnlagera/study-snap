@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import PublishedPlansPage, { metadata } from "./page";
+import { PublishedPlansPageClient } from "./published-plans-page-client";
 import {
   adoptGoal,
   adoptStudyPlan,
@@ -132,6 +133,18 @@ describe("PublishedPlansPage", () => {
     expect(listPublicStudyPlans).toHaveBeenCalledWith({});
     expect(listCollections).toHaveBeenCalledTimes(1);
     expect(screen.getAllByRole("button", { name: "Start this Study Plan" })).toHaveLength(4);
+  });
+
+  it("reuses the catalog without standalone navigation chrome when embedded", async () => {
+    render(<PublishedPlansPageClient embedded discoverySource="explore" />);
+
+    expect(await screen.findByRole("heading", { name: "Recommended Study Plans" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Dashboard" })).not.toBeInTheDocument();
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "PUBLISHED_PLANS_VIEWED",
+    }));
+    expect(listPublicStudyPlans).toHaveBeenCalledWith({ courseProgram: "LET" });
+    expect(listPublicStudyPlans).toHaveBeenCalledWith({});
   });
 
   it("shows Continue for an already-adopted plan and Start for the rest", async () => {

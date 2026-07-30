@@ -9,6 +9,7 @@ jest.mock("@/lib/auth", () => ({
 describe("PublicLibraryBackLink", () => {
   beforeEach(() => {
     (getAuthUser as jest.Mock).mockReset();
+    globalThis.sessionStorage.clear();
   });
 
   it("hides the link for anonymous visitors", async () => {
@@ -29,6 +30,21 @@ describe("PublicLibraryBackLink", () => {
     expect(await screen.findByRole("link", { name: "Public Library" })).toHaveAttribute(
       "href",
       "/public/library",
+    );
+  });
+
+  it("returns authenticated visitors to an Explore Notes context", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    globalThis.sessionStorage.setItem(
+      "notelib_public_library_return_url",
+      "/explore?tab=notes&subject=biology",
+    );
+
+    render(<PublicLibraryBackLink />);
+
+    expect(await screen.findByRole("link", { name: "Explore" })).toHaveAttribute(
+      "href",
+      "/explore?tab=notes&subject=biology",
     );
   });
 });

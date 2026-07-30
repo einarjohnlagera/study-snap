@@ -8,6 +8,7 @@ import {
   adoptGoal,
   adoptStudyPlan,
   getPublicStudyPlanDetail,
+  trackAnalyticsEvent,
   type NoteCollectionDetail,
   type NoteCollectionSummary,
   type ProfileType,
@@ -23,6 +24,10 @@ type PublicStudyPlanCardProps = {
   adoptedCollection: NoteCollectionSummary | null;
   profileType?: ProfileType | null;
   canAdopt?: boolean;
+  discoveryMetadata?: Record<string, string>;
+  discoverySource?: "exam_hub" | "explore";
+  onSignedOutAdopt?: () => void;
+  signedOutHref?: string;
 };
 
 export function PublicStudyPlanCard({
@@ -30,6 +35,10 @@ export function PublicStudyPlanCard({
   adoptedCollection,
   profileType = null,
   canAdopt = true,
+  discoveryMetadata,
+  discoverySource,
+  onSignedOutAdopt,
+  signedOutHref = "/auth",
 }: Readonly<PublicStudyPlanCardProps>) {
   const router = useRouter();
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
@@ -75,6 +84,15 @@ export function PublicStudyPlanCard({
       return;
     }
     setPreviewOpen(true);
+    if (discoverySource) {
+      void trackAnalyticsEvent({
+        eventType: discoverySource === "exam_hub"
+          ? "EXAM_HUB_OFFICIAL_SET_PREVIEWED"
+          : "EXPLORE_OFFICIAL_SET_PREVIEWED",
+        entityId: plan.id,
+        metadata: { ...discoveryMetadata, source: discoverySource },
+      });
+    }
     if (!preview && !loadingPreview) {
       void loadPreview();
     }
@@ -92,8 +110,18 @@ export function PublicStudyPlanCard({
   const hiddenPreviewItemCount = (preview?.items.length ?? 0) - visiblePreviewItems.length;
 
   const handleStart = async () => {
+    if (discoverySource && !adoptedCollection) {
+      void trackAnalyticsEvent({
+        eventType: discoverySource === "exam_hub"
+          ? "EXAM_HUB_OFFICIAL_SET_ADOPT_CLICKED"
+          : "EXPLORE_OFFICIAL_SET_ADOPT_CLICKED",
+        entityId: plan.id,
+        metadata: { ...discoveryMetadata, source: discoverySource },
+      });
+    }
     if (!canAdopt) {
-      router.push("/auth");
+      onSignedOutAdopt?.();
+      router.push(signedOutHref);
       return;
     }
     if (adoptedCollection) {

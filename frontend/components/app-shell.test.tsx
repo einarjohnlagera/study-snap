@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AppShell } from "./app-shell";
 import { ExamFocusProvider, useBottomViewportClaim, useExamFocusMode } from "./exam-mode/exam-focus-context";
 import { getMe, getMyPlan, logout } from "@/lib/api";
@@ -257,6 +257,22 @@ describe("AppShell", () => {
       expect(logout).toHaveBeenCalled();
       expect(routerMock.replace).toHaveBeenCalledWith("/login?reason=logged_out");
     });
+  });
+
+  it("renders the authenticated discovery navigation in the requested order", async () => {
+    render(
+      <AppShell>
+        <div>Dashboard content</div>
+      </AppShell>,
+    );
+
+    await screen.findAllByRole("link", { name: "Explore" });
+    const navigation = screen.getAllByRole("navigation")
+      .find((candidate) => candidate.getAttribute("aria-label") !== "Mobile navigation");
+    expect(navigation).toBeDefined();
+    const labels = within(navigation as HTMLElement).getAllByRole("link").map((link) => link.textContent);
+    expect(labels.slice(0, 5)).toEqual(["Dashboard", "Study Plans", "Library", "Explore", "Progress"]);
+    expect(within(navigation as HTMLElement).queryByRole("link", { name: "Public Library" })).not.toBeInTheDocument();
   });
 
   it("shows My Profile and Settings in the avatar dropdown", async () => {

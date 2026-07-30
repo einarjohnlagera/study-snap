@@ -30,14 +30,14 @@ describe("MobileBottomTabBar", () => {
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Library" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Review Sets" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Public Library" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Explore" })).toBeInTheDocument();
   });
 
   it.each([
     ["/dashboard", "Dashboard"],
     ["/library", "Library"],
     ["/collections/collection-1", "Review Sets"],
-    ["/public/library/biology", "Public Library"],
+    ["/explore", "Explore"],
   ])("marks %s as the active route", (pathname, label) => {
     render(<MobileBottomTabBar pathname={pathname} profileType="BOARD_EXAM" />);
 
@@ -66,15 +66,9 @@ describe("MobileBottomTabBar", () => {
     expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library");
   });
 
-  it("restores a valid Public Library return URL and falls back for an invalid one", () => {
-    window.sessionStorage.setItem("notelib_public_library_return_url", "/public/library?subject=biology");
-    const { rerender } = render(<MobileBottomTabBar pathname="/notes/note-1" profileType="STUDENT" />);
+  it("links Explore to the composite discovery route", () => {
+    render(<MobileBottomTabBar pathname="/notes/note-1" profileType="STUDENT" />);
 
-    expect(screen.getByRole("link", { name: "Public Library" })).toHaveAttribute("href", "/public/library?subject=biology");
-
-    window.sessionStorage.setItem("notelib_public_library_return_url", "https://notelib.app/public/library?subject=biology");
-    rerender(<MobileBottomTabBar pathname="/notes/note-1" profileType="STUDENT" />);
-
-    expect(screen.getByRole("link", { name: "Public Library" })).toHaveAttribute("href", "/public/library");
+    expect(screen.getByRole("link", { name: "Explore" })).toHaveAttribute("href", "/explore");
   });
 });

@@ -1,6 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PublicStudyPlanCard } from "./public-study-plan-card";
-import { adoptGoal, adoptStudyPlan, getPublicStudyPlanDetail, type NoteCollectionSummary } from "@/lib/api";
+import {
+  adoptGoal,
+  adoptStudyPlan,
+  getPublicStudyPlanDetail,
+  trackAnalyticsEvent,
+  type NoteCollectionSummary,
+} from "@/lib/api";
 import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 
 const pushMock = jest.fn();
@@ -13,6 +19,7 @@ jest.mock("@/lib/api", () => ({
   adoptGoal: jest.fn(),
   adoptStudyPlan: jest.fn(),
   getPublicStudyPlanDetail: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 jest.mock("@/lib/just-adopted-notice", () => ({
@@ -43,6 +50,7 @@ describe("PublicStudyPlanCard", () => {
     (adoptStudyPlan as jest.Mock).mockReset();
     (getPublicStudyPlanDetail as jest.Mock).mockReset();
     (setJustAdoptedNotice as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
   });
 
   it("identifies published plans and explains the adopt outcome", () => {
@@ -223,5 +231,42 @@ describe("PublicStudyPlanCard", () => {
 
     expect(await screen.findByText("This plan does not have any available notes yet.")).toBeInTheDocument();
     expect(screen.getByText("0 of 0 notes practice-ready")).toBeInTheDocument();
+  });
+
+  it("tracks Explore preview/adopt actions and preserves a configured signed-out destination", async () => {
+    const onSignedOutAdopt = jest.fn();
+    (getPublicStudyPlanDetail as jest.Mock).mockResolvedValue({
+      ...leafPlan,
+      items: [],
+      progress: { totalNotes: 0, notesWithStudyPack: 0, notesPracticed: 0 },
+    });
+
+    render(
+      <PublicStudyPlanCard
+        plan={leafPlan}
+        adoptedCollection={null}
+        canAdopt={false}
+        discoverySource="explore"
+        onSignedOutAdopt={onSignedOutAdopt}
+        signedOutHref="/auth?mode=signup&redirect=%2Fexplore"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview this plan · 3 notes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to adopt" }));
+
+    expect(await screen.findByText("This plan does not have any available notes yet.")).toBeInTheDocument();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "EXPLORE_OFFICIAL_SET_PREVIEWED",
+      entityId: "source-plan-1",
+      metadata: { source: "explore" },
+    });
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "EXPLORE_OFFICIAL_SET_ADOPT_CLICKED",
+      entityId: "source-plan-1",
+      metadata: { source: "explore" },
+    });
+    expect(onSignedOutAdopt).toHaveBeenCalledTimes(1);
+    expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&redirect=%2Fexplore");
   });
 });

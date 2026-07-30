@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { ExamHubCta } from "@/components/exam-hub/exam-hub-cta";
+import { ExamHubOfficialReviewSets } from "@/components/exam-hub/exam-hub-official-review-sets";
 import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
@@ -26,6 +27,7 @@ import {
   getPublicTitleSlug,
 } from "@/lib/public-note-path";
 import { getServerPublicNotesByCoursePrograms } from "@/lib/server-public-notes";
+import { getServerPublicStudyPlansByCoursePrograms } from "@/lib/server-public-study-plans";
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
 
@@ -189,7 +191,10 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
     notFound();
   }
 
-  const notes = await getServerPublicNotesByCoursePrograms(exam.coursePrograms) as ExamHubNote[];
+  const [notes, officialReviewSets] = await Promise.all([
+    getServerPublicNotesByCoursePrograms(exam.coursePrograms) as Promise<ExamHubNote[]>,
+    getServerPublicStudyPlansByCoursePrograms(exam.coursePrograms),
+  ]);
   const description = buildExamMetadataDescription(exam);
   const examPath = buildExamPath(exam.slug);
   const { featured, popular, recent, remaining } = getSectionedNotes(notes);
@@ -254,6 +259,10 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
         practice — so you can track the weak areas that need review before exam day, not just read through material
         once.
       </p>
+
+      {officialReviewSets.length > 0 ? (
+        <ExamHubOfficialReviewSets exam={exam} plans={officialReviewSets} />
+      ) : null}
 
       {hasAnyNotes ? (
         <div className="space-y-8">

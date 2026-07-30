@@ -664,6 +664,16 @@ Use these skills before writing prompts, before starting new features, and after
   - allow graceful fallback summaries for older sessions that do not have full stored quiz detail
   - weak concepts in session review use the same `< 60%` accuracy threshold as other study surfaces
 
+### Explore Navigation Rule
+
+- Authenticated primary navigation order is Dashboard, the existing profile-aware Collections label, Library, Explore, Progress.
+- `/explore` is an authenticated composite discovery front door with `Review Sets` and `Notes` tabs plus an Exam Hub index pointer.
+- Explore must reuse the existing Official Review Set catalog and Public Library rendering. It must not replace, redirect, or redefine the canonical `/collections/published` and `/public/library` routes.
+- Library stays structurally separate from Collections and Explore.
+- The mobile bottom tab bar replaces its former Public Library tab with Explore and keeps the existing `mobileTabBarEnabled` preference gate.
+- The anonymous marketing navbar is separate and must not gain the authenticated Explore item.
+- Exam Hub Official Review Set enrichment uses exact normalized `courseProgram` matching only, remains anonymous-previewable, and must fail open so public-note content still renders.
+
 ### Card Interaction Rule
 
 - Library cards, Public Library cards, and Public Profile cards must use a consistent interaction model.
@@ -876,7 +886,7 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 ### Back Navigation Rule
 
 - All back navigation uses the `BackLink` component (`components/ui/back-link.tsx`): renders `← {label}` with `ArrowLeft` icon, blue link color (`text-blue-600 dark:text-blue-400`), underlines on hover — same style as "View Full Notes →". Not a button.
-- Back links appear on sub-pages only. Main pages (Dashboard, Library, Public Library, My Profile, Settings) must NOT have a back link.
+- Back links appear on sub-pages only. Main pages (Dashboard, Library, profile-aware Collections, Explore, Progress, Public Library, My Profile, Settings) must NOT have a back link.
 - Back navigation always uses explicit routing (`href` prop on `BackLink`) — never `router.back()`.
 - Back link label is the destination page name only — do NOT use "Back to X" or "Back" alone.
 - My Profile (owner's own public profile) is a main page — no back link.
