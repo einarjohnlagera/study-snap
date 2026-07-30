@@ -111,6 +111,7 @@ function buildNote(id: string, overrides: Record<string, unknown> = {}) {
     studyPackId: null,
     studyPackStatus: "DRAFT",
     quizCount: null,
+    keyConceptCount: null,
     generatedQuizId: null,
     generatedQuizQuestionCount: null,
     createdAt: "2026-03-20T10:00:00Z",
@@ -288,6 +289,7 @@ describe("Library page", () => {
         studyPackId: null,
         studyPackStatus: "DRAFT",
         quizCount: null,
+        keyConceptCount: null,
         generatedQuizId: null,
         generatedQuizQuestionCount: null,
         createdAt: "2026-03-20T10:00:00Z",
@@ -305,6 +307,7 @@ describe("Library page", () => {
         studyPackId: "pack-99",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
+        keyConceptCount: 4,
         generatedQuizId: "generated-99",
         generatedQuizQuestionCount: 10,
         createdAt: "2026-03-21T10:00:00Z",
@@ -322,6 +325,7 @@ describe("Library page", () => {
         studyPackId: "pack-77",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 4,
+        keyConceptCount: 6,
         generatedQuizId: "generated-77",
         generatedQuizQuestionCount: 10,
         createdAt: "2026-03-18T10:00:00Z",
@@ -370,6 +374,35 @@ describe("Library page", () => {
     });
 
     expect(listLibraryPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows scope only on Study-Pack-ready private Library cards", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    expect(screen.getByText("4 concepts · 3 questions · ~5 min")).toBeInTheDocument();
+    expect(screen.getByText("6 concepts · 4 questions · ~7 min")).toBeInTheDocument();
+    expect(screen.queryByText(/0 concepts|~0 min/)).not.toBeInTheDocument();
+  });
+
+  it("hides scope for a regenerating note even though its prior pack's counts are still attached", async () => {
+    // A note mid-regeneration keeps the previous StudyPackEntity row (and its counts) attached
+    // to the response while status flips to GENERATING — showing the old pack's scope here would
+    // be stale, not just absent. The STUDY_PACK_READY gate must hide it despite non-null counts.
+    const regeneratingNote = buildNote("note-regenerating", {
+      title: "Regenerating Note",
+      studyPackStatus: "GENERATING",
+      quizCount: 5,
+      keyConceptCount: 6,
+    });
+    (listNotes as jest.Mock).mockResolvedValue([regeneratingNote]);
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Regenerating Note");
+
+    expect(screen.queryByText(/6 concepts|5 questions/)).not.toBeInTheDocument();
   });
 
   it("debounces filter requests and fetches the page and subject stats once", async () => {

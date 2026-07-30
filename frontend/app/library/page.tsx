@@ -61,6 +61,7 @@ import {getCollectionLabels} from "@/lib/collection-labels";
 import {shouldShowQuizReadyIndicator} from "@/lib/profile-mode";
 import {requireAuthenticatedOnboardedUser} from "@/lib/route-guards";
 import {normalizeSubject} from "@/lib/subjects";
+import {formatStudyPackScope, getStudyPackScope} from "@/lib/study-pack-scope";
 import {GuidanceTip} from "@/components/ui/guidance-tip";
 import {pickActiveGuidance, type GuidanceRule} from "@/lib/guidance-engine";
 import {getUpgradeCtas, type AppPlanType} from "@/src/config/plans";
@@ -1826,6 +1827,12 @@ export default function LibraryPage() {
                 const itemTags = normalizeTags(item.tags);
                 const examReady = canIncludeInExam(item);
                 const isSelected = selectedNoteIds.includes(item.id);
+                const studyPackScope = item.studyPackStatus === "STUDY_PACK_READY"
+                  ? getStudyPackScope({
+                      keyConceptCount: item.keyConceptCount,
+                      quizCount: item.quizCount,
+                    })
+                  : null;
 
                 return (
                   <Card
@@ -1881,11 +1888,20 @@ export default function LibraryPage() {
                         </span>
                       ) : renderVisibilityIcon(item.visibility)}
                       stateBadge={<NoteStateBadge status={item.studyPackStatus} />}
-                      metadataBadges={showQuizReadyIndicators && examReady ? (
-                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                          Quiz Ready
-                        </span>
-                      ) : null}
+                      metadataBadges={(
+                        <>
+                          {showQuizReadyIndicators && examReady ? (
+                            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                              Quiz Ready
+                            </span>
+                          ) : null}
+                          {studyPackScope ? (
+                            <span className="text-xs text-foreground/65">
+                              {formatStudyPackScope(studyPackScope)}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
                       footer={(
                         <div className="space-y-1">
                           <p className="text-xs text-foreground/65">

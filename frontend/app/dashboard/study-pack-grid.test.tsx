@@ -18,6 +18,7 @@ describe("StudyPackGrid", () => {
       studyPackId: "sp-1",
       studyPackStatus: "STUDY_PACK_READY",
       quizCount: 8,
+      keyConceptCount: 5,
       copyCount: 0,
       likeCount: 0,
       shareCount: 0,
