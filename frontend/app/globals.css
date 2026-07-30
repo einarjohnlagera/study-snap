@@ -14,6 +14,7 @@
   --primary-hover: #1d4ed8;
   --primary-active: #1e40af;
   --surface-alt: #f9fafb;
+  --card: var(--background);
   --motion-duration-fast: 150ms;
   --motion-duration-base: 220ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -32,6 +33,7 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-active: var(--primary-active);
   --color-surface-alt: var(--surface-alt);
+  --color-card: var(--card);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -48,6 +50,7 @@
   --primary-hover: #2563eb;
   --primary-active: #1d4ed8;
   --surface-alt: rgb(3 7 18 / 0.4);
+  --card: var(--background);
 }
 
 html.theme-light,
