@@ -9,7 +9,13 @@ export function PublicLibraryBackLink() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [returnHref] = useState(() => {
     const saved = globalThis.sessionStorage?.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY);
-    return saved && saved.startsWith(PUBLIC_LIBRARY_PATH) ? saved : PUBLIC_LIBRARY_PATH;
+    const isPublicLibraryPath = saved === PUBLIC_LIBRARY_PATH
+      || saved?.startsWith(`${PUBLIC_LIBRARY_PATH}?`)
+      || saved?.startsWith(`${PUBLIC_LIBRARY_PATH}/`);
+    const isExplorePath = saved === "/explore" || saved?.startsWith("/explore?");
+    return saved && (isPublicLibraryPath || isExplorePath)
+      ? saved
+      : PUBLIC_LIBRARY_PATH;
   });
 
   useEffect(() => {
@@ -28,5 +34,5 @@ export function PublicLibraryBackLink() {
     return null;
   }
 
-  return <BackLink href={returnHref} label="Public Library" />;
+  return <BackLink href={returnHref} label={returnHref.startsWith("/explore") ? "Explore" : "Public Library"} />;
 }

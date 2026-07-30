@@ -51,6 +51,14 @@ Exam hubs reuse existing public-note infrastructure:
 
 Filtering is by `courseProgram`, matched case-insensitively against the configured aliases.
 
+Exam hubs also perform a best-effort Official Review Set enrichment:
+
+- Each configured `courseProgram` is looked up independently through the existing public collection catalog.
+- Matching uses the backend's normalized exact `courseProgram` lookup only. There is no subject-level, partial, or fuzzy matching.
+- Results are deduplicated by collection id. If more than one set matches, the shared plan picker lets the visitor select which set to preview.
+- Lookup failures are swallowed for this enrichment only; public notes and the rest of the anonymous hub continue rendering.
+- No matches means no additional section or empty state.
+
 ## Conversion
 
 Anonymous CTA:
@@ -66,6 +74,15 @@ Authenticated CTA:
 - Destination: filtered Public Library URL, using the existing `courseProgram` query slug.
 
 The current feature only preserves exam context. It does not pre-fill goals or change onboarding logic.
+
+### Official Review Set preview and adoption
+
+When an exact course/program match exists, the hub shows an `Official Review Sets for {exam}` section before its public-note discovery sections. The existing public plan card provides the real note preview and adoption flow.
+
+- Preview is public and requires no profile type or authenticated session.
+- Authenticated learners can adopt through the existing collection adoption endpoints.
+- Anonymous adoption routes through `/auth?mode=signup&intent=exam&exam={slug}&redirect=/exam/{slug}`. The auth page persists the existing `notelib-exam-intent` cookie and returns the visitor to the hub after authentication; it never attempts an authenticated adoption request while signed out.
+- This section is additive. It does not replace public notes, alter structured-data membership, or make the Exam Hub dependent on the collection lookup succeeding.
 
 ## Product Value Strip
 
@@ -171,6 +188,8 @@ Exam hub analytics events are frontend-fired and non-blocking:
 
 - `EXAM_HUB_VIEWED` with metadata `{ slug, referrerSource }`; the shared page-view tracker supplies the coarse source bucket.
 - `EXAM_HUB_CTA_CLICKED` with metadata `{ slug, destination }`; Admin's organic-landing panel consumes this existing event only as a coarse aggregate Google Exam Hub landing → CTA ratio, not as a visitor-correlated funnel.
+- `EXAM_HUB_OFFICIAL_SET_PREVIEWED` with the selected set as `entityId` and metadata `{ source: "exam_hub", slug }`.
+- `EXAM_HUB_OFFICIAL_SET_ADOPT_CLICKED` with the selected set as `entityId` and metadata `{ source: "exam_hub", slug }`; signed-out intent clicks are included.
 - `STUDY_GOAL_SET` with metadata `{ studyGoal }`.
 - `STUDY_GOAL_DISMISSED` with metadata `{ studyGoal }`.
 - `DASHBOARD_GOAL_CARD_VIEWED` with metadata `{ studyGoal }`.

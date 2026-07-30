@@ -13,12 +13,15 @@ type ExamHubCtaProps = {
   exam: ExamHubConfig;
 };
 
-function buildExamAuthPath(slug: string) {
+export function buildExamAuthPath(slug: string, redirectTo?: string) {
   const params = new URLSearchParams({
     mode: "signup",
     intent: "exam",
     exam: slug,
   });
+  if (redirectTo) {
+    params.set("redirect", redirectTo);
+  }
   return `/auth?${params.toString()}`;
 }
 

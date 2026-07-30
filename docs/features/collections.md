@@ -859,7 +859,7 @@ Profile-aware labels are resolved only through `frontend/lib/collection-labels.t
 
 ### Browse published plans (`/collections/published`)
 
-The Dashboard card surfaces only the top matching published root plan, so publishing several plans per course/program hides all but one. `/collections/published` is the lightweight browse surface for official published root plans (v0.31.1, root-only listing tightened in v0.33.3; unfiltered Browse All added in v0.40.1).
+The Dashboard card surfaces only the top matching published root plan, so publishing several plans per course/program hides all but one. `/collections/published` is the lightweight standalone browse surface for official published root plans (v0.31.1, root-only listing tightened in v0.33.3; unfiltered Browse All added in v0.40.1). Authenticated `/explore` reuses the same catalog rendering in its `Review Sets` tab; it does not replace or redirect the standalone route.
 
 - Recommended section. The top section remains course/program-scoped and reuses root-only `GET /collections/public?courseProgram=` (via `listPublicStudyPlans`) plus the user's `GET /collections` to join each plan to an already-adopted personal collection (`sourcePlanId`). Child Subject plans are not shown as standalone public cards.
 - Browse All section. Below Recommended, the page renders `Browse All Official {labels.plural}` with `id="browse-all"`, calls `listPublicStudyPlans({})` / `GET /collections/public` with no course/program filter, sorts the returned public top-level collections alphabetically by title (case-insensitive), and renders the same `PublicStudyPlanCard` component. Duplication between Recommended and Browse All is expected and not de-duplicated.

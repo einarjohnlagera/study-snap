@@ -22,7 +22,12 @@ Anti-drift: Library stays untouched and structurally separate from Collections â
 
 ### Shipped
 
-_(nothing yet)_
+_(pending audit â€” see docs/codex-prompts/v0.67.0-explore-convergence.md for the delivered scope; bullets below to be confirmed/corrected against the actual diff before signoff)_
+
+- **Authenticated Explore navigation.** Desktop navigation now reads Dashboard / profile-aware Collections label / Library / Explore / Progress, and the optional four-item mobile tab bar replaces Public Library with Explore while preserving its existing preference gate. The separate public marketing navbar is unchanged.
+- **Composite `/explore` page.** Explore presents Review Sets and Notes behind an accessible URL-backed segmented control, reusing the existing `/collections/published` catalog and `/public/library` data/rendering with independently scoped loading, error, and retry behavior. The original routes remain live and behaviorally unchanged, and Explore includes a pointer to the Exam Hub index.
+- **Shared plan picker and Exam Hub enrichment.** The Progress plan picker is now a shared component with its existing `/progress?collectionId=` behavior intact. Exam Hubs perform one best-effort published-set lookup per configured `courseProgram`, deduplicate exact matches, and show an anonymous-safe preview/adopt section when matches exist; lookup failures and no-match cases leave the existing hub untouched, while signed-out adoption preserves exam intent and returns through auth.
+- **Discovery analytics.** Explore tab switches plus Official Review Set preview/adopt clicks from Explore and Exam Hub emit non-blocking events declared in both frontend and backend analytics event contracts.
 
 ## v0.66.2 - Card Surface Token Fix
 

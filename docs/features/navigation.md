@@ -33,7 +33,7 @@ Current public navigation order:
 All sub-pages use a `BackLink` component (`components/ui/back-link.tsx`) that renders `← {Destination}` using `ArrowLeft` icon + destination label text.
 
 Rules:
-- Back link appears on sub-pages only. Main pages (Dashboard, Library, Collections/"My Reviews", Progress, Public Library, My Profile, Settings) have no default back link.
+- Back link appears on sub-pages only. Main pages (Dashboard, Library, profile-aware Collections, Explore, Progress, Public Library, My Profile, Settings) have no default back link.
 - Back link uses explicit routing (not `router.back()`), so the destination is always predictable.
 - Back link label is the destination page name only — no "Back to" prefix.
 - Back link is positioned above the page header card, left-aligned.
@@ -52,6 +52,20 @@ Rules:
 | Shared Study Pack | Home | Home |
 
 **Progress is a main page (v0.59.0)** — reachable directly from primary nav (`/progress`), no default back link. It shows one exception: a contextual back link to the originating collection (`← {Plan Name}`, e.g. via a plan detail's `Check readiness` deep-link) only when reached with an explicit `?collectionId=` — this is a "return to where you came from" pattern, not the removed "Progress is a sub-page of Dashboard" pattern. Implemented in `ProgressHeader` (`frontend/app/progress/progress-report-client.tsx`).
+
+## Authenticated Navigation
+
+Authenticated desktop navigation order:
+
+- `Dashboard`
+- the existing profile-aware Collections label from `getCollectionLabels` (`Review Sets`, `Study Plans`, `Lesson Plans`, or `Collections`)
+- `Library`
+- `Explore`
+- `Progress`
+
+`Explore` points to `/explore`, where `Review Sets` and `Notes` reuse the existing Official Review Set catalog and Public Library rendering behind a segmented control. `/collections/published` and `/public/library` remain independent main pages with unchanged canonical routes and no default back links; they are no longer direct authenticated-nav items.
+
+The optional mobile bottom tab bar remains four items: `Dashboard`, `Library`, the profile-aware Collections label, and `Explore`. Its existing `mobileTabBarEnabled` preference gate is unchanged.
 
 ## Public Profile Back Behavior
 

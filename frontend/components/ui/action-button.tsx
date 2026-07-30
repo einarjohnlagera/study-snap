@@ -9,6 +9,7 @@ import {
   BookOpen,
   BookMarked,
   Briefcase,
+  Compass,
   Copy,
   Download,
   GraduationCap,
@@ -49,6 +50,7 @@ export type ActionIconName =
   | "delete"
   | "download"
   | "edit"
+  | "explore"
   | "collections"
   | "library"
   | "admin"
@@ -85,6 +87,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   delete: Trash2,
   download: Download,
   edit: Pencil,
+  explore: Compass,
   collections: Layers,
   library: BookOpen,
   admin: Shield,

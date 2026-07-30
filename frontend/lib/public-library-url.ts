@@ -172,6 +172,7 @@ export function parsePublicLibraryFilters(searchParams?: SearchParamsInput): Req
 export function buildPublicLibraryUrl(
   filters: PublicLibraryUrlFilters = {},
   baseSearchParams?: SearchParamsInput,
+  path = PUBLIC_LIBRARY_PATH,
 ) {
   const params = cloneSearchParams(baseSearchParams);
 
@@ -210,7 +211,7 @@ export function buildPublicLibraryUrl(
     .forEach((tag) => params.append(PUBLIC_LIBRARY_TAG_QUERY_PARAM, tag));
 
   const query = params.toString();
-  return query ? `${PUBLIC_LIBRARY_PATH}?${query}` : PUBLIC_LIBRARY_PATH;
+  return query ? `${path}?${query}` : path;
 }
 
 // sessionStorage key the mobile tab bar and PublicLibraryBackLink read from to return to the

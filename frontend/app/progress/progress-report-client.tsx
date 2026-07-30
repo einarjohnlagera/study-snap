@@ -9,6 +9,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
 import { HelpLink } from "@/components/ui/help-link";
 import { PageHeader } from "@/components/page-header";
+import { PlanPicker } from "@/components/collections/plan-picker";
 import { getBrowsingCardClassName } from "@/lib/clickable-card";
 import {
   ApiRequestError,
@@ -315,68 +316,6 @@ function SetStudyFocusCard({ subjects }: Readonly<{ subjects: SubjectProgressEnt
       <Link href="/profile#study-focus" className="inline-flex text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
         Or set from Profile &rarr;
       </Link>
-    </Card>
-  );
-}
-
-function PlanPicker({
-  collections,
-  selectedCollectionId,
-  collectionsState,
-  onChange,
-}: Readonly<{
-  collections: NoteCollectionSummary[];
-  selectedCollectionId: string | null;
-  collectionsState: "loading" | "ready" | "error";
-  onChange: (collectionId: string | null) => void;
-}>) {
-  const leafCollections = useMemo(
-    () => collections.filter((collection) => collection.childCount === 0),
-    [collections],
-  );
-  const selectedCollection = selectedCollectionId
-    ? collections.find((collection) => collection.id === selectedCollectionId)
-    : null;
-  const selectedLeafCollection = selectedCollectionId
-    ? leafCollections.find((collection) => collection.id === selectedCollectionId)
-    : null;
-
-  return (
-    <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-      <div className="space-y-1">
-        <label htmlFor="progress-plan-picker" className="text-sm font-semibold text-foreground">
-          Progress view
-        </label>
-        <p className="text-sm text-foreground/65">
-          Switch between all subjects and one saved study plan.
-        </p>
-      </div>
-      <div className="flex flex-col gap-1 sm:min-w-72">
-        <select
-          id="progress-plan-picker"
-          value={selectedCollectionId ?? ""}
-          onChange={(event) => onChange(event.target.value || null)}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">All subjects</option>
-          {selectedCollectionId && !selectedLeafCollection ? (
-            <option value={selectedCollectionId}>{selectedCollection?.title ?? "Selected plan"}</option>
-          ) : null}
-          {leafCollections.map((collection) => (
-            <option key={collection.id} value={collection.id}>
-              {collection.title}
-            </option>
-          ))}
-        </select>
-        {collectionsState === "loading" ? (
-          <span className="text-xs text-foreground/50">Loading study plans...</span>
-        ) : null}
-        {collectionsState === "error" ? (
-          <span className="text-xs text-rose-600 dark:text-rose-400">
-            Could not load study plans for the picker.
-          </span>
-        ) : null}
-      </div>
     </Card>
   );
 }
