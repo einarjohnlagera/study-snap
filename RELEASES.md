@@ -2,7 +2,7 @@
 
 ## v0.66.2 - Card Surface Token Fix
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: fix `bg-card`, a Tailwind utility with 23 literal usages across 9 files (22 rendered elements) that has silently resolved to no output since it was first used, because no `--color-card` token was ever registered in `globals.css`.
 
