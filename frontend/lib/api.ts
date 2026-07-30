@@ -1079,6 +1079,8 @@ export type QuickReviewStudyTipResponse = {
 
 export type QuizSessionStatus = "GENERATING" | "FAILED" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "FORFEITED";
 
+export type AdaptiveConceptSelectionReason = "DUE" | "WEAK" | "BOTH";
+
 export type QuickReviewAdaptiveQuizResponse = {
   sessionId: string | null;
   status: QuizSessionStatus | null;
@@ -1086,6 +1088,7 @@ export type QuickReviewAdaptiveQuizResponse = {
   title: string;
   weakConcepts: string[];
   quiz: QuizItem[];
+  conceptSelectionReasons: Array<AdaptiveConceptSelectionReason | null>;
   message: string;
 };
 

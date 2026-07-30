@@ -38,6 +38,7 @@ import {
   getPostSessionNextStep,
   isEmailNotVerifiedError,
   trackAnalyticsEvent,
+  type AdaptiveConceptSelectionReason,
   type CompanionContent,
   type NoteResponse,
   type AdaptivePracticeCompleteResponse,
@@ -62,6 +63,31 @@ function AdaptivePracticeLoading() {
       </div>
     </Card>
   );
+}
+
+function formatSelectionRationale(
+  concept: string | null | undefined,
+  reason: AdaptiveConceptSelectionReason | null | undefined,
+) {
+  const normalizedConcept = concept?.trim();
+  if (!normalizedConcept || !reason) {
+    return null;
+  }
+  let reasonLabel: string;
+  switch (reason) {
+    case "DUE":
+      reasonLabel = "due for review";
+      break;
+    case "WEAK":
+      reasonLabel = "missed last time";
+      break;
+    case "BOTH":
+      reasonLabel = "missed last time and due for review";
+      break;
+    default:
+      return null;
+  }
+  return `Reviewing: ${normalizedConcept} — ${reasonLabel}`;
 }
 
 export default function AdaptivePracticePage() {
@@ -278,6 +304,23 @@ export default function AdaptivePracticePage() {
   const hasQuestions = quiz.length > 0;
   const currentQuestion = hasQuestions ? quiz[currentIndex] : null;
   const currentMatchingGroup = resolveQuizItemGroupAt(quiz, currentIndex);
+  const currentRationales = (() => {
+    const questionIndexes = currentMatchingGroup
+      ? currentMatchingGroup.items.map((_, offset) => currentMatchingGroup.startIndex + offset)
+      : [currentIndex];
+    const uniqueRationales = new Set<string>();
+    questionIndexes.forEach((questionIndex) => {
+      const question = quiz[questionIndex];
+      const rationale = formatSelectionRationale(
+        question?.concept,
+        adaptiveQuiz?.conceptSelectionReasons?.[questionIndex],
+      );
+      if (rationale) {
+        uniqueRationales.add(rationale);
+      }
+    });
+    return Array.from(uniqueRationales);
+  })();
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
   const selectedMultiChoiceIndices = selectedMultiChoices[currentIndex] ?? [];
   const currentQuestionIsMultiSelect = currentQuestion?.questionFormat === "MULTI_SELECT";
@@ -797,6 +840,18 @@ export default function AdaptivePracticePage() {
           </Card>
 
           <Card className="space-y-4 p-4 sm:p-6">
+            {currentRationales.length > 0 ? (
+              <div className="flex flex-wrap gap-2" aria-label="Why these questions">
+                {currentRationales.map((rationale) => (
+                  <p
+                    key={rationale}
+                    className="w-fit max-w-full rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium leading-relaxed text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+                  >
+                    {rationale}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             {currentMatchingGroup ? (
               <QuizMatchingGroup
                 items={currentMatchingGroup.items}

@@ -11,6 +11,7 @@ public record QuickReviewAdaptiveQuizResponse(
         String title,
         List<String> weakConcepts,
         List<QuizItem> quiz,
+        List<String> conceptSelectionReasons,
         String message
 ) {
 }

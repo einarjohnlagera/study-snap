@@ -32,6 +32,7 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -131,24 +132,27 @@ public class QuickReviewAdaptivePracticeService {
                 studyPack.getTitle(),
                 List.of(),
                 List.of(),
+                List.of(),
                 NO_SOURCE_SESSION_MESSAGE
             );
         }
 
         List<String> weakConcepts = extractWeakConcepts(latestCompletedSession);
-        List<String> focusConcepts = resolveAdaptiveFocusConcepts(
+        AdaptiveFocus adaptiveFocus = resolveAdaptiveFocus(
             userId,
             studyPackId,
             studyPack,
             weakConcepts,
             OffsetDateTime.now(ZoneOffset.UTC)
         );
+        List<String> focusConcepts = adaptiveFocus.concepts();
         if (focusConcepts.isEmpty()) {
             return new QuickReviewAdaptiveQuizResponse(
                 null,
                 null,
                 studyPack.getId().toString(),
                 studyPack.getTitle(),
+                List.of(),
                 List.of(),
                 List.of(),
                 NO_WEAK_CONCEPTS_MESSAGE
@@ -188,7 +192,7 @@ public class QuickReviewAdaptivePracticeService {
                 );
             }
 
-            markSessionReady(session, adaptiveQuiz, focusConcepts);
+            markSessionReady(session, adaptiveQuiz, focusConcepts, adaptiveFocus.selectionReasons());
             QuickReviewSessionEntity savedSession = quickReviewSessionRepository.save(session);
             userUsageService.incrementAdaptiveQuizGeneration(userId, savedSession.getCreatedAt());
 
@@ -239,24 +243,26 @@ public class QuickReviewAdaptivePracticeService {
                 studyPack.getTitle(),
                 List.of(),
                 List.of(),
+                List.of(),
                 NO_SOURCE_SESSION_MESSAGE
             );
         }
 
         List<String> weakConcepts = extractWeakConcepts(latestCompletedSession);
-        List<String> focusConcepts = resolveAdaptiveFocusConcepts(
+        List<String> focusConcepts = resolveAdaptiveFocus(
             userId,
             studyPackId,
             studyPack,
             weakConcepts,
             OffsetDateTime.now(ZoneOffset.UTC)
-        );
+        ).concepts();
         if (focusConcepts.isEmpty()) {
             return new QuickReviewAdaptiveQuizResponse(
                 null,
                 null,
                 studyPack.getId().toString(),
                 studyPack.getTitle(),
+                List.of(),
                 List.of(),
                 List.of(),
                 NO_WEAK_CONCEPTS_MESSAGE
@@ -269,6 +275,7 @@ public class QuickReviewAdaptivePracticeService {
             studyPack.getId().toString(),
             studyPack.getTitle(),
             focusConcepts,
+            List.of(),
             List.of(),
             FOCUS_MESSAGE
         );
@@ -430,7 +437,8 @@ public class QuickReviewAdaptivePracticeService {
     private void markSessionReady(
         QuickReviewSessionEntity session,
         List<QuizItem> adaptiveQuiz,
-        List<String> weakConcepts
+        List<String> weakConcepts,
+        Map<String, ConceptSelectionReason> selectionReasons
     ) {
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
@@ -441,7 +449,15 @@ public class QuickReviewAdaptivePracticeService {
         session.setRetryCount(0);
         session.setDurationSeconds(null);
         session.setSessionMetadata(Map.of(SESSION_METADATA_WEAK_CONCEPTS, weakConcepts));
-        session.setSessionState(QuizSessionStateUtils.withQuiz(adaptiveQuiz, null));
+        List<String> questionSelectionReasons = adaptiveQuiz.stream()
+            .map(QuizItem::concept)
+            .map(concept -> resolveSelectionReason(concept, selectionReasons))
+            .toList();
+        Map<String, Object> sessionState = QuizSessionStateUtils.withQuiz(adaptiveQuiz, null);
+        session.setSessionState(QuizSessionStateUtils.withConceptSelectionReasons(
+            sessionState,
+            questionSelectionReasons
+        ));
         session.setCompletedAt(null);
     }
 
@@ -459,6 +475,10 @@ public class QuickReviewAdaptivePracticeService {
         StudyPackEntity studyPack
     ) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        List<String> conceptSelectionReasons = QuizSessionStateUtils.extractConceptSelectionReasons(
+            session.getSessionState(),
+            quiz.size()
+        );
         String message = switch (session.getStatus()) {
             case GENERATING -> ADAPTIVE_GENERATING_MESSAGE;
             case FAILED -> ADAPTIVE_GENERATION_FAILED_MESSAGE;
@@ -471,6 +491,7 @@ public class QuickReviewAdaptivePracticeService {
             studyPack.getTitle(),
             extractWeakConcepts(session),
             quiz,
+            conceptSelectionReasons,
             message
         );
     }
@@ -497,18 +518,43 @@ public class QuickReviewAdaptivePracticeService {
         return new ArrayList<>(normalized);
     }
 
-    private List<String> resolveAdaptiveFocusConcepts(
+    private AdaptiveFocus resolveAdaptiveFocus(
         UUID userId,
         UUID studyPackId,
         StudyPackEntity studyPack,
         List<String> weakConcepts,
         OffsetDateTime now
     ) {
-        LinkedHashSet<String> focusConcepts = new LinkedHashSet<>(
-            conceptHealthService.getDueConcepts(userId, studyPackId, getKeyConcepts(studyPack), now)
+        List<String> dueConcepts = conceptHealthService.getDueConcepts(
+            userId,
+            studyPackId,
+            getKeyConcepts(studyPack),
+            now
         );
-        focusConcepts.addAll(weakConcepts);
-        return new ArrayList<>(focusConcepts);
+        LinkedHashSet<String> focusConcepts = new LinkedHashSet<>(dueConcepts);
+        Map<String, ConceptSelectionReason> selectionReasons = new LinkedHashMap<>();
+        dueConcepts.forEach(concept -> selectionReasons.put(concept, ConceptSelectionReason.DUE));
+        for (String weakConcept : weakConcepts) {
+            focusConcepts.add(weakConcept);
+            selectionReasons.compute(
+                weakConcept,
+                (ignored, existingReason) -> existingReason == ConceptSelectionReason.DUE
+                    ? ConceptSelectionReason.BOTH
+                    : ConceptSelectionReason.WEAK
+            );
+        }
+        return new AdaptiveFocus(new ArrayList<>(focusConcepts), selectionReasons);
+    }
+
+    private String resolveSelectionReason(
+        String concept,
+        Map<String, ConceptSelectionReason> selectionReasons
+    ) {
+        if (concept == null || concept.isBlank()) {
+            return null;
+        }
+        ConceptSelectionReason reason = selectionReasons.get(concept.trim());
+        return reason == null ? null : reason.name();
     }
 
     private List<String> getKeyConcepts(StudyPackEntity studyPack) {
@@ -607,5 +653,17 @@ public class QuickReviewAdaptivePracticeService {
             ).stream()
             .findFirst()
             .orElse(null);
+    }
+
+    private record AdaptiveFocus(
+        List<String> concepts,
+        Map<String, ConceptSelectionReason> selectionReasons
+    ) {
+    }
+
+    private enum ConceptSelectionReason {
+        DUE,
+        WEAK,
+        BOTH
     }
 }
