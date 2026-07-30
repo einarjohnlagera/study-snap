@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.66.2 - Card Surface Token Fix
+
+**Status: In Progress**
+
+Theme: fix `bg-card`, a Tailwind utility used 21 times across 10 files that has silently resolved to no output since it was first used, because no `--color-card` token was ever registered in `globals.css`.
+
+### Planned Scope
+
+- **Register `--color-card` (frontend only, `frontend/app/globals.css`).** Alias `--card` to `--background` in both `:root`/`.theme-light` and `.theme-dark`/`.dark`, and register `--color-card: var(--card)` in the `@theme inline` block, so `bg-card` finally compiles. `--background` was chosen over `--surface-alt` after verifying real render behavior: several call sites (e.g. `challenge-quiz/page.tsx:2090`'s `isBoardExamMode ? "border-foreground/15 bg-card" : ""`, and `long-exam/page.tsx:1090`'s unconditional `border-foreground/15 bg-card`) deliberately override the default `Card` component's `bg-surface-alt` — aliasing to `--surface-alt` would make that override a no-op (identical color to the default Card), silently defeating intent the code already expresses. Aliasing to `--background` also produces zero visual regression versus the currently-shipped (accidentally transparent) appearance in every un-nested usage, while giving `ScoreReveal`'s nested-in-`Card` pattern (and similar) real, visible panel separation instead of a flat same-tone stack.
+- **Doc correction (already applied while scoping, folded in here).** The Backlog Index row logging this finding originally said "9 usages" — corrected to the actual count (21, across 10 files, primarily `long-exam.tsx` and `challenge-quiz.tsx`'s core exam-mode UI) after a fresh grep during scoping.
+
+Anti-drift: CSS token registration only — no component logic, className, or markup changes; all 21 call sites pick up the fix automatically with no per-site edits.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.66.1 - Goal Detail Due-Concept Signal
 
 **Status: Released**
