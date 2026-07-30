@@ -1216,7 +1216,11 @@ function GoalDetailView({
                     />
                   </div>
                   <p className="text-xs text-foreground/60">
-                    {child.masteredConcepts}/{child.totalConcepts} mastered · {child.dueConcepts} due · {child.notPracticedConcepts} not started
+                    {child.masteredConcepts}/{child.totalConcepts} mastered ·{" "}
+                    <span className={child.dueConcepts > 0 ? "text-amber-700 dark:text-amber-300" : undefined}>
+                      {child.dueConcepts} due
+                    </span>{" "}
+                    · {child.notPracticedConcepts} not started
                   </p>
                 </div>
               </Card>
