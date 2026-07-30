@@ -2,7 +2,7 @@
 
 ## v0.65.0 - Study Effectiveness Polish
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: close out the remaining, still-valid candidates from the 2026-07-22 Study Effectiveness/UI Polish/Pricing Fit consultation — surfacing what a Study Pack actually contains before a learner commits, cleaning up the card stack that's accreted on Review Set Detail and the quiz result screens across many separate releases, making the collapsed Companion discoverable, and tagging why Adaptive Practice picked a given question. Reclaims the `v0.65.0` minor-version slot from `Explore Convergence` (renumbered to `v0.66.0`), since this item is small, ungated, and ready now, while Explore's Diagnostic Read gate remains unmet (due after 2026-08-06) — the sixth time a slot has changed hands this way, following `v0.60.0`, `v0.61.0`, `v0.62.0`, `v0.63.0`, and `v0.64.0`.
 
@@ -25,6 +25,7 @@ Anti-drift: none of these four touch `EXAM_MODES.md`'s locked no-mid-exam-coachi
 ### Known Limitations
 
 - **Challenge Quiz's outcome area (score, Score Summary, per-metric cards, Concept Breakdown) still reads as an accreted card stack** — a real-browser visual audit flagged this as the reason Challenge Quiz's result screen is the weakest of the three (Adaptive Practice's outcome hierarchy was rated strongest). This is a materially larger redesign than this release's scope: the original Codex prompt for this layout pass explicitly named only the post-session guidance cards (`PostSessionNextStep`/`GoalNudgeCard`/`WeeklyPacingEchoCard` and `CompanionResultBridgeCard`/`TwiceMissedAskCompanionCard`), not the score/outcome area above them. Merging those into one outcome block with a compact metric grid needs its own scoping pass and Codex prompt, not an ad-hoc expansion of this one. Not fixed this release.
+- **Adaptive Practice's rationale pill row has not had a real-browser visual check.** The longest single-reason string ("missed last time and due for review") is 62 characters in a `rounded-full` pill, and a matching-group question can render 2-3 distinct pills in one `flex-wrap` row — neither case is covered by the RTL tests added this release (all use a single short concept). Code-level review confirmed the row renders only in the active-question branch, never on the result screen. The owner opted to eyeball it directly rather than route through a separate visual-review pass; if it turns out to wrap badly on narrow viewports, that's a follow-up fix, not a re-open of this release.
 
 ## v0.64.0 - Add to Review Set
 
