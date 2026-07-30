@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.66.0 - Challenge Quiz Result Clarity
+
+**Status: Released**
+
+Theme: consolidate the standard Challenge Quiz result screen's score/Score Summary/Concept Breakdown into a single coherent outcome hierarchy, closing the gap flagged as a Known Limitation while signing off `v0.65.0`. Reclaims the `v0.66.0` minor-version slot from `Explore Convergence` (renumbered to `v0.67.0`), since this item is small, ungated, and ready now, while Explore's Diagnostic Read gate remains unmet (due after 2026-08-06) — the seventh time a slot has changed hands this way, following `v0.60.0`, `v0.61.0`, `v0.62.0`, `v0.63.0`, `v0.64.0`, and `v0.65.0`.
+
+### Planned Scope
+
+- **Challenge Quiz outcome-area consolidation (frontend only).** Standard Challenge Quiz mode's result branch (`frontend/app/study-packs/[id]/challenge-quiz/page.tsx`, ~line 2548-2639) currently stacks three separate visual blocks that partially duplicate each other: a raw score `<div>` (percentage, correct count, duration, message, performance badge), a separate "Score Summary" `Card` re-displaying the same Correct/Answered/Percentage numbers in a grid, and a separate "Concept Breakdown" `Card`. Board Exam Mode's own result branch in the same file (~line 2331-2379) already solved this with the shared `ScoreReveal` component (`frontend/components/exam-mode/score-reveal.tsx`) plus one Concept Breakdown card — standard mode should converge on the same pattern rather than keep its own separate, more duplicated layout.
+- **`ScoreReveal` needs a third tone.** Currently a closed `tone: "long-exam" | "board-exam"` union; standard Challenge Quiz mode needs its own tone value (e.g. `"challenge-quiz"`) rather than reusing `"board-exam"`'s styling by coincidence.
+- **Resolved dual-metric design:** standard mode has a case Board Exam Mode doesn't — when a session has unanswered questions, it shows both "Answered Accuracy" and "Overall Completion Score." `ScoreReveal` gains an optional subordinate `secondaryMetric` slot for the completion score, while Answered Accuracy remains the primary reveal; existing Board Exam and Long Exam calls omit the slot and retain their existing output.
+
+Anti-drift: presentation-only — no score calculation, concept-breakdown data, or session logic changes; Quick Review and Adaptive Practice result screens are not in scope (this Known Limitation named Challenge Quiz specifically); Board Exam Mode's already-clean branch is the reference pattern to converge toward, not to modify.
+
+### Shipped
+
+- **Challenge Quiz outcome-area consolidation (frontend only).** Standard Challenge Quiz results now use the shared `ScoreReveal` hierarchy for the primary score, correct/answered count, duration, and performance pill, followed by the existing Concept Breakdown card; the duplicated raw score block and separate Score Summary card are removed. Sessions with unanswered questions keep both required metrics in one outcome block through an optional subordinate `secondaryMetric` for Overall Completion Score, with the explanatory copy now positioned directly under the reveal instead of separated by the result message. `ScoreReveal` now has a dedicated `challenge-quiz` tone, while Board Exam and Long Exam omit the optional slot and retain their previous DOM/classes. As a result of adopting the shared component, the performance pill picks up `ScoreReveal`'s existing outline-only style (already live on Board Exam Mode) in place of Challenge Quiz's own filled/tinted badge — a deliberate choice, since filled hue badges read poorly in dark mode; "Good" now renders as a neutral outline like the other non-extreme levels instead of filled blue.
+
 ## v0.65.0 - Study Effectiveness Polish
 
 **Status: Released**
