@@ -1637,7 +1637,7 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
     const toggle = screen.getByRole("button", { name: "View Full Guide" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Start with the foundations.")).not.toBeInTheDocument();
+    expect(screen.getByText("Start with the foundations.")).toBeInTheDocument();
 
     fireEvent.click(toggle);
 
@@ -1648,7 +1648,39 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.click(hideButton);
 
     expect(screen.getByRole("button", { name: "View Full Guide" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Start with the foundations.")).not.toBeInTheDocument();
+    expect(screen.getByText("Start with the foundations.")).toBeInTheDocument();
+  });
+
+  it("shows a one-line teaser of the collapsed companion guide's overview", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: "**Start** with the foundations before moving on.",
+        studyStrategy: null,
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.getByText("Start with the foundations before moving on.")).toBeInTheDocument();
+  });
+
+  it("falls back to Study Strategy for the collapsed teaser when Overview is empty", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      companion: {
+        overview: null,
+        studyStrategy: "Review one chapter per day.",
+        commonMistakes: null,
+        faq: [],
+      },
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
+    expect(screen.getByText("Review one chapter per day.")).toBeInTheDocument();
   });
 
   it("renders the companion after Goal-view readiness content", async () => {

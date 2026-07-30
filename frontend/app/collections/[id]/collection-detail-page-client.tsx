@@ -72,6 +72,7 @@ import {
   CHALLENGE_QUIZ_MODE_SELECTION_ENTRY,
 } from "@/lib/challenge-quiz-entry";
 import { getJustAdoptedNotice } from "@/lib/just-adopted-notice";
+import { stripMarkdownForPreview } from "@/lib/public-note-text";
 import { setCollectionActionNotice } from "@/lib/collection-action-notice";
 import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -1086,6 +1087,7 @@ function CompanionDisplayCard({
       answer: renderableCompanionText(item.answer),
     }))
     .filter((item) => item.question || item.answer);
+  const collapsedTeaser = stripMarkdownForPreview(overview || studyStrategy || commonMistakes);
 
   return (
     <Card className="space-y-4 p-4 sm:p-5">
@@ -1149,6 +1151,8 @@ function CompanionDisplayCard({
 
           <MentorTipsGuideSection mentorTips={mentorTips} />
         </div>
+      ) : collapsedTeaser ? (
+        <p className="line-clamp-1 text-sm text-foreground/60">{collapsedTeaser}</p>
       ) : null}
     </Card>
   );
