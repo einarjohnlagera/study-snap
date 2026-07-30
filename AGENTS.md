@@ -829,13 +829,26 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 
 ### Page Responsibility Rule
 
-- Dashboard = what to do now
-- Library = private workspace
-- Public Library = discovery
-- Public Profile = public showcase
-- Profile = identity
-- Settings = app preferences
-- Do not merge responsibilities casually.
+| Page | Governing question |
+|---|---|
+| Dashboard | What should I do now? |
+| Review Sets (the profile-aware Collections workspace) | What material have I organized into a study journey? |
+| Library | What notes do I already have? |
+| Explore | What material exists that I don't have yet? |
+| Progress | How is my learning progressing? |
+| Companion | What guidance applies to this curated journey? |
+| Public Profile | What learning work do I share publicly? |
+| Profile | Who am I as a learner? |
+| Settings | How should NoteLib behave for me? |
+
+**Locked doctrine (2026-07-30):**
+
+- `/explore` is the single owner of content discovery. No other authenticated page may render an inline discovery catalog, adopt-picker, or public-note browse grid.
+- Other pages may point at Explore with a link or a single pointer card; they may not do Explore's job.
+- A bounded teaser is not discovery when it has a fixed small item count, no filters/paging/sort, no adopt/copy action, and one see-all link.
+- `/public/library` and `/collections/published` remain canonical, separately-addressable routes for deep links, SEO, and anonymous access. This is a navigation-level claim, not a route deletion.
+- `/onboarding` is exempt because it is a temporally scoped first-run wizard, not a persistent navigation page.
+- Treat this as a deliberate, locked product rule rather than an informal convention.
 
 ### Auth Redirect Rule
 
@@ -992,8 +1005,10 @@ Keep app shell grouping:
 
 - Main:
   - Dashboard
+  - Profile-aware review-workspace label resolved through `getCollectionLabels().navLabel`
   - Library
-  - Public Library
+  - Explore
+  - Progress
 - Account:
   - Profile
   - Settings

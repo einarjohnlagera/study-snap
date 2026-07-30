@@ -87,6 +87,26 @@ describe("ExplorePageClient", () => {
     });
   });
 
+  it("tracks the pointer source exactly once across unrelated rerenders", async () => {
+    searchParams = new URLSearchParams({ source: "collections" });
+    const { rerender } = render(<ExplorePageClient />);
+
+    await screen.findByRole("heading", { name: "Explore" });
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "EXPLORE_VIEWED",
+      entityId: null,
+      metadata: { source: "collections", referrerSource: "direct" },
+    });
+
+    searchParams = new URLSearchParams({ tab: "notes", source: "collections" });
+    rerender(<ExplorePageClient />);
+    expect(await screen.findByRole("tab", { name: "Notes" })).toHaveAttribute("aria-selected", "true");
+
+    const explorePageViewCalls = (trackAnalyticsEvent as jest.Mock).mock.calls
+      .filter(([event]) => event.eventType === "EXPLORE_VIEWED");
+    expect(explorePageViewCalls).toHaveLength(1);
+  });
+
   it("does not mount discovery data when the authenticated route guard rejects access", () => {
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReturnValue(false);
 
