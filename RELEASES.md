@@ -1,5 +1,29 @@
 # RELEASES.md - NoteLib
 
+## v0.67.0 - Explore Convergence
+
+**Status: In Progress**
+
+Theme: give signed-in users one nav-level surface ("Explore") to discover both curated Official Review Sets and the public notes library, and let the Exam Hub point straight into an official-set adoption path when one exists for that hub's course/program — closing the "post-signup in-app discovery" gap this release's own gate was written to test, independent of the still-open pre-signup acquisition-channel question.
+
+**Gate override, ratified by the owner 2026-07-30.** This release's stated gate — "proceed only if the Diagnostic Read indicates a discovery problem" — is unmet; Round 2 of the read isn't due until after 2026-08-06. The owner explicitly chose to override and kick off now rather than wait, consistent with this project's established precedent for owner-ratified gate overrides (Knowledge Impact, `v0.62.0`; Challenge Quiz Quota Increase, `v0.61.0` — both shipped ahead of their own data gates on explicit owner reasoning, not silently). Recorded as history, not smoothed over: see `docs/product/ROADMAP.md`'s "Phase 2 — IA / Explore convergence" section and Current Release Baseline for the full ratification note. On record, not a blocker: the 2026-07-24 signup surge that renewed interest in this gate is Facebook/LET-direct-landing traffic — pre-signup acquisition-channel discovery, a mechanism distinct from the post-signup in-app discovery this release actually addresses (`ROADMAP.md` line 213) — if that segment's retention doesn't move regardless of this release, Explore didn't touch the real mechanism, and that's a fact for the eventual Diagnostic Read re-read to surface, not a reason to hold back given the override.
+
+**Checkpoint committed at kickoff, 2026-07-30.** Per this project's `[CHECKPOINT — due YYYY-MM-DD]` discipline (see `ROADMAP.md`'s Backlog Index gate-types note): ship a new `AnalyticsEventType` firing on Explore nav-item engagement (segmented-control tab switch, and adopt/preview actions taken from within Explore or the Exam Hub's new official-set path) in this same release, then re-check 30-45 days after ship (**due 2026-09-13**) whether Explore-driven adopt/preview activity meaningfully exceeds what the old direct `/collections/published` and `/public/library` nav entries drove pre-launch. Kill criterion: if Explore-attributed engagement is flat-to-negligible against the pre-launch baseline, treat that as evidence the discovery gap was not the retention lever, not a reason to keep iterating on this surface without new evidence.
+
+### Planned Scope
+
+- **Nav restructure (frontend only).** `frontend/components/app-shell.tsx` (`MAIN_NAV`) and `frontend/components/mobile-bottom-tab-bar.tsx`: replace the "Public Library" nav item with a new "Explore" item; desktop reorders to Dashboard / Collections (existing dynamic `getCollectionLabels().navLabel`, profile-branched — not a new literal "My Reviews" string, which does not exist anywhere in code today) / Library / Explore / Progress. Mobile's bottom tab bar gets the same "Public Library" → "Explore" swap (owner-confirmed same mapping as desktop), keeping its existing 4-tab shape and backend-persisted show/hide preference (`user.mobileTabBarEnabled`) untouched.
+- **New `/explore` page (frontend only).** Segmented control compositing the existing `/collections/published` (Official Review Set catalog) and `/public/library` (public notes library) content, plus a pointer card into the Exam Hub index. `/collections/published` and `/public/library` remain live as real, separately-addressable routes (deep links, SEO) — `/explore` is a nav-level composite, not a new canonical content URL.
+- **`PlanPicker` extraction (frontend only).** Currently a private, unexported function component inside `frontend/app/progress/progress-report-client.tsx:322`, used only at line 824 in the same file. Extract into a shared component (preserving its existing `?collectionId=` behavior unchanged) so Explore's adopt flow can reuse it rather than rebuilding adopt UI from scratch.
+- **`/exam/[slug]` additive official-set check (frontend + backend-adjacent).** `frontend/app/exam/[slug]/page.tsx` currently resolves public notes only via `getServerPublicNotesByCoursePrograms`. Add: resolve the hub's `coursePrograms` array against published Official Review Sets, looping the backend's existing `courseProgram`-exact-match-only `NoteCollectionController.listPublic`/`NoteCollectionService.listPublic` (confirmed: no subject-level or fuzzy matching exists — the additive check can only honestly claim courseProgram-exact matching, matching the same false-precision constraint already documented on the `v0.64.0` Ask-Companion-scoping Known Limitation). A match adds a preview+adopt path reusing the extracted `PlanPicker`.
+- **Explore-engagement `AnalyticsEventType`.** New event(s) covering segmented-control tab switches and adopt/preview actions taken from Explore or the Exam Hub's new official-set path — the checkpoint above depends on this shipping in the same release, not being added later.
+
+Anti-drift: Library stays untouched and structurally separate from Collections — Explore composites, it does not merge, the two catalogs. Adopt-sets-Primary-default is unchanged; this release does not resolve the open Primary-Review-Set-vs-Study/Exam-Focus philosophy question (flagged, not fixed, per the original source doc). No literal "My Reviews" string is introduced anywhere — the Collections nav item keeps its existing profile-dependent dynamic label. Progress's promotion to first-class nav (no `← Dashboard` back link) already shipped in `v0.59.0` and is not re-touched here.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.66.2 - Card Surface Token Fix
 
 **Status: Released**
