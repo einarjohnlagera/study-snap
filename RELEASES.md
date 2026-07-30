@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.65.0 - Study Effectiveness Polish
+
+**Status: In Progress**
+
+Theme: close out the remaining, still-valid candidates from the 2026-07-22 Study Effectiveness/UI Polish/Pricing Fit consultation — surfacing what a Study Pack actually contains before a learner commits, cleaning up the card stack that's accreted on Review Set Detail and the quiz result screens across many separate releases, making the collapsed Companion discoverable, and tagging why Adaptive Practice picked a given question. Reclaims the `v0.65.0` minor-version slot from `Explore Convergence` (renumbered to `v0.66.0`), since this item is small, ungated, and ready now, while Explore's Diagnostic Read gate remains unmet (due after 2026-08-06) — the sixth time a slot has changed hands this way, following `v0.60.0`, `v0.61.0`, `v0.62.0`, `v0.63.0`, and `v0.64.0`.
+
+### Planned Scope
+
+- **Study Pack scope surfacing (backend + frontend).** Concept count, quiz length, and rough review time on the Summary tab and on library note cards, before a learner commits to a session. `StudyPackEntity.keyConcepts`/`.quiz` already carry this data for the Summary tab; the note-list response DTO needs a small addition to carry counts for the card view too.
+- **Card-accretion layout pass on Review Set Detail and quiz result screens (frontend only, Codex).** Presentation-only reorder/consolidation across the detail page and all 3 result-screen variants (Quick Review, Challenge Quiz, Adaptive Practice) — no logic change. The stack has grown since the original 2026-07-22 audit (Ask Companion panel, GoalNudgeCard, TwiceMissedAskCompanionCard all added in v0.63.0).
+- **Collapsed-Companion teaser (frontend only).** A one-line overview excerpt in `CompanionDisplayCard`'s collapsed state, so the feature isn't literally invisible until a learner clicks the toggle — without reversing the deliberate collapse-by-default decision.
+- **Adaptive Practice per-question rationale tag (backend + frontend, Codex).** A new selection-provenance field threaded from `QuickReviewAdaptivePracticeService`'s weak/due-concept selection logic through to `QuizItem`, rendered per-question during the session (e.g. "Reviewing: Ohm's Law — missed last time").
+
+Anti-drift: none of these four touch `EXAM_MODES.md`'s locked no-mid-exam-coaching rule — the rationale tag is static deterministic metadata, not LLM-driven, so it doesn't cross into "interactive AI"; the layout pass is presentation-only, no card removed or logic changed; Companion's collapse-by-default decision (Coach vs. Companion doctrine) stays, only the collapsed-state emptiness is fixed. Two other candidates from the same original consultation are already resolved and explicitly out of scope: Note Detail tab order (locked decision, nudge already shipped) and Key Concepts readiness sort (already shipped) — corrected in `docs/product/ROADMAP.md`'s Backlog Index as part of this kickoff.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.64.0 - Add to Review Set
 
 **Status: Released**
