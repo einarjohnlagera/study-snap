@@ -15,7 +15,8 @@ Anti-drift: presentation + doc-only — no new backend field, no new threshold c
 
 ### Shipped
 
-_(nothing yet)_
+- **Doc fix: formalized the Goal-detail readiness exception.** `AGENTS.md:142` and `docs/features/collections.md:481` now name `GoalDetailView`'s child Subject-plan cards as a second, deliberate exception to the no-mastery rule — the `overallReadinessPercentage`/progress-bar display has been live there since the original Goal → Subject hierarchy feature, just never documented as sanctioned.
+- **Overdue color-warning on child Subject-plan cards.** `collection-detail-page-client.tsx`'s `GoalDetailView` now renders the `dueConcepts` segment of each child card's stats line in the existing amber-warning color (`text-amber-700 dark:text-amber-300`) when `dueConcepts > 0`; `0` stays muted. Presence-based only, matching precedent from this file's own `getNoteExecutionStatus`. Verified in both light and dark mode via a real render.
 
 ## v0.66.0 - Challenge Quiz Result Clarity
 

@@ -478,7 +478,7 @@ Aggregation rules:
 - Empty plans, plans with notes but no Study Packs, and never-practiced Study Packs are valid `200` responses, not errors.
 - No new persisted readiness field, generated content, quota category, AI call, trend, snapshot, or batch/progress infrastructure is added.
 
-This is the deliberate v0.33.0 reversal of the older "Study Plans do not duplicate Progress" rule, scoped to the dedicated readiness detail route only. Collection detail execution rows, collection list cards, published-plan cards, and public source plans must still not show subject mastery percentages, milestones, goals, streaks, or weakest-subject routing.
+This is the deliberate v0.33.0 reversal of the older "Study Plans do not duplicate Progress" rule, originally scoped to the dedicated readiness detail route only. **A second, narrower exception was formalized in v0.66.1:** `GoalDetailView`'s child Subject-plan cards (`frontend/app/collections/[id]/collection-detail-page-client.tsx`) show each child's `overallReadinessPercentage` and a readiness progress bar — shipped with the original Goal → Subject hierarchy feature but not documented as an exception until v0.66.1 found the gap while scoping the due-color addition below. It also shows the existing `mastered · due · not started` count line, where the due segment renders in a warning color when `dueConcepts > 0` (presence-based, no magnitude threshold). Both exceptions exist because a Goal's own detail page is the owner reviewing their own curriculum, not a list/browse surface. Collection list cards, published-plan cards, public source plans, and per-note execution rows must still not show subject mastery percentages, milestones, goals, streaks, or weakest-subject routing.
 
 ### Get Note Concept Counts
 
