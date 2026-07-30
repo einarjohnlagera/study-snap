@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.66.2 - Card Surface Token Fix
+
+**Status: Released**
+
+Theme: fix `bg-card`, a Tailwind utility with 23 literal usages across 9 files (22 rendered elements) that has silently resolved to no output since it was first used, because no `--color-card` token was ever registered in `globals.css`.
+
+### Planned Scope
+
+- **Register `--color-card` (frontend only, `frontend/app/globals.css`).** Alias `--card` to `--background` in both `:root`/`.theme-light` and `.theme-dark`/`.dark`, and register `--color-card: var(--card)` in the `@theme inline` block, so `bg-card` finally compiles. `--background` was chosen over `--surface-alt` because standalone nested panels — `ScoreReveal` on the Challenge Quiz result screen and `public-flashcards-preview.tsx` — sit inside a parent `Card` (`bg-surface-alt`); aliasing `--card` to `--surface-alt` would flatten them into a same-tone stack with no visible separation, while `--background` gives them real contrast against their container. (Two other call sites, `challenge-quiz/page.tsx:2090` and `long-exam/page.tsx:1090`, apply `bg-card` directly on a `Card` component alongside `Card`'s own default `bg-surface-alt` — an independent audit found this does **not** actually override the background: `cn()` is a plain string join with no `tailwind-merge`, and the compiled stylesheet places `.bg-card` before `.bg-surface-alt`, so equal-specificity cascade order means `bg-surface-alt` wins regardless of which token `--card` aliases to. Confirmed directly against the live compiled CSS. This doesn't change which token is correct — the standalone-panel evidence above still holds — but the original rationale citing these two sites as a "preserved override" was wrong and has been removed.)
+- **Not a uniform no-op-to-no-op change.** Most of the 23 usages are visually unchanged (previously transparent/border-only, now filled with `--background`, which reads the same in an un-nested context). Two are genuine, verified-good changes: `quiz-generation-overlay.tsx`'s modal panel goes from a translucent blur-bleed-through card to a solid, legible dialog panel (checked in both themes via a real render — clean in both), and nested panels (`ScoreReveal`, `public-flashcards-preview`) gain real separation from their container instead of blending into it.
+
+Anti-drift: CSS token registration only — no component logic, className, or markup changes; all 23 call sites pick up the fix automatically with no per-site edits.
+
+### Shipped
+
+- **Registered `--color-card` in `frontend/app/globals.css`, aliased to `--background`.** `bg-card` now compiles across all 23 usages (22 rendered elements) with no per-site changes. See Planned Scope above for the corrected token-choice rationale and the two genuinely-changed cases (verified in both themes).
+- **Backlog Index corrected:** the `bg-card` no-op row now reflects the real count (23 usages across 9 files, 22 elements) and the corrected reasoning.
+- **Independent audit caught a factual error before signoff:** the original scoping claimed two `Card`+`bg-card` call sites were "deliberately overriding" `Card`'s default background, and that this fix "preserved" that override. A fresh audit found the override never actually applied (`cn()` has no `tailwind-merge`, and compiled-CSS order decides equal-specificity ties, not JSX class order) — confirmed directly against the live stylesheet. The token choice itself was unaffected (it rests on separate, valid nested-panel evidence), but the false claim was removed rather than left standing.
+
 ## v0.66.1 - Goal Detail Due-Concept Signal
 
 **Status: Released**
