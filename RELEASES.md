@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.66.1 - Goal Detail Due-Concept Signal
+
+**Status: In Progress**
+
+Theme: give a Goal's child Subject-plan cards a lightweight visual cue for concepts due for spaced-repetition review, and formalize an existing undocumented anti-drift exception found while scoping it.
+
+### Planned Scope
+
+- **Doc fix: formalize the Goal-detail readiness exception (docs only).** `GoalDetailView`'s child Subject-plan cards (`frontend/app/collections/[id]/collection-detail-page-client.tsx:1201-1217`) have shown `overallReadinessPercentage` plus a progress bar since the original Goal → Subject hierarchy feature (2026-06-30) — a mastery-percentage display that `AGENTS.md:142` and `docs/features/collections.md:481`'s "no-mastery rule" only documented as excepted for the dedicated `/progress?collectionId={id}` route. Found while scoping the due-color item below; not a behavior change, corrects the docs to name this second, already-shipped exception explicitly.
+- **Overdue color-warning on child Subject-plan cards (frontend only).** `child.dueConcepts` is already rendered as plain text in the same card's stats line (`collection-detail-page-client.tsx:1218-1220`) with no color coding. When `dueConcepts > 0`, that segment renders in the existing amber-warning color already used elsewhere in this file for `getNoteExecutionStatus`'s "Needs Study Pack" state; `0` stays muted. Presence-based only, not a magnitude threshold — avoids inventing a new threshold system.
+
+Anti-drift: presentation + doc-only — no new backend field, no new threshold constant, no change to how `dueConcepts` or `overallReadinessPercentage` are computed; the due-color treatment is additive to the card already carrying a mastery signal, not a departure into new "monitoring dashboard" territory on a previously metadata-only surface.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.66.0 - Challenge Quiz Result Clarity
 
 **Status: Released**
