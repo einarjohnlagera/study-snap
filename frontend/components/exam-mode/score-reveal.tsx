@@ -1,15 +1,26 @@
 import { cn } from "@/lib/utils";
 
-export type ScoreRevealTone = "long-exam" | "board-exam";
+export type ScoreRevealTone = "long-exam" | "board-exam" | "challenge-quiz";
+
+type ScoreRevealSecondaryMetric = {
+  label: string;
+  percentage: number;
+  description?: string;
+};
 
 type ScoreRevealProps = {
   percentage: number;
   label: string;
   supportingLine?: string;
+  secondaryMetric?: ScoreRevealSecondaryMetric;
   performanceLevel?: string | null;
   tone?: ScoreRevealTone;
   className?: string;
 };
+
+function clampPercentage(percentage: number): number {
+  return Math.max(0, Math.min(100, Math.round(percentage)));
+}
 
 function resolvePerformancePillClass(performanceLevel: string): string {
   if (performanceLevel === "Excellent") {
@@ -28,11 +39,13 @@ export function ScoreReveal({
   percentage,
   label,
   supportingLine,
+  secondaryMetric,
   performanceLevel,
   tone = "long-exam",
   className,
 }: ScoreRevealProps) {
-  const clamped = Math.max(0, Math.min(100, Math.round(percentage)));
+  const clamped = clampPercentage(percentage);
+  const secondaryClamped = secondaryMetric ? clampPercentage(secondaryMetric.percentage) : null;
   const ariaLabel = `${label}, ${clamped} percent`;
 
   return (
@@ -58,6 +71,25 @@ export function ScoreReveal({
         <p className="max-w-md text-sm leading-relaxed text-foreground/70">
           {supportingLine}
         </p>
+      ) : null}
+      {secondaryMetric ? (
+        <div
+          data-testid="score-reveal-secondary-metric"
+          className="mt-2 space-y-1 border-t border-border/70 pt-4"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/50">
+            {secondaryMetric.label}
+          </p>
+          <p className="text-3xl font-semibold tracking-tight tabular-nums text-foreground/70 sm:text-4xl">
+            {secondaryClamped}
+            <span className="ml-0.5 text-xl font-medium text-foreground/45 sm:text-2xl">%</span>
+          </p>
+          {secondaryMetric.description ? (
+            <p className="text-xs leading-relaxed text-foreground/55">
+              {secondaryMetric.description}
+            </p>
+          ) : null}
+        </div>
       ) : null}
       {performanceLevel ? (
         <span

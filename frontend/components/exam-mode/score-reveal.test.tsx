@@ -40,6 +40,31 @@ describe("ScoreReveal", () => {
     expect(screen.queryByText("Needs Improvement")).not.toBeInTheDocument();
   });
 
+  it("renders a subordinate secondary metric when provided", () => {
+    render(
+      <ScoreReveal
+        percentage={80}
+        label="Answered Accuracy"
+        secondaryMetric={{
+          label: "Overall Completion Score",
+          percentage: 60,
+          description: "6 correct of 10 total",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Overall Completion Score")).toBeInTheDocument();
+    expect(screen.getByTestId("score-reveal-secondary-metric")).toHaveTextContent("60%");
+    expect(screen.getByText("6 correct of 10 total")).toBeInTheDocument();
+  });
+
+  it("renders no secondary metric markup when omitted", () => {
+    render(<ScoreReveal percentage={80} label="Score" />);
+
+    expect(screen.queryByText("Overall Completion Score")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("score-reveal-secondary-metric")).not.toBeInTheDocument();
+  });
+
   it("clamps percentages outside 0-100", () => {
     const { rerender } = render(<ScoreReveal percentage={120} label="Score" />);
     expect(screen.getByRole("heading")).toHaveTextContent("100");
@@ -51,5 +76,10 @@ describe("ScoreReveal", () => {
   it("exposes the tone via data-tone for downstream styling", () => {
     render(<ScoreReveal percentage={50} label="Score" tone="board-exam" />);
     expect(screen.getByTestId("exam-score-reveal")).toHaveAttribute("data-tone", "board-exam");
+  });
+
+  it("supports the Challenge Quiz tone", () => {
+    render(<ScoreReveal percentage={50} label="Score" tone="challenge-quiz" />);
+    expect(screen.getByTestId("exam-score-reveal")).toHaveAttribute("data-tone", "challenge-quiz");
   });
 });
