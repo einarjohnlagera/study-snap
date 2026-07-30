@@ -42,7 +42,7 @@ Rules:
 | Sub-page | Destination | Label |
 |----------|-------------|-------|
 | Note Details | Library | Library |
-| Public Note Details | Public Library | Public Library |
+| Public Note Details | Public Library, or Explore if reached via `/explore`'s Notes tab | `Public Library`, or `Explore` when the stored return path starts with `/explore` (`PublicLibraryBackLink`, `frontend/components/notes/public-library-back-link.tsx`) |
 | Quiz pages (Quick Review, Challenge Quiz, Adaptive Practice) | Note Details | Note |
 | Create Note | Library | Library |
 | Edit Note | Note Details | Note |

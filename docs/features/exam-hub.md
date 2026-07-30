@@ -81,7 +81,7 @@ When an exact course/program match exists, the hub shows an `Official Review Set
 
 - Preview is public and requires no profile type or authenticated session.
 - Authenticated learners can adopt through the existing collection adoption endpoints.
-- Anonymous adoption routes through `/auth?mode=signup&intent=exam&exam={slug}&redirect=/exam/{slug}`. The auth page persists the existing `notelib-exam-intent` cookie and returns the visitor to the hub after authentication; it never attempts an authenticated adoption request while signed out.
+- Anonymous adoption routes through `/auth?mode=signup&intent=exam&exam={slug}&redirect=/exam/{slug}`; it never attempts an authenticated adoption request while signed out. The `redirect` param only takes effect for a *returning* visitor who switches to login — `resolvePostLoginDestination` sends a brand-new signup through `/verify-email`/`/onboarding` first, so `redirect` is dropped on the primary `mode=signup` path. The existing `notelib-exam-intent` cookie, not `redirect`, is what actually carries exam context through that path.
 - This section is additive. It does not replace public notes, alter structured-data membership, or make the Exam Hub dependent on the collection lookup succeeding.
 
 ## Product Value Strip

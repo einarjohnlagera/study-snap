@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PublishedPlansPageClient } from "@/app/collections/published/published-plans-page-client";
+import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { PageHeader } from "@/components/page-header";
 import { PublicLibraryPageClient } from "@/components/notes/public-library-page-client";
 import { Card } from "@/components/ui/card";
@@ -61,6 +62,7 @@ export function ExplorePageClient() {
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <AnalyticsPageViewTracker eventType="EXPLORE_VIEWED" />
       <PageHeader
         eyebrow="DISCOVER"
         title="Explore"

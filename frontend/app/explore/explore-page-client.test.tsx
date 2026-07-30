@@ -64,7 +64,27 @@ describe("ExplorePageClient", () => {
     render(<ExplorePageClient />);
 
     expect(await screen.findByRole("tab", { name: "Notes" })).toHaveAttribute("aria-selected", "true");
-    expect(trackAnalyticsEvent).not.toHaveBeenCalled();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "EXPLORE_VIEWED",
+      entityId: null,
+      metadata: { referrerSource: "direct" },
+    });
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "EXPLORE_TAB_SWITCHED" }),
+    );
+  });
+
+  it("fires a single EXPLORE_VIEWED page-view event on mount", async () => {
+    render(<ExplorePageClient />);
+
+    await screen.findByRole("heading", { name: "Explore" });
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledTimes(1);
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "EXPLORE_VIEWED",
+      entityId: null,
+      metadata: { referrerSource: "direct" },
+    });
   });
 
   it("does not mount discovery data when the authenticated route guard rejects access", () => {

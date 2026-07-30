@@ -62,7 +62,6 @@ export type ActionIconName =
   | "private"
   | "profile"
   | "progress"
-  | "publicLibrary"
   | "public"
   | "quickReview"
   | "challengeQuiz"
@@ -99,7 +98,6 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   private: Lock,
   profile: User,
   progress: BarChart2,
-  publicLibrary: Globe,
   public: Globe,
   quickReview: Zap,
   challengeQuiz: Trophy,
