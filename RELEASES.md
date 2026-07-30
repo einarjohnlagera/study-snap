@@ -2,7 +2,7 @@
 
 ## v0.66.1 - Goal Detail Due-Concept Signal
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: give a Goal's child Subject-plan cards a lightweight visual cue for concepts due for spaced-repetition review, and formalize an existing undocumented anti-drift exception found while scoping it.
 
