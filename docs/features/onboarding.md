@@ -109,13 +109,13 @@ after adoption. All other learners see the unchanged input-method choices below.
 
 Users choose one path:
 
-- `Generate a note`
+- `Create a note`
 - `Write or paste my own note`
 
-`Generate a note` path:
+`Create a note` path:
 
 - enter a topic
-- click `Generate Note`
+- click `Create a Note`
 - NoteLib creates an editable note draft first
 - user then clicks `Generate Study Pack →`
 
@@ -127,7 +127,7 @@ Users choose one path:
 Important:
 
 - onboarding note generation is single-use and guided
-- onboarding does not expose standalone iteration controls like `Generate Again`
+- onboarding does not expose standalone iteration controls like `Create Again`
 - note-generation gating still applies here
 
 ### Step 4 — Study Pack Generation

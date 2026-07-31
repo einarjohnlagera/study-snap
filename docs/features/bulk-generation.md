@@ -2,7 +2,7 @@
 
 ## Goal
 
-Bulk Generation lets an authenticated user enter one subject and a list of topics, then queue one generated note plus one Study Pack per topic. Each topic is a generation seed, matching the Note Create `Generate from topic` flow. The AI generates the note content and later refines the note title and tags.
+Bulk Generation lets an authenticated user enter one subject and a list of topics, then queue one generated note plus one Study Pack per topic. Each topic is a generation seed, matching the Note Create `Create from topic` flow. The AI generates the note content and later refines the note title and tags.
 
 ## Access
 
@@ -96,14 +96,14 @@ The batch subject wins. Bulk Study Pack completion applies the AI-refined title 
 - ADMIN bulk generation bypasses note-generation quota, Study Pack quota, per-user AI rate limits, and their usage counters.
 - The bypass is local to bulk orchestration and its Study Pack call. Shared quota services do not contain an ADMIN exemption.
 - Non-admin bulk generation hard-caps note generations at submit time. If accepted topics exceed remaining monthly note generations, the server returns HTTP 422 and no batch is queued or receipt row is created.
-- Non-admin bulk note-content generation uses `NoteGenerationService.generateFromTopic`, so monthly note-generation quota and usage accounting match the single-note Generate from topic path.
+- Non-admin bulk note-content generation uses `NoteGenerationService.generateFromTopic`, so monthly note-generation quota and usage accounting match the single-note Create from topic path.
 - Study Pack shortfall is allowed at submit time. Those notes can still be created with content and remain drafts when Study Pack generation cannot start.
 - If note-generation quota runs out before a note row is created, the topic is written to `quotaBlockedTopics`. If a note row exists and a later make-public or Study Pack enqueue step fails, the topic is not added to any receipt failure list because the Library row is visible.
 - Throttled sequential fan-out protects the LLM provider while Study Pack workers continue on the existing executor.
 
 ## Discoverability
 
-The Library Create menu exposes `Bulk generate` next to normal note creation and file import. The single Note Create `Generate from topic` panel includes a persistent inline link, `Have a list of topics? Generate them all at once`, pointing to `/library/bulk-generate`. This is a navigational affordance, not a one-time guidance tip.
+The Library Create menu exposes `Bulk generate` next to normal note creation and file import. The single Note Create `Create from topic` panel includes a persistent inline link, `Have a list of topics? Generate them all at once`, pointing to `/library/bulk-generate`. This is a navigational affordance, not a one-time guidance tip.
 
 Help includes a deep-linkable `Bulk Generation` guide at `/help#bulk-generate` covering what one topic produces, background Library arrival, quota behavior, and when retry is appropriate.
 

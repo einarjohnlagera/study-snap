@@ -384,7 +384,7 @@ describe("OnboardingPage", () => {
     expect(await screen.findByText("You're preparing for LET.")).toBeInTheDocument();
     expect(await screen.findByText("2 of 3 notes practice-ready")).toBeInTheDocument();
     expect(screen.queryByText("How do you want to start?")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Generate Note" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create a Note" })).not.toBeInTheDocument();
     expect(screen.getByText("Step 5 of 5")).toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole("button", { name: "Start this Review Set" }));
@@ -464,7 +464,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate a note" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create a note" })).toBeInTheDocument();
     expect(listPublicStudyPlans).not.toHaveBeenCalled();
   });
 
@@ -533,19 +533,19 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
     fireEvent.change(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion..."), {
       target: { value: "Newton's Laws of Motion" },
     });
     expect(screen.getByRole("button", { name: "Generate Study Pack →" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /Generate Note/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Create a Note/ }));
 
     const generatedNoteEditor = await screen.findByPlaceholderText("Your generated note will appear here.");
     expect(generatedNoteEditor).toHaveValue("Newton's Laws study content");
     expect(
       screen.getByText("Your note is ready. You can edit it before generating your Study Pack."),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Generate Again" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create Again" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Regenerate Note/i })).not.toBeInTheDocument();
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
 
@@ -638,11 +638,11 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
     fireEvent.change(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion..."), {
       target: { value: "Newton's Laws of Motion" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Generate Note/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Create a Note/ }));
 
     const generatedNoteEditor = await screen.findByPlaceholderText("Your generated note will appear here.");
     fireEvent.change(generatedNoteEditor, {
@@ -673,7 +673,7 @@ describe("OnboardingPage", () => {
     fillLearningProfile();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
     expect(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion...")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Paste or write your notes here...")).not.toBeInTheDocument();
 
@@ -720,10 +720,10 @@ describe("OnboardingPage", () => {
     expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
     fillLearningProfile();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
 
     expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create a Note" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Get Plus" }));
 

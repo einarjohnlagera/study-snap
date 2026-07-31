@@ -121,15 +121,15 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 
 ## Note import flow
 
-## Generate note from topic
+## Create a note from topic
 
 Create Note now includes a lightweight note-generation assist before save.
 
 Rules:
 
-- users can choose `Write your own note` or `Generate from topic`
+- users can choose `Write your own note` or `Create from topic`
 - topic input placeholder: `Create a note about Newton's Laws of Motion...`
-- CTA: `Generate Note`
+- CTA: `Create a Note`
 - backend endpoint: `POST /api/notes/generate`
 - response fills the editor `Content` field
 - generated note content remains editable before save
