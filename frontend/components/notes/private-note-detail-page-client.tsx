@@ -347,7 +347,7 @@ function StudyPackFailureCard({
         onClick={onRetry}
         disabled={retrying}
         action="studyPack"
-        label={retrying ? "Retrying..." : "Retry Generate"}
+        label={retrying ? "Retrying..." : "Retry Generation"}
         showTextOnMobile
       />
     </Card>
@@ -2123,7 +2123,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         loading={generating}
                         loadingText={hasGenerationFailed ? "Retrying..." : "Generating..."}
                         action="studyPack"
-                        label={hasGenerationFailed ? "Retry Generate" : "Generate Study Pack"}
+                        label={hasGenerationFailed ? "Retry Generation" : "Generate Study Pack"}
                         showTextOnMobile
                       />
                     ) : note?.generatedQuiz ? (
@@ -2164,7 +2164,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       loading={generating}
                       loadingText={hasGenerationFailed ? "Retrying..." : "Generating..."}
                       action="studyPack"
-                      label={hasGenerationFailed ? "Retry Generate" : "Generate Study Pack"}
+                      label={hasGenerationFailed ? "Retry Generation" : "Generate Study Pack"}
                       showTextOnMobile
                     />
                   ) : (
@@ -2263,7 +2263,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 {isGeneratingStudyPack ? (
                   <p className="text-sm text-foreground/75">Key concepts are being generated from your note.</p>
                 ) : hasGenerationFailed ? (
-                  <p className="text-sm text-foreground/75">Generation did not complete, so key concepts are not available yet. Retry Generate when you are ready.</p>
+                  <p className="text-sm text-foreground/75">Generation did not complete, so key concepts are not available yet. Retry generation when you are ready.</p>
                 ) : isDraft || note.keyConcepts.length === 0 ? (
                   <p className="text-sm text-foreground/75">No key concepts yet. Generate a Study Pack to extract the most important ideas from this note.</p>
                 ) : (
@@ -2343,7 +2343,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               ) : hasGenerationFailed ? (
                 <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
                   <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
-                  <p className="text-sm text-foreground/75">Generation did not complete, so the quiz is not available yet. Retry Generate when you are ready.</p>
+                  <p className="text-sm text-foreground/75">Generation did not complete, so the quiz is not available yet. Retry generation when you are ready.</p>
                 </Card>
               ) : isDraft ? (
                 <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
