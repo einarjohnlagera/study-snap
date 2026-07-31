@@ -92,6 +92,20 @@ describe("ExamHubOfficialReviewSets", () => {
     expect(await screen.findByRole("button", { name: /continue this/i })).toBeInTheDocument();
   });
 
+  it("fails open to Start on a malformed-but-200 (non-array) collections response", async () => {
+    // Same bug class as server-public-study-plans.ts's Array.isArray() fix shipped earlier in
+    // this release: a valid-JSON, non-array 200 response used to pass the `as` cast unchecked and
+    // throw uncaught inside `personalCollections.find(...)`, crashing this anonymous page's render.
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM" });
+    (getAccessToken as jest.Mock).mockReturnValue("valid-token");
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ error: "unexpected shape" }) });
+
+    render(<ExamHubOfficialReviewSets exam={exam} plans={[plan]} />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(await screen.findByRole("button", { name: /start this/i })).toBeInTheDocument();
+  });
+
   it("fails open to Start when the personal-collections lookup rejects", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM" });
     (getAccessToken as jest.Mock).mockReturnValue("valid-token");

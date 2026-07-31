@@ -65,6 +65,10 @@ describe("ExplorePageClient", () => {
     const selectedTab = await screen.findByRole("tab", { name: "Official Collections" });
     expect(selectedTab.className).toContain("bg-blue-600");
     expect(selectedTab.className).not.toContain("bg-background");
+    // The focus ring (ring-blue-600) now matches the selected tab's own fill color, so without an
+    // offset the ring becomes invisible against the tab it's supposed to highlight — a coupling a
+    // future fill-color change could easily reintroduce without this assertion catching it.
+    expect(selectedTab.className).toContain("focus-visible:ring-offset-2");
   });
 
   it("renders both independent discovery sources with Review Sets selected by default", async () => {
