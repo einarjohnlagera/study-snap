@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.67.1 - Explore Convergence Follow-ups
+
+**Status: In Progress**
+
+Theme: fix three `v0.67.1`-candidate findings logged as Known Limitations at `v0.67.0` signoff — Explore's hardcoded "Review Sets" tab label colliding with `BOARD_EXAM`'s Collections nav label, Exam Hub's official-set card hardcoding `adoptedCollection={null}`, and the zero-note Dashboard's two stacked Explore CTAs.
+
+### Planned Scope
+
+- **Explore tab label collision (frontend only).** `getCollectionLabels()` already exists for exactly this profile-branching problem — route Explore's segmented-control label through it (or otherwise disambiguate) instead of the hardcoded "Review Sets" string, so `BOARD_EXAM` profiles no longer see the same label point at two different destinations (personal Collections from nav, public Official Review Set catalog from inside Explore).
+- **Exam Hub official-set card `adoptedCollection` (frontend only).** Resolve the real `adoptedCollection` value the same way the `/collections/published` sibling caller does, instead of hardcoding `null`, so an already-adopted signed-in visitor sees "Continue" instead of "Start" and doesn't re-trigger the (idempotent) adopt call.
+- **Zero-note Dashboard duplicate Explore CTAs (frontend only).** `DashboardEmpty`'s "start from a ready-made plan instead" and `DashboardStudyPlanSection`'s pointer card both link to the identical `/explore?source=dashboard` and now stack directly on top of each other. Needs a product call on which CTA wins before implementing.
+
+Anti-drift: all three are targeted fixes to `v0.67.0`-shipped code — no new surfaces, no scope beyond the three logged findings.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.67.0 - Explore Convergence
 
 **Status: Released**
