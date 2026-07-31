@@ -147,6 +147,20 @@ describe("PublishedPlansPage", () => {
     expect(listPublicStudyPlans).toHaveBeenCalledWith({});
   });
 
+  it("threads discoveryMetadata through to each plan card's preview/adopt analytics", async () => {
+    render(
+      <PublishedPlansPageClient embedded discoverySource="explore" discoveryMetadata={{ pointerSource: "dashboard" }} />,
+    );
+
+    const previewButtons = await screen.findAllByRole("button", { name: /Preview this plan/ });
+    fireEvent.click(previewButtons[0]);
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "EXPLORE_OFFICIAL_SET_PREVIEWED",
+      metadata: { pointerSource: "dashboard", source: "explore" },
+    }));
+  });
+
   it("shows Continue for an already-adopted plan and Start for the rest", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       { ...planOne, id: "personal-1", visibility: "PRIVATE", sourcePlanId: "source-plan-1" },

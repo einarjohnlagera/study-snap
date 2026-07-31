@@ -269,4 +269,25 @@ describe("PublicStudyPlanCard", () => {
     expect(onSignedOutAdopt).toHaveBeenCalledTimes(1);
     expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&redirect=%2Fexplore");
   });
+
+  it("preserves discoveryMetadata's pointerSource alongside discoverySource's own `source` key", async () => {
+    render(
+      <PublicStudyPlanCard
+        plan={leafPlan}
+        adoptedCollection={null}
+        canAdopt={false}
+        discoverySource="explore"
+        discoveryMetadata={{ pointerSource: "dashboard" }}
+        signedOutHref="/auth"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview this plan · 3 notes" }));
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "EXPLORE_OFFICIAL_SET_PREVIEWED",
+      entityId: "source-plan-1",
+      metadata: { pointerSource: "dashboard", source: "explore" },
+    });
+  });
 });
