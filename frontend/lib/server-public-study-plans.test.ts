@@ -65,4 +65,25 @@ describe("getServerPublicStudyPlansByCoursePrograms", () => {
       plan("surgical", "Medical – Surgical Nursing"),
     ]);
   });
+
+  it("degrades to an empty result instead of crashing on a malformed but 200-status response", async () => {
+    // A valid-JSON, non-array 200 response used to throw uncaught downstream (`result.value.forEach`
+    // assumed an array), crashing the anonymous, SEO-relevant Exam Hub page's server render.
+    (globalThis.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ error: "unexpected shape" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [plan("surgical", "Medical – Surgical Nursing")],
+      });
+
+    await expect(getServerPublicStudyPlansByCoursePrograms([
+      "Nursing",
+      "Medical – Surgical Nursing",
+    ])).resolves.toEqual([
+      plan("surgical", "Medical – Surgical Nursing"),
+    ]);
+  });
 });

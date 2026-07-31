@@ -286,6 +286,25 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByTestId("note-count-pill")).toHaveTextContent("1 of 1 notes");
   });
 
+  it("resolves an arriving slugified courseProgram URL param back to its real display value in the chip", async () => {
+    // Regression coverage for the v0.67.1 DashboardCommunityNotesSection fix: confirms the
+    // producer side (slugifying before building the URL) actually round-trips through
+    // resolvePublicLibraryValueBySlug on arrival, not just that listPublicNotes receives a slug.
+    currentSearch = "?tab=notes&courseProgram=medical-surgical-nursing";
+    pathnameMock.mockReturnValue("/explore");
+    (listCoursePrograms as jest.Mock).mockResolvedValue(["Medical – Surgical Nursing", "PNLE"]);
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "note-1", courseProgram: "Medical – Surgical Nursing" }),
+    ]));
+
+    render(<PublicLibraryPageClient basePath="/explore" embedded />);
+
+    expect(await screen.findByText("Course: Medical – Surgical Nursing")).toBeInTheDocument();
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({
+      courseProgram: "medical-surgical-nursing",
+    }));
+  });
+
   it("shows course/program chips from server facets and applies the canonical filter URL", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({ id: "pnle-1", courseProgram: "PNLE" }),

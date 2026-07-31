@@ -62,7 +62,10 @@ describe("DashboardCommunityNotesSection", () => {
     expect(url.pathname).toBe("/explore");
     expect(url.searchParams.get("tab")).toBe("notes");
     expect(url.searchParams.get("source")).toBe("dashboard");
-    expect(url.searchParams.get("courseProgram")).toBe(COURSE_PROGRAM);
+    // Slugified, matching every other buildExploreUrl/buildPublicLibraryUrl caller's courseProgram
+    // filter — this used to be the raw, unslugified value, so the arriving filter chip never
+    // displayed on Explore's Notes tab and a no-op Filters-modal re-submit silently dropped it.
+    expect(url.searchParams.get("courseProgram")).toBe("medical-surgical-nursing");
     expect(listPublicNotes).toHaveBeenCalledWith({ courseProgram: COURSE_PROGRAM, size: 4 });
   });
 

@@ -17,6 +17,7 @@ import {
 import { buildExploreUrl } from "@/lib/explore-url";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
+import { slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 
 type DashboardCommunityNotesSectionProps = {
@@ -160,7 +161,7 @@ export function DashboardCommunityNotesSection({
   const exploreUrl = buildExploreUrl({
     tab: "notes",
     source: "dashboard",
-    filters: { courseProgram: normalizedCourseProgram },
+    filters: { courseProgram: slugifyPublicLibraryFilterValue(normalizedCourseProgram) },
   });
 
   return (

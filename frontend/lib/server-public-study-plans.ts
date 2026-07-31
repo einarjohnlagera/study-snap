@@ -19,7 +19,8 @@ async function getServerPublicStudyPlansByCourseProgram(
     return [];
   }
   try {
-    return (await response.json()) as NoteCollectionSummary[];
+    const parsed: unknown = await response.json();
+    return Array.isArray(parsed) ? (parsed as NoteCollectionSummary[]) : [];
   } catch {
     return [];
   }
