@@ -1,13 +1,34 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { PlanPicker } from "@/components/collections/plan-picker";
 import { buildExamAuthPath } from "@/components/exam-hub/exam-hub-cta";
 import { PublicStudyPlanCard } from "@/components/study-plan/public-study-plan-card";
-import { getAuthUser } from "@/lib/auth";
-import type { NoteCollectionSummary } from "@/lib/api";
+import { getAccessToken, getAuthUser } from "@/lib/auth";
+import { API_BASE_URL, type NoteCollectionSummary } from "@/lib/api";
 import type { ExamHubConfig } from "@/lib/exam-hub-config";
 import { setExamIntentCookie } from "@/lib/exam-intent";
+
+// Deliberately not `listCollections()`: that helper routes through `fetchWithAuth`, which
+// hard-redirects to `/login` via `handleUnauthorizedSession` on any 401 (e.g. a stale
+// `localStorage` auth user whose refresh token has expired). That's the right behavior on an
+// authenticated page, but this section lives on the anonymous, SEO-relevant Exam Hub page,
+// whose contract is to never navigate a visitor away on a lookup failure. This raw fetch fails
+// open (including on a 401) instead.
+async function fetchOwnedCollectionsWithoutRedirect(): Promise<NoteCollectionSummary[]> {
+  const token = getAccessToken();
+  if (!token) {
+    return [];
+  }
+  const response = await fetch(`${API_BASE_URL}/collections`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    return [];
+  }
+  const parsed: unknown = await response.json();
+  return Array.isArray(parsed) ? (parsed as NoteCollectionSummary[]) : [];
+}
 
 type ExamHubOfficialReviewSetsProps = {
   exam: ExamHubConfig;
@@ -51,6 +72,40 @@ export function ExamHubOfficialReviewSets({
   const selectedPlan = useMemo(
     () => plans.find((plan) => plan.id === effectiveSelectedPlanId) ?? null,
     [effectiveSelectedPlanId, plans],
+  );
+  const [personalCollections, setPersonalCollections] = useState<NoteCollectionSummary[]>([]);
+
+  // Same-page-load fetch as `/collections/published`'s adoption resolution, but this card's
+  // `plans` prop is already available synchronously (server-rendered), so there is a brief
+  // window where an already-adopted visitor sees "Start" before this settles to "Continue".
+  // Accepted for this patch: the adopt call is idempotent, so a click during that window
+  // re-triggers rather than duplicates. Fails open to `[]` so a lookup failure never blocks
+  // this anonymous, SEO-relevant hub page from rendering its adopt/preview CTA.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+    let cancelled = false;
+    fetchOwnedCollectionsWithoutRedirect()
+      .then((collections) => {
+        if (!cancelled) {
+          setPersonalCollections(collections);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPersonalCollections([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+  const adoptedCollection = useMemo(
+    () => (isAuthenticated
+      ? personalCollections.find((collection) => collection.sourcePlanId === selectedPlan?.id) ?? null
+      : null),
+    [isAuthenticated, personalCollections, selectedPlan],
   );
 
   if (!selectedPlan) {
@@ -97,7 +152,7 @@ export function ExamHubOfficialReviewSets({
       <div className="max-w-xl">
         <PublicStudyPlanCard
           plan={selectedPlan}
-          adoptedCollection={null}
+          adoptedCollection={adoptedCollection}
           profileType={authUser?.profileType ?? null}
           canAdopt={authUser !== null}
           discoverySource="exam_hub"

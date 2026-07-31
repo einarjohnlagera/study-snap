@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ExplorePageClient } from "./explore-page-client";
 import { trackAnalyticsEvent } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 const replaceMock = jest.fn();
@@ -13,6 +14,10 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/api", () => ({
   trackAnalyticsEvent: jest.fn(),
+}));
+
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: jest.fn(),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -34,16 +39,43 @@ describe("ExplorePageClient", () => {
     searchParams = new URLSearchParams();
     replaceMock.mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
+    (getAuthUser as jest.Mock).mockReset();
+    (getAuthUser as jest.Mock).mockReturnValue(null);
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReset();
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReturnValue(true);
     publishedPlansPageClientMock.mockClear();
+  });
+
+  it("labels the Review Sets tab distinctly from BOARD_EXAM's Collections nav label", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM" });
+
+    render(<ExplorePageClient />);
+
+    expect(await screen.findByRole("tab", { name: "Official Review Sets" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: "Review Sets" })).not.toBeInTheDocument();
+  });
+
+  it("gives the selected tab a solid, theme-safe background instead of bg-background", async () => {
+    // Regression guard for a dark-mode contrast bug: `bg-background` on the selected tab was
+    // visually indistinguishable from the tablist's own `bg-surface-alt` container in dark mode
+    // (both resolve to the same near-black), so the selected state was invisible. Fixed to match
+    // the Settings page's billing-cycle toggle pattern: an explicit blue pill in both themes.
+    render(<ExplorePageClient />);
+
+    const selectedTab = await screen.findByRole("tab", { name: "Official Collections" });
+    expect(selectedTab.className).toContain("bg-blue-600");
+    expect(selectedTab.className).not.toContain("bg-background");
+    // The focus ring (ring-blue-600) now matches the selected tab's own fill color, so without an
+    // offset the ring becomes invisible against the tab it's supposed to highlight — a coupling a
+    // future fill-color change could easily reintroduce without this assertion catching it.
+    expect(selectedTab.className).toContain("focus-visible:ring-offset-2");
   });
 
   it("renders both independent discovery sources with Review Sets selected by default", async () => {
     render(<ExplorePageClient />);
 
     expect(await screen.findByRole("heading", { name: "Explore" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Review Sets" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Official Collections" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Review Sets Data")).toBeInTheDocument();
     expect(screen.getByText("Notes Data")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse Exam Hubs" })).toHaveAttribute("href", "/exam");

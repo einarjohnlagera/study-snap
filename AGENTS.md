@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.67.0 - Explore Convergence` (In Progress); previous: `v0.66.2 - Card Surface Token Fix` (Released)
+- `v0.67.1 - Explore Convergence Follow-ups` (In Progress); previous: `v0.67.0 - Explore Convergence` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 

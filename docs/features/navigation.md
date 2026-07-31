@@ -63,7 +63,7 @@ Authenticated desktop navigation order:
 - `Explore`
 - `Progress`
 
-`Explore` points to `/explore`, where `Review Sets` and `Notes` reuse the existing Official Review Set catalog and Public Library rendering behind a segmented control. `/collections/published` and `/public/library` remain independent main pages with unchanged canonical routes and no default back links; they are no longer direct authenticated-nav items.
+`Explore` points to `/explore`, where a segmented control reuses the existing Official Review Set catalog and Public Library rendering. The Review Sets tab is labeled `Official {profile-aware plural}` via `getCollectionLabels` (e.g. `Official Review Sets`, `Official Study Plans`) — not the bare profile-aware label, since that would collide with the Collections nav item above for `BOARD_EXAM` profiles, whose Collections nav label is also `Review Sets`; the `Official` prefix disambiguates the two destinations (v0.67.1 fix). The second tab is `Notes`. `/collections/published` and `/public/library` remain independent main pages with unchanged canonical routes and no default back links; they are no longer direct authenticated-nav items.
 
 The optional mobile bottom tab bar remains four items: `Dashboard`, `Library`, the profile-aware Collections label, and `Explore`. Its existing `mobileTabBarEnabled` preference gate is unchanged.
 

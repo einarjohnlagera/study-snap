@@ -22,6 +22,7 @@ import { ToastMessage } from "@/components/ui/toast-message";
 import { getAuthUser } from "@/lib/auth";
 import { PublicLibraryDiscoveryFeedbackPrompt } from "@/components/feedback/public-library-discovery-feedback-prompt";
 import { markPublicLibraryNoteAdoptedThisSession } from "@/lib/early-lifecycle-feedback-signals";
+import { buildExploreUrl } from "@/lib/explore-url";
 import {
   listCoursePrograms,
   listNotes,
@@ -80,6 +81,8 @@ const SHARE_PUBLIC_LIBRARY_COPY_ERROR = "Could not copy the public library link.
 const SHARE_LINK_COPIED_MESSAGE = "Link copied";
 const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 250;
 const PUBLISHED_STUDY_PLANS_PATH = "/collections/published";
+const PUBLISHED_STUDY_PLANS_PATH_FROM_LIBRARY = `${PUBLISHED_STUDY_PLANS_PATH}?ref=/public/library`;
+const EXPLORE_REVIEW_SETS_PATH = buildExploreUrl({ tab: "review-sets" });
 const TEXT_LINK_CLASS_NAME = "shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200";
 const SCROLL_RAIL_FADE_CLASS_NAME = "[mask-image:linear-gradient(to_right,black_85%,transparent_100%)]";
 const EMPTY_FACET_COUNTS = new Map<string, number>();
@@ -1583,7 +1586,7 @@ export function PublicLibraryPageClient({
             <p className="text-sm text-foreground/75">
               Looking for a full Study Plan for {activeCourseProgram}?{" "}
               <Link
-                href={PUBLISHED_STUDY_PLANS_PATH}
+                href={embedded ? EXPLORE_REVIEW_SETS_PATH : PUBLISHED_STUDY_PLANS_PATH_FROM_LIBRARY}
                 className="font-medium text-blue-700 transition-colors hover:underline dark:text-blue-300"
               >
                 Browse official plans →

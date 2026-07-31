@@ -286,6 +286,25 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByTestId("note-count-pill")).toHaveTextContent("1 of 1 notes");
   });
 
+  it("resolves an arriving slugified courseProgram URL param back to its real display value in the chip", async () => {
+    // Regression coverage for the v0.67.1 DashboardCommunityNotesSection fix: confirms the
+    // producer side (slugifying before building the URL) actually round-trips through
+    // resolvePublicLibraryValueBySlug on arrival, not just that listPublicNotes receives a slug.
+    currentSearch = "?tab=notes&courseProgram=medical-surgical-nursing";
+    pathnameMock.mockReturnValue("/explore");
+    (listCoursePrograms as jest.Mock).mockResolvedValue(["Medical – Surgical Nursing", "PNLE"]);
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "note-1", courseProgram: "Medical – Surgical Nursing" }),
+    ]));
+
+    render(<PublicLibraryPageClient basePath="/explore" embedded />);
+
+    expect(await screen.findByText("Course: Medical – Surgical Nursing")).toBeInTheDocument();
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({
+      courseProgram: "medical-surgical-nursing",
+    }));
+  });
+
   it("shows course/program chips from server facets and applies the canonical filter URL", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
       createPublicNote({ id: "pnle-1", courseProgram: "PNLE" }),
@@ -699,7 +718,26 @@ describe("PublicLibraryPageClient", () => {
 
     expect(await screen.findByText(/Looking for a full Study Plan for Engineering\?/i)).toBeInTheDocument();
     expect(listPublicStudyPlans).toHaveBeenCalledWith({ courseProgram: "Engineering" });
-    expect(screen.getByRole("link", { name: "Browse official plans →" })).toHaveAttribute("href", "/collections/published");
+    expect(screen.getByRole("link", { name: "Browse official plans →" }))
+      .toHaveAttribute("href", "/collections/published?ref=/public/library");
+  });
+
+  it("keeps the official-plan bridge inside Explore (switches tabs, doesn't leave) when embedded", async () => {
+    // Explore is the single owner of authenticated content discovery (AGENTS.md Page
+    // Responsibility Rule, locked 2026-07-30) — this bridge must not route an Explore-embedded
+    // visitor out to the standalone `/collections/published`.
+    currentSearch = "?courseProgram=engineering";
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "engineering-note", title: "Engineering Note", courseProgram: "Engineering" }),
+    ]));
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      { id: "plan-1", title: "Engineering Review Set" },
+    ]);
+
+    render(<PublicLibraryPageClient basePath="/explore" embedded />);
+
+    expect(await screen.findByRole("link", { name: "Browse official plans →" }))
+      .toHaveAttribute("href", "/explore");
   });
 
   it("hides the official-plan bridge when the lookup has no match or fails", async () => {

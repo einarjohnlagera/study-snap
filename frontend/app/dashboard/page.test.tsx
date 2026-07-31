@@ -303,7 +303,7 @@ describe("DashboardPage profile variants", () => {
     }
     expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "See all in Explore →" }))
-      .toHaveAttribute("href", "/explore?tab=notes&source=dashboard&courseProgram=PNLE");
+      .toHaveAttribute("href", "/explore?tab=notes&source=dashboard&courseProgram=pnle");
     expect(screen.getByText("Quick Review")).toBeInTheDocument();
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
@@ -1198,6 +1198,14 @@ describe("DashboardPage profile variants", () => {
     expect(await screen.findByText("Start studying smarter")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Import files" })).toHaveAttribute("href", "/notes/import");
     expect(screen.getByRole("link", { name: "Create a note" })).toHaveAttribute("href", "/notes/new");
+    expect(screen.getByRole("link", { name: "Or start from a ready-made study plan instead" }))
+      .toHaveAttribute("href", "/explore?source=dashboard");
+    await waitFor(() => {
+      expect(mockDashboardStudyPlanSection).toHaveBeenCalled();
+    });
+    for (const [props] of mockDashboardStudyPlanSection.mock.calls) {
+      expect(props).toEqual(expect.objectContaining({ suppressPointerWhenNoPrimary: true }));
+    }
   });
 
   it("shows the Teacher empty state from the overview's zero total", async () => {
@@ -1257,6 +1265,7 @@ describe("DashboardPage profile variants", () => {
       expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "pointer" }));
       expect(props).not.toHaveProperty("viewAllHref");
       expect(props).not.toHaveProperty("browseWhenEmpty");
+      expect(props.suppressPointerWhenNoPrimary).not.toBe(true);
     }
   });
 });

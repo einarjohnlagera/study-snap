@@ -182,7 +182,7 @@ A section visible to all profile types, placed below Recent Notes.
 
 **Section title**: "Notes for [CourseProgram]" — e.g. "Notes for PNLE", "Notes for NMAT"
 **Data source**: `GET /notes/public?courseProgram=<value>&size=4` — the same endpoint as the Public Library
-**Footer link**: "See all in Explore →" navigates through `/explore?tab=notes&source=dashboard&courseProgram=<value>`
+**Footer link**: "See all in Explore →" navigates through `/explore?tab=notes&source=dashboard&courseProgram=<value>`, where `<value>` is slugified via `slugifyPublicLibraryFilterValue()` (v0.67.1 fix — previously the raw, unslugified value, unlike every other `courseProgram` filter link in the app, so the arriving filter chip never displayed and a no-op Filters-modal re-submit silently dropped it).
 
 Behavior by state:
 
@@ -233,3 +233,5 @@ When a user has zero notes, the dashboard renders a profile-aware first-run empt
 The profile-specific collection term (Lesson Plan / Review Set) is resolved through `lib/collection-labels.ts`, not hardcoded. Every variant surfaces both entry points — `Import files` (`/notes/import`) and `Create a note` (`/notes/new`) — to make the new bulk-import on-ramp the first thing a new user sees.
 
 **Curated-plan adoption link (v0.39.1, repointed v0.67.0).** For STUDENT, BOARD_EXAM, and PROFESSIONAL profiles only (TEACHER has no adoption path), `DashboardEmpty` also renders the same secondary copy — "Or start from a ready-made {Study Plan / Review Set} instead" — but now points to `/explore?source=dashboard`. Explore owns catalog browsing and its fallback states; `DashboardEmpty` does not duplicate matching logic. Do not restructure `/onboarding`'s Profile Type → Study Goal → Input Method → Study Pack Generation → Completion flow to surface this earlier — that flow is locked and remains unchanged.
+
+**No-primary pointer suppressed on the zero-note Dashboard (v0.67.1 fix).** The STUDENT/PROFESSIONAL zero-note branch is the only call site where `DashboardEmpty` (which already carries the curated-plan adoption link above) and `DashboardStudyPlanSection`'s pointer card were both rendering, stacking two near-identical `/explore?source=dashboard` CTAs directly on top of each other. `DashboardStudyPlanSection` now takes `suppressPointerWhenNoPrimary?: boolean`, passed `true` only from that STUDENT/PROFESSIONAL zero-note call site (`totalNoteCount === 0`); when set, the no-primary `ExplorePointerCard` branch renders nothing instead, leaving `DashboardEmpty`'s inline link as the sole CTA. The valid-primary continue card (a user's actual owned Primary Review Set) is a different render branch and is unaffected — it still renders normally even with the flag set. The Board Exam zero-note branch never rendered `DashboardEmpty` and is untouched, so its pointer card call site does not pass this prop.
