@@ -853,6 +853,7 @@ export default function DashboardPage() {
                 profileType={profile?.profileType ?? null}
                 primaryCollectionId={profile?.primaryCollectionId ?? null}
                 discoveryPresentation="pointer"
+                suppressPointerWhenNoPrimary={totalNoteCount === 0}
               />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}

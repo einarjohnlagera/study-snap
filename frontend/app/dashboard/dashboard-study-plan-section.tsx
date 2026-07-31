@@ -41,6 +41,10 @@ type DashboardStudyPlanSectionProps = {
   context?: "default" | "onboarding" | "practice-first";
   primaryCollectionId?: string | null;
   discoveryPresentation?: "full" | "pointer";
+  // The no-primary pointer card duplicates DashboardEmpty's own "ready-made {plan} instead"
+  // link on the zero-note Dashboard — set true there so this section only renders when a
+  // Primary Review Set actually exists to continue.
+  suppressPointerWhenNoPrimary?: boolean;
   onPlanStarted?: (context: StudyPlanStartContext) => Promise<void>;
 };
 
@@ -76,6 +80,7 @@ export function DashboardStudyPlanSection({
   context = "default",
   primaryCollectionId,
   discoveryPresentation = "full",
+  suppressPointerWhenNoPrimary = false,
   onPlanStarted,
 }: Readonly<DashboardStudyPlanSectionProps>) {
   const router = useRouter();
@@ -182,6 +187,9 @@ export function DashboardStudyPlanSection({
   }
 
   if (discoveryPresentation === "pointer" && !usingPrimary) {
+    if (suppressPointerWhenNoPrimary) {
+      return null;
+    }
     return <ExplorePointerCard singular={labels.singular} plural={labels.plural} />;
   }
 
