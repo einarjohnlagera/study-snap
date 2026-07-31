@@ -310,6 +310,23 @@ describe("PublicLibraryPageClient", () => {
     );
   });
 
+  it("keeps Explore tab state when embedded filters update the URL", async () => {
+    currentSearch = "tab=notes";
+    pathnameMock.mockReturnValue("/explore");
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ courseProgram: "PNLE" }),
+    ]));
+
+    render(<PublicLibraryPageClient basePath="/explore" embedded />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "PNLE" }));
+
+    expect(replaceMock).toHaveBeenCalledWith(
+      "/explore?tab=notes&courseProgram=pnle",
+      { scroll: false },
+    );
+  });
+
   it("copies the current filtered public library URL from the share action", async () => {
     const writeTextMock = jest.fn().mockResolvedValue(undefined);
     Object.defineProperty(globalThis.navigator, "clipboard", {

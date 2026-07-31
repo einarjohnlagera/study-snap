@@ -31,12 +31,6 @@ jest.mock("@/lib/api", () => ({
   listCollections: jest.fn(),
 }));
 
-jest.mock("@/app/dashboard/dashboard-study-plan-section", () => ({
-  DashboardStudyPlanSection: (props: { primaryCollectionId?: string | null }) => (
-    <div data-testid="dashboard-study-plan-section" data-primary-collection-id={props.primaryCollectionId ?? ""} />
-  ),
-}));
-
 describe("CollectionsPage", () => {
   beforeEach(() => {
     pushMock.mockReset();
@@ -62,14 +56,14 @@ describe("CollectionsPage", () => {
     expect(metadata).toMatchObject({ title: "Collections | NoteLib" });
   });
 
-  it("keeps a persistent official-plan catalog link in the header", async () => {
+  it("points its profile-aware discovery CTA to Explore", async () => {
     (listCollections as jest.Mock).mockResolvedValue([]);
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: "goal-1" });
 
     render(<CollectionsPageClient />);
 
-    expect(await screen.findByRole("link", { name: "Browse official plans" }))
-      .toHaveAttribute("href", "/collections/published?ref=/collections");
+    expect(await screen.findByRole("link", { name: "Explore official Study Plans" }))
+      .toHaveAttribute("href", "/explore?source=collections");
   });
 
   it("renders collection cards returned by the API", async () => {
@@ -280,20 +274,6 @@ describe("CollectionsPage", () => {
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith({ title: "Finals", description: null });
       expect(pushMock).toHaveBeenCalledWith("/collections/created-1/builder");
-    });
-  });
-
-  it("passes the user's primaryCollectionId through to DashboardStudyPlanSection", async () => {
-    (listCollections as jest.Mock).mockResolvedValue([]);
-    (getMe as jest.Mock).mockResolvedValue({ courseProgram: null, primaryCollectionId: "goal-1" });
-
-    render(<CollectionsPageClient />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("dashboard-study-plan-section")).toHaveAttribute(
-        "data-primary-collection-id",
-        "goal-1",
-      );
     });
   });
 

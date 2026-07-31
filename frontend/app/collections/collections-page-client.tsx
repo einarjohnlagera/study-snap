@@ -14,9 +14,9 @@ import { getAuthUser } from "@/lib/auth";
 import { getCollectionActionNotice } from "@/lib/collection-action-notice";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { createCollection, getMe, listCollections, type NoteCollectionSummary } from "@/lib/api";
+import { buildExploreUrl } from "@/lib/explore-url";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
-import { DashboardStudyPlanSection } from "@/app/dashboard/dashboard-study-plan-section";
 
 type LoadState = "loading" | "ready" | "error";
 type CollectionExecutionStatus = "not-started" | "in-progress" | "completed";
@@ -225,7 +225,6 @@ export function CollectionsPageClient() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [courseProgram, setCourseProgram] = useState<string | null>(null);
   const [primaryCollectionId, setPrimaryCollectionId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(searchParams.get("new") === "1");
   const [actionToast, setActionToast] = useState<string | null>(() => getCollectionActionNotice());
@@ -246,10 +245,8 @@ export function CollectionsPageClient() {
   const loadProfile = useCallback(async () => {
     try {
       const me = await getMe();
-      setCourseProgram(me.courseProgram ?? null);
       setPrimaryCollectionId(me.primaryCollectionId ?? null);
     } catch {
-      setCourseProgram(null);
       setPrimaryCollectionId(null);
     }
   }, []);
@@ -288,10 +285,10 @@ export function CollectionsPageClient() {
   const headerAction = (
     <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
       <Link
-        href="/collections/published?ref=/collections"
+        href={buildExploreUrl({ source: "collections" })}
         className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
       >
-        Browse official plans
+        Explore official {labels.plural}
       </Link>
       <ResponsiveActionButton
         action="create"
@@ -368,16 +365,6 @@ export function CollectionsPageClient() {
             </Link>
           ))}
         </div>
-      ) : null}
-
-      {loadState === "ready" ? (
-        <DashboardStudyPlanSection
-          courseProgram={courseProgram}
-          profileType={profileType}
-          primaryCollectionId={primaryCollectionId}
-          viewAllHref="/collections/published?ref=/collections"
-          browseWhenEmpty
-        />
       ) : null}
 
       <CreateCollectionModal

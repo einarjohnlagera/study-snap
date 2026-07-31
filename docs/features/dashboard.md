@@ -36,7 +36,7 @@ When `GET /auth/me` returns a `primaryCollectionId`, Dashboard adds a condensed 
 - The identity/title and `Continue Studying` action both open `/collections/{id}`. The detail page remains the owner of per-note next-action resolution, so this summary does not duplicate that more detailed logic.
 - While the primary collection read is pending, Dashboard shows a hero-shaped skeleton rather than an empty gap or the goal-prompt fallback.
 - If the read fails or the primary reference no longer resolves, the hero slot falls back to the existing `GoalPromptBanner` / `DashboardGoalCard` behavior. Learners with no `primaryCollectionId` stay on that existing fallback path unchanged.
-- This is additive: Continue Studying, Focus Areas, Today Focus, Recent Notes, Community Notes, Usage / Progress, and the matching Study Plan section retain their existing composition and links below the hero. It does not introduce or link to `/explore`.
+- This is additive: Continue Studying, Focus Areas, Today Focus, Recent Notes, Community Notes, Usage / Progress, and the valid-primary continue presentation remain below the hero. The no-primary Study Plan presentation now points to `/explore`; valid-primary continue mode still duplicates this hero lower on the page as a documented v0.67.0 Known Limitation.
 
 ## Current Personalization Prompt
 
@@ -182,7 +182,7 @@ A section visible to all profile types, placed below Recent Notes.
 
 **Section title**: "Notes for [CourseProgram]" — e.g. "Notes for PNLE", "Notes for NMAT"
 **Data source**: `GET /notes/public?courseProgram=<value>&size=4` — the same endpoint as the Public Library
-**Footer link**: "See all in Public Library →" navigates to `/public/library?courseProgram=<value>`
+**Footer link**: "See all in Explore →" navigates through `/explore?tab=notes&source=dashboard&courseProgram=<value>`
 
 Behavior by state:
 
@@ -196,32 +196,26 @@ Behavior by state:
 
 Applies to STUDENT, BOARD_EXAM, TEACHER, and PROFESSIONAL profile types.
 
-## Matching Study Plan Section
+## Study Plan Section
 
 v0.31.0 adds a learner-facing plan surface for STUDENT, BOARD_EXAM, and PROFESSIONAL dashboards.
 
-**Section title**: `Recommended {collectionLabel.singular}` using `getCollectionLabels(profileType)`
-**Data source**: `GET /collections/public?courseProgram=<value>` plus the user's `GET /collections` list to detect an already adopted `sourcePlanId`
-**CTA**:
+`DashboardStudyPlanSection` now has `discoveryPresentation?: "full" | "pointer"`, defaulting to `"full"`.
 
-- `Preview this plan` opens the shared, read-only public-detail disclosure before adoption; it is available on the Dashboard card as well as `/collections/published` and does not change the Start/Continue flow
-- `Start this plan` when the learner has not adopted the source plan
-- `Continue this plan` when a private collection with `sourcePlanId == sourcePlan.id` already exists
+- Both persistent Dashboard call sites (STUDENT/PROFESSIONAL and BOARD_EXAM) pass `"pointer"`.
+- Onboarding passes no presentation prop, so it retains the full course/program-matched recommendation and adoption flow unchanged.
+- `viewAllHref` and `browseWhenEmpty` were removed. Dashboard no longer renders a matching-plan catalog, a `See all N` link, or the cold-start no-match browse card.
 
-Behavior by state:
+Dashboard pointer behavior:
 
-- `courseProgram` is set and a matching published plan exists → show the first matching plan card with its item count, `{readyCount} of {itemCount} notes practice-ready` metadata, and Start/Continue CTA. The readiness fraction is always plain metadata (not a badge), including `0 of N` and `N of N`; an older cached response without `readyCount` keeps the item count without a partial string.
-- no matching plan exists, and the learner already has notes (`items.length > 0`) → render nothing; do not show an empty shell. Preserved from the original v0.33.0 decision — an established, already-active dashboard should not carry a "no curated plan yet" filler card just because their track has no curated content.
-- no matching plan exists, and the learner has zero notes (`items.length === 0`, the cold-start case) → **pass `browseWhenEmpty` (v0.39.1)** so the same guidance-nudge card `/collections` already shows ("No curated {plural} for {program} yet... Check back soon, or build your own above") renders here too, instead of silently disappearing. Cold-start discoverability audit (v0.39.1) found the Dashboard's blanket "render nothing" rule meant a zero-notes learner with no curated plan for their track got no signal that adoption exists at all, in the exact moment it matters most. Gating on `items.length` keeps the original anti-clutter intent for everyone else.
-- Start calls `POST /collections/{id}/adopt`, then routes to `/collections/{personalId}`
-- if adoption reports skipped items, show a non-blocking notice on the destination collection page
-- network errors keep the CTA in place and show an inline retryable error
+- A configured primary lookup is still pending → render nothing, preventing a flash of the Explore pointer.
+- A valid owned primary resolves → render the existing Primary continue card byte-for-byte, with no adoption call.
+- No primary, a failed primary lookup, or a stale primary reference → render one dashed pointer card to `/explore?source=dashboard`.
+- Pointer mode never calls `listPublicStudyPlans` and does not show the former course/program nudge or no-match browse fallback. It is independent of course/program fetch state, so it cannot be blocked by the full presentation's pending gate.
 
-The section does not create a new Dashboard backend endpoint, quota, AI call, or plan store. Adopted plans are normal private collections, so the existing note -> Study Pack -> practice -> Progress loop handles all downstream work.
+Full presentation behavior remains available to onboarding: it calls `GET /collections/public?courseProgram=<value>` plus the user's `GET /collections`, shows the first matching public plan, detects an already adopted `sourcePlanId`, and preserves its Start/Continue flow, practice-ready metadata, retryable adoption error, and skipped-item destination notice. No matching plan still self-hides, and no configured course/program still shows the existing learner-profile nudge.
 
 The same `DashboardStudyPlanSection` card is also reused on the onboarding completion step (v0.31.1) as a supplementary adopt surface — see `onboarding.md`. There is no separate component or endpoint for that surface.
-
-The card only renders the top match (`publicPlans[0]`). When more than one plan matches the learner's course/program and the Dashboard passes a `viewAllHref`, a `See all N {plural}` link appears below the card and routes to the browse surface (`/collections/published`) — see `collections.md`. The link is prop-gated so it does **not** appear on the onboarding card (onboarding does not pass `viewAllHref`). With zero or one match, no link is shown.
 
 ## First-study guidance
 
@@ -238,4 +232,4 @@ When a user has zero notes, the dashboard renders a profile-aware first-run empt
 
 The profile-specific collection term (Lesson Plan / Review Set) is resolved through `lib/collection-labels.ts`, not hardcoded. Every variant surfaces both entry points — `Import files` (`/notes/import`) and `Create a note` (`/notes/new`) — to make the new bulk-import on-ramp the first thing a new user sees.
 
-**Curated-plan adoption link (v0.39.1).** For STUDENT, BOARD_EXAM, and PROFESSIONAL profiles only (TEACHER has no adoption path), `DashboardEmpty` also renders a secondary link — "Or start from a ready-made {Study Plan / Review Set} instead" — to `/collections/published`. This is the cold-start on-ramp ROADMAP.md's Flexible-Review-adjacent Study Plan Builder polish work calls out: adopting a curated plan is meant to be the alternative for a zero-notes learner with nothing of their own to bring in yet, but before this the empty state never mentioned it existed. The link always points to `/collections/published` regardless of whether a plan actually exists yet for the learner's course/program — that page already handles every fallback state gracefully (guidance nudge to `/profile` if course/program isn't set, "check back soon" if the track has no curated plan yet), so `DashboardEmpty` does not need to duplicate that plan-matching logic. Do not restructure `/onboarding`'s Profile Type → Study Goal → Input Method → Study Pack Generation → Completion flow to surface this earlier — that flow is locked; the fix intentionally lives downstream, on the Dashboard surfaces every cold-start learner reaches regardless of how they got there.
+**Curated-plan adoption link (v0.39.1, repointed v0.67.0).** For STUDENT, BOARD_EXAM, and PROFESSIONAL profiles only (TEACHER has no adoption path), `DashboardEmpty` also renders the same secondary copy — "Or start from a ready-made {Study Plan / Review Set} instead" — but now points to `/explore?source=dashboard`. Explore owns catalog browsing and its fallback states; `DashboardEmpty` does not duplicate matching logic. Do not restructure `/onboarding`'s Profile Type → Study Goal → Input Method → Study Pack Generation → Completion flow to surface this earlier — that flow is locked and remains unchanged.

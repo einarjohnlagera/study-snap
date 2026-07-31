@@ -172,6 +172,7 @@ export function parsePublicLibraryFilters(searchParams?: SearchParamsInput): Req
 export function buildPublicLibraryUrl(
   filters: PublicLibraryUrlFilters = {},
   baseSearchParams?: SearchParamsInput,
+  path = PUBLIC_LIBRARY_PATH,
 ) {
   const params = cloneSearchParams(baseSearchParams);
 
@@ -210,11 +211,11 @@ export function buildPublicLibraryUrl(
     .forEach((tag) => params.append(PUBLIC_LIBRARY_TAG_QUERY_PARAM, tag));
 
   const query = params.toString();
-  return query ? `${PUBLIC_LIBRARY_PATH}?${query}` : PUBLIC_LIBRARY_PATH;
+  return query ? `${path}?${query}` : path;
 }
 
-// sessionStorage key the mobile tab bar and PublicLibraryBackLink read from to return to the
-// learner's last filtered view instead of discarding it. Any surface that navigates a visitor
+// sessionStorage key PublicLibraryBackLink reads from to return to the learner's last filtered
+// view instead of discarding it. Any surface that navigates a visitor
 // into a filtered-context note (a related-notes card, a subject-landing or Exam Hub grid) should
 // call savePublicLibraryReturnUrl before navigating so that context isn't lost.
 export const PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY = "notelib_public_library_return_url";

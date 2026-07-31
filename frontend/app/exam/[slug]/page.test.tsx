@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ExamHubPage, { generateMetadata, generateStaticParams } from "./page";
 import { EXAM_HUBS, EXAM_HUB_SLUGS } from "@/lib/exam-hub-config";
 import { getServerPublicNotesByCoursePrograms } from "@/lib/server-public-notes";
+import { getServerPublicStudyPlansByCoursePrograms } from "@/lib/server-public-study-plans";
 import { getAuthUser } from "@/lib/auth";
 import { trackAnalyticsEvent, type NoteListItemResponse } from "@/lib/api";
 import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
@@ -9,13 +10,19 @@ import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url"
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
 });
+const pushMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   notFound: () => notFoundMock(),
+  useRouter: () => ({ push: pushMock }),
 }));
 
 jest.mock("@/lib/server-public-notes", () => ({
   getServerPublicNotesByCoursePrograms: jest.fn(),
+}));
+
+jest.mock("@/lib/server-public-study-plans", () => ({
+  getServerPublicStudyPlansByCoursePrograms: jest.fn(),
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -65,14 +72,33 @@ const sectionNotes = [
   buildNote({ id: "recent-1", title: "Planning Notes", slug: "planning-notes", summaryPreview: "", createdAt: "2026-03-28T00:00:00Z" }),
 ];
 
+const officialSet = {
+  id: "official-set-1",
+  title: "ALE Official Review Set",
+  description: "A curated Architecture review path.",
+  visibility: "PUBLIC" as const,
+  courseProgram: "Architecture",
+  sourcePlanId: null,
+  parentCollectionId: null,
+  itemCount: 6,
+  readyCount: 5,
+  childCount: 0,
+  notesPracticed: 0,
+  createdAt: "2026-03-20T00:00:00Z",
+  updatedAt: "2026-03-21T00:00:00Z",
+};
+
 describe("ExamHubPage", () => {
   beforeEach(() => {
     notFoundMock.mockClear();
     document.cookie = "notelib-exam-intent=; path=/; max-age=0; SameSite=Strict";
     (getServerPublicNotesByCoursePrograms as jest.Mock).mockReset();
+    (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockReset();
+    (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockResolvedValue([]);
     (getAuthUser as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue(null);
     (trackAnalyticsEvent as jest.Mock).mockReset();
+    pushMock.mockReset();
     window.sessionStorage.clear();
   });
 
@@ -179,6 +205,68 @@ describe("ExamHubPage", () => {
     fireEvent.click(emptyStateCta);
 
     expect(document.cookie).toContain("notelib-exam-intent=ale");
+  });
+
+  it("renders exact course/program-matched Official Review Sets without requiring authentication", async () => {
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue(sectionNotes);
+    (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockResolvedValue([
+      { ...officialSet, courseProgram: "Nursing", title: "PNLE Official Review Set" },
+    ]);
+
+    render(await ExamHubPage({ params: Promise.resolve({ slug: "pnle" }) }));
+
+    expect(getServerPublicStudyPlansByCoursePrograms).toHaveBeenCalledWith([
+      "Nursing",
+      "Medical – Surgical Nursing",
+    ]);
+    expect(screen.getByRole("heading", { name: "Official Review Sets for PNLE" })).toBeInTheDocument();
+    expect(screen.getByText(/Matched exactly by Course \/ Program: Nursing/)).toBeInTheDocument();
+    expect(screen.getByText("PNLE Official Review Set")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in to adopt" })).toBeInTheDocument();
+  });
+
+  it("leaves the existing hub unchanged when no Official Review Set matches", async () => {
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue(sectionNotes);
+    (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockResolvedValue([]);
+
+    render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
+
+    expect(screen.queryByRole("heading", { name: /Official Review Sets for/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Featured Notes" })).toBeInTheDocument();
+  });
+
+  it("redirects anonymous Official Review Set adoption through auth with exam intent and return path", async () => {
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue(sectionNotes);
+    (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockResolvedValue([officialSet]);
+
+    render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to adopt" }));
+
+    expect(pushMock).toHaveBeenCalledWith(
+      "/auth?mode=signup&intent=exam&exam=ale&redirect=%2Fexam%2Fale",
+    );
+    expect(document.cookie).toContain("notelib-exam-intent=ale");
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "EXAM_HUB_OFFICIAL_SET_ADOPT_CLICKED",
+      entityId: "official-set-1",
+      metadata: { source: "exam_hub", slug: "ale" },
+    });
+  });
+
+  it("tracks Official Review Set preview actions from the Exam Hub", async () => {
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue(sectionNotes);
+    (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockResolvedValue([officialSet]);
+
+    render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview this plan · 6 notes" }));
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "EXAM_HUB_OFFICIAL_SET_PREVIEWED",
+      entityId: "official-set-1",
+      metadata: { source: "exam_hub", slug: "ale" },
+    });
   });
 
   it("suppresses empty discovery section headers for small note sets", async () => {

@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.66.0 - Challenge Quiz Result Clarity` (In Progress); previous: `v0.65.0 - Study Effectiveness Polish` (Released)
+- `v0.67.0 - Explore Convergence` (In Progress); previous: `v0.66.2 - Card Surface Token Fix` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -618,7 +618,7 @@ Use these skills before writing prompts, before starting new features, and after
   - course/program reuse checks should be case-insensitive while keeping a readable display label
 - Public Library canonical browsing route is `/public/library` for both signed-in and signed-out users.
 - Do not introduce duplicate Public Library browse routes or wrappers such as `/library/public`; keep legacy paths as redirects only when compatibility is required.
-- Public subject listing pages must not become second canonical list pages; use `/public/library?subject={subjectSlug}` for shareable subject filtering and keep `/public/library/{subject}` as compatibility redirect-only when it exists.
+- Public subject listing pages must not become second canonical list pages for query-filtered browsing; use `/public/library?subject={subjectSlug}` for shareable subject filtering. `/public/library/{subject}` is a separate, server-rendered canonical subject landing page (shipped v0.14.0 — see `docs/features/public-library.md`), not a redirect, and must not be merged with the query-filter view without a dedicated future refactor.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.
 - Public landing page should emit JSON-LD `WebSite` schema.
@@ -663,6 +663,16 @@ Use these skills before writing prompts, before starting new features, and after
   - use stored session data only for answer review and concept breakdown; do not call LLMs for session history or review
   - allow graceful fallback summaries for older sessions that do not have full stored quiz detail
   - weak concepts in session review use the same `< 60%` accuracy threshold as other study surfaces
+
+### Explore Navigation Rule
+
+- Authenticated primary navigation order is Dashboard, the existing profile-aware Collections label, Library, Explore, Progress.
+- `/explore` is an authenticated composite discovery front door with `Review Sets` and `Notes` tabs plus an Exam Hub index pointer.
+- Explore must reuse the existing Official Review Set catalog and Public Library rendering. It must not replace, redirect, or redefine the canonical `/collections/published` and `/public/library` routes.
+- Library stays structurally separate from Collections and Explore.
+- The mobile bottom tab bar replaces its former Public Library tab with Explore and keeps the existing `mobileTabBarEnabled` preference gate.
+- The anonymous marketing navbar is separate and must not gain the authenticated Explore item.
+- Exam Hub Official Review Set enrichment uses exact normalized `courseProgram` matching only, remains anonymous-previewable, and must fail open so public-note content still renders.
 
 ### Card Interaction Rule
 
@@ -819,13 +829,28 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 
 ### Page Responsibility Rule
 
-- Dashboard = what to do now
-- Library = private workspace
-- Public Library = discovery
-- Public Profile = public showcase
-- Profile = identity
-- Settings = app preferences
-- Do not merge responsibilities casually.
+| Page | Governing question |
+|---|---|
+| Dashboard | What should I do now? |
+| Review Sets (the profile-aware Collections workspace) | What material have I organized into a study journey? |
+| Library | What notes do I already have? |
+| Explore | What material exists that I don't have yet? |
+| Progress | How is my learning progressing? |
+| Companion | What guidance applies to this curated journey? |
+| Public Profile | What learning work do I share publicly? |
+| Profile | Who am I as a learner? |
+| Settings | How should NoteLib behave for me? |
+
+**Locked doctrine (2026-07-30):**
+
+- `/explore` is the single owner of content discovery. No other authenticated page may render an inline discovery catalog, adopt-picker, or public-note browse grid.
+- Other pages may point at Explore with a link or a single pointer card; they may not do Explore's job.
+- A bounded teaser is not discovery when it has a fixed small item count, no filters/paging/sort, no adopt/copy action, and one see-all link.
+- `/public/library` and `/collections/published` remain canonical, separately-addressable routes for deep links, SEO, and anonymous access. This is a navigation-level claim, not a route deletion.
+- `/onboarding` is exempt because it is a temporally scoped first-run wizard, not a persistent navigation page.
+- Treat this as a deliberate, locked product rule rather than an informal convention.
+
+**Amendment (dated 2026-07-31, pending Stage 0 — not ratified):** a future direction exists to name the **Discovery System** as the product-architecture concept this table already implements — Explore is its primary interface; Public Library, Official Review Sets, and Exam Hubs are its sources and content surfaces. "Explore Owns Discovery" (locked above) is that doctrine's authenticated-navigation scope; this amendment extends the same doctrine toward eventual anonymous access, it does not replace it. Under this framing, `/explore` may eventually absorb `/public/library`'s *list-page* traffic only, once `/explore` itself gains real anonymous rendering, canonical metadata, and structured data. This narrows — it does not reverse — both the "must not replace, redirect, or redefine" language in `### Explore Navigation Rule` below and the "navigation-level claim, not a route deletion" language above: both continue to mean subject-listing pages (`/public/library/{subject}`) and note-detail pages (`/public/library/{subject}/{slug}`) are never redirected, full stop; only the bare list page is a legitimate future redirect target, and only once this amendment and a concrete SEO-parity evidence bar both clear. This also revisits, but does not resolve by itself, the owner's own earlier "Public Library is not absorbed or removed" direction recorded in `ROADMAP.md`'s Review-Set-Centric Navigation section — under this framing that direction stays true (Public Library remains a Discovery System source and route family; only its navigation primacy changes), so this reads as a narrowing of that direction, not a reversal needing separate sign-off, but the owner should confirm that reading explicitly rather than have it asserted silently. Blocked on Explore gaining real anonymous rendering, canonical metadata, structured data, and a resolved sequencing decision against this release's own `[CHECKPOINT — due 2026-09-13]`. Tracked in `ROADMAP.md`'s Backlog Index as "Discovery System — Public Front Door."
 
 ### Auth Redirect Rule
 
@@ -876,7 +901,7 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 ### Back Navigation Rule
 
 - All back navigation uses the `BackLink` component (`components/ui/back-link.tsx`): renders `← {label}` with `ArrowLeft` icon, blue link color (`text-blue-600 dark:text-blue-400`), underlines on hover — same style as "View Full Notes →". Not a button.
-- Back links appear on sub-pages only. Main pages (Dashboard, Library, Public Library, My Profile, Settings) must NOT have a back link.
+- Back links appear on sub-pages only. Main pages (Dashboard, Library, profile-aware Collections, Explore, Progress, Public Library, My Profile, Settings) must NOT have a back link.
 - Back navigation always uses explicit routing (`href` prop on `BackLink`) — never `router.back()`.
 - Back link label is the destination page name only — do NOT use "Back to X" or "Back" alone.
 - My Profile (owner's own public profile) is a main page — no back link.
@@ -982,8 +1007,10 @@ Keep app shell grouping:
 
 - Main:
   - Dashboard
+  - Profile-aware review-workspace label resolved through `getCollectionLabels().navLabel`
   - Library
-  - Public Library
+  - Explore
+  - Progress
 - Account:
   - Profile
   - Settings
@@ -1539,7 +1566,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.66.2`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is `v0.67.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

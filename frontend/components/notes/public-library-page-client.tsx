@@ -41,6 +41,7 @@ import { getBrowsingCardClassName } from "@/lib/clickable-card";
 import { buildCopiedNotePath } from "@/lib/public-note-copy";
 import {
   buildPublicLibraryUrl,
+  PUBLIC_LIBRARY_PATH,
   parsePublicLibraryFilters,
   resolvePublicLibraryValueBySlug,
   resolvePublicLibraryValuesBySlug,
@@ -471,7 +472,15 @@ function PublicLibraryDiscoverySection({
   );
 }
 
-export function PublicLibraryPageClient() {
+type PublicLibraryPageClientProps = {
+  basePath?: string;
+  embedded?: boolean;
+};
+
+export function PublicLibraryPageClient({
+  basePath = PUBLIC_LIBRARY_PATH,
+  embedded = false,
+}: Readonly<PublicLibraryPageClientProps> = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchParamsKey = searchParams.toString();
@@ -774,12 +783,12 @@ export function PublicLibraryPageClient() {
   }, []);
 
   const replacePublicLibraryFilters = useCallback((nextFilters: PublicLibraryUrlFilters) => {
-    const currentUrl = buildPublicLibraryUrl(parsedUrlFilters, searchParamsKey);
-    const nextUrl = buildPublicLibraryUrl(nextFilters, searchParamsKey);
+    const currentUrl = buildPublicLibraryUrl(parsedUrlFilters, searchParamsKey, basePath);
+    const nextUrl = buildPublicLibraryUrl(nextFilters, searchParamsKey, basePath);
     if (currentUrl !== nextUrl) {
       router.replace(nextUrl, { scroll: false });
     }
-  }, [parsedUrlFilters, router, searchParamsKey]);
+  }, [basePath, parsedUrlFilters, router, searchParamsKey]);
 
   const availableSubjects = subjectSuggestions;
   const availableCoursePrograms = courseProgramSuggestions;
@@ -1320,19 +1329,19 @@ export function PublicLibraryPageClient() {
     router.push(buildPublicLibraryUrl({
       ...parsedUrlFilters,
       view,
-    }, searchParamsKey), { scroll: false });
-  }, [parsedUrlFilters, router, searchParamsKey, startRouteProgress]);
+    }, searchParamsKey, basePath), { scroll: false });
+  }, [basePath, parsedUrlFilters, router, searchParamsKey, startRouteProgress]);
   const clearDiscoveryView = useCallback(() => {
     startRouteProgress();
     router.push(buildPublicLibraryUrl({
       ...parsedUrlFilters,
       view: null,
-    }, searchParamsKey), { scroll: false });
-  }, [parsedUrlFilters, router, searchParamsKey, startRouteProgress]);
+    }, searchParamsKey, basePath), { scroll: false });
+  }, [basePath, parsedUrlFilters, router, searchParamsKey, startRouteProgress]);
   const activeSectionCopy = activeDiscoveryView === null ? null : DISCOVERY_SECTION_COPY[activeDiscoveryView];
   const currentPublicLibraryPath = useMemo(
-    () => buildPublicLibraryUrl(parsedUrlFilters, searchParamsKey),
-    [parsedUrlFilters, searchParamsKey],
+    () => buildPublicLibraryUrl(parsedUrlFilters, searchParamsKey, basePath),
+    [basePath, parsedUrlFilters, searchParamsKey],
   );
   const handleNoteNavigate = useCallback((path: string) => {
     savePublicLibraryReturnUrl(currentPublicLibraryPath);
@@ -1356,24 +1365,38 @@ export function PublicLibraryPageClient() {
     }
   }, [resolvedShareUrl]);
 
+  const Container = embedded ? "div" : "main";
+
   return (
-    <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <PageHeader
-        eyebrow="LIBRARY"
-        title="Public Library"
-        description="Explore public notes from you, the community, and official NoteLib examples. Copy a note into your library when you want to study it in your own workspace."
-        actions={(
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto lg:hidden"
-            onClick={() => void handleCopyShareLink()}
-          >
-            {SHARE_PUBLIC_LIBRARY_LABEL}
-          </Button>
-        )}
-        brandLogo
-      />
+    <Container className={embedded
+      ? "w-full space-y-6"
+      : "mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10"}
+    >
+      {!embedded ? (
+        <PageHeader
+          eyebrow="LIBRARY"
+          title="Public Library"
+          description="Explore public notes from you, the community, and official NoteLib examples. Copy a note into your library when you want to study it in your own workspace."
+          actions={(
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto lg:hidden"
+              onClick={() => void handleCopyShareLink()}
+            >
+              {SHARE_PUBLIC_LIBRARY_LABEL}
+            </Button>
+          )}
+          brandLogo
+        />
+      ) : (
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold tracking-tight">Community Notes</h2>
+          <p className="text-sm text-foreground/65">
+            Browse public notes and copy useful material into your own library.
+          </p>
+        </div>
+      )}
 
       <GuidanceTip
         tipId="public-library-intro"
@@ -2179,6 +2202,6 @@ export function PublicLibraryPageClient() {
           </div>
         ) : null}
       </AppModal>
-    </main>
+    </Container>
   );
 }

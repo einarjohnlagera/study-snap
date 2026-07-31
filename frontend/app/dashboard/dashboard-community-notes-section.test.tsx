@@ -14,11 +14,13 @@ jest.mock("@/lib/api", () => ({
   listPublicNotes: jest.fn(),
 }));
 
+const COURSE_PROGRAM = "Medical – Surgical Nursing";
+
 const publicNote = {
   id: "public-note-1",
   ownerUserId: null,
-  title: "PNLE Fundamentals",
-  courseProgram: "PNLE",
+  title: "Medical-Surgical Nursing Review",
+  courseProgram: COURSE_PROGRAM,
   targetProfileType: "BOARD_TAKER",
   subject: "Nursing",
   tags: ["review"],
@@ -47,18 +49,21 @@ describe("DashboardCommunityNotesSection", () => {
     (listPublicNotes as jest.Mock).mockReset();
   });
 
-  it("renders matching public note cards and a filtered Public Library link", async () => {
+  it("renders matching public note cards and a filtered Explore link", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue({ items: [publicNote], total: 8 });
 
-    render(<DashboardCommunityNotesSection courseProgram="PNLE" viewerUserId="user-1" />);
+    render(<DashboardCommunityNotesSection courseProgram={COURSE_PROGRAM} viewerUserId="user-1" />);
 
-    expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
-    expect(screen.getByText("PNLE Fundamentals")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "See all in Public Library →" })).toHaveAttribute(
-      "href",
-      "/public/library?courseProgram=PNLE",
-    );
-    expect(listPublicNotes).toHaveBeenCalledWith({ courseProgram: "PNLE", size: 4 });
+    expect(await screen.findByRole("heading", { name: `Notes for ${COURSE_PROGRAM}` })).toBeInTheDocument();
+    expect(screen.getByText("Medical-Surgical Nursing Review")).toBeInTheDocument();
+    const href = screen.getByRole("link", { name: "See all in Explore →" }).getAttribute("href");
+    expect(href).not.toBeNull();
+    const url = new URL(href ?? "", "http://localhost");
+    expect(url.pathname).toBe("/explore");
+    expect(url.searchParams.get("tab")).toBe("notes");
+    expect(url.searchParams.get("source")).toBe("dashboard");
+    expect(url.searchParams.get("courseProgram")).toBe(COURSE_PROGRAM);
+    expect(listPublicNotes).toHaveBeenCalledWith({ courseProgram: COURSE_PROGRAM, size: 4 });
   });
 
   it("hides itself when a course program has no matching notes", async () => {

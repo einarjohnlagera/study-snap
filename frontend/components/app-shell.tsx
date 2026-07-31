@@ -67,6 +67,7 @@ function shouldUseAuthenticatedShell(hasAuthUser: boolean, pathname: string): bo
 function isProtectedAppRoute(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard")
+    || pathname.startsWith("/explore")
     || (pathname.startsWith("/collections") && pathname !== "/collections/published")
     || pathname.startsWith("/library")
     || pathname.startsWith("/notes")
@@ -84,6 +85,9 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/dashboard")) {
     return "Dashboard";
+  }
+  if (pathname.startsWith("/explore")) {
+    return "Explore";
   }
   if (pathname.startsWith("/public/library/")) {
     return "Public Library";
@@ -160,15 +164,15 @@ function getPageTitle(pathname: string): string {
 type NavLinkItem = {
   href: string;
   label: string;
-  action: "admin" | "campaigns" | "collections" | "dashboard" | "help" | "library" | "profile" | "progress" | "publicLibrary" | "settings";
+  action: "admin" | "campaigns" | "collections" | "dashboard" | "explore" | "help" | "library" | "profile" | "progress" | "settings";
 };
 
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard", action: "dashboard" },
-  { href: "/library", label: "Library", action: "library" },
   { href: "/collections", label: "Collections", action: "collections" },
+  { href: "/library", label: "Library", action: "library" },
+  { href: "/explore", label: "Explore", action: "explore" },
   { href: "/progress", label: "Progress", action: "progress" },
-  { href: "/public/library", label: "Public Library", action: "publicLibrary" },
 ];
 
 

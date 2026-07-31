@@ -16,7 +16,6 @@ import {
   listNotes,
   listCollections,
   listPublicNotes,
-  listPublicStudyPlans,
   updateLearningProfileContext,
 } from "@/lib/api";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -31,6 +30,12 @@ const routerMock = {
   push: jest.fn(),
   replace: jest.fn(),
 };
+const mockDashboardStudyPlanSection = jest.fn((props: Record<string, unknown>) => (
+  <div
+    data-testid="dashboard-study-plan-section"
+    data-discovery-presentation={String(props.discoveryPresentation ?? "")}
+  />
+));
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
@@ -39,6 +44,10 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/route-guards", () => ({
   requireAuthenticatedOnboardedUser: () => true,
+}));
+
+jest.mock("./dashboard-study-plan-section", () => ({
+  DashboardStudyPlanSection: (props: Record<string, unknown>) => mockDashboardStudyPlanSection(props),
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -64,7 +73,6 @@ jest.mock("@/lib/api", () => ({
   listCollections: jest.fn(),
   listNotes: jest.fn(),
   listPublicNotes: jest.fn(),
-  listPublicStudyPlans: jest.fn(),
   setStudyGoal: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateLearningProfileContext: jest.fn(),
@@ -214,7 +222,7 @@ describe("DashboardPage profile variants", () => {
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (getTodayFocus as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
-    (listPublicStudyPlans as jest.Mock).mockReset();
+    mockDashboardStudyPlanSection.mockClear();
     (getNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
     (completeOnboarding as jest.Mock).mockReset();
@@ -256,7 +264,6 @@ describe("DashboardPage profile variants", () => {
     (getQuickReviewLastReviewedBatch as jest.Mock).mockResolvedValue([]);
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue(null);
     (listPublicNotes as jest.Mock).mockResolvedValue({ items: publicNotes, total: publicNotes.length });
-    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
     (listCollections as jest.Mock).mockResolvedValue([]);
   });
 
@@ -288,8 +295,15 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByText("Weak Concepts")).toBeInTheDocument();
     expect(screen.getByText("Recent Notes")).toBeInTheDocument();
     expect(screen.getByText("25 saved")).toBeInTheDocument();
+    expect(mockDashboardStudyPlanSection).toHaveBeenCalled();
+    for (const [props] of mockDashboardStudyPlanSection.mock.calls) {
+      expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "pointer" }));
+      expect(props).not.toHaveProperty("viewAllHref");
+      expect(props).not.toHaveProperty("browseWhenEmpty");
+    }
     expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "See all in Public Library →" })).toHaveAttribute("href", "/public/library?courseProgram=PNLE");
+    expect(screen.getByRole("link", { name: "See all in Explore →" }))
+      .toHaveAttribute("href", "/explore?tab=notes&source=dashboard&courseProgram=PNLE");
     expect(screen.getByText("Quick Review")).toBeInTheDocument();
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
@@ -329,6 +343,12 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByRole("heading", { name: "Weak Areas" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Adaptive Practice" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Study Activity This Week" })).toBeInTheDocument();
+    expect(mockDashboardStudyPlanSection).toHaveBeenCalled();
+    for (const [props] of mockDashboardStudyPlanSection.mock.calls) {
+      expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "pointer" }));
+      expect(props).not.toHaveProperty("viewAllHref");
+      expect(props).not.toHaveProperty("browseWhenEmpty");
+    }
   });
 
   it("shows a primary review set skeleton while its details load", async () => {
@@ -1206,7 +1226,7 @@ describe("DashboardPage profile variants", () => {
     expect(screen.queryByText("Recent Notes")).not.toBeInTheDocument();
   });
 
-  it("keeps the Board Exam browse-empty plan state tied to the overview's zero total", async () => {
+  it("keeps the Board Exam zero-note plan section in pointer mode without browse-empty props", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       firstName: "Board",
       displayName: "Board",
@@ -1229,6 +1249,14 @@ describe("DashboardPage profile variants", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText(/We don't have an official/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Start Board Exam" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockDashboardStudyPlanSection).toHaveBeenCalled();
+    });
+    for (const [props] of mockDashboardStudyPlanSection.mock.calls) {
+      expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "pointer" }));
+      expect(props).not.toHaveProperty("viewAllHref");
+      expect(props).not.toHaveProperty("browseWhenEmpty");
+    }
   });
 });

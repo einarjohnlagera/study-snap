@@ -36,7 +36,17 @@ function PlanSkeletonGrid() {
   );
 }
 
-export function PublishedPlansPageClient() {
+type PublishedPlansPageClientProps = {
+  embedded?: boolean;
+  discoverySource?: "explore";
+  discoveryMetadata?: Record<string, string>;
+};
+
+export function PublishedPlansPageClient({
+  embedded = false,
+  discoverySource,
+  discoveryMetadata,
+}: Readonly<PublishedPlansPageClientProps> = {}) {
   const authUser = useMemo(() => getAuthUser(), []);
   const searchParams = useSearchParams();
   const profileType = authUser?.profileType ?? null;
@@ -134,22 +144,33 @@ export function PublishedPlansPageClient() {
     void Promise.resolve().then(loadPlans);
   }, [loadPlans]);
 
-  return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <AnalyticsPageViewTracker eventType="PUBLISHED_PLANS_VIEWED" />
-      <BackLink href={backLink.href} label={backLink.label} />
+  const description = courseProgram
+    ? `Published ${labels.plural.toLowerCase()} for ${courseProgram}. Adopt any of them to start studying with a curated set of notes.`
+    : canAdopt
+      ? `Published ${labels.plural.toLowerCase()} matched to your course or program.`
+      : `Browse official ${labels.plural.toLowerCase()} before you add one to your library.`;
+  const Container = embedded ? "div" : "main";
 
-      <PageHeader
-        eyebrow="DISCOVER"
-        title={`Recommended ${labels.plural}`}
-        description={
-          courseProgram
-            ? `Published ${labels.plural.toLowerCase()} for ${courseProgram}. Adopt any of them to start studying with a curated set of notes.`
-            : canAdopt
-              ? `Published ${labels.plural.toLowerCase()} matched to your course or program.`
-              : `Browse official ${labels.plural.toLowerCase()} before you add one to your library.`
-        }
-      />
+  return (
+    <Container className={embedded
+      ? "flex w-full flex-col gap-6"
+      : "mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8"}
+    >
+      {!embedded ? <AnalyticsPageViewTracker eventType="PUBLISHED_PLANS_VIEWED" /> : null}
+      {!embedded ? <BackLink href={backLink.href} label={backLink.label} /> : null}
+
+      {embedded ? (
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold tracking-tight">Recommended {labels.plural}</h2>
+          <p className="text-sm text-foreground/65">{description}</p>
+        </div>
+      ) : (
+        <PageHeader
+          eyebrow="DISCOVER"
+          title={`Recommended ${labels.plural}`}
+          description={description}
+        />
+      )}
 
       {recommendedState === "loading" ? <PlanSkeletonGrid /> : null}
 
@@ -208,6 +229,8 @@ export function PublishedPlansPageClient() {
               adoptedCollection={adoptedCollection}
               profileType={profileType}
               canAdopt={canAdopt}
+              discoverySource={discoverySource}
+              discoveryMetadata={discoveryMetadata}
             />
           ))}
         </div>
@@ -246,11 +269,12 @@ export function PublishedPlansPageClient() {
                 adoptedCollection={adoptedCollection}
                 profileType={profileType}
                 canAdopt={canAdopt}
+                discoverySource={discoverySource}
               />
             ))}
           </div>
         ) : null}
       </section>
-    </main>
+    </Container>
   );
 }
