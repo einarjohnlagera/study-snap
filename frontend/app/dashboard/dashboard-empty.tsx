@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionLink } from "@/components/ui/action-button";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { buildExploreUrl } from "@/lib/explore-url";
 
 export type FirstRunProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL";
 
@@ -85,7 +86,7 @@ export function DashboardEmpty({ profileType }: Readonly<{ profileType: FirstRun
 
       {showPlanAdoptionLink ? (
         <Link
-          href="/collections/published?ref=/dashboard"
+          href={buildExploreUrl({ source: "dashboard" })}
           className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
         >
           Or start from a ready-made {labels.singular.toLowerCase()} instead
