@@ -9,7 +9,7 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib Pricing — Free, Plus, and Pro Plans",
-  description: "Simple plans for everyday study and serious review. Start free, move to Plus for higher limits, or choose Pro for exam prep.",
+  description: "A complete learning system, wherever you are in your studies. Start free, add guided study with Plus, or go all-in with Pro.",
   path: "/pricing",
 });
 
@@ -24,13 +24,13 @@ export default function PricingPage() {
             Pricing
           </p>
           <h1 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
-            Simple plans for everyday study and serious review.
+            Always know what to learn next.
           </h1>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Start free for core features. Move to Plus for higher limits, or choose Pro for deeper practice and exam-ready tools.
+            NoteLib turns your notes into a complete learning system — organized, prioritized, and ready whenever you sit down to study.
           </p>
           <p className="max-w-2xl text-sm leading-relaxed text-foreground/70 sm:text-base">
-            Most users stay on Free while studying casually. Plus fits regular review, and Pro is built for serious exam prep.
+            Start on Free. Move to Plus for guided, regular study. Go Pro for your complete learning system.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/signup" className="w-full sm:w-auto">
@@ -54,7 +54,7 @@ export default function PricingPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Free, Plus, and Pro
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Free for everyday study. Plus for regular review. Pro for deeper exam prep.</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Free for everyday study. Plus for regular review. Pro for your complete learning system.</h2>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
             Free covers the core note-to-study-pack workflow. Plus expands your monthly limits. Pro adds the highest limits and advanced practice tools.
           </p>

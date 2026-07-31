@@ -59,8 +59,8 @@ export const PLANS: Record<AppPlanType, {
   },
   PLUS: {
     name: "Plus",
-    title: "For regular study",
-    description: "Perfect for students who want consistent review and better retention.",
+    title: "Guided learning built around your notes",
+    description: "Consistent, guided study with more room to keep going — always know what to review next.",
     ctaLabel: "Get Plus",
     adaptivePracticeMessage: "Train on weak areas (limited sessions)",
     features: [
@@ -75,8 +75,8 @@ export const PLANS: Record<AppPlanType, {
   },
   PRO: {
     name: "Pro",
-    title: "Best for exam prep",
-    description: "Designed for serious learners preparing for board and entrance exams.",
+    title: "Your complete learning system",
+    description: "The complete system for serious, sustained study — plan what's next, practice with confidence, and track real progress.",
     ctaLabel: "Get Pro",
     eyebrow: "Most popular",
     adaptivePracticeMessage: "Train on weak areas until you master them",
