@@ -1684,7 +1684,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(await screen.findByText("We couldn't generate the Study Pack this time.")).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(screen.getAllByRole("button", { name: "Retry Generate" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "Retry Generation" })[0]);
     });
 
     await waitFor(() => {
