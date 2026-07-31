@@ -55,6 +55,18 @@ describe("ExplorePageClient", () => {
     expect(screen.queryByRole("tab", { name: "Review Sets" })).not.toBeInTheDocument();
   });
 
+  it("gives the selected tab a solid, theme-safe background instead of bg-background", async () => {
+    // Regression guard for a dark-mode contrast bug: `bg-background` on the selected tab was
+    // visually indistinguishable from the tablist's own `bg-surface-alt` container in dark mode
+    // (both resolve to the same near-black), so the selected state was invisible. Fixed to match
+    // the Settings page's billing-cycle toggle pattern: an explicit blue pill in both themes.
+    render(<ExplorePageClient />);
+
+    const selectedTab = await screen.findByRole("tab", { name: "Official Collections" });
+    expect(selectedTab.className).toContain("bg-blue-600");
+    expect(selectedTab.className).not.toContain("bg-background");
+  });
+
   it("renders both independent discovery sources with Review Sets selected by default", async () => {
     render(<ExplorePageClient />);
 
