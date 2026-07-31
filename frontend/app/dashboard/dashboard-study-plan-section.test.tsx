@@ -293,6 +293,21 @@ describe("DashboardStudyPlanSection", () => {
     expect(listPublicStudyPlans).not.toHaveBeenCalled();
   });
 
+  it("renders nothing when suppressPointerWhenNoPrimary is set and no primary exists", () => {
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        discoveryPresentation="pointer"
+        suppressPointerWhenNoPrimary
+      />,
+    );
+
+    expect(screen.queryByRole("heading", { name: "Find your next Study Plan" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Browse in Explore" })).not.toBeInTheDocument();
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+  });
+
   it("renders nothing in pointer mode while the primary lookup is pending", () => {
     (listCollections as jest.Mock).mockImplementation(() => new Promise(() => {}));
 
@@ -369,6 +384,29 @@ describe("DashboardStudyPlanSection", () => {
       expect(listPublicStudyPlans).toHaveBeenCalled();
     });
     expect(fullRender.container.innerHTML).toBe(pointerMarkup);
+  });
+
+  it("still renders valid-primary continue mode when suppressPointerWhenNoPrimary is set", async () => {
+    const primaryPlan = {
+      ...publicPlan,
+      id: "primary-goal-1",
+      visibility: "PRIVATE" as const,
+      sourcePlanId: null,
+      childCount: 2,
+    };
+    (listCollections as jest.Mock).mockResolvedValue([primaryPlan]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="BOARD_EXAM"
+        primaryCollectionId="primary-goal-1"
+        discoveryPresentation="pointer"
+        suppressPointerWhenNoPrimary
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Primary Review Set" })).toBeInTheDocument();
   });
 
   it("shows the owned Primary Review Set instead of the course/program recommendation", async () => {

@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/page-header";
 import { PublicLibraryPageClient } from "@/components/notes/public-library-page-client";
 import { Card } from "@/components/ui/card";
 import { trackAnalyticsEvent } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
+import { getCollectionLabels } from "@/lib/collection-labels";
 import {
   EXPLORE_PATH,
   EXPLORE_SOURCE_QUERY_PARAM,
@@ -25,6 +27,8 @@ export function ExplorePageClient() {
   const [routeReady, setRouteReady] = useState(false);
   const activeTab = resolveExploreTab(searchParams.get(EXPLORE_TAB_QUERY_PARAM));
   const source = searchParams.get(EXPLORE_SOURCE_QUERY_PARAM);
+  const authUser = useMemo(() => getAuthUser(), []);
+  const collectionLabels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser]);
   const pageViewMetadata = useMemo(
     () => source === null ? undefined : { source },
     [source],
@@ -37,9 +41,9 @@ export function ExplorePageClient() {
     [source],
   );
   const tabs = useMemo<Array<{ id: ExploreTab; label: string }>>(() => [
-    { id: "review-sets", label: "Review Sets" },
+    { id: "review-sets", label: `Official ${collectionLabels.plural}` },
     { id: "notes", label: "Notes" },
-  ], []);
+  ], [collectionLabels]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
@@ -95,7 +99,7 @@ export function ExplorePageClient() {
               aria-controls={`explore-panel-${tab.id}`}
               aria-selected={selected}
               className={cn(
-                "min-h-10 rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
+                "min-h-10 rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 sm:text-sm",
                 selected
                   ? "bg-background text-foreground shadow-sm"
                   : "text-foreground/60 hover:text-foreground",

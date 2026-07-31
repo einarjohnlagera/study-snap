@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ExplorePageClient } from "./explore-page-client";
 import { trackAnalyticsEvent } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 const replaceMock = jest.fn();
@@ -13,6 +14,10 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/api", () => ({
   trackAnalyticsEvent: jest.fn(),
+}));
+
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: jest.fn(),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -34,16 +39,27 @@ describe("ExplorePageClient", () => {
     searchParams = new URLSearchParams();
     replaceMock.mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
+    (getAuthUser as jest.Mock).mockReset();
+    (getAuthUser as jest.Mock).mockReturnValue(null);
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReset();
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReturnValue(true);
     publishedPlansPageClientMock.mockClear();
+  });
+
+  it("labels the Review Sets tab distinctly from BOARD_EXAM's Collections nav label", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM" });
+
+    render(<ExplorePageClient />);
+
+    expect(await screen.findByRole("tab", { name: "Official Review Sets" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: "Review Sets" })).not.toBeInTheDocument();
   });
 
   it("renders both independent discovery sources with Review Sets selected by default", async () => {
     render(<ExplorePageClient />);
 
     expect(await screen.findByRole("heading", { name: "Explore" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Review Sets" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Official Collections" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Review Sets Data")).toBeInTheDocument();
     expect(screen.getByText("Notes Data")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse Exam Hubs" })).toHaveAttribute("href", "/exam");
