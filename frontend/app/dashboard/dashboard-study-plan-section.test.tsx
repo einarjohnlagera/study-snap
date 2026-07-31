@@ -54,7 +54,7 @@ describe("DashboardStudyPlanSection", () => {
     (listCollections as jest.Mock).mockResolvedValue([]);
   });
 
-  it("surfaces a matching public plan and starts adoption", async () => {
+  it("keeps full discovery as the default and starts adoption from a matching public plan", async () => {
     (adoptStudyPlan as jest.Mock).mockResolvedValue({
       collectionId: "personal-plan-1",
       copiedCount: 3,
@@ -65,6 +65,7 @@ describe("DashboardStudyPlanSection", () => {
     render(<DashboardStudyPlanSection courseProgram=" let " profileType="STUDENT" />);
 
     expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
+    expect(listPublicStudyPlans).toHaveBeenCalledWith({ courseProgram: "let" });
     expect(screen.queryByText(/Optional: explore an official study plan/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
 
@@ -264,31 +265,6 @@ describe("DashboardStudyPlanSection", () => {
     expect(listPublicStudyPlans).not.toHaveBeenCalled();
   });
 
-  it("renders a browse empty state when browseWhenEmpty is set and no plan matches", async () => {
-    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
-
-    render(<DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" browseWhenEmpty />);
-
-    expect(await screen.findByText("We don't have an official study plan for LET yet")).toBeInTheDocument();
-    expect(screen.getByText(/browse every official set that is already public/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Browse all study plans" }))
-      .toHaveAttribute("href", "/collections/published#browse-all");
-  });
-
-  it("shows a view-all link only when multiple plans match and a href is provided", async () => {
-    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
-      publicPlan,
-      { ...publicPlan, id: "source-plan-2", title: "LET Reviewer Plan 2" },
-    ]);
-
-    render(
-      <DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" viewAllHref="/collections/published" />,
-    );
-
-    const viewAll = await screen.findByRole("link", { name: "See all 2 study plans" });
-    expect(viewAll).toHaveAttribute("href", "/collections/published");
-  });
-
   it("does not show a view-all link without a href even when multiple plans match (onboarding card)", async () => {
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([
       publicPlan,
@@ -301,13 +277,98 @@ describe("DashboardStudyPlanSection", () => {
     expect(screen.queryByRole("link", { name: /See all/ })).not.toBeInTheDocument();
   });
 
-  it("does not show a view-all link when only one plan matches", async () => {
+  it("renders an Explore pointer without fetching public plans when no primary is set", () => {
     render(
-      <DashboardStudyPlanSection courseProgram="LET" profileType="STUDENT" viewAllHref="/collections/published" />,
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        discoveryPresentation="pointer"
+      />,
     );
 
-    expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /See all/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Find your next Study Plan" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse in Explore" }))
+      .toHaveAttribute("href", "/explore?source=dashboard");
+    expect(screen.queryByText("Set your course or program to find official study plans")).not.toBeInTheDocument();
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+  });
+
+  it("renders nothing in pointer mode while the primary lookup is pending", () => {
+    (listCollections as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        primaryCollectionId="primary-goal-1"
+        discoveryPresentation="pointer"
+      />,
+    );
+
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Browse in Explore" })).not.toBeInTheDocument();
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+  });
+
+  it("renders the Explore pointer when a configured primary cannot be found", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        primaryCollectionId="stale-primary-id"
+        discoveryPresentation="pointer"
+      />,
+    );
+
+    expect(await screen.findByRole("link", { name: "Browse in Explore" }))
+      .toHaveAttribute("href", "/explore?source=dashboard");
+    expect(screen.queryByText("Set your course or program to find official study plans")).not.toBeInTheDocument();
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+  });
+
+  it("renders valid-primary continue mode identically in pointer and full presentations", async () => {
+    const primaryPlan = {
+      ...publicPlan,
+      id: "primary-goal-1",
+      visibility: "PRIVATE" as const,
+      sourcePlanId: null,
+      childCount: 2,
+    };
+    (listCollections as jest.Mock).mockResolvedValue([primaryPlan]);
+
+    const pointerRender = render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="BOARD_EXAM"
+        primaryCollectionId="primary-goal-1"
+        discoveryPresentation="pointer"
+      />,
+    );
+    expect(await screen.findByRole("heading", { name: "Primary Review Set" })).toBeInTheDocument();
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+    const pointerMarkup = pointerRender.container.innerHTML;
+    pointerRender.unmount();
+
+    (listCollections as jest.Mock).mockClear();
+    (listCollections as jest.Mock).mockResolvedValue([primaryPlan]);
+    (listPublicStudyPlans as jest.Mock).mockClear();
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([publicPlan]);
+
+    const fullRender = render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="BOARD_EXAM"
+        primaryCollectionId="primary-goal-1"
+        discoveryPresentation="full"
+      />,
+    );
+    expect(await screen.findByRole("heading", { name: "Primary Review Set" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(listPublicStudyPlans).toHaveBeenCalled();
+    });
+    expect(fullRender.container.innerHTML).toBe(pointerMarkup);
   });
 
   it("shows the owned Primary Review Set instead of the course/program recommendation", async () => {
@@ -320,7 +381,6 @@ describe("DashboardStudyPlanSection", () => {
         courseProgram="LET"
         profileType="BOARD_EXAM"
         primaryCollectionId="primary-goal-1"
-        viewAllHref="/collections/published"
       />,
     );
 

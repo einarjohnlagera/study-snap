@@ -14,9 +14,9 @@ import {
   listPublicNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
+import { buildExploreUrl } from "@/lib/explore-url";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
-import { buildPublicLibraryUrl } from "@/lib/public-library-url";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 
 type DashboardCommunityNotesSectionProps = {
@@ -157,7 +157,11 @@ export function DashboardCommunityNotesSection({
     return <CommunityNotesSkeleton />;
   }
 
-  const publicLibraryUrl = buildPublicLibraryUrl({ courseProgram: normalizedCourseProgram });
+  const exploreUrl = buildExploreUrl({
+    tab: "notes",
+    source: "dashboard",
+    filters: { courseProgram: normalizedCourseProgram },
+  });
 
   return (
     <section className="space-y-3 sm:space-y-4">
@@ -199,8 +203,8 @@ export function DashboardCommunityNotesSection({
       </div>
 
       <div className="flex justify-end pt-0.5">
-        <Link href={publicLibraryUrl} className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-          See all in Public Library &rarr;
+        <Link href={exploreUrl} className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+          See all in Explore &rarr;
         </Link>
       </div>
     </section>

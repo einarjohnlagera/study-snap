@@ -14,6 +14,7 @@ import {
   type ProfileType,
 } from "@/lib/api";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { buildExploreUrl } from "@/lib/explore-url";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 import { setStudyPlanSkippedNotice } from "@/lib/study-plan-skipped-notice";
@@ -39,18 +40,42 @@ type DashboardStudyPlanSectionProps = {
   profileType: ProfileType | null;
   context?: "default" | "onboarding" | "practice-first";
   primaryCollectionId?: string | null;
-  viewAllHref?: string;
-  browseWhenEmpty?: boolean;
+  discoveryPresentation?: "full" | "pointer";
   onPlanStarted?: (context: StudyPlanStartContext) => Promise<void>;
 };
+
+function ExplorePointerCard({
+  singular,
+  plural,
+}: Readonly<{
+  singular: string;
+  plural: string;
+}>) {
+  return (
+    <section className="space-y-3 sm:space-y-4">
+      <h2 className="text-lg font-semibold sm:text-xl">Find your next {singular}</h2>
+      <Card className="space-y-3 border-dashed p-4 sm:p-6">
+        <CardTitle>Explore official {plural}</CardTitle>
+        <CardDescription>
+          Browse curated {plural.toLowerCase()} and choose one when you&apos;re ready to start.
+        </CardDescription>
+        <Link
+          href={buildExploreUrl({ source: "dashboard" })}
+          className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
+        >
+          Browse in Explore
+        </Link>
+      </Card>
+    </section>
+  );
+}
 
 export function DashboardStudyPlanSection({
   courseProgram,
   profileType,
   context = "default",
   primaryCollectionId,
-  viewAllHref,
-  browseWhenEmpty = false,
+  discoveryPresentation = "full",
   onPlanStarted,
 }: Readonly<DashboardStudyPlanSectionProps>) {
   const router = useRouter();
@@ -58,7 +83,6 @@ export function DashboardStudyPlanSection({
   const normalizedCourseProgram = useMemo(() => normalizeCourseProgram(courseProgram), [courseProgram]);
   const [plan, setPlan] = useState<NoteCollectionSummary | null>(null);
   const [adoptedPlan, setAdoptedPlan] = useState<NoteCollectionSummary | null>(null);
-  const [matchCount, setMatchCount] = useState(0);
   const [loadedCourseProgram, setLoadedCourseProgram] = useState<string | null>(null);
   const [adopting, setAdopting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +126,13 @@ export function DashboardStudyPlanSection({
   }, [primaryCollectionId]);
 
   useEffect(() => {
+    if (discoveryPresentation === "pointer") {
+      setPlan(null);
+      setAdoptedPlan(null);
+      setLoadedCourseProgram(null);
+      return;
+    }
+
     if (!normalizedCourseProgram) {
       setPlan(null);
       setAdoptedPlan(null);
@@ -121,7 +152,6 @@ export function DashboardStudyPlanSection({
         }
         const matchingPlan = publicPlans[0] ?? null;
         setPlan(matchingPlan);
-        setMatchCount(publicPlans.length);
         setAdoptedPlan(
           matchingPlan
             ? personalCollections.find(
@@ -134,7 +164,6 @@ export function DashboardStudyPlanSection({
       .catch(() => {
         if (!cancelled) {
           setPlan(null);
-          setMatchCount(0);
           setAdoptedPlan(null);
           setLoadedCourseProgram(normalizedCourseProgram);
         }
@@ -143,13 +172,22 @@ export function DashboardStudyPlanSection({
     return () => {
       cancelled = true;
     };
-  }, [normalizedCourseProgram]);
+  }, [discoveryPresentation, normalizedCourseProgram]);
 
   const primaryPending = Boolean(primaryCollectionId) && !primaryLoaded;
   const usingPrimary = Boolean(primaryCollectionId) && primaryLoaded && primaryMatch !== null;
+
+  if (primaryPending) {
+    return null;
+  }
+
+  if (discoveryPresentation === "pointer" && !usingPrimary) {
+    return <ExplorePointerCard singular={labels.singular} plural={labels.plural} />;
+  }
+
   const courseProgramPending = !usingPrimary && (!normalizedCourseProgram || loadedCourseProgram !== normalizedCourseProgram);
 
-  if (primaryPending || (courseProgramPending && normalizedCourseProgram !== null)) {
+  if (courseProgramPending && normalizedCourseProgram !== null) {
     return null;
   }
 
@@ -173,34 +211,7 @@ export function DashboardStudyPlanSection({
   const displayPlan = usingPrimary ? primaryMatch : plan;
 
   if (!displayPlan) {
-    if (!browseWhenEmpty) {
-      return null;
-    }
-    return (
-      <section className="space-y-3 sm:space-y-4">
-        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-semibold sm:text-xl">Recommended {labels.singular}</h2>
-          <p className="text-xs text-foreground/65">{normalizedCourseProgram}</p>
-        </div>
-        <Card className="space-y-3 border-dashed p-4 sm:p-6">
-          <div className="space-y-1.5">
-            <CardTitle>
-              We don&apos;t have an official {labels.singular.toLowerCase()} for {normalizedCourseProgram} yet
-            </CardTitle>
-            <CardDescription>
-              We add curated {labels.plural.toLowerCase()} per track. Check back soon, build your own above, or
-              browse every official set that is already public.
-            </CardDescription>
-          </div>
-          <Link
-            href="/collections/published#browse-all"
-            className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
-          >
-            Browse all {labels.plural.toLowerCase()}
-          </Link>
-        </Card>
-      </section>
-    );
+    return null;
   }
 
   const continuePlan = usingPrimary ? primaryMatch : (adoptedPlan ?? null);
@@ -309,14 +320,6 @@ export function DashboardStudyPlanSection({
           </p>
         ) : null}
       </Card>
-      {!usingPrimary && viewAllHref && matchCount > 1 ? (
-        <Link
-          href={viewAllHref}
-          className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
-        >
-          See all {matchCount} {labels.plural.toLowerCase()}
-        </Link>
-      ) : null}
     </section>
   );
 }
