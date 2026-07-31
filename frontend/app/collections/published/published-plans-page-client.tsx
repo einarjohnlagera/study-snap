@@ -39,11 +39,13 @@ function PlanSkeletonGrid() {
 type PublishedPlansPageClientProps = {
   embedded?: boolean;
   discoverySource?: "explore";
+  discoveryMetadata?: Record<string, string>;
 };
 
 export function PublishedPlansPageClient({
   embedded = false,
   discoverySource,
+  discoveryMetadata,
 }: Readonly<PublishedPlansPageClientProps> = {}) {
   const authUser = useMemo(() => getAuthUser(), []);
   const searchParams = useSearchParams();
@@ -228,6 +230,7 @@ export function PublishedPlansPageClient({
               profileType={profileType}
               canAdopt={canAdopt}
               discoverySource={discoverySource}
+              discoveryMetadata={discoveryMetadata}
             />
           ))}
         </div>

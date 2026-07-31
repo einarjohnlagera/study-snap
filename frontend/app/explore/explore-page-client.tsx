@@ -29,6 +29,13 @@ export function ExplorePageClient() {
     () => source === null ? undefined : { source },
     [source],
   );
+  // Keyed `pointerSource`, not `source` — PublicStudyPlanCard's analytics events already use
+  // `source` for the discovery surface ("explore"/"exam_hub"); reusing that key here would let
+  // its `{ ...discoveryMetadata, source: discoverySource }` merge silently overwrite this value.
+  const discoveryMetadata = useMemo(
+    () => source === null ? undefined : { pointerSource: source },
+    [source],
+  );
   const tabs = useMemo<Array<{ id: ExploreTab; label: string }>>(() => [
     { id: "review-sets", label: "Review Sets" },
     { id: "notes", label: "Notes" },
@@ -107,7 +114,7 @@ export function ExplorePageClient() {
         aria-labelledby="explore-tab-review-sets"
         hidden={activeTab !== "review-sets"}
       >
-        <PublishedPlansPageClient embedded discoverySource="explore" />
+        <PublishedPlansPageClient embedded discoverySource="explore" discoveryMetadata={discoveryMetadata} />
       </section>
 
       <section

@@ -19,8 +19,10 @@ jest.mock("@/lib/route-guards", () => ({
   requireAuthenticatedOnboardedUser: jest.fn(),
 }));
 
+const publishedPlansPageClientMock = jest.fn((_props: unknown) => <div>Review Sets Data</div>);
+
 jest.mock("@/app/collections/published/published-plans-page-client", () => ({
-  PublishedPlansPageClient: () => <div>Review Sets Data</div>,
+  PublishedPlansPageClient: (props: unknown) => publishedPlansPageClientMock(props),
 }));
 
 jest.mock("@/components/notes/public-library-page-client", () => ({
@@ -34,6 +36,7 @@ describe("ExplorePageClient", () => {
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReset();
     (requireAuthenticatedOnboardedUser as jest.Mock).mockReturnValue(true);
+    publishedPlansPageClientMock.mockClear();
   });
 
   it("renders both independent discovery sources with Review Sets selected by default", async () => {
@@ -105,6 +108,31 @@ describe("ExplorePageClient", () => {
     const explorePageViewCalls = (trackAnalyticsEvent as jest.Mock).mock.calls
       .filter(([event]) => event.eventType === "EXPLORE_VIEWED");
     expect(explorePageViewCalls).toHaveLength(1);
+  });
+
+  it("threads the pointer source into PublishedPlansPageClient as discoveryMetadata, keyed distinctly from `source`", async () => {
+    searchParams = new URLSearchParams({ source: "dashboard" });
+
+    render(<ExplorePageClient />);
+
+    await screen.findByRole("heading", { name: "Explore" });
+
+    expect(publishedPlansPageClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discoverySource: "explore",
+        discoveryMetadata: { pointerSource: "dashboard" },
+      }),
+    );
+  });
+
+  it("passes no discoveryMetadata when there is no pointer source", async () => {
+    render(<ExplorePageClient />);
+
+    await screen.findByRole("heading", { name: "Explore" });
+
+    expect(publishedPlansPageClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({ discoveryMetadata: undefined }),
+    );
   });
 
   it("does not mount discovery data when the authenticated route guard rejects access", () => {
