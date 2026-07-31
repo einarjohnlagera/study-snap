@@ -8,6 +8,9 @@ work in `fable-out/06-terminology-rename-map.md` past where it stopped. No code 
 
 ## Decisions carried forward
 
+**Ratified by owner 2026-07-31** (§4 items 1, 2, 3, 6 — see `ROADMAP.md`'s Backlog Index Company
+Redefinition row for the recorded decision). §4 items 4, 5, 7, 8, 9 remain open.
+
 **RECOMMENDATION — packaging: one product, not two.** Creator (bring-your-own-notes, generate,
 private workspace) and Curated Learning (adopt Official Review Sets) should NOT become separate
 products or plans. They stay two *modes of use* inside the single existing FREE/PLUS/PRO ladder plus

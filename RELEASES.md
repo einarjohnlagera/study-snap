@@ -1,5 +1,21 @@
 # RELEASES.md - NoteLib
 
+## v0.68.0 - Topic Note Rename
+
+**Status: In Progress**
+
+Theme: rename the bare-prompt "Generate Note" action to "Create a Note," so the word "Generate" stays reserved for the product's actual differentiator (transforming a learner's own notes into a Study Pack/Quiz) instead of also naming the one feature that looks like a generic AI note tool.
+
+### Planned Scope
+
+- **"Generate Note" → "Create a Note" rename (frontend only).** Ratified 2026-07-31 as Company Redefinition Phase 4, §4 item 6 (`docs/claude-prompt/company-redefinition-out/05-packaging-and-terminology.md`). Covers `note-editor-form.tsx`'s `generateNoteLabel` default, onboarding Step 3, the demo page, and downstream status/confirmation copy that names the same action ("Generating a note will replace the current content..." → "Creating a note will replace...", "Generating note…" → "Creating note…"). "Generate Study Pack," "Generate Quiz," and "Regenerate" (teacher note-detail flow) are explicitly unchanged — those transform the learner's own material, which is the mechanism this rename is protecting the word "Generate" for.
+
+Anti-drift: label/copy rename only, no behavior change to what the action does. Does not touch Study Pack/Quiz generation terminology, pricing, quotas, or any other §4 item left open at ratification (items 4, 5, 7, 8, 9 — see `ROADMAP.md`'s Company Redefinition Backlog Index row).
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.67.1 - Explore Convergence Follow-ups
 
 **Status: Released**
