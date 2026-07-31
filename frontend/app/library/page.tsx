@@ -1424,7 +1424,7 @@ export default function LibraryPage() {
               primaryLabel="New Note"
               onPrimary={() => router.push("/notes/new")}
               items={[
-                { key: "note", label: "Note", description: "Write, import, or generate a note", onSelect: () => router.push("/notes/new") },
+                { key: "note", label: "Note", description: "Write, import, or create a note", onSelect: () => router.push("/notes/new") },
                 { key: "import", label: "Import files", description: "Upload several files as draft notes", onSelect: () => router.push("/notes/import?from=library") },
                 {
                   key: "bulk-generate",

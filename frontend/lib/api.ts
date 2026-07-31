@@ -2766,7 +2766,7 @@ export async function generateNoteFromTopic(
   );
   return parseApiResponse<GenerateNoteFromTopicResponse>(
     response,
-    "We could not generate a note right now. Please try again.",
+    "We could not create a note right now. Please try again.",
   );
 }
 

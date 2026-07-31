@@ -299,7 +299,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     expect(await screen.findByRole("button", { name: /Write your own note/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Generate from topic/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Create from topic/i }));
     expect(screen.getByRole("link", { name: /Generate them all at once/i })).toHaveAttribute(
       "href",
       "/library/bulk-generate",
@@ -483,9 +483,9 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.click(await screen.findByText("Create from topic"));
     fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Newton's Laws of Motion" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     await waitFor(() => {
       expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion", "Nursing");
@@ -493,9 +493,9 @@ describe("NoteEditorPageClient", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Add details" }));
     expect(screen.getByLabelText("Title (optional)")).toHaveValue("Newton's Laws of Motion");
-    expect(screen.getByRole("button", { name: "Generate Again" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create Again" })).toBeInTheDocument();
     expect(
-      screen.getByText("Not quite right? Try refining your topic before generating again."),
+      screen.getByText("Not quite right? Try refining your topic before creating again."),
     ).toBeInTheDocument();
   });
 
@@ -516,12 +516,12 @@ describe("NoteEditorPageClient", () => {
     });
     fireEvent.change(courseProgramInput, { target: { value: "Civil Engineering" } });
 
-    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.click(await screen.findByText("Create from topic"));
     fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Bridge Load Distribution" } });
 
     expect(screen.getByText(/Tailored for: Civil Engineering/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     await waitFor(() => {
       expect(generateNoteFromTopic).toHaveBeenCalledWith("Bridge Load Distribution", "Civil Engineering");
@@ -545,9 +545,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(courseProgramInput, { target: { value: "Civil Engineering" } });
     fireEvent.change(courseProgramInput, { target: { value: "Mechanical Engineering" } });
 
-    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.click(await screen.findByText("Create from topic"));
     fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Torque and Rotation" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     await waitFor(() => {
       expect(generateNoteFromTopic).toHaveBeenCalledWith("Torque and Rotation", "Mechanical Engineering");
@@ -573,12 +573,12 @@ describe("NoteEditorPageClient", () => {
     });
     fireEvent.change(courseProgramInput, { target: { value: "Civil Engineering" } });
 
-    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.click(await screen.findByText("Create from topic"));
     fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Bridge Load Distribution" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     await screen.findByDisplayValue("First generated topic note");
-    fireEvent.click(screen.getByRole("button", { name: "Generate Again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create Again" }));
 
     await waitFor(() => {
       expect(generateNoteFromTopic).toHaveBeenNthCalledWith(1, "Bridge Load Distribution", "Civil Engineering");
@@ -600,9 +600,9 @@ describe("NoteEditorPageClient", () => {
       expect(screen.getByLabelText(/Course \/ Program/)).toHaveValue("Software Engineering");
     });
 
-    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.click(await screen.findByText("Create from topic"));
     fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Binary Search Trees" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     await waitFor(() => {
       expect(generateNoteFromTopic).toHaveBeenCalledWith("Binary Search Trees", "Software Engineering");
@@ -614,21 +614,21 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.click(await screen.findByText("Create from topic"));
     const topicInput = screen.getByLabelText("Topic");
 
     fireEvent.change(topicInput, { target: { value: "Newton's Laws of Motion" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
-    await screen.findByRole("button", { name: "Generate Again" });
+    await screen.findByRole("button", { name: "Create Again" });
 
     fireEvent.change(topicInput, { target: { value: "" } });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Generate Note" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Create a Note" })).toBeInTheDocument();
     });
     expect(
-      screen.queryByText("Not quite right? Try refining your topic before generating again."),
+      screen.queryByText("Not quite right? Try refining your topic before creating again."),
     ).not.toBeInTheDocument();
   });
 
@@ -645,21 +645,21 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.click(await screen.findByText("Create from topic"));
     fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Newton's Laws of Motion" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
     await screen.findByDisplayValue("First generated topic note");
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate Again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create Again" }));
 
-    expect(screen.getByRole("button", { name: "Generating..." })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Creating..." })).toBeInTheDocument();
     expect(screen.getByText("Creating a new version...")).toBeInTheDocument();
 
     resolveSecondGeneration!({ content: "Second generated topic note" });
 
     await screen.findByDisplayValue("Second generated topic note");
-    expect(screen.getAllByRole("button", { name: "Generate Again" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Create Again" })).toHaveLength(1);
   });
 
   it("keeps topic note generation clickable at the free plan limit and opens the paywall", async () => {
@@ -696,14 +696,14 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.click(await screen.findByText("Create from topic"));
     fireEvent.change(screen.getByLabelText("Topic"), {
       target: { value: "Photosynthesis" },
     });
 
-    expect(screen.getByRole("button", { name: "Generate Note" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Create a Note" })).toBeEnabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
     expect(await screen.findByText("You've reached your note generation limit")).toBeInTheDocument();
   });
@@ -841,8 +841,8 @@ describe("NoteEditorPageClient", () => {
 
     expect(screen.getByRole("button", { name: "Generate Study Pack" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: /Generate from topic/i }));
-    expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Create from topic/i }));
+    expect(screen.getByRole("button", { name: "Create a Note" })).toBeDisabled();
 
     await selectImportNotesMode();
     const uploadInput = document.getElementById("note-import-file") as HTMLInputElement | null;

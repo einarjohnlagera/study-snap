@@ -880,7 +880,7 @@ export default function OnboardingPage() {
         setShowNoteGenerationLimitModal(true);
       } else {
         setStepThreeError(
-          error instanceof Error ? error.message : "We could not generate a note right now. Please try again.",
+          error instanceof Error ? error.message : "We could not create a note right now. Please try again.",
         );
       }
     } finally {
@@ -1230,7 +1230,7 @@ export default function OnboardingPage() {
           <div className="grid gap-2.5 sm:grid-cols-2">
             <ModeOptionButton
               icon="✨"
-              label="Generate a note"
+              label="Create a note"
               description="Start with a topic, review the draft, then generate your Study Pack."
               selected={selectedInputMethod === "generate"}
               onClick={() => selectInputMethod("generate")}
@@ -1316,7 +1316,7 @@ export default function OnboardingPage() {
                 </div>
               ) : (
                 <p className="rounded-xl border border-dashed border-border px-4 py-4 text-sm text-foreground/70 sm:text-base">
-                  Generate a note first, then review and edit it before creating your Study Pack.
+                  Create a note first, then review and edit it before creating your Study Pack.
                 </p>
               )}
             </div>
@@ -1616,9 +1616,9 @@ export default function OnboardingPage() {
                 onClick={() => void handleGenerateNoteDraft()}
                 disabled={!canGenerateNoteDraft}
                 loading={isGeneratingNote}
-                loadingText="Generating..."
+                loadingText="Creating..."
               >
-                Generate Note
+                Create a Note
               </Button>
             </div>
           </div>

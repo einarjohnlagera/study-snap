@@ -555,12 +555,12 @@ export function NoteEditorPageClient({
     : null;
   const normalizedGenerateTopic = generateTopic.trim();
   const generateNoteButtonLabel = hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
-    ? "Generate Again"
-    : "Generate Note";
+    ? "Create Again"
+    : "Create a Note";
   const contentStatusText = entryOption === "generate" && hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
     ? (isGeneratingNote
       ? "Creating a new version..."
-      : "Not quite right? Try refining your topic before generating again.")
+      : "Not quite right? Try refining your topic before creating again.")
     : importFlowState === "success"
       ? IMPORT_SUCCESS_MESSAGE
       : null;
@@ -953,7 +953,7 @@ export function NoteEditorPageClient({
           setShowNoteGenerationLimitModal(true);
         }
       } else {
-        const message = error instanceof Error ? error.message : "Could not generate note.";
+        const message = error instanceof Error ? error.message : "Could not create note.";
         showToast(message, "error");
       }
     } finally {
@@ -1133,7 +1133,7 @@ export function NoteEditorPageClient({
         isGeneratingNote={isGeneratingNote}
         disableGenerateNote={!isEmailVerified}
         generateNoteLabel={generateNoteButtonLabel}
-        generateNoteLoadingLabel="Generating..."
+        generateNoteLoadingLabel="Creating..."
         generateNoteFooter={generateNoteFooter}
         showGenerateNoteEntry={showGenerateNoteEntry}
         showGenerateNoteTip={showGenerateNoteTip}

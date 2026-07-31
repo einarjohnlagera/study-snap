@@ -9,7 +9,7 @@ Verify these onboarding cases:
   - `Study Pack Generation`
   - `Completion`
 - Board Taker users get the inline optional `Exam Date` field on the Study Goal step
-- `Generate a note` path requires topic input, creates an editable generated draft first, then allows `Generate Study Pack →`
+- `Create a note` path requires topic input, creates an editable generated draft first, then allows `Generate Study Pack →`
 - `Write or paste my own note` path requires note content before `Generate Study Pack →`
 - onboarding does **not** ask for `learnerLevel`, `courseProgram`, `bio`, `Learning Style`, or reminder preferences
 - users who already completed onboarding are redirected away from `/onboarding`

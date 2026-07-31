@@ -59,7 +59,7 @@ Teacher Profile also owns one export-specific default outside the learning conte
 - Quiz/exam prompts receive `courseProgram` alongside `learnerLevel` through `buildLearnerContextBlock()`.
 - Per-note `courseProgram` takes precedence over the profile default when set.
 - Challenge Quiz, Board Exam, and Adaptive Practice must use the same note-first `courseProgram` resolution as Study Pack generation.
-- Generate from Topic accepts an optional `courseProgram` in `GenerateNoteFromTopicRequest`; the current draft Course / Program selected in Create Note must be read at submit time, sent on the first generation request, and used as the domain for the generated note. Fall back to the profile value only when the draft value is blank.
+- Create from Topic accepts an optional `courseProgram` in `GenerateNoteFromTopicRequest`; the current draft Course / Program selected in Create Note must be read at submit time, sent on the first generation request, and used as the domain for the generated note. Fall back to the profile value only when the draft value is blank.
 - When neither is set, the prompt falls back to subject-only context.
 
 **Autocomplete rules:**
