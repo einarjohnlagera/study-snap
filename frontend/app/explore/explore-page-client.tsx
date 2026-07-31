@@ -99,7 +99,7 @@ export function ExplorePageClient() {
               aria-controls={`explore-panel-${tab.id}`}
               aria-selected={selected}
               className={cn(
-                "min-h-10 rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 sm:text-sm",
+                "min-h-10 rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 sm:text-sm",
                 selected
                   ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-slate-950"
                   : "text-foreground/60 hover:text-foreground",

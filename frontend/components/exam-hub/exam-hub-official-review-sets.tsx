@@ -26,7 +26,8 @@ async function fetchOwnedCollectionsWithoutRedirect(): Promise<NoteCollectionSum
   if (!response.ok) {
     return [];
   }
-  return response.json() as Promise<NoteCollectionSummary[]>;
+  const parsed: unknown = await response.json();
+  return Array.isArray(parsed) ? (parsed as NoteCollectionSummary[]) : [];
 }
 
 type ExamHubOfficialReviewSetsProps = {
