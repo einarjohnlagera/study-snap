@@ -699,7 +699,26 @@ describe("PublicLibraryPageClient", () => {
 
     expect(await screen.findByText(/Looking for a full Study Plan for Engineering\?/i)).toBeInTheDocument();
     expect(listPublicStudyPlans).toHaveBeenCalledWith({ courseProgram: "Engineering" });
-    expect(screen.getByRole("link", { name: "Browse official plans →" })).toHaveAttribute("href", "/collections/published");
+    expect(screen.getByRole("link", { name: "Browse official plans →" }))
+      .toHaveAttribute("href", "/collections/published?ref=/public/library");
+  });
+
+  it("keeps the official-plan bridge inside Explore (switches tabs, doesn't leave) when embedded", async () => {
+    // Explore is the single owner of authenticated content discovery (AGENTS.md Page
+    // Responsibility Rule, locked 2026-07-30) — this bridge must not route an Explore-embedded
+    // visitor out to the standalone `/collections/published`.
+    currentSearch = "?courseProgram=engineering";
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "engineering-note", title: "Engineering Note", courseProgram: "Engineering" }),
+    ]));
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([
+      { id: "plan-1", title: "Engineering Review Set" },
+    ]);
+
+    render(<PublicLibraryPageClient basePath="/explore" embedded />);
+
+    expect(await screen.findByRole("link", { name: "Browse official plans →" }))
+      .toHaveAttribute("href", "/explore");
   });
 
   it("hides the official-plan bridge when the lookup has no match or fails", async () => {
