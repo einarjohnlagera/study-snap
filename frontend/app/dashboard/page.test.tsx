@@ -303,7 +303,7 @@ describe("DashboardPage profile variants", () => {
     }
     expect(await screen.findByRole("heading", { name: "Notes for PNLE" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "See all in Explore →" }))
-      .toHaveAttribute("href", "/explore?tab=notes&source=dashboard&courseProgram=PNLE");
+      .toHaveAttribute("href", "/explore?tab=notes&source=dashboard&courseProgram=pnle");
     expect(screen.getByText("Quick Review")).toBeInTheDocument();
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();

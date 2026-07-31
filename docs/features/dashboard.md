@@ -182,7 +182,7 @@ A section visible to all profile types, placed below Recent Notes.
 
 **Section title**: "Notes for [CourseProgram]" — e.g. "Notes for PNLE", "Notes for NMAT"
 **Data source**: `GET /notes/public?courseProgram=<value>&size=4` — the same endpoint as the Public Library
-**Footer link**: "See all in Explore →" navigates through `/explore?tab=notes&source=dashboard&courseProgram=<value>`
+**Footer link**: "See all in Explore →" navigates through `/explore?tab=notes&source=dashboard&courseProgram=<value>`, where `<value>` is slugified via `slugifyPublicLibraryFilterValue()` (v0.67.1 fix — previously the raw, unslugified value, unlike every other `courseProgram` filter link in the app, so the arriving filter chip never displayed and a no-op Filters-modal re-submit silently dropped it).
 
 Behavior by state:
 
