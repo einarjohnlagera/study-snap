@@ -239,7 +239,7 @@ For note-owned Study Pack generation:
 3. The frontend redirects immediately to Note Detail.
 4. Note Detail observes generation state with light polling.
 5. Successful generation persists the Study Pack, increments usage, and maps the note to `STUDY_PACK_READY`.
-6. Failed generation maps the note to `FAILED`, keeps the note content safe, does not increment usage, and exposes `Retry Generate`.
+6. Failed generation maps the note to `FAILED`, keeps the note content safe, does not increment usage, and exposes `Retry Generation`.
 
 User-facing generation statuses:
 

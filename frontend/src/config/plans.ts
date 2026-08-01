@@ -40,7 +40,7 @@ export const PLANS: Record<AppPlanType, {
   FREE: {
     name: "Free",
     title: "For getting started",
-    description: "Create notes, generate Study Packs, and review basic concepts.",
+    description: "Create notes, generate Study Packs, review Key Concepts, and practice with Quick Review.",
     ctaLabel: "Get Started Free",
     adaptivePracticeMessage: `Taste Adaptive Practice — ${pricingConfig.free.adaptivePracticePerMonth} sessions / month`,
     features: [
@@ -76,7 +76,7 @@ export const PLANS: Record<AppPlanType, {
   PRO: {
     name: "Pro",
     title: "Your complete learning system",
-    description: "The complete system for serious, sustained study — plan what's next, practice with confidence, and track real progress.",
+    description: "The complete system for serious, sustained study — plan what's next and track real progress.",
     ctaLabel: "Get Pro",
     eyebrow: "Most popular",
     adaptivePracticeMessage: "Train on weak areas until you master them",

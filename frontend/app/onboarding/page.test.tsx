@@ -540,7 +540,7 @@ describe("OnboardingPage", () => {
     expect(screen.getByRole("button", { name: "Generate Study Pack →" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: /Create a Note/ }));
 
-    const generatedNoteEditor = await screen.findByPlaceholderText("Your generated note will appear here.");
+    const generatedNoteEditor = await screen.findByPlaceholderText("Your note will appear here.");
     expect(generatedNoteEditor).toHaveValue("Newton's Laws study content");
     expect(
       screen.getByText("Your note is ready. You can edit it before generating your Study Pack."),
@@ -644,7 +644,7 @@ describe("OnboardingPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Create a Note/ }));
 
-    const generatedNoteEditor = await screen.findByPlaceholderText("Your generated note will appear here.");
+    const generatedNoteEditor = await screen.findByPlaceholderText("Your note will appear here.");
     fireEvent.change(generatedNoteEditor, {
       target: { value: "Edited Newton note content for onboarding so the study pack can start." },
     });
@@ -728,6 +728,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Get Plus" }));
 
     expect(await screen.findByText("You've reached your topic note limit")).toBeInTheDocument();
+    expect(screen.getByText("Create more topic notes and keep building your study library faster.")).toBeInTheDocument();
   });
 
   it("allows board takers to finish without an exam date", async () => {

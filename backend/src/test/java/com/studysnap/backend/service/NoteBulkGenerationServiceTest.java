@@ -184,7 +184,7 @@ class NoteBulkGenerationServiceTest {
 
         assertThatThrownBy(() -> service.queueBatch(request, userId, true))
                 .isInstanceOf(BulkNoteGenerationQuotaExceededException.class)
-                .hasMessage("You have 2 note generation(s) left this cycle. Remove 1 topic(s) to continue.")
+                .hasMessage("You have 2 topic notes left this cycle. Remove 1 topic to continue.")
                 .satisfies(exception -> {
                     BulkNoteGenerationQuotaExceededException quotaException =
                             (BulkNoteGenerationQuotaExceededException) exception;

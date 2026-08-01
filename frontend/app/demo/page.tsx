@@ -192,7 +192,7 @@ function NoteStep({
     <section className="space-y-4">
       <div className="space-y-1">
         <h2 className="text-lg font-semibold">Your note is ready</h2>
-        <p className="text-sm text-foreground/70">Review the generated note, then turn it into a Study Pack.</p>
+        <p className="text-sm text-foreground/70">Review your note, then turn it into a Study Pack.</p>
       </div>
 
       <Card className="space-y-3 p-4 sm:p-6">

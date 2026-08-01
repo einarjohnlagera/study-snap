@@ -81,7 +81,11 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(screen.getByTestId("bulk-metadata-grid")).toHaveClass("sm:grid-cols-2");
-    expect(screen.queryByText(/topic notes remaining this cycle/i)).not.toBeInTheDocument();
+    // ADMIN bypasses the quota gate, so no remaining-cap hint should render. Asserts the
+    // string the component actually emits — the previous form ("...remaining this cycle")
+    // never existed in any state, so this assertion passed vacuously both before and after
+    // the v0.68.0 "topic note" rename.
+    expect(screen.queryByText(/topic notes? left this cycle/i)).not.toBeInTheDocument();
   });
 
   it("keeps the compact grid profile-aware for teacher and non-teacher views", async () => {

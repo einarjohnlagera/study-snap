@@ -34,7 +34,7 @@ export function BulkGenerateGuide() {
           </li>
           <li className="flex gap-2 text-xs leading-relaxed text-foreground/65">
             <Gauge className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/50" aria-hidden="true" />
-            <span>Monthly note-generation limits still apply. Free users should check the remaining count before queueing a long list.</span>
+            <span>Monthly topic note limits still apply. Free users should check the remaining count before queueing a long list.</span>
           </li>
           <li className="flex gap-2 text-xs leading-relaxed text-foreground/65">
             <RefreshCw className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/50" aria-hidden="true" />

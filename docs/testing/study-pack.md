@@ -7,7 +7,7 @@
 - Note Detail renders the `GENERATING` state with friendly loading copy and placeholder Study Pack content.
 - Note Detail polling stops when the note reaches `STUDY_PACK_READY`.
 - Note Detail polling stops when the note reaches `FAILED`.
-- `FAILED` renders a friendly recovery card and `Retry Generate`.
+- `FAILED` renders a friendly recovery card and `Retry Generation`.
 - retry queues generation again from the saved note.
 - failed generation and failed retries do not increment Study Pack quota.
 - note content remains saved and visible in `Full Notes` after a failed generation.

@@ -507,7 +507,7 @@ Favicon requirements:
   - `TEACHER` -> open `tab=quiz`
 - Generate saves the note first, marks it `Generating`, starts background generation, and redirects immediately to Note Detail.
 - Note Detail polls lightly while generation is active and stops when the status is `Study Pack Ready` or `Failed`.
-- Failed generation shows a friendly recovery state with `Retry Generate`; the note content remains saved.
+- Failed generation shows a friendly recovery state with `Retry Generation`; the note content remains saved.
 - Entry modes reuse the same note pipeline:
   - `/notes/new` -> normal note creation
   - `/notes/new?mode=quiz` -> quiz-first flow
@@ -1378,7 +1378,7 @@ Welcome email requirements:
 - Plus includes:
   - Higher monthly limits
   - More exports
-  - More topic-note generations
+  - More topic notes
 - Pro includes:
   - Adaptive Practice
   - Weak Concept Training
@@ -1418,7 +1418,7 @@ Plans: `FREE`, `PLUS`, `PRO`
 Plan limits:
 
 - Free: unlimited notes, 10 Study Packs/month, 20 Challenge Quizzes/month, 3 Adaptive Practice sessions/month, 2 exports/month, Summary + Key Concepts
-- Plus: 50 Study Packs/month, 100 Challenge Quizzes/month, 10 Adaptive Practice sessions/month, 15 exports/month, higher note generation limits
+- Plus: 50 Study Packs/month, 100 Challenge Quizzes/month, 10 Adaptive Practice sessions/month, 15 exports/month, higher topic note limits
 - Pro: 100 Study Packs/month, 200 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, Board Exam Mode
 - Current enforcement truth:
   - Adaptive Practice is quota-gated by plan: Free 3/month, Plus 10/month, Pro 30/month

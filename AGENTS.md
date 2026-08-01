@@ -121,7 +121,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Note-creation paywalls must save the current note or preserve a local draft before redirecting to checkout.
 - When a user has `2` or `1` Study Packs remaining, show a non-blocking monthly-limit banner on Dashboard, Note Detail, and Study Pack generation surfaces.
 - When Study Pack remaining reaches `0`, keep `Generate Study Pack` enabled and show a student-friendly monthly-limit modal on click instead of disabling the action.
-- Upgrade messaging should position Plus as the practical step-up for regular study and Pro as the exam-preparation and mastery tier.
+- Upgrade messaging should position Plus as the practical step-up for consistent, guided study and Pro as the complete learning system for serious, sustained study (re-messaged in v0.68.0 — see `docs/product/PLANS.md` and the Messaging Architecture Backlog Index row; Board Exam Mode remains a Pro feature, but exam prep is no longer the tier's framing).
 - Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, Board Exam Mode, and the `100` Study Pack Pro limit.
 - Pricing page should clearly compare Free vs Plus vs Pro with localized backend pricing and student-oriented value messaging.
 
@@ -174,7 +174,7 @@ Use these skills before writing prompts, before starting new features, and after
 
 - Note-owned Study Pack generation must save the note first, mark it `GENERATING`, and redirect the user to Note Detail immediately.
 - Note Detail owns generation observation: show a clear `GENERATING` state, friendly loading copy, and light polling until `STUDY_PACK_READY` or `FAILED`.
-- `FAILED` must keep note content safe, show a friendly recovery message, and expose `Retry Generate`.
+- `FAILED` must keep note content safe, show a friendly recovery message, and expose `Retry Generation`.
 - Retry generation must reuse the saved note content and must not consume Study Pack quota unless a Study Pack is successfully persisted.
 - Create/Edit Note should not keep users blocked on the editor while the LLM request runs.
 

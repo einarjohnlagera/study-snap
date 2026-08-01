@@ -21,7 +21,7 @@ Verify these cases on mobile-sized viewports:
 - `Full Notes` remains readable on mobile for long note bodies
 - Note Editor mobile Generate CTA stays centered and readable
 - after tapping Generate in Note Editor, mobile users are redirected to Note Detail instead of waiting on the editor
-- Note Detail `GENERATING` and `FAILED` Study Pack states stay readable on mobile, including `Retry Generate`
+- Note Detail `GENERATING` and `FAILED` Study Pack states stay readable on mobile, including `Retry Generation`
 - Study Pack generation loading messages are calm, short, and do not crowd the tab content on mobile
 - core learning routes use a compact header feedback icon instead of the floating launcher, including Note Editor, Study Pack / Note Detail, and in-progress quiz routes
 - global `Send Feedback` launcher does not overlap the mobile Note Editor CTA

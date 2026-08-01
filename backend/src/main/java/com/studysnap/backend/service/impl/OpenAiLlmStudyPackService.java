@@ -2503,7 +2503,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 "openai_generated_note_unavailable",
                 "The note generation service returned an empty response. Please try again.",
                 "The note generation service returned an unexpected format. Please try again.",
-                "Note generation failed. Please try again in a moment.",
+                "We couldn't create your note. Please try again in a moment.",
                 "Note generation is temporarily unavailable. Please try again."
         );
     }
