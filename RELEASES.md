@@ -2,7 +2,7 @@
 
 ## v0.68.0 - Topic Note Rename
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: rename the bare-prompt "Generate Note" action to "Create a Note" so the word "Generate" stays reserved for the product's actual differentiator, plus six more ready, ungated items folded in before signoff: a related micro-copy grammar fix, the Companion Guidance Doctrine, a first slice of the newly-ratified Messaging Architecture, then — folded in 2026-08-01 on explicit owner review after the first three shipped — the two consistency batches the rename's own deliberately-narrow scope left behind (`plans.ts`'s pricing-table and upgrade-highlight strings, and the topic-note quota's user-facing vocabulary), and finally a docs-only correction to `fable-out/06`'s rename map, whose stale "keep" verdicts on two of the strings this release renamed would otherwise have set up a future session to revert them.
 

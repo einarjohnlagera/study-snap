@@ -1578,7 +1578,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.67.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is recorded once, in the `Current documentation baseline` line at the top of this file — do **not** restate a version number here. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version. *(This line used to name a specific version and went stale for two full release cycles — set at the `v0.67.0` kickoff and still reading `v0.67.0` at `v0.68.0` signoff, because both intervening kickoffs updated the baseline line at the top and not this one. The `/version-check` skill's 7-location table lists only one `AGENTS.md` field, so it did not catch the second. De-versioned at `v0.68.0` signoff so there is exactly one version reference per file.)*
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.
