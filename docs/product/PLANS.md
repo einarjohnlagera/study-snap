@@ -47,7 +47,7 @@ Perfect for students who want consistent review and better retention.
 
 - Adaptive Practice (limited — `10` sessions / month)
 - Ask Companion grounded in curator-authored Review Set guidance (`20` sessions / month, up to `6` questions each)
-- Higher note generation limits (`25` topic notes / month)
+- Higher topic note limits (`25` topic notes / month)
 - Everything in Free
 
 ---
@@ -80,7 +80,7 @@ Designed for serious learners preparing for board and entrance exams.
 - Ask Companion grounded in curator-authored Review Set guidance (`20` sessions / month, up to `6` questions each)
 - Long Exam Mode (`12` sessions / month)
 - Board Exam Mode (`10` sessions / month, also uses the shared Quiz budget)
-- Highest note generation limits (`100` topic notes / month)
+- Highest topic note limits (`100` topic notes / month)
 - Everything in Plus
 
 ---
@@ -117,7 +117,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Quizzes / month | 20 | 100 | 200 |
 | Exports / month | 2 | 15 | Unlimited |
 | Shareable quiz links / month | 3 | 10 | Unlimited |
-| Topic note generation | Limited | Higher | Highest |
+| Topic notes | Limited | Higher | Highest |
 | Adaptive Practice | 3 sessions | 10 sessions | 30 sessions |
 | Ask Companion | — | 20 sessions | 20 sessions |
 | Interview Practice | — | — | 10 sessions |

@@ -722,12 +722,12 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
 
-    expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
+    expect(screen.getByText("You've reached your topic note limit for this month.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create a Note" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Get Plus" }));
 
-    expect(await screen.findByText("You've reached your note generation limit")).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your topic note limit")).toBeInTheDocument();
   });
 
   it("allows board takers to finish without an exam date", async () => {

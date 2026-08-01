@@ -705,7 +705,7 @@ describe("NoteEditorPageClient", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
 
-    expect(await screen.findByText("You've reached your note generation limit")).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your topic note limit")).toBeInTheDocument();
   });
 
   it("uses the student generate label and helper text by default", async () => {

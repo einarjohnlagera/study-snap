@@ -298,7 +298,7 @@ export default function OnboardingPage() {
     : null;
   const hasReachedNoteGenerationLimit = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining <= 0;
   const noteGenerationRemainingLabel = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining > 0
-    ? `${noteGenerationsRemaining} note generation${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
+    ? `${noteGenerationsRemaining} topic note${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
     : null;
   const studyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const studyPackGenerating = studyPackStatus === "GENERATING";
@@ -1266,7 +1266,7 @@ export default function OnboardingPage() {
               {hasReachedNoteGenerationLimit ? (
                 currentPlan === "FREE" ? (
                   <div className="flex flex-col gap-2 rounded-xl border border-amber-300/70 bg-amber-50/80 p-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
-                    <p>You&apos;ve reached your topic note generation limit for this month.</p>
+                    <p>You&apos;ve reached your topic note limit for this month.</p>
                     <Button
                       type="button"
                       variant="outline"
@@ -1278,7 +1278,7 @@ export default function OnboardingPage() {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-border/80 bg-muted/30 p-3 text-sm text-foreground/70">
-                    You&apos;ve reached your topic note generation limit for this billing cycle. Continue with Pro if you want more room to generate note drafts this month.
+                    You&apos;ve reached your topic note limit for this billing cycle. Continue with Pro if you want more room to create topic notes this month.
                   </div>
                 )
               ) : noteGenerationRemainingLabel ? (
@@ -1771,8 +1771,8 @@ export default function OnboardingPage() {
       {currentPlan === "PRO" ? (
         <AppModal
           isOpen={showNoteGenerationLimitModal}
-          title="Note generation limit reached"
-          description="You’ve reached your topic-based note generation limit for this billing cycle. Your limits will reset on your next billing date."
+          title="Topic note limit reached"
+          description="You’ve reached your topic note limit for this billing cycle. Your limits will reset on your next billing date."
           onClose={() => setShowNoteGenerationLimitModal(false)}
           actions={(
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

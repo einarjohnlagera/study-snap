@@ -125,10 +125,10 @@ export function resolvePaywallPresentation(
       };
     case "GENERATE_NOTE_LIMIT":
       return {
-        headline: "You've reached your note generation limit",
+        headline: "You've reached your topic note limit",
         body: currentPlan === "PLUS"
-          ? "Keep generating note drafts from topics and move faster through your study flow with Pro."
-          : "Create more note drafts from topics and keep building your study library faster.",
+          ? "Keep creating topic notes and move faster through your study flow with Pro."
+          : "Create more topic notes and keep building your study library faster.",
         feature: "note_generation_limit",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",

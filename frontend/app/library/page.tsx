@@ -1446,7 +1446,7 @@ export default function LibraryPage() {
               {bulkFailureBanner.quotaBlockedTopics.length > 0 ? (
                 <section className="space-y-2">
                   <p className="text-sm font-semibold">
-                    You&apos;ve used this month&apos;s note generations — {bulkFailureBanner.quotaBlockedTopics.length} topic{bulkFailureBanner.quotaBlockedTopics.length === 1 ? "" : "s"} weren&apos;t generated.
+                    You&apos;ve used all your topic notes this month — {bulkFailureBanner.quotaBlockedTopics.length} topic{bulkFailureBanner.quotaBlockedTopics.length === 1 ? "" : "s"} weren&apos;t generated.
                   </p>
                   <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed">
                     {bulkFailureBanner.quotaBlockedTopics.map((topic) => (

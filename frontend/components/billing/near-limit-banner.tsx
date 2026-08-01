@@ -14,7 +14,7 @@ type NearLimitBannerProps = {
   onUpgrade?: () => void;
   /**
    * Singular noun for the metered credit. Defaults to the Study Pack copy used
-   * by the Note editor. Pass a custom label (e.g. "note generation", "image scan")
+   * by the Note editor. Pass a custom label (e.g. "topic note", "image scan")
    * to reuse the banner for other quotas.
    */
   creditLabel?: string;
