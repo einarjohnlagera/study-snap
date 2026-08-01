@@ -9,7 +9,7 @@ work in `fable-out/06-terminology-rename-map.md` past where it stopped. No code 
 ## Decisions carried forward
 
 **Ratified by owner 2026-07-31** (§4 items 1, 2, 3, 6 — see `ROADMAP.md`'s Backlog Index Company
-Redefinition row for the recorded decision). §4 items 4, 5, 7, 8, 9 remain open.
+Redefinition row for the recorded decision). §4 items 4, 5, 7, 8, 9 were open at ratification. **Updated 2026-08-01:** items 6 and 8 shipped in `v0.68.0`; item 4 was widened into the standalone Messaging Architecture initiative and its first slice shipped there too; item 7 was touched at the documentation level only (the `fable-out/06` staleness correction). Items 5 and 7's implementation substance, and item 9, remain open.
 
 **RECOMMENDATION — packaging: one product, not two.** Creator (bring-your-own-notes, generate,
 private workspace) and Curated Learning (adopt Official Review Sets) should NOT become separate

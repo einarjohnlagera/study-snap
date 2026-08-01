@@ -908,7 +908,7 @@ export function NoteEditorPageClient({
       return;
     }
     if (!isEmailVerified) {
-      showToast("Email verification is required before generating notes.", "info");
+      showToast("Email verification is required before creating notes.", "info");
       return;
     }
     if (hasReachedNoteGenerationLimit) {
@@ -936,14 +936,14 @@ export function NoteEditorPageClient({
       setGeneratedContentRefreshToken((previous) => previous + 1);
       showToast(
         isReplacingContent
-          ? "Generated note replaced the current content. Review and edit it before saving."
-          : "Generated note added. Review and edit it before saving.",
+          ? "Your new note replaced the current content. Review and edit it before saving."
+          : "Your new note is ready. Review and edit it before saving.",
         "success",
       );
       void refreshUsageSummary();
     } catch (error) {
       if (isEmailNotVerifiedError(error)) {
-        showToast("Email verification is required before generating notes.", "info");
+        showToast("Email verification is required before creating notes.", "info");
       } else if (isNoteGenerationLimitReachedError(error)) {
         const latestUsageSummary = await refreshUsageSummary();
         const limitPlan = latestUsageSummary?.plan ?? currentPlan;

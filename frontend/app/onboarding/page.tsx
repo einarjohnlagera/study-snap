@@ -1292,7 +1292,7 @@ export default function OnboardingPage() {
                   className={generatedNoteRefreshToken > 0 ? "motion-note-content-enter" : undefined}
                 >
                   <label className="block space-y-2">
-                    <span className="text-sm font-medium text-foreground">Generated note</span>
+                    <span className="text-sm font-medium text-foreground">Your note</span>
                     <textarea
                       value={draft.noteContent}
                       onChange={(event) => {
@@ -1304,7 +1304,7 @@ export default function OnboardingPage() {
                       }}
                       rows={8}
                       className="min-h-[180px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[210px]"
-                      placeholder="Your generated note will appear here."
+                      placeholder="Your note will appear here."
                     />
                     <div className="space-y-1">
                       <p className="text-sm text-foreground/60">{noteLength} / 50 minimum</p>

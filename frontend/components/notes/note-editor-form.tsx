@@ -593,7 +593,7 @@ export function NoteEditorForm({
                 </Link>
             </p>
             <p className="text-xs text-foreground/50">
-                Your Learning Profile helps tailor the created note&apos;s depth, terminology, and examples.
+                Your Learning Profile helps tailor the new note&apos;s depth, terminology, and examples.
             </p>
             {generateNoteFooter}
             {note.content.trim().length > 0 ? (

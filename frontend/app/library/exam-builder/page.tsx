@@ -1337,7 +1337,7 @@ export default function ExamBuilderPage() {
 
           {addableQuizReadyNotes.length === 0 ? (
             <p className="rounded-xl border border-border bg-muted/20 px-3 py-4 text-sm text-foreground/70">
-              All your quiz-ready notes are already in this exam. Create or generate a new note to add more.
+              All your quiz-ready notes are already in this exam. Create a new note to add more.
             </p>
           ) : (
             <div className="max-h-80 space-y-2 overflow-y-auto pr-1">

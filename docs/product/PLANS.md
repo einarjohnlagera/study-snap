@@ -6,7 +6,7 @@ This document is the canonical reference for NoteLib's Free / Plus / Pro plans, 
 
 ### Free — *For getting started*
 
-Create notes, generate Study Packs, and review basic concepts.
+Create notes, generate Study Packs, review Key Concepts, and practice with Quick Review.
 
 **Monthly limits**
 
@@ -24,9 +24,9 @@ Create notes, generate Study Packs, and review basic concepts.
 
 ---
 
-### Plus — *For regular study*
+### Plus — *Guided learning built around your notes*
 
-Perfect for students who want consistent review and better retention.
+Consistent, guided study with more room to keep going — always know what to review next.
 
 **Pricing**
 
@@ -52,9 +52,9 @@ Perfect for students who want consistent review and better retention.
 
 ---
 
-### Pro — *Best for exam prep*
+### Pro — *Your complete learning system*
 
-Designed for serious learners preparing for board and entrance exams.
+The complete system for serious, sustained study — plan what's next and track real progress.
 
 **Pricing**
 
@@ -94,8 +94,8 @@ Free → Plus → Pro
 The ladder reflects the user's *study stage*, not just price:
 
 - **Free** is for users who are exploring NoteLib and need basic note → Study Pack → Quick Review, with a small Adaptive Practice allowance to close the weak-area loop.
-- **Plus** is for *regular study* — users who study consistently, want Adaptive Practice on weak areas, and want grounded interaction with their Review Set Companion without committing to exam-prep volume.
-- **Pro** is for *exam preparation* — board exam takers and serious learners who need Board Exam Mode and the highest generation limits.
+- **Plus** is for *consistent, guided study* — users who study regularly, want Adaptive Practice on weak areas, and want grounded interaction with their Review Set Companion without committing to Pro volume.
+- **Pro** is for *serious, sustained study* — learners who want the complete system: planning what's next, the highest limits, and Board Exam Mode. Board Exam Mode is still Pro-only; as of v0.68.0 exam prep is no longer the tier's framing.
 
 Upgrade CTAs must respect the ladder:
 
