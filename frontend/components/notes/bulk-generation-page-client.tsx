@@ -147,7 +147,7 @@ export function BulkGenerationPageClient() {
     }
     if (quota && normalizedTopics.length > quota.noteGenRemaining) {
       const excess = normalizedTopics.length - quota.noteGenRemaining;
-      return `You have ${quota.noteGenRemaining} note generation${quota.noteGenRemaining === 1 ? "" : "s"} left this cycle. Remove ${excess} topic${excess === 1 ? "" : "s"} to continue.`;
+      return `You have ${quota.noteGenRemaining} topic note${quota.noteGenRemaining === 1 ? "" : "s"} left this cycle. Remove ${excess} topic${excess === 1 ? "" : "s"} to continue.`;
     }
     if (isTeacherOrAdmin && !courseProgram.trim()) {
       return "Enter a course or program for this batch.";
@@ -195,7 +195,7 @@ export function BulkGenerationPageClient() {
       const dropped = parsed.length - accepted.length;
       if (dropped > 0) {
         const capReason = isNoteGenCapped
-          ? `your ${effectiveTopicCap} note generation${effectiveTopicCap === 1 ? "" : "s"} left this cycle`
+          ? `your ${effectiveTopicCap} topic note${effectiveTopicCap === 1 ? "" : "s"} left this cycle`
           : `the ${MAX_BULK_GENERATION_TOPICS} max`;
         setPasteNotice(
           `Added ${accepted.length} topic${accepted.length === 1 ? "" : "s"} up to ${capReason} — ${dropped} more weren't added.`,
@@ -303,7 +303,7 @@ export function BulkGenerationPageClient() {
             planType={currentPlan}
             remainingCredits={quota.noteGenRemaining}
             resetDateLabel={quota.resetLabel}
-            creditLabel="note generation"
+            creditLabel="topic note"
             ctaContext="note-generation-limit"
             analyticsSource="bulk_generation_note_generation_near_limit"
             onUpgrade={() => router.push("/settings?section=plans")}
@@ -394,7 +394,7 @@ export function BulkGenerationPageClient() {
             </div>
             {isNoteGenCapped ? (
               <p className="text-xs text-foreground/60">
-                Capped by your {effectiveTopicCap} note generation{effectiveTopicCap === 1 ? "" : "s"} left this cycle.
+                Capped by your {effectiveTopicCap} topic note{effectiveTopicCap === 1 ? "" : "s"} left this cycle.
               </p>
             ) : null}
 
@@ -440,7 +440,7 @@ export function BulkGenerationPageClient() {
           {overCap ? (
             <p className="text-sm text-red-600 dark:text-red-400">
               {isNoteGenCapped
-                ? `You have ${effectiveTopicCap} note generation${effectiveTopicCap === 1 ? "" : "s"} left this cycle. Remove ${normalizedTopics.length - effectiveTopicCap} topic${normalizedTopics.length - effectiveTopicCap === 1 ? "" : "s"} to continue.`
+                ? `You have ${effectiveTopicCap} topic note${effectiveTopicCap === 1 ? "" : "s"} left this cycle. Remove ${normalizedTopics.length - effectiveTopicCap} topic${normalizedTopics.length - effectiveTopicCap === 1 ? "" : "s"} to continue.`
                 : `You can bulk generate up to ${MAX_BULK_GENERATION_TOPICS} topics at once.`}
             </p>
           ) : null}

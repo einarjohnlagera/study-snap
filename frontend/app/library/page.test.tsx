@@ -909,7 +909,7 @@ describe("Library page", () => {
 
     render(<LibraryPage />);
 
-    expect(await screen.findByText(/used this month's note generations/i)).toBeInTheDocument();
+    expect(await screen.findByText(/used all your topic notes this month/i)).toBeInTheDocument();
     expect(screen.getByText("Pediatric Milestones")).toBeInTheDocument();
     expect(screen.getByText("Immunization Schedule")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upgrade to Plus" })).toBeInTheDocument();

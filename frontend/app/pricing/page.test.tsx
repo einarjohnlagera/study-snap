@@ -90,7 +90,7 @@ describe("PricingPage", () => {
     expect(screen.getAllByText("Export every study resource you need")).not.toHaveLength(0);
     expect(screen.getByText("Teachers get unlimited quiz exports on Plus.")).toBeInTheDocument();
     expect(screen.getAllByText("Summary + Key Concepts")).not.toHaveLength(0);
-    expect(screen.getAllByText("Higher note generation limits")).not.toHaveLength(0);
+    expect(screen.getAllByText("Higher topic note limits")).not.toHaveLength(0);
     expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
     expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
     expect(screen.getByRole("button", { name: "Get Plus" })).toBeInTheDocument();

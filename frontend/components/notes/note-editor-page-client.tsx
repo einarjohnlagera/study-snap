@@ -551,7 +551,7 @@ export function NoteEditorPageClient({
     ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
   const noteGenerationRemainingLabel = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining > 0
-    ? `${noteGenerationsRemaining} note generation${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
+    ? `${noteGenerationsRemaining} topic note${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
     : null;
   const normalizedGenerateTopic = generateTopic.trim();
   const generateNoteButtonLabel = hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
@@ -977,7 +977,7 @@ export function NoteEditorPageClient({
 
   const generateNoteFooter = hasReachedNoteGenerationLimit ? (
     <QuotaLimitBanner
-      title="You've reached your note generation limit for this month."
+      title="You've reached your topic note limit for this month."
       resetDateLabel={usageResetDateLabel}
       plan={resolveAppPlan(currentPlan)}
       ctaContext="note-generation-limit"
@@ -1206,8 +1206,8 @@ export function NoteEditorPageClient({
       {currentPlan === "PRO" ? (
         <AppModal
           isOpen={showNoteGenerationLimitModal}
-          title="Note generation limit reached"
-          description="You’ve reached your topic-based note generation limit for this billing cycle. Your limits will reset on your next billing date."
+          title="Topic note limit reached"
+          description="You’ve reached your topic note limit for this billing cycle. Your limits will reset on your next billing date."
           onClose={() => setShowNoteGenerationLimitModal(false)}
           actions={(
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

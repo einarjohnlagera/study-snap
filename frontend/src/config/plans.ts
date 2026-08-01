@@ -54,7 +54,7 @@ export const PLANS: Record<AppPlanType, {
     upgradeHighlights: [
       `Adaptive Practice (${pricingConfig.free.adaptivePracticePerMonth} free sessions / month)`,
       "Board Exam Mode",
-      "Higher note generation limits",
+      "Higher topic note limits",
     ],
   },
   PLUS: {
@@ -144,7 +144,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     },
   },
   {
-    label: "Topic note generation",
+    label: "Topic notes",
     values: {
       FREE: "Limited",
       PLUS: "Higher",
