@@ -356,7 +356,7 @@ describe("Exam Builder page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Start Blank Begin with one empty section. Add, rename, and reorder sections as you go." }));
     fireEvent.click(screen.getByRole("button", { name: "Add Notes" }));
 
-    expect(await screen.findByText("All your quiz-ready notes are already in this exam. Create or generate a new note to add more.")).toBeInTheDocument();
+    expect(await screen.findByText("All your quiz-ready notes are already in this exam. Create a new note to add more.")).toBeInTheDocument();
   });
 
   it("applies built-in templates and asks before replacing an edited structure", async () => {

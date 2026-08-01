@@ -6,7 +6,7 @@ This document is the canonical reference for NoteLib's Free / Plus / Pro plans, 
 
 ### Free — *For getting started*
 
-Create notes, generate Study Packs, and review basic concepts.
+Create notes, generate Study Packs, review Key Concepts, and practice with Quick Review.
 
 **Monthly limits**
 
@@ -24,9 +24,9 @@ Create notes, generate Study Packs, and review basic concepts.
 
 ---
 
-### Plus — *For regular study*
+### Plus — *Guided learning built around your notes*
 
-Perfect for students who want consistent review and better retention.
+Consistent, guided study with more room to keep going — always know what to review next.
 
 **Pricing**
 
@@ -47,14 +47,14 @@ Perfect for students who want consistent review and better retention.
 
 - Adaptive Practice (limited — `10` sessions / month)
 - Ask Companion grounded in curator-authored Review Set guidance (`20` sessions / month, up to `6` questions each)
-- Higher note generation limits (`25` topic notes / month)
+- Higher topic note limits (`25` topic notes / month)
 - Everything in Free
 
 ---
 
-### Pro — *Best for exam prep*
+### Pro — *Your complete learning system*
 
-Designed for serious learners preparing for board and entrance exams.
+The complete system for serious, sustained study — plan what's next and track real progress.
 
 **Pricing**
 
@@ -80,7 +80,7 @@ Designed for serious learners preparing for board and entrance exams.
 - Ask Companion grounded in curator-authored Review Set guidance (`20` sessions / month, up to `6` questions each)
 - Long Exam Mode (`12` sessions / month)
 - Board Exam Mode (`10` sessions / month, also uses the shared Quiz budget)
-- Highest note generation limits (`100` topic notes / month)
+- Highest topic note limits (`100` topic notes / month)
 - Everything in Plus
 
 ---
@@ -94,8 +94,8 @@ Free → Plus → Pro
 The ladder reflects the user's *study stage*, not just price:
 
 - **Free** is for users who are exploring NoteLib and need basic note → Study Pack → Quick Review, with a small Adaptive Practice allowance to close the weak-area loop.
-- **Plus** is for *regular study* — users who study consistently, want Adaptive Practice on weak areas, and want grounded interaction with their Review Set Companion without committing to exam-prep volume.
-- **Pro** is for *exam preparation* — board exam takers and serious learners who need Board Exam Mode and the highest generation limits.
+- **Plus** is for *consistent, guided study* — users who study regularly, want Adaptive Practice on weak areas, and want grounded interaction with their Review Set Companion without committing to Pro volume.
+- **Pro** is for *serious, sustained study* — learners who want the complete system: planning what's next, the highest limits, and Board Exam Mode. Board Exam Mode is still Pro-only; as of v0.68.0 exam prep is no longer the tier's framing.
 
 Upgrade CTAs must respect the ladder:
 
@@ -117,7 +117,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Quizzes / month | 20 | 100 | 200 |
 | Exports / month | 2 | 15 | Unlimited |
 | Shareable quiz links / month | 3 | 10 | Unlimited |
-| Topic note generation | Limited | Higher | Highest |
+| Topic notes | Limited | Higher | Highest |
 | Adaptive Practice | 3 sessions | 10 sessions | 30 sessions |
 | Ask Companion | — | 20 sessions | 20 sessions |
 | Interview Practice | — | — | 10 sessions |

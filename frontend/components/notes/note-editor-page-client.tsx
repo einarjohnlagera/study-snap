@@ -551,16 +551,16 @@ export function NoteEditorPageClient({
     ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
   const noteGenerationRemainingLabel = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining > 0
-    ? `${noteGenerationsRemaining} note generation${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
+    ? `${noteGenerationsRemaining} topic note${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
     : null;
   const normalizedGenerateTopic = generateTopic.trim();
   const generateNoteButtonLabel = hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
-    ? "Generate Again"
-    : "Generate Note";
+    ? "Create Again"
+    : "Create a Note";
   const contentStatusText = entryOption === "generate" && hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
     ? (isGeneratingNote
       ? "Creating a new version..."
-      : "Not quite right? Try refining your topic before generating again.")
+      : "Not quite right? Try refining your topic before creating again.")
     : importFlowState === "success"
       ? IMPORT_SUCCESS_MESSAGE
       : null;
@@ -908,7 +908,7 @@ export function NoteEditorPageClient({
       return;
     }
     if (!isEmailVerified) {
-      showToast("Email verification is required before generating notes.", "info");
+      showToast("Email verification is required before creating notes.", "info");
       return;
     }
     if (hasReachedNoteGenerationLimit) {
@@ -936,14 +936,14 @@ export function NoteEditorPageClient({
       setGeneratedContentRefreshToken((previous) => previous + 1);
       showToast(
         isReplacingContent
-          ? "Generated note replaced the current content. Review and edit it before saving."
-          : "Generated note added. Review and edit it before saving.",
+          ? "Your new note replaced the current content. Review and edit it before saving."
+          : "Your new note is ready. Review and edit it before saving.",
         "success",
       );
       void refreshUsageSummary();
     } catch (error) {
       if (isEmailNotVerifiedError(error)) {
-        showToast("Email verification is required before generating notes.", "info");
+        showToast("Email verification is required before creating notes.", "info");
       } else if (isNoteGenerationLimitReachedError(error)) {
         const latestUsageSummary = await refreshUsageSummary();
         const limitPlan = latestUsageSummary?.plan ?? currentPlan;
@@ -953,7 +953,7 @@ export function NoteEditorPageClient({
           setShowNoteGenerationLimitModal(true);
         }
       } else {
-        const message = error instanceof Error ? error.message : "Could not generate note.";
+        const message = error instanceof Error ? error.message : "Could not create note.";
         showToast(message, "error");
       }
     } finally {
@@ -977,7 +977,7 @@ export function NoteEditorPageClient({
 
   const generateNoteFooter = hasReachedNoteGenerationLimit ? (
     <QuotaLimitBanner
-      title="You've reached your note generation limit for this month."
+      title="You've reached your topic note limit for this month."
       resetDateLabel={usageResetDateLabel}
       plan={resolveAppPlan(currentPlan)}
       ctaContext="note-generation-limit"
@@ -1133,7 +1133,7 @@ export function NoteEditorPageClient({
         isGeneratingNote={isGeneratingNote}
         disableGenerateNote={!isEmailVerified}
         generateNoteLabel={generateNoteButtonLabel}
-        generateNoteLoadingLabel="Generating..."
+        generateNoteLoadingLabel="Creating..."
         generateNoteFooter={generateNoteFooter}
         showGenerateNoteEntry={showGenerateNoteEntry}
         showGenerateNoteTip={showGenerateNoteTip}
@@ -1206,8 +1206,8 @@ export function NoteEditorPageClient({
       {currentPlan === "PRO" ? (
         <AppModal
           isOpen={showNoteGenerationLimitModal}
-          title="Note generation limit reached"
-          description="You’ve reached your topic-based note generation limit for this billing cycle. Your limits will reset on your next billing date."
+          title="Topic note limit reached"
+          description="You’ve reached your topic note limit for this billing cycle. Your limits will reset on your next billing date."
           onClose={() => setShowNoteGenerationLimitModal(false)}
           actions={(
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

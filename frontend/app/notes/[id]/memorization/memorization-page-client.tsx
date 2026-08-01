@@ -238,7 +238,7 @@ export function MemorizationPageClient({ noteId }: Readonly<{ noteId: string }>)
           {studyPackStatus === "FAILED" ? (
             <MemorizationGuard
               title="Memorization is not available yet"
-              message="Generation did not complete, so key concepts are not available yet. Retry Generate when you are ready."
+              message="Generation did not complete, so key concepts are not available yet. Retry generation when you are ready."
             />
           ) : null}
 

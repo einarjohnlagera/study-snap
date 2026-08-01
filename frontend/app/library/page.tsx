@@ -1424,7 +1424,7 @@ export default function LibraryPage() {
               primaryLabel="New Note"
               onPrimary={() => router.push("/notes/new")}
               items={[
-                { key: "note", label: "Note", description: "Write, import, or generate a note", onSelect: () => router.push("/notes/new") },
+                { key: "note", label: "Note", description: "Write, import, or create a note", onSelect: () => router.push("/notes/new") },
                 { key: "import", label: "Import files", description: "Upload several files as draft notes", onSelect: () => router.push("/notes/import?from=library") },
                 {
                   key: "bulk-generate",
@@ -1446,7 +1446,7 @@ export default function LibraryPage() {
               {bulkFailureBanner.quotaBlockedTopics.length > 0 ? (
                 <section className="space-y-2">
                   <p className="text-sm font-semibold">
-                    You&apos;ve used this month&apos;s note generations — {bulkFailureBanner.quotaBlockedTopics.length} topic{bulkFailureBanner.quotaBlockedTopics.length === 1 ? "" : "s"} weren&apos;t generated.
+                    You&apos;ve used all your topic notes this month — {bulkFailureBanner.quotaBlockedTopics.length} topic{bulkFailureBanner.quotaBlockedTopics.length === 1 ? " wasn't" : "s weren't"} generated.
                   </p>
                   <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed">
                     {bulkFailureBanner.quotaBlockedTopics.map((topic) => (

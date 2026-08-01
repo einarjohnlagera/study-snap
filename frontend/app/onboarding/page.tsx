@@ -298,7 +298,7 @@ export default function OnboardingPage() {
     : null;
   const hasReachedNoteGenerationLimit = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining <= 0;
   const noteGenerationRemainingLabel = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining > 0
-    ? `${noteGenerationsRemaining} note generation${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
+    ? `${noteGenerationsRemaining} topic note${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
     : null;
   const studyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const studyPackGenerating = studyPackStatus === "GENERATING";
@@ -880,7 +880,7 @@ export default function OnboardingPage() {
         setShowNoteGenerationLimitModal(true);
       } else {
         setStepThreeError(
-          error instanceof Error ? error.message : "We could not generate a note right now. Please try again.",
+          error instanceof Error ? error.message : "We could not create a note right now. Please try again.",
         );
       }
     } finally {
@@ -1230,7 +1230,7 @@ export default function OnboardingPage() {
           <div className="grid gap-2.5 sm:grid-cols-2">
             <ModeOptionButton
               icon="✨"
-              label="Generate a note"
+              label="Create a note"
               description="Start with a topic, review the draft, then generate your Study Pack."
               selected={selectedInputMethod === "generate"}
               onClick={() => selectInputMethod("generate")}
@@ -1266,7 +1266,7 @@ export default function OnboardingPage() {
               {hasReachedNoteGenerationLimit ? (
                 currentPlan === "FREE" ? (
                   <div className="flex flex-col gap-2 rounded-xl border border-amber-300/70 bg-amber-50/80 p-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
-                    <p>You&apos;ve reached your topic note generation limit for this month.</p>
+                    <p>You&apos;ve reached your topic note limit for this month.</p>
                     <Button
                       type="button"
                       variant="outline"
@@ -1278,7 +1278,7 @@ export default function OnboardingPage() {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-border/80 bg-muted/30 p-3 text-sm text-foreground/70">
-                    You&apos;ve reached your topic note generation limit for this billing cycle. Continue with Pro if you want more room to generate note drafts this month.
+                    You&apos;ve reached your topic note limit for this billing cycle. Continue with Pro if you want more room to create topic notes this month.
                   </div>
                 )
               ) : noteGenerationRemainingLabel ? (
@@ -1292,7 +1292,7 @@ export default function OnboardingPage() {
                   className={generatedNoteRefreshToken > 0 ? "motion-note-content-enter" : undefined}
                 >
                   <label className="block space-y-2">
-                    <span className="text-sm font-medium text-foreground">Generated note</span>
+                    <span className="text-sm font-medium text-foreground">Your note</span>
                     <textarea
                       value={draft.noteContent}
                       onChange={(event) => {
@@ -1304,7 +1304,7 @@ export default function OnboardingPage() {
                       }}
                       rows={8}
                       className="min-h-[180px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[210px]"
-                      placeholder="Your generated note will appear here."
+                      placeholder="Your note will appear here."
                     />
                     <div className="space-y-1">
                       <p className="text-sm text-foreground/60">{noteLength} / 50 minimum</p>
@@ -1316,7 +1316,7 @@ export default function OnboardingPage() {
                 </div>
               ) : (
                 <p className="rounded-xl border border-dashed border-border px-4 py-4 text-sm text-foreground/70 sm:text-base">
-                  Generate a note first, then review and edit it before creating your Study Pack.
+                  Create a note first, then review and edit it before creating your Study Pack.
                 </p>
               )}
             </div>
@@ -1616,9 +1616,9 @@ export default function OnboardingPage() {
                 onClick={() => void handleGenerateNoteDraft()}
                 disabled={!canGenerateNoteDraft}
                 loading={isGeneratingNote}
-                loadingText="Generating..."
+                loadingText="Creating..."
               >
-                Generate Note
+                Create a Note
               </Button>
             </div>
           </div>
@@ -1771,8 +1771,8 @@ export default function OnboardingPage() {
       {currentPlan === "PRO" ? (
         <AppModal
           isOpen={showNoteGenerationLimitModal}
-          title="Note generation limit reached"
-          description="You’ve reached your topic-based note generation limit for this billing cycle. Your limits will reset on your next billing date."
+          title="Topic note limit reached"
+          description="You’ve reached your topic note limit for this billing cycle. Your limits will reset on your next billing date."
           onClose={() => setShowNoteGenerationLimitModal(false)}
           actions={(
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

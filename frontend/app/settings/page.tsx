@@ -1151,13 +1151,15 @@ export default function SettingsPage() {
                 {/* Free card */}
                 <div className={`flex flex-col rounded-lg border p-4 ${currentPlan === "FREE" ? "border-blue-300 bg-blue-50/20 dark:border-blue-700 dark:bg-blue-950/10" : "border-border bg-muted/20"}`}>
                   <div className="mb-4 space-y-2">
-                    {currentPlan === "FREE" ? (
-                      <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                        Current plan
-                      </span>
-                    ) : null}
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{freePlanConfig.name}</p>
-                    <p className="text-2xl font-bold">{freePlanConfig.title}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{freePlanConfig.name}</p>
+                      {currentPlan === "FREE" ? (
+                        <span className="inline-flex shrink-0 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                          Current plan
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-lg font-semibold text-foreground">{freePlanConfig.title}</p>
                     <p className="text-sm leading-snug text-foreground/70">{freePlanConfig.description}</p>
                   </div>
                   <PlanFeatureList features={freePlanConfig.features} />
@@ -1169,12 +1171,14 @@ export default function SettingsPage() {
                 {/* Plus card */}
                 <div className={`flex flex-col rounded-lg border p-4 ${currentPlan === "PLUS" ? "border-blue-300 bg-blue-50/30 dark:border-blue-700 dark:bg-blue-950/15" : "border-border bg-background"}`}>
                   <div className="mb-4 space-y-2">
-                    {currentPlan === "PLUS" ? (
-                      <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                        Current plan
-                      </span>
-                    ) : null}
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{plusPlanConfig.name}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{plusPlanConfig.name}</p>
+                      {currentPlan === "PLUS" ? (
+                        <span className="inline-flex shrink-0 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                          Current plan
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="text-lg font-semibold text-foreground">{plusPlanConfig.title}</p>
                     <p className="text-sm leading-snug text-foreground/70">{plusPlanConfig.description}</p>
                     <p className="text-xl font-semibold">{plusMonthlyPriceLabel}</p>
@@ -1225,17 +1229,19 @@ export default function SettingsPage() {
                 {/* Pro card */}
                 <div className={`flex flex-col rounded-lg border p-4 ${currentPlan === "PRO" ? "border-blue-400 bg-blue-50/40 dark:border-blue-600 dark:bg-blue-950/20" : "border-blue-200 bg-blue-50/20 dark:border-blue-800/60 dark:bg-blue-950/10"}`}>
                   <div className="mb-4 space-y-2">
-                    {currentPlan === "PRO" ? (
-                      <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                        Current plan
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                        <Sparkles className="h-3 w-3" aria-hidden="true" />
-                        {proPlanConfig.eyebrow}
-                      </span>
-                    )}
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{proPlanConfig.name}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{proPlanConfig.name}</p>
+                      {currentPlan === "PRO" ? (
+                        <span className="inline-flex shrink-0 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                          Current plan
+                        </span>
+                      ) : (
+                        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                          <Sparkles className="h-3 w-3" aria-hidden="true" />
+                          {proPlanConfig.eyebrow}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-lg font-semibold text-foreground">{proPlanConfig.title}</p>
                     <p className="text-sm leading-snug text-foreground/70">{proPlanConfig.description}</p>
                     <p className="text-xl font-semibold">{proSelectedPriceLabel}</p>

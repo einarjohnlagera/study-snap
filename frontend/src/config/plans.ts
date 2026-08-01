@@ -40,7 +40,7 @@ export const PLANS: Record<AppPlanType, {
   FREE: {
     name: "Free",
     title: "For getting started",
-    description: "Create notes, generate Study Packs, and review basic concepts.",
+    description: "Create notes, generate Study Packs, review Key Concepts, and practice with Quick Review.",
     ctaLabel: "Get Started Free",
     adaptivePracticeMessage: `Taste Adaptive Practice — ${pricingConfig.free.adaptivePracticePerMonth} sessions / month`,
     features: [
@@ -54,13 +54,13 @@ export const PLANS: Record<AppPlanType, {
     upgradeHighlights: [
       `Adaptive Practice (${pricingConfig.free.adaptivePracticePerMonth} free sessions / month)`,
       "Board Exam Mode",
-      "Higher note generation limits",
+      "Higher topic note limits",
     ],
   },
   PLUS: {
     name: "Plus",
-    title: "For regular study",
-    description: "Perfect for students who want consistent review and better retention.",
+    title: "Guided learning built around your notes",
+    description: "Consistent, guided study with more room to keep going — always know what to review next.",
     ctaLabel: "Get Plus",
     adaptivePracticeMessage: "Train on weak areas (limited sessions)",
     features: [
@@ -75,8 +75,8 @@ export const PLANS: Record<AppPlanType, {
   },
   PRO: {
     name: "Pro",
-    title: "Best for exam prep",
-    description: "Designed for serious learners preparing for board and entrance exams.",
+    title: "Your complete learning system",
+    description: "The complete system for serious, sustained study — plan what's next and track real progress.",
     ctaLabel: "Get Pro",
     eyebrow: "Most popular",
     adaptivePracticeMessage: "Train on weak areas until you master them",
@@ -144,7 +144,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     },
   },
   {
-    label: "Topic note generation",
+    label: "Topic notes",
     values: {
       FREE: "Limited",
       PLUS: "Higher",

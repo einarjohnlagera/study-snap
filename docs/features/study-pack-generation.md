@@ -121,15 +121,15 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 
 ## Note import flow
 
-## Generate note from topic
+## Create a note from topic
 
 Create Note now includes a lightweight note-generation assist before save.
 
 Rules:
 
-- users can choose `Write your own note` or `Generate from topic`
+- users can choose `Write your own note` or `Create from topic`
 - topic input placeholder: `Create a note about Newton's Laws of Motion...`
-- CTA: `Generate Note`
+- CTA: `Create a Note`
 - backend endpoint: `POST /api/notes/generate`
 - response fills the editor `Content` field
 - generated note content remains editable before save
@@ -239,7 +239,7 @@ For note-owned Study Pack generation:
 3. The frontend redirects immediately to Note Detail.
 4. Note Detail observes generation state with light polling.
 5. Successful generation persists the Study Pack, increments usage, and maps the note to `STUDY_PACK_READY`.
-6. Failed generation maps the note to `FAILED`, keeps the note content safe, does not increment usage, and exposes `Retry Generate`.
+6. Failed generation maps the note to `FAILED`, keeps the note content safe, does not increment usage, and exposes `Retry Generation`.
 
 User-facing generation statuses:
 

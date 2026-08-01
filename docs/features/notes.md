@@ -105,14 +105,14 @@ Create mode:
   - `Choose how to start`
   - start options:
     - `Write your own note`
-    - `Generate from topic`
+    - `Create from topic`
     - `Import notes`
   - optional topic generation panel
   - optional import panel
   - note `Content`
   - `Add details` disclosure
 - actions: `Save`, `Generate Study Pack`
-- optional topic-first helper: `Generate Note`
+- optional topic-first helper: `Create a Note`
 - the `Import notes` start option reuses the existing OCR/file-extraction flow and inserts extracted text into the main editor before save or Study Pack generation.
 - `/notes/import` is the separate bulk note-creation entry point, reached from the Create-note flow's `Import notes` panel (a "Bulk import multiple files" link). It sends multiple files through `POST /notes/import-batch`, creates one `DRAFT` note per successfully extracted file directly, and never triggers Study Pack generation or LLM calls.
 - note metadata fields (`title`, `subject`, `courseProgram`, `tags`, and teacher/admin `Who is this note for?`) stay available in the collapsed `Add details` section by default so first-time note creation stays focused on content.
@@ -120,9 +120,9 @@ Create mode:
 - create mode should keep a subtle inline prompt near the primary actions so users can reveal `Add details` without turning the page back into a long form.
 - `Generate Study Pack` first saves the note, queues Study Pack generation, then redirects immediately to Note Detail with the requested default tab.
 - the editor must not wait for the LLM request to finish before navigation.
-- `Generate Note` creates a structured first draft from a topic with clear sections (`Overview`, `Core Concepts`, `Key Details`, optional `Examples`) and should avoid meta filler or instructional language.
-- `Generate Note` must build its request from the current Create Note form state at submit time. The selected draft Course / Program is authoritative for the first generated note; the profile Course / Program is fallback only when the draft field is blank.
-- `Generate Note` calibrates the generated draft from that resolved Course / Program, not from the owner's learner level, so copied notes retain a shared academic depth signal.
+- `Create a Note` creates a structured first draft from a topic with clear sections (`Overview`, `Core Concepts`, `Key Details`, optional `Examples`) and should avoid meta filler or instructional language.
+- `Create a Note` must build its request from the current Create Note form state at submit time. The selected draft Course / Program is authoritative for the first generated note; the profile Course / Program is fallback only when the draft field is blank.
+- `Create a Note` calibrates the generated draft from that resolved Course / Program, not from the owner's learner level, so copied notes retain a shared academic depth signal.
 - topic note generation is plan-gated separately from Study Pack generation and OCR.
 
 Bulk import behavior:

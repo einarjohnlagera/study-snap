@@ -108,7 +108,7 @@ This supports instant value from public notes while keeping regeneration explici
 9. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
 10. Public notes can be copied into Library; if the source has a Study Pack, the copy arrives as Study Pack Ready.
 
-### Generate Note from topic
+### Create a Note from topic
 
 Create Note includes a lightweight topic-to-note draft flow.
 
@@ -507,7 +507,7 @@ Favicon requirements:
   - `TEACHER` -> open `tab=quiz`
 - Generate saves the note first, marks it `Generating`, starts background generation, and redirects immediately to Note Detail.
 - Note Detail polls lightly while generation is active and stops when the status is `Study Pack Ready` or `Failed`.
-- Failed generation shows a friendly recovery state with `Retry Generate`; the note content remains saved.
+- Failed generation shows a friendly recovery state with `Retry Generation`; the note content remains saved.
 - Entry modes reuse the same note pipeline:
   - `/notes/new` -> normal note creation
   - `/notes/new?mode=quiz` -> quiz-first flow
@@ -1270,7 +1270,7 @@ Onboarding order:
 
 1. `Profile Type` — Student, Board Taker, or Teacher
 2. `Study Goal` — persona-filtered goal selection; Board Taker also sets optional `Exam Date` inline
-3. `Input Method` — generate a note from a topic, or paste/write own note
+3. `Input Method` — create a note from a topic, or paste/write own note
 4. `Study Pack Generation` — Study Pack is generated and previewed (summary, key concepts, quiz teaser)
 5. `Completion` — learning loop position shown; options to Continue Studying or Go to Dashboard
 
@@ -1288,7 +1288,7 @@ Rules:
 - `Exam Date` is optional and shown inline on Step 2 for Board Takers only
 - `learnerLevel`, `courseProgram`, `bio`, `engagementMode`, and reminder preferences are deferred — collected in Profile and Settings after the user's first session
 - the note created during onboarding is saved to the user's library and then follows the standard async Study Pack generation flow
-- Step 3 `Generate a note` creates an editable note draft first; it does not immediately skip past the user's opportunity to generate the Study Pack from that draft
+- Step 3 `Create a note` creates an editable note draft first; it does not immediately skip past the user's opportunity to generate the Study Pack from that draft
 - onboarding Study Pack creation must be idempotent: reuse `draft.noteId` and do not create duplicate notes or Study Packs for refresh/back/forward repeats
 - while Step 4 generation is active, the footer `Back` action is hidden and the notice reads `Your Study Pack is being created. This step can't be undone.`
 - after onboarding generation succeeds, backend may auto-apply generated `subject` and `tags` to the source note when those fields are empty
@@ -1378,7 +1378,7 @@ Welcome email requirements:
 - Plus includes:
   - Higher monthly limits
   - More exports
-  - More topic-note generations
+  - More topic notes
 - Pro includes:
   - Adaptive Practice
   - Weak Concept Training
@@ -1418,7 +1418,7 @@ Plans: `FREE`, `PLUS`, `PRO`
 Plan limits:
 
 - Free: unlimited notes, 10 Study Packs/month, 20 Challenge Quizzes/month, 3 Adaptive Practice sessions/month, 2 exports/month, Summary + Key Concepts
-- Plus: 50 Study Packs/month, 100 Challenge Quizzes/month, 10 Adaptive Practice sessions/month, 15 exports/month, higher note generation limits
+- Plus: 50 Study Packs/month, 100 Challenge Quizzes/month, 10 Adaptive Practice sessions/month, 15 exports/month, higher topic note limits
 - Pro: 100 Study Packs/month, 200 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, Board Exam Mode
 - Current enforcement truth:
   - Adaptive Practice is quota-gated by plan: Free 3/month, Plus 10/month, Pro 30/month

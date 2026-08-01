@@ -92,6 +92,7 @@ When topic note generation is exhausted:
 
 - Free users hit the upgrade path
 - paid users get reset-date messaging instead of a billing redirect
+- user-facing copy calls the metered unit a **topic note**, never a "note generation" or a "note draft" (v0.68.0) — "Draft" is already a distinct user-visible state derived from `studyPackStatus === "DRAFT"`, and a hand-written note is a Draft that consumes no topic-note quota. `topic note generation` remains the internal name of the quota mechanism (and of every backend field: `noteGenRemaining`, `noteGenerationsRemaining`, the `note-generation-limit` CTA context, and the `GENERATE_NOTE_LIMIT` / `GENERATE_NOTE` analytics identifiers) — the rename is user-facing copy only
 
 When OCR is exhausted:
 

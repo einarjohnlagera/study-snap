@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.67.1 - Explore Convergence Follow-ups` (In Progress); previous: `v0.67.0 - Explore Convergence` (Released)
+- `v0.68.0 - Topic Note Rename` (In Progress); previous: `v0.67.1 - Explore Convergence Follow-ups` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -121,7 +121,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Note-creation paywalls must save the current note or preserve a local draft before redirecting to checkout.
 - When a user has `2` or `1` Study Packs remaining, show a non-blocking monthly-limit banner on Dashboard, Note Detail, and Study Pack generation surfaces.
 - When Study Pack remaining reaches `0`, keep `Generate Study Pack` enabled and show a student-friendly monthly-limit modal on click instead of disabling the action.
-- Upgrade messaging should position Plus as the practical step-up for regular study and Pro as the exam-preparation and mastery tier.
+- Upgrade messaging should position Plus as the practical step-up for consistent, guided study and Pro as the complete learning system for serious, sustained study (re-messaged in v0.68.0 — see `docs/product/PLANS.md` and the Messaging Architecture Backlog Index row; Board Exam Mode remains a Pro feature, but exam prep is no longer the tier's framing).
 - Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, Board Exam Mode, and the `100` Study Pack Pro limit.
 - Pricing page should clearly compare Free vs Plus vs Pro with localized backend pricing and student-oriented value messaging.
 
@@ -174,7 +174,7 @@ Use these skills before writing prompts, before starting new features, and after
 
 - Note-owned Study Pack generation must save the note first, mark it `GENERATING`, and redirect the user to Note Detail immediately.
 - Note Detail owns generation observation: show a clear `GENERATING` state, friendly loading copy, and light polling until `STUDY_PACK_READY` or `FAILED`.
-- `FAILED` must keep note content safe, show a friendly recovery message, and expose `Retry Generate`.
+- `FAILED` must keep note content safe, show a friendly recovery message, and expose `Retry Generation`.
 - Retry generation must reuse the saved note content and must not consume Study Pack quota unless a Study Pack is successfully persisted.
 - Create/Edit Note should not keep users blocked on the editor while the LLM request runs.
 
@@ -851,6 +851,18 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - Treat this as a deliberate, locked product rule rather than an informal convention.
 
 **Amendment (dated 2026-07-31, pending Stage 0 — not ratified):** a future direction exists to name the **Discovery System** as the product-architecture concept this table already implements — Explore is its primary interface; Public Library, Official Review Sets, and Exam Hubs are its sources and content surfaces. "Explore Owns Discovery" (locked above) is that doctrine's authenticated-navigation scope; this amendment extends the same doctrine toward eventual anonymous access, it does not replace it. Under this framing, `/explore` may eventually absorb `/public/library`'s *list-page* traffic only, once `/explore` itself gains real anonymous rendering, canonical metadata, and structured data. This narrows — it does not reverse — both the "must not replace, redirect, or redefine" language in `### Explore Navigation Rule` below and the "navigation-level claim, not a route deletion" language above: both continue to mean subject-listing pages (`/public/library/{subject}`) and note-detail pages (`/public/library/{subject}/{slug}`) are never redirected, full stop; only the bare list page is a legitimate future redirect target, and only once this amendment and a concrete SEO-parity evidence bar both clear. This also revisits, but does not resolve by itself, the owner's own earlier "Public Library is not absorbed or removed" direction recorded in `ROADMAP.md`'s Review-Set-Centric Navigation section — under this framing that direction stays true (Public Library remains a Discovery System source and route family; only its navigation primacy changes), so this reads as a narrowing of that direction, not a reversal needing separate sign-off, but the owner should confirm that reading explicitly rather than have it asserted silently. Blocked on Explore gaining real anonymous rendering, canonical metadata, structured data, and a resolved sequencing decision against this release's own `[CHECKPOINT — due 2026-09-13]`. Tracked in `ROADMAP.md`'s Backlog Index as "Discovery System — Public Front Door."
+
+### Companion Guidance Doctrine
+
+Ratified 2026-07-31 (Company Redefinition Phase 4, considered and narrowed 2026-07-29 — see `ROADMAP.md`'s Backlog Index "Companion Guidance Doctrine" row for the full pressure-test history). "Companion" today names three structurally different things — admin-authored static content, learner-reactive derived guidance (i.e. "Coach"), and the LLM chat (Ask Companion) — and a literal system-merge of them was considered and rejected: it would remove the vocabulary that keeps them safely apart (a learner would see "Companion" guidance on Dashboard, then be told it's unavailable on a Review Set with no admin-authored content).
+
+**Authoring doctrine (docs/copy only — applies to new guidance surfaces going forward):**
+
+- **One learning responsibility per feature.** Each guidance surface answers exactly one governing question (see the Page Responsibility Rule table above). Do not let a guidance feature quietly answer a second surface's question.
+- **One question per surface.** A given page should not present two independently-reasoned "what should I do next" answers competing for the same moment of attention.
+- **De-duplication rule.** Before adding a new "what's next" resolver, check whether an existing one already covers the same signal on the same surface; extend it rather than adding a parallel resolver.
+
+**Explicitly not done by this doctrine:** no rename of "Companion," "Ask Companion," or "Coach"; no new user-facing brand; no backend merge. `Feature.ASK_COMPANION`, the `ask_companion_sessions` table, and `AnalyticsEventType.ASK_COMPANION_*` are unchanged. The 8 existing, independently-justified "what's next" resolvers across Dashboard/Collection detail/Progress (e.g. Dashboard/collection pacing staying uncoupled per `docs/features/dashboard.md:95`) are not merged by this doctrine — a full audit-and-merge pass ("Phase 1" of the phased plan in `ROADMAP.md`) stays gated on the still-open Primary-Review-Set-vs-Study/Exam-Focus philosophy question, unresolved as of this doctrine's adoption.
 
 ### Auth Redirect Rule
 
@@ -1566,7 +1578,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Version Management Anti-Drift
 
-- The current version is `v0.67.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version.
+- The current version is recorded once, in the `Current documentation baseline` line at the top of this file — do **not** restate a version number here. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` version references in sync when bumping a version. *(This line used to name a specific version and went stale for two full release cycles — set at the `v0.67.0` kickoff and still reading `v0.67.0` at `v0.68.0` signoff, because both intervening kickoffs updated the baseline line at the top and not this one. The `/version-check` skill's 7-location table lists only one `AGENTS.md` field, so it did not catch the second. De-versioned at `v0.68.0` signoff so there is exactly one version reference per file.)*
 - Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
 - `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
 - `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.

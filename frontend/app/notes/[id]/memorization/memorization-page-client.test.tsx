@@ -185,7 +185,7 @@ describe("MemorizationPageClient", () => {
   it.each([
     ["DRAFT", "No key concepts yet", "No key concepts yet. Generate a Study Pack to extract the most important ideas from this note."],
     ["GENERATING", "Key concepts are being generated", "Key concepts are being generated from your note."],
-    ["FAILED", "Memorization is not available yet", "Generation did not complete, so key concepts are not available yet. Retry Generate when you are ready."],
+    ["FAILED", "Memorization is not available yet", "Generation did not complete, so key concepts are not available yet. Retry generation when you are ready."],
   ] as const)("shows the %s guard instead of loading the schedule", async (studyPackStatus, title, message) => {
     (getNote as jest.Mock).mockResolvedValue({
       ...readyNote,

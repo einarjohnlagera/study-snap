@@ -39,7 +39,7 @@ Failed generation behavior:
 
 - `FAILED` shows a friendly recovery state instead of empty Study Pack content.
 - copy should make clear that the note is saved and generation did not complete.
-- `Retry Generate` queues generation again without consuming quota unless a Study Pack is successfully persisted.
+- `Retry Generation` queues generation again without consuming quota unless a Study Pack is successfully persisted.
 
 Study Pack Ready actions:
 

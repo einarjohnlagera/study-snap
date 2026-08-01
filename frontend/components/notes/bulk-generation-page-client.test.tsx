@@ -81,7 +81,11 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(screen.getByTestId("bulk-metadata-grid")).toHaveClass("sm:grid-cols-2");
-    expect(screen.queryByText(/note generations remaining this cycle/i)).not.toBeInTheDocument();
+    // ADMIN bypasses the quota gate, so no remaining-cap hint should render. Asserts the
+    // string the component actually emits — the previous form ("...remaining this cycle")
+    // never existed in any state, so this assertion passed vacuously both before and after
+    // the v0.68.0 "topic note" rename.
+    expect(screen.queryByText(/topic notes? left this cycle/i)).not.toBeInTheDocument();
   });
 
   it("keeps the compact grid profile-aware for teacher and non-teacher views", async () => {
@@ -104,7 +108,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
-    expect(await screen.findByText(/Capped by your 7 note generations left this cycle/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Capped by your 7 topic notes left this cycle/i)).toBeInTheDocument();
   });
 
   it("submits the resolved payload, flashes the queued count, and redirects to Library", async () => {
@@ -242,7 +246,7 @@ describe("BulkGenerationPageClient", () => {
 
     // Near-limit (<= 2) shows the amber note-generation banner.
     expect(
-      await screen.findByText(/2 note generations still ready to use/i),
+      await screen.findByText(/2 topic notes still ready to use/i),
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Topic 1" } });

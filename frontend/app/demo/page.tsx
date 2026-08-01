@@ -63,7 +63,7 @@ function ChooseStep({ onChoose }: Readonly<{ onChoose: (method: "topic" | "paste
           </span>
           <div className="space-y-1">
             <p className="font-semibold text-foreground">Enter a topic</p>
-            <p className="text-sm text-foreground/65">Type a subject and NoteLib generates a note draft instantly.</p>
+            <p className="text-sm text-foreground/65">Type a subject and NoteLib creates a note draft instantly.</p>
           </div>
           <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400">
             Try it <ArrowRight className="h-3 w-3" />
@@ -118,7 +118,7 @@ function InputStep({
         </h2>
         <p className="text-sm text-foreground/70">
           {method === "topic"
-            ? "NoteLib will generate a note draft from your topic."
+            ? "NoteLib will create a note draft from your topic."
             : "NoteLib will turn your notes into a Study Pack."}
         </p>
       </div>
@@ -164,10 +164,10 @@ function InputStep({
             {loading ? (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Generating note…
+                Creating note…
               </span>
             ) : (
-              "Generate Note"
+              "Create a Note"
             )}
           </button>
           <button
@@ -192,7 +192,7 @@ function NoteStep({
     <section className="space-y-4">
       <div className="space-y-1">
         <h2 className="text-lg font-semibold">Your note is ready</h2>
-        <p className="text-sm text-foreground/70">Review the generated note, then turn it into a Study Pack.</p>
+        <p className="text-sm text-foreground/70">Review your note, then turn it into a Study Pack.</p>
       </div>
 
       <Card className="space-y-3 p-4 sm:p-6">

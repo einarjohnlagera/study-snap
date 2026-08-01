@@ -601,11 +601,20 @@ describe("Library page", () => {
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
     // A GENERATING note keeps the poller running, so the paginated list is
     // refreshed beyond the initial load without returning to GET /notes.
+    // Assert the pageSize inside the predicate, not after it. `fetchNotesSilently` depends on
+    // `items.length`, so the 0 -> 1 transition tears down and re-arms the poller effect; whichever
+    // interval instance ticks first decides whether refresh #2 carries pageSize 20 (items.length
+    // still 0, so `items.length || LIBRARY_PAGE_SIZE` falls through) or pageSize 1. With the poll
+    // interval mocked to 10ms of real time and no fake timers, that race is decided by whether a
+    // cold React commit beats the timer — which made the old post-hoc assertion fail under load or
+    // on a cold single-test run while passing in a warm full-file run.
     await waitFor(
-      () => expect((listLibraryPage as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2),
+      () => expect(listLibraryPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({page: 0, pageSize: 1}),
+      ),
       { timeout: 5000 },
     );
-    expect(listLibraryPage).toHaveBeenLastCalledWith(expect.objectContaining({page: 0, pageSize: 1}));
+    expect((listLibraryPage as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
   }, 10000);
 
   it("skips the enriched note fetch when a status tick has no changes", async () => {
@@ -909,7 +918,7 @@ describe("Library page", () => {
 
     render(<LibraryPage />);
 
-    expect(await screen.findByText(/used this month's note generations/i)).toBeInTheDocument();
+    expect(await screen.findByText(/used all your topic notes this month/i)).toBeInTheDocument();
     expect(screen.getByText("Pediatric Milestones")).toBeInTheDocument();
     expect(screen.getByText("Immunization Schedule")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upgrade to Plus" })).toBeInTheDocument();

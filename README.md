@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.67.1 - Explore Convergence Follow-ups` (In Progress); previous: `v0.67.0 - Explore Convergence` (Released)
+Current release baseline: `v0.68.0 - Topic Note Rename` (In Progress); previous: `v0.67.1 - Explore Convergence Follow-ups` (Released)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
@@ -58,7 +58,7 @@ NoteLib uses a 3-tier learning-focused plan structure:
   - 100 Quizzes / month
   - 15 exports / month
   - Adaptive Practice (10 sessions / month)
-  - Higher note generation limits
+  - Higher topic note limits
 - Pro
   - ₱199 first month, then ₱249/month in the Philippines when intro pricing applies
   - 100 Study Packs / month

@@ -142,8 +142,8 @@ export function NoteEditorForm({
                                    onGenerateNote,
                                    isGeneratingNote = false,
                                    disableGenerateNote = false,
-                                   generateNoteLabel = "Generate Note",
-                                   generateNoteLoadingLabel = "Generating...",
+                                   generateNoteLabel = "Create a Note",
+                                   generateNoteLoadingLabel = "Creating...",
                                    generateNoteFooter = null,
                                    showGenerateNoteEntry = false,
                                    showGenerateNoteTip = false,
@@ -551,7 +551,7 @@ export function NoteEditorForm({
             {showGenerateNoteTip ? (
                 <div
                     className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
-                    Tip: You can generate notes instantly by typing a topic above.
+                    Tip: You can create notes instantly by typing a topic above.
                 </div>
             ) : null}
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -583,7 +583,7 @@ export function NoteEditorForm({
                 </Button>
             </div>
             <p className="text-xs text-foreground/60">
-                Generate a first draft here, then review and edit the content below before saving or generating a Study
+                Create a first draft here, then review and edit the content below before saving or generating a Study
                 Pack.
             </p>
             <p className="text-xs text-foreground/65">
@@ -593,12 +593,12 @@ export function NoteEditorForm({
                 </Link>
             </p>
             <p className="text-xs text-foreground/50">
-                Your Learning Profile helps tailor the generated note&apos;s depth, terminology, and examples.
+                Your Learning Profile helps tailor the new note&apos;s depth, terminology, and examples.
             </p>
             {generateNoteFooter}
             {note.content.trim().length > 0 ? (
                 <p className="text-xs text-foreground/55">
-                    Generating a note will replace the current content in the editor.
+                    Creating a note will replace the current content in the editor.
                 </p>
             ) : null}
         </div>
@@ -694,7 +694,7 @@ export function NoteEditorForm({
                                 >
                                     <div className="flex items-center gap-2 text-sm font-semibold">
                                         <Sparkles className="h-4 w-4"/>
-                                        Generate from topic
+                                        Create from topic
                                     </div>
                                     <p className="mt-1 text-xs text-current/75">
                                         Create a study-ready first draft, then edit it before saving.

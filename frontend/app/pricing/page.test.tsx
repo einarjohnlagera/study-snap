@@ -60,19 +60,19 @@ describe("PricingPage", () => {
     render(<PricingPage />);
 
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
-    expect(screen.getByText("Simple plans for everyday study and serious review.")).toBeInTheDocument();
+    expect(screen.getByText("Always know what to learn next.")).toBeInTheDocument();
     expect(
-      screen.getByText("Start free for core features. Move to Plus for higher limits, or choose Pro for deeper practice and exam-ready tools."),
+      screen.getByText("NoteLib turns your notes into a complete learning system — organized, prioritized, and ready whenever you sit down to study."),
     ).toBeInTheDocument();
     expect(
-      screen.getAllByText("Most users stay on Free while studying casually. Plus fits regular review, and Pro is built for serious exam prep.")[0],
+      screen.getAllByText("Start on Free. Move to Plus for guided, regular study. Go Pro for your complete learning system.")[0],
     ).toBeInTheDocument();
     expect(await screen.findAllByText(/Intro offer:/i)).not.toHaveLength(0);
-    expect(screen.getByRole("heading", { name: "Free for everyday study. Plus for regular review. Pro for deeper exam prep." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Free for everyday study. Plus for regular review. Pro for your complete learning system." })).toBeInTheDocument();
     expect(screen.getByText("Free covers the core note-to-study-pack workflow. Plus expands your monthly limits. Pro adds the highest limits and advanced practice tools.")).toBeInTheDocument();
     expect(screen.getByText("For getting started")).toBeInTheDocument();
-    expect(screen.getByText("For regular study")).toBeInTheDocument();
-    expect(screen.getByText("Best for exam prep")).toBeInTheDocument();
+    expect(screen.getByText("Guided learning built around your notes")).toBeInTheDocument();
+    expect(screen.getByText("Your complete learning system")).toBeInTheDocument();
     expect(screen.getByText("Most popular")).toBeInTheDocument();
     expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱249 after"))).not.toHaveLength(0);
     expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱1,999 / 1 year"))).not.toHaveLength(0);
@@ -90,7 +90,7 @@ describe("PricingPage", () => {
     expect(screen.getAllByText("Export every study resource you need")).not.toHaveLength(0);
     expect(screen.getByText("Teachers get unlimited quiz exports on Plus.")).toBeInTheDocument();
     expect(screen.getAllByText("Summary + Key Concepts")).not.toHaveLength(0);
-    expect(screen.getAllByText("Higher note generation limits")).not.toHaveLength(0);
+    expect(screen.getAllByText("Higher topic note limits")).not.toHaveLength(0);
     expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
     expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
     expect(screen.getByRole("button", { name: "Get Plus" })).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe("PricingPage", () => {
   it("exports pricing metadata with canonical and social preview fields", () => {
     expect(metadata).toMatchObject({
       title: "NoteLib Pricing — Free, Plus, and Pro Plans",
-      description: "Simple plans for everyday study and serious review. Start free, move to Plus for higher limits, or choose Pro for exam prep.",
+      description: "A complete learning system, wherever you are in your studies. Start free, add guided study with Plus, or go all-in with Pro.",
       alternates: {
         canonical: "https://notelib.app/pricing",
       },
