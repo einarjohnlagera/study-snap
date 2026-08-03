@@ -64,9 +64,15 @@ The original decision said **"validate later, don't pre-optimize."** These three
 | Return rate of converted users | if most are one-and-done, the lever is re-engagement, not buttons |
 | Quick Review → Challenge conversion rate, before vs. after the 5/5 → 4/5 change | whether the shipped product half actually moved anything |
 
-The first is the one that falsifies the decision's own framing. The third has a hard requirement the others do not: it needs a **before** figure spanning the June 2026 change, so the further this slips the harder it gets to answer honestly.
+**Instrumentation audit, 2026-08-03 — the three do not have equal standing:**
 
-These are unmeasured obligations rather than backlog candidates — they judge something already shipped. If they are to be tracked rather than remembered, they belong as a Backlog Index row in `docs/product/ROADMAP.md` with an explicit gate.
+- **Read 3 is measurable now.** `CHALLENGE_QUIZ_STARTED` (added 2026-03-23) and `QUICK_REVIEW_COMPLETED` (added 2026-05-05) both predate the June 2026 change, so a real before window exists. That window is fixed and already closed, so this read does not get *better* by waiting — it only accumulates denominator.
+- **Read 2 is measurable now**, from `PUBLIC_NOTE_COPY_CLICKED` plus session data. It needs a query, not new events.
+- **Read 1 is not measurable.** There is no impression event and no click event for the post-session Challenge CTA. `CHALLENGE_QUIZ_STARTED` cannot separate *seen-and-ignored* from *never-reached*, which is the entire discrimination. Closing it requires shipping two events first — a CTA impression and a CTA click. That is a prerequisite, not part of the read.
+
+Read 1 being the un-instrumented one is the uncomfortable part: it is the only one that tests *why* adoption is low, and therefore the only one that can falsify the "motivation, not placement" framing. Reads 2 and 3 can only tell you whether the chosen fix moved the number.
+
+**Tracked** as a `[CHECKPOINT — due 2026-09-30]` row in `docs/product/ROADMAP.md`'s Backlog Index, with a named kill criterion and a denominator clause. That row is the operative obligation; this section is the reasoning behind it.
 
 ---
 
