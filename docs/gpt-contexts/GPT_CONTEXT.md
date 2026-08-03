@@ -2,11 +2,30 @@
 
 > Paste the block below as your first message in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.67.0 (Released) - 2026-07-30
+> Last updated: v0.68.0 (Released) - 2026-08-01
 
 ---
 
 Here's the current context for our NoteLib product session. Treat this as a compact product snapshot, not a replacement for the repo docs. For implementation work, always defer to `AGENTS.md`, `RELEASES.md`, `docs/product/ROADMAP.md`, and the relevant `docs/features/*.md`.
+
+---
+
+## START HERE — orientation in 12 lines
+
+Read this block first. Everything below is detail behind it.
+
+1. **What it is:** NoteLib is a notes-first study workspace. Capture notes → generate Study Packs → practice with quizzes → track readiness → reuse the library.
+2. **What we sell:** the *learning system*, not features. Hero: **"Always know what to learn next."** Features are evidence for that promise, never the promise itself.
+3. **Current state:** `v0.68.0` released 2026-08-01. **No version in progress.** Next step is a `/kickoff`.
+4. **The single biggest constraint:** W1→W2 retention is **2.4%**. It has not moved across multiple releases. Read "Retention Is the Proven Constraint" before proposing anything new.
+5. **Pricing is settled for now** — quota raised, price change deferred pending data. Don't reopen it.
+6. **Positioning copy no longer needs a conversion test** (owner call, 2026-08-01). Pricing/checkout *mechanics* still do.
+7. **Mastery comes only from graded assessment.** Self-review surfaces (Flashcards, Memorization) are firewalled from readiness by design.
+8. **There are exactly 5 quiz modes.** The contract is locked. Do not propose a 6th.
+9. **Biggest recurring failure mode in this repo:** repo-wide copy/terminology changes that under-scope themselves. `v0.68.0` under-counted its own sweep four times; `v0.67.1` scoped three items and shipped seven. Assume one grep is insufficient.
+10. **Open question awaiting your input:** Explore's default tab (see the next section) — still unresolved two releases later.
+11. **Don't propose:** a 6th quiz mode, price changes, AI-generated per-concept definitions, feeding self-review into readiness, or user-facing "Creator"/"Curated Learning" labels.
+12. **The repo is `studysnap` internally.** The product is NoteLib. Database and package names still say `studysnap` — that is intentional, not debt to fix.
 
 ---
 
@@ -16,20 +35,44 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **Core loop:** Capture -> Generate -> Review -> Improve -> Make a Copy -> Repeat
 
-**Positioning:** Your notes become your study system (external copy, unchanged). **Internal strategy reframed 2026-07-23** as a "learning OS" (see Company Redefinition section below) — external copy hasn't caught up yet; that gap is tracked in `docs/product/ROADMAP.md`'s Backlog Index as a small, not-urgent item requiring its own conversion-test discipline before changing, same bar already applied to pricing.
+**Positioning:** **Ratified 2026-08-01 as a product-wide Messaging Architecture** — *"We sell the learning system. Features simply support that promise."* Ratified hero: **"Always know what to learn next."** / *"NoteLib turns your notes into a complete learning system — organized, prioritized, and ready whenever you sit down to study."* The hierarchy is **locked**: Hero (universal emotional outcome, profile-agnostic) → Supporting paragraph → Profile-specific bullets (via the existing `ProfileType`-keyed copy-resolution pattern, not a new mechanism) → Features as *evidence* for the promise. Board Exam Mode, Companion, Adaptive Practice, Review Sets, Progress, Knowledge Impact, and Explore all live at the Features layer — **none of them becomes the hero anywhere.**
+
+Two things a new session usually gets wrong here:
+
+- **The old "external copy hasn't caught up / needs a conversion test first" framing is dead.** `v0.68.0` shipped the ratified hero and supporting paragraph on `/pricing` word for word, plus the Plus/Pro taglines. And the "no positioning-copy change without a conversion test" bar was **explicitly lifted by the owner on 2026-08-01** — narrative consistency with the product vision is treated as a design decision, measured post-launch, not an optimization experiment. Pricing/checkout *mechanics* changes still need evidence; positioning copy does not.
+- **Rollout is deliberately incremental, not done.** Only `/pricing` has shipped. The landing page, paywall modal, Exam Hub upsell, `PLAN_COMPARISON_ROWS`'s "Best for" row, and per-plan feature bullets are all still un-actioned and each needs its own scoping pass and `/kickoff`. `PROFESSIONAL`'s profile bullets are flagged **aspirational — do not wire live** until that profile has real capability behind it (it is enum-only today).
 
 **Rebrand note:** The product is NoteLib. Code, package names, and database/schema names still use `studysnap` in many places unless explicitly changed.
 
-**Current baseline:** **No version currently in progress.** `v0.67.0 - Explore Convergence` shipped and merged 2026-07-30 (PR #949). This is the release that finally claimed the `Explore Convergence` slot after **8 reclaims** by unrelated smaller work whose own gates cleared first (`v0.60.0` through `v0.66.0`, each ratified/gate-cleared same-day work, not Diagnostic-Read-gated). It shipped via an **explicit owner override of its own stated gate** — the Diagnostic Read (still due after 2026-08-06, not yet re-run) was supposed to show a discovery problem before this kicked off; the owner chose to proceed anyway, consistent with this project's precedent for ratified overrides (Knowledge Impact, Challenge Quiz Quota Increase). A dated `[CHECKPOINT — due 2026-09-13]` was committed at kickoff: a new `EXPLORE_VIEWED`/`EXPLORE_TAB_SWITCHED`/adopt-click analytics set ships in this release specifically so the override can be checked against real engagement data instead of being ship-and-forget. **What shipped:** a new "Explore" nav item (desktop and mobile) replacing the old standalone "Public Library" item, compositing the existing Official Review Set catalog (`/collections/published`) and public notes library (`/public/library`) behind a segmented control, plus an additive exact-`courseProgram` Official Review Set preview/adopt path on the (anonymous-accessible) Exam Hub pages. Implemented by Codex, audited against the real diff by an independent fresh-context Opus review before merge (not a trusted summary) — that audit caught and fixed a real gap: the delivered scope had no page-view event for `/explore` itself, which would have made the checkpoint above unmeasurable. Full detail: `RELEASES.md` v0.67.0, `docs/product/ROADMAP.md`'s "Phase 2 — IA / Explore convergence" section. **Five releases shipped between `v0.63.0` and this one** (`v0.64.0` Add to Review Set, `v0.65.0` Study Effectiveness Polish, `v0.66.0`/`v0.66.1`/`v0.66.2` — see condensed summaries below). **Read "Open Question This Session" immediately below, then "Company Redefinition & Where Things Stand Now" further down before proposing what comes next.**
+**Current baseline:** **No version currently in progress.** `v0.68.0 - Topic Note Rename` shipped and merged 2026-08-01 (PR #966). **What shipped:** the bare-topic drafting action renamed **"Generate Note" → "Create a Note"** (Company Redefinition Phase 4 §4 item 6), reserving "Generate" for operations that transform the learner's *own* material — "Generate Study Pack", "Generate Quiz", and "Regenerate" are deliberately unchanged, and that distinction is the whole point of the rename. Five further ungated items were folded in after kickoff: a "Retry Generate" → "Retry Generation" grammar fix (§4 item 8), the Companion Guidance Doctrine's docs-only text, the Messaging Architecture's first slice on `/pricing`, and — on explicit owner review after the first three shipped — two consistency batches the rename's own narrow scope had left behind (`plans.ts`'s pricing-table and upgrade-highlight strings, and the topic-note quota's entire user-facing vocabulary moving to **"topic note(s)"**).
+
+**Two process facts from `v0.68.0` worth carrying forward, because they recurred:**
+
+1. **Scoping under-counted itself four separate times in one release.** The rename's own "swept the whole repo" claim missed five surfaces inside the renamed action's *own* flow; the quota batch's sweep was truncated and missed the actual paywall copy (including a term the batch had explicitly rejected on evidence); a layout fix addressed the pill and title size but not the description-length drift that was the real cause; and `RELEASES.md` contained four wrong counts. All were caught by a **five-agent pre-signoff pressure test**, not by per-PR audits — because none of them appeared in any single PR's diff. If you are proposing a repo-wide copy or terminology change, assume one grep is not enough.
+2. **A backend string can be user-facing copy.** The release was scoped "frontend-only" and still shipped a bug: `BulkNoteGenerationQuotaExceededException`'s 422 message rendered the retired vocabulary into the *same* `role="alert"` element as its renamed frontend twin. Fixed as an explicit scope amendment. Backend exception messages propagate verbatim to the UI through `api.ts` — treat them as copy, not internals.
+
+Twelve pre-existing findings are recorded as **Known Limitations tagged `v0.68.1` candidates** in `RELEASES.md`. Note this project's own history here: `v0.67.0`'s candidate tagging was itself incomplete, and `v0.67.1` ended up shipping seven items after scoping three — so review that list directly rather than trusting the tags.
+
+**Immediately prior releases:** `v0.67.1 - Explore Convergence Follow-ups` (2026-07-31) and `v0.67.0 - Explore Convergence` (2026-07-30, PR #949) — the latter notable for claiming its slot after **8 reclaims** by unrelated gate-cleared work, and for shipping on an **explicit owner gate override** with a dated `[CHECKPOINT — due 2026-09-13]` attached so the override gets checked against real engagement data. Full detail for both in the release list below.
 
 ---
 
-## Open Question This Session — Explore's default tab (unresolved, live as of this update)
+## Open Question — Explore's default tab (STILL unresolved as of v0.68.0, two releases later)
 
 **The question:** `/explore` (shipped in `v0.67.0`, see above) shows a two-tab segmented control: "Review Sets" (curated, Official/admin-authored collections) and "Notes" (the original public-notes library). As shipped, **"Review Sets" is both the left-positioned tab and the default-selected tab** — a user landing on `/explore` sees curated content first, with the public notes library one click away. The product owner noticed this only after shipping and flagged: NoteLib's original identity was built around Public Library (organic, user-generated, browsable-by-anyone notes) — it was one of only ~3 main nav items for most of the product's history — and the new default may be quietly deprioritizing that identity in favor of the newer curated-content push.
 
 **Opus's opinion (fresh-context agent, read the real code/docs before answering), given 2026-07-30:**
-> **Flip the default to Notes. Leave tab order alone.** The identity argument alone is the weakest reason to move a default — products are allowed to outgrow their origins — but the empirical case is strong and points the same way. (1) **Review Sets can't reward browsing today:** producing more Official Review Sets is bottlenecked on the still-unscoped Curator pipeline; only 4 Goals have ever been adopted, ~84% concentrated in just two (LET Comprehensive, PNLE Core). Anyone outside those two programs hits an empty "Recommended" state on the default panel of a nav item called Explore. (2) **For the segment this whole redefinition targets (`BOARD_EXAM`), Review Sets is redundant as a default:** onboarding already auto-adopts a qualifying Official Review Set and lands them on it; it's also the Dashboard Primary card; Explore already carries an Exam Hub pointer card. Review Sets has three other entry points — the public library now has exactly one. (3) **It biases the release's own checkpoint** (the `2026-09-13` engagement checkpoint above) — defaulting to the panel that dead-ends for most users skews the read that decides whether Explore was worth building. Recommends flipping now, while the checkpoint window is effectively unstarted, not waiting until it would contaminate the read. Explicitly rejected profile-aware branching (adds a second variable to a checkpoint that needs one) and rejected changing tab *order* (in a two-item control, the selected panel is ~100% of the visible content — left-position precedence is close to noise). Also flagged a real anti-drift bug found along the way: the "Review Sets" tab label is hardcoded in `explore-page-client.tsx` instead of reusing the existing profile-aware `getCollectionLabels()` — a `STUDENT` user sees a tab labeled "Review Sets" containing content labeled "Recommended Study Plans."
+> **Recommendation: flip the default to Notes. Leave tab order alone.**
+>
+> The identity argument alone is the weakest reason to move a default — products are allowed to outgrow their origins — but the empirical case is strong and points the same way:
+>
+> 1. **Review Sets can't reward browsing today.** Producing more Official Review Sets is bottlenecked on the still-unscoped Curator pipeline. Only 4 Goals have ever been adopted, ~84% concentrated in two (LET Comprehensive, PNLE Core). Anyone outside those two programs hits an empty "Recommended" state on the default panel of a nav item called Explore.
+> 2. **For `BOARD_EXAM` — the segment this whole redefinition targets — Review Sets is redundant as a default.** Onboarding already auto-adopts a qualifying Official Review Set and lands them on it; it is also the Dashboard Primary card; Explore already carries an Exam Hub pointer card. Review Sets has three other entry points. The public library now has exactly one.
+> 3. **It biases the release's own checkpoint.** Defaulting to the panel that dead-ends for most users skews the `2026-09-13` engagement read that decides whether Explore was worth building. Flip now, while that window is effectively unstarted, rather than waiting until it contaminates the read.
+>
+> **Explicitly rejected:** profile-aware branching (adds a second variable to a checkpoint that needs one), and changing tab *order* (in a two-item control the selected panel is ~100% of visible content, so left-position precedence is close to noise).
+>
+> *Also flagged a hardcoded "Review Sets" tab label bypassing the profile-aware `getCollectionLabels()`, so a `STUDENT` saw a tab labeled "Review Sets" containing "Recommended Study Plans" — **this was fixed in `v0.67.1`** and is no longer open.*
 
 **What's needed from you (GPT):** an independent second opinion on the same question — does defaulting `/explore` to Notes (public library) over Review Sets make sense, both on identity/positioning grounds and against the concrete adoption/engagement facts above? Agree or disagree with Opus's specific recommendation (flip default only, not order; not profile-aware; do it now before the checkpoint window contaminates). No code has been changed yet — this is genuinely still open.
 
@@ -46,7 +89,7 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 - **What ships instead:** a small, user-initiated "Add to {Review Set}" action on Note Detail — no recommendation, no matching, no coverage claim, just closes a real navigation gap (extracts the already-built `AddImportedDraftsModal` from the bulk-import flow).
 - **The no-Review-Set learner's guidance question was folded into the existing, still-open Primary-Review-Set-vs-Study/Exam-Focus roadmap item**, not opened as a new one — that question already commits to Study/Exam Focus as the load-bearing no-Goal fallback.
 
-## Companion Guidance Doctrine — considered and narrowed, 2026-07-29 (same conversation, one level up)
+## Companion Guidance Doctrine — narrowed 2026-07-29, doctrine text ADOPTED in v0.68.0
 
 **A further GPT exchange proposed something bigger:** stop calling it "Ask Companion" (a chatbot the learner has to think to open) and instead make "Companion" NoteLib's cross-cutting learning-guidance *system* — one voice answering "what should I do next" across Dashboard, Review Set, Progress, and Readiness, deterministic wherever possible (ConceptHealth/Progress/schedule), LLM only when the learner explicitly asks for deeper reasoning. Pressure-tested with Opus — **the taxonomy is right, the literal merge is not:**
 
@@ -58,6 +101,10 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 - **If ever scoped:** Phase 0 resolve Primary-vs-Focus → Phase 1 doctrine + copy audit (docs only, no backend) → Phase 2 additive `reason` field on existing resolvers (substrate, no merge) → Phase 3 lightweight one-off "why this?" explainer (needs a new message-unit mechanism — `ask_companion_sessions`'s session-unit quota and DB-CHECK turn cap don't fit a single question) → Phase 4 Personalization (unchanged). Merge the 8 resolvers only if Phase 1 empirically proves the ladder is identical across surfaces.
 - **`v0.64.0` is unaffected by this discussion** — ships exactly as already scoped above.
 - Full resolution: `docs/product/ROADMAP.md`'s "Companion Guidance Doctrine" Backlog Index row.
+
+**Status update — `v0.68.0` (2026-08-01):** the **doctrine text itself is now adopted**, as a new `### Companion Guidance Doctrine` section in `AGENTS.md` (placed beside the Page Responsibility Rule it extends). Docs/copy only — no rename, no new user-facing brand, no backend or analytics change, exactly as narrowed above. **Everything past the text is still gated:** Phase 1's copy audit and any merge of the 8 existing "what's next" resolvers still require Phase 0 (Primary-vs-Focus) resolved first.
+
+**Caveat if you are asked to apply the doctrine:** `v0.68.0`'s pressure test found **four internal inconsistencies in the doctrine's own text**, logged as a Known Limitation. It conflicts with the Page Responsibility Rule table it claims to extend (that table assigns `Companion` a single governing question, while the doctrine argues "Companion" names three structurally different things — admin-authored static content, learner-reactive derived guidance, and the LLM chat); its "one question per surface" bullet points at a table enumerating *pages*, not guidance surfaces, so a new surface has no row to look up; its "docs/copy only" header scope contradicts its own third bullet instructing you to extend a resolver (a code change); and it says nothing about a new surface landing on a page that already has a grandfathered resolver. Reconciling that text belongs with Phase 1, not with a casual application of the doctrine.
 
 ---
 
@@ -71,7 +118,17 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **The 2026-07-24 signup surge reversed the "go straight to Phase 2" plan and inserted a Diagnostic Read + a new Reusable Practice Assets initiative ahead of it — full detail in the Company Redefinition section below, which supersedes the old post-v0.48.0 sequencing.** The retained/churned exam-dated user interview script is still written, ready, zero engineering cost, and still hasn't been run — the one open item on this whole track that can't happen from a keyboard.
 
-**The target habit was redefined 2026-07-28 — read Round 2 through this, not the raw blended 2.4%.** The single W1→W2 calendar-week boolean is retired as the universal yardstick. Segment by whether `UserEntity.examDate` is set (not `profile_type` — a coarser proxy for the same thing). Exam-bound learners (the majority — `BOARD_EXAM` alone is 70.94% of profile-typed accounts, confirmed product-wide, not a surge artifact — see the population-mix finding below) have a naturally episodic arc: signup → sustained practice → sit the exam → legitimately stop. They're scored only once their exam date has passed, on whether they had activity in the final 7 pre-exam days; still-in-flight users are excluded from the denominator entirely rather than penalized on a calendar clock that doesn't match their arc — going quiet only *after* the exam is not churn. Open-ended learners (`STUDENT`, no exam date set, ~27%+) keep the existing W1→W2-style frame, which fits them better. **This does not excuse the existing 0/41 exam-dated-retention finding** (users retaining below their own exam date) — that's disengagement *before* the goal, a real problem under either frame. Expect a small scored group at first (recent signups, PRC-clustered exam dates) — a near-single-digit denominator means "not yet measurable," not a verdict. Full definition: `docs/product/ROADMAP.md`'s "Target-habit definition" Backlog Index row.
+**The target habit was redefined 2026-07-28 — read Round 2 through this, not the raw blended 2.4%.** The single W1→W2 calendar-week boolean is retired as the universal yardstick. Segment by whether `UserEntity.examDate` is set (not `profile_type`, a coarser proxy for the same thing):
+
+- **Exam-bound learners** — the majority; `BOARD_EXAM` alone is **70.94%** of profile-typed accounts, confirmed product-wide rather than a surge artifact. Their arc is naturally episodic: signup → sustained practice → sit the exam → legitimately stop. Scored **only once their exam date has passed**, on whether they had activity in the final 7 pre-exam days. Still-in-flight users are excluded from the denominator entirely rather than penalized on a calendar clock that doesn't match their arc — going quiet *after* the exam is not churn.
+- **Open-ended learners** — `STUDENT`, no exam date, ~27%+. Keep the existing W1→W2-style frame, which fits them better.
+
+Two guardrails on reading this:
+
+- **It does not excuse the 0/41 exam-dated-retention finding** (users going quiet *below* their own exam date). That is disengagement before the goal — a real problem under either frame.
+- **Expect a small scored group at first** (recent signups, PRC-clustered exam dates). A near-single-digit denominator means "not yet measurable," not a verdict.
+
+Full definition: `docs/product/ROADMAP.md`'s "Target-habit definition" Backlog Index row.
 
 **Full backlog, current status, and exactly what un-parks each item lives in `docs/product/ROADMAP.md`'s Backlog Index table (~55 rows) — check it before proposing or resurfacing anything.** See "Roadmap Candidates: Gated & Ungated" below for a synthesized, status-grouped view of that same table, restricted to items still actually open (shipped/resolved rows are dropped from that view — check `RELEASES.md` for those). Do not propose roadmap items from partial memory of past sessions; the index is the current source of truth.
 
@@ -91,9 +148,26 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 **Since Phase 3a shipped, three more Challenge Quiz patch releases closed real bugs and shaped the mode further — all released, all off `v0.60.0`'s line, none consuming a minor-version slot:** `v0.60.1` (5-bug fix pass found exercising the new template-sharing feature in production — executor saturation, missing shuffle, an inert difficulty selector removed entirely, abandoned sessions silently auto-submitted, a non-functional Redo Missed Questions button); `v0.60.2` (3 narrower known-limitations closed: claim-release transaction isolation, an expiry-vs-completion lock race, a missing Resume/Start-Fresh prompt at one entry point); `v0.60.3` (adaptive initial question count, a Redo-Missed-Questions session-matching fix, an incomplete-submission guard — a 4th scoped item, onboarding coverage-gap capture for `STUDENT` profiles, was **deferred out at signoff** when its gate query found real `STUDENT` presence in the surge cohort, 2/29 = 6.9%, failing the required "effectively zero" bar; it now tracks as its own version-less Backlog Index row, gated on the Diagnostic Read closing).
 
-**Knowledge Impact (creator-recognition dashboard, "your notes helped N learners") — ratified by the owner 2026-07-28, despite its own data gate failing.** GPT originally proposed this off the platform's aggregate engagement growth. A CTO evaluation (`company-redefinition-out/09-knowledge-impact.md`) found ~232 of ~235 public notes were official/admin-curated even then; the actual gate query (finally run 2026-07-28) confirmed and sharpened that: **3 distinct non-official public-note creators** (un-park threshold was order-of-magnitude 20-30+), **697 official vs. 4 community public notes (99.4% official)**, community engagement share ~1.8% of views/~0.07% of copies, and a community-publish rate that's gone to **zero in 2026-07** despite the signup surge. The owner ratified proceeding anyway: near-zero publishing may exist *because* creators get nothing back for it — a chicken-and-egg counter the original CTO evaluation already named as a live, unresolved branch, not a new argument invented to override the data. Not yet scoped — `09`'s "Answers to the memo's 12 questions" is the design brief once it is (passive/pull dashboard, retrospective + aggregate framing, nothing comparative/ranked/real-time, private-to-the-creator).
+**Knowledge Impact (creator-recognition dashboard, "your notes helped N learners") — ratified by the owner 2026-07-28, despite its own data gate failing.** GPT originally proposed this off the platform's aggregate engagement growth. The gate query (run 2026-07-28) came back decisively negative:
 
-**Pricing/quota debate (raised 2026-07-25, resolved 2026-07-27/28).** The owner argued current pricing (PLUS ₱179/PRO ₱249, FREE capped at 5 Challenge Quizzes/month) can't convert PH students against `boardready.ph`'s reported ₱99 one-time/~unlimited practice access, and proposed pooling-funded quota loosening plus a price cut. After analysis (NoteLib's plans are already one-time passes, not subscriptions, so the "recurring vs. one-time" framing didn't actually hold; pooling buys generosity, not a price cut — two different levers; FREE quota being "never hit" doesn't discriminate between "quota is genuinely sufficient" and "users disengage before ever approaching it") and a three-way consensus (Claude + independent Fable + independent GPT second opinion, ~90% aligned) to not cut prices without pulling the already-instrumented paywall funnel first, the owner **ratified a resolution 2026-07-28: raise the Challenge Quiz monthly quota substantially now (shipping as `v0.61.0`, see Current Release above), defer the price decrease until paywall conversion / onboarding retention / post-increase usage data exists.** A literal daily-reset quota model (also proposed) was explicitly rejected in favor of a bigger monthly ceiling — real study behavior is bursty around exams, and a daily reset would force the product to dictate the learner's study schedule.
+- **3** distinct non-official public-note creators — the un-park threshold was order-of-magnitude **20–30+**
+- **697 official vs. 4 community** public notes (99.4% official)
+- Community engagement share ~1.8% of views, ~0.07% of copies
+- Community-publish rate went to **zero in 2026-07**, the highest-signup month on record
+
+**Why the owner ratified proceeding anyway:** near-zero publishing may exist *because* creators get nothing back for it — a chicken-and-egg counter the original CTO evaluation (`company-redefinition-out/09-knowledge-impact.md`) had already named as a live unresolved branch, not an argument invented after the fact to override the data. Not yet scoped; `09`'s "Answers to the memo's 12 questions" is the design brief when it is (passive/pull dashboard, retrospective and aggregate framing, nothing comparative/ranked/real-time, private to the creator).
+
+**Pricing/quota debate (raised 2026-07-25, resolved 2026-07-27/28).** The owner argued current pricing (PLUS ₱179 / PRO ₱249, FREE capped at 5 Challenge Quizzes/month) can't convert PH students against `boardready.ph`'s reported ₱99 one-time / ~unlimited practice access, and proposed pooling-funded quota loosening plus a price cut.
+
+Three counter-findings from the analysis:
+
+- NoteLib's plans are **already one-time passes, not subscriptions** — the "recurring vs. one-time" competitor framing didn't actually hold.
+- **Pooling buys generosity, not a price cut** — two different levers.
+- **FREE quota "never being hit" is ambiguous** — it doesn't discriminate between "quota is genuinely sufficient" and "users disengage before ever approaching it."
+
+A three-way consensus (Claude + independent Fable + independent GPT, ~90% aligned) held that prices shouldn't be cut without first pulling the already-instrumented paywall funnel. **Owner resolution, ratified 2026-07-28:** raise the Challenge Quiz monthly quota substantially now (shipped as `v0.61.0`), defer the price decrease until paywall-conversion / onboarding-retention / post-increase usage data exists.
+
+A literal **daily-reset** quota model was also proposed and **explicitly rejected** in favor of a bigger monthly ceiling: real study behavior is bursty around exams, and a daily reset would force the product to dictate the learner's schedule.
 
 **v0.61.0 shipped both items 2026-07-28** — quota increase and LLM telemetry, both audited (backend 1285 tests, frontend 1544 tests, clean). One documentation-precision correction made at signoff, not a functional bug: Board Exam sessions draw from both their own dedicated 10-unit cap and the shared Challenge Quiz counter this release raised — the dedicated cap remains the binding constraint in every realistic path, so this release strictly improved Board Exam's effective headroom rather than changing its own limit. One real finding logged as a Known Limitation rather than silently dropped: the new telemetry has no reader yet (no baseline, threshold, or query), and by design stays null for bank/template-served sessions — a naive "mostly null" read could be mistaken for low spend rather than most sessions never calling the LLM. Next step: a read of the columns ~30 days post-deploy.
 
@@ -221,14 +295,43 @@ Within the five modes, individual questions carry a `questionFormat`: `MCQ`, `TR
 
 Both formats are Challenge Quiz-only for now, and both are **ungated across every plan tier** — a deliberate stance: question-format variety is a learning-quality dimension, not a monetization lever. Monetization stays in mode-level and quota-level gates.
 
-### Non-engine review surfaces
+### Non-engine review surfaces: Flashcards and Memorization
 
-**Flashcards** and **Memorization** are free, non-scored review surfaces outside the quiz-session engine — no timer, no submit, and critically, **never write `ConceptHealth`**.
+Both are free on every plan, live on the Note Detail **Key Concepts tab** (deliberately *not* the quiz-mode CTA row), are hidden in Teacher mode, and exist only on private authenticated Note Detail — never on public notes, public library, or shared quiz links. Neither is a quiz mode: no `QuickReviewSessionEntity`, no session row, no timer, no score, no result screen, nothing in quiz history.
 
-- **Flashcards** — flips each `keyConcepts` entry against its matching `quiz[].explanation` as a self-review deck. No new AI call.
-- **Memorization** — Flashcards' matching logic plus a real spaced-repetition schedule (simplified SM-2), stored in a separate `memorization_cards` entity, firewalled from `ConceptHealth` by design.
+They are frequently mistaken for two skins on the same feature. They are pedagogically different tools, and the difference is load-bearing.
 
-Both sit on the Note Detail Key Concepts tab, hidden from Teacher profile, free for every plan.
+**Flashcards is a coverage pass. Memorization is a retention engine.**
+
+Flashcards is **stateless** — a linear deck with previous/next, flipping concept → definition at your own pace. Nothing is recorded, so every visit yields the identical deck. Memorization is **stateful** — it shows **one due card at a time**, you self-grade it, and that grade rewrites when the card returns, persisted per `user_id` + `study_pack_id` + normalized `concept` in `memorization_cards`.
+
+**Four distinctions that matter:**
+
+1. **Recognition vs. committed retrieval.** Flashcards lets you flip at the first flicker of familiarity — the fluency illusion, where recognizing an answer feels like knowing it. Memorization forces a judgment *after* the attempt, and the judgment has a consequence.
+2. **Massed vs. spaced.** Flashcards has no concept of time at all: one sitting, any order, all cards. Memorization distributes across days. Spacing is the mechanism that produces durable memory, and it is the entire reason Memorization is a separate surface rather than a button on the deck.
+3. **Coverage vs. drillability — and they deliberately disagree.** Flashcards shows **every** key concept, rendering `No definition yet for this concept.` where no explanation matched. Memorization **excludes** those concepts entirely, because self-grading a card with no answer is meaningless. Only ~56% of key concepts get a matched definition (up from ~18% under exact-only matching), and this is a **permanent structural limit, not a bug to keep chasing**: `keyConcepts` (5–10) and `quiz` (a smaller fixed count) are independently generated, so there will always be more concepts than explanations. **Consequence to expect: Memorization legitimately shows fewer cards than Flashcards on the same note, and shows a caught-up state on days when Flashcards still offers the full deck.**
+4. **Neither one measures the learner.** See the firewall below.
+
+**When each is the right tool:** just-generated Study Pack → Flashcards (see the whole landscape, including the gaps). Weeks out from an exam, returning regularly → Memorization (spacing builds durability; the due-card loop is the return mechanism). Night-before cramming → Flashcards (no scheduler telling you a card isn't due). Want to know actual readiness → **neither; take a quiz.**
+
+One-line version: **Flashcards answers "what's in this note?" — Memorization answers "what have I not yet made stick?"**
+
+**Memorization's scheduling algorithm (simplified SM-2).** New cards start `repetitions = 0`, `intervalDays = 0`, `easeFactor = 2.5`, due now. Grades:
+
+| Grade | Interval | Ease factor | Repetitions |
+|---|---|---|---|
+| **Again** | `0` — due now, returns in the same session | −0.20 (floor `1.3`) | **reset to 0** |
+| **Hard** | `max(1, previous × 1.2)` | −0.15 (floor `1.3`) | +1 |
+| **Good** | `1` day on first success, then `previous × easeFactor` | unchanged | +1 |
+| **Easy** | `4` days on first success, then `previous × easeFactor × 1.3` | **+0.15** | +1 |
+
+On a brand-new card all four collapse to *now / 1 / 1 / 4 days* — they only fan out once a card has history, because Good and Easy compound through `easeFactor` while Hard erodes it. **Again is the only destructive grade:** it zeroes `repetitions`, so a card built up to a 30-day interval restarts from scratch.
+
+**Three firewalls — the most likely things for a future proposal to try to break:**
+
+- **Never writes `ConceptHealth`.** Excluded from `ProgressReportService`, note readiness, plan readiness, My Progress, and `Overall Readiness`. The reasoning, not just the rule: **self-assessment is rehearsal, not evidence.** Only objectively graded quizzes and exams move mastery. A learner could rate every card "Easy" for a month and readiness would not move — that is correct. Wiring SRS recall into readiness would let a learner grade themselves ready, which is exactly the assessment-only mastery boundary this preserves.
+- **Never calls the LLM.** Concepts with no matched explanation are *excluded* (Memorization) or shown with an explicit empty state (Flashcards) — never filled by generation. Closing the gap properly would need a real per-concept definition field in Study Pack generation: a schema and prompt change with real token cost, where existing packs would only benefit after regeneration. That is a deliberate non-goal, not an oversight.
+- **Not routed through the Quiz Session Engine.** Do not add a `quizSession` discriminator, create a session row, or make either surface count toward quiz performance.
 
 ---
 
@@ -244,6 +347,8 @@ Runtime entitlement source of truth is the backend subscription model and `GET /
 - New question *formats* are explicitly kept out of plan-gating (see Quiz / Practice Mode Contract) — a considered exception, not an oversight.
 - **Quota numbers currently live in two independent places that must move together:** backend enforcement defaults (`application.yaml`) and frontend marketing/display copy (`frontend/lib/pricing-config.ts`'s `pricingConfig` object) — the latter is not derived from the former. A quota change that only touches one will silently desync marketing copy from actual enforcement.
 - **Pricing itself stays unchanged as of `v0.61.0`** — see the Company Redefinition section above for the full resolution (quota raised now, price deferred pending paywall/retention/usage data). Do not propose a price change as if this is still an open debate; it's been resolved for now, revisit only once that data exists.
+- **Plan taglines were re-messaged in `v0.68.0`; plan *names* were not.** `PLUS.title` → "Guided learning built around your notes", `PRO.title` → "Your complete learning system" (from "For regular study" / "Best for exam prep"). `name: "Plus"` / `name: "Pro"` are **untouched everywhere** — checkout, Settings, badges, receipts, support — a deliberate decision to avoid a bifurcated vocabulary, the same reasoning that kept Creator/Curated Learning internal-frame-only. `FREE.title` ("For getting started") is **still owed** to the Messaging Architecture: an outcome-framed candidate was written and reverted in `v0.68.0` because deriving it from Plus/Pro consistency contradicted the ratified **FREE=adopt** tier placement. It must be written against the locked hierarchy, not against its siblings.
+- **Four separate components render plan `title`/`description`** — `/pricing`'s `PricingPlansSection`, the landing page's `SimplePricingSection`, `app/settings/page.tsx`, and `components/billing/paywall-modal.tsx`. `v0.68.0` shipped a real misalignment bug because plan `description` lengths had drifted to 62/96/133 characters, which cannot render at equal line counts in a multi-column card grid. They are now balanced at **88/88/92**. If you propose changing a plan description, keep the three within a few characters of each other, or you will silently break card alignment on four surfaces at once.
 
 Upgrade CTA rule:
 
@@ -256,7 +361,11 @@ Upgrade CTA rule:
 
 ## Previous Releases (condensed — see `RELEASES.md` and `docs/releases/*.md` for full detail)
 
-**v0.67.0 - Explore Convergence (Released 2026-07-30, PR #949).** See Current Baseline above for full detail — new Explore nav item, gate override + checkpoint, Codex-delivered + independent Opus-audited before merge.
+**v0.68.0 - Topic Note Rename (Released 2026-08-01, PR #966, four feature PRs).** See Current Baseline above for full detail — the "Create a Note" rename, the "topic note" quota vocabulary, the Messaging Architecture's first `/pricing` slice, the Companion Guidance Doctrine text, and a five-agent pre-signoff pressure test whose ~30 findings included a backend/frontend copy split in one alert element, a four-renderer layout regression, and four wrong counts in `RELEASES.md` itself.
+
+**v0.67.1 - Explore Convergence Follow-ups (Released 2026-07-31, PR #959).** Cleaned up `v0.67.0`'s Known Limitations: Explore's hardcoded "Review Sets" tab label colliding with `BOARD_EXAM`'s Collections nav label, Exam Hub's official-set card hardcoding `adoptedCollection={null}`, two stacked Explore CTAs on the zero-note Dashboard, an unreachable `?ref=` back-link, a dark-mode contrast bug on Explore's segmented control (found from a live screenshot, not any test), plus two pre-existing bugs surfaced only by explicit owner review of the full list. **Worth remembering as a pattern:** the release scoped three candidates and shipped seven — its own tagging under-counted it by more than half.
+
+**v0.67.0 - Explore Convergence (Released 2026-07-30, PR #949).** New "Explore" nav item (desktop and mobile) replacing the standalone "Public Library" item, compositing the Official Review Set catalog (`/collections/published`) and the public notes library (`/public/library`) behind a segmented control, plus an additive exact-`courseProgram` Official Review Set preview/adopt path on the anonymous-accessible Exam Hub pages. Shipped via an **explicit owner override of its own stated gate** — the Diagnostic Read (due after 2026-08-06, still not re-run) was supposed to show a discovery problem first. A dated **`[CHECKPOINT — due 2026-09-13]`** was committed at kickoff, with a new `EXPLORE_VIEWED`/`EXPLORE_TAB_SWITCHED`/adopt-click analytics set shipped specifically so the override can be checked against real engagement rather than being ship-and-forget. Codex-delivered, then audited against the real diff by an independent fresh-context Opus review, which caught a real gap: no page-view event for `/explore` itself, which would have made that checkpoint unmeasurable.
 
 **v0.66.2 - Card Surface Token Fix (Released 2026-07-30, PR #947).** Registered a `--color-card` Tailwind v4 theme token that had silently never existed, so `bg-card` (23 literal usages across 9 files) had resolved to no CSS output since it was first used — every one of those usages read as a bordered-but-unfilled panel in production and no one had noticed. Aliased to `--background` based on `getComputedStyle`-verified nested-panel evidence, not a screenshot alone — a requested independent Codex audit caught a real reasoning error in the original scoping (a claimed "deliberate override" on two `Card` call sites that, per compiled-CSS cascade order, was never actually happening) and corrected it before signoff.
 
@@ -291,6 +400,8 @@ Upgrade CTA rule:
 Synthesized from `docs/product/ROADMAP.md`'s Backlog Index (~55 rows) — the authoritative table. **Shipped/resolved/superseded rows are dropped from this view entirely** (check `RELEASES.md` for those) — this section is restricted to what's actually still open, grouped by status. **Treat the Backlog Index itself as the source of truth if the two ever disagree.**
 
 ### Active now — no gate, just not yet done
+- **Messaging Architecture rollout (ratified 2026-08-01, one slice shipped).** No gate on the architecture — it is an owner decision, and explicitly **not** gated on a conversion experiment. `/pricing` shipped in `v0.68.0`; **the landing page, paywall modal, Exam Hub upsell, `PLAN_COMPARISON_ROWS`'s "Best for" row, and per-plan feature bullets are all still un-actioned**, each needing its own scoping pass and `/kickoff`. `FREE.title` is the one already-identified concrete item and must be written against the locked hierarchy rather than derived from Plus/Pro consistency. Explicitly incremental — do not propose this as one release.
+- **Company Redefinition Phase 4 items 5 and 7.** Item 5 (which IA/landing changes follow from the packaging recommendation, e.g. whether Exam Hub changes structure) and item 7's implementation substance — the unexecuted **"AI" de-emphasis rename** in `fable-out/06`: ~13 actionable rows across `ai-suggestion-modal.tsx`, `profile-learning-section.tsx`, `paywall-content.ts`, `learn-guides.ts`, `study-packs-guide.tsx`, `professional-guide.tsx` ("AI Suggestions" → "Suggested Details", "AI Critique" → "Answer Critique", Help-guide mechanism copy to NoteLib-as-actor). It touches public SEO content and landing copy, so it needs its own scoping pass and `/kickoff` — **not a fold into an unrelated release.** Item 9 (prices, quotas, pass durations, checkout mechanics) is out of scope by the source doc's own constraint.
 - **User interviews (retained + churned exam-dated).** Script written, zero engineering cost. The one item on the entire retention track that can't happen from a keyboard.
 - **P1 (Google Search Console setup) and P3 (exam-named Learn guides).** Non-engineering — P1 needs domain access, P3 needs a human curator.
 - **Knowledge Impact.** Ratified 2026-07-28 despite a failed data gate (see Company Redefinition section above) — needs a scoping pass before it can kick off. Design brief already exists in `company-redefinition-out/09-knowledge-impact.md`. **Checkpoint committed 2026-07-28:** re-run the gate query 30-60 days after this ships — a continued-zero or still-collapsed community-publish rate settles the "can we create creators" hypothesis for good, not a reason to keep waiting. The only trend data available now (publish rate 1→3→0 across May/June/July, zero in the highest-signup month on record) argues against the hypothesis rather than being neutral.
@@ -342,8 +453,9 @@ Three coexisting navigation surfaces, **updated in `v0.67.0`**: **desktop sideba
 ### Library and Notes
 
 - Library is the authenticated note workspace. Notes can be private or public.
-- Note creation/generation must respect profile setup, target audience defaults, and Study Pack usage rules.
-- Async generation saves the note first, marks it `GENERATING`, redirects to Note Detail, and lets Note Detail poll. Failed generation preserves note content and exposes Retry Generate.
+- Note creation must respect profile setup, target audience defaults, and Study Pack usage rules.
+- **Terminology, locked in `v0.68.0` — get this right, it is the most recently-enforced naming rule in the product.** Drafting a note from a bare topic prompt is **"Create a Note"** (never "Generate Note"), and its metered monthly allowance is a **"topic note"** in all user-facing copy. **"Generate" is reserved for operations that transform the learner's own material** — "Generate Study Pack", "Generate Quiz", "Regenerate", and the `Retry Generation` failure label all keep it deliberately. Internal names are unchanged and should stay that way: `noteGenRemaining`, `noteGenerationsRemaining`, the `note-generation-limit` CTA context, and the `GENERATE_NOTE_LIMIT` / `GENERATE_NOTE` analytics identifiers. "Note draft" is **not** available as a synonym for the allowance — `Draft` is already a user-visible state meaning "no Study Pack yet", and a hand-written note is also a Draft while consuming zero topic-note quota.
+- Async generation saves the note first, marks it `GENERATING`, redirects to Note Detail, and lets Note Detail poll. Failed generation preserves note content and exposes `Retry Generation`.
 - Note Detail is the owner study hub: summary, key concepts, quiz, full notes, practice actions, recent sessions, readiness signal, Flashcards/Memorization entry points. Key Concepts entries sort by readiness (struggling → due → not-started → mastered) once ConceptHealth loads.
 - Quiz result screens carry two authored/derived guidance surfaces: a `CompanionResultBridgeCard` excerpting the primary Review Set's Companion content, and deep-links from missed/weak concepts to their matching Key Concepts explanation. Both are same-session learning aids, not retention/return mechanics.
 
