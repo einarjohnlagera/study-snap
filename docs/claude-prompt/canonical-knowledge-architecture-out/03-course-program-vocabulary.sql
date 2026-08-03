@@ -3,7 +3,7 @@
 --
 -- Companion to 01-architecture-critique-and-migration-plan.md §1.2 (the vocabulary
 -- queries that gate Step 2) and §9 (the success-metric baselines that must be taken
--- BEFORE Step 1 ships, because they measure the world without Content Context in it).
+-- BEFORE Step 1 ships, because they measure the world without Domain Context in it).
 --
 -- ============================================================================
 -- WHAT THIS ANSWERS
@@ -16,7 +16,7 @@
 -- reconciliation project of genuinely unknown size.
 --
 -- Queries A–D size that reconciliation. Queries E–G take the §9 baselines while they are
--- still takeable. F is additionally the most useful single input to the Content Context
+-- still takeable. F is additionally the most useful single input to the Domain Context
 -- taxonomy decision: it names the subjects that ALREADY span multiple programs, which are
 -- exactly the notes that should become canonical shared notes first.
 --
@@ -131,7 +131,7 @@ ORDER BY rows_affected DESC;
 -- "no significant duplicate Official Notes," and 01 §2.10 is explicit that the duplication
 -- cost is forward-looking rather than measured. This is the baseline that would climb if
 -- Civil Engineering shipped WITHOUT this architecture — so it only has meaning if it is
--- recorded now, before Content Context exists.
+-- recorded now, before Domain Context exists.
 WITH official_public_notes AS (
     SELECT
         n.id,
@@ -197,10 +197,10 @@ ORDER BY distinct_programs DESC;
 -- ============================================================================
 -- QUERY F — subjects already spanning multiple programs (TAXONOMY INPUT)
 -- ============================================================================
--- The most actionable single query for the Content Context decision. Any subject appearing
+-- The most actionable single query for the Domain Context decision. Any subject appearing
 -- under two or more course_program values is knowledge the library is ALREADY treating as
 -- shared — those are the first notes that should become canonical, and their groupings
--- suggest the Content Context values themselves ("Engineering Foundation" is the right
+-- suggest the Domain Context values themselves ("Engineering Foundation" is the right
 -- value if Algebra/Physics/Statistics cluster across engineering programs here).
 --
 -- Unlike Query E this is not restricted to official notes: community notes reveal how

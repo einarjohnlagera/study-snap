@@ -1,4 +1,4 @@
-# Content Context taxonomy — consultation prompt for product UX GPT
+# Domain Context taxonomy — consultation prompt for product UX GPT
 
 Paste everything below the line. Written in the owner's voice, self-contained — no NoteLib context assumed.
 
@@ -6,7 +6,7 @@ Paste everything below the line. Written in the owner's voice, self-contained �
 
 ---
 
-# NoteLib — Content Context Taxonomy Decision
+# NoteLib — Domain Context Taxonomy Decision
 
 I need help finalizing one specific decision. Please treat this as a **product architecture discussion**, not an implementation request.
 
@@ -27,7 +27,7 @@ The ratified model splits it into four independent axes:
 | Axis | Cardinality | Owns |
 |---|---|---|
 | **Subject** | one | *what* the note is about (Algebra) |
-| **Content Context** | one | ***how* it is authored** — the LLM's domain constraint |
+| **Domain Context** | one | ***how* it is authored** — the LLM's domain constraint |
 | **Note Learner Level** | one | *how deep* — the educational level it was authored for |
 | **Applicable Programs** | many | *where* it appears — discovery and filtering only, never reaches a prompt |
 
@@ -39,9 +39,9 @@ So this is about **not creating the duplication in the first place**, decided at
 
 ## The decision I need help with
 
-**What should the Content Context value set be?**
+**What should the Domain Context value set be?**
 
-This is the highest-stakes part, because Content Context is substituted directly into the generation prompt where the program name currently sits:
+This is the highest-stakes part, because Domain Context is substituted directly into the generation prompt where the program name currently sits:
 
 ```
 Course / Program: {VALUE}
@@ -55,11 +55,11 @@ That instruction is why the original sketch of this idea — values like "Engine
 
 ### The rule I'm proposing
 
-> **Content Context is the coarsest label under which the note's treatment is identical.**
+> **Domain Context is the coarsest label under which the note's treatment is identical.**
 
 Not the program. Not the subject plan. The level at which curricula genuinely share the same treatment. Consequence: the value set is a deliberate **mix** of shared-bundle names and program names.
 
-| Note | Treatment identical across… | Content Context |
+| Note | Treatment identical across… | Domain Context |
 |---|---|---|
 | Algebra topics | all 11 engineering programs | `Engineering Mathematics` |
 | Strength of Materials | most engineering programs | `Engineering Sciences` |
@@ -91,7 +91,7 @@ My test for any candidate value: **would a competent author, given only this val
 1. **Is `Engineering Sciences` genuinely shared across all 11 Philippine engineering programs, or only a subset?** This is the one I most need resolved — it sets the default applicability expansion. It is a curriculum question, not an architecture one.
 2. **Does `Engineering Mathematics` need to split by depth** (board-review vs. college coursework), or does the separate Note Learner Level axis handle that adequately with one shared context?
 3. **Is one `General Education` context right across Grade School → Junior High → Senior High**, distinguished only by Note Learner Level? Or does the treatment differ by more than depth?
-4. **Should Content Context be the single visible badge on note cards** (replacing the current program badge)? I do not want to show twelve program badges per card, and Content Context is single-valued and stable — but it means learners see this vocabulary constantly, so it has to read well to a student, not just to a curator.
+4. **Should Domain Context be the single visible badge on note cards** (replacing the current program badge)? I do not want to show twelve program badges per card, and Domain Context is single-valued and stable — but it means learners see this vocabulary constantly, so it has to read well to a student, not just to a curator.
 5. **`Civil Service` (7 notes)** — its own context, or fold into `General Education`?
 
 ## Real data from our production database, for grounding

@@ -10,11 +10,11 @@
 
 Three claims that should change how this gets sequenced:
 
-1. **Content Context is the load-bearing piece, and it is cheap.** One additive nullable column, one resolver change, three prompt-builder changes. It is the only piece that is *forced* — the current prompt contains an instruction that is logically unsatisfiable under many-valued programs.
-2. **Content Context alone unblocks comprehensive Official Review Sets.** Review Sets already compose notes by explicit reference with no program constraint. A curator can author one canonical "Engineering Foundation / Algebra" note and add it to eleven engineering Review Sets *before any join table exists*. Measured against the stated success metric — "does this reduce the effort to build comprehensive Official Review Sets" — the many-to-many relation contributes very little; it buys discovery, filtering, and SEO reach instead. Both are worth having. They are not the same bet and should not be gated together.
+1. **Domain Context is the load-bearing piece, and it is cheap.** One additive nullable column, one resolver change, three prompt-builder changes. It is the only piece that is *forced* — the current prompt contains an instruction that is logically unsatisfiable under many-valued programs.
+2. **Domain Context alone unblocks comprehensive Official Review Sets.** Review Sets already compose notes by explicit reference with no program constraint. A curator can author one canonical "Engineering Foundation / Algebra" note and add it to eleven engineering Review Sets *before any join table exists*. Measured against the stated success metric — "does this reduce the effort to build comprehensive Official Review Sets" — the many-to-many relation contributes very little; it buys discovery, filtering, and SEO reach instead. Both are worth having. They are not the same bet and should not be gated together.
 3. **The many-to-many cannot ship in one release, and is not reversible.** It touches 59 backend main-source files and 40 frontend non-test files, rewrites two hot paginated read paths, and once badges and filters read from the join, rollback requires a migration. That directly violates clause 2 of this ROADMAP's own bootstrap test ("fits one release slot and is reversible — no schema/pricing/nav commitment that needs a migration to withdraw").
 
-Recommended shape: **the proposed architecture, unchanged in substance, delivered as four separately-gated steps with Content Context first.**
+Recommended shape: **the proposed architecture, unchanged in substance, delivered as four separately-gated steps with Domain Context first.**
 
 ---
 
@@ -31,7 +31,7 @@ All content, terminology, examples, and question framing must belong to that dom
 Do not blend in material from unrelated disciplines.
 ```
 
-This instruction is **logically unsatisfiable** if the field holds Civil + Mechanical + Electrical + Electronics + Computer + Industrial + Chemical + Mining + Agricultural + Geodetic + Sanitary Engineering. There is no single authoritative domain to name, and "do not blend unrelated disciplines" becomes self-contradictory. The proposal's instinct that Applicable Programs "should NOT simply be concatenated into the prompt" is not a stylistic preference — concatenation would actively break a constraint the system currently depends on. Content Context is the fix, and it is required by the many-to-many, not optional alongside it.
+This instruction is **logically unsatisfiable** if the field holds Civil + Mechanical + Electrical + Electronics + Computer + Industrial + Chemical + Mining + Agricultural + Geodetic + Sanitary Engineering. There is no single authoritative domain to name, and "do not blend unrelated disciplines" becomes self-contradictory. The proposal's instinct that Applicable Programs "should NOT simply be concatenated into the prompt" is not a stylistic preference — concatenation would actively break a constraint the system currently depends on. Domain Context is the fix, and it is required by the many-to-many, not optional alongside it.
 
 **Separating "where it appears" from "how it is authored" is the correct cut.** Today `notes.course_program` carries five unrelated responsibilities simultaneously: the LLM domain constraint (`:1536`), the private Library filter facet (`NoteLibraryRepositoryImpl:277-279`) and its facet-count query (`:189-195`), the Public Library slug filter and free-text search predicate (`PublicLibraryRepositoryImpl:198-200`, `:235`), the Exam Hub mapping key (`ExamGoalConfig` ↔ `frontend/lib/exam-hub-config.ts`), and the note card badge. Those five want different cardinality. That is the actual bug.
 
@@ -54,7 +54,7 @@ The proposal states: *"Every existing note can be migrated automatically using i
 - `StudyPackService:746` calls `note.setCourseProgram(...)` — **an LLM suggestion can write into this field**
 - The vocabulary drift is already documented in-code, in two files that must be hand-synced: *"CourseProgram values must match production DB values exactly; 'Medical – Surgical Nursing' uses U+2013 (en-dash), not a hyphen"* (`ExamGoalConfig:52-55`, `exam-hub-config.ts:12-13`)
 
-So the current program vocabulary is **open-ended, user-typed, partly machine-generated, and already known to contain characters that break exact matching.** Building a catalog from it is a data-reconciliation project with editorial judgment calls (is "BS Nursing" the same catalog entry as "Nursing"? is "Senior High – STEM" a program at all, or a Content Context?), and every mis-merge silently drops notes out of a filter.
+So the current program vocabulary is **open-ended, user-typed, partly machine-generated, and already known to contain characters that break exact matching.** Building a catalog from it is a data-reconciliation project with editorial judgment calls (is "BS Nursing" the same catalog entry as "Nursing"? is "Senior High – STEM" a program at all, or a Domain Context?), and every mis-merge silently drops notes out of a filter.
 
 **This is knowable before committing.** Two queries, runnable today, decide whether step 2 is a half-day or a two-week job:
 
@@ -79,7 +79,7 @@ Run these before scoping step 2. The plan's cost is genuinely unknown until they
 
 ### 1.3 This is three initiatives, and their economics are not comparable
 
-| | Content Context | Programs many-to-many | Note Learner Level |
+| | Domain Context | Programs many-to-many | Note Learner Level |
 |---|---|---|---|
 | Schema | 1 nullable column | catalog + families + join + backfill | 1 nullable column |
 | Read paths touched | none | private Library filter + facet counts, Public Library filter + search, Exam Hub resolution, 6 note-card surfaces, analytics | none |
@@ -97,7 +97,7 @@ Gating all three behind one decision means the cheap, forced, reversible piece w
 
 `notes.target_profile_type` is **NOT NULL** (`NoteEntity.java:56-58`) and holds `NoteTargetProfileType`: `STUDENT`, `BOARD_TAKER`, `PROFESSIONAL`. It is set from `UpsertNoteRequest.targetProfileType` (`:12`).
 
-Add Content Context + Note Learner Level + Applicable Programs and a note carries **five** metadata axes, two of which look like they overlap: "authored for BOARD_TAKER" and "authored at PROFESSIONAL level" appear to answer nearly the same question.
+Add Domain Context + Note Learner Level + Applicable Programs and a note carries **five** metadata axes, two of which look like they overlap: "authored for BOARD_TAKER" and "authored at PROFESSIONAL level" appear to answer nearly the same question.
 
 **Checking what it actually does resolves the conflict, and reframes the ruling.** `target_profile_type` is not write-only — it is read as a **Public Library audience filter**: `PublicLibraryRepositoryImpl:176-178` (`and n.target_profile_type = :targetProfileType`), `NoteController:594` and `:636` (`targetProfileType` request param → `resolvePublicAudienceFilter(audience, targetProfileType)`), `NoteRepository:106` and `:131`. It is projected by both library read paths (`PublicLibraryRepositoryImpl:62`, `NoteLibraryRepositoryImpl:56`) and carried on `BulkGenerationResultEntity:35-36`. It never reaches a prompt.
 
@@ -140,11 +140,11 @@ If Note Learner Level wins, `:101` must compare against the *note's* level, not 
 
 `getExamSlugForCourseProgram` (`frontend/lib/exam-hub-config.ts:52-62`) returns a single `ExamHubSlug` via `.find(...)`. It drives the public note detail Exam Hub callout banner and the Dashboard `GoalPromptBanner` (`goal-prompt-banner.tsx:34`). `ExamGoalConfig.getCoursePrograms(slug)` is the backend mirror and must stay hand-synced.
 
-With many-valued programs a note can map to several hubs, and `.find()` would silently pick whichever slug is declared first in `EXAM_HUBS` — a config-order-dependent, non-obvious behaviour. A deterministic tie-break rule is needed (recommended: resolve the hub from the *learner's* own program/goal when authenticated, and from Content Context otherwise — never from an arbitrary pick out of the note's program list).
+With many-valued programs a note can map to several hubs, and `.find()` would silently pick whichever slug is declared first in `EXAM_HUBS` — a config-order-dependent, non-obvious behaviour. A deterministic tie-break rule is needed (recommended: resolve the hub from the *learner's* own program/goal when authenticated, and from Domain Context otherwise — never from an arbitrary pick out of the note's program list).
 
 ### 2.5 `isQuantitativeContext` would be diluted by a program list
 
-`OpenAiLlmStudyPackService:1568-1590` concatenates `courseProgram + subject + tags + conceptHints + summary` into one lowercase haystack and keyword-matches `QUANTITATIVE_KEYWORDS` to decide whether to generate computational content. Joining eleven program names into that haystack means **one program whose name contains a quantitative keyword flips a non-quantitative note to quantitative.** This must read Content Context, never the program list.
+`OpenAiLlmStudyPackService:1568-1590` concatenates `courseProgram + subject + tags + conceptHints + summary` into one lowercase haystack and keyword-matches `QUANTITATIVE_KEYWORDS` to decide whether to generate computational content. Joining eleven program names into that haystack means **one program whose name contains a quantitative keyword flips a non-quantitative note to quantitative.** This must read Domain Context, never the program list.
 
 ### 2.6 Review Set program is behavioral, and can now diverge from its notes
 
@@ -160,7 +160,7 @@ Once notes have many programs, a Civil Engineering Review Set will legitimately 
 
 `NoteService:264` copies `courseProgram` into a copied note. Applicable Programs are a *curation* property of a canonical Official note — they describe editorial reach, not anything about a learner's personal copy. If they copy, the private Library's program facet fills with eleven-program notes for every adopter, which is noise.
 
-Recommended rule: **copies inherit Content Context and Note Learner Level (both affect generated content, and the copy carries a copied StudyPack) but do not inherit Applicable Programs.** Note that `CLAUDE.md`'s copy rules are already a documented exception minefield ("Public-note copies include the linked StudyPack… owner self-copies exclude generated content") — this needs to be written as a third explicit rule there, not left to inference.
+Recommended rule: **copies inherit Domain Context and Note Learner Level (both affect generated content, and the copy carries a copied StudyPack) but do not inherit Applicable Programs.** Note that `CLAUDE.md`'s copy rules are already a documented exception minefield ("Public-note copies include the linked StudyPack… owner self-copies exclude generated content") — this needs to be written as a third explicit rule there, not left to inference.
 
 ### 2.8 `users.course_program` is free text too
 
@@ -187,7 +187,7 @@ Honest framing, because the proposal's maintenance argument reads as though dupl
 | R1 | **Vocabulary reconciliation, not the join table, is the real hazard.** A mis-merged or missed program value silently drops notes out of a filter with no error | High | Run §1.2's two queries first. Curate the catalog by hand; keep the original string on `notes` alongside the FK for one full release so mis-mappings are recoverable |
 | R2 | **Step 3 is not withdrawable.** Once badges/filters read the join, rollback needs a migration — conflicts with bootstrap-test clause 2 | High | Accept it explicitly as a multi-release commitment; do not attempt it in one slot. Keep `notes.course_program` populated in parallel through step 3 as the rollback path |
 | R3 | **Five-axis authoring form → curator inconsistency.** Worse than duplication because it is invisible | High | Settle §2.1 before adding any field. Admin form must group the axes with one-line "this controls X" labels, not present five peer dropdowns |
-| R4 | **Generation quality could get *worse*.** A vaguer Content Context ("Engineering Foundation") is a weaker domain constraint than "Civil Engineering." This is the one place the new architecture can regress output | Medium-High | Content Context must be a curated taxonomy, not free text, with values specific enough to constrain. Before bulk authoring, generate one canonical shared note and diff its Study Pack against its single-program predecessor |
+| R4 | **Generation quality could get *worse*.** A vaguer Domain Context ("Engineering Foundation") is a weaker domain constraint than "Civil Engineering." This is the one place the new architecture can regress output | Medium-High | Domain Context must be a curated taxonomy, not free text, with values specific enough to constrain. Before bulk authoring, generate one canonical shared note and diff its Study Pack against its single-program predecessor |
 | R5 | **"Canonical knowledge" does not make generated artifacts canonical.** Pools/banks/Study Packs remain per-copy (§2.3) | Medium | State the limit in the ADR. Cross-user pooling is Company Redefinition Phase 3b and stays separately gated |
 | R6 | **Program facets create new indexable SEO surface** (sitemap, canonicals, thin-page risk) while the SEO items that would justify it are gated on GSC access nobody has yet (ROADMAP P1, `[EFFORT]`) | Low-Medium | Do not build program landing pages as part of this. Public Library URLs are subject-keyed (`/public/library/[subject]/[slug]`) — leave them that way |
 | R7 | **Reprioritization drops dated measurement obligations.** Two are calendar-bound and near | Medium | See §10 — defer building, never measuring |
@@ -196,7 +196,7 @@ Honest framing, because the proposal's maintenance argument reads as though dupl
 
 ## 4. Alternatives considered
 
-**A1 — Inverse mapping: `program → content_contexts`, keep `notes.course_program` single-valued.** Applicability expressed once per program ("Civil Engineering draws from Engineering Foundation, General Education, Civil Engineering") instead of once per note-program pair. Dozens of rows instead of thousands; already the shape `ExamGoalConfig` uses (hub → many programs); adding Sanitary Engineering becomes one row instead of touching N notes.
+**A1 — Inverse mapping: `program → domain_contexts`, keep `notes.course_program` single-valued.** Applicability expressed once per program ("Civil Engineering draws from Engineering Foundation, General Education, Civil Engineering") instead of once per note-program pair. Dozens of rows instead of thousands; already the shape `ExamGoalConfig` uses (hub → many programs); adding Sanitary Engineering becomes one row instead of touching N notes.
 
 **Not recommended, and as of 2026-08-03 not even a fallback.** It breaks the moment applicability is genuinely per-note rather than per-context — one exception forces a sparse per-note override table *plus* a second mechanism to reason about, which is strictly worse than the join alone. It also contradicts the stated constraint that *"the stored applicability should still remain explicit."*
 
@@ -217,7 +217,7 @@ Honest framing, because the proposal's maintenance argument reads as though dupl
 | Axis | Field | Cardinality | Sole responsibility |
 |---|---|---|---|
 | Subject | `notes.subject` (exists) | 1 | **what** the note is about |
-| Content Context | `notes.content_context` (new) | 1 | **how** it is authored — the LLM domain constraint |
+| Domain Context | `notes.domain_context` (new) | 1 | **how** it is authored — the LLM domain constraint |
 | Note Learner Level | `notes.learner_level` (new) | 1 | **how deep** — educational depth |
 | Applicable Programs | `note_course_program` (new) | N | **where** it appears — discovery only |
 | Audience framing | `notes.target_profile_type` (exists) | 1 | **who** it is written for — never depth (§2.1) |
@@ -228,21 +228,21 @@ Program Families sit on the catalog (`course_programs.family_id`) and are an aut
 
 Extend `StudyPackGenerationContextResolver` (the existing, documented single resolver; `CLAUDE.md` already says "do not bypass this resolver") and widen `StudyPackGenerationContext` to carry `contentContext` and `noteLearnerLevel`:
 
-1. **Static content** (note body, summary, key concepts, flashcards, memorization, static question pool): Content Context + Note Learner Level. **Never** Applicable Programs. **Never** user learner level.
-2. **Quizzes and exams** (Quick Review, Challenge, Adaptive, Long Exam, Board Exam, Interview Practice, Teacher preview): Content Context + Note Learner Level set the floor. User Learner Level may adjust scaffolding and wording only, and **may never lower the curriculum** — this is the proposal's rule and it needs to be a code-level invariant with a test, not prose.
-3. **Discovery** (filters, facets, badges, Exam Hub, search, recommendations): Applicable Programs only. Never Content Context.
+1. **Static content** (note body, summary, key concepts, flashcards, memorization, static question pool): Domain Context + Note Learner Level. **Never** Applicable Programs. **Never** user learner level.
+2. **Quizzes and exams** (Quick Review, Challenge, Adaptive, Long Exam, Board Exam, Interview Practice, Teacher preview): Domain Context + Note Learner Level set the floor. User Learner Level may adjust scaffolding and wording only, and **may never lower the curriculum** — this is the proposal's rule and it needs to be a code-level invariant with a test, not prose.
+3. **Discovery** (filters, facets, badges, Exam Hub, search, recommendations): Applicable Programs only. Never Domain Context.
 4. **Fallback chains** (each must be one function, not inlined):
-   - Content Context: `note.contentContext` → `note.courseProgram` (legacy) → `user.courseProgram`
+   - Domain Context: `note.contentContext` → `note.courseProgram` (legacy) → `user.courseProgram`
    - Level: `note.learnerLevel` → `user.learnerLevel` → `LearnerLevel.COLLEGE` (the existing `DEFAULT_LEARNER_LEVEL`, `:77`)
 
 ### 5.3 The card badge problem dissolves
 
-The proposal asks how to display many programs without twelve badges. **Show Content Context as the single badge.** It is single-valued, stable, curator-authored, and is the axis that actually describes what the content *is* — "Engineering Foundation" is more informative on a card than either "Civil Engineering" (wrong: it's shared) or "Applicable to 8 programs" (uninformative: says nothing about the content). Surface the program list only on note detail, as a collapsed "Applicable to 8 programs" disclosure. This is a free win from the four-axis split rather than a new affordance to design, and it keeps all six note-card surfaces on the single shared `SharedNoteCard` content cascade that `v0.50.2` consolidated.
+The proposal asks how to display many programs without twelve badges. **Show Domain Context as the single badge.** It is single-valued, stable, curator-authored, and is the axis that actually describes what the content *is* — "Engineering Foundation" is more informative on a card than either "Civil Engineering" (wrong: it's shared) or "Applicable to 8 programs" (uninformative: says nothing about the content). Surface the program list only on note detail, as a collapsed "Applicable to 8 programs" disclosure. This is a free win from the four-axis split rather than a new affordance to design, and it keeps all six note-card surfaces on the single shared `SharedNoteCard` content cascade that `v0.50.2` consolidated.
 
 ### 5.4 Sequencing — four steps, minimum four releases
 
-**Step 1 — `notes.content_context` (one release; additive; reversible). Do this first.**
-New nullable column + a curated `content_contexts` value set. Resolver prefers it over `course_program`. `buildGenerationContextBlock` (`:1535-1542`) reads it for the Domain constraint and content-calibration lines. `isQuantitativeContext` (`:1568`) reads it. `buildSubjectSuggestionGuidanceBlock` (`:1560-1564`) reads it. Admin note authoring and Bulk Generate expose it; normal users never see it (their `course_program` keeps working through the fallback chain). **No read-path, filter, badge, or URL change.**
+**Step 1 — `notes.domain_context` (one release; additive; reversible). Do this first.**
+New nullable column + a curated `domain_contexts` value set. Resolver prefers it over `course_program`. `buildGenerationContextBlock` (`:1535-1542`) reads it for the Domain constraint and content-calibration lines. `isQuantitativeContext` (`:1568`) reads it. `buildSubjectSuggestionGuidanceBlock` (`:1560-1564`) reads it. Admin note authoring and Bulk Generate expose it; normal users never see it (their `course_program` keeps working through the fallback chain). **No read-path, filter, badge, or URL change.**
 
 This is the whole near-term curriculum-authoring unblock: a curator can now author one canonical "Engineering Foundation / Algebra" note whose Study Pack, flashcards, and pools are correctly domain-constrained, and add it to every engineering Review Set — because Review Sets already compose freely (§1.1). Ship this and start authoring Civil Engineering; the rest can follow on its own schedule.
 
@@ -261,7 +261,7 @@ Steps 1, 2, and 4 are independent of each other and of step 3. Step 4 can preced
 
 ## 6. Migration inventory (the 14 requested items)
 
-1. **Database.** Step 1: `notes.content_context VARCHAR(64)` nullable. Step 2: `course_programs(id, name, slug, family_id, created_at)`, `program_families(id, name, slug)`, nullable `notes.course_program_id` + `users.course_program_id`. Step 3: `note_course_program(note_id, course_program_id, PRIMARY KEY(note_id, course_program_id))` + index on `course_program_id`; optional denormalized `notes.program_slugs text[]` + GIN index (§2.9). Step 4: `notes.learner_level VARCHAR(32)` nullable. Next free version is **V102** — the numeric max is `V101__concept_health_incorrect_streak.sql`, *not* V99; a lexical `ls` sorts `V9__`/`V90__`–`V99__` after `V100__`/`V101__` and reports the wrong answer. Always derive it numerically (`ls … | sed 's/^V\([0-9]*\)__.*/\1/' | sort -n | tail -1`). `v0.47.1` was a migration-collision hotfix — also check concurrent branches before claiming a number.
+1. **Database.** Step 1: `notes.domain_context VARCHAR(64)` nullable. Step 2: `course_programs(id, name, slug, family_id, created_at)`, `program_families(id, name, slug)`, nullable `notes.course_program_id` + `users.course_program_id`. Step 3: `note_course_program(note_id, course_program_id, PRIMARY KEY(note_id, course_program_id))` + index on `course_program_id`; optional denormalized `notes.program_slugs text[]` + GIN index (§2.9). Step 4: `notes.learner_level VARCHAR(32)` nullable. Next free version is **V102** — the numeric max is `V101__concept_health_incorrect_streak.sql`, *not* V99; a lexical `ls` sorts `V9__`/`V90__`–`V99__` after `V100__`/`V101__` and reports the wrong answer. Always derive it numerically (`ls … | sed 's/^V\([0-9]*\)__.*/\1/' | sort -n | tail -1`). `v0.47.1` was a migration-collision hotfix — also check concurrent branches before claiming a number.
 
 2. **API.** `GET /course-programs` (`CourseProgramController`) currently returns `List<String>` from live-row aggregation; it becomes catalog-backed and should return objects (`{id, name, slug, family}`) — a **breaking response-shape change** with frontend consumers in at least `private-note-detail-page-client.tsx:663-668`, `library/page.tsx`, `public-library-page-client.tsx`. Prefer a new `GET /course-programs/catalog` and deprecate the old shape rather than mutating it. New: `GET /program-families`. `POST/PUT /notes` accept `contentContext`, `learnerLevel`, `applicableProgramIds[]`. Library/Public Library list endpoints accept repeated or comma-joined program filters.
 
@@ -269,25 +269,25 @@ Steps 1, 2, and 4 are independent of each other and of step 3. Step 4 can preced
 
 4. **Search / filter.** `NoteLibraryRepositoryImpl:277-279` (filter), `:189-195` (facet counts — `GROUP BY` becomes a join aggregate), `PublicLibraryRepositoryImpl:198-200` (slug filter), `:235` (search `LIKE`). `NoteLibraryFilterCriteria` and `PublicLibraryFilterCriteria` go from `String courseProgram` to a collection. Perf decision per §2.9 **before** writing these.
 
-5. **Private Library.** Filter facet becomes multi-valued (a note appears under every applicable program — expect facet counts to sum above the note total, which is correct but needs a UI note). `UserLibraryFilterService`, `library/page.tsx`, `library/exam-builder/page.tsx`. Badge → Content Context (§5.3).
+5. **Private Library.** Filter facet becomes multi-valued (a note appears under every applicable program — expect facet counts to sum above the note total, which is correct but needs a UI note). `UserLibraryFilterService`, `library/page.tsx`, `library/exam-builder/page.tsx`. Badge → Domain Context (§5.3).
 
 6. **Explore / Public Library.** `public-library-page-client.tsx`, `public/library/[subject]/page.tsx`, `[subject]/[slug]/page.tsx`. **No URL migration** — Public Library is subject-keyed (`/public/library/[subject]/[slug]`), programs are query-param facets only. Exam Hub callout tie-break per §2.4. `PublicProfileService` program-count rollups (`public-profile-page-client.tsx:385-387`) become many-valued.
 
-7. **Admin UI.** Note create/edit exposes Content Context (single-select), Note Learner Level (single-select), Applicable Programs (multi-select), Program Family shortcut (expands to explicit rows client-side, submits the expansion). Grouped with per-axis "this controls X" labels, per R3. Normal-user note editor is unchanged except that its free-text program field now maps to the catalog on save.
+7. **Admin UI.** Note create/edit exposes Domain Context (single-select), Note Learner Level (single-select), Applicable Programs (multi-select), Program Family shortcut (expands to explicit rows client-side, submits the expansion). Grouped with per-axis "this controls X" labels, per R3. Normal-user note editor is unchanged except that its free-text program field now maps to the catalog on save.
 
-8. **Bulk Generate.** `NoteBulkGenerationService`, `BulkGenerateNotesRequest`, `BulkGenerationResultEntity` (has its own `courseProgram`), `BulkGenerationResultService:39`, `StudyPackGenerationContextResolver.resolveForBulkGeneration` (`:62-82`). Bulk Generate is where per-program duplication would otherwise be industrialized, so it needs Content Context in **step 1**, not step 3 — a bulk run should produce one canonical set with a Content Context, not eleven program-flavored sets.
+8. **Bulk Generate.** `NoteBulkGenerationService`, `BulkGenerateNotesRequest`, `BulkGenerationResultEntity` (has its own `courseProgram`), `BulkGenerationResultService:39`, `StudyPackGenerationContextResolver.resolveForBulkGeneration` (`:62-82`). Bulk Generate is where per-program duplication would otherwise be industrialized, so it needs Domain Context in **step 1**, not step 3 — a bulk run should produce one canonical set with a Domain Context, not eleven program-flavored sets.
 
-9. **Prompts / templates.** `study-pack-v1/developer.txt`, `note-generation-developer.txt`, `companion-developer.txt` (`:33` — `Course / Program: {COURSE_PROGRAM}`). Builder sites: `OpenAiLlmStudyPackService:649` (`{COURSE_PROGRAM}`), `:1519-1549` (`buildGenerationContextBlock`, both variants), `:1551-1566` (`buildSubjectSuggestionGuidanceBlock`), `:1568-1590` (`isQuantitativeContext`), plus the six per-mode builders at `:709`, `:738`, `:783`, `:816`, `:866`, `:893` that inject `{LEARNER_LEVEL}` / `{LEARNER_LEVEL_GUIDANCE}`. Each quiz mode also has its own `{mode}-developer.txt` + `{mode}-system.txt` pair under `prompts/study-pack-v1/` — audit all of them for program/level references. **Rename the placeholder** to `{CONTENT_CONTEXT}` rather than leaving `{COURSE_PROGRAM}` holding a different meaning; a placeholder whose name lies is how anti-drift failures start.
+9. **Prompts / templates.** `study-pack-v1/developer.txt`, `note-generation-developer.txt`, `companion-developer.txt` (`:33` — `Course / Program: {COURSE_PROGRAM}`). Builder sites: `OpenAiLlmStudyPackService:649` (`{COURSE_PROGRAM}`), `:1519-1549` (`buildGenerationContextBlock`, both variants), `:1551-1566` (`buildSubjectSuggestionGuidanceBlock`), `:1568-1590` (`isQuantitativeContext`), plus the six per-mode builders at `:709`, `:738`, `:783`, `:816`, `:866`, `:893` that inject `{LEARNER_LEVEL}` / `{LEARNER_LEVEL_GUIDANCE}`. Each quiz mode also has its own `{mode}-developer.txt` + `{mode}-system.txt` pair under `prompts/study-pack-v1/` — audit all of them for program/level references. **Rename the placeholder** to `{DOMAIN_CONTEXT}` rather than leaving `{COURSE_PROGRAM}` holding a different meaning; a placeholder whose name lies is how anti-drift failures start.
 
 10. **Question pools.** §2.3 in full: re-key `exam_question_pool.learner_level` and `challenge_quiz_question_bank.learner_level` from user level to note level; fix `ExamQuestionPoolService:101`/`:368-374`; decide the existing-rows policy; note that the `idx_challenge_quiz_question_bank_claimable` index includes `learner_level`. `OfficialChallengeQuizTemplateService:179`, `:247` also stamp learner level onto copied template questions. Out of scope but state it: pools remain per-`study_pack_id`, so canonical *notes* do not yield canonical *pools*.
 
-11. **Backfill.** Step 2: map each distinct `notes.course_program` / `users.course_program` string to a catalog row by hand; leave unmappable values with a NULL FK and the string intact rather than guessing. Step 3: one `note_course_program` row per note from its mapped program (notes with no mapping get no row and fall back to Content Context for display). Content Context backfill is a **curator judgment call, not a script** — the whole point is that "Civil Engineering" and "Engineering Foundation" are different values; a mechanical copy of `course_program` into `content_context` would encode the old duplication assumption into the new field. Recommended: backfill `content_context = course_program` mechanically as a *migration-safe default*, then have the curator revise the ~50-value vocabulary by hand before authoring new shared notes.
+11. **Backfill.** Step 2: map each distinct `notes.course_program` / `users.course_program` string to a catalog row by hand; leave unmappable values with a NULL FK and the string intact rather than guessing. Step 3: one `note_course_program` row per note from its mapped program (notes with no mapping get no row and fall back to Domain Context for display). Domain Context backfill is a **curator judgment call, not a script** — the whole point is that "Civil Engineering" and "Engineering Foundation" are different values; a mechanical copy of `course_program` into `domain_context` would encode the old duplication assumption into the new field. Recommended: backfill `domain_context = course_program` mechanically as a *migration-safe default*, then have the curator revise the ~50-value vocabulary by hand before authoring new shared notes.
 
 12. **Rollback.** Steps 1, 2, 4 are additive nullable columns/tables — rollback is dropping them, with no data loss in existing columns. **Step 3 is not reversible once read paths use it**: rollback requires re-deriving a single program per note. Mitigation is to keep `notes.course_program` written and correct in parallel for one full release after step 3 ships, so a revert restores the old filter behaviour without a data migration. Say this in the release's own Known Limitations rather than assuming it.
 
 13. **Documentation.** `docs/features/notes.md` (the four axes + the reuse-vs-new-note authoring test verbatim), `study-pack-generation.md` (the resolution rules in §5.2), `library.md`, `public-library.md`, `bulk-generation.md`, `admin-dashboard.md`, `collections.md` (§2.6's Review Set divergence rule), `public-notes.md` (§2.7's copy rule), `profile-learning-context.md` and `onboarding.md` (user vs. note level), `challenge-quiz.md` + `exam-hub.md` + `quiz.md` (pool re-keying), `docs/architecture/DATA_MODEL.md`, `docs/product/SPEC.md`. `CLAUDE.md`'s "Generation context is resolved in a shared utility" paragraph and its copy-rules paragraph both need updating. **`EXAM_MODES.md` is a locked contract — this proposal does not touch mode structure, and must not.**
 
-14. **Analytics.** Any `AnalyticsEventType` payload carrying `courseProgram` becomes ambiguous under many-valued programs. Recommended: event payloads carry **Content Context** (single-valued, stable, the meaningful grouping for content analysis) and, where discovery attribution matters, the *filter value the user actually clicked* — never the note's full program list. Per `CLAUDE.md`, add to the Java enum before firing anything new. Also: existing dashboards/queries grouping by `course_program` (e.g. the ROADMAP's gate-check SQL under `docs/claude-prompt/company-redefinition-out/`) will silently change meaning — grep that directory before step 3 ships.
+14. **Analytics.** Any `AnalyticsEventType` payload carrying `courseProgram` becomes ambiguous under many-valued programs. Recommended: event payloads carry **Domain Context** (single-valued, stable, the meaningful grouping for content analysis) and, where discovery attribution matters, the *filter value the user actually clicked* — never the note's full program list. Per `CLAUDE.md`, add to the Java enum before firing anything new. Also: existing dashboards/queries grouping by `course_program` (e.g. the ROADMAP's gate-check SQL under `docs/claude-prompt/company-redefinition-out/`) will silently change meaning — grep that directory before step 3 ships.
 
 ---
 
@@ -315,7 +315,7 @@ The stated metric ("how much easier does it become to publish Civil Engineering?
 
 **Baseline C — curator-hours per published Review Set.** Manually logged, not derivable from the DB. Rough is fine — the comparison is 10× or nothing.
 
-**Post-step-1 leading indicator.** After step 1, count notes whose Content Context is shared by Review Sets belonging to two or more distinct programs. That is the *direct* measure of canonical reuse actually happening, and it is available without step 3 existing. Worth tracking as a progress signal.
+**Post-step-1 leading indicator.** After step 1, count notes whose Domain Context is shared by Review Sets belonging to two or more distinct programs. That is the *direct* measure of canonical reuse actually happening, and it is available without step 3 existing. Worth tracking as a progress signal.
 
 **The originally-proposed kill criterion has been retired — it was answered before it was needed.** This section first proposed a `[CHECKPOINT — due 2027-02-01]`: if no note were being reused across two or more programs' Review Sets six months after step 1, the duplication problem would have been hypothetical and step 3 should not be built.
 
