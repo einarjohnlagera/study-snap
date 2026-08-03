@@ -8,8 +8,8 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
-import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,7 +42,7 @@ class AdminStudyPackTransactionHelperTest {
     @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
-    private UserRepository userRepository;
+    private StudyPackGenerationContextResolver generationContextResolver;
     @Mock
     private LlmStudyPackService llmStudyPackService;
     @Mock
@@ -56,7 +56,7 @@ class AdminStudyPackTransactionHelperTest {
                 noteRepository,
                 studyPackRepository,
                 quickReviewSessionRepository,
-                userRepository,
+                generationContextResolver,
                 llmStudyPackService,
                 progressTracker
         );
@@ -108,7 +108,8 @@ class AdminStudyPackTransactionHelperTest {
                 QuickReviewSessionStatus.IN_PROGRESS
         )).thenReturn(false);
         when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
-        when(userRepository.findById(pack.getOwnerUserId())).thenReturn(Optional.empty());
+        when(generationContextResolver.resolve(pack.getOwnerUserId(), note))
+                .thenReturn(new StudyPackGenerationContext(null, null, null, List.of()));
         when(llmStudyPackService.generateStudyPack(eq(note.getContent()), any())).thenReturn(generated);
         when(studyPackRepository.save(same(pack))).thenReturn(pack);
 
@@ -162,7 +163,8 @@ class AdminStudyPackTransactionHelperTest {
                 QuickReviewSessionStatus.IN_PROGRESS
         )).thenReturn(false);
         when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
-        when(userRepository.findById(pack.getOwnerUserId())).thenReturn(Optional.empty());
+        when(generationContextResolver.resolve(pack.getOwnerUserId(), note))
+                .thenReturn(new StudyPackGenerationContext(null, null, null, List.of()));
         when(llmStudyPackService.generateStudyPack(eq(note.getContent()), any()))
                 .thenThrow(new IllegalStateException("LLM failed"));
 

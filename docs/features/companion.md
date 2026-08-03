@@ -91,6 +91,8 @@ The collection detail page now exposes ADMIN-only authoring for eligible top-lev
 
 AI-assisted generation exists for curator drafts only: ADMIN users can generate one Companion section or all AI-generatable sections (Overview, Study Strategy, Common Mistakes, FAQ, Mentor Tips — Resources is manual-only, see "Data Model" above) using the PREMIUM LLM tier. Generation never persists on its own and never writes `note_collections.companion`; the existing Save action remains the only write path. Mentor Tip generation returns draft title/body text only. `linkedAction` and `surfacingCondition` are always curator-set in the modal, never selected by the model. There is still no feature gate or quota check on either the manual or generated path. Learner-facing display is documented under "Reads" below.
 
+Companion generation deliberately uses the Review Set's own `courseProgram` curation label through `{COURSE_PROGRAM}`. It does not use a note's Domain Context: ADR-001 allows Review Sets to compose notes freely and keeps their course/program independent from every member note's authoring domain.
+
 Saving Companion content through `PUT /collections/{id}/companion` also captures a lightweight structure snapshot on the same collection row. The snapshot stores `memberCount` plus sorted member ids only: child Subject Plan ids for Goals with children, or attached note ids for childless top-level collections. Draft generation does not capture or clear the snapshot because it never persists content.
 
 Resources and Mentor Tip content/configuration do not affect the structure snapshot or `companionMayBeOutdated`; the staleness signal compares child/note membership only, not authored Companion text.

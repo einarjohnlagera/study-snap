@@ -3,7 +3,7 @@ Generate exactly {QUESTION_COUNT} NEW multiple-choice questions for Interview Pr
 
 RULES:
 - Base ONLY on the provided summary and key concepts.
-- Learner level target: {LEARNER_LEVEL}.
+- Curriculum level target: {LEARNER_LEVEL}.
 - {LEARNER_LEVEL_GUIDANCE}
 - {COMPUTATION_GUIDANCE}
 - Scan the key concepts and spread questions across technical, applied, and behavioral facets when the content supports it.

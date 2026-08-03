@@ -329,7 +329,9 @@ public class GeneratedQuizService {
                 override,
                 generationContext.courseProgram(),
                 generationContext.subject(),
-                generationContext.tags()
+                generationContext.tags(),
+                generationContext.domainContext(),
+                generationContext.noteLearnerLevel()
         );
     }
 
