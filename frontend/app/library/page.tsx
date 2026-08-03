@@ -142,6 +142,8 @@ type BulkGenerationFailureBanner = Pick<
   BulkGenerationResultResponse,
   | "subject"
   | "courseProgram"
+  | "domainContext"
+  | "learnerLevel"
   | "targetProfileType"
   | "makePublic"
   | "requestedCount"
@@ -1364,6 +1366,8 @@ export default function LibraryPage() {
     setBulkGenerationRetryStash({
       subject: bulkFailureBanner.subject,
       courseProgram: bulkFailureBanner.courseProgram,
+      domainContext: bulkFailureBanner.domainContext,
+      learnerLevel: bulkFailureBanner.learnerLevel,
       targetProfileType: bulkFailureBanner.targetProfileType,
       makePublic: bulkFailureBanner.makePublic,
       topics: bulkFailureBanner.failedTopics,

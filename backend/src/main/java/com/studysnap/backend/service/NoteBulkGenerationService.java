@@ -5,6 +5,8 @@ import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
+import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
@@ -131,7 +133,9 @@ public class NoteBulkGenerationService {
             StudyPackGenerationContext context = generationContextResolver.resolveForBulkGeneration(
                     ownerUserId,
                     batch.courseProgram(),
-                    batch.subject()
+                    batch.subject(),
+                    batch.domainContext(),
+                    batch.learnerLevel()
             );
             for (int index = 0; index < batch.items().size(); index++) {
                 BulkGenerationItem item = batch.items().get(index);
@@ -172,6 +176,8 @@ public class NoteBulkGenerationService {
                         ownerUserId,
                         batch.subject(),
                         batch.courseProgram(),
+                        batch.domainContext(),
+                        batch.learnerLevel(),
                         batch.targetProfileType().name(),
                         batch.makePublic(),
                         batch.items().size(),
@@ -208,8 +214,13 @@ public class NoteBulkGenerationService {
     ) {
         String content = enforceLimits
                 ? noteGenerationService.generateFromTopic(
-                        new GenerateNoteFromTopicRequest(item.topic(), batch.courseProgram()),
-                        ownerUserId
+                        new GenerateNoteFromTopicRequest(
+                                item.topic(),
+                                batch.courseProgram(),
+                                batch.domainContext() == null ? null : batch.domainContext().name()
+                        ),
+                        ownerUserId,
+                        context
                 ).content()
                 : generateAdminContent(item.topic(), context);
 
@@ -218,6 +229,8 @@ public class NoteBulkGenerationService {
                         item.topic(),
                         batch.subject(),
                         batch.courseProgram(),
+                        batch.domainContext() == null ? null : batch.domainContext().name(),
+                        batch.learnerLevel() == null ? null : batch.learnerLevel().name(),
                         List.of(),
                         batch.targetProfileType().name(),
                         content
@@ -302,10 +315,14 @@ public class NoteBulkGenerationService {
         NoteTargetProfileType targetProfileType = isTeacherOrAdmin
                 ? requireTargetProfileType(request.targetProfileType())
                 : mapProfileTypeToNoteTargetProfile(owner.getProfileType());
+        DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
+        LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
 
         return new NormalizedBatch(
                 subject,
                 courseProgram,
+                domainContext,
+                learnerLevel,
                 targetProfileType,
                 request.makePublic(),
                 List.copyOf(items),
@@ -367,6 +384,8 @@ public class NoteBulkGenerationService {
     private record NormalizedBatch(
             String subject,
             String courseProgram,
+            DomainContext domainContext,
+            LearnerLevel learnerLevel,
             NoteTargetProfileType targetProfileType,
             boolean makePublic,
             List<BulkGenerationItem> items,

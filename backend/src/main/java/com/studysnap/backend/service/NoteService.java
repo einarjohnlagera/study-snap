@@ -31,9 +31,7 @@ import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
-import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidLibraryQueryException;
-import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.InvalidPublicLibraryQueryException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UserNotFoundException;
@@ -161,8 +159,8 @@ public class NoteService {
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
         entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgram(), owner));
-        entity.setDomainContext(parseDomainContextOrThrow(request.domainContext()));
-        entity.setLearnerLevel(parseLearnerLevelOrThrow(request.learnerLevel()));
+        entity.setDomainContext(NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext()));
+        entity.setLearnerLevel(NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setContent(normalizeRequiredContent(request.content()));
         entity.setStatus(NoteStatus.DRAFT);
@@ -190,8 +188,8 @@ public class NoteService {
                 .orElseThrow(NoteNotFoundException::new);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
-        DomainContext domainContext = parseDomainContextOrThrow(request.domainContext());
-        LearnerLevel learnerLevel = parseLearnerLevelOrThrow(request.learnerLevel());
+        DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
+        LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
 
         entity.setContent(normalizedRequestedContent);
         entity.setTitle(normalizeOptionalText(request.title()));
@@ -1292,28 +1290,6 @@ public class NoteService {
         }
         String normalized = value.trim();
         return normalized.isBlank() ? null : normalized;
-    }
-
-    private DomainContext parseDomainContextOrThrow(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        DomainContext domainContext = DomainContext.fromString(value);
-        if (domainContext == null) {
-            throw new InvalidDomainContextException();
-        }
-        return domainContext;
-    }
-
-    private LearnerLevel parseLearnerLevelOrThrow(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        LearnerLevel learnerLevel = LearnerLevel.fromString(value);
-        if (learnerLevel == null) {
-            throw new InvalidNoteLearnerLevelException();
-        }
-        return learnerLevel;
     }
 
     private List<String> normalizeTags(List<String> rawTags) {

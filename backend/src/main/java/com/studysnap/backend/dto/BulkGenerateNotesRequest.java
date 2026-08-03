@@ -16,6 +16,8 @@ public record BulkGenerateNotesRequest(
         boolean makePublic,
         @Size(max = 160, message = "Course/program must be 160 characters or less.")
         String courseProgram,
+        String domainContext,
+        String learnerLevel,
         NoteTargetProfileType targetProfileType
 ) {
 }

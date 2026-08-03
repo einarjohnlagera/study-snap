@@ -1442,6 +1442,37 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void generateTeacherQuiz_explicitSeniorHighCurriculumHasNoReaderScaffolding() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(buildGeneratedQuizPayload("Teacher", 10))
+        );
+
+        service.generateTeacherQuiz(
+                "Engineering Algebra",
+                "Algebra notes",
+                List.of(),
+                10,
+                new StudyPackGenerationContext(
+                        null,
+                        "Civil Engineering",
+                        "Mathematics",
+                        List.of("algebra"),
+                        DomainContext.ENGINEERING_MATHEMATICS,
+                        LearnerLevel.SENIOR_HIGH
+                )
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(requestCaptor.getValue())
+                .contains("Curriculum level: Senior High School")
+                .contains("for Senior High School")
+                .doesNotContain(READER_SCAFFOLDING_PREFIX)
+                .doesNotContain(COLLEGE_CURRICULUM_LINE);
+    }
+
+    @Test
     void generateLongExam_threadsKeyConceptEnumAndMapsKeyConcept() throws Exception {
         stubResponsesCall();
         ObjectNode payload = objectMapper.createObjectNode();

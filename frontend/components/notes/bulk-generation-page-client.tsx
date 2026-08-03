@@ -20,6 +20,8 @@ import {
   listCoursePrograms,
   listSubjects,
   type BulkGenerateNotesRequest,
+  type DomainContext,
+  type LearnerLevel,
   type NoteTargetProfileType,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
@@ -32,6 +34,8 @@ import {
   SELECTABLE_NOTE_TARGET_PROFILE_TYPES,
 } from "@/lib/note-target-profile";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { DOMAIN_CONTEXT_OPTIONS } from "@/lib/domain-context";
+import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 
 export const MAX_BULK_GENERATION_TOPICS = 50;
 
@@ -54,6 +58,8 @@ export function BulkGenerationPageClient() {
   const nextTopicId = useRef(2);
   const [subject, setSubject] = useState("");
   const [courseProgram, setCourseProgram] = useState("");
+  const [domainContext, setDomainContext] = useState<DomainContext | "">("");
+  const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("");
   const [targetProfileType, setTargetProfileType] = useState<NoteTargetProfileType | "">(
     mapProfileTypeToNoteTargetProfile(authUser?.profileType),
   );
@@ -91,6 +97,8 @@ export function BulkGenerationPageClient() {
     }
     setSubject(stash.subject);
     setCourseProgram(stash.courseProgram ?? "");
+    setDomainContext(stash.domainContext ?? "");
+    setLearnerLevel(stash.learnerLevel ?? "");
     setTargetProfileType(stash.targetProfileType as NoteTargetProfileType);
     setMakePublic(stash.makePublic);
     setTopics(stash.topics.map((value, index) => ({ id: index + 1, value })));
@@ -243,6 +251,8 @@ export function BulkGenerationPageClient() {
       ...(isTeacherOrAdmin
         ? {
             courseProgram: courseProgram.trim(),
+            domainContext: domainContext || null,
+            learnerLevel: learnerLevel || null,
             targetProfileType: targetProfileType as NoteTargetProfileType,
           }
         : {}),
@@ -357,6 +367,50 @@ export function BulkGenerationPageClient() {
                 </select>
                 <p className="text-xs text-foreground/60">
                   Categorizes these notes for Library and Public Library audiences.
+                </p>
+              </div>
+            ) : null}
+
+            {isTeacherOrAdmin ? (
+              <div className="space-y-2">
+                <label htmlFor="bulk-domain-context" className="text-sm font-medium text-foreground">
+                  Domain Context (optional)
+                </label>
+                <select
+                  id="bulk-domain-context"
+                  value={domainContext}
+                  onChange={(event) => setDomainContext(event.target.value as DomainContext | "")}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                >
+                  <option value="">Use Course / Program fallback</option>
+                  {DOMAIN_CONTEXT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-foreground/60">
+                  Controls the AI&apos;s academic domain and framing for every note in this batch.
+                </p>
+              </div>
+            ) : null}
+
+            {isTeacherOrAdmin ? (
+              <div className="space-y-2">
+                <label htmlFor="bulk-learner-level" className="text-sm font-medium text-foreground">
+                  Note Learner Level (optional)
+                </label>
+                <select
+                  id="bulk-learner-level"
+                  value={learnerLevel}
+                  onChange={(event) => setLearnerLevel(event.target.value as LearnerLevel | "")}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                >
+                  <option value="">Use reader level fallback</option>
+                  {LEARNER_LEVEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-foreground/60">
+                  Controls the authored depth for every note, independent of who reads it.
                 </p>
               </div>
             ) : null}

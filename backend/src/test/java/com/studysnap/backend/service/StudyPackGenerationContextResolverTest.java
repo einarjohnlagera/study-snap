@@ -183,14 +183,16 @@ class StudyPackGenerationContextResolverTest {
         StudyPackGenerationContext context = resolver.resolveForBulkGeneration(
                 userId,
                 "Nursing",
-                "Maternal Health"
+                "Maternal Health",
+                DomainContext.NURSING,
+                LearnerLevel.BOARD_EXAM_REVIEW
         );
 
         assertThat(context.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
         assertThat(context.courseProgram()).isEqualTo("Nursing");
         assertThat(context.subject()).isEqualTo("Maternal Health");
-        assertThat(context.domainContext()).isNull();
-        assertThat(context.noteLearnerLevel()).isNull();
+        assertThat(context.domainContext()).isEqualTo(DomainContext.NURSING);
+        assertThat(context.noteLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
     }
 
     @Test
@@ -206,7 +208,9 @@ class StudyPackGenerationContextResolverTest {
         StudyPackGenerationContext context = resolver.resolveForBulkGeneration(
                 userId,
                 "Nursing",
-                "Maternal Health"
+                "Maternal Health",
+                null,
+                null
         );
 
         assertThat(context.learnerLevel()).isNull();

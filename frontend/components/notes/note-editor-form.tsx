@@ -13,7 +13,7 @@ import {
     Tag,
     UploadCloud
 } from "lucide-react";
-import type {NoteTargetProfileType} from "@/lib/api";
+import type {DomainContext, LearnerLevel, NoteTargetProfileType} from "@/lib/api";
 import {CourseProgramCombobox} from "@/components/metadata/course-program-combobox";
 import {SubjectCombobox} from "@/components/notes/subject-combobox";
 import {BackLink} from "@/components/ui/back-link";
@@ -22,6 +22,8 @@ import {Card} from "@/components/ui/card";
 import {getNoteTargetProfileLabel, SELECTABLE_NOTE_TARGET_PROFILE_TYPES} from "@/lib/note-target-profile";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { IMPORT_ACCEPT_VALUE } from "@/lib/note-import";
+import { DOMAIN_CONTEXT_OPTIONS } from "@/lib/domain-context";
+import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 
 const OPTIONAL_DETAILS_SCROLL_DELAY_MS = 140;
 
@@ -29,6 +31,8 @@ export type NoteEditorDraft = {
     title: string;
     subject: string;
     courseProgram: string;
+    domainContext: DomainContext | "";
+    learnerLevel: LearnerLevel | "";
     targetProfileType: NoteTargetProfileType | "";
     content: string;
     tags: string[];
@@ -42,6 +46,8 @@ type NoteEditorFormProps = {
     onTitleChange: (value: string) => void;
     onSubjectChange: (value: string) => void;
     onCourseProgramChange: (value: string) => void;
+    onDomainContextChange?: (value: DomainContext | "") => void;
+    onLearnerLevelChange?: (value: LearnerLevel | "") => void;
     onTargetProfileTypeChange?: (value: NoteTargetProfileType | "") => void;
     onContentChange: (value: string) => void;
     onTagsChange?: (nextTags: string[]) => void;
@@ -55,6 +61,7 @@ type NoteEditorFormProps = {
     helperText: string;
     showTagsSection: boolean;
     studyPackMessage?: string | null;
+    formError?: string | null;
     importFile: File | null;
     importFileInputKey: number;
     importFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
@@ -99,6 +106,7 @@ type NoteEditorFormProps = {
     courseProgramSuggestions?: string[];
     resolvedCourseProgram?: string | null;
     showTargetProfileTypeField?: boolean;
+    showAuthoringMetadataFields?: boolean;
     targetProfileTypeHelperText?: string;
     backHref?: string;
     backLabel?: string;
@@ -116,6 +124,8 @@ export function NoteEditorForm({
                                    onTitleChange,
                                    onSubjectChange,
                                    onCourseProgramChange,
+                                   onDomainContextChange,
+                                   onLearnerLevelChange,
                                    onTargetProfileTypeChange,
                                    onContentChange,
                                    onTagsChange,
@@ -128,6 +138,7 @@ export function NoteEditorForm({
                                    helperText,
                                    showTagsSection,
                                    studyPackMessage,
+                                   formError,
                                    importFile,
                                    importFileInputKey,
                                    importFlowState,
@@ -171,6 +182,7 @@ export function NoteEditorForm({
                                    courseProgramSuggestions = [],
                                    resolvedCourseProgram = null,
                                    showTargetProfileTypeField = false,
+                                   showAuthoringMetadataFields = false,
                                    targetProfileTypeHelperText = "Choose the learner audience for this note.",
                                    backHref,
                                    backLabel,
@@ -362,32 +374,84 @@ export function NoteEditorForm({
                     />
                 </div>
 
-                {showTargetProfileTypeField ? (
-                    <div className="space-y-2 sm:col-span-2">
-                        <label htmlFor="note-target-profile-type" className="text-sm font-medium text-foreground">
-                            Who is this note for? <span className="text-red-500" aria-hidden="true">*</span>
-                        </label>
-                        <select
-                            id="note-target-profile-type"
-                            aria-label="Who is this note for?"
-                            value={note.targetProfileType}
-                            onChange={(event) => onTargetProfileTypeChange?.(event.target.value as NoteTargetProfileType | "")}
-                            disabled={isCopying}
-                            className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                        >
-                            <option value="">Select an audience</option>
-                            {SELECTABLE_NOTE_TARGET_PROFILE_TYPES.map((targetProfileType) => (
-                                <option key={targetProfileType} value={targetProfileType}>
-                                    {getNoteTargetProfileLabel(targetProfileType)}
-                                </option>
-                            ))}
-                        </select>
-                        <p className="text-xs text-foreground/60">
-                            {targetProfileTypeHelperText}
-                        </p>
-                    </div>
-                ) : null}
             </div>
+
+            {showTargetProfileTypeField || showAuthoringMetadataFields ? (
+                <fieldset className="space-y-4 rounded-xl border border-border/80 bg-muted/15 p-4">
+                    <legend className="px-1 text-sm font-semibold text-foreground">Authoring metadata</legend>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {showTargetProfileTypeField ? (
+                            <div className="space-y-2 sm:col-span-2">
+                                <label htmlFor="note-target-profile-type" className="text-sm font-medium text-foreground">
+                                    Who is this note for? <span className="text-red-500" aria-hidden="true">*</span>
+                                </label>
+                                <select
+                                    id="note-target-profile-type"
+                                    aria-label="Who is this note for?"
+                                    value={note.targetProfileType}
+                                    onChange={(event) => onTargetProfileTypeChange?.(event.target.value as NoteTargetProfileType | "")}
+                                    disabled={isCopying}
+                                    className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                                >
+                                    <option value="">Select an audience</option>
+                                    {SELECTABLE_NOTE_TARGET_PROFILE_TYPES.map((targetProfileType) => (
+                                        <option key={targetProfileType} value={targetProfileType}>
+                                            {getNoteTargetProfileLabel(targetProfileType)}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-foreground/60">{targetProfileTypeHelperText}</p>
+                            </div>
+                        ) : null}
+
+                        {showAuthoringMetadataFields ? (
+                            <>
+                                <div className="space-y-2">
+                                    <label htmlFor="note-domain-context" className="text-sm font-medium text-foreground">
+                                        Domain Context (optional)
+                                    </label>
+                                    <select
+                                        id="note-domain-context"
+                                        value={note.domainContext}
+                                        onChange={(event) => onDomainContextChange?.(event.target.value as DomainContext | "")}
+                                        disabled={isCopying}
+                                        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                                    >
+                                        <option value="">Use Course / Program fallback</option>
+                                        {DOMAIN_CONTEXT_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-foreground/60">
+                                        Controls how the AI authors the note&apos;s academic domain and framing.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label htmlFor="note-learner-level" className="text-sm font-medium text-foreground">
+                                        Note Learner Level (optional)
+                                    </label>
+                                    <select
+                                        id="note-learner-level"
+                                        value={note.learnerLevel}
+                                        onChange={(event) => onLearnerLevelChange?.(event.target.value as LearnerLevel | "")}
+                                        disabled={isCopying}
+                                        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                                    >
+                                        <option value="">Use reader level fallback</option>
+                                        {LEARNER_LEVEL_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-foreground/60">
+                                        Controls how deeply the note is authored, independent of who reads it.
+                                    </p>
+                                </div>
+                            </>
+                        ) : null}
+                    </div>
+                </fieldset>
+            ) : null}
 
             {showTagsSection ? (
                 <div className="space-y-2">
@@ -648,6 +712,9 @@ export function NoteEditorForm({
                 </Card>
                 {saveStateLabel ? (
                     <p className="text-xs text-foreground/60">{saveStateLabel}</p>
+                ) : null}
+                {formError ? (
+                    <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>
                 ) : null}
             </header>
 

@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -14,6 +15,8 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.BulkNoteGenerationQuotaExceededException;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
+import com.studysnap.backend.exception.InvalidDomainContextException;
+import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.repository.UserRepository;
@@ -49,6 +52,7 @@ class NoteBulkGenerationServiceTest {
     private static final String COURSE_PROGRAM = "Nursing";
     private static final String PROFILE_COURSE_PROGRAM = "Secondary Education";
     private static final String SUBJECT = "Maternal Health";
+    private static final String ENGINEERING_ALGEBRA_TOPIC = "Engineering Algebra";
 
     @Mock
     private NoteGenerationService noteGenerationService;
@@ -123,14 +127,29 @@ class NoteBulkGenerationServiceTest {
                 NoteTargetProfileType.BOARD_TAKER,
                 true
         );
-        StudyPackGenerationContext context = context(
+        request = new BulkGenerateNotesRequest(
+                SUBJECT,
+                List.of("Prenatal Care", "Labor Stages"),
+                true,
+                COURSE_PROGRAM,
+                DomainContext.NURSING.name(),
+                LearnerLevel.BOARD_EXAM_REVIEW.name(),
+                NoteTargetProfileType.BOARD_TAKER
+        );
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
                 LearnerLevel.COLLEGE,
-                COURSE_PROGRAM
+                COURSE_PROGRAM,
+                SUBJECT,
+                List.of(),
+                DomainContext.NURSING,
+                LearnerLevel.BOARD_EXAM_REVIEW
         );
         when(generationContextResolver.resolveForBulkGeneration(
                 userId,
                 COURSE_PROGRAM,
-                SUBJECT
+                SUBJECT,
+                DomainContext.NURSING,
+                LearnerLevel.BOARD_EXAM_REVIEW
         )).thenReturn(context);
         when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
                 .thenAnswer(invocation -> "Generated content for " + invocation.getArgument(0));
@@ -148,6 +167,8 @@ class NoteBulkGenerationServiceTest {
         assertThat(captor.getAllValues()).allSatisfy(noteRequest -> {
             assertThat(noteRequest.subject()).isEqualTo(SUBJECT);
             assertThat(noteRequest.courseProgram()).isEqualTo(COURSE_PROGRAM);
+            assertThat(noteRequest.domainContext()).isEqualTo(DomainContext.NURSING.name());
+            assertThat(noteRequest.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
             assertThat(noteRequest.targetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER.name());
         });
         verify(noteService, times(2))
@@ -161,6 +182,8 @@ class NoteBulkGenerationServiceTest {
                 eq(userId),
                 eq(SUBJECT),
                 eq(COURSE_PROGRAM),
+                eq(DomainContext.NURSING),
+                eq(LearnerLevel.BOARD_EXAM_REVIEW),
                 eq(NoteTargetProfileType.BOARD_TAKER.name()),
                 eq(true),
                 eq(2),
@@ -200,6 +223,8 @@ class NoteBulkGenerationServiceTest {
                 any(UUID.class),
                 anyString(),
                 anyString(),
+                any(DomainContext.class),
+                any(LearnerLevel.class),
                 anyString(),
                 anyBoolean(),
                 anyInt(),
@@ -221,9 +246,11 @@ class NoteBulkGenerationServiceTest {
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
-        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT, null, null))
                 .thenReturn(context);
-        when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(userId)))
+        when(noteGenerationService.generateFromTopic(
+                any(GenerateNoteFromTopicRequest.class), eq(userId), eq(context)
+        ))
                 .thenReturn(new GenerateNoteFromTopicResponse("Generated content"));
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
                 .thenReturn(noteResponse("note-1"), noteResponse("note-2"));
@@ -232,12 +259,16 @@ class NoteBulkGenerationServiceTest {
 
         assertThat(response.queuedTopics()).isEqualTo(2);
         verify(taskDispatcher).execute(any(Runnable.class));
-        verify(noteGenerationService, times(2)).generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(userId));
+        verify(noteGenerationService, times(2)).generateFromTopic(
+                any(GenerateNoteFromTopicRequest.class), eq(userId), eq(context)
+        );
         verify(bulkGenerationResultService).recordResult(
                 eq(response.resultId()),
                 eq(userId),
                 eq(SUBJECT),
                 eq(COURSE_PROGRAM),
+                eq(null),
+                eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
                 eq(false),
                 eq(2),
@@ -258,7 +289,7 @@ class NoteBulkGenerationServiceTest {
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
-        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT, null, null))
                 .thenReturn(context);
         when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
                 .thenReturn("Generated content");
@@ -288,7 +319,9 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId,
                 COURSE_PROGRAM,
-                SUBJECT
+                SUBJECT,
+                null,
+                null
         )).thenReturn(context);
         when(llmStudyPackService.generateNoteFromTopic("Classroom Assessment", context)).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-1"));
@@ -302,7 +335,7 @@ class NoteBulkGenerationServiceTest {
     }
 
     @Test
-    void queueBatch_nonTeacherIgnoresClientMetadataAndUsesProfile() {
+    void queueBatch_nonTeacherUsesProfileCategorizationButAcceptsAuthoringAxes() {
         UUID userId = UUID.randomUUID();
         mockUser(
                 userId,
@@ -311,17 +344,29 @@ class NoteBulkGenerationServiceTest {
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 PROFILE_COURSE_PROGRAM
         );
-        BulkGenerateNotesRequest request = request(
+        BulkGenerateNotesRequest request = new BulkGenerateNotesRequest(
+                SUBJECT,
                 List.of("Licensure Review"),
+                false,
                 "Ignored Course",
-                NoteTargetProfileType.PROFESSIONAL,
-                false
+                DomainContext.PROFESSIONAL_PRACTICE_AND_REGULATION.name(),
+                LearnerLevel.BOARD_EXAM_REVIEW.name(),
+                NoteTargetProfileType.PROFESSIONAL
         );
-        StudyPackGenerationContext context = context(LearnerLevel.BOARD_EXAM_REVIEW, PROFILE_COURSE_PROGRAM);
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                PROFILE_COURSE_PROGRAM,
+                SUBJECT,
+                List.of(),
+                DomainContext.PROFESSIONAL_PRACTICE_AND_REGULATION,
+                LearnerLevel.BOARD_EXAM_REVIEW
+        );
         when(generationContextResolver.resolveForBulkGeneration(
                 userId,
                 PROFILE_COURSE_PROGRAM,
-                SUBJECT
+                SUBJECT,
+                DomainContext.PROFESSIONAL_PRACTICE_AND_REGULATION,
+                LearnerLevel.BOARD_EXAM_REVIEW
         )).thenReturn(context);
         when(llmStudyPackService.generateNoteFromTopic("Licensure Review", context)).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-1"));
@@ -332,6 +377,51 @@ class NoteBulkGenerationServiceTest {
         verify(noteService).create(captor.capture(), eq(userId));
         assertThat(captor.getValue().courseProgram()).isEqualTo(PROFILE_COURSE_PROGRAM);
         assertThat(captor.getValue().targetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER.name());
+        assertThat(captor.getValue().domainContext())
+                .isEqualTo(DomainContext.PROFESSIONAL_PRACTICE_AND_REGULATION.name());
+        assertThat(captor.getValue().learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
+    }
+
+    @Test
+    void queueBatch_rejectsUnknownDomainContextBeforeDispatch() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = new BulkGenerateNotesRequest(
+                SUBJECT,
+                List.of(ENGINEERING_ALGEBRA_TOPIC),
+                false,
+                COURSE_PROGRAM,
+                "engineering_math",
+                null,
+                NoteTargetProfileType.STUDENT
+        );
+
+        assertThatThrownBy(() -> service.queueBatch(request, userId, false))
+                .isInstanceOf(InvalidDomainContextException.class)
+                .hasMessageContaining("domainContext");
+
+        verify(taskDispatcher, never()).execute(any(Runnable.class));
+    }
+
+    @Test
+    void queueBatch_rejectsUnknownLearnerLevelBeforeDispatch() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = new BulkGenerateNotesRequest(
+                SUBJECT,
+                List.of(ENGINEERING_ALGEBRA_TOPIC),
+                false,
+                COURSE_PROGRAM,
+                DomainContext.ENGINEERING_MATHEMATICS.name(),
+                "university",
+                NoteTargetProfileType.STUDENT
+        );
+
+        assertThatThrownBy(() -> service.queueBatch(request, userId, false))
+                .isInstanceOf(InvalidNoteLearnerLevelException.class)
+                .hasMessageContaining("learnerLevel");
+
+        verify(taskDispatcher, never()).execute(any(Runnable.class));
     }
 
     @Test
@@ -348,7 +438,9 @@ class NoteBulkGenerationServiceTest {
         when(generationContextResolver.resolveForBulkGeneration(
                 userId,
                 COURSE_PROGRAM,
-                SUBJECT
+                SUBJECT,
+                null,
+                null
         )).thenReturn(context);
         when(llmStudyPackService.generateNoteFromTopic("Rejected Topic", context))
                 .thenThrow(new RuntimeException("moderation rejected"));
@@ -366,6 +458,8 @@ class NoteBulkGenerationServiceTest {
                 eq(userId),
                 eq(SUBJECT),
                 eq(COURSE_PROGRAM),
+                eq(null),
+                eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
                 eq(false),
                 eq(2),
@@ -387,9 +481,11 @@ class NoteBulkGenerationServiceTest {
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
         when(mePlanService.getNoteGenerationsRemaining(userId)).thenReturn(3);
-        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT, null, null))
                 .thenReturn(context);
-        when(noteGenerationService.generateFromTopic(any(GenerateNoteFromTopicRequest.class), eq(userId)))
+        when(noteGenerationService.generateFromTopic(
+                any(GenerateNoteFromTopicRequest.class), eq(userId), eq(context)
+        ))
                 .thenAnswer(invocation -> {
                     GenerateNoteFromTopicRequest generationRequest = invocation.getArgument(0);
                     if ("Over Limit Topic".equals(generationRequest.topic())) {
@@ -410,6 +506,8 @@ class NoteBulkGenerationServiceTest {
                 eq(userId),
                 eq(SUBJECT),
                 eq(COURSE_PROGRAM),
+                eq(null),
+                eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
                 eq(false),
                 eq(3),
@@ -430,7 +528,7 @@ class NoteBulkGenerationServiceTest {
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
-        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT, null, null))
                 .thenReturn(context);
         when(llmStudyPackService.generateNoteFromTopic("Healthy Topic", context)).thenReturn("Healthy content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-healthy"));
@@ -445,6 +543,8 @@ class NoteBulkGenerationServiceTest {
                 eq(userId),
                 eq(SUBJECT),
                 eq(COURSE_PROGRAM),
+                eq(null),
+                eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
                 eq(false),
                 eq(1),
@@ -464,7 +564,7 @@ class NoteBulkGenerationServiceTest {
                 NoteTargetProfileType.STUDENT,
                 false
         );
-        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT, null, null))
                 .thenThrow(new RuntimeException("context unavailable"));
 
         BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
@@ -475,6 +575,8 @@ class NoteBulkGenerationServiceTest {
                 eq(userId),
                 eq(SUBJECT),
                 eq(COURSE_PROGRAM),
+                eq(null),
+                eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
                 eq(false),
                 eq(2),
@@ -489,7 +591,7 @@ class NoteBulkGenerationServiceTest {
         UUID userId = UUID.randomUUID();
         mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
         BulkGenerateNotesRequest missingSubject = new BulkGenerateNotesRequest(
-                " ", List.of("Topic"), false, COURSE_PROGRAM, NoteTargetProfileType.STUDENT
+                " ", List.of("Topic"), false, COURSE_PROGRAM, null, null, NoteTargetProfileType.STUDENT
         );
         BulkGenerateNotesRequest emptyTopics = request(
                 List.of(), COURSE_PROGRAM, NoteTargetProfileType.STUDENT, false
@@ -539,7 +641,7 @@ class NoteBulkGenerationServiceTest {
                 List.of("Topic"), COURSE_PROGRAM, NoteTargetProfileType.STUDENT, false
         );
         StudyPackGenerationContext context = context(null, COURSE_PROGRAM);
-        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT))
+        when(generationContextResolver.resolveForBulkGeneration(userId, COURSE_PROGRAM, SUBJECT, null, null))
                 .thenReturn(context);
         when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse("note-1"));
@@ -594,6 +696,8 @@ class NoteBulkGenerationServiceTest {
                 topics,
                 makePublic,
                 courseProgram,
+                null,
+                null,
                 targetProfileType
         );
     }

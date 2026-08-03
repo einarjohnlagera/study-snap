@@ -128,6 +128,8 @@ class NoteBulkImportServiceTest {
         assertThat(requestCaptor.getAllValues()).allSatisfy(request -> {
             assertThat(request.subject()).isNull();
             assertThat(request.courseProgram()).isNull();
+            assertThat(request.domainContext()).isNull();
+            assertThat(request.learnerLevel()).isNull();
             assertThat(request.tags()).isEmpty();
             assertThat(request.targetProfileType()).isNull();
         });

@@ -15,14 +15,4 @@ public record UpsertNoteRequest(
         @NotBlank(message = "Please provide note content before saving.")
         String content
 ) {
-    public UpsertNoteRequest(
-            String title,
-            String subject,
-            String courseProgram,
-            List<String> tags,
-            String targetProfileType,
-            String content
-    ) {
-        this(title, subject, courseProgram, null, null, tags, targetProfileType, content);
-    }
 }

@@ -32,6 +32,8 @@ describe("bulk-generation-flash", () => {
     setBulkGenerationRetryStash({
       subject: "Maternal Health",
       courseProgram: "Nursing",
+      domainContext: "NURSING",
+      learnerLevel: "BOARD_EXAM_REVIEW",
       targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],
@@ -40,6 +42,8 @@ describe("bulk-generation-flash", () => {
     expect(consumeBulkGenerationRetryStash()).toEqual({
       subject: "Maternal Health",
       courseProgram: "Nursing",
+      domainContext: "NURSING",
+      learnerLevel: "BOARD_EXAM_REVIEW",
       targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],
