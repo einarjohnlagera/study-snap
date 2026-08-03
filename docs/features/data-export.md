@@ -20,7 +20,7 @@ Included:
 
 - `meta`: `exportedAt`, `schemaVersion`
 - `account`: profile basics owned by the user, including email, first/last/display name, username, profile type, learner level, course/program, study goal, focus subjects, exam date, and account creation time
-- `notes[]`: owned public and private notes, including title, subject, content, visibility, copy source title, and timestamps
+- `notes[]`: owned public and private notes, including title, subject, note-level `domainContext`, note-level `learnerLevel`, content, visibility, copy source title, and timestamps; both new metadata fields may be `null`
 - `studyPacks[]`: owned Study Packs, including linked `noteId`, title, summary, key concepts, and quiz
 - `collections[]`: owned Study Plans/collections, with ordered owned note references by id and title
 - `practiceSummary`: aggregate completed-session counts, per-mode counts, and the latest completed-session timestamp

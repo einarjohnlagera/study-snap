@@ -23,6 +23,8 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
                 n.title,
                 n.subject,
                 n.courseProgram,
+                n.domainContext,
+                n.learnerLevel,
                 n.status,
                 n.visibility,
                 n.updatedAt
@@ -39,6 +41,8 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
                    n.ownerUserId as ownerUserId,
                    n.title as title,
                    n.courseProgram as courseProgram,
+                   n.domainContext as domainContext,
+                   n.learnerLevel as learnerLevel,
                    n.targetProfileType as targetProfileType,
                    n.subject as subject,
                    n.tags as tags,

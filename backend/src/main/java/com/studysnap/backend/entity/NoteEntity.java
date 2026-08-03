@@ -38,6 +38,14 @@ public class NoteEntity implements NoteListItemView {
     @Column(name = "course_program", length = 120)
     private String courseProgram;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "domain_context", length = 64)
+    private DomainContext domainContext;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "learner_level", length = 32)
+    private LearnerLevel learnerLevel;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]", nullable = false)
     private String[] tags;

@@ -7,7 +7,9 @@ import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.CollectionVisibility;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.InputType;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
@@ -82,6 +84,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     title text,
                     subject varchar(64),
                     course_program varchar(120),
+                    domain_context varchar(64),
+                    learner_level varchar(32),
                     tags varchar array not null,
                     content text not null,
                     status varchar(16) not null,
@@ -321,6 +325,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 note.getTitle(),
                 note.getSubject(),
                 note.getCourseProgram(),
+                note.getDomainContext(),
+                note.getLearnerLevel(),
                 note.getStatus(),
                 note.getVisibility(),
                 note.getUpdatedAt()
@@ -509,6 +515,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
                 note.getTitle(),
                 note.getSubject(),
                 note.getCourseProgram(),
+                note.getDomainContext().name(),
+                note.getLearnerLevel().name(),
                 NoteStudyPackStatusResolver.resolve(note, studyPack),
                 generatedQuizId == null ? null : generatedQuizId.toString(),
                 null,
@@ -558,6 +566,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
         note.setTitle(title);
         note.setSubject(subject);
         note.setCourseProgram(COURSE_PROGRAM);
+        note.setDomainContext(DomainContext.NURSING);
+        note.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
         note.setTags(new String[0]);
         note.setContent("Large note content that must not be selected by collection detail projections.");
         note.setStatus(status);

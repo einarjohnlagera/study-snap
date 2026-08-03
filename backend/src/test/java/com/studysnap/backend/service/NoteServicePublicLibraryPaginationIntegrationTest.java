@@ -5,6 +5,8 @@ import com.studysnap.backend.dto.PublicLibraryDiscoverySectionsResponse;
 import com.studysnap.backend.dto.PublicNoteListResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteTargetProfileType;
@@ -91,6 +93,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 new String[]{"kidney-health"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
                 NoteTargetProfileType.STUDENT, 3
         );
+        expected.setDomainContext(DomainContext.NURSING);
+        expected.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
         saveNote(
                 creatorId, "Cardiac assessment", "Cardiology", "Nursing",
                 new String[]{"heart-health"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
@@ -148,6 +152,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         assertThat(legacy.items()).extracting(NoteListItemResponse::id)
                 .containsExactly(expected.getId().toString());
         assertThat(ids(paginated)).containsExactly(expected.getId().toString());
+        assertThat(paginated.items().getFirst().domainContext()).isEqualTo(DomainContext.NURSING.name());
+        assertThat(paginated.items().getFirst().learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
         assertThat(paginated.totalMatching()).isEqualTo(1);
         assertThat(legacy.total()).isEqualTo(2);
         assertThat(legacy.page()).isNull();
@@ -663,6 +669,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                     title text,
                     subject varchar(64),
                     course_program varchar(120),
+                    domain_context varchar(64),
+                    learner_level varchar(32),
                     tags varchar array not null,
                     content text not null,
                     status varchar(16),

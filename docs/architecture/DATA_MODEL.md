@@ -24,6 +24,8 @@ Recommended fields:
 - `owner_user_id`
 - `title` (nullable)
 - `course_program` (nullable, defaults from `users.course_program` for new notes)
+- `domain_context` (nullable `VARCHAR(64)`, `DomainContext` enum; no default)
+- `learner_level` (nullable `VARCHAR(32)`, note-level `LearnerLevel` enum; no default)
 - `subject` (nullable)
 - `content` (text, required)
 - `tags` (text[] or json array, default empty)
@@ -51,16 +53,26 @@ Course / Program storage rule:
 - Learning Profile UI now requires both `learnerLevel` and `courseProgram` for onboarding completion and later profile saves, while storage remains nullable for pre-existing users until they update those fields.
 - `course_program` is the top-level library shelf, while `subject` stays the more specific academic topic and `tags` remain the fine-grained keywords.
 
+Canonical authoring-axis storage rule:
+
+- `notes.domain_context` and `notes.learner_level` are nullable author-supplied note metadata governed by `ADR-001`.
+- `domain_context` uses the closed eight-value `DomainContext` Java enum persisted by name; adding a value is an architecture decision.
+- `learner_level` reuses the existing `LearnerLevel` enum at note scope and is distinct from `users.learner_level`.
+- `NULL` is valid for both columns. In particular, null `domain_context` marks the program-name fallback state; neither column has a database default or PR-1 backfill.
+- PR 1 persists and transports these values only. Generation does not consume them until PR 2, and UI does not expose them until PR 3.
+
 Library/discovery payload usage:
 
 - Private and public note-list payloads should reuse note metadata directly from `notes`, especially:
   - `course_program`
+  - `domain_context`
+  - `learner_level`
   - `subject`
   - `tags`
   - `visibility`
   - `created_at`
   - `updated_at`
-- Public discovery payloads may also expose owner `learner_level` so Public Library can filter notes by audience level without introducing a separate note-level learner field.
+- Public discovery payloads may expose both the note-level authoring axes and owner profile metadata, but filtering remains unchanged in PR 1.
 
 ## Generated Study Pack Fields
 
@@ -114,6 +126,8 @@ Copy includes:
 
 - `title`
 - `course_program`
+- `domain_context`
+- `learner_level`
 - `subject`
 - `tags`
 - `content`

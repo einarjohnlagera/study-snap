@@ -163,6 +163,8 @@ class PublicNotesScoringUtilsTest {
                 "owner-id",
                 "Title",
                 null,
+                null,
+                null,
                 "STUDENT",
                 "Subject",
                 List.of(),

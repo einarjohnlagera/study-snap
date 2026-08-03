@@ -3928,6 +3928,8 @@ class NoteCollectionServiceTest {
                 note.getTitle(),
                 note.getSubject(),
                 note.getCourseProgram(),
+                note.getDomainContext(),
+                note.getLearnerLevel(),
                 note.getStatus(),
                 note.getVisibility(),
                 note.getUpdatedAt()
@@ -4014,6 +4016,8 @@ class NoteCollectionServiceTest {
                 NOTE_TITLE_ONE,
                 BIOLOGY_SUBJECT,
                 COURSE_PROGRAM,
+                null,
+                null,
                 NoteTargetProfileType.STUDENT.name(),
                 List.of(),
                 "content",

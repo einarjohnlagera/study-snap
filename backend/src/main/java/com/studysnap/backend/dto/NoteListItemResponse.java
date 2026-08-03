@@ -8,6 +8,8 @@ public record NoteListItemResponse(
         String ownerUserId,
         String title,
         String courseProgram,
+        String domainContext,
+        String learnerLevel,
         String targetProfileType,
         String subject,
         List<String> tags,

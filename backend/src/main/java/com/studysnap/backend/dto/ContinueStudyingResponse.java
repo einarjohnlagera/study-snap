@@ -11,6 +11,8 @@ public record ContinueStudyingResponse(
         String noteTitle,
         String subject,
         String courseProgram,
+        String domainContext,
+        String learnerLevel,
         String summaryPreview,
         ContinueStudyingResumeType resumeType,
         ContinueStudyingReason reason,

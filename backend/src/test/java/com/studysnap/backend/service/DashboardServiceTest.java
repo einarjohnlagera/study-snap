@@ -12,6 +12,8 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.ProfileType;
@@ -515,9 +517,12 @@ class DashboardServiceTest {
 
         stubLatestQuickReviewInProgressSession(userId, inProgress);
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
-        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(
-                buildNote(userId, noteId, "Statics Midterm Review", "Engineering Mechanics", "Civil Engineering")
-        ));
+        NoteEntity note = buildNote(
+                userId, noteId, "Statics Midterm Review", "Engineering Mechanics", "Civil Engineering"
+        );
+        note.setDomainContext(DomainContext.ENGINEERING_SCIENCES);
+        note.setLearnerLevel(LearnerLevel.COLLEGE);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
 
         ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
 
@@ -526,6 +531,8 @@ class DashboardServiceTest {
         assertThat(response.noteTitle()).isEqualTo("Statics Midterm Review");
         assertThat(response.subject()).isEqualTo("Engineering Mechanics");
         assertThat(response.courseProgram()).isEqualTo("Civil Engineering");
+        assertThat(response.domainContext()).isEqualTo(DomainContext.ENGINEERING_SCIENCES.name());
+        assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.COLLEGE.name());
         assertThat(response.currentQuestionIndex()).isEqualTo(2);
         assertThat(response.totalQuestions()).isEqualTo(10);
     }
@@ -632,6 +639,8 @@ class DashboardServiceTest {
         assertThat(response.noteTitle()).isEqualTo("Cell Transport Reviewer");
         assertThat(response.subject()).isEqualTo("Biology - Cell Transport");
         assertThat(response.courseProgram()).isNull();
+        assertThat(response.domainContext()).isNull();
+        assertThat(response.learnerLevel()).isNull();
     }
 
     @Test

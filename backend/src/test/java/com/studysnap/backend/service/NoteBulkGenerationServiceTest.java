@@ -624,6 +624,8 @@ class NoteBulkGenerationServiceTest {
                 "Title",
                 SUBJECT,
                 COURSE_PROGRAM,
+                null,
+                null,
                 NoteTargetProfileType.STUDENT.name(),
                 List.of(),
                 "Content",
