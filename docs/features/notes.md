@@ -106,7 +106,9 @@ Rules:
 - Topic-level specificity belongs in tags and key concepts, not in subject
 - Subject is a reusable library shelf label — it should group many notes, not describe one note
 - The backend strips any subtopic suffix (`Biology – Cell Division` → `Biology`) before saving
-- `courseProgram` is required before saving or generating a Study Pack and is pre-filled from the user's profile so validation rarely blocks users who completed onboarding.
+- `courseProgram` is required before saving or generating a Study Pack.
+- **The profile's course/program pre-fills the field when CREATING a note only.** Editing an existing note never falls back to the editor's profile: the note's own persisted value is the only source, and a note with no course/program hits the normal "Please complete: Course / Program" prompt asking the author to classify it. This is deliberate and is a behavior change from before v0.69.0, where `profileCourseProgram` was consulted in edit mode too — which meant an author editing a null-program note saw an empty field while their own profile value was silently submitted. Profile context may assist creation; it must not become an existing note's persisted metadata without an explicit author decision (ADR-001).
+- Topic generation still resolves the profile course/program as a *generation input* when the draft has none. That value is never persisted onto the note, so it is not affected by the rule above.
 - Profile `learnerLevel` remains required on completed profiles for quiz/exam personalization and legacy fallback, but it does not override a note's authored learner level.
 - Note-from-topic and legacy notes without Domain Context use the resolved program-name fallback as their effective authoring domain until the note-level authoring fields are populated.
 - Static generation and quiz/exam generation must tolerate both note-level axes being null and use the documented fallback chains rather than placeholders.
