@@ -31,6 +31,20 @@ Anti-drift — what this release explicitly does **NOT** change:
 - **`docs/product/EXAM_MODES.md` is untouched** — locked contract, exactly 5 modes, no mode structure changes here.
 - **Applicability defaults are out of scope and remain unverified.** Whether `Engineering Sciences` is shared by 8 or 11 engineering programs is a PRC syllabus question for the curator, and it only matters for Release B's family-expansion defaults.
 
+### Verification owed — NOT yet done as of 2026-08-03
+
+**PRs 1–3 are merged and every automated check passes, but the one risk that tests cannot cover is still unverified.** `01` risk R4: a Domain Context is often *broader* than the `course_program` it replaces (`Engineering Mathematics` vs. `Civil Engineering`), and a vaguer domain constraint can make generated content drift generic. No unit test detects this — the prompt-building tests assert which values reach the model, not whether the output is good.
+
+This is an **owner/curator action through the real UI**, now possible since PR 3 shipped the authoring fields:
+
+1. **Control.** Take an existing Civil Engineering note that already has a generated Study Pack. Set `domain_context = Civil Engineering`, `learner_level = Board Exam Review`. Regenerate and diff against the previous pack. Expect no meaningful quality change — the domain label is nearly identical to the program it replaced. If this one *does* change materially, the regression is in the wiring, not the taxonomy.
+2. **The actual test of the architecture.** Take a `Strength of Materials` or `Algebra` note and set a deliberately broader context — `Engineering Sciences` or `Engineering Mathematics`. Regenerate. The content must stay engineering-specific and board-appropriate, **not** drift to generic textbook material.
+3. **Level precedence.** Generate one quiz where the note's authored level is above the reader's profile level, and confirm the questions sit at the note's level with softened wording rather than dropping to the reader's.
+
+**Why this gates bulk authoring, and why it should not wait for PRs 4–7.** If step 2 shows drift, the fix is a **narrower Domain Context value set** — which means amending ADR-001's ratified 8-value list. That is cheap now and expensive once PRs 4–7 and a body of authored notes depend on those values. Do this on one note before authoring eighty.
+
+Recorded here because the step-by-step lived only in the (untracked) Codex prompts and in PR bodies #972/#973, so nothing in the repo said it was still owed — see `09-release-a-pr-sequence.md`'s PR 2 section, which describes the check as part of a now-merged PR's spec.
+
 ### Shipped
 
 - **Canonical authoring surfaces — note editor, topic generation, and Bulk Generate (PR 3 of 7).** Teacher and Admin authors can now optionally set Domain Context and Note Learner Level in the shared note editor and for an entire Bulk Generate batch; topic-first note generation also receives the selected Domain Context. Both axes flow through the shared resolver, every created note, and the read-once bulk result receipt. Teacher quiz Target Level now replaces the curriculum slot without reader-scaffolding side effects, and the silent-null `UpsertNoteRequest` convenience constructor is removed.

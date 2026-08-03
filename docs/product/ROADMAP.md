@@ -224,7 +224,9 @@ Both are recorded in `docs/architecture/ADR-001-canonical-knowledge-architecture
 
 ### Verification
 
-Migration numbers start at **V102** — the numeric max is `V101__concept_health_incorrect_streak.sql`, *not* V99; a lexical `ls` sorts `V9__`/`V90__`–`V99__` after `V100__`, so always derive it numerically. `v0.47.1` was a migration-collision hotfix; check concurrent branches before claiming a number.
+**⚠️ Owed, not done as of 2026-08-03: the R4 generate-and-diff check for PRs 2–3.** Automated checks all pass, but the one risk tests cannot cover — a broader Domain Context (`Engineering Mathematics`) producing vaguer content than the `course_program` it replaced (`Civil Engineering`) — has not been verified against real generated output. It is an owner action through the UI, now possible since PR 3 shipped the authoring fields. **Do it before bulk authoring and before PRs 4–7:** if content drifts generic, the fix amends ADR-001's ratified 8-value set, which is cheap now and expensive once later PRs and a body of authored notes depend on those values. Full steps in `RELEASES.md` v0.69.0 under "Verification owed."
+
+Migration numbers start at **V102** (V102 and V103 are now taken; PR 4 continues from **V104**) — the numeric max is `V101__concept_health_incorrect_streak.sql`, *not* V99; a lexical `ls` sorts `V9__`/`V90__`–`V99__` after `V100__`, so always derive it numerically. `v0.47.1` was a migration-collision hotfix; check concurrent branches before claiming a number.
 
 Baselines for the success metric were taken **before** this release (they are unrecoverable afterward) and live in `docs/claude-prompt/canonical-knowledge-architecture-out/05-vocabulary-results.md`.
 

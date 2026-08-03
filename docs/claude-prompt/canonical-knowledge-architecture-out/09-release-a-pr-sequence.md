@@ -59,6 +59,8 @@ Audit the other per-mode `{mode}-developer.txt` / `{mode}-system.txt` pairs for 
 
 Static content takes Domain Context + Note Learner Level; quizzes take them as the floor with user level adjusting scaffolding only, never lowering the curriculum — ADR-001 rule 3, which needs a test asserting the invariant rather than only prose.
 
+> **⚠️ STATUS 2026-08-03: PR 2 is merged, but the R4 verification below was NOT performed and is still owed.** It is an owner action through the UI, not something the PR could self-check. Full step-by-step, and why it should happen before PRs 4–7 rather than after, is in `RELEASES.md` v0.69.0 under **"Verification owed."** Do not read the paragraph below as a completed step just because the PR merged.
+
 **This is the one PR that can silently degrade output quality (`01` risk R4), and tests cannot catch it.** Verification must include generating a real Study Pack for an existing Civil Engineering note under the new path and diffing it against its current output — plus one note whose Domain Context is deliberately broader (`Engineering Mathematics`) than the `Civil Engineering` it replaces, since a vaguer constraint is the specific regression risk. Heaviest `/audit-diff` of the release.
 
 ### PR 3 — Admin authoring UI and Bulk Generate
