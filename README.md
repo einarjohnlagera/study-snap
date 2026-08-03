@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.68.0 - Topic Note Rename` (In Progress); previous: `v0.67.1 - Explore Convergence Follow-ups` (Released)
+Current release baseline: `v0.69.0 - Canonical Knowledge Foundation` (In Progress); previous: `v0.68.0 - Topic Note Rename` (Released)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 

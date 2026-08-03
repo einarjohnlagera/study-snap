@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.68.0 - Topic Note Rename` (In Progress); previous: `v0.67.1 - Explore Convergence Follow-ups` (Released)
+- `v0.69.0 - Canonical Knowledge Foundation` (In Progress); previous: `v0.68.0 - Topic Note Rename` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -163,6 +163,7 @@ Use these skills before writing prompts, before starting new features, and after
 
 ### Note Target Audience Rule
 
+- **Axis boundary (`docs/architecture/ADR-001-canonical-knowledge-architecture.md`):** Target Audience (`notes.targetProfileType`) is a **discovery** axis — it is a live Public Library audience filter (`PublicLibraryRepositoryImpl:176-178`, `NoteController:594`/`:636`, `NoteRepository:106`/`:131`) and it must **never** influence generated depth or reach a prompt. Educational depth is Note Learner Level's job; authoring treatment is Domain Context's. Do not conflate the three. Whether precise program facets eventually make this coarse three-value facet redundant is judged at the end of ADR-001's Release B, not before.
 - Target Audience is required on every note.
 - Student profiles must not see the Target Audience field; backend saves `STUDENT`.
 - Board Exam profiles must not see the Target Audience field; backend saves `BOARD_TAKER`.
@@ -604,8 +605,9 @@ Use these skills before writing prompts, before starting new features, and after
   - AI-generated subjects should prefer specific reusable academic labels, often `Primary field – subtopic`, rather than broad umbrella fields
   - avoid broad generated labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the notes support a more specific subject
 - Course / Program UI rules:
-  - `courseProgram` is the top-level note-classification shelf above `subject` and `tags`
-  - `users.courseProgram` and `notes.courseProgram` remain persisted string fields; do not add a `course_programs` table unless explicitly requested
+  - **Superseded in part by `docs/architecture/ADR-001-canonical-knowledge-architecture.md` (Accepted 2026-08-03) — read that ADR before changing anything in this block.** Two rules previously stated here have been retired by it: that `courseProgram` is "the top-level note-classification shelf above `subject` and `tags`," and that a `course_programs` table must not be added. Both described the single-axis model the ADR replaces. Under the ADR, `courseProgram` is **not** the classification apex — it is being decomposed into four independent axes: Subject (*what*), **Domain Context** (*how it is authored*, the sole LLM domain constraint), **Note Learner Level** (*how deep*), and **Applicable Programs** (*where it appears*, discovery only, never reaching a prompt). A `course_programs` catalog and `program_families` are explicitly in scope, shipping in `v0.69.0` (Release A).
+  - **Do not "restore" either retired rule.** `courseProgram` as a single free-text field carrying five incompatible responsibilities is the defect the ADR exists to fix, not a constraint to preserve.
+  - Until `v0.69.0` ships, `users.courseProgram` and `notes.courseProgram` remain persisted string fields and the UI rules below describe live behavior. Release A keeps both string columns populated alongside the new nullable catalog FK — nothing reads the FK yet, and no read path, filter, facet, badge, or URL changes in Release A.
   - note editor, onboarding, profile, and note-detail metadata course/program inputs should use one shared autocomplete behavior backed by saved-value suggestions plus curated defaults
   - authenticated course/program suggestions come from `GET /api/course-programs?scope=mine`
   - public/discovery course/program values may come from public note payloads or `GET /api/course-programs?scope=public`
