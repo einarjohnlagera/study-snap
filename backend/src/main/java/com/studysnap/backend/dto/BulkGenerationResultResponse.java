@@ -8,6 +8,8 @@ public record BulkGenerationResultResponse(
         UUID id,
         String subject,
         String courseProgram,
+        String domainContext,
+        String learnerLevel,
         String targetProfileType,
         boolean makePublic,
         int requestedCount,

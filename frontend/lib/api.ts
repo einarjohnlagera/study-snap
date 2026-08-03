@@ -136,6 +136,8 @@ export type BulkGenerateNotesRequest = {
   topics: string[];
   makePublic: boolean;
   courseProgram?: string;
+  domainContext?: DomainContext | null;
+  learnerLevel?: LearnerLevel | null;
   targetProfileType?: NoteTargetProfileType;
 };
 
@@ -150,6 +152,8 @@ export type BulkGenerationResultResponse = {
   id: string;
   subject: string;
   courseProgram: string | null;
+  domainContext: DomainContext | null;
+  learnerLevel: LearnerLevel | null;
   targetProfileType: NoteTargetProfileType;
   makePublic: boolean;
   requestedCount: number;
@@ -443,6 +447,15 @@ export type DashboardOverviewResponse = {
 
 export type ProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL";
 export type NoteTargetProfileType = "STUDENT" | "BOARD_TAKER" | "PROFESSIONAL";
+export type DomainContext =
+  | "ENGINEERING_MATHEMATICS"
+  | "ENGINEERING_SCIENCES"
+  | "CIVIL_ENGINEERING"
+  | "PROFESSIONAL_PRACTICE_AND_REGULATION"
+  | "GENERAL_EDUCATION"
+  | "PROFESSIONAL_EDUCATION"
+  | "NURSING"
+  | "ACCOUNTANCY";
 export type PaidPlanType = "PLUS" | "PRO";
 export type LearnerLevel =
   | "GRADE_SCHOOL"
@@ -1457,6 +1470,8 @@ export type UpsertNoteRequest = {
   title?: string | null;
   subject?: string | null;
   courseProgram?: string | null;
+  domainContext?: DomainContext | null;
+  learnerLevel?: LearnerLevel | null;
   tags?: string[];
   targetProfileType?: NoteTargetProfileType | null;
   content: string;
@@ -1471,6 +1486,8 @@ export type NoteResponse = {
   title: string | null;
   subject: string | null;
   courseProgram?: string | null;
+  domainContext: DomainContext | null;
+  learnerLevel: LearnerLevel | null;
   targetProfileType: NoteTargetProfileType;
   tags: string[];
   content: string;
@@ -2750,10 +2767,14 @@ export async function createStudyPackFromNote(
 export async function generateNoteFromTopic(
   topic: string,
   courseProgram?: string,
+  domainContext?: DomainContext,
 ): Promise<GenerateNoteFromTopicResponse> {
   const body: Record<string, string> = { topic };
   if (courseProgram && courseProgram.trim().length > 0) {
     body.courseProgram = courseProgram.trim();
+  }
+  if (domainContext) {
+    body.domainContext = domainContext;
   }
   const response = await fetchWithAuth(
     "/notes/generate",

@@ -134,7 +134,9 @@ public class GeneratedQuizService {
             }
             entity.setOwnerUserId(userId);
             entity.setNoteId(noteId);
-            entity.setTargetLearnerLevel(generationContext.learnerLevel());
+            entity.setTargetLearnerLevel(
+                    StudyPackGenerationContextResolver.effectiveCurriculumLevel(generationContext)
+            );
             entity.setQuestions(uniqueQuestions);
             entity.setGeneratedAt(now);
             entity.setUpdatedAt(now);
@@ -326,12 +328,12 @@ public class GeneratedQuizService {
             return generationContext;
         }
         return new StudyPackGenerationContext(
-                override,
+                null,
                 generationContext.courseProgram(),
                 generationContext.subject(),
                 generationContext.tags(),
                 generationContext.domainContext(),
-                generationContext.noteLearnerLevel()
+                override
         );
     }
 

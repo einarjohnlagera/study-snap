@@ -8,6 +8,7 @@ public record GenerateNoteFromTopicRequest(
         @Size(max = 160, message = "Topic must be 160 characters or less.")
         String topic,
         @Size(max = 160, message = "Course/program must be 160 characters or less.")
-        String courseProgram
+        String courseProgram,
+        String domainContext
 ) {
 }

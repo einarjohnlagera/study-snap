@@ -2,6 +2,8 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.BulkGenerationResultResponse;
 import com.studysnap.backend.entity.BulkGenerationResultEntity;
+import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.BulkGenerationResultNotFoundException;
 import com.studysnap.backend.repository.BulkGenerationResultRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,8 @@ public class BulkGenerationResultService {
             UUID ownerUserId,
             String subject,
             String courseProgram,
+            DomainContext domainContext,
+            LearnerLevel learnerLevel,
             String targetProfileType,
             boolean makePublic,
             int requestedCount,
@@ -37,6 +41,8 @@ public class BulkGenerationResultService {
         entity.setOwnerUserId(ownerUserId);
         entity.setSubject(subject);
         entity.setCourseProgram(courseProgram);
+        entity.setDomainContext(domainContext);
+        entity.setLearnerLevel(learnerLevel);
         entity.setTargetProfileType(targetProfileType);
         entity.setMakePublic(makePublic);
         entity.setRequestedCount(requestedCount);
@@ -66,6 +72,8 @@ public class BulkGenerationResultService {
                 entity.getId(),
                 entity.getSubject(),
                 entity.getCourseProgram(),
+                entity.getDomainContext() == null ? null : entity.getDomainContext().name(),
+                entity.getLearnerLevel() == null ? null : entity.getLearnerLevel().name(),
                 entity.getTargetProfileType(),
                 Boolean.TRUE.equals(entity.getMakePublic()),
                 entity.getRequestedCount(),

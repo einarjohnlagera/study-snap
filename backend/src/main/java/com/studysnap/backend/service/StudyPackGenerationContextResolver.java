@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
@@ -71,7 +72,9 @@ public class StudyPackGenerationContextResolver {
     public StudyPackGenerationContext resolveForBulkGeneration(
             UUID ownerUserId,
             String courseProgram,
-            String subject
+            String subject,
+            DomainContext domainContext,
+            LearnerLevel noteLearnerLevel
     ) {
         return userRepository.findById(ownerUserId)
                 .map(user -> new StudyPackGenerationContext(
@@ -81,16 +84,16 @@ public class StudyPackGenerationContextResolver {
                         ),
                         subject,
                         List.of(),
-                        null,
-                        null
+                        domainContext,
+                        noteLearnerLevel
                 ))
                 .orElseGet(() -> new StudyPackGenerationContext(
                         null,
                         CourseProgramNormalizationUtils.normalizeForStorage(courseProgram),
                         subject,
                         List.of(),
-                        null,
-                        null
+                        domainContext,
+                        noteLearnerLevel
                 ));
     }
 

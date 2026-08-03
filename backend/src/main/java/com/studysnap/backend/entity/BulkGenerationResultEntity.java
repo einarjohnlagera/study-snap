@@ -2,6 +2,8 @@ package com.studysnap.backend.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -31,6 +33,14 @@ public class BulkGenerationResultEntity {
 
     @Column(name = "course_program")
     private String courseProgram;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "domain_context", length = 64)
+    private DomainContext domainContext;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "learner_level", length = 32)
+    private LearnerLevel learnerLevel;
 
     @Column(name = "target_profile_type", nullable = false)
     private String targetProfileType;

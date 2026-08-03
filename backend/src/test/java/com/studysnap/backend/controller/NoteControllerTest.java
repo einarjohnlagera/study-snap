@@ -143,6 +143,8 @@ class NoteControllerTest {
                 List.of("Prenatal Care"),
                 true,
                 "Nursing",
+                null,
+                null,
                 NoteTargetProfileType.BOARD_TAKER
         );
         UUID resultId = UUID.randomUUID();
@@ -284,6 +286,8 @@ class NoteControllerTest {
                 List.of("Prenatal Care"),
                 false,
                 null,
+                null,
+                null,
                 null
         );
         UUID resultId = UUID.randomUUID();
@@ -320,6 +324,8 @@ class NoteControllerTest {
                 resultId,
                 "Maternal Health",
                 "Nursing",
+                null,
+                null,
                 NoteTargetProfileType.BOARD_TAKER.name(),
                 true,
                 2,
@@ -470,7 +476,9 @@ class NoteControllerTest {
     void generateNoteFromTopic_callsEmailVerificationBeforeGeneration() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest("Newton's Laws of Motion", null);
+        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest(
+                "Newton's Laws of Motion", null, null
+        );
         GenerateNoteFromTopicResponse expected = new GenerateNoteFromTopicResponse("Generated note content");
         when(noteGenerationService.generateFromTopic(request, userId)).thenReturn(expected);
 

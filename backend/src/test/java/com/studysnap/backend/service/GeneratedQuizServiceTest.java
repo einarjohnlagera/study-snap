@@ -207,7 +207,7 @@ class GeneratedQuizServiceTest {
     }
 
     @Test
-    void generate_overridesResolvedLearnerLevelForRequestedTargetLevel() {
+    void generate_teacherTargetLevelOverridesAuthoredCurriculumWithoutReaderScaffoldingContext() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteEntity note = buildNote(noteId, userId);
@@ -217,30 +217,38 @@ class GeneratedQuizServiceTest {
                 new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
         );
         when(generationContextResolver.resolve(userId, note)).thenReturn(
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Education", "Biology", List.of("cells"))
+                new StudyPackGenerationContext(
+                        LearnerLevel.GRADE_SCHOOL,
+                        "Education",
+                        "Biology",
+                        List.of("cells"),
+                        null,
+                        LearnerLevel.COLLEGE
+                )
         );
         when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
                 .thenReturn(buildQuestions());
         when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        generatedQuizService.generate(noteId.toString(), userId, 10, "junior_high");
+        generatedQuizService.generate(noteId.toString(), userId, 10, "senior_high");
 
         verify(quizGenerationService).generateTeacherQuiz(
                 any(),
                 any(),
                 any(),
                 eq(10),
-                argThat(context -> context.learnerLevel() == LearnerLevel.JUNIOR_HIGH
+                argThat(context -> context.learnerLevel() == null
+                        && context.noteLearnerLevel() == LearnerLevel.SENIOR_HIGH
                         && "Education".equals(context.courseProgram()))
         );
         ArgumentCaptor<GeneratedQuizEntity> quizCaptor = ArgumentCaptor.forClass(GeneratedQuizEntity.class);
         verify(generatedQuizRepository).save(quizCaptor.capture());
-        assertThat(quizCaptor.getValue().getTargetLearnerLevel()).isEqualTo(LearnerLevel.JUNIOR_HIGH);
+        assertThat(quizCaptor.getValue().getTargetLearnerLevel()).isEqualTo(LearnerLevel.SENIOR_HIGH);
     }
 
     @Test
-    void generate_usesResolvedLearnerLevelWhenTargetLevelIsMissing() {
+    void generate_usesNoteAuthoredLearnerLevelWhenTargetLevelIsMissing() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteEntity note = buildNote(noteId, userId);
@@ -250,7 +258,14 @@ class GeneratedQuizServiceTest {
                 new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
         );
         when(generationContextResolver.resolve(userId, note)).thenReturn(
-                new StudyPackGenerationContext(LearnerLevel.SENIOR_HIGH, "Education", "Biology", List.of("cells"))
+                new StudyPackGenerationContext(
+                        LearnerLevel.PROFESSIONAL,
+                        "Education",
+                        "Biology",
+                        List.of("cells"),
+                        null,
+                        LearnerLevel.SENIOR_HIGH
+                )
         );
         when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
                 .thenReturn(buildQuestions());
@@ -264,7 +279,8 @@ class GeneratedQuizServiceTest {
                 any(),
                 any(),
                 eq(10),
-                argThat(context -> context.learnerLevel() == LearnerLevel.SENIOR_HIGH)
+                argThat(context -> context.learnerLevel() == LearnerLevel.PROFESSIONAL
+                        && context.noteLearnerLevel() == LearnerLevel.SENIOR_HIGH)
         );
     }
 

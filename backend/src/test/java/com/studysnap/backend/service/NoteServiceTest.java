@@ -144,6 +144,8 @@ class NoteServiceTest {
                 "Title",
                 "Subject",
                 null,
+                null,
+                null,
                 List.of(),
                 null,
                 "content"
@@ -166,6 +168,8 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "  Intro to React  ",
                 "  Web Dev  ",
+                null,
+                null,
                 null,
                 List.of("react", "frontend"),
                 null,
@@ -303,6 +307,8 @@ class NoteServiceTest {
                 "Board note",
                 "Subject",
                 null,
+                null,
+                null,
                 List.of(),
                 null,
                 "content"
@@ -324,6 +330,8 @@ class NoteServiceTest {
                 "Professional note",
                 "Subject",
                 null,
+                null,
+                null,
                 List.of(),
                 null,
                 "content"
@@ -344,6 +352,8 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "Teacher note",
                 "Subject",
+                null,
+                null,
                 null,
                 List.of(),
                 null,
@@ -456,6 +466,8 @@ class NoteServiceTest {
                 "Cell note",
                 " biology-cell division ",
                 null,
+                null,
+                null,
                 List.of(),
                 null,
                 "cell notes"
@@ -480,6 +492,8 @@ class NoteServiceTest {
                 "Kinematics",
                 "Physics",
                 null,
+                null,
+                null,
                 List.of(),
                 null,
                 "motion"
@@ -503,7 +517,10 @@ class NoteServiceTest {
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.empty());
         when(noteRepository.findAllSubjectValues()).thenReturn(List.of("Biology – Cell Division"));
 
-        UpsertNoteRequest request = new UpsertNoteRequest("New title", "biology- cell division", "Pre-Med", List.of("cells"), null, "new content");
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "New title", "biology- cell division", "Pre-Med", null, null,
+                List.of("cells"), null, "new content"
+        );
         NoteResponse updated = noteService.update(noteId.toString(), request, ownerUserId);
 
         assertThat(draftNote.getTitle()).isEqualTo("New title");
@@ -524,7 +541,9 @@ class NoteServiceTest {
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(generatedNote));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
-        UpsertNoteRequest request = new UpsertNoteRequest("Title", "Subject", "Nursing", List.of("tag"), null, "edited content");
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", "Nursing", null, null, List.of("tag"), null, "edited content"
+        );
 
         NoteResponse response = noteService.update(noteId.toString(), request, ownerUserId);
 

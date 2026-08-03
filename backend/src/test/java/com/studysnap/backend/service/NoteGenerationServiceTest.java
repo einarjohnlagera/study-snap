@@ -2,10 +2,12 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
+import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +28,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class NoteGenerationServiceTest {
+    private static final String ENGINEERING_ALGEBRA_TOPIC = "Engineering Algebra";
 
     @Mock
     private UserRepository userRepository;
@@ -64,7 +67,7 @@ class NoteGenerationServiceTest {
         UUID userId = UUID.randomUUID();
         ProfileSetupRequiredException exception = new ProfileSetupRequiredException();
         doThrow(exception).when(onboardingGuardService).assertProfileComplete(userId);
-        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest("Ohm's Law", null);
+        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest("Ohm's Law", null, null);
 
         assertThatThrownBy(() -> noteGenerationService.generateFromTopic(request, userId))
                 .isSameAs(exception);
@@ -90,7 +93,7 @@ class NoteGenerationServiceTest {
         )).thenReturn("Generated note content");
 
         GenerateNoteFromTopicResponse response = noteGenerationService.generateFromTopic(
-                new GenerateNoteFromTopicRequest("  Newton's Laws of Motion  ", null),
+                new GenerateNoteFromTopicRequest("  Newton's Laws of Motion  ", null, null),
                 userId
         );
 
@@ -103,6 +106,54 @@ class NoteGenerationServiceTest {
         assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("Senior High – STEM");
         assertThat(contextCaptor.getValue().subject()).isNull();
         assertThat(contextCaptor.getValue().tags()).isEmpty();
+        assertThat(contextCaptor.getValue().domainContext()).isNull();
+        assertThat(contextCaptor.getValue().noteLearnerLevel()).isNull();
+    }
+
+    @Test
+    void generateFromTopic_usesValidatedDomainContext() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram("Civil Engineering");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(llmStudyPackService.generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(StudyPackGenerationContext.class)
+        )).thenReturn("Generated note content");
+
+        noteGenerationService.generateFromTopic(
+                new GenerateNoteFromTopicRequest(
+                        ENGINEERING_ALGEBRA_TOPIC, "Civil Engineering", "engineering_mathematics"
+                ),
+                userId
+        );
+
+        ArgumentCaptor<StudyPackGenerationContext> contextCaptor =
+                ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(llmStudyPackService).generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(), contextCaptor.capture()
+        );
+        assertThat(contextCaptor.getValue().domainContext())
+                .isEqualTo(DomainContext.ENGINEERING_MATHEMATICS);
+    }
+
+    @Test
+    void generateFromTopic_rejectsUnknownDomainContext() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest(
+                ENGINEERING_ALGEBRA_TOPIC, null, "engineering_math"
+        );
+
+        assertThatThrownBy(() -> noteGenerationService.generateFromTopic(request, userId))
+                .isInstanceOf(InvalidDomainContextException.class)
+                .hasMessageContaining("domainContext");
     }
 
     @Test
@@ -120,7 +171,7 @@ class NoteGenerationServiceTest {
         )).thenReturn("Generated note content");
 
         noteGenerationService.generateFromTopic(
-                new GenerateNoteFromTopicRequest("Ohm's Law", "Civil Engineering"),
+                new GenerateNoteFromTopicRequest("Ohm's Law", "Civil Engineering", null),
                 userId
         );
 
@@ -144,7 +195,7 @@ class NoteGenerationServiceTest {
         )).thenReturn("Generated note content");
 
         noteGenerationService.generateFromTopic(
-                new GenerateNoteFromTopicRequest("Design Patterns", "   "),
+                new GenerateNoteFromTopicRequest("Design Patterns", "   ", null),
                 userId
         );
 
