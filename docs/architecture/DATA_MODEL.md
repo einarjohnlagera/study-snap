@@ -59,6 +59,7 @@ Canonical authoring-axis storage rule:
 - `domain_context` uses the closed eight-value `DomainContext` Java enum persisted by name; adding a value is an architecture decision.
 - `learner_level` reuses the existing `LearnerLevel` enum at note scope and is distinct from `users.learner_level`.
 - `NULL` is valid for both columns. In particular, null `domain_context` marks the program-name fallback state; neither column has a database default or PR-1 backfill.
+- V104 classifies the 27 legacy `Grade School` and `Junior High` note rows as `GENERAL_EDUCATION` with their exact note learner level while retaining `course_program`; the ambiguous and strand-labelled legacy rows remain unchanged pending PR 4b.
 - Generation consumes both axes through `StudyPackGenerationContextResolver`. Teacher/Admin Note Editor and Bulk Generate surfaces expose them as optional authoring metadata; other profile UIs keep them hidden.
 
 Library/discovery payload usage:
