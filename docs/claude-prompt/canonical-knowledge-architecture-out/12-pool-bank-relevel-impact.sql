@@ -27,6 +27,73 @@
 -- This cannot be answered locally: the dev database has 118 notes and a near-empty pool table.
 
 -- ============================================================================
+-- QUERY 0 — RUN THIS FIRST: which variant applies?
+-- ============================================================================
+-- Queries A, B and C below join on `notes.learner_level`, which is a V102 column. Production
+-- was confirmed at **V101 on 2026-08-03**, i.e. nothing from this release is deployed, so as
+-- written they fail with "column n.learner_level does not exist". Re-check rather than assuming
+-- the state has not moved.
+
+SELECT version, description, installed_on
+FROM flyway_schema_history
+ORDER BY installed_rank DESC
+LIMIT 4;
+
+-- >= 104  -> run A, B, C as written. This is the ONLY variant that answers the real question,
+--            because only then do notes actually carry the level PR 6 will compare against.
+-- 102-103 -> run A, B, C as written, but `source_note_has_level` will be 0 or near it (V104 has
+--            not backfilled), so `at_risk` is still mostly reader drift. Treat as a lower bound.
+-- < 102   -> use the V101 VARIANT below instead. Do NOT edit A/B/C by hand: dropping the
+--            `notes` join changes what the number means, and the variant says so explicitly.
+--
+-- **Recommended: run this file AFTER the release deploys.** Its whole purpose is sizing a wave
+-- caused by comparing against the NOTE's level, and at V101 no note has one. The variant below
+-- is worth running now only to establish the floor -- see its note on why that floor is useful.
+
+-- ============================================================================
+-- V101 VARIANT — reader-level drift only (a genuine LOWER BOUND on `at_risk`)
+-- ============================================================================
+-- At V101, `effectiveCurriculumLevel` would resolve to COALESCE(owner level, 'COLLEGE') for
+-- every note, because no note has an authored level. So this measures only the component of the
+-- refresh wave caused by a pool being stamped with one level and the owner now sitting at
+-- another -- users who changed their learner level after the pool was generated.
+--
+-- Why the floor is still worth having: this component does not shrink when V104 lands. V104 can
+-- only ADD divergence, by giving 27 notes a level that may differ from their owner's. So a large
+-- number here already decides the PR's shape -- 6a needs the pre-stamping migration -- without
+-- waiting for deployment. A small number decides nothing and must be re-run after deploy.
+
+SELECT
+    count(*)                                                        AS ready_pools,
+    count(*) FILTER (WHERE p.learner_level IS NULL)                 AS unstamped,
+    count(*) FILTER (
+        WHERE p.learner_level IS NOT NULL
+          AND p.learner_level IS DISTINCT FROM COALESCE(u.learner_level, 'COLLEGE')
+    )                                                               AS at_risk_floor
+FROM exam_question_pool p
+JOIN study_packs sp ON sp.id = p.study_pack_id
+JOIN users u        ON u.id = sp.owner_user_id
+WHERE p.generation_status = 'READY';
+
+SELECT
+    count(*)                                                        AS bank_rows,
+    count(DISTINCT b.user_id)                                       AS affected_users,
+    count(*) FILTER (WHERE b.learner_level IS NULL)                 AS unstamped,
+    count(*) FILTER (
+        WHERE b.learner_level IS NOT NULL
+          AND b.learner_level IS DISTINCT FROM COALESCE(u.learner_level, 'COLLEGE')
+    )                                                               AS at_risk_floor,
+    count(*) FILTER (WHERE b.last_known_outcome = 'INCORRECT')      AS incorrect_rows
+FROM challenge_quiz_question_bank b
+JOIN users u ON u.id = b.user_id
+WHERE b.claimed_session_id IS NULL;
+
+-- Query C has NO V101 equivalent and must wait for deployment. It measures whether the note's
+-- level and the reader's level disagree -- which is definitionally zero when no note has a
+-- level. Running a stripped version would return 0 and read as "no divergence", which is the
+-- opposite of the truth: the divergence simply cannot exist yet.
+
+-- ============================================================================
 -- QUERY A — the headline number
 -- ============================================================================
 -- `at_risk` is the count that decides the PR's shape: READY pools whose stored level differs
@@ -110,11 +177,21 @@ WHERE EXISTS (
 -- ============================================================================
 -- HANDING THE ANSWER BACK
 -- ============================================================================
--- Paste all three result rows. The decisions they drive:
+-- Paste all three result rows, and say which variant you ran. The decisions they drive:
 --
 --   Query A `at_risk`  -> does PR 6a carry a pre-stamping migration, or just a RELEASES.md note?
 --   Query B `at_risk` + `incorrect_rows` -> is the bank impact learner-visible?
 --   Query C            -> is PostSessionNextStepService in scope for 6a? (Almost certainly yes.)
+--
+-- If you ran the V101 variant, say so explicitly -- `at_risk_floor` is not `at_risk`, and the
+-- two must not be recorded as the same number. A large floor decides the PR shape on its own;
+-- a small floor decides nothing and the file must be re-run after deployment.
+--
+-- Sanity check on the variant, from a local run 2026-08-03: on a database where no note has an
+-- authored level, `at_risk_floor` and the full Query A `at_risk` returned the SAME value
+-- (35 of 46 READY pools). That is the expected relationship and is a cheap way to confirm the
+-- variant is measuring what it claims -- if they ever differ on a pre-V104 database, one of the
+-- two queries is wrong.
 --
 -- None of these reopen an ADR-001 decision. They size a consequence the ADR left to the
 -- implementing PR, which is what `09` PR 6 means by "state the staleness behavior explicitly."
