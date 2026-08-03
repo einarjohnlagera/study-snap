@@ -22,7 +22,7 @@ import {Card} from "@/components/ui/card";
 import {getNoteTargetProfileLabel, SELECTABLE_NOTE_TARGET_PROFILE_TYPES} from "@/lib/note-target-profile";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { IMPORT_ACCEPT_VALUE } from "@/lib/note-import";
-import { DOMAIN_CONTEXT_OPTIONS } from "@/lib/domain-context";
+import { DOMAIN_CONTEXT_OPTIONS, isSubjectSameAsDomainContext } from "@/lib/domain-context";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 
 const OPTIONAL_DETAILS_SCROLL_DELAY_MS = 140;
@@ -359,6 +359,16 @@ export function NoteEditorForm({
                     onChange={onSubjectChange}
                     disabled={isCopying}
                 />
+                {/* Live region stays mounted so the advisory is announced when it appears, not just rendered. */}
+                <div aria-live="polite">
+                    {showAuthoringMetadataFields && isSubjectSameAsDomainContext(note.subject, note.domainContext) ? (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                            Subject matches the Domain Context, so it is probably too broad to be a useful
+                            library shelf. Consider a specific subject like Algebra or Pharmacology and let
+                            Domain Context carry the domain. Saving anyway is fine.
+                        </p>
+                    ) : null}
+                </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

@@ -63,6 +63,13 @@ Static note and Study Pack content uses the effective domain plus the note's aut
 
 Adding or changing a Domain Context is an architecture decision, not routine note authoring. Copies inherit both authoring axes because they are note metadata, not generated content.
 
+**Subject-equals-Domain-Context nudge.** Subject and Domain Context are separate axes, so the same value legitimately appearing in both is not an error — a broad survey note about nursing really is `subject = Nursing`. But it usually signals a subject written too broadly to work as a library shelf, which is why ADR-001 asks for a nudge here. When a note's `subject` exactly equals its selected Domain Context's label (compared case-insensitively and trimmed), the Note Editor shows an inline advisory under the Subject field. Rules:
+
+- It is **advisory only** — never a validation error, never a save block, and it does not prevent generation. Saving anyway is a supported outcome.
+- **Exact match only.** `Nursing Pharmacology` under Domain Context `Nursing` is not flagged; only `Nursing` is. A containment check would fire on legitimate specific subjects.
+- It renders only where the Domain Context select renders (Teacher/Admin), and never when Domain Context is blank or the subject is empty.
+- It is computed client-side from the already-loaded values — no new API call, no persisted state, and nothing is recorded when an author dismisses it by editing either field.
+
 Current Note Editor input fields:
 
 - `title` (optional)
