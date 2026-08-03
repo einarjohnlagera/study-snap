@@ -46,6 +46,8 @@ Notes now persist two nullable, author-supplied metadata fields governed by [ADR
 
 Both fields drive generation through `StudyPackGenerationContextResolver`. Teacher and Admin authors can set them in the Note Editor; both selects are optional and load empty for existing null rows. Domain Context controls academic/professional subject matter, terminology, examples, and framing. Note learner level controls authored depth and difficulty. Omitting either field, sending `null`, or sending a blank value stores `NULL`. A null `domainContext` deliberately falls back to the note's program and then the profile program, while a null note learner level falls back to the profile level and then `COLLEGE`.
 
+The 27 pure-level legacy production notes whose retained `courseProgram` is `Grade School` or `Junior High` now carry `GENERAL_EDUCATION` plus `GRADE_SCHOOL` or `JUNIOR_HIGH` respectively. `courseProgram` remains populated as the legacy label; once Domain Context is set, it no longer reaches generation through the fallback chain. The ambiguous `High School` notes and the Senior High strand notes remain unclassified pending PR 4b's per-note classification and empirical strand decision.
+
 Static note and Study Pack content uses the effective domain plus the note's authored level, never the reader's level when a note level exists. Quizzes and exams keep the note level as their curriculum floor; a lower reader level may soften wording or add support but cannot lower the curriculum, while a higher reader level cannot raise the note's difficulty. Applicable Programs are discovery metadata and never reach prompts.
 
 `DomainContext` is a closed architectural enum with exactly eight ratified values:
