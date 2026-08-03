@@ -589,7 +589,15 @@ export function NoteEditorPageClient({
     if (!targetProfileType) {
       return null;
     }
-    let resolvedCourseProgram = normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram);
+    // The profile program may reduce friction when CREATING a note, but it must never become an
+    // existing note's persisted metadata without an explicit author decision (ADR-001). Editing a
+    // note whose course/program is null previously resolved to the editor's own profile value and
+    // submitted it while the field rendered empty. In edit mode the note's own value is now the
+    // only source; a missing one falls through to the validation prompt below, which asks the
+    // author to classify the note rather than silently classifying it for them.
+    let resolvedCourseProgram = isEditMode
+      ? normalizeOptional(draft.courseProgram)
+      : normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram);
     if (!resolvedCourseProgram && !isEditMode) {
       try {
         const me = await getMe();

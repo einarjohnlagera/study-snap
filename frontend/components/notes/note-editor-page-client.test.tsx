@@ -379,6 +379,64 @@ describe("NoteEditorPageClient", () => {
     });
   });
 
+  it("does not submit the profile Course/Program when editing a note that has none", async () => {
+    // Regression: profileCourseProgram was populated unconditionally while the isEditMode guard
+    // gated only the draft prefill, so editing a null-program note rendered an empty field and
+    // silently submitted the editor's own profile program. Profile context may assist creation;
+    // it must never become an existing note's persisted metadata (ADR-001).
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
+      courseProgram: "Architecture",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      courseProgram: null,
+      studyPackStatus: "DRAFT",
+    });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    const courseProgramInput = await screen.findByLabelText(/Course \/ Program/);
+    await waitFor(() => {
+      expect(getMe).toHaveBeenCalled();
+    });
+    expect(courseProgramInput).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Please complete: Course \/ Program\./)).toBeInTheDocument();
+    });
+    expect(updateNote).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("saves an edited note using its own Course/Program, not the editor's profile", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
+      courseProgram: "Architecture",
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+    (updateNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    const titleInput = await screen.findByLabelText("Title (optional)");
+    await waitFor(() => {
+      expect(getMe).toHaveBeenCalled();
+    });
+    fireEvent.change(titleInput, { target: { value: "Updated title" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        courseProgram: "Nursing",
+      }));
+    });
+  });
+
   it("renders the note back link in edit mode", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
