@@ -91,6 +91,37 @@ Subject and Domain Context are different axes, and a value legitimately appearin
 
 **Guard:** when a note's `subject` equals its `domain_context`, surface an admin-side warning that the subject is probably too broad — a nudge, never a hard validation error. Domain Context values are not renamed to dodge the collision; borrowed board-subject-area names are precisely why the vocabulary reads well to learners.
 
+### Legacy-data policy: ambiguity is not migrated forward
+
+Ratified by the owner 2026-08-03, binding on every migration under this ADR. Later PRs must not reopen either rule.
+
+**1. Ambiguous legacy values are resolved per-record by content, never by blanket mapping.**
+
+The concrete case is `notes.course_program = 'High School'` (11 notes, all official and public, none in any collection). `LearnerLevel` already distinguishes `JUNIOR_HIGH` from `SENIOR_HIGH`, so the legacy label is strictly less precise than the taxonomy replacing it. Rules:
+
+- Classify each such note as `JUNIOR_HIGH` or `SENIOR_HIGH` from **its actual curriculum and content**, not from the old label.
+- Where a note cannot be classified confidently, **leave it unclassified for admin review** rather than assign a level that may be wrong.
+- **Do not introduce a `HIGH_SCHOOL` enum value** to preserve the ambiguity. Adding one would migrate the imprecision permanently into the new taxonomy, which is the opposite of this ADR's purpose.
+
+Derived operational rule: an unclassified note keeps `learner_level` NULL **and retains its existing `course_program`**, so it is never left with no classification at all — the fallback chain still resolves it. The general "clear `course_program` once the level moves out of it" step applies only to notes that were confidently classified.
+
+> The word "unpublished" appeared in the ratifying instruction alongside "unclassified." This ADR interprets it conservatively as *leave unclassified*, and does **not** authorize flipping `visibility` from `PUBLIC` to `PRIVATE` — all 11 notes are live official public content, and silently withdrawing published material is precisely the kind of destructive side effect rule 2 below forbids. If actively unpublishing them is intended, that needs its own explicit decision.
+
+**2. Existing generated assets are preserved, but their semantic reach does not widen automatically.**
+
+> **Principle: preserve existing assets, but do not expand their semantic reach until their compatibility has been deliberately reclassified.**
+
+Applies to `exam_question_pool` and `challenge_quiz_question_bank` rows generated before this ADR:
+
+- Existing questions **continue to be reusable for their original source Note.** No behavior is taken away.
+- Domain Context is backfilled onto those rows **from the source Note, only where the mapping is deterministic.**
+- **Legacy `course_program` metadata is not evidence that a question is reusable across every newly-applicable program.** A question generated when a note belonged to one program carries no warrant for the ten programs the note may later be applicable to.
+- Until a PR explicitly re-keys and audits compatibility, legacy rows stay **source-note-scoped** and must not enter broader cross-note or cross-program sharing.
+- Rows whose source Note has no confidently resolved Domain Context remain usable **only through their existing narrow path**, or are excluded from shared retrieval. They are **not deleted**.
+- **No destructive regeneration and no bulk retirement of existing questions,** ever, under this ADR.
+
+**Clarification, so this is not read too broadly:** the cross-*user* Official template sharing shipped in `v0.60.0` (`OfficialChallengeQuizTemplateService`) is already source-note-scoped — an adopter's copied questions trace back to one source note via `copiedFromNoteId`. This policy does **not** restrict or disable it. What it restricts is *new* cross-program pooling that would treat many-program applicability as a licence to share questions across notes.
+
 ### Alternatives considered
 
 - **Inverse mapping (program → domain contexts), notes stay single-valued.** Far cheaper — dozens of rows, and already the shape `ExamGoalConfig` uses. Rejected: it breaks as soon as applicability is per-note rather than per-context (Engineering Algebra applies to eleven programs, Engineering Statics to nine), forcing a sparse override table plus a second mechanism, and it makes applicability implicit when it should be explicit. **Retired as a fallback 2026-08-03, on evidence rather than argument:** Query K showed sharing is ragged *and crosses program families* — `Construction Materials` is shared by Civil Engineering and Architecture, while `Engineering Sciences` subjects are shared by differing subsets (Strength of Materials broadly, Hydraulics narrowly). Under ragged cross-family sharing this alternative needs the per-note override table immediately, making it `note_course_program` with extra steps. Not a viable fallback at any cost level.
