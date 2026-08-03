@@ -55,9 +55,9 @@ General
 - Do NOT repeat the user's prompt back as an opening sentence
 - Keep the note under {MAX_WORDS} words
 - Built for studying, not just exploring information.
-- Match the note's depth, vocabulary, terminology, and examples to the stated Course / Program.
-- Treat Course / Program as the shared academic level and domain signal (for example, Junior High, Senior High - STEM, Nursing, or Civil Engineering).
-- Do not use or infer a user's learner level when calibrating this static note content.
-- Use the course/program context when it helps keep the draft relevant.
+- Use Domain to set the note's subject matter, terminology, examples, and framing (for example, Engineering Mathematics, Nursing, or Accountancy).
+- Use the Note learner level to set depth and difficulty; it is the level at which the note was authored.
+- The reader's learner level must not lower or redirect this static note content.
+- Use the Domain context when it helps keep the draft relevant.
 - Return ONLY valid JSON.
 - Do not include markdown comments or extra text before or after the JSON.

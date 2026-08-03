@@ -27,7 +27,8 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 
 - Note content is **locked** after Study Pack generation (`STUDY_PACK_READY`) — do not re-enable the content editor for ready notes; only title, courseProgram, subject, and tags remain editable
 - `Generate Study Pack` saves the note then navigates immediately to Note Detail — **never wait** for LLM completion before navigation; generation is always async
-- `courseProgram` on the note is the **authoritative** source for generation context; user profile `courseProgram` is fallback only when the note field is blank
+- `domainContext` is the authoritative authoring-domain signal for generation; fallback is note `courseProgram`, then profile `courseProgram`
+- note-level `learnerLevel` is the authoritative educational-depth signal; fallback is profile `learnerLevel`, then `COLLEGE`
 - AI-generated subject must be a reusable academic label with **no topic suffix** — strip anything after `–`, `:`, or `-` before saving (e.g. `Biology – Cell Division` → `Biology`)
 - The share modal/gate is the **same everywhere**: public content → share modal directly; private content → confirm-to-make-public modal first; do not invent content-specific flows
 - **Official author** is determined by `UserRole.ADMIN` only — `isOfficialAuthor(user)` returns `user != null && user.getRole() == UserRole.ADMIN`; the old email-based `isNoteLibOfficialAccount()` method has been removed; do not recreate it
@@ -36,14 +37,16 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 
 ## Note metadata
 
-### Canonical authoring axes (v0.69.0 PR 1 persistence foundation)
+### Canonical authoring axes (v0.69.0)
 
 Notes now persist two nullable, author-supplied metadata fields governed by [ADR-001](../architecture/ADR-001-canonical-knowledge-architecture.md):
 
 - `domainContext` records how the note is authored — its authoritative academic or professional domain.
 - note-level `learnerLevel` records how deep the note is authored, independently of the owner's profile-level learner level.
 
-This PR persists and transports both fields only. Neither field affects Study Pack or quiz generation until PR 2, and neither has authoring UI until PR 3. Omitting either field, sending `null`, or sending a blank value stores `NULL`. Existing rows remain `NULL`; no backfill occurs in this PR. A null `domainContext` is the deliberate program-name fallback/promotion-marker state defined by ADR-001, while a null note learner level remains a valid legacy/fallback state.
+Both fields now drive generation through `StudyPackGenerationContextResolver`; neither has authoring UI until PR 3. Domain Context controls academic/professional subject matter, terminology, examples, and framing. Note learner level controls authored depth and difficulty. Omitting either field, sending `null`, or sending a blank value stores `NULL`. Existing null rows remain valid: a null `domainContext` deliberately falls back to the note's program and then the profile program, while a null note learner level falls back to the profile level and then `COLLEGE`.
+
+Static note and Study Pack content uses the effective domain plus the note's authored level, never the reader's level when a note level exists. Quizzes and exams keep the note level as their curriculum floor; a lower reader level may soften wording or add support but cannot lower the curriculum, while a higher reader level cannot raise the note's difficulty. Applicable Programs are discovery metadata and never reach prompts.
 
 `DomainContext` is a closed architectural enum with exactly eight ratified values:
 
@@ -93,9 +96,9 @@ Rules:
 - Subject is a reusable library shelf label — it should group many notes, not describe one note
 - The backend strips any subtopic suffix (`Biology – Cell Division` → `Biology`) before saving
 - `courseProgram` is required before saving or generating a Study Pack and is pre-filled from the user's profile so validation rarely blocks users who completed onboarding.
-- `learnerLevel` remains required on completed profiles for quiz/exam personalization, but it is not a static content-leveling input and a null legacy value must not break note or Study Pack generation.
-- Note-from-topic and Study Pack content use note-first `courseProgram` to calibrate depth, vocabulary, terminology, and examples. They must not use learner level for static content.
-- `learnerLevel` may remain in generation context for quiz/exam generation and exam-question pool pre-warm; content generation must tolerate a null level.
+- Profile `learnerLevel` remains required on completed profiles for quiz/exam personalization and legacy fallback, but it does not override a note's authored learner level.
+- Note-from-topic and legacy notes without Domain Context use the resolved program-name fallback as their effective authoring domain until the note-level authoring fields are populated.
+- Static generation and quiz/exam generation must tolerate both note-level axes being null and use the documented fallback chains rather than placeholders.
 - tags stay optional and should include helper guidance rather than mandatory validation pressure.
 
 ## Shared Share Behavior Rule
@@ -143,7 +146,7 @@ Create mode:
 - the editor must not wait for the LLM request to finish before navigation.
 - `Create a Note` creates a structured first draft from a topic with clear sections (`Overview`, `Core Concepts`, `Key Details`, optional `Examples`) and should avoid meta filler or instructional language.
 - `Create a Note` must build its request from the current Create Note form state at submit time. The selected draft Course / Program is authoritative for the first generated note; the profile Course / Program is fallback only when the draft field is blank.
-- `Create a Note` calibrates the generated draft from that resolved Course / Program, not from the owner's learner level, so copied notes retain a shared academic depth signal.
+- `Create a Note` uses that resolved Course / Program as its Domain fallback. Because no persisted note learner level exists yet in this pre-save flow, curriculum depth falls back to the owner's learner level and then `COLLEGE`; the two axes remain separate.
 - topic note generation is plan-gated separately from Study Pack generation and OCR.
 
 Bulk import behavior:

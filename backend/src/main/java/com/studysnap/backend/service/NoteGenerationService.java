@@ -42,7 +42,9 @@ public class NoteGenerationService {
                 user.getLearnerLevel(),
                 resolvedCourseProgram,
                 null,
-                List.of()
+                List.of(),
+                null,
+                null
         );
         String generatedContent = llmStudyPackService.generateNoteFromTopic(normalizedTopic, context);
         noteGenerationUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));

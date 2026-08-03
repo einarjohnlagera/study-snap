@@ -10,13 +10,17 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
 - Study Pack output is the generated enhancement state of a Note.
 - New versions are created via `Make a Copy`, not overwrite on the same Note.
 - Backend generation context may also carry:
-  - `learnerLevel`
-  - `courseProgram`
+  - the reader's profile-level `learnerLevel`
+  - legacy/fallback `courseProgram`
   - note `subject`
   - note `tags`
-- `courseProgram` must resolve from the note first. If `notes.courseProgram` is present, it is the source of truth for Study Pack generation. Only fall back to the profile-level `users.courseProgram` when the note has no course/program saved.
-- Static Study Pack output (summary, key concepts, metadata suggestions, and embedded Quick Review) uses the resolved `courseProgram` to calibrate depth, vocabulary, terminology, and examples. It does not use `learnerLevel`.
-- `learnerLevel` remains in `StudyPackGenerationContext` for taker-specific quiz/exam prompts and exam-question pool pre-warm. Static content generation must succeed when that value is null.
+  - note `domainContext`
+  - note-level `learnerLevel`
+- ADR-001's authoring-domain fallback chain is `notes.domainContext` -> `notes.courseProgram` -> `users.courseProgram`. If nothing resolves, generation omits the Domain line instead of inventing a placeholder.
+- ADR-001's curriculum-level fallback chain is note-level `notes.learnerLevel` -> the reader's profile-level `users.learnerLevel` -> `COLLEGE`.
+- Static content — note drafts, summaries, key concepts, flashcards, memorization, metadata suggestions, embedded Quick Review/static question pools — is calibrated by the effective Domain Context plus the note's learner level. The reader's learner level must not lower or redirect static content.
+- Quizzes and exams use the effective Domain Context plus note learner level as the curriculum floor. When the reader's level is lower than an explicit note level, prompts may soften wording and add scaffolding, but must keep curriculum, terminology, and difficulty at the note's level. A higher reader level never raises the note's authored difficulty.
+- Applicable Programs never reach a generation prompt. All note/user fallback resolution stays in `StudyPackGenerationContextResolver`; generation services must not reconstruct either chain.
 
 ## Output structure
 

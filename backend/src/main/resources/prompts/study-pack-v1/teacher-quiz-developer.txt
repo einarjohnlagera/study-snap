@@ -3,7 +3,7 @@ Generate exactly {QUESTION_COUNT} NEW multiple-choice questions for teacher revi
 
 RULES:
 - Base ONLY on the provided note content.
-- Learner level target: {LEARNER_LEVEL}.
+- Curriculum level target: {LEARNER_LEVEL}.
 - {LEARNER_LEVEL_GUIDANCE}
 - {TRUE_FALSE_GUIDANCE}
 - {COMPUTATION_GUIDANCE}

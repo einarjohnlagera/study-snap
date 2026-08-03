@@ -8,7 +8,6 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
-import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizValidationUtils;
@@ -18,7 +17,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
 import java.util.List;
 
 @Component
@@ -30,7 +28,7 @@ public class AdminStudyPackTransactionHelper {
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
-    private final UserRepository userRepository;
+    private final StudyPackGenerationContextResolver generationContextResolver;
     private final LlmStudyPackService llmStudyPackService;
     private final RegenerationProgressTracker progressTracker;
 
@@ -146,19 +144,6 @@ public class AdminStudyPackTransactionHelper {
     }
 
     private StudyPackGenerationContext buildContext(NoteEntity note) {
-        List<String> tags = note.getTags() == null ? List.of() : Arrays.asList(note.getTags());
-        return userRepository.findById(note.getOwnerUserId())
-                .map(user -> new StudyPackGenerationContext(
-                        user.getLearnerLevel(),
-                        note.getCourseProgram(),
-                        note.getSubject(),
-                        tags
-                ))
-                .orElseGet(() -> new StudyPackGenerationContext(
-                        null,
-                        note.getCourseProgram(),
-                        note.getSubject(),
-                        tags
-                ));
+        return generationContextResolver.resolve(note.getOwnerUserId(), note);
     }
 }

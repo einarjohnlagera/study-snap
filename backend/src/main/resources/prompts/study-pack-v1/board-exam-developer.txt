@@ -4,7 +4,7 @@ Generate exactly {QUESTION_COUNT} board exam simulation questions from the study
 RULES:
 - Base ONLY on the supplied summary and key concepts.
 - Difficulty target: {DIFFICULTY}.
-- Learner level: {LEARNER_LEVEL}.
+- Curriculum level: {LEARNER_LEVEL}.
 - {LEARNER_LEVEL_GUIDANCE}
 - {COMPUTATION_GUIDANCE}
 - {TIME_EXPECTATION}
