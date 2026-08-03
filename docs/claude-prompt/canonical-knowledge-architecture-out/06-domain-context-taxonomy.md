@@ -1,14 +1,14 @@
-# Content Context — proposed taxonomy
+# Domain Context — proposed taxonomy
 
 **Draft for owner review. Not ratified.** Companion to `01-architecture-critique-and-migration-plan.md` §5.1 and the production evidence in `05-vocabulary-results.md`.
 
-This is the one design input Release A needs, and it is the highest-stakes decision in the initiative — because Content Context replaces `course_program` in the prompt's domain constraint, and a **vaguer** value is a **weaker** constraint than what it replaces (`01` risk R4). This is the one place the new architecture could make generation quality worse.
+This is the one design input Release A needs, and it is the highest-stakes decision in the initiative — because Domain Context replaces `course_program` in the prompt's domain constraint, and a **vaguer** value is a **weaker** constraint than what it replaces (`01` risk R4). This is the one place the new architecture could make generation quality worse.
 
 ---
 
 ## 1. What the value has to do
 
-Content Context is substituted into `OpenAiLlmStudyPackService.buildGenerationContextBlock` (`:1535-1542`), where it currently receives `course_program`:
+Domain Context is substituted into `OpenAiLlmStudyPackService.buildGenerationContextBlock` (`:1535-1542`), where it currently receives `course_program`:
 
 ```
 Course / Program: {X}
@@ -28,22 +28,22 @@ That single test rules out the "Foundation"-style values sketched in the origina
 
 ## 2. The rule for choosing a value
 
-> **Content Context is the coarsest label under which the note's treatment is identical.**
+> **Domain Context is the coarsest label under which the note's treatment is identical.**
 
 Not the program. Not the subject plan. The level at which curricula genuinely *share* the same treatment.
 
 This is decidable, and it explains why the value set is a deliberate **mix** of shared-bundle names and program names — which is correct, not inconsistent:
 
-| Note | Treatment identical across… | Content Context |
+| Note | Treatment identical across… | Domain Context |
 |---|---|---|
 | Algebra topics | all 11 engineering programs | `Engineering Mathematics` |
 | Strength of Materials | most engineering programs | `Engineering Sciences` |
 | Structural Analysis | Civil Engineering only | `Civil Engineering` |
 | Building Utilities | Architecture only | `Architecture` |
 
-Note the asymmetry against your existing Review Set structure, and that it is expected: the Architecture Review Set has **five** subject-plan children (National Building Code, Building Technology, Architectural Design, Building Utilities, Site Planning) that all share one Content Context — `Architecture` — because their treatment is Architecture-specific. Whereas `Engineering Mathematics` is *both* a subject plan and a Content Context, because its treatment is shared 11 ways.
+Note the asymmetry against your existing Review Set structure, and that it is expected: the Architecture Review Set has **five** subject-plan children (National Building Code, Building Technology, Architectural Design, Building Utilities, Site Planning) that all share one Domain Context — `Architecture` — because their treatment is Architecture-specific. Whereas `Engineering Mathematics` is *both* a subject plan and a Domain Context, because its treatment is shared 11 ways.
 
-**Useful sanity check:** Content Context is never *finer* than a subject plan. If a candidate value is narrower than something you'd name a subject plan, it is a subject, not a context.
+**Useful sanity check:** Domain Context is never *finer* than a subject plan. If a candidate value is narrower than something you'd name a subject plan, it is a subject, not a context.
 
 ## 3. Proposed value set
 
@@ -79,15 +79,17 @@ These three are the ones the Algebra decision is waiting on.
 
 ### Tier 3 — do NOT mint contexts yet
 
-`Business Administration` (1), `Law` (2), `Medicine` (2), `Criminology` (2), `Psychology` (1), `Aviation` (1), `Physical Therapy` (7), `Civil Service` (7). Between 1 and 7 notes each. Let them fall back through the resolver chain (`content_context` → `course_program` → user's `course_program`) until real content exists. Minting a context per thin program is how a curated taxonomy degrades back into the free-text vocabulary this initiative is replacing.
+`Business Administration` (1), `Law` (2), `Medicine` (2), `Criminology` (2), `Psychology` (1), `Aviation` (1), `Physical Therapy` (7), `Civil Service` (7). Between 1 and 7 notes each. Let them fall back through the resolver chain (`domain_context` → `course_program` → user's `course_program`) until real content exists. Minting a context per thin program is how a curated taxonomy degrades back into the free-text vocabulary this initiative is replacing.
 
-**10 values total for Release A.** Small enough to hold in your head, which is itself a design goal.
+**Ratified 2026-08-03 — this list also includes `Architecture` (837 notes), `Pharmacy` (29), and `Information Technology` (74).** Volume does not qualify a program for a Domain Context; *shared* knowledge does. See `08` for the reasoning and for the two values this document over-proposed.
+
+> **This document is superseded in part.** Read it through `08-taxonomy-validation-and-final-recommendation.md`, which ran Query K against production and (a) found three of the values proposed here already exist as `notes.subject` values, (b) dropped `Health Sciences Foundation` and `Computing` by the governance rule, (c) added `Professional Practice & Regulation`, and (d) settled `Architecture` as a fallback. **The ratified set is 8 values, not the 10 proposed here.**
 
 ## 4. How this resolves the audit's loose ends
 
 | Current value | Resolution |
 |---|---|
-| `Junior High` (24), `High School` (11), `Grade School` (3), `Senior High – STEM` (4) / `– ABM` (4) / `– HUMSS` (3) | **Not programs and not contexts — these are levels.** Content Context `General Education` + `notes.learner_level` = the level. Retires the 49-note abuse and the active prompt bug |
+| `Junior High` (24), `High School` (11), `Grade School` (3), `Senior High – STEM` (4) / `– ABM` (4) / `– HUMSS` (3) | **Not programs and not contexts — these are levels.** Domain Context `General Education` + `notes.learner_level` = the level. Retires the 49-note abuse and the active prompt bug |
 | `Engineering` (2) — a family | `Engineering Mathematics` or `Engineering Sciences` by content |
 | `Biology` (1) — a subject | `General Education` |
 | `Bsed` (1 user) — an abbreviation | catalog maps to the `Education` **program**; context `Professional Education` |
@@ -95,7 +97,7 @@ These three are the ones the Algebra decision is waiting on.
 | `Professional / Board Exam Review` (5 notes, 13 users) | **A goal, not a context.** Belongs on the user (`study_goal`), never on a note. Notes carrying it need reclassifying by content |
 | `Self Study / Personal Learning` (1 user) | same — a goal, not a context |
 
-The last two matter beyond bookkeeping: they are the clearest evidence that `course_program` has been absorbing *user intent* as well as content classification. Content Context must not inherit that job.
+The last two matter beyond bookkeeping: they are the clearest evidence that `course_program` has been absorbing *user intent* as well as content classification. Domain Context must not inherit that job.
 
 ## 5. Authoring decision procedure
 
@@ -103,7 +105,7 @@ For the curator, in order:
 
 1. **What is the subject?** → `notes.subject` (Algebra). Unchanged from today.
 2. **At what depth was this authored?** → `notes.learner_level`. Independent of everything else.
-3. **What is the coarsest label under which this treatment is identical?** → `content_context`. If unsure between a shared bundle and a program name, ask: *would a student in a sibling program be served by this exact note, unchanged?* Yes → the shared bundle. No → the program.
+3. **What is the coarsest label under which this treatment is identical?** → `domain_context`. If unsure between a shared bundle and a program name, ask: *would a student in a sibling program be served by this exact note, unchanged?* Yes → the shared bundle. No → the program.
 4. **Which programs should surface it?** → Applicable Programs, via the family shortcut, expanded to explicit rows.
 5. **Does an existing note already satisfy step 3 for this subject?** → **reuse it**; add it to another Review Set instead of authoring. This step is the entire point and belongs in the admin UI as a prompt, not just in a doc.
 
@@ -112,7 +114,7 @@ For the curator, in order:
 1. **Is `Engineering Sciences` shared by all 11 engineering programs, or a subset?** A syllabus question. It determines the default family expansion.
 2. **Does `Engineering Mathematics` split by depth** (board-review vs. college) via `learner_level` alone, or do the boards treat them as genuinely different bundles?
 3. **`General Education` for K-12 — one context across Grade School → Senior High, distinguished only by `learner_level`?** I have assumed yes. If the treatment differs more than depth does, it needs splitting.
-4. **Should Content Context be visible to non-admin users at all?** `01` §5.3 recommends it as the single note-card badge. Confirm — it is the value learners would see most often.
+4. **Should Domain Context be visible to non-admin users at all?** `01` §5.3 recommends it as the single note-card badge. Confirm — it is the value learners would see most often.
 5. **`Civil Service` (7 notes)** — its own context, or `General Education`? Depends whether the exam's treatment differs from gen-ed.
 
 ## 7. Validation query — run before ratifying Tier 1

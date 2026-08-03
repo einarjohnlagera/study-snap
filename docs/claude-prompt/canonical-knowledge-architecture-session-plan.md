@@ -9,7 +9,7 @@ While expanding the Official Library beyond ALE/PNLE/LET/CPALE into Civil Engine
 The owner's proposal (relayed from a product/UX GPT discussion, reproduced in full in `01`'s appendix reference) is to replace single-valued Course/Program with:
 
 - **Applicable Programs** (many) — where a note appears
-- **Content Context** (one) — how a note is authored
+- **Content Context** (one) — how a note is authored *(renamed **Domain Context** at ratification, 2026-08-03 — see `docs/architecture/ADR-001-canonical-knowledge-architecture.md`; the original proposal term is preserved here)*
 - **Note Learner Level** (one) — how deep a note is authored, outranking the user's own level
 - **Program Families** — an authoring shortcut that expands into explicit program rows
 
@@ -22,12 +22,12 @@ A direct code audit of every place `course_program` and learner level influence 
 ## Output
 
 - `canonical-knowledge-architecture-out/01-architecture-critique-and-migration-plan.md` — the full deliverable: critique, gaps, risks, alternatives considered, recommended architecture, 4-step sequencing, the 14-item migration inventory, required ROADMAP/GPT_CONTEXT changes, and a measurable success metric with a falsifiable kill criterion.
-- `canonical-knowledge-architecture-out/02-adr-draft.md` — draft ADR, to move to `docs/architecture/ADR-001-canonical-knowledge-architecture.md` **on ratification only**.
+- `docs/architecture/ADR-001-canonical-knowledge-architecture.md` — the ADR, **ratified and promoted out of this directory 2026-08-03**. Also in this directory: `03`/`04` vocabulary queries, `05` results, `06` Domain Context taxonomy, `07` GPT consultation prompt, `08` Query K validation + the seven governance answers.
 
 ## Headline conclusions
 
-1. **The direction is right and the code proves it.** `OpenAiLlmStudyPackService.java:1536-1537` instructs the model to "treat the course/program above as the authoritative academic domain… Do not blend in material from unrelated disciplines." That instruction is *unsatisfiable* if the field holds eleven programs. Content Context is not polish — it is the load-bearing piece.
-2. **This is three initiatives fused into one, with very different cost and reversibility.** Content Context is one additive nullable column and reversible. The many-to-many join is not withdrawable once badges and filters read it — which puts it in direct conflict with the ROADMAP's own bootstrap-test clause 2. It cannot ship as one release.
-3. **Content Context alone unblocks the stated goal.** Review Sets already compose notes freely by explicit reference, so a curator can author one canonical "Engineering Foundation / Algebra" note and add it to eleven engineering Review Sets *without* the join table existing. The many-to-many buys discovery, filtering, and SEO reach — real value, but not the authoring-velocity unblock.
+1. **The direction is right and the code proves it.** `OpenAiLlmStudyPackService.java:1536-1537` instructs the model to "treat the course/program above as the authoritative academic domain… Do not blend in material from unrelated disciplines." That instruction is *unsatisfiable* if the field holds eleven programs. Domain Context is not polish — it is the load-bearing piece.
+2. **This is three initiatives fused into one, with very different cost and reversibility.** Domain Context is one additive nullable column and reversible. The many-to-many join is not withdrawable once badges and filters read it — which puts it in direct conflict with the ROADMAP's own bootstrap-test clause 2. It cannot ship as one release.
+3. **Domain Context alone unblocks the stated goal.** Review Sets already compose notes freely by explicit reference, so a curator can author one canonical "Engineering Foundation / Algebra" note and add it to eleven engineering Review Sets *without* the join table existing. The many-to-many buys discovery, filtering, and SEO reach — real value, but not the authoring-velocity unblock.
 4. **The migration premise is wrong in a way that matters.** There is no `course_programs` table. `notes.course_program` is free-text `VARCHAR(120)` with no validation on the write path, and an LLM suggestion can write into it. The backfill is a vocabulary-reconciliation project, not an `INSERT … SELECT`.
 5. **Note Learner Level reverses an explicit, deliberate current rule** (`:1540-1541`: "Do not use learner level to calibrate static note or Study Pack content") and requires re-keying two existing pool tables that key on *user* level today.

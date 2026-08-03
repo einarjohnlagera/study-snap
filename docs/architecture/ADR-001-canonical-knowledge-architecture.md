@@ -1,18 +1,9 @@
-# DRAFT ADR — Canonical Knowledge Architecture
+# ADR-001 — Notes model canonical knowledge; programs describe applicability
 
-**This is a draft. It documents a decision that has NOT been ratified.**
-
-On ratification, move this file to `docs/architecture/ADR-001-canonical-knowledge-architecture.md`, alongside the existing `ARCHITECTURE.md`, `DATA_MODEL.md`, and `BILLING_ADDENDUM.md`. No `docs/adr/` directory exists today; creating a new top-level directory for one record is not worth it — `docs/architecture/ADR-NNN-*.md` keeps architecture records where architecture already lives, and `ADR-001` establishes the numbering convention for later ones.
-
-Delete the "Status: Proposed" line and set a decision date when it moves.
-
----
-
-## ADR-001 — Notes model canonical knowledge; programs describe applicability
-
-**Status:** Proposed (drafted 2026-08-03, not ratified)
+**Status:** **Accepted** — ratified by the owner 2026-08-03. Drafted, audited against production, and revised the same day.
 **Deciders:** Owner
-**Open naming decision, must be settled before Release A's migration:** this record calls the axis **Content Context** (`notes.content_context`). `Domain Context` is the recommended alternative — the field's one job in code is to feed the prompt line reading *"treat the {value} above as the authoritative academic **domain**,"* so `domain_context` makes its responsibility self-evident to the next engineer, whereas `content_context` is mildly circular (all note metadata is context about content). `Authoring Context` is the better name for curators specifically; `Academic Context` is weakest, since it excludes the professional and licensure content that is most of this library. Low-stakes either way, and **free to change only until Release A ships.** The learner-facing concern does not bind — a badge displays the value ("Engineering Mathematics"), never the field name.
+**First ADR in this repo.** `docs/adr/` was deliberately not created; `docs/architecture/ADR-NNN-*.md` keeps architecture records alongside the existing `ARCHITECTURE.md`, `DATA_MODEL.md`, and `BILLING_ADDENDUM.md`, and establishes the numbering convention for later records.
+**Naming — decided 2026-08-03.** The axis is **Domain Context** (`notes.domain_context`). Chosen over `Content Context` (the original working name), `Authoring Context`, and `Academic Context`. Two reasons: the field's one job in code is to feed the prompt line reading *"treat the {value} above as the authoritative academic **domain**,"* so the name states its responsibility; and `content_context` would have collided semantically with the **pre-existing** `OpenAiLlmStudyPackService.buildContentContextBlock` (`:1523`), which already means something different — the static-content variant of the generation context block, as opposed to `buildLearnerContextBlock`. A field and an unrelated method sharing a name in the same class is exactly the kind of ambiguity that produces anti-drift errors later. `Academic Context` was weakest: it excludes the professional and licensure content that is most of this library.
 **Supersedes:** the implicit single-program assumption introduced by `V39__note_course_program.sql` (added 2026-04-04 — a plain `VARCHAR(120)` column on `notes`, despite the file name)
 **Related, not superseded:** Company Redefinition Phase 3b (cross-user question pooling) — adjacent and frequently confused; see Consequences.
 
@@ -37,26 +28,26 @@ Notes model **canonical knowledge**. Programs describe **where that knowledge is
 | Axis | Field | Cardinality | Sole responsibility |
 |---|---|---|---|
 | Subject | `notes.subject` | 1 | what the note is about |
-| Content Context | `notes.content_context` | 1 | **how** it is authored — the LLM domain constraint |
+| Domain Context | `notes.domain_context` | 1 | **how** it is authored — the LLM domain constraint |
 | Note Learner Level | `notes.learner_level` | 1 | **how deep** it is authored |
 | Applicable Programs | `note_course_program` | N | **where** it appears — discovery only |
 | Audience framing | `notes.target_profile_type` | 1 | **who** it is written for — never depth |
 
 Binding rules:
 
-1. **Applicable Programs never reach a prompt.** Generation is driven by Content Context. Programs are a discovery and curriculum-management facet only.
-2. **Static content** (note body, summary, key concepts, flashcards, memorization, static question pool) is calibrated by Content Context + Note Learner Level. Never by user learner level.
-3. **Quizzes and exams** take Content Context + Note Learner Level as the floor. User Learner Level may adjust scaffolding and wording; it may **never lower the curriculum**.
+1. **Applicable Programs never reach a prompt.** Generation is driven by Domain Context. Programs are a discovery and curriculum-management facet only.
+2. **Static content** (note body, summary, key concepts, flashcards, memorization, static question pool) is calibrated by Domain Context + Note Learner Level. Never by user learner level.
+3. **Quizzes and exams** take Domain Context + Note Learner Level as the floor. User Learner Level may adjust scaffolding and wording; it may **never lower the curriculum**.
 4. **Review Sets compose freely.** A Review Set may contain any note regardless of its Applicable Programs. A Review Set's own course/program is a curation label — never derived from, never validated against, its notes.
 5. **Program Families are an authoring shortcut only.** Selecting a family expands to explicit `note_course_program` rows at save time. Applicability is never inferred from a family at read time.
 6. **Reuse a note when the learning objective, depth, and treatment are materially the same. Create a new note only when the learning experience itself genuinely differs.** Multiple canonical Algebra notes (Engineering Algebra, Business Algebra, College Algebra, Algebra Foundations) are correct and expected; collapsing them would be a misreading of this ADR.
 7. All resolution stays in `StudyPackGenerationContextResolver`. No service reads these fields directly.
 
-Delivered in two releases (revised 2026-08-03 after the production audit): **Release A** = Content Context + `course_programs` catalog/families + Note Learner Level, all additive and reversible, with pool/bank re-keying as its own PR inside it. **Release B** = `note_course_program` + read paths, multi-release and not reversible.
+Delivered in two releases (revised 2026-08-03 after the production audit): **Release A** = Domain Context + `course_programs` catalog/families + Note Learner Level, all additive and reversible, with pool/bank re-keying as its own PR inside it. **Release B** = `note_course_program` + read paths, multi-release and not reversible.
 
-### Choosing a Content Context value
+### Choosing a Domain Context value
 
-> **Rule:** Content Context is the coarsest label under which the note's treatment is identical.
+> **Rule:** Domain Context is the coarsest label under which the note's treatment is identical.
 >
 > **Test (binary):** would a student in a sibling program be served by this exact note, unchanged? Yes → the shared bundle. No → the program name.
 >
@@ -74,31 +65,35 @@ A longer rule enumerating four conjunctive criteria was considered and rejected 
 
 `Professional Practice & Regulation` is justified on **treatment** — legal, procedural, and regulatory rather than scientific — across 68 existing notes. Its *applicability* across engineering boards is a separate and unverified question, like `Engineering Sciences`'.
 
-`Architecture` is an open owner call — its five large subject plans are Architecture-specific, but with `Professional Practice & Regulation` and `Construction Materials` carved out it may be thin enough to start as a fallback.
+**`Architecture` is deliberately NOT a Domain Context** (owner decision, 2026-08-03). Despite carrying 837 notes across five large subject plans, it uses the **program-name fallback** until there is enough *shared* canonical knowledge to justify its own context. This is the governance rule applied at ratification rather than retrofitted: a Domain Context earns its existence by materially reducing duplication, and Architecture's subject plans are Architecture-specific — a context for them would reduce nothing. Note volume is explicitly **not** a qualifying criterion; shared treatment is.
+
+This is the clearest worked example of the rule, and it is worth preserving as one: a program can be among the largest in the library and still not warrant a Domain Context.
 
 **Applicability defaults for these values are NOT yet verified against current PRC board syllabi** and must be curator-checked before family-expansion defaults are set. Whether `Engineering Sciences` spans 8 or 11 engineering programs is a curriculum fact, not an architecture decision.
 
-### Content Context governance
+### Domain Context governance
 
-> A new Content Context value may be introduced only when **both** hold: (a) there is a sustained body of canonical knowledge — as a concrete floor, **~10 or more notes already authored or firmly planned** — whose treatment cannot be accurately represented by an existing value; and (b) an explicit owner decision is recorded in this ADR's revision log. **When in doubt, reuse an existing Content Context.**
+> **Domain Contexts are expected to remain relatively stable.** Introducing a new one is an **architectural decision, not routine curriculum authoring** — it changes how the LLM is instructed to author an entire class of content, and it permanently widens a vocabulary that learners see. Treat it with the weight of a schema change: it needs an owner decision and a recorded rationale, not a curator's judgment call mid-authoring-session. **Adding notes is authoring. Adding a Domain Context is architecture.** This distinction is the primary defence against taxonomy explosion, and it is the reason the field is a curated closed set rather than free text.
 >
-> **Failure condition, reviewed at every `/kickoff`:** if the number of Content Context values ever approaches the number of course programs, the taxonomy has failed and has collapsed back into the free-text field it replaced. Baseline at ratification: **8 contexts against 27+ programs.** A ratio trending toward 1:1 is the signal to stop and consolidate, not to keep adding.
+> A new Domain Context value may be introduced only when **both** hold: (a) there is a sustained body of canonical knowledge — as a concrete floor, **~10 or more notes already authored or firmly planned** — whose treatment cannot be accurately represented by an existing value; and (b) an explicit owner decision is recorded in this ADR's revision log. **When in doubt, reuse an existing Domain Context.**
+>
+> **Failure condition, reviewed at every `/kickoff`:** if the number of Domain Context values ever approaches the number of course programs, the taxonomy has failed and has collapsed back into the free-text field it replaced. Baseline at ratification: **8 contexts against 27+ programs.** A ratio trending toward 1:1 is the signal to stop and consolidate, not to keep adding.
 
 ### Program-name fallback is a transitional state, not the end state
 
 Thin programs (1–7 notes: Law, Medicine, Criminology, Psychology, Aviation, Business Administration, Physical Therapy, Civil Service, and initially Pharmacy and Information Technology) use their **program name** as the effective authoring context via the resolver's fallback chain. This is pragmatic, not desired.
 
-**It is expressed mechanically rather than only documented, so it cannot be mistaken for the end state:** these values are **not** added to the curated `content_contexts` set, so `content_context IS NULL` *is* the marker of "not yet promoted," and the promotion backlog is a one-line query grouping null-context notes by `course_program`. A curator can see at any time which programs have crossed the ~10-note governance floor. Prose intent decays; a queryable state does not.
+**It is expressed mechanically rather than only documented, so it cannot be mistaken for the end state:** these values are **not** added to the curated `domain_contexts` set, so `domain_context IS NULL` *is* the marker of "not yet promoted," and the promotion backlog is a one-line query grouping null-context notes by `course_program`. A curator can see at any time which programs have crossed the ~10-note governance floor. Prose intent decays; a queryable state does not.
 
-### Subject / Content Context collision
+### Subject / Domain Context collision
 
-Subject and Content Context are different axes, and a value legitimately appearing in both is not an error — a broad survey note about nursing really is `subject = Nursing`. But ~334 notes currently carry a program name as their subject (`Professional Education` 250, `Nursing` 62, `Engineering Mathematics` 10, `Accountancy` 8, `Architecture` 3), which already violates `buildSubjectSuggestionGuidanceBlock`'s existing rule against overly broad subjects and echoing the program name.
+Subject and Domain Context are different axes, and a value legitimately appearing in both is not an error — a broad survey note about nursing really is `subject = Nursing`. But ~334 notes currently carry a program name as their subject (`Professional Education` 250, `Nursing` 62, `Engineering Mathematics` 10, `Accountancy` 8, `Architecture` 3), which already violates `buildSubjectSuggestionGuidanceBlock`'s existing rule against overly broad subjects and echoing the program name.
 
-**Guard:** when a note's `subject` equals its `content_context`, surface an admin-side warning that the subject is probably too broad — a nudge, never a hard validation error. Content Context values are not renamed to dodge the collision; borrowed board-subject-area names are precisely why the vocabulary reads well to learners.
+**Guard:** when a note's `subject` equals its `domain_context`, surface an admin-side warning that the subject is probably too broad — a nudge, never a hard validation error. Domain Context values are not renamed to dodge the collision; borrowed board-subject-area names are precisely why the vocabulary reads well to learners.
 
 ### Alternatives considered
 
-- **Inverse mapping (program → content contexts), notes stay single-valued.** Far cheaper — dozens of rows, and already the shape `ExamGoalConfig` uses. Rejected: it breaks as soon as applicability is per-note rather than per-context (Engineering Algebra applies to eleven programs, Engineering Statics to nine), forcing a sparse override table plus a second mechanism, and it makes applicability implicit when it should be explicit. **Retired as a fallback 2026-08-03, on evidence rather than argument:** Query K showed sharing is ragged *and crosses program families* — `Construction Materials` is shared by Civil Engineering and Architecture, while `Engineering Sciences` subjects are shared by differing subsets (Strength of Materials broadly, Hydraulics narrowly). Under ragged cross-family sharing this alternative needs the per-note override table immediately, making it `note_course_program` with extra steps. Not a viable fallback at any cost level.
+- **Inverse mapping (program → domain contexts), notes stay single-valued.** Far cheaper — dozens of rows, and already the shape `ExamGoalConfig` uses. Rejected: it breaks as soon as applicability is per-note rather than per-context (Engineering Algebra applies to eleven programs, Engineering Statics to nine), forcing a sparse override table plus a second mechanism, and it makes applicability implicit when it should be explicit. **Retired as a fallback 2026-08-03, on evidence rather than argument:** Query K showed sharing is ragged *and crosses program families* — `Construction Materials` is shared by Civil Engineering and Architecture, while `Engineering Sciences` subjects are shared by differing subsets (Strength of Materials broadly, Hydraulics narrowly). Under ragged cross-family sharing this alternative needs the per-note override table immediately, making it `note_course_program` with extra steps. Not a viable fallback at any cost level.
 - **Reuse `notes.tags` for applicability.** Rejected: tags are user-authored and LLM-suggested with no catalog — this returns curation metadata to the free-text soup this ADR exists to escape.
 - **Duplicate content per program.** Rejected on compounding maintenance cost, acknowledging that the duplication is currently forward-looking rather than measured.
 - **A separate "Academic Level" field distinct from Learner Level.** Rejected: Learner Level with two scopes (user's own vs. the note's) expresses the same thing without a third vocabulary.
@@ -116,7 +111,7 @@ Subject and Content Context are different axes, and a value legitimately appeari
 - Library and Explore program facet counts will sum above the note total, because a note appears under every applicable program. This is correct and needs a UI affordance, not a fix.
 - Filter and search paths move to join/`EXISTS` semantics on a hot paginated path that already required a dedicated performance release (`v0.51.0`).
 - **This ADR does not make generated artifacts canonical.** Study Packs, question pools, and question banks remain per-`study_pack_id`, and adopted copies get their own. Canonical *knowledge* is not canonical *generation*. Cross-user pooling is Company Redefinition Phase 3b and stays separately gated.
-- Note cards display Content Context as their single badge. Applicable Programs surface only on note detail, as a collapsed disclosure.
+- Note cards display Domain Context as their single badge. Applicable Programs surface only on note detail, as a collapsed disclosure.
 - `notes.target_profile_type` survives this ADR unchanged. It is `NOT NULL` and is a **live Public Library audience filter** (`PublicLibraryRepositoryImpl:176-178`, `NoteController:594`/`:636`, `NoteRepository:106`/`:131`), so it sits on the discovery axis alongside Applicable Programs rather than conflicting with Note Learner Level. Whether the precise program facet makes this coarse three-value facet redundant is judged at the **end of step 3**, against real filter usage — not decided here.
 
 **Evidence base (production, 2026-08-03).** This ADR is not taken on forecast. The vocabulary audit (`03`/`04-vocabulary-followups.sql`, results in `05-vocabulary-results.md`) established:

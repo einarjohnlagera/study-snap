@@ -1,6 +1,6 @@
 # Vocabulary Audit Results — production, 2026-08-03
 
-`03-course-program-vocabulary.sql` run against production 2026-08-03. **These are the §9 pre-Step-1 baselines and cannot be re-taken once `notes.content_context` exists.** Recorded here for that reason.
+`03-course-program-vocabulary.sql` run against production 2026-08-03. **These are the §9 pre-Step-1 baselines and cannot be re-taken once `notes.domain_context` exists.** Recorded here for that reason.
 
 Three of `01`'s estimates change as a result. Two of `03`'s own queries turned out to measure the wrong thing; `04-vocabulary-followups.sql` corrects them.
 
@@ -58,7 +58,7 @@ So the decision point is **"do not create the duplication in the first place,"**
 
 This matters for how the evidence below is read: the `Strength of Materials` finding is **corroborating evidence that the pattern is real and has already begun**, not the reason for the initiative. Do not present it as the motivating case.
 
-It also constrains the taxonomy (see `06-content-context-taxonomy.md`): the authoring frame in play is `subject = Algebra` inside a collection named `Engineering Mathematics`, which is the shape the Content Context value set has to serve.
+It also constrains the taxonomy (see `06-domain-context-taxonomy.md`): the authoring frame in play is `subject = Algebra` inside a collection named `Engineering Mathematics`, which is the shape the Domain Context value set has to serve.
 
 ## RESOLVED (Round 2, `04` run 2026-08-03) — the duplication has already begun; Step 3 is justified
 
@@ -191,7 +191,7 @@ The duplication cost does not land at some future program #2 — it has already 
 
 | Step | Change |
 |---|---|
-| 1 — `notes.content_context` | **Unchanged, better supported.** The field demonstrably conflates program / level / family / subject / activity |
+| 1 — `notes.domain_context` | **Unchanged, better supported.** The field demonstrably conflates program / level / family / subject / activity |
 | 2 — catalog + families | **Cheaper.** 32 values, 0 collisions — foldable into Step 1's release. ~6 semantic judgment calls remain |
 | 3 — `note_course_program` | **Justified on evidence. Retire the `[CHECKPOINT — due 2027-02-01]`** — Query J answered its question now, affirmatively. Still the expensive, irreversible step, still multi-release, but no longer a bet |
 | 4 — `notes.learner_level` | **Merge into Step 1's release** — see below. No longer a separate step |
