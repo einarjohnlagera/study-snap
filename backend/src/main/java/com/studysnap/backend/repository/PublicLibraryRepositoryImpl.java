@@ -1,5 +1,7 @@
 package com.studysnap.backend.repository;
 
+import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -37,6 +39,8 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     private static final String OWNER_USER_ID_ALIAS = "ownerUserId";
     private static final String TITLE_ALIAS = "title";
     private static final String COURSE_PROGRAM_ALIAS = "courseProgram";
+    private static final String DOMAIN_CONTEXT_ALIAS = "domainContext";
+    private static final String LEARNER_LEVEL_ALIAS = "learnerLevel";
     private static final String TARGET_PROFILE_TYPE_ALIAS = "targetProfileType";
     private static final String SUBJECT_ALIAS = "subject";
     private static final String TAGS_ALIAS = "tags";
@@ -59,6 +63,8 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                    n.owner_user_id as "ownerUserId",
                    n.title as title,
                    n.course_program as "courseProgram",
+                   n.domain_context as "domainContext",
+                   n.learner_level as "learnerLevel",
                    n.target_profile_type as "targetProfileType",
                    n.subject as subject,
                    n.tags as tags,
@@ -354,6 +360,12 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         values.put(OWNER_USER_ID_ALIAS, toUuid(tuple.get(OWNER_USER_ID_ALIAS)));
         values.put(TITLE_ALIAS, stringValue(tuple, TITLE_ALIAS));
         values.put(COURSE_PROGRAM_ALIAS, stringValue(tuple, COURSE_PROGRAM_ALIAS));
+        values.put(DOMAIN_CONTEXT_ALIAS, enumValue(
+                DomainContext.class, stringValue(tuple, DOMAIN_CONTEXT_ALIAS)
+        ));
+        values.put(LEARNER_LEVEL_ALIAS, enumValue(
+                LearnerLevel.class, stringValue(tuple, LEARNER_LEVEL_ALIAS)
+        ));
         values.put(TARGET_PROFILE_TYPE_ALIAS, enumValue(
                 NoteTargetProfileType.class, stringValue(tuple, TARGET_PROFILE_TYPE_ALIAS)
         ));

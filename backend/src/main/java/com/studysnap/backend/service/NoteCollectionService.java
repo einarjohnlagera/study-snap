@@ -2070,6 +2070,8 @@ public class NoteCollectionService {
                 note.title(),
                 note.subject(),
                 note.courseProgram(),
+                note.domainContext() == null ? null : note.domainContext().name(),
+                note.learnerLevel() == null ? null : note.learnerLevel().name(),
                 NoteStudyPackStatusResolver.resolve(note.status(), studyPack != null),
                 generatedQuizId == null ? null : generatedQuizId.toString(),
                 lastSessionCompletedAt,

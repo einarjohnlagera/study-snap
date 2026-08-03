@@ -33,7 +33,7 @@ Anti-drift — what this release explicitly does **NOT** change:
 
 ### Shipped
 
-_(nothing yet)_
+- **Canonical note authoring axes — persistence and transport foundation (PR 1 of 7).** Added nullable `notes.domain_context` and note-level `notes.learner_level`, the ratified closed `DomainContext` enum, create/update validation and explicit clearing, copy inheritance, and the complete detail/list/collection/profile/dashboard/data-export DTO surface. Private and public Library tuple projections now select and map both aliases, with real-SQL integration coverage; generation, prompts, filters, facets, UI, backfill, and pool/bank behavior remain unchanged for the focused follow-up PRs.
 
 ## v0.68.0 - Topic Note Rename
 

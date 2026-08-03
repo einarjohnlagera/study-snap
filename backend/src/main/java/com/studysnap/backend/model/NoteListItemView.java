@@ -3,6 +3,8 @@ package com.studysnap.backend.model;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -15,6 +17,10 @@ public interface NoteListItemView {
     String getTitle();
 
     String getCourseProgram();
+
+    DomainContext getDomainContext();
+
+    LearnerLevel getLearnerLevel();
 
     NoteTargetProfileType getTargetProfileType();
 

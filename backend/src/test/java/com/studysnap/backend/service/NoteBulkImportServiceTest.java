@@ -270,6 +270,8 @@ class NoteBulkImportServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 List.of(),
                 content,
                 PRIVATE_VISIBILITY,

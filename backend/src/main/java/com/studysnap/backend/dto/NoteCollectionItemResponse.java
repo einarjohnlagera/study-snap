@@ -11,6 +11,8 @@ public record NoteCollectionItemResponse(
         String title,
         String subject,
         String courseProgram,
+        String domainContext,
+        String learnerLevel,
         String studyPackStatus,
         String generatedQuizId,
         OffsetDateTime lastSessionCompletedAt,

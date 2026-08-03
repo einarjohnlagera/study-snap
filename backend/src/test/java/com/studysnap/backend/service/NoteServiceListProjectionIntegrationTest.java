@@ -2,11 +2,16 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NotesLibraryPageResponse;
+import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -26,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,6 +61,7 @@ class NoteServiceListProjectionIntegrationTest {
     private EntityManager entityManager;
 
     private NoteService noteService;
+    private UserRepository userRepository;
 
     @BeforeEach
     void initSchema() {
@@ -65,6 +72,8 @@ class NoteServiceListProjectionIntegrationTest {
                     title text,
                     subject varchar(64),
                     course_program varchar(120),
+                    domain_context varchar(64),
+                    learner_level varchar(32),
                     tags varchar array not null,
                     content text not null,
                     status varchar(16) not null,
@@ -133,6 +142,33 @@ class NoteServiceListProjectionIntegrationTest {
     }
 
     @Test
+    void createPersistsAuthoringAxesAndLoadsThemOnFreshFetch() {
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity owner = new UserEntity();
+        owner.setId(ownerUserId);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Engineering algebra",
+                "Algebra",
+                "Civil Engineering",
+                "engineering_mathematics",
+                "college",
+                List.of("algebra"),
+                null,
+                "Canonical algebra content"
+        );
+
+        NoteResponse created = noteService.create(request, ownerUserId);
+        entityManager.flush();
+        entityManager.clear();
+
+        NoteResponse refreshed = noteService.getById(created.id(), ownerUserId);
+
+        assertThat(refreshed.domainContext()).isEqualTo(DomainContext.ENGINEERING_MATHEMATICS.name());
+        assertThat(refreshed.learnerLevel()).isEqualTo(LearnerLevel.COLLEGE.name());
+    }
+
+    @Test
     void listPublicStillBuildsItsPreviewFromTheFullEntityContent() {
         UUID ownerUserId = UUID.randomUUID();
         String longContent = realisticLongContent();
@@ -179,6 +215,8 @@ class NoteServiceListProjectionIntegrationTest {
         assertThat(response.items()).singleElement()
                 .satisfies(item -> {
                     assertThat(item.id()).isEqualTo(newest.getId().toString());
+                    assertThat(item.domainContext()).isEqualTo(DomainContext.NURSING.name());
+                    assertThat(item.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
                     assertThat(item.tags()).containsExactly(NOTE_TAGS);
                     assertThat(item.targetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER.name());
                 });
@@ -198,6 +236,8 @@ class NoteServiceListProjectionIntegrationTest {
         assertThat(item.ownerUserId()).isEqualTo(note.getOwnerUserId().toString());
         assertThat(item.title()).isEqualTo(note.getTitle());
         assertThat(item.courseProgram()).isEqualTo(note.getCourseProgram());
+        assertThat(item.domainContext()).isEqualTo(note.getDomainContext().name());
+        assertThat(item.learnerLevel()).isEqualTo(note.getLearnerLevel().name());
         assertThat(item.targetProfileType()).isEqualTo(note.getTargetProfileType().name());
         assertThat(item.subject()).isEqualTo(note.getSubject());
         assertThat(item.tags()).containsExactly(note.getTags());
@@ -241,6 +281,8 @@ class NoteServiceListProjectionIntegrationTest {
         note.setOwnerUserId(ownerUserId);
         note.setTitle(title);
         note.setCourseProgram(COURSE_PROGRAM);
+        note.setDomainContext(DomainContext.NURSING);
+        note.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
         note.setTargetProfileType(NoteTargetProfileType.BOARD_TAKER);
         note.setSubject(SUBJECT);
         note.setTags(NOTE_TAGS.clone());
@@ -265,7 +307,7 @@ class NoteServiceListProjectionIntegrationTest {
         PublicNoteLikeRepository publicNoteLikeRepository = mock(PublicNoteLikeRepository.class);
         StudyPackRepository studyPackRepository = mock(StudyPackRepository.class);
         GeneratedQuizRepository generatedQuizRepository = mock(GeneratedQuizRepository.class);
-        UserRepository userRepository = mock(UserRepository.class);
+        userRepository = mock(UserRepository.class);
         QuizSessionHistoryService quizSessionHistoryService = mock(QuizSessionHistoryService.class);
         SubscriptionService subscriptionService = mock(SubscriptionService.class);
         FeatureGateService featureGateService = mock(FeatureGateService.class);

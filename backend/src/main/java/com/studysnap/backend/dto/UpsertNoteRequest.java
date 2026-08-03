@@ -8,9 +8,21 @@ public record UpsertNoteRequest(
         String title,
         String subject,
         String courseProgram,
+        String domainContext,
+        String learnerLevel,
         List<String> tags,
         String targetProfileType,
         @NotBlank(message = "Please provide note content before saving.")
         String content
 ) {
+    public UpsertNoteRequest(
+            String title,
+            String subject,
+            String courseProgram,
+            List<String> tags,
+            String targetProfileType,
+            String content
+    ) {
+        this(title, subject, courseProgram, null, null, tags, targetProfileType, content);
+    }
 }

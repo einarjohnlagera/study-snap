@@ -10,7 +10,7 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 - `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes` (private list), `POST /notes`, `PUT /notes/{id}`, `DELETE /notes/{id}`, `GET /notes/public` (public filter endpoint); subject/courseProgram suggestion endpoints
 - `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — note CRUD, `listMine(userId)`, `listPublic(...)`, visibility change, note copy, subject/courseProgram autocomplete
 - `backend/src/main/java/com/studysnap/backend/service/NoteBulkImportService.java` — bulk material import orchestration; one extracted file becomes one `DRAFT` note without Study Pack generation
-- `backend/src/main/java/com/studysnap/backend/entity/NoteEntity.java` — note schema: `title`, `content`, `subject`, `courseProgram`, `tags`, `visibility`, `studyPackStatus`, `targetProfileType`, `ownerUserId`
+- `backend/src/main/java/com/studysnap/backend/entity/NoteEntity.java` — note schema: `title`, `content`, `subject`, `courseProgram`, `domainContext`, note-level `learnerLevel`, `tags`, `visibility`, `studyPackStatus`, `targetProfileType`, `ownerUserId`
 - `backend/src/main/java/com/studysnap/backend/repository/NoteRepository.java` — JPQL queries for private/public note lists, subject/courseProgram suggestion queries
 
 **Frontend**
@@ -36,10 +36,31 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 
 ## Note metadata
 
-Current note-authoring fields:
+### Canonical authoring axes (v0.69.0 PR 1 persistence foundation)
+
+Notes now persist two nullable, author-supplied metadata fields governed by [ADR-001](../architecture/ADR-001-canonical-knowledge-architecture.md):
+
+- `domainContext` records how the note is authored — its authoritative academic or professional domain.
+- note-level `learnerLevel` records how deep the note is authored, independently of the owner's profile-level learner level.
+
+This PR persists and transports both fields only. Neither field affects Study Pack or quiz generation until PR 2, and neither has authoring UI until PR 3. Omitting either field, sending `null`, or sending a blank value stores `NULL`. Existing rows remain `NULL`; no backfill occurs in this PR. A null `domainContext` is the deliberate program-name fallback/promotion-marker state defined by ADR-001, while a null note learner level remains a valid legacy/fallback state.
+
+`DomainContext` is a closed architectural enum with exactly eight ratified values:
+
+- `ENGINEERING_MATHEMATICS` — Engineering Mathematics
+- `ENGINEERING_SCIENCES` — Engineering Sciences
+- `CIVIL_ENGINEERING` — Civil Engineering
+- `PROFESSIONAL_PRACTICE_AND_REGULATION` — Professional Practice & Regulation
+- `GENERAL_EDUCATION` — General Education
+- `PROFESSIONAL_EDUCATION` — Professional Education
+- `NURSING` — Nursing
+- `ACCOUNTANCY` — Accountancy
+
+Adding or changing a Domain Context is an architecture decision, not routine note authoring. Copies inherit both authoring axes because they are note metadata, not generated content.
+
+Current Note Editor input fields (PR 1; the new note-level authoring axes above do not have UI yet):
 
 - `title` (optional)
-- `learnerLevel` (required before save/generate; pre-filled from the user's profile)
 - `courseProgram` (required before save/generate; pre-filled from the user's profile)
 - `subject` (optional)
 - `tags` (optional)

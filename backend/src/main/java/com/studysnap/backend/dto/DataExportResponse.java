@@ -1,5 +1,6 @@
 package com.studysnap.backend.dto;
 
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
@@ -45,6 +46,8 @@ public record DataExportResponse(
             UUID id,
             String title,
             String subject,
+            DomainContext domainContext,
+            LearnerLevel learnerLevel,
             String content,
             NoteVisibility visibility,
             String copiedFromTitle,

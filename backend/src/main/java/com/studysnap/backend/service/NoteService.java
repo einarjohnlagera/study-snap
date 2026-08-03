@@ -15,8 +15,10 @@ import com.studysnap.backend.dto.SubjectFacetCount;
 import com.studysnap.backend.dto.SubjectStatsResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteTargetProfileType;
@@ -29,7 +31,9 @@ import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidLibraryQueryException;
+import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.InvalidPublicLibraryQueryException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UserNotFoundException;
@@ -157,6 +161,8 @@ public class NoteService {
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
         entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgram(), owner));
+        entity.setDomainContext(parseDomainContextOrThrow(request.domainContext()));
+        entity.setLearnerLevel(parseLearnerLevelOrThrow(request.learnerLevel()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setContent(normalizeRequiredContent(request.content()));
         entity.setStatus(NoteStatus.DRAFT);
@@ -184,11 +190,15 @@ public class NoteService {
                 .orElseThrow(NoteNotFoundException::new);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
+        DomainContext domainContext = parseDomainContextOrThrow(request.domainContext());
+        LearnerLevel learnerLevel = parseLearnerLevelOrThrow(request.learnerLevel());
 
         entity.setContent(normalizedRequestedContent);
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
         entity.setCourseProgram(normalizeOptionalCourseProgram(request.courseProgram()));
+        entity.setDomainContext(domainContext);
+        entity.setLearnerLevel(learnerLevel);
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setTargetProfileType(resolveTargetProfileType(request.targetProfileType(), owner));
         entity.setUpdatedAt(OffsetDateTime.now());
@@ -262,6 +272,8 @@ public class NoteService {
         copy.setTitle(source.getTitle());
         copy.setSubject(resolveCanonicalSubject(source.getSubject()));
         copy.setCourseProgram(normalizeOptionalCourseProgram(source.getCourseProgram()));
+        copy.setDomainContext(source.getDomainContext());
+        copy.setLearnerLevel(source.getLearnerLevel());
         copy.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
         copy.setContent(source.getContent());
         copy.setStatus(NoteStatus.DRAFT);
@@ -861,6 +873,8 @@ public class NoteService {
                         null,
                         null,
                         null,
+                        null,
+                        null,
                         NoteTargetProfileType.STUDENT.name(),
                         null,
                         List.of(),
@@ -1280,6 +1294,28 @@ public class NoteService {
         return normalized.isBlank() ? null : normalized;
     }
 
+    private DomainContext parseDomainContextOrThrow(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        DomainContext domainContext = DomainContext.fromString(value);
+        if (domainContext == null) {
+            throw new InvalidDomainContextException();
+        }
+        return domainContext;
+    }
+
+    private LearnerLevel parseLearnerLevelOrThrow(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        LearnerLevel learnerLevel = LearnerLevel.fromString(value);
+        if (learnerLevel == null) {
+            throw new InvalidNoteLearnerLevelException();
+        }
+        return learnerLevel;
+    }
+
     private List<String> normalizeTags(List<String> rawTags) {
         if (rawTags == null) {
             return List.of();
@@ -1384,6 +1420,8 @@ public class NoteService {
                 entity.getTitle(),
                 entity.getSubject(),
                 entity.getCourseProgram(),
+                entity.getDomainContext() == null ? null : entity.getDomainContext().name(),
+                entity.getLearnerLevel() == null ? null : entity.getLearnerLevel().name(),
                 resolveTargetProfileType(entity).name(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getContent(),
@@ -1436,6 +1474,8 @@ public class NoteService {
                 includeOwnerUserId && note.getOwnerUserId() != null ? note.getOwnerUserId().toString() : null,
                 note.getTitle(),
                 normalizeOptionalText(note.getCourseProgram()),
+                note.getDomainContext() == null ? null : note.getDomainContext().name(),
+                note.getLearnerLevel() == null ? null : note.getLearnerLevel().name(),
                 resolveTargetProfileType(note).name(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),

@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.PublicProfileNoteResponse;
 import com.studysnap.backend.dto.PublicProfileResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
@@ -131,6 +132,8 @@ class PublicProfileServiceTest {
         assertThat(response.publicNotes())
                 .extracting(
                         PublicProfileNoteResponse::noteId,
+                        PublicProfileNoteResponse::domainContext,
+                        PublicProfileNoteResponse::learnerLevel,
                         PublicProfileNoteResponse::contentPreview,
                         PublicProfileNoteResponse::summaryPreview,
                         PublicProfileNoteResponse::copyCount,
@@ -141,6 +144,8 @@ class PublicProfileServiceTest {
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple(
                                 noteOneId.toString(),
+                                DomainContext.GENERAL_EDUCATION.name(),
+                                LearnerLevel.COLLEGE.name(),
                                 "Plant Cells source note content",
                                 "Cells make up plant tissue.",
                                 5L,
@@ -150,6 +155,8 @@ class PublicProfileServiceTest {
                         ),
                         org.assertj.core.groups.Tuple.tuple(
                                 noteTwoId.toString(),
+                                DomainContext.GENERAL_EDUCATION.name(),
+                                LearnerLevel.COLLEGE.name(),
                                 "Atomic Bonds source note content",
                                 "Bonds hold atoms together.",
                                 2L,
@@ -357,6 +364,8 @@ class PublicProfileServiceTest {
         note.setOwnerUserId(ownerUserId);
         note.setTitle(title);
         note.setSubject(subject);
+        note.setDomainContext(DomainContext.GENERAL_EDUCATION);
+        note.setLearnerLevel(LearnerLevel.COLLEGE);
         note.setTags(tags);
         note.setContent(title + " source note content");
         note.setVisibility(NoteVisibility.PUBLIC);

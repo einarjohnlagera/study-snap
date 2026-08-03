@@ -82,7 +82,17 @@ Normal users see no new field; their notes resolve through the fallback chain.
 
 **38 notes are pure levels** and lose their `course_program` entirely. **11 are not** — STEM, ABM, and HUMSS are genuine Senior High *strands*, so they keep their program identity and *gain* a level. Nothing is lost, which the original flat "move 49 notes" framing would have discarded.
 
-**One open decision:** `High School` (11 notes) is ambiguous — the enum offers `JUNIOR_HIGH` and `SENIOR_HIGH` with no generic value. Either inspect those 11 notes' content or default to `SENIOR_HIGH`. Needs an answer before the prompt is written; it is a one-line difference in the migration and a real content question.
+**`High School` — DECIDED 2026-08-03 (ADR-001 "Legacy-data policy"). No blanket mapping.** The legacy label is strictly less precise than the `JUNIOR_HIGH`/`SENIOR_HIGH` distinction replacing it, so it is resolved **per note, from actual curriculum and content** — never inferred from the old label, and **no `HIGH_SCHOOL` enum value** may be added to preserve the ambiguity.
+
+This changes PR 4's shape materially: **it is not a pure SQL `UPDATE … WHERE course_program = 'High School'`.** It needs a human review pass over those 11 notes producing an explicit note-ID → level mapping, which the migration then applies. Sequence it as:
+
+1. A read-only query listing the 11 notes (id, title, subject, content excerpt) for admin review.
+2. The owner/curator classifies each as `JUNIOR_HIGH` or `SENIOR_HIGH`, or marks it unclassifiable.
+3. The migration applies that explicit mapping — classified notes get their level and have `course_program` cleared; **unclassifiable notes keep `learner_level` NULL and retain `course_program`**, so they are never left with no classification at all, and remain flagged for admin review.
+
+**Do not flip `visibility`.** All 11 are live official public notes; ADR-001 interprets the ratifying instruction's "unpublished" conservatively as *leave unclassified* and explicitly does not authorize withdrawing published content.
+
+The other 38 notes (`Grade School`, `Junior High`, and the three Senior High strands) are unambiguous and migrate mechanically.
 
 All 49 are in zero collections, so blast radius is nil.
 
@@ -96,7 +106,25 @@ Tables plus nullable FK on `notes` and `users`, populated by mapping; **nothing 
 
 `ExamQuestionPoolService.sameLearnerLevel()` (`:368-374`, called at `:101`) compares the **note's** level; `exam_question_pool.learner_level` and `challenge_quiz_question_bank.learner_level` are written from the note's level (`:166`, `:174`, `:235`); `OfficialChallengeQuizTemplateService` (`:179`, `:247`) stamps the same. Note `idx_challenge_quiz_question_bank_claimable` includes `learner_level`.
 
-**Open decision, must be explicit in the prompt:** existing rows hold a *user's* level. Either set them NULL (accepting one regeneration per pool) or force a single invalidation pass. Silently reinterpreting the column's meaning is the one unacceptable option.
+**Existing rows — DECIDED 2026-08-03 (ADR-001 "Legacy-data policy" rule 2). Neither of the two options originally offered was chosen; the ratified policy is *preserve and narrow-scope*:**
+
+> Preserve existing assets, but do not expand their semantic reach until their compatibility has been deliberately reclassified.
+
+- Existing questions **stay reusable for their original source Note** — no behavior is removed, nothing is nulled out wholesale, nothing is invalidated en masse.
+- Domain Context is backfilled onto those rows **from the source Note, only where the mapping is deterministic.**
+- Legacy `course_program` is **not** evidence of cross-program reusability. A question generated when a note belonged to one program carries no warrant for the ten programs it may later be applicable to.
+- Legacy rows remain **source-note-scoped** and must not enter cross-note or cross-program sharing until a later PR explicitly re-keys and audits compatibility.
+- Rows whose source Note has no confidently resolved Domain Context stay usable **only through their existing narrow path**, or are excluded from shared retrieval. **Never deleted.**
+- **No destructive regeneration, no bulk retirement.**
+
+**Scope consequence for this PR:** the policy requires pool and bank rows to carry a Domain Context, which neither table has today. Two mechanisms are viable and this is a PR-6 implementation choice, not a reopened decision:
+
+- **Denormalize** `domain_context` onto both tables, matching how `learner_level` is already denormalized (and already part of `idx_challenge_quiz_question_bank_claimable`). Consistent with the existing pattern; admits staleness if a note's context later changes.
+- **Resolve by join** to the source note at read time. Always correct; adds a join to a claim path that is latency-sensitive.
+
+The existing-pattern precedent favours denormalizing, but the staleness question needs an answer either way — if a note's Domain Context is later corrected, a denormalized pool row silently keeps the old one, which is exactly the "semantic reach widened without deliberate reclassification" failure the policy exists to prevent. Whichever is chosen, state the staleness behavior explicitly.
+
+**Do not read the policy as disabling `v0.60.0`'s Official template sharing.** `OfficialChallengeQuizTemplateService` shares cross-*user* but same-source-*note* (an adopter's copies trace back via `copiedFromNoteId`), so it is already source-note-scoped and compliant. What the policy blocks is *new* cross-program pooling.
 
 ### PR 7 — Subject-equals-context nudge
 
@@ -118,10 +146,12 @@ Admin-side warning when a note's `subject` equals its `domain_context`, surfacin
 
 **Pre-signoff pressure test:** this release meets the full-pressure-test bar in `CLAUDE.md` on two counts — one concept touching 3+ surfaces, and more than one PR touching the same shared method (`buildGenerationContextBlock` in PR 2, the resolver in PRs 2 and 6). Budget for it.
 
-## Open decisions before the first Codex prompt
+## Decisions — all closed 2026-08-03
 
-1. **`High School` (11 notes) → `JUNIOR_HIGH` or `SENIOR_HIGH`?** (PR 4)
-2. **Existing pool/bank rows: NULL them, or force one invalidation pass?** (PR 6)
-3. **Confirm `DomainContext` as a Java enum** rather than a table (this document's recommendation).
+1. **`High School` (11 notes)** — **no blanket mapping.** Per-note classification from actual content; unclassifiable notes stay unclassified and keep `course_program`; no `HIGH_SCHOOL` enum value. Recorded in ADR-001 "Legacy-data policy" rule 1. See PR 4 above for the three-step shape this forces.
+2. **Existing pool/bank rows** — **preserve and narrow-scope**, not NULL-them and not force-invalidate. Recorded in ADR-001 rule 2. See PR 6 above, including the one remaining *implementation* choice (denormalize vs. join) and its staleness question.
+3. **`DomainContext` as a Java enum** — confirmed, and already implemented in PR 1.
 
-None blocks PR 1.
+**Do not reopen 1 or 2 in a later PR.** Both are recorded in ADR-001 precisely so a future session scoping PR 4 or PR 6 inherits them rather than re-deriving them.
+
+One item remains genuinely open and is *not* a decision — a verification task: **the applicability groupings in `06`/`08` are unverified against current PRC board syllabi.** That only affects Release B's family-expansion defaults, so it does not block any PR in this release.

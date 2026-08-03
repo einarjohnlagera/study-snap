@@ -6,7 +6,9 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.studysnap.backend.dto.DataExportResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.InputType;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
@@ -111,6 +113,10 @@ class AccountDataExportServiceTest {
                 .containsExactly(publicNoteId, privateNoteId);
         assertThat(export.notes()).extracting(DataExportResponse.Note::visibility)
                 .containsExactly(NoteVisibility.PUBLIC, NoteVisibility.PRIVATE);
+        assertThat(export.notes()).extracting(DataExportResponse.Note::domainContext)
+                .containsExactly(DomainContext.GENERAL_EDUCATION, DomainContext.GENERAL_EDUCATION);
+        assertThat(export.notes()).extracting(DataExportResponse.Note::learnerLevel)
+                .containsExactly(LearnerLevel.COLLEGE, LearnerLevel.COLLEGE);
         assertThat(export.studyPacks()).hasSize(1);
         assertThat(export.studyPacks().getFirst().noteId()).isEqualTo(publicNoteId);
         assertThat(export.collections()).hasSize(1);
@@ -211,6 +217,8 @@ class AccountDataExportServiceTest {
         note.setOwnerUserId(userId);
         note.setTitle(title);
         note.setSubject("Biology");
+        note.setDomainContext(DomainContext.GENERAL_EDUCATION);
+        note.setLearnerLevel(LearnerLevel.COLLEGE);
         note.setContent("Cell structure notes");
         note.setStatus(NoteStatus.GENERATED);
         note.setVisibility(visibility);
