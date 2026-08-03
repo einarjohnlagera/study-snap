@@ -313,11 +313,13 @@ The stated metric ("how much easier does it become to publish Civil Engineering?
 
 **Baseline C — curator-hours per published Review Set.** Manually logged, not derivable from the DB. Rough is fine — the comparison is 10× or nothing.
 
-**Post-step-1 leading indicator, and a falsifiable kill criterion.** After step 1, count notes whose Content Context is shared by Review Sets belonging to two or more distinct programs. That is the *direct* measure of canonical reuse actually happening, and it is available without step 3 existing. Proposed checkpoint in this ROADMAP's own idiom:
+**Post-step-1 leading indicator.** After step 1, count notes whose Content Context is shared by Review Sets belonging to two or more distinct programs. That is the *direct* measure of canonical reuse actually happening, and it is available without step 3 existing. Worth tracking as a progress signal.
 
-> **`[CHECKPOINT — due 2027-02-01]`** — six months after step 1 ships. If no note is being reused across two or more programs' Review Sets by then, the duplication problem was hypothetical and **step 3 (the many-to-many join) should not be built** — Content Context alone was the whole answer. Instrumentation is a query against `note_collection_notes` + `notes.content_context`, available the day step 1 lands, so this satisfies the gate-types rule that a checkpoint ship with a working metric.
+**The originally-proposed kill criterion has been retired — it was answered before it was needed.** This section first proposed a `[CHECKPOINT — due 2027-02-01]`: if no note were being reused across two or more programs' Review Sets six months after step 1, the duplication problem would have been hypothetical and step 3 should not be built.
 
-That checkpoint is what makes this a sequenced bet rather than a 100-file commitment taken on faith.
+`04-vocabulary-followups.sql`'s Query J answered that question on **2026-08-03**, affirmatively, and Baseline A turned out to be too weak to have detected it. `Strength of Materials` carries "Stress and Strain in Strength of Materials" under Civil Engineering and "Stress, Strain, and Material Strength" under Mechanical Engineering — the same knowledge, two notes, two programs, invisible to exact-title matching. Nine more Civil Engineering SoM notes are queued to need the same twin per additional engineering program.
+
+So step 3 is justified on evidence rather than held as a bet, and **Baseline A's 0.00% must not be cited as evidence of no duplication** — it measures exact-title collisions only. See `05-vocabulary-results.md` for the full Round 2 read, including the finding that four of the eleven apparently-cross-program subjects (Algebra among them) are in fact the same subject at two learner levels, expressed by abusing the program field.
 
 ## 10. What to defer — and what must not be deferred
 
