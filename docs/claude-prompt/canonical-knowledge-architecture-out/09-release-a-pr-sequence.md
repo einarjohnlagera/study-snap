@@ -85,7 +85,7 @@ Normal users see no new field; their notes resolve through the fallback chain.
 |---|---|---|---|---|
 | `Grade School` | 3 | `GRADE_SCHOOL` | **cleared** | `GENERAL_EDUCATION` |
 | `Junior High` | 24 | `JUNIOR_HIGH` | **cleared** | `GENERAL_EDUCATION` |
-| `High School` | 11 | see decision below | **cleared** | `GENERAL_EDUCATION` |
+| `High School` | 11 | see decision below | **cleared** *(classified only)* | `GENERAL_EDUCATION` *(classified only)* |
 | `Senior High – STEM` | 4 | `SENIOR_HIGH` | **kept** | `GENERAL_EDUCATION` |
 | `Senior High – ABM` | 4 | `SENIOR_HIGH` | **kept** | `GENERAL_EDUCATION` |
 | `Senior High – HUMSS` | 3 | `SENIOR_HIGH` | **kept** | `GENERAL_EDUCATION` |
@@ -96,13 +96,19 @@ Normal users see no new field; their notes resolve through the fallback chain.
 
 This changes PR 4's shape materially: **it is not a pure SQL `UPDATE … WHERE course_program = 'High School'`.** It needs a human review pass over those 11 notes producing an explicit note-ID → level mapping, which the migration then applies. Sequence it as:
 
-1. A read-only query listing the 11 notes (id, title, subject, content excerpt) for admin review.
+1. A read-only query listing the 11 notes (id, title, subject, content excerpt) for admin review. **Written 2026-08-03: `10-high-school-classification.sql`.** It must run against **production** — the local dev database is a different dataset (118 notes, at V101, no `High School` rows), so this step cannot be self-served from the repo.
 2. The owner/curator classifies each as `JUNIOR_HIGH` or `SENIOR_HIGH`, or marks it unclassifiable.
-3. The migration applies that explicit mapping — classified notes get their level and have `course_program` cleared; **unclassifiable notes keep `learner_level` NULL and retain `course_program`**, so they are never left with no classification at all, and remain flagged for admin review.
+3. The migration applies that explicit mapping — classified notes get their level, `domain_context = GENERAL_EDUCATION`, and `course_program` cleared; **unclassifiable notes keep `learner_level` NULL, keep `domain_context` NULL, and retain `course_program`**, so they are never left with no classification at all, and remain flagged for admin review.
+
+> **Correction, 2026-08-03 (scoping PR 4).** The table above originally gave the whole `High School` row `domain_context = GENERAL_EDUCATION`, which is only correct for the classified notes. Writing it onto an *unclassifiable* note is a regression, because `StudyPackGenerationContextResolver:122-140` resolves the domain as `domainContext` → `courseProgram` but resolves the level as `noteLearnerLevel` → user level → `COLLEGE`, **never reading `courseProgram`**. A Domain Context therefore evicts `'High School'` from the `Domain:` line (`:1561-1566`) while contributing no level, and nothing replaces it: static content reads `noteLearnerLevel` directly with no reader fallback (`:1554-1556`), so a NULL level emits no `Curriculum level:` line at all, while quizzes fall back to the reader's level and default to `COLLEGE`. The note ends up with **no level signal for static content and college curriculum for quizzes** — worse than before the migration. Retaining `course_program` only preserves a classification if nothing overrides it. Recorded in ADR-001 "Legacy-data policy" rule 1 as a corollary; it clarifies the ratified decision rather than reopening it.
 
 **Do not flip `visibility`.** All 11 are live official public notes; ADR-001 interprets the ratifying instruction's "unpublished" conservatively as *leave unclassified* and explicitly does not authorize withdrawing published content.
 
-The other 38 notes (`Grade School`, `Junior High`, and the three Senior High strands) are unambiguous and migrate mechanically.
+The other 38 notes (`Grade School`, `Junior High`, and the three Senior High strands) are unambiguous *as to level* and migrate mechanically.
+
+> **Open, added 2026-08-03 — the strand notes have an unexamined R4 exposure.** The 11 Senior High strand notes keep `course_program` and gain `domain_context = GENERAL_EDUCATION`, which moves their prompt Domain line from `Senior High – STEM` to `General Education`. Their *level* is preserved (`SENIOR_HIGH` is set), so this is **not** the High School regression — but the **strand** stops reaching the prompt, and a Pre-Calculus note and a Disciplines-and-Ideas note collapse to one domain constraint. That is risk R4 on 11 live notes, and the table above assigned `GENERAL_EDUCATION` to them without the question being asked.
+>
+> Two defensible answers: (a) `GENERAL_EDUCATION` is correct and the strand belongs purely on the discovery axis, since `subject` already carries the discriminating signal; or (b) these 11 also keep `domain_context` NULL so the strand keeps flowing through `effectiveAuthoringDomain`. **Do not settle it on definitions** — ADR-001's own tie-break of last resort is to generate under both candidate values and diff, and a strand note is the cheapest available R4 subject. Query D in `10-high-school-classification.sql` pulls the 11 notes for that pass. Fold it into the owed R4 verification and record the answer in ADR-001.
 
 All 49 are in zero collections, so blast radius is nil.
 
@@ -150,7 +156,7 @@ Admin-side warning when a note's `subject` equals its `domain_context`, surfacin
 
 **Every PR that changes behavior updates its feature docs in the same PR** — `docs/features/notes.md` (the four axes and the reuse-vs-new-note rule verbatim), `study-pack-generation.md` (ADR-001's resolution rules), `bulk-generation.md`, `admin-dashboard.md`, plus `challenge-quiz.md` / `exam-hub.md` / `quiz.md` for PR 6. `CLAUDE.md`'s "Generation context is resolved in a shared utility" paragraph and `docs/architecture/DATA_MODEL.md` both need updating in PR 2. Per `CLAUDE.md`, updating `RELEASES.md` alone is not enough.
 
-**Migration numbers:** V102 (PR 1), then V103/V104 as PRs 4 and 5 land — assign at write time, not now, and derive the max numerically (`ls … | sed 's/^V\([0-9]*\)__.*/\1/' | sort -n | tail -1`); a lexical `ls` reports V99 when the real max is V101.
+**Migration numbers:** V102 (PR 1) and **V103 (PR 3)** are taken; **PR 4 continues from V104.** Assign at write time and derive the max numerically (`ls … | sed 's/^V\([0-9]*\)__.*/\1/' | sort -n | tail -1`); a lexical `ls` reports V99 when the real max is V103. *(This line originally read "V103/V104 as PRs 4 and 5 land" — written before PR 3 turned out to need a migration of its own. `v0.47.1` was a migration-collision hotfix; re-derive rather than trusting any number written down here.)*
 
 **`/audit-diff` after every Codex delivery**, heaviest on PR 2.
 
