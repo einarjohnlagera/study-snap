@@ -79,6 +79,14 @@ Normal users see no new field; their notes resolve through the fallback chain.
 
 ### PR 4 — Backfill the level-in-program notes
 
+> **RESCOPED 2026-08-03 into PR 4a + PR 4b. The `course_program after` column in the table below is deferred entirely — no PR in Release A clears it.** Recorded in ADR-001's Legacy-data policy as its second corollary.
+>
+> **PR 4a — the 27 pure-level notes (`Grade School` 3, `Junior High` 24).** Fully specified with no open inputs; prompt written as `docs/codex-prompts/v0.69.0-level-in-program-backfill.md`. Sets `learner_level` + `domain_context = GENERAL_EDUCATION`, touches nothing else.
+>
+> **PR 4b — the remaining 22.** Blocked on two inputs that do not exist yet: the per-note classification of the 11 `High School` notes (`10-high-school-classification.sql`, run against production), and the strand answer for the 11 Senior High notes (R4 step 4).
+>
+> **Why the clearing is deferred.** It achieves nothing for generation — `effectiveAuthoringDomain` prefers `domainContext`, so a legacy label stops reaching prompts the moment the Domain Context is set; it is irreversible, contradicting Release A's additive-and-reversible promise; and it would activate a live defect where `note-editor-page-client.tsx:269`/`:592`/`:620` silently submits the **editing admin's own profile program** for a note whose `course_program` is null, while showing an empty field. Whether `Grade School`/`Junior High` survive as program values is properly **PR 5**'s call, alongside `Civil Service`, `Biology`, and the other non-programs it already has to exclude.
+
 **The audit's "49 notes" splits into two groups with different treatments — this is a refinement of the earlier spec, found while checking the `LearnerLevel` enum:**
 
 | Current `course_program` | Notes | `learner_level` | `course_program` after | `domain_context` |
