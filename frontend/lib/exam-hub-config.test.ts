@@ -4,7 +4,6 @@ describe("exam hub config", () => {
   it.each([
     ["Architecture", "ale"],
     ["Nursing", "pnle"],
-    ["Medical – Surgical Nursing", "pnle"],
     ["Education", "let"],
     ["nursing", "pnle"],
     ["Accountancy", "cpale"],
@@ -14,6 +13,7 @@ describe("exam hub config", () => {
 
   it("returns null for unknown course programs", () => {
     expect(getExamSlugForCourseProgram("Civil Engineering")).toBeNull();
+    expect(getExamSlugForCourseProgram("Medical – Surgical Nursing")).toBeNull();
     expect(getExamSlugForCourseProgram(null)).toBeNull();
   });
 });

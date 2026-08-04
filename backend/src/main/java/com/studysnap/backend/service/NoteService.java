@@ -198,7 +198,11 @@ public class NoteService {
         entity.setDomainContext(domainContext);
         entity.setLearnerLevel(learnerLevel);
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
-        entity.setTargetProfileType(resolveTargetProfileType(request.targetProfileType(), owner));
+        entity.setTargetProfileType(resolveTargetProfileTypeForUpdate(
+                request.targetProfileType(),
+                owner,
+                entity.getTargetProfileType()
+        ));
         entity.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(entity);
@@ -1330,6 +1334,25 @@ public class NoteService {
             return parseSelectableTargetProfileTypeOrThrow(requestedTargetProfileType);
         }
         return mapOwnerProfileTypeToNoteTarget(owner.getProfileType());
+    }
+
+    private NoteTargetProfileType resolveTargetProfileTypeForUpdate(
+            String requestedTargetProfileType,
+            UserEntity owner,
+            NoteTargetProfileType storedTargetProfileType
+    ) {
+        if (isTeacherSelectableOwner(owner)) {
+            return parseSelectableTargetProfileTypeOrThrow(requestedTargetProfileType);
+        }
+        // The audience select is not rendered for these owners, so the request carries no intent about
+        // it. Re-deriving from the owner's *current* profile let an unrelated metadata save — a title
+        // fix from Note Detail's inline panel — silently rewrite the note's audience, and
+        // notes.target_profile_type is a live Public Library discovery filter. It also discarded the
+        // author's audience on a copied note. Preserve what is stored; fall back to the profile mapping
+        // only for legacy rows that carry none.
+        return storedTargetProfileType != null
+                ? storedTargetProfileType
+                : mapOwnerProfileTypeToNoteTarget(owner.getProfileType());
     }
 
     private boolean isTeacherSelectableOwner(UserEntity owner) {

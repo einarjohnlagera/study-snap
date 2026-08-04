@@ -65,6 +65,8 @@ public class PostSessionNextStepService {
     private final NoteRepository noteRepository;
     private final ProgressReportService progressReportService;
     private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
+    private final StudyPackGenerationContextResolver generationContextResolver;
+    private final ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
 
     @Transactional(readOnly = true)
     public NextStepResponse getNextStep(UUID userId, UUID studyPackId) {
@@ -77,7 +79,16 @@ public class PostSessionNextStepService {
         AdaptivePracticeQuota adaptivePracticeQuota = resolveAdaptivePracticeQuota(userId, planType);
         GoalNudgeResponse goalNudge = resolveGoalNudge(user, studyPack);
         try {
-            return resolveNextStep(userId, user.getLearnerLevel(), studyPack, adaptivePracticeQuota, goalNudge);
+            LearnerLevel effectiveCurriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(
+                    generationContextResolver.resolveForStudyPack(userId, studyPack)
+            );
+            return resolveNextStep(
+                    userId,
+                    effectiveCurriculumLevel,
+                    studyPack,
+                    adaptivePracticeQuota,
+                    goalNudge
+            );
         } catch (RuntimeException ex) {
             log.warn(
                     "post_session_next_step_fallback userId={} studyPackId={} reason={}",
@@ -91,7 +102,7 @@ public class PostSessionNextStepService {
 
     private NextStepResponse resolveNextStep(
             UUID userId,
-            LearnerLevel learnerLevel,
+            LearnerLevel effectiveCurriculumLevel,
             StudyPackEntity studyPack,
             AdaptivePracticeQuota adaptivePracticeQuota,
             GoalNudgeResponse goalNudge
@@ -120,7 +131,7 @@ public class PostSessionNextStepService {
             );
             case CHALLENGE -> resolveChallengeNextStep(
                     userId,
-                    learnerLevel,
+                    effectiveCurriculumLevel,
                     studyPack,
                     genuineWeakConcepts,
                     adaptivePracticeQuota,
@@ -140,7 +151,7 @@ public class PostSessionNextStepService {
 
     private NextStepResponse resolveChallengeNextStep(
             UUID userId,
-            LearnerLevel learnerLevel,
+            LearnerLevel effectiveCurriculumLevel,
             StudyPackEntity studyPack,
             List<String> genuineWeakConcepts,
             AdaptivePracticeQuota adaptivePracticeQuota,
@@ -149,7 +160,7 @@ public class PostSessionNextStepService {
         boolean hasRedoMissedQuestions = challengeQuizQuestionBankService.countEligibleIncorrectQuestions(
                 userId,
                 studyPack.getId(),
-                learnerLevel
+                effectiveCurriculumLevel
         ) >= ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS;
         if (!genuineWeakConcepts.isEmpty()) {
             return practiceWeakConceptResponse(
@@ -421,7 +432,7 @@ public class PostSessionNextStepService {
 
     private boolean isCurrentNoteInGoal(String studyGoal, String noteCourseProgram) {
         if (ExamGoalConfig.isValidSlug(studyGoal)) {
-            return ExamGoalConfig.getCoursePrograms(studyGoal).stream()
+            return examGoalCourseProgramProvider.getCoursePrograms(studyGoal).stream()
                     .anyMatch(courseProgram -> Objects.equals(courseProgram, noteCourseProgram));
         }
         return Objects.equals(studyGoal, noteCourseProgram);

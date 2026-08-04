@@ -20,7 +20,8 @@ import { buildPublicNoteHook, normalizePublicNoteText, splitPublicNoteBlocks } f
 import { getServerPublicNoteBySeoPath, getServerPublicNotesBySubject, getServerPublicNotesBySubjectSlug, getServerPublicNotesByCourseProgram } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 import { buildArticleStructuredData, buildBreadcrumbStructuredData } from "@/lib/structured-data";
-import { getExamSlugForCourseProgram, EXAM_HUBS } from "@/lib/exam-hub-config";
+import { EXAM_HUBS } from "@/lib/exam-hub-config";
+import { getServerExamSlugForCourseProgram } from "@/lib/server-exam-goal-course-programs";
 
 type PublicLibrarySeoPageProps = {
   params: Promise<{
@@ -98,7 +99,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
     .map((n) => ({ id: n.id, title: n.title, subject: n.subject, summaryPreview: n.summaryPreview, contentPreview: n.contentPreview }));
 
   const courseProgram = allSubjectNotes.find((n) => n.id === note.id)?.courseProgram ?? null;
-  const examSlug = getExamSlugForCourseProgram(courseProgram);
+  const examSlug = await getServerExamSlugForCourseProgram(courseProgram);
   const moreByCourseProgram = courseProgram
     ? (await getServerPublicNotesByCourseProgram(courseProgram))
         .filter((n) => n.id !== note.id && n.studyPackStatus === "STUDY_PACK_READY")

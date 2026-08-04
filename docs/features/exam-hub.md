@@ -19,10 +19,10 @@ Unknown slugs return `notFound()`.
 | Slug | Exam | Included `courseProgram` values |
 |---|---|---|
 | `ale` | Architect Licensure Examination (ALE) | `Architecture` |
-| `pnle` | Philippine Nurse Licensure Examination (PNLE) | `Nursing`, `Medical – Surgical Nursing` |
+| `pnle` | Philippine Nurse Licensure Examination (PNLE) | `Nursing` |
 | `let` | Licensure Examination for Teachers (LET) | `Education` |
 
-The mapping lives in `frontend/lib/exam-hub-config.ts`. Keep curation aliases there as the single frontend source of truth. Do not scatter exam-to-course mappings in route components or UI copy.
+Program names come from `course_programs.exam_goal_slug`. `frontend/lib/exam-hub-config.ts` retains the same names only as a fail-open fallback for anonymous server rendering; exam copy and valid slugs remain static config. Do not scatter exam-to-course mappings in route components or UI copy.
 
 ## Wave 2 Set
 
@@ -30,7 +30,7 @@ The mapping lives in `frontend/lib/exam-hub-config.ts`. Keep curation aliases th
 |---|---|---|
 | `cpale` | Certified Public Accountant Licensure Examination (CPALE) | `Accountancy` |
 
-Filtering matches `courseProgram` exactly (case-insensitive, trimmed) — not `subject`. Accountancy-adjacent notes that carry a different courseProgram value (e.g. "Business", "Commerce") with subject="Accounting" will not surface in this hub. This is a known, accepted characteristic of the existing config-alias-map mechanism, not a bug — do not broaden the filter to match on `subject` to compensate.
+Filtering matches `courseProgram` exactly (case-insensitive, trimmed) — not `subject`. Accountancy-adjacent notes that carry a different courseProgram value (e.g. "Business", "Commerce") with subject="Accounting" will not surface in this hub. This is a known, accepted characteristic of exact catalog-name matching, not a bug — do not broaden the filter to match on `subject` to compensate.
 
 ## Access Rules
 
@@ -38,18 +38,21 @@ Filtering matches `courseProgram` exactly (case-insensitive, trimmed) — not `s
 - Reading and browsing exam hub notes must not require login.
 - There is no profile-type gate. Student, Board Exam, Teacher, Admin, Professional, and anonymous visitors can view the same public exam pages.
 - Conversion gates live only on actions such as signup, copy, and quiz flows.
-- Exam hubs are curated views over existing public notes. They do not create a new entity, table, content type, or backend endpoint.
+- Exam hubs are curated views over existing public notes. They use the shared course/program catalog but do not create a new content type.
 
 ## Data Source
 
 Exam hubs reuse existing public-note infrastructure:
 
 - `GET /notes/public` for public note list data.
+- `GET /public/exam-goals/course-programs` for catalog-backed exam-to-program names.
 - Frontend server helpers for ISR-backed fetches.
 - `public-library-discovery` for featured, popular, and recent sections.
 - Existing public note cards and canonical public note paths.
 
-Filtering is by `courseProgram`, matched case-insensitively against the configured aliases.
+Filtering is by `courseProgram`, matched case-insensitively against the catalog-resolved names (or the fail-open fallback names).
+
+The backend's cached `ExamGoalCourseProgramProvider` reads program names from `course_programs.exam_goal_slug`. The frontend server component uses that public mapping for both Hub filtering and reverse note-to-Hub enrichment. If the catalog request fails, returns malformed data, or returns an empty list for a slug, the frontend uses that slug's literal fallback and renders the full anonymous Hub normally. Backend consumers likewise fall back when the catalog read is unavailable. `Medical – Surgical Nursing` was removed from PNLE in v0.70.0 after the production audit found zero matching notes, users, or collections and confirmed it is a subject area rather than a program; the generic multi-program lookup/dedupe path remains available for future Hubs.
 
 Exam hubs also perform a best-effort Official Review Set enrichment:
 
@@ -58,6 +61,8 @@ Exam hubs also perform a best-effort Official Review Set enrichment:
 - Results are deduplicated by collection id. If more than one set matches, the shared plan picker lets the visitor select which set to preview.
 - Lookup failures are swallowed for this enrichment only; public notes and the rest of the anonymous hub continue rendering.
 - No matches means no additional section or empty state.
+
+Exam practice launched from adopted content follows the note's curriculum axis rather than the hub visitor's profile level. On the single-Study-Pack paths, Long Exam and Board Exam question pools are stamped and sampled by the note's effective curriculum level (`notes.learner_level` -> reader level -> `COLLEGE`). Changing the reader's profile level therefore does not invalidate a pool for a note with an authored level. Multi-note exam assembly remains always assembled from its selected sources and does not use this single-note pool key.
 
 ## Conversion
 
@@ -143,7 +148,7 @@ so the UI can render both paths without exam-specific DTO fields.
 
 Goal summary computation uses the same mastery aggregation for both paths:
 
-- `EXAM` goals resolve matching `courseProgram` values through `ExamGoalConfig.getCoursePrograms(studyGoal)`.
+- `EXAM` goals resolve matching `courseProgram` values through the cached catalog-backed provider, with the static config used only as its fail-open fallback.
 - `SUBJECT` goals use the raw `studyGoal` value as a single `courseProgram` filter.
 - Users with a goal but no matching Study Packs still receive a `0%` goal summary so the confirmed goal remains visible.
 
@@ -170,7 +175,7 @@ Post-quiz goal nudges reinforce goals after off-goal practice:
 - The existing `GET /study-packs/{id}/next-step` response may include nullable `goalNudge`.
 - `goalNudge` is returned only when the authenticated user has a study goal and the completed session's linked note
   `courseProgram` does not match that goal.
-- `EXAM` goal matching uses `ExamGoalConfig.getCoursePrograms(studyGoal)`.
+- `EXAM` goal matching uses the same cached catalog-backed provider.
 - `SUBJECT` goal matching uses direct `courseProgram == studyGoal` equality.
 - No nudge is returned when the user has no goal, the current note matches the goal, the Study Pack has no linked note,
   or the nudge computation is unavailable.

@@ -24,6 +24,7 @@ Recommended fields:
 - `owner_user_id`
 - `title` (nullable)
 - `course_program` (nullable, defaults from `users.course_program` for new notes)
+- `course_program_id` (nullable FK to `course_programs`; populated when the legacy string exactly matches the catalog, not read by current note flows)
 - `domain_context` (nullable `VARCHAR(64)`, `DomainContext` enum; no default)
 - `learner_level` (nullable `VARCHAR(32)`, note-level `LearnerLevel` enum; no default)
 - `subject` (nullable)
@@ -45,13 +46,23 @@ Subject storage rule:
 
 Course / Program storage rule:
 
-- `users.course_program` is the profile-level default and `notes.course_program` is the note-level persisted source of truth.
-- There is no normalized `course_programs` table in the current architecture.
+- `users.course_program` is the profile-level default and `notes.course_program` is the note-level persisted source of truth for current authoring and discovery behavior.
+- `course_programs` is the curated program catalog; `program_families` holds architecture-level groupings such as `Engineering`.
+- `notes.course_program_id` and `users.course_program_id` are nullable references populated by the V106 audited-vocabulary backfill. Current note/user flows do not read them.
 - Distinct course/program suggestions are derived from persisted note values plus the authenticated user's saved profile value.
-- Course/program reuse is built by normalizing saved values rather than by writing to a second taxonomy table.
+- Current authoring suggestions and discovery labels continue to normalize the retained strings; the catalog and nullable FKs do not replace those read paths yet.
 - Normalization should trim whitespace, standardize dash formatting, and compare equivalent course/program values case-insensitively.
 - Learning Profile UI now requires both `learnerLevel` and `courseProgram` for onboarding completion and later profile saves, while storage remains nullable for pre-existing users until they update those fields.
 - `course_program` remains the legacy program label and fallback authoring context; it is not the classification apex for Domain Context, Note Learner Level, subject, or tags.
+
+Program catalog fields:
+
+- `program_families`: `id`, unique `name`, `created_at`.
+- `course_programs`: `id`, unique `name`, nullable `program_family_id`, nullable `exam_goal_slug`, `created_at`.
+- Catalog seed values are deterministic curator data. They are never derived from `SELECT DISTINCT` over author-supplied strings.
+- V106 backfills FKs by exact string equality only, except for the one sanctioned literal alias `Bsed` -> `Education`. It never clears, normalizes, or rewrites a legacy `course_program` string.
+- Excluded levels, subjects, goals, families, and contested values retain their strings with null FKs.
+- Exam Hub program-name resolution reads `course_programs.exam_goal_slug` directly through a cached provider; it does not read either note/user FK.
 
 Canonical authoring-axis storage rule:
 
@@ -182,6 +193,7 @@ Recommended fields:
 - `bio` (optional, up to 200 chars)
 - `learner_level` (nullable enum: `GRADE_SCHOOL`, `JUNIOR_HIGH`, `SENIOR_HIGH`, `COLLEGE`, `BOARD_EXAM_REVIEW`, `PROFESSIONAL`, `PERSONAL_LEARNING`)
 - `course_program` (nullable, up to 120 chars)
+- `course_program_id` (nullable FK to `course_programs`; not read by current profile flows)
 - `public_profile_visible` (boolean, default true)
 - `country_code` (optional)
 - `profile_type` (nullable enum)
@@ -463,6 +475,8 @@ Recommended fields:
 ## Relationships
 
 - User -> Notes: one-to-many
+- ProgramFamily -> CoursePrograms: one-to-many
+- CourseProgram -> Notes/Users: optional catalog references alongside retained legacy strings
 - Note -> Generated Study Pack fields: one-to-one enhancement state
 - Note -> QuickReviewSession: one-to-many
 - Note -> ChallengeSession: one-to-many

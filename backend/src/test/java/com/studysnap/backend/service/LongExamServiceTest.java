@@ -215,6 +215,14 @@ class LongExamServiceTest {
         UUID studyPackId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
         List<QuizItem> pooledQuiz = buildQuiz(25);
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+            LearnerLevel.GRADE_SCHOOL,
+            "General Education",
+            studyPack.getSubject(),
+            List.of(),
+            null,
+            LearnerLevel.COLLEGE
+        );
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
@@ -226,6 +234,7 @@ class LongExamServiceTest {
             eq(QuickReviewSessionMode.LONG_EXAM),
             any()
         )).thenReturn(Optional.empty());
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
         when(examQuestionPoolService.sampleQuestions(
             studyPackId,
             ExamQuestionPoolService.MODE_LONG_EXAM,

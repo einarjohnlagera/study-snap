@@ -28,6 +28,7 @@ import {
 } from "@/lib/public-note-path";
 import { getServerPublicNotesByCoursePrograms } from "@/lib/server-public-notes";
 import { getServerPublicStudyPlansByCoursePrograms } from "@/lib/server-public-study-plans";
+import { getServerExamGoalCoursePrograms } from "@/lib/server-exam-goal-course-programs";
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
 
@@ -191,9 +192,11 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
     notFound();
   }
 
+  const coursePrograms = await getServerExamGoalCoursePrograms(exam.slug);
+  const resolvedExam = { ...exam, coursePrograms };
   const [notes, officialReviewSets] = await Promise.all([
-    getServerPublicNotesByCoursePrograms(exam.coursePrograms) as Promise<ExamHubNote[]>,
-    getServerPublicStudyPlansByCoursePrograms(exam.coursePrograms),
+    getServerPublicNotesByCoursePrograms(coursePrograms) as Promise<ExamHubNote[]>,
+    getServerPublicStudyPlansByCoursePrograms(coursePrograms),
   ]);
   const description = buildExamMetadataDescription(exam);
   const examPath = buildExamPath(exam.slug);
@@ -235,7 +238,7 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {exam.coursePrograms.map((courseProgram) => (
+              {coursePrograms.map((courseProgram) => (
                 <span key={courseProgram} className="rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-medium text-foreground/75">
                   {courseProgram}
                 </span>
@@ -248,7 +251,7 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
               Sign up to save notes, generate Study Packs, and start quiz practice from this exam set.
             </p>
             <div className="mt-4">
-              <ExamHubCta exam={exam} />
+              <ExamHubCta exam={resolvedExam} />
             </div>
           </div>
         </div>
@@ -261,7 +264,7 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
       </p>
 
       {officialReviewSets.length > 0 ? (
-        <ExamHubOfficialReviewSets exam={exam} plans={officialReviewSets} />
+        <ExamHubOfficialReviewSets exam={resolvedExam} plans={officialReviewSets} />
       ) : null}
 
       {hasAnyNotes ? (
@@ -295,7 +298,7 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
             Start preparing with your own notes, or browse the full Public Library for related study notes, summaries, and quizzes.
           </p>
           <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <ExamHubCta exam={exam} />
+            <ExamHubCta exam={resolvedExam} />
             <Link href="/public/library" className="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 transition-colors hover:text-blue-800 hover:underline dark:text-blue-300 dark:hover:text-blue-200">
               Browse the Public Library
             </Link>

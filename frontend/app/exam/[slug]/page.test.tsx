@@ -3,6 +3,7 @@ import ExamHubPage, { generateMetadata, generateStaticParams } from "./page";
 import { EXAM_HUBS, EXAM_HUB_SLUGS } from "@/lib/exam-hub-config";
 import { getServerPublicNotesByCoursePrograms } from "@/lib/server-public-notes";
 import { getServerPublicStudyPlansByCoursePrograms } from "@/lib/server-public-study-plans";
+import { getServerExamGoalCoursePrograms } from "@/lib/server-exam-goal-course-programs";
 import { getAuthUser } from "@/lib/auth";
 import { trackAnalyticsEvent, type NoteListItemResponse } from "@/lib/api";
 import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
@@ -23,6 +24,10 @@ jest.mock("@/lib/server-public-notes", () => ({
 
 jest.mock("@/lib/server-public-study-plans", () => ({
   getServerPublicStudyPlansByCoursePrograms: jest.fn(),
+}));
+
+jest.mock("@/lib/server-exam-goal-course-programs", () => ({
+  getServerExamGoalCoursePrograms: jest.fn(),
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -95,6 +100,10 @@ describe("ExamHubPage", () => {
     (getServerPublicNotesByCoursePrograms as jest.Mock).mockReset();
     (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockReset();
     (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockResolvedValue([]);
+    (getServerExamGoalCoursePrograms as jest.Mock).mockReset();
+    (getServerExamGoalCoursePrograms as jest.Mock).mockImplementation(
+      (slug: keyof typeof EXAM_HUBS) => Promise.resolve(EXAM_HUBS[slug].coursePrograms),
+    );
     (getAuthUser as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue(null);
     (trackAnalyticsEvent as jest.Mock).mockReset();
@@ -105,7 +114,7 @@ describe("ExamHubPage", () => {
   it("defines exactly the configured exam hubs and course program aliases", () => {
     expect(EXAM_HUB_SLUGS).toEqual(["ale", "pnle", "let", "cpale"]);
     expect(EXAM_HUBS.ale.coursePrograms).toEqual(["Architecture"]);
-    expect(EXAM_HUBS.pnle.coursePrograms).toEqual(["Nursing", "Medical – Surgical Nursing"]);
+    expect(EXAM_HUBS.pnle.coursePrograms).toEqual(["Nursing"]);
     expect(EXAM_HUBS.let.coursePrograms).toEqual(["Education"]);
     expect(EXAM_HUBS.cpale.coursePrograms).toEqual(["Accountancy"]);
     expect(generateStaticParams()).toEqual([{ slug: "ale" }, { slug: "pnle" }, { slug: "let" }, { slug: "cpale" }]);
@@ -124,6 +133,7 @@ describe("ExamHubPage", () => {
     expect(screen.getByRole("heading", { name: fullName })).toBeInTheDocument();
     expect(screen.getByText(EXAM_HUBS[slug as keyof typeof EXAM_HUBS].description, { exact: false })).toBeInTheDocument();
     expect(screen.getAllByText(firstCourseProgram).length).toBeGreaterThanOrEqual(1);
+    expect(getServerExamGoalCoursePrograms).toHaveBeenCalledWith(slug);
     expect(getServerPublicNotesByCoursePrograms).toHaveBeenCalledWith(EXAM_HUBS[slug as keyof typeof EXAM_HUBS].coursePrograms);
   });
 
@@ -215,10 +225,7 @@ describe("ExamHubPage", () => {
 
     render(await ExamHubPage({ params: Promise.resolve({ slug: "pnle" }) }));
 
-    expect(getServerPublicStudyPlansByCoursePrograms).toHaveBeenCalledWith([
-      "Nursing",
-      "Medical – Surgical Nursing",
-    ]);
+    expect(getServerPublicStudyPlansByCoursePrograms).toHaveBeenCalledWith(["Nursing"]);
     expect(screen.getByRole("heading", { name: "Official Review Sets for PNLE" })).toBeInTheDocument();
     expect(screen.getByText(/Matched exactly by Course \/ Program: Nursing/)).toBeInTheDocument();
     expect(screen.getByText("PNLE Official Review Set")).toBeInTheDocument();

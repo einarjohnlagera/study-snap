@@ -582,6 +582,43 @@ class NoteServiceTest {
     }
 
     @Test
+    void update_preservesStoredTargetProfileTypeForNonTeacherOwner() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity boardNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content");
+        boardNote.setTargetProfileType(NoteTargetProfileType.BOARD_TAKER);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(boardNote));
+
+        // A STUDENT-profile owner never sees the audience select, so the request carries no intent about
+        // it. Re-deriving from the owner's current profile would silently rewrite a live Public Library
+        // discovery filter during an unrelated title fix.
+        UpsertNoteRequest titleOnlyEdit = new UpsertNoteRequest(
+                "Corrected title", "Subject", "Course", null, null, List.of("tag"), null, "content"
+        );
+        NoteResponse response = noteService.update(noteId.toString(), titleOnlyEdit, ownerUserId);
+
+        assertThat(boardNote.getTargetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER);
+        assertThat(response.targetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER.name());
+        assertThat(boardNote.getTitle()).isEqualTo("Corrected title");
+    }
+
+    @Test
+    void update_derivesTargetProfileTypeForLegacyNoteWithoutOne() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity legacyNote = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        legacyNote.setTargetProfileType(null);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(legacyNote));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", "Course", null, null, List.of("tag"), null, "content"
+        );
+        noteService.update(noteId.toString(), request, ownerUserId);
+
+        assertThat(legacyNote.getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
+    }
+
+    @Test
     void copyOwnNote_createsDraftWithoutAttribution() {
         UUID ownerUserId = UUID.randomUUID();
         UUID sourceNoteId = UUID.randomUUID();

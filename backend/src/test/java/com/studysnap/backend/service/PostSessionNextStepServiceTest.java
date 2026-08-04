@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
@@ -16,9 +17,11 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +39,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,6 +51,7 @@ class PostSessionNextStepServiceTest {
     private static final String CHALLENGE_PATH_SUFFIX = "/challenge-quiz";
     private static final String ADAPTIVE_PATH_SUFFIX = "/adaptive-practice";
     private static final String QUICK_REVIEW_PATH_SUFFIX = "/quick-review";
+    private static final String OUTCOME_INCORRECT = "INCORRECT";
     private static final OffsetDateTime NOW = OffsetDateTime.of(2026, 6, 4, 7, 0, 0, 0, ZoneOffset.UTC);
 
     @Mock
@@ -67,6 +72,12 @@ class PostSessionNextStepServiceTest {
     private ProgressReportService progressReportService;
     @Mock
     private ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
+    @Mock
+    private ChallengeQuizQuestionBankRepository challengeQuizQuestionBankRepository;
+    @Mock
+    private StudyPackGenerationContextResolver generationContextResolver;
+    @Mock
+    private ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
 
     private StudySnapProperties properties;
     private PostSessionNextStepService postSessionNextStepService;
@@ -84,8 +95,12 @@ class PostSessionNextStepServiceTest {
                 userRepository,
                 noteRepository,
                 progressReportService,
-                challengeQuizQuestionBankService
+                challengeQuizQuestionBankService,
+                generationContextResolver,
+                examGoalCourseProgramProvider
         );
+        lenient().when(examGoalCourseProgramProvider.getCoursePrograms("pnle"))
+                .thenReturn(List.of("Nursing"));
     }
 
     @Test
@@ -377,6 +392,99 @@ class PostSessionNextStepServiceTest {
     }
 
     @Test
+    void getNextStep_redoAvailabilityAndClaimUseTheSameEffectiveCurriculumLevel() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        UUID redoSessionId = UUID.randomUUID();
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, null, null, List.of(), null, LearnerLevel.SENIOR_HIGH
+        );
+        List<ChallengeQuizQuestionBankEntity> missedQuestions = List.of(
+                bankedQuestion("Missed one"),
+                bankedQuestion("Missed two"),
+                bankedQuestion("Missed three")
+        );
+        ChallengeQuizQuestionBankService realQuestionBankService =
+                new ChallengeQuizQuestionBankService(challengeQuizQuestionBankRepository);
+        PostSessionNextStepService serviceWithRealBank = new PostSessionNextStepService(
+                studyPackRepository,
+                quickReviewSessionRepository,
+                conceptHealthService,
+                subscriptionService,
+                userUsageService,
+                properties,
+                userRepository,
+                noteRepository,
+                progressReportService,
+                realQuestionBankService,
+                generationContextResolver,
+                examGoalCourseProgramProvider
+        );
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        stubLatestSession(userId, studyPack, QuickReviewSessionMode.CHALLENGE, List.of());
+        stubConceptHealth(userId, studyPack, List.of());
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
+        when(challengeQuizQuestionBankRepository.countIncorrectEligibleQuestions(
+                userId,
+                studyPack.getId(),
+                LearnerLevel.SENIOR_HIGH.name(),
+                OUTCOME_INCORRECT
+        )).thenReturn((long) missedQuestions.size());
+        when(challengeQuizQuestionBankRepository.findIncorrectClaimableForUpdate(
+                userId,
+                studyPack.getId(),
+                LearnerLevel.SENIOR_HIGH.name(),
+                OUTCOME_INCORRECT
+        )).thenReturn(missedQuestions);
+
+        NextStepResponse response = serviceWithRealBank.getNextStep(userId, studyPack.getId());
+        long eligibleCount = realQuestionBankService.countEligibleIncorrectQuestions(
+                userId,
+                studyPack.getId(),
+                StudyPackGenerationContextResolver.effectiveCurriculumLevel(context)
+        );
+        List<com.studysnap.backend.dto.QuizItem> claimed = realQuestionBankService.claimIncorrectQuestions(
+                userId,
+                studyPack.getId(),
+                StudyPackGenerationContextResolver.effectiveCurriculumLevel(context),
+                redoSessionId,
+                5,
+                ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS
+        );
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REDO_MISSED_QUESTIONS);
+        assertThat(claimed).hasSize(Math.toIntExact(eligibleCount));
+        verify(challengeQuizQuestionBankRepository, org.mockito.Mockito.times(2)).countIncorrectEligibleQuestions(
+                userId,
+                studyPack.getId(),
+                LearnerLevel.SENIOR_HIGH.name(),
+                OUTCOME_INCORRECT
+        );
+        verify(challengeQuizQuestionBankRepository).findIncorrectClaimableForUpdate(
+                userId,
+                studyPack.getId(),
+                LearnerLevel.SENIOR_HIGH.name(),
+                OUTCOME_INCORRECT
+        );
+    }
+
+    @Test
+    void getNextStep_returnsReviewPackFallbackWhenGenerationContextResolutionFails() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack))
+                .thenThrow(new IllegalStateException("note unavailable"));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+    }
+
+    @Test
     void getNextStep_returnsChallengeAfterChallengeWhenNoGenuineWeaknessRemains() {
         UUID userId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(userId);
@@ -613,6 +721,19 @@ class PostSessionNextStepServiceTest {
         studyPack.setTitle("Physiology");
         studyPack.setKeyConcepts(List.of(FIRST_CONCEPT, SECOND_CONCEPT));
         return studyPack;
+    }
+
+    private ChallengeQuizQuestionBankEntity bankedQuestion(String text) {
+        ChallengeQuizQuestionBankEntity entry = new ChallengeQuizQuestionBankEntity();
+        entry.setQuestionKey(text.toLowerCase());
+        entry.setQuestion(new com.studysnap.backend.dto.QuizItem(
+                text,
+                List.of("A", "B", "C", "D"),
+                0,
+                "Concept",
+                "Explanation"
+        ));
+        return entry;
     }
 
     private QuickReviewSessionEntity buildCompletedSession(

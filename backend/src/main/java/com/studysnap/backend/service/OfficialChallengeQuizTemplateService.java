@@ -134,12 +134,13 @@ public class OfficialChallengeQuizTemplateService {
 
     /**
      * Copies template rows into the caller's own bank. Template reads deliberately ignore the
-     * Official author's learner level; copied rows are tagged with the caller's current level.
+     * Official author's learner level; copied rows are tagged with the adopter note's effective
+     * curriculum level.
      */
     public List<QuizItem> copyTemplateQuestions(
             UUID userId,
             UUID callerStudyPackId,
-            LearnerLevel learnerLevel,
+            LearnerLevel effectiveCurriculumLevel,
             UUID sessionId,
             Set<String> disallowedQuestionKeys,
             int count
@@ -176,7 +177,7 @@ public class OfficialChallengeQuizTemplateService {
                 copy.setOriginSessionId(sessionId);
                 copy.setQuestionKey(questionKey);
                 copy.setQuestion(source.getQuestion());
-                copy.setLearnerLevel(learnerLevel == null ? null : learnerLevel.name());
+                copy.setLearnerLevel(effectiveCurriculumLevel == null ? null : effectiveCurriculumLevel.name());
                 copy.setLastKnownOutcome(OUTCOME_UNANSWERED);
                 copy.setClaimedSessionId(sessionId);
                 copy.setGeneratedAt(now);
@@ -244,7 +245,7 @@ public class OfficialChallengeQuizTemplateService {
                         target.ownerUserId(),
                         target.studyPack().getId(),
                         null,
-                        target.context().learnerLevel(),
+                        StudyPackGenerationContextResolver.effectiveCurriculumLevel(target.context()),
                         generated
                 );
                 return null;
