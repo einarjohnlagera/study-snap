@@ -52,6 +52,14 @@ Study Pack Ready actions:
   - `Make a Copy`
   - `Share`
 
+Inline metadata edit:
+
+- fields: `title`, `subject`, `courseProgram`, `tags` for every owner; `targetProfileType`, Domain Context, and Note Learner Level additionally for Teacher/Admin authors (`isTeacherSelectableNoteTarget`, the same gate the Note Editor uses).
+- the two authoring axes are the only way to correct a note's Domain Context or Note Learner Level once a Study Pack exists, and they shape future generation only — saving them does not touch the existing Study Pack.
+- the Subject field carries the same subject-equals-Domain-Context advisory as the Note Editor: exact case-insensitive match only, advisory text under the field, never a save block.
+- the panel's draft is seeded from the note in five places (load sync, `?edit=1` auto-open, `Edit`, `Cancel`, post-save reset) through one `toMetadataDraft` helper — add new fields there, not at the call sites.
+- saving sends `PUT /notes/{id}`, a full replace. Fields the current user cannot see must be sent back from the loaded note, never from the draft.
+
 Recent Sessions:
 
 - Note Detail shows the actual completed quiz mode label for Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice.

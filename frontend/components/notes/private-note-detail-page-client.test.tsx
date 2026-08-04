@@ -433,13 +433,173 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.",
+        "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, audience, Domain Context, and Note Learner Level.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
     expect(screen.getByText("Changing audience will affect future quiz generation.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
+  });
+
+  it("seeds the authoring axes from the note and saves the corrected values for a teacher", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      domainContext: "NURSING",
+      learnerLevel: "COLLEGE",
+    });
+    (updateNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      domainContext: "ENGINEERING_MATHEMATICS",
+      learnerLevel: "BOARD_EXAM_REVIEW",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    const domainContextSelect = screen.getByLabelText("Domain Context (optional)");
+    const learnerLevelSelect = screen.getByLabelText("Note Learner Level (optional)");
+    expect(domainContextSelect).toHaveValue("NURSING");
+    expect(learnerLevelSelect).toHaveValue("COLLEGE");
+
+    fireEvent.change(domainContextSelect, { target: { value: "ENGINEERING_MATHEMATICS" } });
+    fireEvent.change(learnerLevelSelect, { target: { value: "BOARD_EXAM_REVIEW" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        domainContext: "ENGINEERING_MATHEMATICS",
+        learnerLevel: "BOARD_EXAM_REVIEW",
+      }));
+    });
+  });
+
+  it("clears an authoring axis when the teacher selects the fallback option", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      domainContext: "NURSING",
+      learnerLevel: "COLLEGE",
+    });
+    (updateNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      domainContext: null,
+      learnerLevel: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    fireEvent.change(screen.getByLabelText("Domain Context (optional)"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Note Learner Level (optional)"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        domainContext: null,
+        learnerLevel: null,
+      }));
+    });
+  });
+
+  it("exposes the authoring axes to an admin on a non-teacher profile", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+      role: "ADMIN",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      domainContext: "ACCOUNTANCY",
+      learnerLevel: "COLLEGE",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    expect(screen.getByLabelText("Domain Context (optional)")).toHaveValue("ACCOUNTANCY");
+    expect(screen.getByLabelText("Note Learner Level (optional)")).toHaveValue("COLLEGE");
+  });
+
+  it("preserves the authoring axes when a non-teacher saves note details", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "STUDENT" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      domainContext: "NURSING",
+      learnerLevel: "SENIOR_HIGH",
+    });
+    (updateNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      domainContext: "NURSING",
+      learnerLevel: "SENIOR_HIGH",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        domainContext: "NURSING",
+        learnerLevel: "SENIOR_HIGH",
+      }));
+    });
+  });
+
+  it("nudges the teacher when the inline subject matches the selected Domain Context", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      subject: "Nursing",
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      domainContext: "NURSING",
+      learnerLevel: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+
+    expect(screen.getByText(/Subject matches the Domain Context/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Domain Context (optional)"), { target: { value: "GENERAL_EDUCATION" } });
+
+    expect(screen.queryByText(/Subject matches the Domain Context/)).not.toBeInTheDocument();
   });
 
   it("navigates to the dedicated session review page from Recent Sessions on note detail", async () => {

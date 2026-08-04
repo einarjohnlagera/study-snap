@@ -63,6 +63,8 @@ import {
   updateNoteVisibility,
   type ChallengeQuizPerformanceSummaryResponse,
   type ConceptHealthEntry,
+  type DomainContext,
+  type LearnerLevel,
   type NoteTargetProfileType,
   type NoteResponse,
   type NoteStudyPackStatus,
@@ -82,9 +84,11 @@ import {
   COURSE_PROGRAM_SUGGESTIONS,
   formatLearnerLevel,
   getGroupedLearnerLevels,
+  LEARNER_LEVEL_OPTIONS,
   mergeCourseProgramSuggestions,
   normalizeCourseProgram,
 } from "@/lib/learning-profile";
+import { DOMAIN_CONTEXT_OPTIONS, isSubjectSameAsDomainContext } from "@/lib/domain-context";
 import {
   buildNoteDetailPathWithTab,
   normalizeNoteDetailTab,
@@ -125,6 +129,43 @@ const COPIED_STUDY_PACK_REGENERATE_HINT_MESSAGE = "This Study Pack was copied. I
 const QUIZ_FULL_NOTES_NUDGE_ID = "quiz-tab-full-notes-nudge";
 const QUIZ_FULL_NOTES_NUDGE_MESSAGE = "Haven't reviewed the full notes yet? Skim the source material before testing yourself.";
 const NOTE_READINESS_SUBJECT = "This note";
+
+type NoteMetadataDraft = {
+  title: string;
+  subject: string;
+  courseProgram: string;
+  domainContext: DomainContext | "";
+  learnerLevel: LearnerLevel | "";
+  targetProfileType: NoteTargetProfileType | "";
+  tags: string[];
+};
+
+const EMPTY_METADATA_DRAFT: NoteMetadataDraft = {
+  title: "",
+  subject: "",
+  courseProgram: "",
+  domainContext: "",
+  learnerLevel: "",
+  targetProfileType: "",
+  tags: [],
+};
+
+/**
+ * The draft is seeded from the note in four places (the load sync, entering edit, cancelling, and
+ * the post-save reset). Building it here keeps a newly added field from being wired into three of
+ * them and silently blanking in the fourth.
+ */
+function toMetadataDraft(note: NoteResponse): NoteMetadataDraft {
+  return {
+    title: note.title ?? "",
+    subject: note.subject ?? "",
+    courseProgram: note.courseProgram ?? "",
+    domainContext: note.domainContext ?? "",
+    learnerLevel: note.learnerLevel ?? "",
+    targetProfileType: note.targetProfileType,
+    tags: [...(note.tags ?? [])],
+  };
+}
 
 type ConceptHealthLoadState = "idle" | "loading" | "loaded" | "error";
 type ConceptReadinessStatus = NonNullable<ConceptHealthEntry["readinessStatus"]>;
@@ -434,19 +475,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
   const [metadataTagDraft, setMetadataTagDraft] = useState("");
-  const [metadataDraft, setMetadataDraft] = useState<{
-    title: string;
-    subject: string;
-    courseProgram: string;
-    targetProfileType: NoteTargetProfileType | "";
-    tags: string[];
-  }>({
-    title: "",
-    subject: "",
-    courseProgram: "",
-    targetProfileType: "",
-    tags: [],
-  });
+  const [metadataDraft, setMetadataDraft] = useState<NoteMetadataDraft>(EMPTY_METADATA_DRAFT);
   const [conceptHash, setConceptHash] = useState("");
   const [highlightedConceptAnchor, setHighlightedConceptAnchor] = useState<string | null>(null);
   const [hasViewedFullNotes, setHasViewedFullNotes] = useState(false);
@@ -808,18 +837,15 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!note || isInlineMetadataEditMode) {
       return;
     }
-    setMetadataDraft({
-      title: note.title ?? "",
-      subject: note.subject ?? "",
-      courseProgram: note.courseProgram ?? "",
-      targetProfileType: note.targetProfileType,
-      tags: [...(note.tags ?? [])],
-    });
+    setMetadataDraft(toMetadataDraft(note));
   }, [isInlineMetadataEditMode, note]);
 
   const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
   const isTeacherMode = profileType === "TEACHER";
   const canEditTargetProfileType = isTeacherSelectableNoteTarget(profileType, userRole);
+  // Same gate the Note Editor uses for its authoring metadata fieldset, so the two surfaces expose
+  // the same axes to the same authors.
+  const canEditAuthoringMetadata = canEditTargetProfileType;
   const isStudyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const isGeneratingStudyPack = studyPackStatus === "GENERATING";
   const hasGenerationFailed = studyPackStatus === "FAILED";
@@ -1221,13 +1247,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
 
     autoEditHandledRef.current = true;
-    setMetadataDraft({
-      title: note.title ?? "",
-      subject: note.subject ?? "",
-      courseProgram: note.courseProgram ?? "",
-      targetProfileType: note.targetProfileType,
-      tags: [...(note.tags ?? [])],
-    });
+    setMetadataDraft(toMetadataDraft(note));
     setMetadataTagDraft("");
     setIsInlineMetadataEditMode(true);
 
@@ -1327,13 +1347,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
     setNoteActionsMenuOpen(false);
     if (!isDraft) {
-      setMetadataDraft({
-        title: note.title ?? "",
-        subject: note.subject ?? "",
-        courseProgram: note.courseProgram ?? "",
-        targetProfileType: note.targetProfileType,
-        tags: [...(note.tags ?? [])],
-      });
+      setMetadataDraft(toMetadataDraft(note));
       setMetadataTagDraft("");
       setIsInlineMetadataEditMode(true);
       return;
@@ -1345,13 +1359,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!note || savingMetadata) {
       return;
     }
-    setMetadataDraft({
-      title: note.title ?? "",
-      subject: note.subject ?? "",
-      courseProgram: note.courseProgram ?? "",
-      targetProfileType: note.targetProfileType,
-      tags: [...(note.tags ?? [])],
-    });
+    setMetadataDraft(toMetadataDraft(note));
     setMetadataTagDraft("");
     setIsInlineMetadataEditMode(false);
   };
@@ -1391,27 +1399,28 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     const nextTargetProfileType: NoteTargetProfileType = canEditTargetProfileType
       ? metadataDraft.targetProfileType as NoteTargetProfileType
       : note.targetProfileType;
+    // PUT is a full replace. The authoring axes only render for Teacher/Admin, so for everyone else
+    // the draft holds a blank that would silently null a set Domain Context or Note Learner Level.
+    const nextDomainContext: DomainContext | null = canEditAuthoringMetadata
+      ? metadataDraft.domainContext || null
+      : note.domainContext ?? null;
+    const nextLearnerLevel: LearnerLevel | null = canEditAuthoringMetadata
+      ? metadataDraft.learnerLevel || null
+      : note.learnerLevel ?? null;
     setSavingMetadata(true);
     try {
       const updated = await updateNote(note.id, {
         title: normalizeMetadataInput(metadataDraft.title),
         subject: normalizeMetadataInput(metadataDraft.subject),
         courseProgram: normalizeMetadataInput(metadataDraft.courseProgram),
-        // Not editable on this page, but PUT is a full replace — carry them through untouched.
-        domainContext: note.domainContext ?? null,
-        learnerLevel: note.learnerLevel ?? null,
+        domainContext: nextDomainContext,
+        learnerLevel: nextLearnerLevel,
         tags: metadataDraft.tags,
         targetProfileType: nextTargetProfileType,
         content: note.content,
       });
       setNote(updated);
-      setMetadataDraft({
-        title: updated.title ?? "",
-        subject: updated.subject ?? "",
-        courseProgram: updated.courseProgram ?? "",
-        targetProfileType: updated.targetProfileType,
-        tags: [...(updated.tags ?? [])],
-      });
+      setMetadataDraft(toMetadataDraft(updated));
       setMetadataTagDraft("");
       setIsInlineMetadataEditMode(false);
       setToast("Note details updated");
@@ -1973,6 +1982,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     onChange={(value) => setMetadataDraft((previous) => ({ ...previous, subject: value }))}
                     placeholder="Choose or type a subject"
                   />
+                  {/* Live region stays mounted so the advisory is announced when it appears, not just rendered. */}
+                  <div aria-live="polite">
+                    {canEditAuthoringMetadata
+                    && isSubjectSameAsDomainContext(metadataDraft.subject, metadataDraft.domainContext) ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        Subject matches the Domain Context, so it is probably too broad to be a useful
+                        library shelf. Consider a specific subject like Algebra or Pharmacology and let
+                        Domain Context carry the domain. Saving anyway is fine.
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
@@ -2013,6 +2033,57 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <p className="text-xs text-foreground/60">
                       Changing audience will affect future quiz generation.
                     </p>
+                  </div>
+                ) : null}
+                {canEditAuthoringMetadata ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label htmlFor="note-domain-context-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                        Domain Context (optional)
+                      </label>
+                      <select
+                        id="note-domain-context-inline"
+                        value={metadataDraft.domainContext}
+                        onChange={(event) => setMetadataDraft((previous) => ({
+                          ...previous,
+                          domainContext: event.target.value as DomainContext | "",
+                        }))}
+                        className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                      >
+                        <option value="">Use Course / Program fallback</option>
+                        {DOMAIN_CONTEXT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-foreground/60">
+                        Controls how the AI authors the note&apos;s academic domain and framing. Applies to
+                        the next generation, not the existing Study Pack.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="note-learner-level-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                        Note Learner Level (optional)
+                      </label>
+                      <select
+                        id="note-learner-level-inline"
+                        value={metadataDraft.learnerLevel}
+                        onChange={(event) => setMetadataDraft((previous) => ({
+                          ...previous,
+                          learnerLevel: event.target.value as LearnerLevel | "",
+                        }))}
+                        className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                      >
+                        <option value="">Use reader level fallback</option>
+                        {LEARNER_LEVEL_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-foreground/60">
+                        Controls how deeply the note is authored, independent of who reads it. Applies to
+                        the next generation, not the existing Study Pack.
+                      </p>
+                    </div>
                   </div>
                 ) : null}
                 <div className="space-y-2">
@@ -2083,7 +2154,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             )}
             {isInlineMetadataEditMode ? (
               <p className="text-xs text-foreground/70">
-                Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.
+                {canEditAuthoringMetadata
+                  ? "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, audience, Domain Context, and Note Learner Level."
+                  : "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."}
               </p>
             ) : isTeacherMode ? (
               <p className="text-xs text-foreground/70">

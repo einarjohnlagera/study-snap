@@ -25,7 +25,7 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 
 ## Anti-drift Notes
 
-- Note content is **locked** after Study Pack generation (`STUDY_PACK_READY`) — do not re-enable the content editor for ready notes; only title, courseProgram, subject, and tags remain editable
+- Note content is **locked** after Study Pack generation (`STUDY_PACK_READY`) — do not re-enable the content editor for ready notes; title, courseProgram, subject, and tags remain editable for everyone, plus audience, Domain Context, and Note Learner Level for Teacher/Admin authors
 - `Generate Study Pack` saves the note then navigates immediately to Note Detail — **never wait** for LLM completion before navigation; generation is always async
 - `domainContext` is the authoritative authoring-domain signal for generation; fallback is note `courseProgram`, then profile `courseProgram`
 - note-level `learnerLevel` is the authoritative educational-depth signal; fallback is profile `learnerLevel`, then `COLLEGE`
@@ -44,7 +44,7 @@ Notes now persist two nullable, author-supplied metadata fields governed by [ADR
 - `domainContext` records how the note is authored — its authoritative academic or professional domain.
 - note-level `learnerLevel` records how deep the note is authored, independently of the owner's profile-level learner level.
 
-Both fields drive generation through `StudyPackGenerationContextResolver`. Teacher and Admin authors can set them in the Note Editor; both selects are optional and load empty for existing null rows. Domain Context controls academic/professional subject matter, terminology, examples, and framing. Note learner level controls authored depth and difficulty. Omitting either field, sending `null`, or sending a blank value stores `NULL`. A null `domainContext` deliberately falls back to the note's program and then the profile program, while a null note learner level falls back to the profile level and then `COLLEGE`.
+Both fields drive generation through `StudyPackGenerationContextResolver`. Teacher and Admin authors can set them in the Note Editor **and correct them afterwards from Note Detail's inline metadata panel**, which is the only editing surface a `STUDY_PACK_READY` note offers from the UI; both selects are optional and load empty for existing null rows. Correcting either axis on a ready note changes only *future* generation — the existing Study Pack is untouched until the user explicitly regenerates. Domain Context controls academic/professional subject matter, terminology, examples, and framing. Note learner level controls authored depth and difficulty. Omitting either field, sending `null`, or sending a blank value stores `NULL`. A null `domainContext` deliberately falls back to the note's program and then the profile program, while a null note learner level falls back to the profile level and then `COLLEGE`.
 
 The legacy level-in-program cleanup is complete without rewriting any retained `courseProgram` label. V104 classified the 27 pure-level `Grade School` and `Junior High` notes as `GENERAL_EDUCATION` plus `GRADE_SCHOOL` or `JUNIOR_HIGH`. V105 applied the curator's content-based classification to four ambiguous `High School` notes: three now carry `GENERAL_EDUCATION` + `JUNIOR_HIGH`, and one carries `GENERAL_EDUCATION` + `SENIOR_HIGH`. Six `High School` notes remain deliberately unclassified with both axes `NULL` because their content has no defensible K-12 grade anchor; their legacy `courseProgram` remains their only classification and continues through the fallback chain. The 11 Senior High strand notes carry `SENIOR_HIGH` with no Domain Context, preserving STEM, ABM, or HUMSS as the effective authoring domain through the same fallback.
 
@@ -154,7 +154,7 @@ Create mode:
 - `/notes/import` is the separate bulk note-creation entry point, reached from the Create-note flow's `Import notes` panel (a "Bulk import multiple files" link). It sends multiple files through `POST /notes/import-batch`, creates one `DRAFT` note per successfully extracted file directly, and never triggers Study Pack generation or LLM calls.
 - note metadata fields (`title`, `subject`, `courseProgram`, `tags`, and the Teacher/Admin authoring metadata group) stay available in the collapsed `Add details` section by default so first-time note creation stays focused on content.
 - Target Audience is required on every note. For Student, Board Exam, and Professional profiles the field is hidden and auto-prefilled from profile type at save time (Student -> Student, Board Exam -> Board Taker, Professional -> Professional). For Teacher and Admin profiles the field is visible and user-picked, with all audience values selectable.
-- Domain Context and Note Learner Level are visible only to Teacher/Admin authors in the product UI. Both are optional single-selects; blank remains a real null state rather than a fabricated default.
+- Domain Context and Note Learner Level are visible only to Teacher/Admin authors in the product UI, on both authoring surfaces (Note Editor and Note Detail's inline metadata panel). Both are optional single-selects; blank remains a real null state rather than a fabricated default. Because `PUT /notes/{id}` is a full replace, a surface that hides these selects must send the note's stored values back untouched rather than the empty draft — hiding a field must never null it.
 - create mode should keep a subtle inline prompt near the primary actions so users can reveal `Add details` without turning the page back into a long form.
 - `Generate Study Pack` first saves the note, queues Study Pack generation, then redirects immediately to Note Detail with the requested default tab.
 - the editor must not wait for the LLM request to finish before navigation.
@@ -184,11 +184,13 @@ Edit mode for draft notes:
 
 Edit mode for Study Pack Ready notes:
 
-- route: `/notes/{id}/edit`
-- editable metadata: `title`, `courseProgram`, `subject`, `tags`
+- surface: Note Detail's inline metadata panel. `Edit` in the note actions menu opens it in place; it does **not** route to `/notes/{id}/edit` once a Study Pack exists.
+- editable metadata: `title`, `courseProgram`, `subject`, `tags`, plus `targetProfileType`, `domainContext`, and `learnerLevel` for Teacher/Admin authors
 - locked field: `content`
-- helper text: `Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.`
-- actions: `Save Changes`, `Cancel`, `Make a Copy`
+- helper text: `Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.` — Teacher/Admin authors get the longer variant naming audience, Domain Context, and Note Learner Level as well
+- actions: `Save`, `Cancel`; `Make a Copy` stays in the note actions menu
+
+`/notes/{id}/edit` itself has **no** ready-note guard on either side — `NoteService.update` accepts any status and the editor renders an unlocked content textarea — so the route stays reachable by direct URL and edits content. This is deliberate: it is the escape hatch that made the ADR-001 R4 verification runnable before the inline axes shipped. Do not add a guard without an explicit decision; the content lock is an entry-point convention, not an enforced invariant.
 
 ## AI metadata suggestions
 
