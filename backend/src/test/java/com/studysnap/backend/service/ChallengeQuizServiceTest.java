@@ -502,7 +502,12 @@ class ChallengeQuizServiceTest {
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
         StudyPackGenerationContext generationContext = new StudyPackGenerationContext(
-                LearnerLevel.COLLEGE, "Engineering", studyPack.getSubject(), List.of()
+                LearnerLevel.COLLEGE,
+                "Engineering",
+                studyPack.getSubject(),
+                List.of(),
+                null,
+                LearnerLevel.SENIOR_HIGH
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
@@ -519,7 +524,7 @@ class ChallengeQuizServiceTest {
         when(challengeQuizQuestionBankService.claimEligibleQuestions(
                 eq(userId),
                 eq(studyPackId),
-                eq(LearnerLevel.COLLEGE),
+                eq(LearnerLevel.SENIOR_HIGH),
                 any(UUID.class),
                 any(),
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT)
@@ -543,7 +548,12 @@ class ChallengeQuizServiceTest {
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
         StudyPackGenerationContext generationContext = new StudyPackGenerationContext(
-                LearnerLevel.COLLEGE, "Engineering", studyPack.getSubject(), List.of()
+                LearnerLevel.COLLEGE,
+                "Engineering",
+                studyPack.getSubject(),
+                List.of(),
+                null,
+                LearnerLevel.SENIOR_HIGH
         );
         List<QuizItem> missedQuestions = buildQuizWithPrefix("Missed", 3);
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
@@ -555,7 +565,7 @@ class ChallengeQuizServiceTest {
         when(challengeQuizQuestionBankService.claimIncorrectQuestions(
                 eq(userId),
                 eq(studyPackId),
-                eq(LearnerLevel.COLLEGE),
+                eq(LearnerLevel.SENIOR_HIGH),
                 any(UUID.class),
                 eq(REDO_MISSED_QUESTION_COUNT),
                 eq(3)
@@ -594,7 +604,7 @@ class ChallengeQuizServiceTest {
         verify(challengeQuizQuestionBankService).claimIncorrectQuestions(
                 eq(userId),
                 eq(studyPackId),
-                eq(LearnerLevel.COLLEGE),
+                eq(LearnerLevel.SENIOR_HIGH),
                 any(UUID.class),
                 eq(REDO_MISSED_QUESTION_COUNT),
                 eq(ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS)
@@ -1152,7 +1162,9 @@ class ChallengeQuizServiceTest {
                 LearnerLevel.COLLEGE,
                 "Engineering",
                 studyPack.getSubject(),
-                List.of()
+                List.of(),
+                null,
+                LearnerLevel.BOARD_EXAM_REVIEW
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
@@ -1185,7 +1197,7 @@ class ChallengeQuizServiceTest {
                 studyPackId,
                 ExamQuestionPoolService.MODE_BOARD_EXAM,
                 12,
-                LearnerLevel.COLLEGE
+                LearnerLevel.BOARD_EXAM_REVIEW
         )).thenReturn(Optional.of(buildQuiz(12)));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

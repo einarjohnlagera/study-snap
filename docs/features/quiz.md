@@ -100,7 +100,7 @@ Shared pattern:
 Server resolution priority:
 
 1. `PRACTICE_WEAK_CONCEPT` — due concepts from `ConceptHealthService.getDueConcepts(...)` route to Adaptive Practice. After Challenge Quiz, eligible banked misses can appear as the secondary `Redo Missed Questions` action.
-2. `REDO_MISSED_QUESTIONS` — when the latest completed session is Challenge Quiz, no genuine weak concepts remain, and at least three same-learner-level owned bank questions have last outcome `INCORRECT`; starts an LLM-free, quota-exempt ordinary Challenge session from those questions.
+2. `REDO_MISSED_QUESTIONS` — when the latest completed session is Challenge Quiz, no genuine weak concepts remain, and at least three owned bank questions at the note's effective curriculum level have last outcome `INCORRECT`; starts an LLM-free, quota-exempt ordinary Challenge session from those questions. Availability counting and claiming use the same resolver-derived level.
 3. `RETRY_REVIEW` — only when no concepts are due, the latest completed session has weak concepts, and the completed mode is Quick Review. Its `Retry Incorrect Questions` label and plain Quick Review route are unchanged; it is distinct from Challenge Quiz's `Redo Missed Questions`.
 4. `REVIEW_PACK` — no due concepts and nothing retryable; route to Challenge Quiz or the source note.
 

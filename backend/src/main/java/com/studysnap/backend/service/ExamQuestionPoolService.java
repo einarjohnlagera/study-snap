@@ -80,7 +80,7 @@ public class ExamQuestionPoolService {
             UUID studyPackId,
             String mode,
             int count,
-            LearnerLevel currentUserLearnerLevel
+            LearnerLevel effectiveCurriculumLevel
     ) {
         String normalizedMode = normalizeMode(mode);
         Optional<ExamQuestionPoolEntity> poolOptional = examQuestionPoolRepository
@@ -98,7 +98,7 @@ public class ExamQuestionPoolService {
         if (!STATUS_READY.equals(pool.getGenerationStatus())) {
             return Optional.empty();
         }
-        if (!sameLearnerLevel(pool.getLearnerLevel(), currentUserLearnerLevel)) {
+        if (!sameLearnerLevel(pool.getLearnerLevel(), effectiveCurriculumLevel)) {
             refreshPool(pool);
             return Optional.empty();
         }
@@ -163,7 +163,9 @@ public class ExamQuestionPoolService {
                 throw new ExamQuestionPoolGenerationFailedException();
             }
             List<QuizItem> poolQuestions = List.copyOf(generated.subList(0, expectedPoolSize));
-            String learnerLevel = learnerLevelName(target.context().learnerLevel());
+            String learnerLevel = learnerLevelName(
+                    StudyPackGenerationContextResolver.effectiveCurriculumLevel(target.context())
+            );
 
             studyPackGenerationTransactionOperations.execute(status -> {
                 ExamQuestionPoolEntity pool = examQuestionPoolRepository.findByIdForUpdate(target.poolId())
@@ -365,12 +367,10 @@ public class ExamQuestionPoolService {
         throw new ExamQuestionPoolGenerationFailedException();
     }
 
-    private boolean sameLearnerLevel(String generatedLearnerLevel, LearnerLevel currentUserLearnerLevel) {
-        String current = learnerLevelName(currentUserLearnerLevel);
-        if (generatedLearnerLevel == null || generatedLearnerLevel.isBlank()) {
-            return current == null;
-        }
-        return generatedLearnerLevel.equals(current);
+    private boolean sameLearnerLevel(String generatedLearnerLevel, LearnerLevel effectiveCurriculumLevel) {
+        return generatedLearnerLevel != null
+                && !generatedLearnerLevel.isBlank()
+                && generatedLearnerLevel.equals(learnerLevelName(effectiveCurriculumLevel));
     }
 
     private String learnerLevelName(LearnerLevel learnerLevel) {

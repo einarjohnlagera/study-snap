@@ -7,10 +7,12 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.repository.ExamQuestionPoolRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.transaction.TransactionException;
@@ -25,6 +27,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -127,6 +131,113 @@ class ExamQuestionPoolServiceTest {
                 ExamQuestionPoolService.MODE_LONG_EXAM,
                 20,
                 LearnerLevel.BOARD_EXAM_REVIEW
+        );
+
+        assertThat(result).isEmpty();
+        assertThat(pool.getGenerationStatus()).isEqualTo("PENDING");
+        verify(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
+    }
+
+    @Test
+    void sampleQuestions_keepsCollegePoolForGradeSchoolReaderWhenNoteIsCollege() {
+        UUID studyPackId = UUID.randomUUID();
+        ExamQuestionPoolEntity pool = pool(studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM, "READY", buildQuiz(48));
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.GRADE_SCHOOL,
+                "General Education",
+                "Science",
+                List.of(),
+                null,
+                LearnerLevel.COLLEGE
+        );
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM
+        )).thenReturn(Optional.of(pool));
+
+        Optional<List<QuizItem>> result = service.sampleQuestions(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                20,
+                StudyPackGenerationContextResolver.effectiveCurriculumLevel(context)
+        );
+
+        assertThat(result).isPresent();
+        verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
+    }
+
+    @Test
+    void sampleQuestions_readerLevelChangeDoesNotInvalidateAuthoredNoteLevelPool() {
+        UUID studyPackId = UUID.randomUUID();
+        ExamQuestionPoolEntity pool = pool(studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM, "READY", buildQuiz(48));
+        StudyPackGenerationContext gradeSchoolReader = new StudyPackGenerationContext(
+                LearnerLevel.GRADE_SCHOOL, null, null, List.of(), null, LearnerLevel.COLLEGE
+        );
+        StudyPackGenerationContext professionalReader = new StudyPackGenerationContext(
+                LearnerLevel.PROFESSIONAL, null, null, List.of(), null, LearnerLevel.COLLEGE
+        );
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM
+        )).thenReturn(Optional.of(pool));
+
+        Optional<List<QuizItem>> first = service.sampleQuestions(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                10,
+                StudyPackGenerationContextResolver.effectiveCurriculumLevel(gradeSchoolReader)
+        );
+        Optional<List<QuizItem>> second = service.sampleQuestions(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                10,
+                StudyPackGenerationContextResolver.effectiveCurriculumLevel(professionalReader)
+        );
+
+        assertThat(first).isPresent();
+        assertThat(second).isPresent();
+        verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
+    }
+
+    @Test
+    void sampleQuestions_noteWithoutAuthoredLevelFallsBackToReaderLevel() {
+        UUID studyPackId = UUID.randomUUID();
+        ExamQuestionPoolEntity pool = pool(studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM, "READY", buildQuiz(48));
+        pool.setLearnerLevel(LearnerLevel.SENIOR_HIGH.name());
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.SENIOR_HIGH, null, null, List.of(), null, null
+        );
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM
+        )).thenReturn(Optional.of(pool));
+
+        Optional<List<QuizItem>> result = service.sampleQuestions(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                20,
+                StudyPackGenerationContextResolver.effectiveCurriculumLevel(context)
+        );
+
+        assertThat(result).isPresent();
+        verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
+    }
+
+    @Test
+    void sampleQuestions_unstampedPoolStillRefreshes() {
+        UUID studyPackId = UUID.randomUUID();
+        ExamQuestionPoolEntity pool = pool(studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM, "READY", buildQuiz(48));
+        pool.setLearnerLevel(null);
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM
+        )).thenReturn(Optional.of(pool));
+
+        Optional<List<QuizItem>> result = service.sampleQuestions(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                20,
+                LearnerLevel.COLLEGE
         );
 
         assertThat(result).isEmpty();
@@ -261,6 +372,56 @@ class ExamQuestionPoolServiceTest {
 
         verify(examQuestionPoolRepository, org.mockito.Mockito.times(2)).save(any(ExamQuestionPoolEntity.class));
         verify(studyPackGenerationTaskDispatcher, org.mockito.Mockito.times(2)).execute(any(Runnable.class));
+    }
+
+    @Test
+    void generatePoolAsync_stampsTheNoteEffectiveCurriculumLevelInsteadOfTheReaderLevel() {
+        UUID poolId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        ExamQuestionPoolEntity pool = pool(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                "PENDING",
+                List.of()
+        );
+        pool.setId(poolId);
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+        studyPack.setTitle("Engineering mechanics");
+        studyPack.setSummary("Summary");
+        studyPack.setKeyConcepts(List.of("Forces"));
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Civil Engineering",
+                "Mechanics",
+                List.of(),
+                null,
+                LearnerLevel.BOARD_EXAM_REVIEW
+        );
+        int poolSize = properties.getPricing().getLongExamPoolSize();
+        when(examQuestionPoolRepository.findByIdForUpdate(poolId)).thenReturn(Optional.of(pool));
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
+        when(quizGenerationService.generateLongExamParallel(
+                anyString(),
+                anyString(),
+                any(),
+                any(),
+                anyInt(),
+                anyString(),
+                eq(context),
+                any()
+        )).thenReturn(buildQuiz(poolSize));
+
+        service.generatePoolAsync(poolId);
+
+        assertThat(pool.getGenerationStatus()).isEqualTo("READY");
+        assertThat(pool.getLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
+        ArgumentCaptor<ExamQuestionPoolEntity> savedPool = ArgumentCaptor.forClass(ExamQuestionPoolEntity.class);
+        verify(examQuestionPoolRepository, org.mockito.Mockito.atLeastOnce()).save(savedPool.capture());
+        assertThat(savedPool.getValue().getLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
     }
 
     @Test
