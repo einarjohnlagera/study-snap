@@ -208,19 +208,22 @@ This section exists so a fresh session doesn't have to re-derive from scratch wh
 
 ### Planned Scope
 
-1. **Authoring metadata editable on `STUDY_PACK_READY` notes** — Domain Context and Note Learner Level become correctable after generation. Content stays locked. **First, because it blocks R4 step 1.**
-2. **Detail-page inline panel exposes both axes** — it currently duplicates Subject/Program/Audience/Tags but omits the two new axes.
-3. **`course_programs` catalog + `program_families`** — 32 values, zero collisions, nullable FK read by nothing.
-4. **Pool/bank learner-level re-keying** — off the reader's level onto the note's. No pre-stamping migration (57/1,244 pools, 4.6%). `PostSessionNextStepService` threaded in the same PR.
-5. **`10-…sql` cleanup** — stale V104/11-row/clearing references.
+_All planned scope has shipped. Remaining before signoff: R4, the two `#986` Known Limitations dispositioned, and the full pre-signoff pressure test._
+
+### Completed in v0.70.0 so far
+
+1. **Authoring metadata editable on `STUDY_PACK_READY` notes, including the detail-page inline panel** — Domain Context and Note Learner Level are correctable after generation while content stays locked.
+2. **Pool/bank learner-level re-keying** — persisted quiz reuse now keys on the note's effective curriculum level, with no pre-stamping migration.
+3. **`course_programs` catalog + `program_families`** — V106 seeds the audited 21-program catalog and one Engineering family, adds nullable note/user FKs without rewriting legacy strings, and makes catalog names authoritative for Exam Hub lookups with fail-open literals.
+4. **`10-…sql` cleanup plus two `AGENTS.md` blocks that were actively misdirecting Codex prompts** — `31f602f4`.
 
 ### Carried over unchanged
 
 **R4 `[CHECKPOINT — due 2026-08-18]`.** Bulk authoring does not begin until step 2 passes. PR 6b (Domain Context onto pool rows) and the authoring-by-inference direction both stay gated behind it.
 
-### Open decision blocking item 3
+### Resolved catalog decisions
 
-**CS / IT / SE.** `08` kept all three as programs; production shows IT 74 notes / SE 4 notes (single subject `Computer Science`) / CS **0 notes**. Recommendation: seed IT, leave CS and SE as user-side values with a NULL FK. Reverses part of `08` on evidence it did not have — needs an owner call.
+The owner ruled 2026-08-04 to seed `Information Technology` and leave `Computer Science` / `Software Engineering` outside the catalog with null FKs. On 2026-08-05 the owner also ruled to seed all three Senior High strands and remove the zero-match `Medical – Surgical Nursing` subject-area alias from PNLE. `Bsed` -> `Education` is the only literal non-exact FK mapping; every legacy string remains unchanged.
 
 ## v0.69.0 — Canonical Knowledge Foundation (Released, base branch `releases/v0.69.0`)
 

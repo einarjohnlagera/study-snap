@@ -39,6 +39,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -75,6 +76,8 @@ class PostSessionNextStepServiceTest {
     private ChallengeQuizQuestionBankRepository challengeQuizQuestionBankRepository;
     @Mock
     private StudyPackGenerationContextResolver generationContextResolver;
+    @Mock
+    private ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
 
     private StudySnapProperties properties;
     private PostSessionNextStepService postSessionNextStepService;
@@ -93,8 +96,11 @@ class PostSessionNextStepServiceTest {
                 noteRepository,
                 progressReportService,
                 challengeQuizQuestionBankService,
-                generationContextResolver
+                generationContextResolver,
+                examGoalCourseProgramProvider
         );
+        lenient().when(examGoalCourseProgramProvider.getCoursePrograms("pnle"))
+                .thenReturn(List.of("Nursing"));
     }
 
     @Test
@@ -411,7 +417,8 @@ class PostSessionNextStepServiceTest {
                 noteRepository,
                 progressReportService,
                 realQuestionBankService,
-                generationContextResolver
+                generationContextResolver,
+                examGoalCourseProgramProvider
         );
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);

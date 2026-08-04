@@ -1,4 +1,7 @@
-import { getServerPublicNoteCount } from "./server-public-notes";
+import {
+  getServerPublicNoteCount,
+  getServerPublicNotesByCoursePrograms,
+} from "./server-public-notes";
 
 const originalFetch = global.fetch;
 
@@ -31,5 +34,23 @@ describe("getServerPublicNoteCount", () => {
     });
 
     await expect(getServerPublicNoteCount()).resolves.toBeNull();
+  });
+
+  it("returns the same PNLE notes after removing the zero-match subject-area alias", async () => {
+    const nursingNote = { id: "nursing-note", courseProgram: "Nursing" };
+    const response = {
+      ok: true,
+      json: async () => ({ items: [nursingNote], total: 1 }),
+    };
+    global.fetch = jest.fn().mockResolvedValue(response);
+
+    const before = await getServerPublicNotesByCoursePrograms([
+      "Nursing",
+      "Medical – Surgical Nursing",
+    ]);
+    const after = await getServerPublicNotesByCoursePrograms(["Nursing"]);
+
+    expect(after).toEqual(before);
+    expect(after).toEqual([nursingNote]);
   });
 });

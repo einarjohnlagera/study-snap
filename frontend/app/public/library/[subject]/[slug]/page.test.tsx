@@ -7,6 +7,7 @@ import {
   getServerPublicNotesBySubjectSlug,
 } from "@/lib/server-public-notes";
 import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
+import { getServerExamSlugForCourseProgram } from "@/lib/server-exam-goal-course-programs";
 
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
@@ -21,6 +22,10 @@ jest.mock("@/lib/server-public-notes", () => ({
   getServerPublicNotesBySubject: jest.fn().mockResolvedValue([]),
   getServerPublicNotesBySubjectSlug: jest.fn().mockResolvedValue([]),
   getServerPublicNotesByCourseProgram: jest.fn().mockResolvedValue([]),
+}));
+
+jest.mock("@/lib/server-exam-goal-course-programs", () => ({
+  getServerExamSlugForCourseProgram: jest.fn().mockResolvedValue(null),
 }));
 
 jest.mock("@/components/notes/shared-note-card", () => ({
@@ -128,6 +133,8 @@ describe("PublicLibrarySeoPage", () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([]);
     (getServerPublicNotesByCourseProgram as jest.Mock).mockReset();
     (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([]);
+    (getServerExamSlugForCourseProgram as jest.Mock).mockReset();
+    (getServerExamSlugForCourseProgram as jest.Mock).mockResolvedValue(null);
     window.sessionStorage.clear();
   });
 
@@ -497,6 +504,7 @@ describe("PublicLibrarySeoPage", () => {
   });
 
   it("shows the exam hub callout banner exactly once, and keeps the course/program section pointed at the filtered library view, when the course/program maps to a hub", async () => {
+    (getServerExamSlugForCourseProgram as jest.Mock).mockResolvedValue("pnle");
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
       { ...baseNote, courseProgram: "Nursing" },

@@ -12,7 +12,6 @@ public final class ExamGoalConfig {
 
     private static final String ARCHITECTURE = "Architecture";
     private static final String NURSING = "Nursing";
-    private static final String MEDICAL_SURGICAL_NURSING = "Medical – Surgical Nursing";
     private static final String EDUCATION = "Education";
     private static final String ACCOUNTANCY = "Accountancy";
 
@@ -28,7 +27,7 @@ public final class ExamGoalConfig {
             new ExamGoalDefinition(
                     "PNLE",
                     "Philippine Nurse Licensure Examination",
-                    List.of(NURSING, MEDICAL_SURGICAL_NURSING)
+                    List.of(NURSING)
             ),
             LET,
             new ExamGoalDefinition(
@@ -47,11 +46,7 @@ public final class ExamGoalConfig {
     private ExamGoalConfig() {
     }
 
-    /**
-     * Keep this config in sync with frontend/lib/exam-hub-config.ts. CourseProgram values must match production DB
-     * values exactly; "Medical – Surgical Nursing" uses U+2013 (en-dash), not a hyphen.
-     */
-    public static List<String> getCoursePrograms(String slug) {
+    public static List<String> getFallbackCoursePrograms(String slug) {
         ExamGoalDefinition definition = EXAMS.get(normalizeSlug(slug));
         return definition == null ? List.of() : definition.coursePrograms();
     }

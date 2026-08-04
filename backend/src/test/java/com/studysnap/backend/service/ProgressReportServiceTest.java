@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -50,6 +51,9 @@ class ProgressReportServiceTest {
     @Mock
     private NoteRepository noteRepository;
 
+    @Mock
+    private ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
+
     private ProgressReportService progressReportService;
 
     @BeforeEach
@@ -59,8 +63,13 @@ class ProgressReportServiceTest {
                 studyPackRepository,
                 conceptHealthRepository,
                 conceptHealthService,
-                noteRepository
+                noteRepository,
+                examGoalCourseProgramProvider
         );
+        lenient().when(examGoalCourseProgramProvider.getCoursePrograms("ale"))
+                .thenReturn(List.of("Architecture"));
+        lenient().when(examGoalCourseProgramProvider.getCoursePrograms("pnle"))
+                .thenReturn(List.of("Nursing"));
     }
 
     @Test
@@ -338,7 +347,7 @@ class ProgressReportServiceTest {
     }
 
     @Test
-    void getProgressReport_includesBothPnleCourseProgramAliasesInGoalSummary() {
+    void getProgressReport_ignoresRemovedPnleSubjectAreaAliasInGoalSummary() {
         UUID userId = UUID.randomUUID();
         UUID nursingNoteId = UUID.randomUUID();
         UUID medSurgNoteId = UUID.randomUUID();
@@ -354,11 +363,6 @@ class ProgressReportServiceTest {
         when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(nursingPack.getId()))).thenReturn(List.of(
                 health(nursingPack.getId(), "Vital Signs", NOW.minusDays(1))
         ));
-        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(medSurgPack.getId()))).thenReturn(List.of());
-        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(
-                userId,
-                List.of(nursingPack.getId(), medSurgPack.getId())
-        )).thenReturn(List.of(health(nursingPack.getId(), "Vital Signs", NOW.minusDays(1))));
 
         ProgressReportResponse response = progressReportService.getProgressReport(userId, "pnle", NOW);
 
@@ -367,11 +371,11 @@ class ProgressReportServiceTest {
                 "EXAM",
                 "PNLE",
                 "Philippine Nurse Licensure Examination",
-                50,
+                100,
                 1,
-                2,
                 1,
-                "Medical Surgical Nursing"
+                0,
+                "Fundamentals"
         ));
     }
 

@@ -8,8 +8,6 @@ export type ExamHubConfig = {
   coursePrograms: readonly string[];
 };
 
-// Keep this config in sync with backend ExamGoalConfig. CourseProgram values must match production DB
-// values exactly; "Medical – Surgical Nursing" uses U+2013 (en-dash), not a hyphen.
 export const EXAM_HUBS = {
   ale: {
     slug: "ale",
@@ -23,7 +21,7 @@ export const EXAM_HUBS = {
     shortName: "PNLE",
     fullName: "Philippine Nurse Licensure Examination (PNLE)",
     description: "Free PNLE reviewer notes and practice quizzes for Philippine nursing board exam takers",
-    coursePrograms: ["Nursing", "Medical – Surgical Nursing"],
+    coursePrograms: ["Nursing"],
   },
   let: {
     slug: "let",

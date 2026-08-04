@@ -30,24 +30,22 @@ describe("getServerPublicStudyPlansByCoursePrograms", () => {
     (globalThis.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [plan("shared", "Nursing")],
+        json: async () => [plan("shared", "Architecture")],
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [plan("shared", "Nursing"), plan("surgical", "Medical – Surgical Nursing")],
+        json: async () => [plan("shared", "Architecture"), plan("nursing", "Nursing")],
       });
 
     const result = await getServerPublicStudyPlansByCoursePrograms([
+      "Architecture",
       "Nursing",
-      "Medical – Surgical Nursing",
     ]);
 
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
-    expect((globalThis.fetch as jest.Mock).mock.calls[0][0]).toContain("courseProgram=Nursing");
-    expect((globalThis.fetch as jest.Mock).mock.calls[1][0]).toContain(
-      "courseProgram=Medical+%E2%80%93+Surgical+Nursing",
-    );
-    expect(result.map((item) => item.id)).toEqual(["shared", "surgical"]);
+    expect((globalThis.fetch as jest.Mock).mock.calls[0][0]).toContain("courseProgram=Architecture");
+    expect((globalThis.fetch as jest.Mock).mock.calls[1][0]).toContain("courseProgram=Nursing");
+    expect(result.map((item) => item.id)).toEqual(["shared", "nursing"]);
   });
 
   it("keeps successful matches when another exact-match lookup fails", async () => {
@@ -55,14 +53,14 @@ describe("getServerPublicStudyPlansByCoursePrograms", () => {
       .mockRejectedValueOnce(new Error("timeout"))
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [plan("surgical", "Medical – Surgical Nursing")],
+        json: async () => [plan("nursing", "Nursing")],
       });
 
     await expect(getServerPublicStudyPlansByCoursePrograms([
+      "Architecture",
       "Nursing",
-      "Medical – Surgical Nursing",
     ])).resolves.toEqual([
-      plan("surgical", "Medical – Surgical Nursing"),
+      plan("nursing", "Nursing"),
     ]);
   });
 
@@ -76,14 +74,30 @@ describe("getServerPublicStudyPlansByCoursePrograms", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [plan("surgical", "Medical – Surgical Nursing")],
+        json: async () => [plan("nursing", "Nursing")],
       });
 
     await expect(getServerPublicStudyPlansByCoursePrograms([
+      "Architecture",
+      "Nursing",
+    ])).resolves.toEqual([
+      plan("nursing", "Nursing"),
+    ]);
+  });
+
+  it("returns the same PNLE sets after removing the zero-match subject-area alias", async () => {
+    (globalThis.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => [plan("pnle", "Nursing")] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [plan("pnle", "Nursing")] });
+
+    const before = await getServerPublicStudyPlansByCoursePrograms([
       "Nursing",
       "Medical – Surgical Nursing",
-    ])).resolves.toEqual([
-      plan("surgical", "Medical – Surgical Nursing"),
     ]);
+    const after = await getServerPublicStudyPlansByCoursePrograms(["Nursing"]);
+
+    expect(after).toEqual(before);
+    expect(after.map((item) => item.id)).toEqual(["pnle"]);
   });
 });
