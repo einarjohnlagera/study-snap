@@ -2,7 +2,7 @@
 
 ## v0.70.0 - Canonical Knowledge Completion
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: finish what `v0.69.0` started — make the canonical authoring axes correctable after generation, give programs a real catalog, and stop question pools being invalidated by whoever happens to be reading.
 
