@@ -69,6 +69,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_GENERATED_NOTE_OVERVIEW_WORDS = 90;
     private static final int MAX_GENERATED_NOTE_KEY_IDEA_WORDS = 40;
     private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
+    // Quick Recall is bounded by characters rather than words. A whitespace word count measures
+    // the wrong thing on notation -- "Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2)" is ~15 "words" of
+    // pure symbols -- so a formula plus its variable definitions could exceed the prose ceiling
+    // while staying visually compact and well under the schema's own length bound.
+    private static final int MAX_GENERATED_NOTE_ITEM_CHARS = 240;
     private static final int COMPANION_FAQ_MIN_ITEMS = 3;
     private static final int COMPANION_FAQ_MAX_ITEMS = 6;
     private static final int COMPANION_MENTOR_TIP_MIN_ITEMS = 1;
@@ -707,7 +712,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private String buildNoteGenerationDeveloperPrompt() {
         return promptResources.noteGenerationDeveloperPromptTemplate()
-                .replace("{MAX_WORDS}", String.valueOf(MAX_GENERATED_NOTE_WORDS));
+                .replace("{MAX_WORDS}", String.valueOf(MAX_GENERATED_NOTE_WORDS))
+                .replace("{MAX_ITEM_CHARS}", String.valueOf(MAX_GENERATED_NOTE_ITEM_CHARS));
     }
 
     private ArrayNode buildAdaptivePracticeInputMessages(
@@ -1150,7 +1156,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         arraySchema.putObject("items")
                 .put("type", "string")
                 .put("minLength", 1)
-                .put("maxLength", 240);
+                .put("maxLength", MAX_GENERATED_NOTE_ITEM_CHARS);
         return arraySchema;
     }
 
@@ -2361,7 +2367,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 2,
                 "The note generation service returned invalid why-it-matters content. Please try again."
         );
-        List<String> quickRecall = normalizeGeneratedNoteItems(
+        List<String> quickRecall = normalizeQuickRecallItems(
                 generatedNote.quickRecall(),
                 3,
                 "The note generation service returned invalid quick recall content. Please try again."
@@ -2473,6 +2479,24 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .map(value -> normalizeGeneratedNoteText(value, 1, MAX_GENERATED_NOTE_ITEM_WORDS, errorMessage))
                 .toList();
         if (normalized.size() < minItems) {
+            throw invalidOutput(errorMessage);
+        }
+        return normalized;
+    }
+
+    private List<String> normalizeQuickRecallItems(List<String> values, int minItems, String errorMessage) {
+        List<String> normalized = sanitizeStringList(values).stream()
+                .map(value -> normalizeGeneratedNoteChars(value, MAX_GENERATED_NOTE_ITEM_CHARS, errorMessage))
+                .toList();
+        if (normalized.size() < minItems) {
+            throw invalidOutput(errorMessage);
+        }
+        return normalized;
+    }
+
+    private String normalizeGeneratedNoteChars(String value, int maxChars, String errorMessage) {
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(value);
+        if (normalized == null || normalized.length() > maxChars) {
             throw invalidOutput(errorMessage);
         }
         return normalized;

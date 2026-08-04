@@ -43,6 +43,8 @@ Rules:
 - 3 to 5 bullets
 - Must include: dates, names, key terms, formulas, or precise definitions
 - Format each bullet as: Term — value or definition
+- Keep each bullet at or under {MAX_ITEM_CHARS} characters, counting the formula and any variable definitions together
+- If a formula plus all its variable definitions will not fit, split it across two bullets rather than truncating either
 - These are the facts to drill before an exam
 
 General

@@ -86,7 +86,7 @@ class OpenAiLlmStudyPackServiceTest {
                 "Developer prompt with {QUIZ_COUNT} questions. Use Domain for terminology and Note learner level for depth. {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 objectMapper.createObjectNode(),
                 "Note generation system prompt",
-                "Note generation developer prompt. Use Domain for terminology and Note learner level for depth. Built for studying, not just exploring information. Max {MAX_WORDS} words.",
+                "Note generation developer prompt. Use Domain for terminology and Note learner level for depth. Built for studying, not just exploring information. Max {MAX_WORDS} words. Quick Recall bullets: at or under {MAX_ITEM_CHARS} characters.",
                 "Companion system prompt",
                 "Companion developer prompt {REQUESTED_SECTIONS} {COLLECTION_TITLE} {COLLECTION_DESCRIPTION} {COURSE_PROGRAM} {STRUCTURE_CONTEXT}",
                 "Challenge quiz system prompt",
@@ -856,6 +856,119 @@ class OpenAiLlmStudyPackServiceTest {
                 assertThat(appException.getMessage()).isEqualTo(
                     "Study pack generation failed. Please try again in a moment.");
             });
+    }
+
+    @Test
+    void generateNoteFromTopic_acceptsAFormulaQuickRecallItemThatExceedsTheProseWordCeiling() throws JsonProcessingException {
+        // Reproduces the reported LLM_INVALID_OUTPUT failure verbatim (Civil Engineering / "Weirs",
+        // logged 2026-08-03). This item is 199 characters — valid under the schema — but 38
+        // whitespace-delimited "words", which the shared 28-word prose ceiling used to reject.
+        // It is a formula followed by definitions of its variables, i.e. correct content.
+        String formulaItem = "Discharge formula — Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2) for sharp-crested weirs, "
+                + "where Q is flow, C_d is discharge coefficient, L is crest length, g is gravity acceleration, "
+                + "H is head over crest";
+        assertThat(formulaItem.length()).isLessThanOrEqualTo(240);
+        assertThat(formulaItem.split("\\s+")).hasSizeGreaterThan(28);
+
+        stubResponsesCall();
+        when(responseSpec.body(String.class))
+                .thenReturn(generatedQuizResponseJson(generatedNotePayloadWithQuickRecall(formulaItem)));
+
+        String content = service.generateNoteFromTopic(
+                "Weirs",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+        );
+
+        assertThat(content).contains("Discharge formula");
+    }
+
+    @Test
+    void generateNoteFromTopic_rejectsAQuickRecallItemOverTheCharacterCeiling() throws JsonProcessingException {
+        // The character bound still has to bite, otherwise dropping the word count would leave
+        // Quick Recall unbounded on the backend side.
+        String overlong = "Term — " + "x".repeat(240);
+        assertThat(overlong.length()).isGreaterThan(240);
+
+        stubResponsesCall();
+        when(responseSpec.body(String.class))
+                .thenReturn(generatedQuizResponseJson(generatedNotePayloadWithQuickRecall(overlong)));
+
+        assertThatThrownBy(() -> service.generateNoteFromTopic(
+                "Weirs",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+        )).hasMessageContaining("invalid quick recall content");
+    }
+
+    @Test
+    void generateNoteFromTopic_stillRejectsAnOverlongCoreDetailsItem() throws JsonProcessingException {
+        // coreDetails and whyItMatters are prose and deliberately keep the 28-word ceiling.
+        String wordyProse = "word ".repeat(40).trim();
+        ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
+        payload.putArray("coreDetails")
+                .add(wordyProse)
+                .add("Second Law: net force equals mass times acceleration.")
+                .add("Third Law: for every action there is an equal and opposite reaction.");
+
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        assertThatThrownBy(() -> service.generateNoteFromTopic(
+                "Weirs",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+        )).isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void noteGenerationPromptStatesTheQuickRecallCharacterBound() throws JsonProcessingException {
+        // The 4-of-5 sampled-failure rate came from the model never being told the bound it was
+        // judged against. If this placeholder stops being substituted, the prompt silently ships
+        // a literal "{MAX_ITEM_CHARS}" and the bound becomes guesswork again.
+        stubResponsesCall();
+        when(responseSpec.body(String.class))
+                .thenReturn(generatedQuizResponseJson(generatedNotePayloadWithQuickRecall("First Law — law of inertia")));
+
+        service.generateNoteFromTopic(
+                "Weirs",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(requestCaptor.getValue())
+                .contains("240 characters")
+                .doesNotContain("{MAX_ITEM_CHARS}");
+    }
+
+    @Test
+    void noteGenerationPromptResourceDeclaresTheQuickRecallCharacterPlaceholder() throws Exception {
+        // The test above proves substitution works against a stubbed template. This one proves the
+        // real prompt actually asks for the bound -- without it, deleting the line from the
+        // resource file would leave the model uninstructed and every test still green.
+        String template = new String(
+                new ClassPathResource("prompts/study-pack-v1/note-generation-developer.txt")
+                        .getInputStream().readAllBytes(),
+                StandardCharsets.UTF_8
+        );
+        assertThat(template).contains("{MAX_ITEM_CHARS}");
+    }
+
+    private ObjectNode generatedNotePayloadWithQuickRecall(String firstQuickRecallItem) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("title", "Discharge Over Sharp-Crested Weirs");
+        payload.put("overview", "Weirs are hydraulic structures used to measure and control open-channel flow. Their discharge depends on head and crest geometry.");
+        payload.put("keyIdea", "Discharge over a weir varies with the three-halves power of the head.");
+        payload.putArray("coreDetails")
+                .add("Sharp-crested weirs are common flow-measurement structures.")
+                .add("Discharge coefficient depends on crest geometry and approach conditions.")
+                .add("Head is measured upstream of the drawdown zone.");
+        payload.putArray("whyItMatters")
+                .add("Weir sizing governs channel capacity and flood safety.")
+                .add("Board exams test discharge computation directly.");
+        payload.putArray("quickRecall")
+                .add(firstQuickRecallItem)
+                .add("Head — depth of flow over the crest")
+                .add("Crest length — L in the discharge equation");
+        return payload;
     }
 
     @Test
