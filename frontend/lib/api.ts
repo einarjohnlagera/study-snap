@@ -1466,12 +1466,23 @@ export type UpdateStudyPackMetadataRequest = {
   subject?: string | null;
 };
 
+/**
+ * PUT /notes/{id} is a FULL REPLACE, not a merge — `updateNote` sends this object verbatim and the
+ * backend writes every field unconditionally, so an omitted key persists as null.
+ *
+ * `domainContext` and `learnerLevel` are therefore deliberately NOT optional. Two update call sites
+ * on the note detail page omitted them and silently wiped both axes off any note they touched; making
+ * the fields required turns that from a runtime data loss into a compile error at every present and
+ * future caller. Same reasoning that removed `UpsertNoteRequest`'s silent-null convenience constructor
+ * on the backend in v0.69.0 — an interface that hides a field from its callers will eventually lose it.
+ * Pass an explicit `null` where the caller genuinely means "no value".
+ */
 export type UpsertNoteRequest = {
   title?: string | null;
   subject?: string | null;
   courseProgram?: string | null;
-  domainContext?: DomainContext | null;
-  learnerLevel?: LearnerLevel | null;
+  domainContext: DomainContext | null;
+  learnerLevel: LearnerLevel | null;
   tags?: string[];
   targetProfileType?: NoteTargetProfileType | null;
   content: string;

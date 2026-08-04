@@ -1198,7 +1198,9 @@ export function NoteEditorPageClient({
         actionVariant={hasGeneratedStudyPack ? "outline" : "default"}
         subjectSuggestions={subjectSuggestions}
         courseProgramSuggestions={availableCourseProgramSuggestions}
-        resolvedCourseProgram={normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram)}
+        resolvedCourseProgram={isEditMode
+          ? normalizeOptional(draft.courseProgram)
+          : normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram)}
         showTargetProfileTypeField={showTargetProfileTypeField}
         showAuthoringMetadataFields={showTargetProfileTypeField}
         targetProfileTypeHelperText={targetProfileTypeHelperText}

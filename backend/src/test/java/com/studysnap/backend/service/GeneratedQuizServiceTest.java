@@ -248,6 +248,43 @@ class GeneratedQuizServiceTest {
     }
 
     @Test
+    void generate_leavesTargetLearnerLevelNullWhenTheTeacherChoseNoTargetLevel() {
+        // targetLearnerLevel means "the level the teacher last explicitly targeted". NULL means "never
+        // targeted" and is load-bearing: findByNoteIdAndTargetLearnerLevelIsNotNullOrderByGeneratedAtDesc
+        // exists to encode it, and NoteService surfaces it as lastUsedTargetLearnerLevel, which the
+        // teacher UI pre-fills from. Writing effectiveCurriculumLevel here floored it to COLLEGE and made
+        // the UI pre-fill a level nobody chose, locking every later generation to it.
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        when(generationContextResolver.resolve(userId, note)).thenReturn(
+                new StudyPackGenerationContext(
+                        null,
+                        "Education",
+                        null,
+                        List.of(),
+                        null,
+                        null
+                )
+        );
+        when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
+                .thenReturn(buildQuestions());
+        when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        generatedQuizService.generate(noteId.toString(), userId, 10, null);
+
+        ArgumentCaptor<GeneratedQuizEntity> quizCaptor = ArgumentCaptor.forClass(GeneratedQuizEntity.class);
+        verify(generatedQuizRepository).save(quizCaptor.capture());
+        assertThat(quizCaptor.getValue().getTargetLearnerLevel()).isNull();
+    }
+
+    @Test
     void generate_usesNoteAuthoredLearnerLevelWhenTargetLevelIsMissing() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();

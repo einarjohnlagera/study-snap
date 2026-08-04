@@ -581,6 +581,10 @@ describe("OnboardingPage", () => {
     expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion");
     expect(createNote).toHaveBeenCalledWith({
       title: "Newton's Laws of Motion",
+      // Explicit nulls, not omissions: UpsertNoteRequest requires both authoring axes so a caller
+      // cannot silently drop them (PUT is a full replace and omission persists as null).
+      domainContext: null,
+      learnerLevel: null,
       targetProfileType: "STUDENT",
       content: "Edited Newton note content for onboarding so the study pack can start.",
     });

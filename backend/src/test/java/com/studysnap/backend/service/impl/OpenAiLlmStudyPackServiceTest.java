@@ -389,9 +389,40 @@ class OpenAiLlmStudyPackServiceTest {
 
             assertThat(invokeBuildSubjectSuggestionGuidanceBlock(context))
                     .contains("For a school-level curriculum")
-                    .contains("Because the curriculum level is school-level")
+                    .contains("Because the note is authored at a school-level curriculum")
                     .doesNotContain("For college, board-review, professional, or personal-learning curricula");
         }
+    }
+
+    @Test
+    void buildSubjectSuggestionGuidance_isIndependentOfTheReaderLevelWhenTheNoteHasNone() throws Exception {
+        // This block is concatenated into the STATIC user prompt, so the reader must not influence it.
+        // Before the fix it called effectiveCurriculumLevel, which falls back reader -> COLLEGE, so two
+        // users generating from byte-identical notes received different subject guidance. Every existing
+        // test supplied a note level, where old and new code agree -- the defect lived entirely in the
+        // null case, which is ~every production row.
+        String schoolReader = invokeBuildSubjectSuggestionGuidanceBlock(new StudyPackGenerationContext(
+                LearnerLevel.GRADE_SCHOOL, "Civil Engineering", null, List.of(), null, null));
+        String collegeReader = invokeBuildSubjectSuggestionGuidanceBlock(new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Civil Engineering", null, List.of(), null, null));
+
+        assertThat(schoolReader).isEqualTo(collegeReader);
+        // With no authored level, neither list may be silently chosen for the note -- emit both.
+        assertThat(schoolReader)
+                .contains("For a school-level curriculum")
+                .contains("For college, board-review, professional, or personal-learning curricula")
+                .doesNotContain("Because the note is authored at a school-level curriculum");
+    }
+
+    @Test
+    void buildSubjectSuggestionGuidance_keepsTheStrandGuardOnTheDomainNotTheReaderLevel() throws Exception {
+        // A legacy 'Senior High – STEM' note with no authored level, read by a COLLEGE user, previously
+        // lost the strand guard entirely and would echo "STEM" as its subject -- exactly the row class
+        // V104/V105 exist to fix. The guard is data-driven and must survive any reader.
+        String block = invokeBuildSubjectSuggestionGuidanceBlock(new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Senior High – STEM", null, List.of(), null, null));
+
+        assertThat(block).contains("If the domain above is a K-12 strand or track");
     }
 
     @Test
