@@ -64,7 +64,10 @@ class CourseProgramCatalogMigrationTest {
                 String migration = new ClassPathResource(
                         "db/migration/V106__course_program_catalog.sql"
                 ).getContentAsString(StandardCharsets.UTF_8);
-                statement.execute(migration);
+                // Guard the deploy-log evidence block against a silent future deletion: it is the only
+                // thing that surfaces a zero-match backfill, which would otherwise report success.
+                assertThat(migration).contains("RAISE NOTICE");
+                statement.execute(stripInformationalPlPgSqlBlock(migration));
 
                 assertThat(count(statement, PROGRAM_FAMILIES_TABLE)).isEqualTo(1);
                 assertThat(count(statement, COURSE_PROGRAMS_TABLE)).isEqualTo(21);
@@ -79,6 +82,17 @@ class CourseProgramCatalogMigrationTest {
                 assertThat(readCoursePrograms(statement, USERS_TABLE)).isEqualTo(userStringsBefore);
             }
         }
+    }
+
+    /**
+     * H2 has no PL/pgSQL, so the migration's trailing {@code DO $$ ... $$} block cannot be parsed here.
+     * It only emits {@code RAISE NOTICE} backfill counts for the deploy log and asserts nothing, so
+     * dropping it costs this test no coverage — every count it reports is asserted directly against the
+     * migrated tables below.
+     */
+    private String stripInformationalPlPgSqlBlock(String migration) {
+        int blockStart = migration.indexOf("DO $$");
+        return blockStart < 0 ? migration : migration.substring(0, blockStart);
     }
 
     private void seedFixtures(Statement statement) throws Exception {

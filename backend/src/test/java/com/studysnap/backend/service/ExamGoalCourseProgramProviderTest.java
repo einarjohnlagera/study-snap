@@ -22,6 +22,8 @@ class ExamGoalCourseProgramProviderTest {
     private static final String NURSING = "Nursing";
     private static final String EDUCATION = "Education";
     private static final String ACCOUNTANCY = "Accountancy";
+    // Stands in for a row a curator adds after boot: it must become visible without a redeploy.
+    private static final String CURATOR_ADDED_PROGRAM = "Midwifery";
 
     @Mock
     private CourseProgramCatalogRepository courseProgramCatalogRepository;
@@ -66,5 +68,27 @@ class ExamGoalCourseProgramProviderTest {
         ExamGoalCourseProgramProvider provider = new ExamGoalCourseProgramProvider(courseProgramCatalogRepository);
 
         assertThat(provider.getCoursePrograms(PNLE)).containsExactly(NURSING);
+    }
+
+    @Test
+    void getCoursePrograms_recoversAfterTransientCatalogFailure() {
+        when(courseProgramCatalogRepository.findNamesByExamGoalSlug(PNLE))
+                .thenThrow(new IllegalStateException("catalog unavailable"))
+                .thenReturn(List.of(NURSING, CURATOR_ADDED_PROGRAM));
+        ExamGoalCourseProgramProvider provider = new ExamGoalCourseProgramProvider(courseProgramCatalogRepository);
+
+        assertThat(provider.getCoursePrograms(PNLE)).containsExactly(NURSING);
+        assertThat(provider.getCoursePrograms(PNLE)).containsExactly(NURSING, CURATOR_ADDED_PROGRAM);
+    }
+
+    @Test
+    void getCoursePrograms_recoversAfterEmptyCatalogRead() {
+        when(courseProgramCatalogRepository.findNamesByExamGoalSlug(PNLE))
+                .thenReturn(List.of())
+                .thenReturn(List.of(NURSING, CURATOR_ADDED_PROGRAM));
+        ExamGoalCourseProgramProvider provider = new ExamGoalCourseProgramProvider(courseProgramCatalogRepository);
+
+        assertThat(provider.getCoursePrograms(PNLE)).containsExactly(NURSING);
+        assertThat(provider.getCoursePrograms(PNLE)).containsExactly(NURSING, CURATOR_ADDED_PROGRAM);
     }
 }

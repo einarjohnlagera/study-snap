@@ -2057,7 +2057,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       </select>
                       <p className="text-xs text-foreground/60">
                         Controls how the AI authors the note&apos;s academic domain and framing. Applies to
-                        the next generation, not the existing Study Pack.
+                        the next generation only — quiz and exam questions already generated for this note
+                        keep their original domain.
                       </p>
                     </div>
 
