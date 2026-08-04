@@ -115,7 +115,73 @@ questions exist).
 
 ### Noted, out of scope
 
-`unstamped = 256` — roughly 20% of READY pools have a NULL `learner_level` and therefore already
-fail `sameLearnerLevel` and regenerate on access **today**, before any PR 6 change. Pre-existing
-and unaffected by the re-keying, but it is a standing regeneration cost nobody has costed. Worth
-its own look; not part of PR 6a.
+`unstamped = 256` — roughly 20% of READY pools have a NULL `learner_level`.
+
+> **CORRECTED 2026-08-05, after PR 6a (#986) shipped. The paragraph below originally claimed all 256
+> "already fail `sameLearnerLevel` and regenerate on access today, before any PR 6 change." That is
+> wrong for 40 of them, and the error mattered.**
+>
+> `sameLearnerLevel` used to receive the **raw nullable reader level**, and its `generatedLearnerLevel
+> IS NULL → return current == null` branch meant a NULL pool level *matched* a NULL user level and
+> sampled without refreshing. So the pools owned by users whose profile level is null were **not**
+> regenerating today — they were matching. `effectiveCurriculumLevel` never returns null, so that
+> pairing now mismatches and takes the lazy refresh path. Measured 2026-08-04 during #986's
+> pre-commit audit: **40 READY pools and 15 bank rows** in that null-by-null cohort.
+>
+> The 40 pools self-heal — one refresh stamps them `COLLEGE` and they match thereafter. The 15 bank
+> rows do not, and are permanently unclaimable for their owners. Both are recorded in `RELEASES.md`
+> v0.70.0 under Known Limitations.
+>
+> **Do not cost the 256-pool question off the original sentence.** `12-pool-bank-relevel-impact.sql`
+> compared note level against reader level and never covered the null-by-null cell at all, so that
+> cohort sits outside the 57 / 5 headline figures as well.
+
+The remaining unstamped pools are a pre-existing regeneration cost that nobody has sized, unaffected
+by the re-keying. Worth its own look; not part of PR 6a.
+
+---
+
+## Part 3 — the seed list itself (Query `16`, 2026-08-05)
+
+`15` recorded Query A's *findings* but never its *output*, so the exact program strings did not exist
+anywhere in the repo and PR 5 could not be written from this document. `16-program-vocabulary-seed-followup.sql`
+closed that, and added `note_collections.course_program` — a third source (`V76`) that `11` never read.
+
+**Results:**
+
+- **32 values, unchanged.** Collections contributed **no** new values: every collection-side program
+  (Education, Architecture, Accountancy, Nursing, Information Technology) was already in the notes+users set.
+- **Zero collisions across all three sources** (Query C, no rows). The finding that makes PR 5 a curated
+  seed rather than a reconciliation project holds four weeks on.
+- **Exactly four U+2013 values** (Query B): `Senior High – ABM` / `– STEM` / `– HUMSS`, and
+  `Special Needs Education – Generalist`. FINDING 1's count was right.
+
+### FINDING 4 — `Medical – Surgical Nursing` is a phantom
+
+It matches **0 notes, 0 users, 0 collections**. It exists only in `ExamGoalConfig:15` and
+`frontend/lib/exam-hub-config.ts:26` as PNLE's second course/program, under a comment in both files
+asserting that "CourseProgram values must match production DB values exactly." It never has.
+
+`RELEASES.md:253` cites PNLE's two programs as the worked example of the Exam Hub's multi-program
+dedupe — a case that cannot occur. The value is also a PNLE board *subject area* rather than a degree
+program, failing the catalog's classification rule on the same grounds as `Biology`.
+
+**Owner ruled 2026-08-05: drop it.** PNLE maps to `Nursing` only. Behavior-preserving in effect, since
+the dropped value matched nothing.
+
+### The seed decisions, ratified 2026-08-05
+
+The full 32-row table, the 21/11 seed/exclude split, and the reasons are in
+`docs/codex-prompts/v0.70.0-course-programs-catalog.md`. Recorded here so they survive that file being
+untracked:
+
+- **Seed the three `Senior High – …` strands.** Closes the call `11`'s Query D left open. They are
+  curriculum tracks, not bare levels: `V105` deliberately left their `domain_context` NULL so the strand
+  keeps reaching the prompt as the effective authoring domain, and excluding them would leave the value
+  that actually reaches generation outside the catalog. `Grade School` / `Junior High` / `High School`
+  stay excluded as bare levels.
+- **Seed `Radiologic Technology` and `Special Needs Education – Generalist`** despite zero notes. The
+  `Computer Science` / `Software Engineering` exclusion turned on the contested computing space, not on
+  note count, so it does not generalise to two unambiguous degree programs.
+- **`Bsed` → `Education` is the only non-exact FK mapping**, as an enumerated single-row alias. The
+  stored string stays `Bsed`.

@@ -941,23 +941,27 @@ Ratified 2026-07-31 (Company Redefinition Phase 4, considered and narrowed 2026-
 
 ### Learning Profile Metadata Rule
 
+> **Superseded in part by `docs/architecture/ADR-001-canonical-knowledge-architecture.md` (Accepted 2026-08-03) — read that ADR before changing anything in this block.** Two rules below no longer describe the system: `learnerLevel` is **not** exclusively a `User` field (`v0.69.0` shipped `notes.learner_level`, the note's authored depth, which outranks the reader's), and `notes.courseProgram` is **not** the generation source of truth (`notes.domain_context` is, with `courseProgram` as its fallback). The metadata hierarchy is now four independent axes, not one shelf. Resolution belongs to `StudyPackGenerationContextResolver.effectiveAuthoringDomain()` and `.effectiveCurriculumLevel()`; no service reads these fields directly. **Do not restore either retired rule** — the single-axis model they describe is the defect the ADR exists to fix.
+
 - `learnerLevel` lives on `User`, not on Note or a separate learner-profile table.
 - `User.courseProgram` remains the profile-level default for new notes.
 - Notes may also store an optional note-level `courseProgram`, defaulted from the user's profile and editable per note.
-- For Study Pack generation, `notes.courseProgram` is the source of truth when present. Fall back to `users.courseProgram` only when the note has no saved course/program.
+- For Study Pack generation the authoring domain resolves `notes.domainContext` -> `notes.courseProgram` -> `users.courseProgram`, and the curriculum level resolves `notes.learnerLevel` -> `users.learnerLevel` -> `COLLEGE`. The level chain never reads `courseProgram`.
 - Metadata hierarchy should stay:
   - `courseProgram` -> top-level track/domain
   - `subject` -> reusable academic topic
   - `tags` -> fine-grained keywords
 - `learnerLevel` is required during onboarding but remains nullable in storage for pre-existing users.
 - `courseProgram` is required during onboarding and later Learning Profile saves, but remains nullable in storage for pre-existing users until they update it.
-- Backend generation context may carry `learnerLevel`, `courseProgram`, `subject`, and `tags`. Static note and Study Pack content uses course/program for calibration; learner level remains available for quizzes, exams, and exam-pool pre-warm.
+- Backend generation context carries `learnerLevel` (the reader's), `courseProgram`, `subject`, `tags`, `domainContext`, and `noteLearnerLevel`. Static note and Study Pack content is calibrated by the **effective Domain Context plus the note's authored level** — never by the reader's level. Quizzes and exams take both as the curriculum floor: a lower reader level may soften wording and scaffolding but must never lower curriculum, terminology, or difficulty. Question pools and the Challenge bank key on the effective curriculum level, not the reader's (`v0.70.0`).
 
 ### LLM Context Builder Rule
 
+> **Superseded in part by ADR-001 (Accepted 2026-08-03).** The content-context builder no longer "omits learner level and uses course/program": since `v0.69.0` it calibrates from the effective Domain Context plus the note's authored level. What the ADR did **not** retire is the clause that matters most — shared/static content must never be calibrated from the **reader's** level.
+
 - All LLM calls must resolve context through `StudyPackGenerationContextResolver` (backend service).
-- Static note and Study Pack content must call the content-context builder, which omits learner level and uses course/program to calibrate depth, vocabulary, terminology, and examples.
-- Quiz and exam prompts must call `buildLearnerContextBlock()`, which includes learner level and course/program for taker-specific difficulty plus domain context.
+- Static note and Study Pack content must call the content-context builder, which calibrates depth, vocabulary, terminology, and examples from the effective Domain Context plus the note's authored level. It must never calibrate from the reader's learner level.
+- Quiz and exam prompts must call `buildLearnerContextBlock()`, which carries the effective domain and curriculum floor plus the reader's level for scaffolding only.
 - Never inline raw learner-level or course/program formatting in individual prompt builders.
 - Learner level defaults to `COLLEGE` for quiz/exam prompts when the user has no saved `learnerLevel`; note and Study Pack content generation must also work when context learner level is null.
 - Course/program is omitted from the context block when the user has no saved `courseProgram`.
@@ -1043,9 +1047,9 @@ Keep app shell grouping:
   - mobile should keep a floating primary generate button visible while scrolling
   - `/notes/new` stays in create mode with `Save` + `Generate`
   - `/notes/{id}/edit` for Draft notes stays in edit mode with `Save Changes`, `Cancel`, and `Generate`
-  - `/notes/{id}/edit` for Study Pack Ready notes keeps metadata editing only and shows `Save Changes`, `Cancel`, and `Make a Copy`
+  - `/notes/{id}/edit` for Study Pack Ready notes shows `Save Changes`, `Cancel`, and `Make a Copy`. **Note that neither the backend nor this route enforces the content lock** — `NoteService.update` has no status guard and the editor renders an unlocked textarea. The lock is an entry-point convention: Note Detail's `Edit` action routes ready notes to the inline panel instead. The route stays reachable by direct URL deliberately (it is the escape hatch that made ADR-001's R4 verification runnable); do not add a guard without an explicit decision. See `docs/features/notes.md`.
   - edit routes must render `Edit Note` copy, not create-note copy
-  - note editor metadata fields are `title`, `courseProgram`, `subject`, `tags`, and `content`
+  - note editor metadata fields are `title`, `courseProgram`, `subject`, `tags`, `content`, and — for Teacher/Admin authors — `targetProfileType`, `domainContext`, and `learnerLevel`
   - subject suggestions must come from persisted note subjects and still allow custom typed values
   - tags remain optional and should include helper guidance rather than hard validation pressure
 - Generate button wording may vary by `profileType` (`Generate`, `Practice`, `Create Quiz`) but must still hit the same Study Pack generation flow.
@@ -1059,7 +1063,8 @@ Keep app shell grouping:
 - Do not use browser-native `window.confirm` or `alert` for product dialogs.
 - Note Detail edit rules:
   - `DRAFT`: Edit routes to full editor (content + OCR)
-  - `STUDY_PACK_READY`: Edit stays on Note Detail and allows only title/courseProgram/subject/tags
+  - `STUDY_PACK_READY`: Edit stays on Note Detail. Every owner may edit title/courseProgram/subject/tags; **Teacher/Admin authors may additionally edit Target Audience, Domain Context, and Note Learner Level** (`v0.70.0`, gated by `isTeacherSelectableNoteTarget` — the same gate the Note Editor uses). Correcting either authoring axis shapes *future* generation only and never touches the existing Study Pack. Note **content** stays locked; that is the lock this rule protects.
+  - Because `PUT /notes/{id}` is a full replace, any surface that hides a field must send the note's stored value back untouched rather than an empty draft. Hiding a field must never null it.
   - While inline metadata edit is active, hide/disable share/visibility/learning actions.
 - Share flow for private notes:
   - click Share -> show private-note modal

@@ -15,7 +15,31 @@
 --   1. THIS FILE — list the notes for review.
 --   2. The owner/curator classifies each one as JUNIOR_HIGH or SENIOR_HIGH from its ACTUAL
 --      curriculum and content, or marks it unclassifiable. Never from the old label.
---   3. The V104 migration applies that explicit note-ID → level mapping.
+--   3. The migration applies that explicit note-ID → level mapping.
+--
+-- ============================================================================
+-- HISTORICAL — this file has been executed. Corrected 2026-08-05.
+-- ============================================================================
+-- Three statements below were written before the work ran and are now wrong. They are corrected
+-- here rather than deleted, because the reasoning is still the record of why the pass was shaped
+-- the way it was.
+--
+--   * "V104" -> the High School mapping shipped as **V105**. V104 was the 27 pure-level
+--     Grade School / Junior High notes (PR 4a); V105 applied this file's curator mapping (PR 4b).
+--   * "Expected: 11 rows" -> **10**. One of the 11 audited notes was deleted as a duplicate
+--     between the 2026-08-03 audit and the migration. Confirmed by the 2026-08-05 production read
+--     (`16-program-vocabulary-seed-followup.sql`, Query A): `High School` = 10 notes, 7 users.
+--     Of those 10, V105 classified 4 (3 JUNIOR_HIGH + 1 SENIOR_HIGH) and 6 remain deliberately
+--     unclassified with both new axes NULL.
+--   * "course_program := cleared" -> **course_program is never cleared.** ADR-001's second
+--     Legacy-data corollary (added 2026-08-03, after this file was written) deferred clearing out
+--     of the release entirely, for classified and unclassified notes alike. Neither V104 nor V105
+--     clears it, and that is deliberate: clearing achieves nothing for generation once a Domain
+--     Context is set, is irreversible, and would activate a live editor defect. Every "cleared"
+--     and "before course_program is cleared" line below should be read as **retained**.
+--
+-- `High School` is also excluded from the `course_programs` catalog in `v0.70.0` PR 5 — excluded,
+-- not cleared. For the 6 unclassified notes this string remains their only classification.
 --
 -- The classification cannot be done from this repo: the notes live in production, and the
 -- local dev database is a different dataset (118 notes, at V101, no `High School` rows at
@@ -126,9 +150,11 @@ FROM notes n
 WHERE n.course_program = 'High School'
 ORDER BY n.subject NULLS LAST, n.title;
 
--- Expected: 11 rows (audited 2026-08-03). If the count has moved, say so before the migration
--- is written — the V104 mapping is keyed by note ID, so a note added since the audit would
--- otherwise be silently skipped and left with a level in its program field.
+-- Expected: 11 rows (audited 2026-08-03). **Actual at migration time: 10** — one was deleted as a
+-- duplicate in between, which is exactly the drift this warning anticipated. If the count moves
+-- again, say so before any further migration is written — the mapping is keyed by note ID, so a
+-- note added since the audit would otherwise be silently skipped and left with a level in its
+-- program field.
 
 -- ============================================================================
 -- QUERY B — drift check on all six level-in-program values
