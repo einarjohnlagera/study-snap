@@ -136,6 +136,52 @@ Applies to `exam_question_pool` and `challenge_quiz_question_bank` rows generate
 
 **Clarification, so this is not read too broadly:** the cross-*user* Official template sharing shipped in `v0.60.0` (`OfficialChallengeQuizTemplateService`) is already source-note-scoped — an adopter's copied questions trace back to one source note via `copiedFromNoteId`. This policy does **not** restrict or disable it. What it restricts is *new* cross-program pooling that would treat many-program applicability as a licence to share questions across notes.
 
+### Authoring populates by inference, not manual classification (direction, added 2026-08-04)
+
+**Status: agreed direction, NOT yet implemented, and deliberately gated — see the R4 constraint at the end of this section.** The four axes above are unchanged. What changes is how their values get set.
+
+**The reframing that produced this.** The question "should a Note have a Learner Level?" was the wrong one. The right one is **"what is the canonical source of educational depth?"** — and the answer is *the content itself*. Grade School Algebra, Senior High Algebra, College Engineering Algebra and Board Exam Review Algebra are **different knowledge artifacts**, not one artifact with four quiz settings: the explanation, examples, terminology, Study Pack, flashcards and quizzes all differ. Depth is therefore a property of the note, which is what `notes.learner_level` already encodes. This makes explicit what rule 2 above only implied.
+
+Two rejected placements, both recorded so they are not re-proposed:
+
+- **Depth on the reader alone.** Removing the note axis makes depth fall back to whoever is reading, so a College-profile learner studying a Grade School Algebra note receives a college-level quiz. That failure is the exact scenario the note axis prevents.
+- **Depth on the program (`course_programs.learner_level_id`).** One program spans several authored depths — Civil Engineering runs Year 1 through Board Review; Nursing runs College and Board Review. Normalising the relationship into an FK asserts one program has one depth, which is false, and re-creates the conflation this ADR exists to remove. It relocates the coupling rather than solving it.
+
+**But the authoring surface currently exposes implementation concepts rather than educational ones.** Asking an admin to reason about three orthogonal metadata axes is technically correct and cognitively wrong. A teacher thinks *"I'm writing Engineering Algebra for first-year engineering students."* Everything else should be inferred where it can be, and confirmed rather than composed.
+
+**Direction:** keep the four-axis knowledge model; evolve authoring toward **inferred metadata with explicit human override**, instead of manual classification everywhere.
+
+#### Constraints on any inference implementation
+
+These are binding on the design, not suggestions. They exist because the naive version of this proposal breaks two mechanisms this ADR already depends on.
+
+**1. Only a curation container may infer depth. Subject and Domain Context may not.**
+
+The proposed order was Review Set → Subject → Domain Context → defaults → override. The middle two are invalid *as depth sources*:
+
+- **Subject cannot imply depth** — `Algebra` is the worked counter-example from this section's own opening. A subject that spans four depths cannot select one.
+- **Domain Context must not imply depth.** It is the *how it is authored* axis; depth is *how deep*. Inferring one from the other re-couples exactly what the four-axis split separated, and `Engineering Mathematics` spans Year 1 through Board Review just as its program does.
+
+A **Review Set / subject plan** is a legitimate source because it is a curation container with a declared purpose — a CE Board Review set is board-depth by construction. The author's own profile level is a legitimate weak fallback. So the supported chain is **Review Set → author profile → explicit override**, and it is deliberately shorter than proposed.
+
+**2. Inference is a UI pre-fill. It must never be a server-side default write.**
+
+`domain_context IS NULL` is load-bearing: this ADR uses it as *the* marker of "not yet promoted," and the promotion backlog is a one-line query over null-context notes. A server-side default would populate that column for every note and **silently destroy the mechanism** — the backlog query would return nothing and the governance floor would become unobservable.
+
+Pre-filling a form control is safe: the value is only persisted because a human saved it, so a stored value continues to mean "a person decided this." A confidently-wrong stored value is worse than NULL, because NULL is visible and a wrong value is not.
+
+**3. Depth granularity is capped at the existing `LearnerLevel` values — Year 1–4 is explicitly out of scope.**
+
+The Civil Engineering example above lists Year 1 through Year 4. `LearnerLevel` has a single `COLLEGE` value and will keep it. Year-level granularity would multiply the value set for a distinction the generation prompts do not currently act on, and the same governance instinct that keeps Domain Context to eight values applies here. If per-year depth ever becomes real, it is a separate decision with its own evidence, not a quiet enum expansion.
+
+**4. Renaming the user-facing label is in scope; `Intended Audience` is not available.**
+
+"Learner Level" is implementation vocabulary and may be relabelled for admins — `Educational Level` and `Authored Depth` are both viable. **`Intended Audience` is not**, because `notes.target_profile_type` already occupies that concept and is already labelled *"Who is this note for?"* in the editor. Reusing it would collide two distinct axes in the one place users actually read. Any rename is copy-only: the column stays `learner_level`.
+
+#### Sequencing — gated on R4
+
+**No structural change to the depth axis before the R4 generate-and-diff verification runs** (see `RELEASES.md` v0.69.0, checkpoint due 2026-08-18). R4 is the first production evidence that Domain Context works as intended. If it surfaces unexpected authoring or generation behaviour, that evidence should inform this design rather than arrive after it. Note that R4 is itself currently blocked: authoring metadata is not editable once a note reaches `STUDY_PACK_READY`, so **making those fields editable is the true first step**, ahead of any inference work.
+
 ### Alternatives considered
 
 - **Inverse mapping (program → domain contexts), notes stay single-valued.** Far cheaper — dozens of rows, and already the shape `ExamGoalConfig` uses. Rejected: it breaks as soon as applicability is per-note rather than per-context (Engineering Algebra applies to eleven programs, Engineering Statics to nine), forcing a sparse override table plus a second mechanism, and it makes applicability implicit when it should be explicit. **Retired as a fallback 2026-08-03, on evidence rather than argument:** Query K showed sharing is ragged *and crosses program families* — `Construction Materials` is shared by Civil Engineering and Architecture, while `Engineering Sciences` subjects are shared by differing subsets (Strength of Materials broadly, Hydraulics narrowly). Under ragged cross-family sharing this alternative needs the per-note override table immediately, making it `note_course_program` with extra steps. Not a viable fallback at any cost level.
