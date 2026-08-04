@@ -28,12 +28,12 @@ describe("PublicLibrarySeoIndexPage", () => {
         url: "https://notelib.app/public/library",
         siteName: "NoteLib",
         images: expect.arrayContaining([
-          expect.objectContaining({ url: "https://notelib.app/og-image.png" }),
+          expect.objectContaining({ url: "https://notelib.app/og-image-v2.png" }),
         ]),
       }),
       twitter: expect.objectContaining({
         card: "summary_large_image",
-        images: ["https://notelib.app/og-image.png"],
+        images: ["https://notelib.app/og-image-v2.png"],
       }),
     });
   });
