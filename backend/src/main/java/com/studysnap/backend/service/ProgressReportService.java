@@ -43,6 +43,7 @@ public class ProgressReportService {
     private final ConceptHealthRepository conceptHealthRepository;
     private final ConceptHealthService conceptHealthService;
     private final NoteRepository noteRepository;
+    private final ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
 
     @Transactional(readOnly = true)
     public ProgressReportResponse getProgressReport(UUID userId, String studyGoal, OffsetDateTime now) {
@@ -438,7 +439,9 @@ public class ProgressReportService {
             return List.of();
         }
 
-        List<String> goalCourseProgramValues = studyGoalIsSlug ? ExamGoalConfig.getCoursePrograms(studyGoal) : List.of(studyGoal);
+        List<String> goalCourseProgramValues = studyGoalIsSlug
+                ? examGoalCourseProgramProvider.getCoursePrograms(studyGoal)
+                : List.of(studyGoal);
         Set<String> goalCoursePrograms = goalCourseProgramValues.stream()
                 .map(this::normalizeCourseProgramKey)
                 .filter(Objects::nonNull)

@@ -66,6 +66,7 @@ public class PostSessionNextStepService {
     private final ProgressReportService progressReportService;
     private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     private final StudyPackGenerationContextResolver generationContextResolver;
+    private final ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
 
     @Transactional(readOnly = true)
     public NextStepResponse getNextStep(UUID userId, UUID studyPackId) {
@@ -431,7 +432,7 @@ public class PostSessionNextStepService {
 
     private boolean isCurrentNoteInGoal(String studyGoal, String noteCourseProgram) {
         if (ExamGoalConfig.isValidSlug(studyGoal)) {
-            return ExamGoalConfig.getCoursePrograms(studyGoal).stream()
+            return examGoalCourseProgramProvider.getCoursePrograms(studyGoal).stream()
                     .anyMatch(courseProgram -> Objects.equals(courseProgram, noteCourseProgram));
         }
         return Objects.equals(studyGoal, noteCourseProgram);
