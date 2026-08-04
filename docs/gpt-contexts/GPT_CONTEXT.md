@@ -23,7 +23,7 @@ Read this block first. Everything below is detail behind it.
 7. **Mastery comes only from graded assessment.** Self-review surfaces (Flashcards, Memorization) are firewalled from readiness by design.
 8. **There are exactly 5 quiz modes.** The contract is locked. Do not propose a 6th.
 9. **Biggest recurring failure mode in this repo:** repo-wide copy/terminology changes that under-scope themselves. `v0.68.0` under-counted its own sweep four times; `v0.67.1` scoped three items and shipped seven. Assume one grep is insufficient.
-10. **Open questions awaiting your input:** (a) Explore's default tab — still unresolved three releases later; (b) **whether a note needs its own Learner Level at all** — live design debate opened 2026-08-04, consultation prompt at `docs/claude-prompt/canonical-knowledge-architecture-out/14-learner-level-necessity-gpt-consultation.md`. Do not treat the four-axis model as settled on the depth axis.
+10. **Open questions awaiting your input:** (a) Explore's default tab — still unresolved three releases later; (b) the learner-depth question is **resolved** 2026-08-04 — the four-axis model stands and notes own their depth; what remains is evolving authoring toward inference, recorded as a direction in `ADR-001` and gated behind R4.
 11. **Don't propose:** a 6th quiz mode, price changes, AI-generated per-concept definitions, feeding self-review into readiness, or user-facing "Creator"/"Curated Learning" labels.
 12. **The repo is `studysnap` internally.** The product is NoteLib. Database and package names still say `studysnap` — that is intentional, not debt to fix.
 
@@ -78,13 +78,15 @@ Twelve pre-existing findings are recorded as **Known Limitations tagged `v0.68.1
 
 ---
 
-## Open Question — does a note need its own Learner Level? (opened 2026-08-04, UNRESOLVED)
+## Resolved 2026-08-04 — a note DOES own its depth; the open part is authoring, not the model
 
 Raised by the owner immediately after `v0.69.0` deployed, and **genuinely open** — do not treat the depth axis as settled.
 
 **The owner's position:** notes should not carry a learner level at all. It originally existed so *quizzes* could be pitched correctly, i.e. it was a property of the *reader*. Course/Program arguably already implies difficulty. And it feels absurd that a learner who mis-set their profile to `College` could get a college-level quiz on a grade-school Algebra note. Two related proposals: give the program catalog a `learner_level_id` so depth is inherited rather than chosen; and/or carry the college→board-exam distinction on `ProfileType` instead.
 
 **The counter-case:** the absurd scenario is precisely what the note's level *prevents* — with the note authored at Grade School, a College reader still gets a grade-school quiz, and removing the field makes depth fall back to the reader, which produces the complaint. "Program implies difficulty" also describes the model `v0.69.0` just retired (`Grade School` was a *level* sitting in a program field). And `ProfileType`'s `STUDENT` value spans four distinct depths, so it cannot carry depth without losing them. Where the owner is right: ordinary learners already never see the field, so the friction is Teacher/Admin-only — which argues for **inferring** the value (from the Review Set being authored into, then the author's profile) rather than deleting the axis.
+
+**RESOLVED 2026-08-04 after a GPT pressure test.** The four-axis model **stands unchanged** and the note keeps its own depth: the reframed question is *"what is the canonical source of educational depth?"* and the answer is **the content itself** — Grade School / Senior High / College Engineering / Board Review Algebra are different knowledge artifacts, not one artifact with four quiz settings. Both alternative placements are rejected on the record (depth on the reader alone; depth on the program via `course_programs.learner_level_id`, which fails because Civil Engineering spans Year 1–4 plus Board Review). **What remains open is the authoring experience, not the model:** the direction is inferred metadata with explicit human override (**Review Set → author profile → override**), recorded as a direction section in `ADR-001` with four binding constraints — Subject and Domain Context may not infer depth, inference is a UI pre-fill and never a server-side write (it would destroy the `domain_context IS NULL` promotion marker), year-level granularity is out of scope, and the label may not be renamed to `Intended Audience` because `target_profile_type` already owns that concept. **Not implemented, and gated behind making authoring metadata editable on `STUDY_PACK_READY` notes and then R4.**
 
 **A neutral, self-contained consultation prompt exists** at `docs/claude-prompt/canonical-knowledge-architecture-out/14-learner-level-necessity-gpt-consultation.md`, including a bias warning about who wrote it. **Sequencing note: R4 has not run yet.** It is the evidence on whether Domain Context works at all, and if it shows content drifting generic the answer to this question changes anyway — so resist restructuring the taxonomy before that read exists.
 
