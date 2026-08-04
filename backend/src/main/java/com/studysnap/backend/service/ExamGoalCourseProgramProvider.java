@@ -23,10 +23,29 @@ public class ExamGoalCourseProgramProvider {
         if (!ExamGoalConfig.isValidSlug(normalizedSlug)) {
             return List.of();
         }
-        return courseProgramsBySlug.computeIfAbsent(normalizedSlug, this::loadCoursePrograms);
+        List<String> cached = courseProgramsBySlug.get(normalizedSlug);
+        if (cached != null) {
+            return cached;
+        }
+        // Only a successful, non-empty catalog read is memoized. Caching the fail-open fallback would
+        // pin the literal lists for the JVM's lifetime after a single transient DB failure, so a later
+        // catalog edit would stay invisible until redeploy — AGENTS.md:677 sanctions failing open, not
+        // failing open permanently. The load also runs outside the map so a blocking JDBC call never
+        // holds a ConcurrentHashMap bin monitor; two concurrent cold loads for one slug are harmless.
+        List<String> coursePrograms = loadCatalogCoursePrograms(normalizedSlug);
+        if (coursePrograms == null) {
+            return ExamGoalConfig.getFallbackCoursePrograms(normalizedSlug);
+        }
+        courseProgramsBySlug.putIfAbsent(normalizedSlug, coursePrograms);
+        return coursePrograms;
     }
 
-    private List<String> loadCoursePrograms(String slug) {
+    /**
+     * @return the catalog's programs for this slug, or {@code null} when the caller should fail open to
+     *         the literal fallback list. Never returns an empty list — an empty catalog read is a
+     *         fallback signal, not an answer.
+     */
+    private List<String> loadCatalogCoursePrograms(String slug) {
         try {
             List<String> coursePrograms = courseProgramCatalogRepository.findNamesByExamGoalSlug(slug);
             if (coursePrograms != null && !coursePrograms.isEmpty()) {
@@ -36,7 +55,7 @@ public class ExamGoalCourseProgramProvider {
         } catch (RuntimeException ex) {
             log.warn("exam_goal_course_program_catalog_unavailable slug={} using=fallback reason={}", slug, ex.getMessage());
         }
-        return ExamGoalConfig.getFallbackCoursePrograms(slug);
+        return null;
     }
 
     private String normalizeSlug(String slug) {
