@@ -1,5 +1,40 @@
 # RELEASES.md - NoteLib
 
+## v0.70.0 - Canonical Knowledge Completion
+
+**Status: In Progress**
+
+Theme: finish what `v0.69.0` started — make the canonical authoring axes correctable after generation, give programs a real catalog, and stop question pools being invalidated by whoever happens to be reading.
+
+### Planned Scope
+
+- **Authoring metadata editable on `STUDY_PACK_READY` notes (backend + frontend).** The note editor closes once a Study Pack exists, so Domain Context and Note Learner Level cannot be corrected after generation — a mis-set axis is currently permanent. Content stays locked (that lock exists to keep the note consistent with its pack); these two fields do not touch the existing pack and only shape *future* generation. **This is first because it blocks R4 step 1 outright**, which asks for an existing note with a generated pack to be re-set and regenerated.
+- **Note detail page's inline "Edit details" panel exposes both axes (frontend).** That panel duplicates Subject, Course/Program, Audience and Tags but omits the two axes `v0.69.0` shipped, so it reads as a complete authoring surface while silently missing them. It cost two people real time in the first hour of production use.
+- **`course_programs` catalog + `program_families` (backend, data).** Deferred from `v0.69.0`; the production read is now done (`15-vocabulary-and-impact-results.md`). 32 values, zero character-level collisions. Nullable FK on `notes` and `users` **alongside** the existing string columns; nothing reads the FK. Retires `ExamGoalConfig`/`exam-hub-config.ts`'s hand-synced name lists.
+- **Question pool / bank learner-level re-keying (backend).** Deferred from `v0.69.0`; production read now done. `exam_question_pool.learner_level` and `challenge_quiz_question_bank.learner_level` move off the **reader's** level onto the **note's**, so a College note's pool is no longer discarded the moment a Grade School user touches it. **No pre-stamping migration** — measured at 57 of 1,244 READY pools (4.6%) and 5 of 6,235 bank rows, a lazy regeneration spread across normal traffic. `PostSessionNextStepService` must be threaded in the **same** PR as the five `ChallengeQuizService` write sites.
+- **`10-high-school-classification.sql` cleanup (docs).** It still says V104 where V105 applied, "expected 11 rows" where one was deleted as a duplicate, and describes clearing `course_program` — a step ADR-001's second corollary deferred out of the release entirely.
+
+Anti-drift — what this release explicitly does **NOT** change:
+
+- **No Domain Context backfill onto pool/bank rows (PR 6b).** Gated on R4: a changed value set would invalidate it. Only the *learner level* re-keying ships here.
+- **No `note_course_program` and no Applicable Programs.** Still Release B. The catalog FK is written and read by nothing; no filter, facet, badge, search predicate, or URL changes.
+- **No authoring-by-inference implementation.** ADR-001 records it as a direction, explicitly gated behind R4. Pre-filling from a Review Set is *not* in this release.
+- **The note-level learner depth axis is not removed, narrowed, or renamed before R4 runs** — owner constraint, 2026-08-04.
+- **Note content stays locked after `STUDY_PACK_READY`.** Only the two authoring axes become editable; this is not a reopening of the content lock.
+- **`docs/product/EXAM_MODES.md` is untouched** — locked contract, exactly 5 modes.
+
+### Open decision blocking PR 5 scoping
+
+**Computer Science / Information Technology / Software Engineering.** `08` ruled all three survive as distinct programs; the production read disagrees — IT has 74 notes across 11 subjects, Software Engineering has 4 notes whose only subject is *Computer Science*, and Computer Science has **0 notes** against 3 user profiles. Recommendation is to seed IT as a program and leave CS/SE as user-side values with a NULL FK pending a curator ruling. This reverses part of `08` on evidence `08` did not have, so it needs an owner call rather than an assumption.
+
+### Verification
+
+**R4 (`[CHECKPOINT — due 2026-08-18]`) carries over from `v0.69.0` and is unchanged.** Bulk authoring must not begin until step 2 passes. The first scope item above exists to unblock it.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.69.0 - Canonical Knowledge Foundation
 
 **Status: Released**

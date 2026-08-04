@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.69.0 — Canonical Knowledge Foundation** (In Progress, base branch `releases/v0.69.0`). Release A of `docs/architecture/ADR-001-canonical-knowledge-architecture.md`. Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
+Current version: **v0.70.0 — Canonical Knowledge Completion** (In Progress, base branch `releases/v0.70.0`). Completes Release A of `docs/architecture/ADR-001-canonical-knowledge-architecture.md` (`v0.69.0`, Released 2026-08-04). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
