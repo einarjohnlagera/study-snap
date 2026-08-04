@@ -139,6 +139,14 @@ Rules:
 - generated note content remains editable before save
 - this is a note-drafting assist, not a saved note or Study Pack
 
+Generated-note item validation (v0.69.0):
+
+- `coreDetails` and `whyItMatters` are prose and are bounded at **28 whitespace-delimited words** per item
+- `quickRecall` is bounded by **characters, not words** — the same 240-character limit the JSON schema already applies to every generated-note array item
+- the split is deliberate. A whitespace word count measures the wrong thing on notation: `Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2)` is roughly 15 "words" of pure symbols, so a formula followed by its variable definitions could exceed a prose ceiling while staying visually compact and well inside the schema's own bound. That mismatch rejected valid Civil Engineering content intermittently — see `docs/claude-prompt/topic-note-quick-recall-validation-review.md`
+- the prompt states the Quick Recall character bound via `{MAX_ITEM_CHARS}`, substituted from the same constant the schema uses. **A bound the model is not told about is enforced by chance** — that is what produced the original four-of-five pass rate. If a new bound is added, state it in the prompt too
+- the whole generated note remains bounded at 700 words independently
+
 Create/Edit Note supports multiple content input paths before save or generation:
 
 - pasted text in the main `Content` field
