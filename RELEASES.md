@@ -2,7 +2,7 @@
 
 ## v0.69.0 - Canonical Knowledge Foundation
 
-**Status: In Progress**
+**Status: Released**
 
 Theme: stop the library from being forced to duplicate shared knowledge. One canonical note can now be authored for a body of knowledge that many programs share — an Algebra note authored once for Engineering Mathematics, rather than eleven near-identical copies, one per engineering program.
 
