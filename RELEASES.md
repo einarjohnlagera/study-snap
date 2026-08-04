@@ -15,13 +15,17 @@ This is **Release B of `docs/architecture/ADR-001-canonical-knowledge-architectu
 - **Facet counts will sum above the note total**, because a note appears under every applicable program. That is correct behavior needing a UI affordance, not a bug to fix.
 - **Program Families are an authoring shortcut only** — selecting a family expands to explicit `note_course_program` rows at save time. Applicability is never inferred from a family at read time.
 
-### Open before scoping
-
-**Applicability groupings are still unverified against current PRC board syllabi.** ADR-001 flags this in its Ratified value set section and R4 did **not** settle it — R4 validated the Domain Context *value set*, not which programs share which subjects. Whether `Engineering Sciences` spans 8 or 11 engineering programs is a curriculum fact for the curator, and it is exactly what family-expansion defaults depend on. This is a `[DECISION]`/`[EFFORT]` gate, not an `[EVIDENCE]` one — no query answers it.
-
 ### Planned Scope
 
-_Not yet scoped. Release B's shape needs the applicability answer above plus an owner decision on how much of it lands in one release._
+Cut into **three slices along the irreversibility boundary**, not by layer — full reasoning in `docs/claude-prompt/canonical-knowledge-architecture-out/18-release-b-slice-sequence.md`. Release A split by layer because all of it was reversible; Release B is not.
+
+**Only slice 3 is gated.** The opening framing of this section read "blocked on the applicability question," which is a broader reading than ADR-001's own gate: the ADR requires curator verification *"before **family-expansion defaults** are set"* — not before the join table, the backfill, or a curator adding programs to a note by hand. A curator marking one Algebra note applicable to eleven programs **is** the per-note judgment; it needs no syllabus table.
+
+- **Slice 1 — `note_course_program`, 1:1 backfill, admin write surface (backend + migration + frontend).** Additive, reversible, gated on nothing. Backfills exactly one row per note from the existing string resolved against the `v0.70.0` catalog; a note whose value the catalog deliberately excluded gets **no** join row and keeps its string. Nothing reads the join. **This is the slice that delivers what the whole ADR exists for** — one canonical note applicable to many programs, no duplication.
+- **Slice 2 — filters, facets, badges, and search move to join/`EXISTS` (backend).** The irreversible commitment, and a hot paginated path that already needed a dedicated performance release (`v0.51.0`). **Must run while every note still has exactly one program row**, because that is what makes it testable: facet counts are `count(*)` grouped on `notes` today, so the join version returns identical counts and the regression test is "same filter, same counts, before and after" rather than a judgment call. Once notes carry several programs, facet counts sum above the note total — correct per ADR-001, needing a UI affordance rather than a fix.
+- **Slice 3 — Program Family expansion (backend + frontend).** The only gated slice. Selecting a family expands to explicit rows at save time; the *preset* is the curriculum fact.
+
+**The gate on slice 3:** applicability groupings are unverified against current PRC board syllabi. `[EFFORT]`, not `[EVIDENCE]` — no query answers whether `Engineering Sciences` spans 8 or 11 engineering programs. **R4 did not settle it**; R4 validated the Domain Context *value set*, not which programs share which subjects.
 
 ### Carried forward
 

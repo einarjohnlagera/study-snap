@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.71.0 — Applicable Programs` (on `releases/v0.71.0`, cut from `main` after `v0.70.0` merged and deployed) is **In Progress** — kicked off 2026-08-04. It opens **Release B of `ADR-001`**: `note_course_program` makes applicability a many-to-many fact, so one canonical note surfaces under every program that needs it. Release B is materially riskier than Release A — irreversible once filters and badges read the join, and it moves the Library/Explore filter and search onto join/`EXISTS` semantics on a hot paginated path. **Planned Scope is deliberately empty at kickoff**: it needs the PRC-syllabus applicability answer, which R4 did *not* settle, plus an owner call on how much lands in one release.
+`v0.71.0 — Applicable Programs` (on `releases/v0.71.0`, cut from `main` after `v0.70.0` merged and deployed) is **In Progress** — kicked off 2026-08-04. It opens **Release B of `ADR-001`**: `note_course_program` makes applicability a many-to-many fact, so one canonical note surfaces under every program that needs it. Release B is materially riskier than Release A — irreversible once filters and badges read the join, and it moves the Library/Explore filter and search onto join/`EXISTS` semantics on a hot paginated path. **Scoped into three slices along the irreversibility boundary** (`18-release-b-slice-sequence.md`), correcting the initial read that the whole release was blocked: ADR-001 gates only **family-expansion defaults** on the unverified PRC-syllabus applicability question, so the join table, the 1:1 backfill, and per-note curator additions — the slice that actually delivers one-canonical-note-many-programs — are ungated. Slice 2 moves reads onto the join and is the irreversible commitment; slice 3 is the gated one. R4 did *not* settle applicability.
 
 Previous: `v0.70.0 — Canonical Knowledge Completion` (on `releases/v0.70.0`, cut from `main` after `v0.69.0` merged and deployed) is **Released** — kicked off 2026-08-04, signed off 2026-08-04. It completes Release A of `ADR-001`: the two Planned Scope items `v0.69.0` deferred (the `course_programs` catalog + `program_families`, and the question pool/bank learner-level re-keying) both shipped once their production reads were done, alongside the two authoring-surface gaps found in the first hour of real use — authoring metadata is now correctable after generation, which is what unblocks R4 step 1. Previous baseline: `v0.69.0 — Canonical Knowledge Foundation`, **Released and deployed 2026-08-04**, which shipped Domain Context, note-level learner depth, and the 49-note legacy backfill.
 
@@ -211,13 +211,15 @@ This section exists so a fresh session doesn't have to re-derive from scratch wh
 
 Kicked off 2026-08-04, cut from `main` after `v0.70.0` merged and deployed. Opens **Release B of `ADR-001`**: `note_course_program` turns applicability into a many-to-many fact, so one canonical Algebra note surfaces under every engineering program that needs it rather than being duplicated per program. Release A closed with `v0.70.0`.
 
-### Planned Scope
+### Planned Scope — three slices, split along the irreversibility boundary
 
-_Deliberately empty at kickoff._ Release B's shape depends on an answer this repo does not have yet — see below.
+Sequenced 2026-08-04 in `18-release-b-slice-sequence.md`. **Only slice 3 is gated** — the initial "blocked on applicability" framing read ADR-001's gate more broadly than the ADR does. It requires curator verification *"before **family-expansion defaults** are set"*, not before the join table, the backfill, or per-note curator additions.
 
-### Blocking the scope
+1. **`note_course_program` + 1:1 backfill + admin write surface.** Additive, reversible, gated on nothing, and it delivers the ADR's actual purpose: one canonical note applicable to many programs. Nothing reads the join.
+2. **Read paths move to join/`EXISTS`.** The irreversible step. Must run *while every note still has one program row*, because that is what makes it testable against a known-good baseline — facet counts are `count(*)` grouped on `notes` today, so a join returns identical counts at 1:1.
+3. **Program Family expansion.** Gated.
 
-**Applicability groupings are unverified against current PRC board syllabi.** ADR-001 flags this in its Ratified value set section, and **R4 did not settle it** — R4 validated the Domain Context *value set* (a broader value does not degrade authored content), not which programs share which subjects. Whether `Engineering Sciences` spans 8 or 11 engineering programs is a curriculum fact for the curator. This is a `[DECISION]`/`[EFFORT]` gate, not `[EVIDENCE]`: no query answers it, and it is exactly what family-expansion defaults depend on.
+**The gate on slice 3:** applicability groupings unverified against current PRC board syllabi — `[EFFORT]`, not `[EVIDENCE]`. No query answers it, and **R4 did not settle it**: R4 validated the Domain Context *value set*, not which programs share which subjects.
 
 ### What ADR-001 warns about, and this release must respect
 
