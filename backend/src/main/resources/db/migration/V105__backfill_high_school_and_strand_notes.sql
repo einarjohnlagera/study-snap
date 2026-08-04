@@ -54,6 +54,10 @@ BEGIN
         RAISE EXCEPTION 'V105 failed: a Senior High strand note remains without learner_level';
     END IF;
 
+    -- NOTE ON REACH: because this predicate mirrors the UPDATEs above it, it only fires on a
+    -- DIVERGENCE between the two ID lists (someone drops an id from one and not the other). Given
+    -- identical lists it is unreachable in production by construction. It cannot detect a shared
+    -- wrong assumption -- that was retired by the curator review query, not by this guard.
     -- Matches the (NULL, NULL) precondition both classification UPDATEs require, so a note a
     -- curator has already partly classified through the authoring UI -- domain_context set,
     -- learner_level left blank -- is skipped by the UPDATE and by this guard alike, rather than

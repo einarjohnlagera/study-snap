@@ -56,6 +56,7 @@ Do not mix these models.
 - Teacher Generate Quiz includes a required per-invocation `Target Level` picker so one note can produce quizzes for different classes without copying or rewriting the note.
 - The picker pre-fills from the most recent Target Level used to generate a quiz on that note, falling back to the teacher's profile learner level when the note has no prior target.
 - The selected `Target Level` is an explicit authoring act for that quiz generation. It replaces the curriculum-level slot even when the note has its own authored level, and it does not generate reader-scaffolding guidance. It is not stored on the note; generated quiz history retains the target only so the next Generate Quiz modal can prefill the latest value.
+- **A stored `targetLearnerLevel` of NULL means "the teacher never chose one," and that state is load-bearing.** Only an explicit Target Level is persisted — the resolved curriculum level is never written in its place. `findByNoteIdAndTargetLearnerLevelIsNotNullOrderByGeneratedAtDesc` exists precisely to encode it, and the picker's fallback in the rule above depends on it. Writing a resolved level here floors it to `COLLEGE`, which makes the modal pre-fill a level nobody selected and locks every later generation to it.
 
 ### View
 

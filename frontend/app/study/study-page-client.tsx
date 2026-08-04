@@ -76,6 +76,8 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
       const saved = await createNote({
         title: null,
         subject: null,
+        domainContext: null,
+        learnerLevel: null,
         tags: [],
         content: notesText,
       });

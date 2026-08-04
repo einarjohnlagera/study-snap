@@ -912,6 +912,8 @@ export default function OnboardingPage() {
     try {
       const createdNote = await createNote({
         title: selectedInputMethod === "generate" ? draft.topic.trim() : null,
+        domainContext: null,
+        learnerLevel: null,
         targetProfileType: mapProfileTypeToNoteTargetProfile(profileType),
         content: draft.noteContent,
       });

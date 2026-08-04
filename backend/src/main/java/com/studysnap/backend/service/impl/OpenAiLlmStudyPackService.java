@@ -108,6 +108,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             "Content calibration: use the Curriculum level above to set depth and difficulty. The note's authored learner level sets depth when present; the reader's learner level must not lower or redirect static note or Study Pack content.";
     private static final String STATIC_CONTENT_DOMAIN_ONLY_CALIBRATION =
             "Content calibration: use the Domain above to set subject matter, depth, vocabulary, terminology, examples, and framing. This note has no authored learner level, so do not infer one — and the reader's learner level must not lower or redirect static note or Study Pack content.";
+    private static final String STATIC_CONTENT_NO_AXIS_CALIBRATION =
+            "Content calibration: this note has no authored domain and no authored learner level, so infer subject matter and depth from the note content itself. Do not invent either, and the reader's learner level must not lower or redirect static note or Study Pack content.";
     private static final String READER_SCAFFOLDING_GUIDANCE =
             "Reader scaffolding: the reader's level is %s, below the note's %s level. You may soften wording and add support, but do not lower the curriculum, terminology, or difficulty below the note's level.";
     private static final EnumSet<LearnerLevel> SCHOOL_LEVELS = EnumSet.of(
@@ -1593,10 +1595,19 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private String buildSubjectSuggestionGuidanceBlock(StudyPackGenerationContext context) {
         List<String> lines = new ArrayList<>();
         lines.add("Subject guidance: use the specific academic subject or professional discipline covered by the note — label only, no topic suffix.");
-        LearnerLevel curriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(context);
-        if (SCHOOL_LEVELS.contains(curriculumLevel)) {
+        // This block is concatenated into the STATIC user prompt (buildStudyPackUserPrompt), so it must
+        // never consult the reader's level. effectiveCurriculumLevel falls back reader -> COLLEGE, which
+        // made two users generating from byte-identical notes receive different subject guidance. Read
+        // the note's authored level directly, exactly as buildGenerationContextBlock's static branch does.
+        LearnerLevel authoredLevel = context == null ? null : context.noteLearnerLevel();
+        boolean schoolLevel = authoredLevel != null && SCHOOL_LEVELS.contains(authoredLevel);
+        boolean collegeOrAbove = authoredLevel != null && !SCHOOL_LEVELS.contains(authoredLevel);
+        // With no authored level, emit BOTH lists — the pre-v0.69.0 behaviour. Narrowing to one list on a
+        // null level would silently pick a side for the ~all-null production rows.
+        if (schoolLevel || authoredLevel == null) {
             lines.add("For a school-level curriculum, use the curriculum subject the note belongs to: Biology, Physics, Chemistry, Mathematics, History, English, Economics, Filipino, Science, Social Studies.");
-        } else {
+        }
+        if (collegeOrAbove || authoredLevel == null) {
             lines.add("For college, board-review, professional, or personal-learning curricula, use the specific field of study: Civil Engineering, Electrical Engineering, Mechanical Engineering, Nursing, Anatomy, Pharmacology, Clinical Chemistry, Accountancy, Marketing, Business Finance, Computer Science, Pharmacy, Architecture, Constitutional Law, Criminal Law, Civil Law, Legal Ethics.");
         }
         lines.add("Do not suggest overly broad subjects such as Business, Medicine, Engineering, or Law.");
@@ -1607,9 +1618,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (authoringDomain != null && !authoringDomain.isBlank()) {
             lines.add("Domain context is: " + promptValue(authoringDomain) + ".");
             lines.add("Do not echo the domain name as the subject. Derive the subject from the note title and content — it should be the specific sub-field this note covers. Examples: a note in 'Engineering Sciences' about fluid machinery → 'Fluid Machinery'; a note in 'Nursing' covering pharmacology → 'Pharmacology'; a note in 'Accountancy' on auditing theory → 'Auditing Theory'.");
+            // Data-driven, never reader-driven. Pre-v0.69.0 this guard sat unconditionally inside the
+            // course/program block; gating it on a reader-derived level meant a legacy 'Senior High – STEM'
+            // note read by a COLLEGE user lost it and would echo "STEM" as its subject — exactly the row
+            // class V104/V105 exist to fix, and exactly the rows most likely to still be mid-migration.
+            lines.add("If the domain above is a K-12 strand or track (e.g. STEM, ABM, HUMSS, GAS, Senior High – STEM), derive the subject from the note content instead (e.g. Biology, Physics, Economics, English).");
         }
-        if (SCHOOL_LEVELS.contains(curriculumLevel)) {
-            lines.add("Because the curriculum level is school-level, derive the subject from the note content rather than using a strand, track, or broad domain label (e.g. Biology, Physics, Economics, English).");
+        if (schoolLevel) {
+            lines.add("Because the note is authored at a school-level curriculum, derive the subject from the note content rather than using a strand, track, or broad domain label (e.g. Biology, Physics, Economics, English).");
         }
         return String.join("\n", lines);
     }
@@ -1651,7 +1667,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (hasDomain) {
             return STATIC_CONTENT_DOMAIN_ONLY_CALIBRATION;
         }
-        return STATIC_CONTENT_LEVEL_ONLY_CALIBRATION;
+        if (hasNoteLevel) {
+            return STATIC_CONTENT_LEVEL_ONLY_CALIBRATION;
+        }
+        // Neither axis resolved. Previously this fell through to the level-only string, which points at
+        // a "Curriculum level above" line that was never emitted — a dangling reference on what is still
+        // the common path, since both columns are nullable and nearly every production row is null.
+        // Pre-v0.69.0 this case produced an empty block.
+        return STATIC_CONTENT_NO_AXIS_CALIBRATION;
     }
 
     private boolean isReaderBelowNoteLevel(StudyPackGenerationContext context) {
