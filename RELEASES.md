@@ -1,5 +1,37 @@
 # RELEASES.md - NoteLib
 
+## v0.71.0 - Applicable Programs
+
+**Status: In Progress**
+
+Theme: a canonical note stops belonging to one program. `note_course_program` makes applicability a many-to-many fact, so an Algebra note authored once for Engineering Mathematics can surface under every engineering program that needs it — which is the payoff Release A built the foundations for.
+
+This is **Release B of `docs/architecture/ADR-001-canonical-knowledge-architecture.md`**. Release A closed with `v0.70.0`.
+
+**Read ADR-001's own warnings before scoping anything here.** Release B is materially riskier than Release A, and the ADR says so in its own Consequences section:
+
+- **It is not reversible** once filters and badges read the join; rollback would require a migration. This knowingly fails clause 2 of the ROADMAP bootstrap test and is accepted as a multi-release commitment.
+- **Filter and search paths move to join/`EXISTS` semantics on a hot paginated path** that already required a dedicated performance release (`v0.51.0`).
+- **Facet counts will sum above the note total**, because a note appears under every applicable program. That is correct behavior needing a UI affordance, not a bug to fix.
+- **Program Families are an authoring shortcut only** — selecting a family expands to explicit `note_course_program` rows at save time. Applicability is never inferred from a family at read time.
+
+### Open before scoping
+
+**Applicability groupings are still unverified against current PRC board syllabi.** ADR-001 flags this in its Ratified value set section and R4 did **not** settle it — R4 validated the Domain Context *value set*, not which programs share which subjects. Whether `Engineering Sciences` spans 8 or 11 engineering programs is a curriculum fact for the curator, and it is exactly what family-expansion defaults depend on. This is a `[DECISION]`/`[EFFORT]` gate, not an `[EVIDENCE]` one — no query answers it.
+
+### Planned Scope
+
+_Not yet scoped. Release B's shape needs the applicability answer above plus an owner decision on how much of it lands in one release._
+
+### Carried forward
+
+- **The two `v0.70.0` Known Limitations**, both documented rather than fixed: the Challenge bank orphaning on a learner-level correction (including the write path whose duplicate-key failure surfaces at commit, outside its own catch, contradicting `docs/features/challenge-quiz.md`'s best-effort claim), and the null-by-null pool/bank cohort (40 pools, 15 bank rows). Each now has a ROADMAP Backlog Index row.
+- **Regeneration is not structure-preserving** — observed during R4, logged with its own Backlog Index row.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.70.0 - Canonical Knowledge Completion
 
 **Status: Released**
@@ -31,15 +63,27 @@ Four owner rulings, none of which PR 5 may re-litigate. The full 32-row seed tab
 
 **Ruling: seed `Information Technology` as a catalog program. `Computer Science` and `Software Engineering` stay user-side values with a NULL catalog FK**, pending a curator ruling if either grows real curriculum. Nothing is deleted — the 4 Software Engineering notes and the 3 Computer Science profiles keep their existing strings, exactly as the catalog's other unmappable values do. This reverses part of `08` on evidence `08` did not have; it is ratified rather than assumed.
 
-**2. The three `Senior High – …` strands are seeded — ruled by the owner 2026-08-05.** Closes the call `11`'s Query D deferred to PR 5. STEM (4 notes), ABM (4), and HUMSS (3) are curriculum *tracks*, not bare levels: `V105` deliberately left their `domain_context` NULL so the strand keeps reaching the prompt as the effective authoring domain, and excluding them would leave the value that actually reaches generation sitting outside the catalog. `Grade School`, `Junior High`, and `High School` stay excluded as bare levels now fully described by `learner_level` + `domain_context`. Excluding a value never means clearing it — ADR-001's second corollary still defers that out of the release entirely.
+**2. The three `Senior High – …` strands are seeded — ruled by the owner 2026-08-04.** Closes the call `11`'s Query D deferred to PR 5. STEM (4 notes), ABM (4), and HUMSS (3) are curriculum *tracks*, not bare levels: `V105` deliberately left their `domain_context` NULL so the strand keeps reaching the prompt as the effective authoring domain, and excluding them would leave the value that actually reaches generation sitting outside the catalog. `Grade School`, `Junior High`, and `High School` stay excluded as bare levels now fully described by `learner_level` + `domain_context`. Excluding a value never means clearing it — ADR-001's second corollary still defers that out of the release entirely.
 
-**3. `Medical – Surgical Nursing` is dropped from PNLE — ruled by the owner 2026-08-05.** The second production read found it matches **0 notes, 0 users, and 0 collections**: it exists only in `ExamGoalConfig:15` and `frontend/lib/exam-hub-config.ts:26`, under a comment in both files asserting that course/program values "must match production DB values exactly." It never has. It is also a PNLE board *subject area* rather than a degree program, failing the catalog's classification rule on the same grounds as `Biology`. **PNLE maps to `Nursing` only.** Behavior-preserving in effect — the dropped value matched nothing — but it must be proven by test rather than asserted. The Exam Hub's multi-program dedupe path stays; PNLE simply stops exercising it. `RELEASES.md:253`'s worked example of that dedupe is left as the historical record it is.
+**3. `Medical – Surgical Nursing` is dropped from PNLE — ruled by the owner 2026-08-04.** The second production read found it matches **0 notes, 0 users, and 0 collections**: it exists only in `ExamGoalConfig:15` and `frontend/lib/exam-hub-config.ts:26`, under a comment in both files asserting that course/program values "must match production DB values exactly." It never has. It is also a PNLE board *subject area* rather than a degree program, failing the catalog's classification rule on the same grounds as `Biology`. **PNLE maps to `Nursing` only.** Behavior-preserving in effect — the dropped value matched nothing — but it must be proven by test rather than asserted. The Exam Hub's multi-program dedupe path stays; PNLE simply stops exercising it. `RELEASES.md:253`'s worked example of that dedupe is left as the historical record it is.
 
 **4. `Bsed` → `Education` is the only non-exact FK mapping.** An enumerated single-row alias sanctioned by `11`'s settled judgment calls, written as a literal exception and never generalised into a normalization rule. The stored string stays `Bsed`.
 
-### Verification
+### Verification — R4 RESOLVED 2026-08-04, after deploy. Bulk authoring is unblocked.
 
-**R4 (`[CHECKPOINT — due 2026-08-18]`) carries over from `v0.69.0` and is unchanged.** Bulk authoring must not begin until step 2 passes. The first scope item above exists to unblock it.
+**R4 carried over from `v0.69.0` as a `[CHECKPOINT — due 2026-08-18]` and was run against production on 2026-08-04, once this release deployed.** The first scope item above is what made it runnable: both authoring axes became correctable on a note that already has a Study Pack. Full runbook, note selection, and the five-point scoring rubric: `docs/claude-prompt/canonical-knowledge-architecture-out/17-r4-verification-runbook.md`.
+
+**Passed on all three steps. The ratified 8-value Domain Context set is not amended.**
+
+1. **Control** — a Civil Engineering note set to `Civil Engineering` + `Board Exam Review` regenerated near-identically, slightly richer. No wiring regression.
+2. **The actual test** — a `Strength of Materials` note set to the deliberately broader `Engineering Sciences` kept every domain marker: `hoop (circumferential)` / `longitudinal` stress, `Lame's equations`, the `ASME Boiler and Pressure Vessel Code`, the thin/thick-wall classification, and its civil-engineering application framing. **Zero of five drift checks fired.** Confirmed in production afterwards that only `domain_context` changed and `learner_level` stayed NULL, so it is a clean single-variable result.
+3. **Level precedence** — a `BOARD_EXAM_REVIEW` note read by a `COLLEGE` profile produced board-level questions (plausible-distractor framings, and a four-step trapezoid→wetted-perimeter→hydraulic-radius→Manning's problem rather than a single plug-in), scored against `docs/features/challenge-quiz.md`'s own level rubric. ADR-001 rule 3 held.
+
+**The bulk-authoring block is lifted.** That sentence was load-bearing across three releases; it is satisfied, not merely restated.
+
+**What it does not settle.** R4 validates the Domain Context *value set*. The **applicability groupings** in `06`/`08` remain unverified against current PRC board syllabi — a curator question, and precisely what Release B's family-expansion defaults depend on. Do not read "R4 passed" as "applicability is settled."
+
+**One incidental finding, not drift** — the regenerated `Strength of Materials` summary dropped a comparison table and a Common Misconceptions block its prior version had, while the surviving prose stayed fully domain-specific. A level-signal explanation is falsified by the note's own history (the original pack also had `learner_level` NULL and *did* carry the table). Logged as one-sample structural variance with its own ROADMAP Backlog Index row, on the user-facing grounds that a regeneration can silently drop content a learner valued.
 
 ### Shipped
 

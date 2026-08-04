@@ -18,7 +18,7 @@
 --   3. The migration applies that explicit note-ID → level mapping.
 --
 -- ============================================================================
--- HISTORICAL — this file has been executed. Corrected 2026-08-05.
+-- HISTORICAL — this file has been executed. Corrected 2026-08-04.
 -- ============================================================================
 -- Three statements below were written before the work ran and are now wrong. They are corrected
 -- here rather than deleted, because the reasoning is still the record of why the pass was shaped
@@ -27,7 +27,7 @@
 --   * "V104" -> the High School mapping shipped as **V105**. V104 was the 27 pure-level
 --     Grade School / Junior High notes (PR 4a); V105 applied this file's curator mapping (PR 4b).
 --   * "Expected: 11 rows" -> **10**. One of the 11 audited notes was deleted as a duplicate
---     between the 2026-08-03 audit and the migration. Confirmed by the 2026-08-05 production read
+--     between the 2026-08-03 audit and the migration. Confirmed by the 2026-08-04 production read
 --     (`16-program-vocabulary-seed-followup.sql`, Query A): `High School` = 10 notes, 7 users.
 --     Of those 10, V105 classified 4 (3 JUNIOR_HIGH + 1 SENIOR_HIGH) and 6 remain deliberately
 --     unclassified with both new axes NULL.
