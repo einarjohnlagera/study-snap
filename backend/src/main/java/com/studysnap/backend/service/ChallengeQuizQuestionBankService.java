@@ -41,7 +41,7 @@ public class ChallengeQuizQuestionBankService {
     public List<QuizItem> claimEligibleQuestions(
             UUID userId,
             UUID studyPackId,
-            LearnerLevel learnerLevel,
+            LearnerLevel effectiveCurriculumLevel,
             UUID sessionId,
             Set<String> disallowedQuestionKeys,
             int count
@@ -56,7 +56,7 @@ public class ChallengeQuizQuestionBankService {
             List<ChallengeQuizQuestionBankEntity> candidates = challengeQuizQuestionBankRepository.findClaimableForUpdate(
                     userId,
                     studyPackId,
-                    learnerLevelName(learnerLevel),
+                    learnerLevelName(effectiveCurriculumLevel),
                     sessionId
             );
             List<QuizItem> claimed = new ArrayList<>(count);
@@ -86,7 +86,7 @@ public class ChallengeQuizQuestionBankService {
             UUID userId,
             UUID studyPackId,
             UUID sessionId,
-            LearnerLevel learnerLevel,
+            LearnerLevel effectiveCurriculumLevel,
             List<QuizItem> questions
     ) {
         if (questions == null || questions.isEmpty()) {
@@ -108,7 +108,7 @@ public class ChallengeQuizQuestionBankService {
                 entry.setOriginSessionId(sessionId);
                 entry.setQuestionKey(questionKey);
                 entry.setQuestion(question);
-                entry.setLearnerLevel(learnerLevelName(learnerLevel));
+                entry.setLearnerLevel(learnerLevelName(effectiveCurriculumLevel));
                 entry.setLastKnownOutcome(OUTCOME_UNANSWERED);
                 entry.setClaimedSessionId(sessionId);
                 entry.setGeneratedAt(now);
@@ -122,12 +122,16 @@ public class ChallengeQuizQuestionBankService {
         }
     }
 
-    public long countEligibleIncorrectQuestions(UUID userId, UUID studyPackId, LearnerLevel learnerLevel) {
+    public long countEligibleIncorrectQuestions(
+            UUID userId,
+            UUID studyPackId,
+            LearnerLevel effectiveCurriculumLevel
+    ) {
         try {
             return challengeQuizQuestionBankRepository.countIncorrectEligibleQuestions(
                     userId,
                     studyPackId,
-                    learnerLevelName(learnerLevel),
+                    learnerLevelName(effectiveCurriculumLevel),
                     OUTCOME_INCORRECT
             );
         } catch (RuntimeException exception) {
@@ -143,7 +147,7 @@ public class ChallengeQuizQuestionBankService {
     public List<QuizItem> claimIncorrectQuestions(
             UUID userId,
             UUID studyPackId,
-            LearnerLevel learnerLevel,
+            LearnerLevel effectiveCurriculumLevel,
             UUID sessionId,
             int count,
             int minimumCount
@@ -153,7 +157,7 @@ public class ChallengeQuizQuestionBankService {
                     .findIncorrectClaimableForUpdate(
                             userId,
                             studyPackId,
-                            learnerLevelName(learnerLevel),
+                            learnerLevelName(effectiveCurriculumLevel),
                             OUTCOME_INCORRECT
                     );
             int claimCount = Math.min(count, candidates.size());
@@ -259,7 +263,7 @@ public class ChallengeQuizQuestionBankService {
         ) ? OUTCOME_CORRECT : OUTCOME_INCORRECT;
     }
 
-    private String learnerLevelName(LearnerLevel learnerLevel) {
-        return learnerLevel == null ? null : learnerLevel.name();
+    private String learnerLevelName(LearnerLevel curriculumLevel) {
+        return curriculumLevel == null ? null : curriculumLevel.name();
     }
 }

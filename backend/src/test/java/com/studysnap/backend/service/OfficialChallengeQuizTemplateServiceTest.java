@@ -60,7 +60,7 @@ class OfficialChallengeQuizTemplateServiceTest {
     private AsyncTaskExecutor llmParallelTaskExecutor;
 
     @Test
-    void copyTemplateQuestions_usesOfficialTemplateAcrossLearnerLevelsAndTagsTheCallerRows() {
+    void copyTemplateQuestions_usesOfficialTemplateAcrossLearnerLevelsAndTagsTheAdopterNoteLevel() {
         UUID adopterId = UUID.randomUUID();
         UUID adopterStudyPackId = UUID.randomUUID();
         UUID adopterNoteId = UUID.randomUUID();
@@ -86,10 +86,14 @@ class OfficialChallengeQuizTemplateServiceTest {
         when(questionBankRepository.findByUserIdAndStudyPackIdOrderByGeneratedAtAsc(officialId, officialStudyPackId))
                 .thenReturn(List.of(source));
 
+        com.studysnap.backend.service.model.StudyPackGenerationContext adopterContext =
+                new com.studysnap.backend.service.model.StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE, null, null, List.of(), null, LearnerLevel.SENIOR_HIGH
+                );
         List<QuizItem> copied = service().copyTemplateQuestions(
                 adopterId,
                 adopterStudyPackId,
-                LearnerLevel.COLLEGE,
+                StudyPackGenerationContextResolver.effectiveCurriculumLevel(adopterContext),
                 sessionId,
                 Set.of(),
                 5
@@ -101,7 +105,7 @@ class OfficialChallengeQuizTemplateServiceTest {
         ChallengeQuizQuestionBankEntity copiedRow = saved.getValue().getFirst();
         assertThat(copiedRow.getUserId()).isEqualTo(adopterId);
         assertThat(copiedRow.getStudyPackId()).isEqualTo(adopterStudyPackId);
-        assertThat(copiedRow.getLearnerLevel()).isEqualTo(LearnerLevel.COLLEGE.name());
+        assertThat(copiedRow.getLearnerLevel()).isEqualTo(LearnerLevel.SENIOR_HIGH.name());
         assertThat(copiedRow.getQuestion()).isEqualTo(source.getQuestion());
         assertThat(copiedRow.getClaimedSessionId()).isEqualTo(sessionId);
         assertThat(copiedRow.getLastKnownOutcome()).isEqualTo("UNANSWERED");
@@ -149,7 +153,12 @@ class OfficialChallengeQuizTemplateServiceTest {
         UserEntity officialAuthor = officialAuthor(officialId);
         com.studysnap.backend.service.model.StudyPackGenerationContext context =
                 new com.studysnap.backend.service.model.StudyPackGenerationContext(
-                        LearnerLevel.BOARD_EXAM_REVIEW, "Nursing", "Nursing", List.of()
+                        LearnerLevel.COLLEGE,
+                        "Nursing",
+                        "Nursing",
+                        List.of(),
+                        null,
+                        LearnerLevel.BOARD_EXAM_REVIEW
                 );
 
         when(userRepository.findById(officialId)).thenReturn(Optional.of(officialAuthor));

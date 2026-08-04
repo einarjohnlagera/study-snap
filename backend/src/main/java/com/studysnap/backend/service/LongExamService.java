@@ -183,7 +183,7 @@ public class LongExamService {
                         studyPackId,
                         ExamQuestionPoolService.MODE_LONG_EXAM,
                         questionCount,
-                        generationContext.learnerLevel()
+                        StudyPackGenerationContextResolver.effectiveCurriculumLevel(generationContext)
                 );
                 if (pooledQuestions.isPresent()) {
                     QuickReviewSessionEntity poolSession = buildGeneratingSession(

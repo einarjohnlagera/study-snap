@@ -18,6 +18,7 @@ import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -214,7 +215,7 @@ public class ChallengeQuizService {
                         studyPackId,
                         ExamQuestionPoolService.MODE_BOARD_EXAM,
                         quizCount,
-                        generationContext.learnerLevel()
+                        StudyPackGenerationContextResolver.effectiveCurriculumLevel(generationContext)
                 );
                 if (pooledQuestions.isPresent()) {
                     QuickReviewSessionEntity session = buildGeneratingSession(
@@ -259,6 +260,9 @@ public class ChallengeQuizService {
         if (generationContext == null) {
             generationContext = buildQuizGenerationContext(userId, studyPack);
         }
+        LearnerLevel effectiveCurriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(
+                generationContext
+        );
         try {
             List<QuizItem> challengeQuiz;
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
@@ -279,7 +283,7 @@ public class ChallengeQuizService {
                 List<QuizItem> bankedQuestions = challengeQuizQuestionBankService.claimEligibleQuestions(
                         userId,
                         studyPackId,
-                        generationContext.learnerLevel(),
+                        effectiveCurriculumLevel,
                         session.getId(),
                         disallowedQuestionKeys,
                         quizCount
@@ -287,7 +291,7 @@ public class ChallengeQuizService {
                 List<QuizItem> templateQuestions = officialChallengeQuizTemplateService.copyTemplateQuestions(
                         userId,
                         studyPackId,
-                        generationContext.learnerLevel(),
+                        effectiveCurriculumLevel,
                         session.getId(),
                         disallowedQuestionKeys,
                         quizCount - bankedQuestions.size()
@@ -320,7 +324,7 @@ public class ChallengeQuizService {
                             userId,
                             studyPackId,
                             session.getId(),
-                            generationContext.learnerLevel(),
+                            effectiveCurriculumLevel,
                             uniqueGeneratedQuiz
                     );
                 }
@@ -396,6 +400,9 @@ public class ChallengeQuizService {
 
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, null, MODE_CHALLENGE);
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
+        LearnerLevel effectiveCurriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(
+                generationContext
+        );
         QuickReviewSessionEntity generatingSession = buildGeneratingSession(
                 userId,
                 studyPackId,
@@ -410,7 +417,7 @@ public class ChallengeQuizService {
         List<QuizItem> missedQuestions = challengeQuizQuestionBankService.claimIncorrectQuestions(
                 userId,
                 studyPackId,
-                generationContext.learnerLevel(),
+                effectiveCurriculumLevel,
                 session.getId(),
                 INITIAL_CHALLENGE_QUIZ_COUNT,
                 ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS
@@ -664,11 +671,14 @@ public class ChallengeQuizService {
 
         StudyPackEntity studyPack = findOwnedStudyPackOrThrow(session.getStudyPackId(), userId);
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
+        LearnerLevel effectiveCurriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(
+                generationContext
+        );
         Set<String> disallowedQuestionKeys = QuizDeduplicationUtils.toNormalizedQuestionSet(existingQuiz);
         List<QuizItem> bankedQuestions = challengeQuizQuestionBankService.claimEligibleQuestions(
                 userId,
                 session.getStudyPackId(),
-                generationContext.learnerLevel(),
+                effectiveCurriculumLevel,
                 session.getId(),
                 disallowedQuestionKeys,
                 batchSize
@@ -676,7 +686,7 @@ public class ChallengeQuizService {
         List<QuizItem> templateQuestions = officialChallengeQuizTemplateService.copyTemplateQuestions(
                 userId,
                 session.getStudyPackId(),
-                generationContext.learnerLevel(),
+                effectiveCurriculumLevel,
                 session.getId(),
                 disallowedQuestionKeys,
                 batchSize - bankedQuestions.size()
@@ -717,7 +727,7 @@ public class ChallengeQuizService {
                         userId,
                         session.getStudyPackId(),
                         session.getId(),
-                        generationContext.learnerLevel(),
+                        effectiveCurriculumLevel,
                         uniqueGenerated
                 );
             }

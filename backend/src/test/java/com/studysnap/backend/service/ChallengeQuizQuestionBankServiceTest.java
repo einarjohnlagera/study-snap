@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.NotEnoughMissedChallengeQuestionsException;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,7 +42,7 @@ class ChallengeQuizQuestionBankServiceTest {
     }
 
     @Test
-    void claimEligibleQuestions_locksAndClaimsOnlyMatchingLearnerLevelQuestions() {
+    void claimEligibleQuestions_locksAndClaimsOnlyMatchingCurriculumLevelQuestions() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -63,6 +64,31 @@ class ChallengeQuizQuestionBankServiceTest {
                 userId, studyPackId, LearnerLevel.COLLEGE.name(), sessionId
         );
         verify(questionBankRepository).saveAll(List.of(first, second));
+    }
+
+    @Test
+    void claimEligibleQuestions_usesTheNoteLevelWhenItOutranksTheReaderLevel() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChallengeQuizQuestionBankEntity banked = bankedQuestion("Senior High question");
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, null, null, List.of(), null, LearnerLevel.SENIOR_HIGH
+        );
+        LearnerLevel effectiveCurriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(context);
+        when(questionBankRepository.findClaimableForUpdate(
+                userId, studyPackId, LearnerLevel.SENIOR_HIGH.name(), sessionId
+        )).thenReturn(List.of(banked));
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+
+        List<QuizItem> claimed = service.claimEligibleQuestions(
+                userId, studyPackId, effectiveCurriculumLevel, sessionId, Set.of(), 1
+        );
+
+        assertThat(claimed).containsExactly(banked.getQuestion());
+        verify(questionBankRepository).findClaimableForUpdate(
+                userId, studyPackId, LearnerLevel.SENIOR_HIGH.name(), sessionId
+        );
     }
 
     @Test
@@ -97,7 +123,7 @@ class ChallengeQuizQuestionBankServiceTest {
     }
 
     @Test
-    void claimIncorrectQuestions_claimsOnlyIncorrectCurrentLevelQuestions() {
+    void claimIncorrectQuestions_claimsOnlyIncorrectCurriculumLevelQuestions() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();

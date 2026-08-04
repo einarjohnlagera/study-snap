@@ -59,6 +59,8 @@ Exam hubs also perform a best-effort Official Review Set enrichment:
 - Lookup failures are swallowed for this enrichment only; public notes and the rest of the anonymous hub continue rendering.
 - No matches means no additional section or empty state.
 
+Exam practice launched from adopted content follows the note's curriculum axis rather than the hub visitor's profile level. On the single-Study-Pack paths, Long Exam and Board Exam question pools are stamped and sampled by the note's effective curriculum level (`notes.learner_level` -> reader level -> `COLLEGE`). Changing the reader's profile level therefore does not invalidate a pool for a note with an authored level. Multi-note exam assembly remains always assembled from its selected sources and does not use this single-note pool key.
+
 ## Conversion
 
 Anonymous CTA:
