@@ -52,11 +52,12 @@ Information Technology is unambiguously a real program with real curriculum brea
 Engineering has four notes whose only subject is *Computer Science*. Computer Science has **no
 notes at all** — three user profiles and nothing authored.
 
-> **OPEN DECISION — owner call required before PR 5 is scopeable.** Recommendation: seed
-> `Information Technology` as a program; treat `Computer Science` and `Software Engineering` as
-> user-side values with a NULL catalog FK pending a curator ruling, rather than minting two
-> programs on 4 notes and 0 notes respectively. This reverses part of `08` **on evidence `08` did
-> not have**, so it needs ratifying rather than assuming.
+> **RESOLVED — ruled by the owner 2026-08-04. PR 5 is scopeable.** Seed `Information Technology` as
+> a program; `Computer Science` and `Software Engineering` stay user-side values with a NULL catalog
+> FK pending a curator ruling, rather than minting two programs on 4 notes and 0 notes respectively.
+> Nothing is deleted — both keep their existing strings, like the catalog's other unmappable values.
+> This reverses part of `08` **on evidence `08` did not have**; it is ratified, not assumed, and PR 5
+> must not re-litigate it.
 
 ### The settled judgment calls, confirmed against content
 

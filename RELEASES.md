@@ -23,9 +23,11 @@ Anti-drift — what this release explicitly does **NOT** change:
 - **Note content stays locked after `STUDY_PACK_READY`.** Only the two authoring axes become editable; this is not a reopening of the content lock.
 - **`docs/product/EXAM_MODES.md` is untouched** — locked contract, exactly 5 modes.
 
-### Open decision blocking PR 5 scoping
+### Resolved decision — PR 5 is scopeable
 
-**Computer Science / Information Technology / Software Engineering.** `08` ruled all three survive as distinct programs; the production read disagrees — IT has 74 notes across 11 subjects, Software Engineering has 4 notes whose only subject is *Computer Science*, and Computer Science has **0 notes** against 3 user profiles. Recommendation is to seed IT as a program and leave CS/SE as user-side values with a NULL FK pending a curator ruling. This reverses part of `08` on evidence `08` did not have, so it needs an owner call rather than an assumption.
+**Computer Science / Information Technology / Software Engineering — ruled by the owner 2026-08-04.** `08` ruled all three survive as distinct programs; the production read disagreed — IT has 74 notes across 11 subjects, Software Engineering has 4 notes whose only subject is *Computer Science*, and Computer Science has **0 notes** against 3 user profiles.
+
+**Ruling: seed `Information Technology` as a catalog program. `Computer Science` and `Software Engineering` stay user-side values with a NULL catalog FK**, pending a curator ruling if either grows real curriculum. Nothing is deleted — the 4 Software Engineering notes and the 3 Computer Science profiles keep their existing strings, exactly as the catalog's other unmappable values do. This reverses part of `08` on evidence `08` did not have; it is ratified rather than assumed, and PR 5 must not re-litigate it.
 
 ### Verification
 
