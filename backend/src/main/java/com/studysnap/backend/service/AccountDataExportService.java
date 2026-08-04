@@ -87,6 +87,8 @@ public class AccountDataExportService {
                 note.getId(),
                 note.getTitle(),
                 note.getSubject(),
+                note.getDomainContext(),
+                note.getLearnerLevel(),
                 note.getContent(),
                 note.getVisibility(),
                 note.getCopiedFromTitle(),

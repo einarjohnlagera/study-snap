@@ -91,6 +91,51 @@ Subject and Domain Context are different axes, and a value legitimately appearin
 
 **Guard:** when a note's `subject` equals its `domain_context`, surface an admin-side warning that the subject is probably too broad — a nudge, never a hard validation error. Domain Context values are not renamed to dodge the collision; borrowed board-subject-area names are precisely why the vocabulary reads well to learners.
 
+### Legacy-data policy: ambiguity is not migrated forward
+
+Ratified by the owner 2026-08-03, binding on every migration under this ADR. Later PRs must not reopen either rule.
+
+**1. Ambiguous legacy values are resolved per-record by content, never by blanket mapping.**
+
+The concrete case is `notes.course_program = 'High School'` (11 notes, all official and public, none in any collection). `LearnerLevel` already distinguishes `JUNIOR_HIGH` from `SENIOR_HIGH`, so the legacy label is strictly less precise than the taxonomy replacing it. Rules:
+
+- Classify each such note as `JUNIOR_HIGH` or `SENIOR_HIGH` from **its actual curriculum and content**, not from the old label.
+- Where a note cannot be classified confidently, **leave it unclassified for admin review** rather than assign a level that may be wrong.
+- **Do not introduce a `HIGH_SCHOOL` enum value** to preserve the ambiguity. Adding one would migrate the imprecision permanently into the new taxonomy, which is the opposite of this ADR's purpose.
+
+Derived operational rule: an unclassified note keeps `learner_level` NULL **and retains its existing `course_program`**, so it is never left with no classification at all — the fallback chain still resolves it. The general "clear `course_program` once the level moves out of it" step applies only to notes that were confidently classified.
+
+**Corollary, added 2026-08-03 while scoping PR 4 — an unclassified note also keeps `domain_context` NULL.** Setting a Domain Context on a note whose level could not be decided would defeat the rule above rather than complement it. `StudyPackGenerationContextResolver` (`:122-140`) resolves `effectiveAuthoringDomain` as `domainContext` → `courseProgram`, and `effectiveCurriculumLevel` as `noteLearnerLevel` → user level → `COLLEGE` — the level chain **never reads `courseProgram`**. So on an unclassified `High School` note, `'High School'` reaches `buildGenerationContextBlock` (`:1561-1566`) today as the `Domain:` line — the wrong axis, but a real grade-level signal. Backfilling `domain_context = GENERAL_EDUCATION` evicts it, because Domain Context wins that fallback, and nothing replaces it: static content takes its level from `noteLearnerLevel` **directly, with no reader fallback** (`:1554-1556`, deliberate — a Grade School reader must not lower a College note), so a NULL level emits no `Curriculum level:` line at all; quizzes and exams do fall back and land on the reader's level, defaulting to `COLLEGE`. The note therefore moves from a wrong-axis level signal to **no level signal for static content and college-level curriculum for quizzes**. Retaining `course_program` only preserves a classification if nothing overrides it. This is also the consistent reading of the promotion marker — `domain_context IS NULL` means "not yet classified," which is precisely this note's state.
+
+One consequence to expect rather than act on: because these rows keep `domain_context IS NULL` alongside `course_program = 'High School'`, they will appear in the promotion-backlog query described above under "Program-name fallback." **`High School` is not a thin program awaiting promotion** — those rows are admin-review flags for a classification that was declined, and the correct resolution is to classify the note, never to mint a Domain Context for the label.
+
+**Second corollary, added 2026-08-03 — clearing `course_program` is deferred out of the backfill entirely, for classified and unclassified notes alike.** The rule above ("clear `course_program` once the level moves out of it") is retained as intent but is **not** executed by PR 4. Three reasons, the first of which stands alone:
+
+1. **It achieves nothing for generation.** `effectiveAuthoringDomain` resolves `domainContext` first and only falls back to `courseProgram`, so once a note has a Domain Context its legacy label can never reach a prompt again. The generation defect these 49 notes represent is fixed by *setting* the two new axes, not by *clearing* the old one. Clearing is cosmetic.
+2. **It is not reversible**, which contradicts this ADR's own promise that Release A is "additive and reversible." For a note reclassified out of `High School` the original label is unrecoverable — a `JUNIOR_HIGH` note cannot be distinguished afterward from one that was always `Junior High`.
+3. **It would activate a live frontend defect.** `note-editor-page-client.tsx:269` populates `profileCourseProgram` unconditionally, while the `isEditMode` guard at `:270` gates only the draft prefill; `:592` then resolves `draft.courseProgram || profileCourseProgram` and writes the result into the payload at `:620`. On a note with a cleared `course_program`, an admin sees an empty Course/Program field while their **own profile program** is silently submitted on save — reintroducing exactly the free-text program contamination this ADR exists to remove, on canonical official notes. The defect is pre-existing and already affects null-program notes; deferring the clear simply declines to multiply its blast radius by 38.
+
+What counts as a *program* value — and therefore whether `Grade School` and `Junior High` survive at all — is properly PR 5's decision, which must already rule on `Civil Service`, `Biology`, `Professional / Board Exam Review`, and `Self Study / Personal Learning`. Adding two more exclusions there is zero marginal work; doing it here is an irreversible write with a known active hazard.
+
+**Left open, deliberately, at the time this corollary was written:** the same eviction applies in weaker form to the 11 Senior High strand notes, which keep `course_program` and gain `domain_context = GENERAL_EDUCATION` — so `Senior High – STEM` stops reaching the prompt and STEM, ABM, and HUMSS collapse to one domain constraint. The level is preserved there, so it is not this regression; it is risk R4 (a broader domain label replacing a narrower one) on live notes. It is not decided here because it is answerable empirically for less than it costs to argue: a strand note is the cheapest available R4 subject, and ADR-001 already prescribes generate-under-both-values as the tie-break of last resort. Resolve it in the owed R4 pass and record the answer here.
+
+> The word "unpublished" appeared in the ratifying instruction alongside "unclassified." This ADR interprets it conservatively as *leave unclassified*, and does **not** authorize flipping `visibility` from `PUBLIC` to `PRIVATE` — all 11 notes are live official public content, and silently withdrawing published material is precisely the kind of destructive side effect rule 2 below forbids. If actively unpublishing them is intended, that needs its own explicit decision.
+
+**2. Existing generated assets are preserved, but their semantic reach does not widen automatically.**
+
+> **Principle: preserve existing assets, but do not expand their semantic reach until their compatibility has been deliberately reclassified.**
+
+Applies to `exam_question_pool` and `challenge_quiz_question_bank` rows generated before this ADR:
+
+- Existing questions **continue to be reusable for their original source Note.** No behavior is taken away.
+- Domain Context is backfilled onto those rows **from the source Note, only where the mapping is deterministic.**
+- **Legacy `course_program` metadata is not evidence that a question is reusable across every newly-applicable program.** A question generated when a note belonged to one program carries no warrant for the ten programs the note may later be applicable to.
+- Until a PR explicitly re-keys and audits compatibility, legacy rows stay **source-note-scoped** and must not enter broader cross-note or cross-program sharing.
+- Rows whose source Note has no confidently resolved Domain Context remain usable **only through their existing narrow path**, or are excluded from shared retrieval. They are **not deleted**.
+- **No destructive regeneration and no bulk retirement of existing questions,** ever, under this ADR.
+
+**Clarification, so this is not read too broadly:** the cross-*user* Official template sharing shipped in `v0.60.0` (`OfficialChallengeQuizTemplateService`) is already source-note-scoped — an adopter's copied questions trace back to one source note via `copiedFromNoteId`. This policy does **not** restrict or disable it. What it restricts is *new* cross-program pooling that would treat many-program applicability as a licence to share questions across notes.
+
 ### Alternatives considered
 
 - **Inverse mapping (program → domain contexts), notes stay single-valued.** Far cheaper — dozens of rows, and already the shape `ExamGoalConfig` uses. Rejected: it breaks as soon as applicability is per-note rather than per-context (Engineering Algebra applies to eleven programs, Engineering Statics to nine), forcing a sparse override table plus a second mechanism, and it makes applicability implicit when it should be explicit. **Retired as a fallback 2026-08-03, on evidence rather than argument:** Query K showed sharing is ragged *and crosses program families* — `Construction Materials` is shared by Civil Engineering and Architecture, while `Engineering Sciences` subjects are shared by differing subsets (Strength of Materials broadly, Hydraulics narrowly). Under ragged cross-family sharing this alternative needs the per-note override table immediately, making it `note_course_program` with extra steps. Not a viable fallback at any cost level.

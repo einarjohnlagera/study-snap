@@ -24,6 +24,8 @@ Recommended fields:
 - `owner_user_id`
 - `title` (nullable)
 - `course_program` (nullable, defaults from `users.course_program` for new notes)
+- `domain_context` (nullable `VARCHAR(64)`, `DomainContext` enum; no default)
+- `learner_level` (nullable `VARCHAR(32)`, note-level `LearnerLevel` enum; no default)
 - `subject` (nullable)
 - `content` (text, required)
 - `tags` (text[] or json array, default empty)
@@ -49,18 +51,52 @@ Course / Program storage rule:
 - Course/program reuse is built by normalizing saved values rather than by writing to a second taxonomy table.
 - Normalization should trim whitespace, standardize dash formatting, and compare equivalent course/program values case-insensitively.
 - Learning Profile UI now requires both `learnerLevel` and `courseProgram` for onboarding completion and later profile saves, while storage remains nullable for pre-existing users until they update those fields.
-- `course_program` is the top-level library shelf, while `subject` stays the more specific academic topic and `tags` remain the fine-grained keywords.
+- `course_program` remains the legacy program label and fallback authoring context; it is not the classification apex for Domain Context, Note Learner Level, subject, or tags.
+
+Canonical authoring-axis storage rule:
+
+- `notes.domain_context` and `notes.learner_level` are nullable author-supplied note metadata governed by `ADR-001`.
+- `domain_context` uses the closed eight-value `DomainContext` Java enum persisted by name; adding a value is an architecture decision.
+- `learner_level` reuses the existing `LearnerLevel` enum at note scope and is distinct from `users.learner_level`.
+- `NULL` is valid for both columns. In particular, null `domain_context` marks the program-name fallback state; neither column has a database default or PR-1 backfill.
+- V104 classifies the 27 legacy `Grade School` and `Junior High` note rows as `GENERAL_EDUCATION` with their exact note learner level while retaining `course_program`.
+- V105 classifies four content-reviewed `High School` rows as `GENERAL_EDUCATION` with their curator-assigned level, deliberately leaves six unclassifiable `High School` rows with both axes null, and gives the Senior High strand rows only `SENIOR_HIGH` so their retained strand remains the fallback authoring domain.
+- Generation consumes both axes through `StudyPackGenerationContextResolver`. Teacher/Admin Note Editor and Bulk Generate surfaces expose them as optional authoring metadata; other profile UIs keep them hidden.
 
 Library/discovery payload usage:
 
 - Private and public note-list payloads should reuse note metadata directly from `notes`, especially:
   - `course_program`
+  - `domain_context`
+  - `learner_level`
   - `subject`
   - `tags`
   - `visibility`
   - `created_at`
   - `updated_at`
-- Public discovery payloads may also expose owner `learner_level` so Public Library can filter notes by audience level without introducing a separate note-level learner field.
+- Public discovery payloads may expose both the note-level authoring axes and owner profile metadata, but filtering remains unchanged in PR 1.
+
+## Bulk Generation Result Receipt
+
+`bulk_generation_result` is a terminal, read-once receipt rather than a batch job or progress model.
+
+Relevant fields:
+
+- `id`
+- `owner_user_id`
+- `subject`
+- `course_program` (nullable)
+- `domain_context` (nullable `VARCHAR(64)`, `DomainContext` enum)
+- `learner_level` (nullable `VARCHAR(32)`, note-level `LearnerLevel` enum)
+- `target_profile_type`
+- `make_public`
+- `requested_count`
+- `created_count`
+- `failed_topics` (`jsonb`)
+- `quota_blocked_topics` (`jsonb`)
+- `created_at`
+
+The two authoring-axis columns preserve the batch context for retry. Receipts are owner-scoped, deleted when consumed, and expired after 24 hours.
 
 ## Generated Study Pack Fields
 
@@ -114,6 +150,8 @@ Copy includes:
 
 - `title`
 - `course_program`
+- `domain_context`
+- `learner_level`
 - `subject`
 - `tags`
 - `content`

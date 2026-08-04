@@ -1,3 +1,5 @@
+import type { DomainContext, LearnerLevel, NoteTargetProfileType } from "@/lib/api";
+
 const BULK_QUEUED_FLASH_KEY = "notelib.bulk.queuedFlash";
 const BULK_RETRY_STASH_KEY = "notelib.bulk.retryTopics";
 
@@ -13,7 +15,9 @@ export type BulkQueuedFlash = {
 export type BulkGenerationRetryStash = {
   subject: string;
   courseProgram: string | null;
-  targetProfileType: string;
+  domainContext: DomainContext | null;
+  learnerLevel: LearnerLevel | null;
+  targetProfileType: NoteTargetProfileType;
   makePublic: boolean;
   topics: string[];
 };
@@ -94,7 +98,9 @@ export function consumeBulkGenerationRetryStash(): BulkGenerationRetryStash | nu
     return {
       subject: stash.subject,
       courseProgram: typeof stash.courseProgram === "string" ? stash.courseProgram : null,
-      targetProfileType: stash.targetProfileType,
+      domainContext: typeof stash.domainContext === "string" ? stash.domainContext as DomainContext : null,
+      learnerLevel: typeof stash.learnerLevel === "string" ? stash.learnerLevel as LearnerLevel : null,
+      targetProfileType: stash.targetProfileType as NoteTargetProfileType,
       makePublic: stash.makePublic,
       topics,
     };

@@ -11,6 +11,7 @@ import com.studysnap.backend.dto.CompanionContent;
 import com.studysnap.backend.dto.CompanionMentorTipAction;
 import com.studysnap.backend.dto.CompanionSection;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
@@ -49,6 +50,11 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OpenAiLlmStudyPackServiceTest {
+    private static final String COLLEGE_CURRICULUM_LINE = "Curriculum level: College";
+    private static final String DOMAIN_LINE_PREFIX = "Domain:";
+    private static final String CURRICULUM_LINE_PREFIX = "Curriculum level:";
+    private static final String ENGINEERING_MATHEMATICS_LABEL = "Engineering Mathematics";
+    private static final String READER_SCAFFOLDING_PREFIX = "Reader scaffolding:";
 
     @Mock
     private RestClient restClient;
@@ -77,10 +83,10 @@ class OpenAiLlmStudyPackServiceTest {
             restClient,
             new OpenAiPromptResources(
                 "System prompt",
-                "Developer prompt with {QUIZ_COUNT} questions. Match depth and terminology to Course / Program. {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
+                "Developer prompt with {QUIZ_COUNT} questions. Use Domain for terminology and Note learner level for depth. {TRUE_FALSE_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 objectMapper.createObjectNode(),
                 "Note generation system prompt",
-                "Note generation developer prompt. Match depth and terminology to Course / Program. Built for studying, not just exploring information. Max {MAX_WORDS} words.",
+                "Note generation developer prompt. Use Domain for terminology and Note learner level for depth. Built for studying, not just exploring information. Max {MAX_WORDS} words. Quick Recall bullets: at or under {MAX_ITEM_CHARS} characters.",
                 "Companion system prompt",
                 "Companion developer prompt {REQUESTED_SECTIONS} {COLLECTION_TITLE} {COLLECTION_DESCRIPTION} {COURSE_PROGRAM} {STRUCTURE_CONTEXT}",
                 "Challenge quiz system prompt",
@@ -244,7 +250,7 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
-    void contentPromptTemplates_useCourseProgramWithoutLearnerLevelPlaceholders() throws IOException {
+    void contentPromptTemplates_splitDomainAndNoteLearnerLevelWithoutReaderPlaceholders() throws IOException {
         for (String resourcePath : List.of(
                 "prompts/study-pack-v1/note-generation-developer.txt",
                 "prompts/study-pack-v1/developer.txt"
@@ -252,14 +258,16 @@ class OpenAiLlmStudyPackServiceTest {
             String template = new ClassPathResource(resourcePath).getContentAsString(StandardCharsets.UTF_8);
 
             assertThat(template)
-                    .contains("Course / Program")
+                    .contains("Domain")
+                    .contains("Note learner level")
+                    .doesNotContain("shared academic level and domain signal")
                     .doesNotContain("{LEARNER_LEVEL}")
                     .doesNotContain("{LEARNER_LEVEL_GUIDANCE}");
         }
     }
 
     @Test
-    void quizAndExamPromptTemplates_keepLearnerLevelPlaceholders() throws IOException {
+    void quizAndExamPromptTemplates_labelLearnerPlaceholderAsCurriculumLevel() throws IOException {
         for (String resourcePath : List.of(
                 "prompts/study-pack-v1/challenge-quiz-developer.txt",
                 "prompts/study-pack-v1/adaptive-practice-developer.txt",
@@ -270,8 +278,168 @@ class OpenAiLlmStudyPackServiceTest {
         )) {
             String template = new ClassPathResource(resourcePath).getContentAsString(StandardCharsets.UTF_8);
 
-            assertThat(template).contains("{LEARNER_LEVEL}");
+            assertThat(template)
+                    .contains("Curriculum level")
+                    .contains("{LEARNER_LEVEL}");
         }
+
+        String longExamSystem = new ClassPathResource(
+                "prompts/study-pack-v1/long-exam-system.txt"
+        ).getContentAsString(StandardCharsets.UTF_8);
+        assertThat(longExamSystem).contains("authoritative curriculum level");
+    }
+
+    @Test
+    void buildGenerationContextBlock_omitsDomainWhenNothingResolves() throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                null,
+                null,
+                null,
+                List.of(),
+                null,
+                null
+        );
+
+        // Static content (ADR-001 rule 1): no domain resolves and the note claims no level, so emit
+        // neither. Defaulting the level to College here would assert a depth the note never claimed —
+        // the same "a blank constraint beats a false one" rule the domain line follows.
+        assertThat(invokeBuildGenerationContextBlock(context, false))
+                .doesNotContain(CURRICULUM_LINE_PREFIX)
+                .doesNotContain(DOMAIN_LINE_PREFIX)
+                .doesNotContain("Unknown")
+                .doesNotContain("Not provided");
+        assertThat(invokeBuildGenerationContextBlock(null, false))
+                .doesNotContain(CURRICULUM_LINE_PREFIX)
+                .doesNotContain(DOMAIN_LINE_PREFIX);
+
+        // Quizzes (ADR-001 rule 2) legitimately fall back note -> reader -> College, so the
+        // curriculum level is always present there even when nothing else resolves.
+        assertThat(invokeBuildGenerationContextBlock(context, true))
+                .contains(COLLEGE_CURRICULUM_LINE)
+                .doesNotContain(DOMAIN_LINE_PREFIX);
+        assertThat(invokeBuildGenerationContextBlock(null, true))
+                .contains(COLLEGE_CURRICULUM_LINE);
+    }
+
+    @Test
+    void buildGenerationContextBlock_omitsScaffoldingWithoutALowerReader() throws Exception {
+        StudyPackGenerationContext noReader = new StudyPackGenerationContext(
+                null,
+                "General Education",
+                null,
+                List.of(),
+                DomainContext.GENERAL_EDUCATION,
+                LearnerLevel.SENIOR_HIGH
+        );
+        StudyPackGenerationContext equalReader = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                ENGINEERING_MATHEMATICS_LABEL,
+                null,
+                List.of(),
+                DomainContext.ENGINEERING_MATHEMATICS,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeBuildGenerationContextBlock(noReader, true))
+                .contains("Curriculum level: Senior High School")
+                .doesNotContain(READER_SCAFFOLDING_PREFIX);
+        assertThat(invokeBuildGenerationContextBlock(equalReader, true))
+                .contains(COLLEGE_CURRICULUM_LINE)
+                .doesNotContain(READER_SCAFFOLDING_PREFIX);
+    }
+
+    @Test
+    void isQuantitativeContext_usesEffectiveDomainInsteadOfLegacyProgram() throws Exception {
+        StudyPackGenerationContext quantitativeDomain = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Nursing",
+                null,
+                List.of(),
+                DomainContext.ENGINEERING_MATHEMATICS,
+                LearnerLevel.COLLEGE
+        );
+        StudyPackGenerationContext nonQuantitativeDomain = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                ENGINEERING_MATHEMATICS_LABEL,
+                null,
+                List.of(),
+                DomainContext.NURSING,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeIsQuantitativeContext(quantitativeDomain)).isTrue();
+        assertThat(invokeIsQuantitativeContext(nonQuantitativeDomain)).isFalse();
+    }
+
+    @Test
+    void buildSubjectSuggestionGuidance_usesSchoolBranchForSchoolCurriculumLevels() throws Exception {
+        for (LearnerLevel schoolLevel : List.of(
+                LearnerLevel.GRADE_SCHOOL,
+                LearnerLevel.JUNIOR_HIGH,
+                LearnerLevel.SENIOR_HIGH
+        )) {
+            StudyPackGenerationContext context = new StudyPackGenerationContext(
+                    LearnerLevel.PROFESSIONAL,
+                    ENGINEERING_MATHEMATICS_LABEL,
+                    null,
+                    List.of(),
+                    DomainContext.GENERAL_EDUCATION,
+                    schoolLevel
+            );
+
+            assertThat(invokeBuildSubjectSuggestionGuidanceBlock(context))
+                    .contains("For a school-level curriculum")
+                    .contains("Because the note is authored at a school-level curriculum")
+                    .doesNotContain("For college, board-review, professional, or personal-learning curricula");
+        }
+    }
+
+    @Test
+    void buildSubjectSuggestionGuidance_isIndependentOfTheReaderLevelWhenTheNoteHasNone() throws Exception {
+        // This block is concatenated into the STATIC user prompt, so the reader must not influence it.
+        // Before the fix it called effectiveCurriculumLevel, which falls back reader -> COLLEGE, so two
+        // users generating from byte-identical notes received different subject guidance. Every existing
+        // test supplied a note level, where old and new code agree -- the defect lived entirely in the
+        // null case, which is ~every production row.
+        String schoolReader = invokeBuildSubjectSuggestionGuidanceBlock(new StudyPackGenerationContext(
+                LearnerLevel.GRADE_SCHOOL, "Civil Engineering", null, List.of(), null, null));
+        String collegeReader = invokeBuildSubjectSuggestionGuidanceBlock(new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Civil Engineering", null, List.of(), null, null));
+
+        assertThat(schoolReader).isEqualTo(collegeReader);
+        // With no authored level, neither list may be silently chosen for the note -- emit both.
+        assertThat(schoolReader)
+                .contains("For a school-level curriculum")
+                .contains("For college, board-review, professional, or personal-learning curricula")
+                .doesNotContain("Because the note is authored at a school-level curriculum");
+    }
+
+    @Test
+    void buildSubjectSuggestionGuidance_keepsTheStrandGuardOnTheDomainNotTheReaderLevel() throws Exception {
+        // A legacy 'Senior High – STEM' note with no authored level, read by a COLLEGE user, previously
+        // lost the strand guard entirely and would echo "STEM" as its subject -- exactly the row class
+        // V104/V105 exist to fix. The guard is data-driven and must survive any reader.
+        String block = invokeBuildSubjectSuggestionGuidanceBlock(new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Senior High – STEM", null, List.of(), null, null));
+
+        assertThat(block).contains("If the domain above is a K-12 strand or track");
+    }
+
+    @Test
+    void buildSubjectSuggestionGuidance_usesFieldOfStudyBranchOtherwise() throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.GRADE_SCHOOL,
+                "Senior High – STEM",
+                null,
+                List.of(),
+                DomainContext.ENGINEERING_SCIENCES,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeBuildSubjectSuggestionGuidanceBlock(context))
+                .contains("Domain context is: Engineering Sciences")
+                .contains("For college, board-review, professional, or personal-learning curricula")
+                .doesNotContain("Because the curriculum level is school-level");
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -296,6 +464,39 @@ class OpenAiLlmStudyPackServiceTest {
         );
         method.setAccessible(true);
         return (String) method.invoke(service, allowTrueFalse);
+    }
+
+    private String invokeBuildGenerationContextBlock(
+            StudyPackGenerationContext context,
+            boolean includeLearnerLevel
+    ) throws Exception {
+        Method method = OpenAiLlmStudyPackService.class.getDeclaredMethod(
+                "buildGenerationContextBlock",
+                StudyPackGenerationContext.class,
+                boolean.class
+        );
+        method.setAccessible(true);
+        return (String) method.invoke(service, context, includeLearnerLevel);
+    }
+
+    private String invokeBuildSubjectSuggestionGuidanceBlock(StudyPackGenerationContext context) throws Exception {
+        Method method = OpenAiLlmStudyPackService.class.getDeclaredMethod(
+                "buildSubjectSuggestionGuidanceBlock",
+                StudyPackGenerationContext.class
+        );
+        method.setAccessible(true);
+        return (String) method.invoke(service, context);
+    }
+
+    private boolean invokeIsQuantitativeContext(StudyPackGenerationContext context) throws Exception {
+        Method method = OpenAiLlmStudyPackService.class.getDeclaredMethod(
+                "isQuantitativeContext",
+                StudyPackGenerationContext.class,
+                List.class,
+                String.class
+        );
+        method.setAccessible(true);
+        return (boolean) method.invoke(service, context, List.of(), null);
     }
 
     private JsonNode invokeBuildGeneratedQuizSchema(
@@ -471,17 +672,19 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
-    void generateStudyPack_usesCourseProgramGuidanceWithoutLearnerLevel() throws JsonProcessingException {
+    void generateStudyPack_usesNoteDomainAndLevelForStaticContentInsteadOfReaderLevel() throws JsonProcessingException {
         stubResponsesCall();
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
 
         service.generateStudyPack(
             "Beam design notes",
             new StudyPackGenerationContext(
-                null,
+                LearnerLevel.GRADE_SCHOOL,
                 "Civil Engineering",
                 "Engineering",
-                List.of("beams", "load")
+                List.of("beams", "load"),
+                DomainContext.CIVIL_ENGINEERING,
+                LearnerLevel.BOARD_EXAM_REVIEW
             )
         );
 
@@ -489,16 +692,118 @@ class OpenAiLlmStudyPackServiceTest {
         verify(requestSpec).body(requestCaptor.capture());
         String requestBody = requestCaptor.getValue();
 
-        assertThat(requestBody).contains("Course / Program: Civil Engineering")
-            .contains("Match depth and terminology to Course / Program")
-            .contains("Content calibration: use the Course / Program above to set depth")
+        assertThat(requestBody).contains("Domain: Civil Engineering")
+            .contains("Use Domain for terminology and Note learner level for depth")
+            .contains("Curriculum level: Board Exam Review")
+            .contains("Content calibration: use the Domain and Curriculum level above")
             .contains("Current subject: Engineering")
             .contains("Subject guidance: use the specific academic subject or professional discipline")
             .contains("Do not suggest overly broad subjects such as Business, Medicine, Engineering, or Law")
             .contains("label only, no topic suffix")
-            .doesNotContain("Learner level:")
+            .doesNotContain("Grade School")
+            .doesNotContain(READER_SCAFFOLDING_PREFIX)
             .doesNotContain("{LEARNER_LEVEL}")
             .doesNotContain("{LEARNER_LEVEL_GUIDANCE}");
+    }
+
+    @Test
+    void generateStudyPack_omitsCurriculumLevelForStaticContentWhenNoteHasNoAuthoredLevel()
+            throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
+
+        // ADR-001 rule 1: static content is never calibrated by the reader's level. A note with no
+        // authored learner level — the state of every note until PR 4's backfill — must emit no
+        // curriculum level at all, rather than silently borrowing the reader's.
+        service.generateStudyPack(
+            "Beam design notes",
+            new StudyPackGenerationContext(
+                LearnerLevel.GRADE_SCHOOL,
+                "Civil Engineering",
+                "Engineering",
+                List.of("beams", "load"),
+                DomainContext.CIVIL_ENGINEERING,
+                null
+            )
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        String requestBody = requestCaptor.getValue();
+
+        assertThat(requestBody).contains("Domain: Civil Engineering")
+            .contains("Content calibration: use the Domain above")
+            .contains("This note has no authored learner level, so do not infer one")
+            .doesNotContain("Curriculum level:")
+            .doesNotContain("Grade School")
+            .doesNotContain(READER_SCAFFOLDING_PREFIX);
+    }
+
+    @Test
+    void generateChallengeQuiz_noteCollegeAndGradeSchoolReaderKeepsCollegeWithScaffolding()
+            throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload()));
+
+        service.generateChallengeQuiz(
+                "Engineering Algebra",
+                "Algebra summary",
+                List.of("Linear equations"),
+                List.of(),
+                2,
+                "medium",
+                new StudyPackGenerationContext(
+                        LearnerLevel.GRADE_SCHOOL,
+                        "Civil Engineering",
+                        "Mathematics",
+                        List.of("algebra"),
+                        DomainContext.ENGINEERING_MATHEMATICS,
+                        LearnerLevel.COLLEGE
+                )
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(requestCaptor.getValue())
+                .contains("Domain: Engineering Mathematics")
+                .contains(COLLEGE_CURRICULUM_LINE)
+                .contains("for College")
+                .contains("Reader scaffolding: the reader's level is Grade School, below the note's College level")
+                .contains("do not lower the curriculum, terminology, or difficulty below the note's level")
+                .doesNotContain("Curriculum level: Grade School");
+    }
+
+    @Test
+    void generateChallengeQuiz_noteJuniorHighAndProfessionalReaderDoesNotEscalateDifficulty()
+            throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload()));
+
+        service.generateChallengeQuiz(
+                "School Science",
+                "Science summary",
+                List.of("Matter"),
+                List.of(),
+                2,
+                "medium",
+                new StudyPackGenerationContext(
+                        LearnerLevel.PROFESSIONAL,
+                        "Professional Practice",
+                        "Science",
+                        List.of(),
+                        DomainContext.GENERAL_EDUCATION,
+                        LearnerLevel.JUNIOR_HIGH
+                )
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(requestCaptor.getValue())
+                .contains("Curriculum level: Junior High School")
+                .contains("for Junior High School")
+                .doesNotContain(READER_SCAFFOLDING_PREFIX)
+                .doesNotContain("Curriculum level: Professional")
+                .doesNotContain("for Professional");
     }
 
     @Test
@@ -585,7 +890,120 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
-    void generateNoteFromTopic_usesCourseProgramContextWithNullLearnerLevel() throws JsonProcessingException {
+    void generateNoteFromTopic_acceptsAFormulaQuickRecallItemThatExceedsTheProseWordCeiling() throws JsonProcessingException {
+        // Reproduces the reported LLM_INVALID_OUTPUT failure verbatim (Civil Engineering / "Weirs",
+        // logged 2026-08-03). This item is 199 characters — valid under the schema — but 38
+        // whitespace-delimited "words", which the shared 28-word prose ceiling used to reject.
+        // It is a formula followed by definitions of its variables, i.e. correct content.
+        String formulaItem = "Discharge formula — Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2) for sharp-crested weirs, "
+                + "where Q is flow, C_d is discharge coefficient, L is crest length, g is gravity acceleration, "
+                + "H is head over crest";
+        assertThat(formulaItem.length()).isLessThanOrEqualTo(240);
+        assertThat(formulaItem.split("\\s+")).hasSizeGreaterThan(28);
+
+        stubResponsesCall();
+        when(responseSpec.body(String.class))
+                .thenReturn(generatedQuizResponseJson(generatedNotePayloadWithQuickRecall(formulaItem)));
+
+        String content = service.generateNoteFromTopic(
+                "Weirs",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+        );
+
+        assertThat(content).contains("Discharge formula");
+    }
+
+    @Test
+    void generateNoteFromTopic_rejectsAQuickRecallItemOverTheCharacterCeiling() throws JsonProcessingException {
+        // The character bound still has to bite, otherwise dropping the word count would leave
+        // Quick Recall unbounded on the backend side.
+        String overlong = "Term — " + "x".repeat(240);
+        assertThat(overlong.length()).isGreaterThan(240);
+
+        stubResponsesCall();
+        when(responseSpec.body(String.class))
+                .thenReturn(generatedQuizResponseJson(generatedNotePayloadWithQuickRecall(overlong)));
+
+        assertThatThrownBy(() -> service.generateNoteFromTopic(
+                "Weirs",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+        )).hasMessageContaining("invalid quick recall content");
+    }
+
+    @Test
+    void generateNoteFromTopic_stillRejectsAnOverlongCoreDetailsItem() throws JsonProcessingException {
+        // coreDetails and whyItMatters are prose and deliberately keep the 28-word ceiling.
+        String wordyProse = "word ".repeat(40).trim();
+        ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
+        payload.putArray("coreDetails")
+                .add(wordyProse)
+                .add("Second Law: net force equals mass times acceleration.")
+                .add("Third Law: for every action there is an equal and opposite reaction.");
+
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        assertThatThrownBy(() -> service.generateNoteFromTopic(
+                "Weirs",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+        )).isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void noteGenerationPromptStatesTheQuickRecallCharacterBound() throws JsonProcessingException {
+        // The 4-of-5 sampled-failure rate came from the model never being told the bound it was
+        // judged against. If this placeholder stops being substituted, the prompt silently ships
+        // a literal "{MAX_ITEM_CHARS}" and the bound becomes guesswork again.
+        stubResponsesCall();
+        when(responseSpec.body(String.class))
+                .thenReturn(generatedQuizResponseJson(generatedNotePayloadWithQuickRecall("First Law — law of inertia")));
+
+        service.generateNoteFromTopic(
+                "Weirs",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(requestCaptor.getValue())
+                .contains("240 characters")
+                .doesNotContain("{MAX_ITEM_CHARS}");
+    }
+
+    @Test
+    void noteGenerationPromptResourceDeclaresTheQuickRecallCharacterPlaceholder() throws Exception {
+        // The test above proves substitution works against a stubbed template. This one proves the
+        // real prompt actually asks for the bound -- without it, deleting the line from the
+        // resource file would leave the model uninstructed and every test still green.
+        String template = new String(
+                new ClassPathResource("prompts/study-pack-v1/note-generation-developer.txt")
+                        .getInputStream().readAllBytes(),
+                StandardCharsets.UTF_8
+        );
+        assertThat(template).contains("{MAX_ITEM_CHARS}");
+    }
+
+    private ObjectNode generatedNotePayloadWithQuickRecall(String firstQuickRecallItem) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("title", "Discharge Over Sharp-Crested Weirs");
+        payload.put("overview", "Weirs are hydraulic structures used to measure and control open-channel flow. Their discharge depends on head and crest geometry.");
+        payload.put("keyIdea", "Discharge over a weir varies with the three-halves power of the head.");
+        payload.putArray("coreDetails")
+                .add("Sharp-crested weirs are common flow-measurement structures.")
+                .add("Discharge coefficient depends on crest geometry and approach conditions.")
+                .add("Head is measured upstream of the drawdown zone.");
+        payload.putArray("whyItMatters")
+                .add("Weir sizing governs channel capacity and flood safety.")
+                .add("Board exams test discharge computation directly.");
+        payload.putArray("quickRecall")
+                .add(firstQuickRecallItem)
+                .add("Head — depth of flow over the crest")
+                .add("Crest length — L in the discharge equation");
+        return payload;
+    }
+
+    @Test
+    void generateNoteFromTopic_usesProgramDomainFallbackAndCollegeLevelFallback() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("title", "Newton's Laws of Motion");
@@ -626,18 +1044,22 @@ class OpenAiLlmStudyPackServiceTest {
         verify(requestSpec).body(requestCaptor.capture());
         String requestBody = requestCaptor.getValue();
 
+        // Note generation is static content (ADR-001 rule 1): the legacy program supplies the domain,
+        // but with no authored note level there is no level signal at all — not a College default and
+        // certainly not the reader's level.
         assertThat(requestBody).contains("Topic: Newton's Laws of Motion")
-                .contains("Course / Program: Senior High – STEM")
-                .contains("Match depth and terminology to Course / Program")
-                .contains("Content calibration: use the Course / Program above to set depth")
-                .doesNotContain("Learner level:")
+                .contains("Domain: Senior High – STEM")
+                .contains("Use Domain for terminology and Note learner level for depth")
+                .doesNotContain(CURRICULUM_LINE_PREFIX)
+                .contains("Content calibration: use the Domain above")
+                .contains("This note has no authored learner level, so do not infer one")
                 .doesNotContain("{LEARNER_LEVEL}")
                 .doesNotContain("{LEARNER_LEVEL_GUIDANCE}")
                 .contains("Built for studying, not just exploring information.");
     }
 
     @Test
-    void generateCompanion_usesPremiumModelAndReturnsOnlyRequestedSections() throws JsonProcessingException {
+    void generateCompanion_keepsReviewSetCourseProgramAndReturnsOnlyRequestedSections() throws JsonProcessingException {
         stubResponsesCall();
         when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildCompanionPayload()));
 
@@ -660,6 +1082,7 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(request.path("input").toString())
                 .contains("OVERVIEW")
                 .contains("Cell Biology Plan")
+                .contains("Nursing")
                 .contains("Subject Plans");
     }
 
@@ -1049,7 +1472,7 @@ class OpenAiLlmStudyPackServiceTest {
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
         verify(requestSpec).body(requestCaptor.capture());
         assertThat(requestCaptor.getValue())
-                .contains("Learner level: Board Exam Review")
+                .contains("Curriculum level: Board Exam Review")
                 .contains("for Board Exam Review")
                 .contains("questionFormat")
                 .contains("\"TRUE_FALSE\"")
@@ -1160,6 +1583,37 @@ class OpenAiLlmStudyPackServiceTest {
             .contains("Teacher quiz system prompt")
             .contains("Teacher quiz developer prompt for 30")
             .doesNotContain("{QUESTION_COUNT}");
+    }
+
+    @Test
+    void generateTeacherQuiz_explicitSeniorHighCurriculumHasNoReaderScaffolding() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(buildGeneratedQuizPayload("Teacher", 10))
+        );
+
+        service.generateTeacherQuiz(
+                "Engineering Algebra",
+                "Algebra notes",
+                List.of(),
+                10,
+                new StudyPackGenerationContext(
+                        null,
+                        "Civil Engineering",
+                        "Mathematics",
+                        List.of("algebra"),
+                        DomainContext.ENGINEERING_MATHEMATICS,
+                        LearnerLevel.SENIOR_HIGH
+                )
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        assertThat(requestCaptor.getValue())
+                .contains("Curriculum level: Senior High School")
+                .contains("for Senior High School")
+                .doesNotContain(READER_SCAFFOLDING_PREFIX)
+                .doesNotContain(COLLEGE_CURRICULUM_LINE);
     }
 
     @Test

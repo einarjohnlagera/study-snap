@@ -6,11 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.68.0 — Topic Note Rename** (In Progress, base branch `releases/v0.68.0`). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
+Current version: **v0.69.0 — Canonical Knowledge Foundation** (In Progress, base branch `releases/v0.69.0`). Release A of `docs/architecture/ADR-001-canonical-knowledge-architecture.md`. Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
 - `AGENTS.md` — implementation rules, anti-drift constraints, code quality rules. Always check this first.
+- `docs/architecture/ADR-NNN-*.md` — **binding architecture decision records; read any that touch what you are changing.** `ADR-001-canonical-knowledge-architecture.md` (Accepted 2026-08-03) governs the Note metadata axes: Subject (*what*), **Domain Context** (*how it is authored* — the sole LLM domain constraint), **Note Learner Level** (*how deep*), **Applicable Programs** (*where it appears* — discovery only, never reaches a prompt), and Target Audience (*who* — discovery only, never depth). An ADR outranks a feature doc where they disagree.
+- `docs/architecture/ARCHITECTURE.md` and `docs/architecture/DATA_MODEL.md` — system shape and schema
 - `docs/product/ROADMAP.md` — what's in scope for the current release and future phases
 - `docs/product/SPEC.md` — canonical product behavior
 - `docs/product/EXAM_MODES.md` — quiz mode hierarchy (locked contract; exactly 5 modes)
@@ -120,7 +122,7 @@ The core async flow that touches the most files:
 
 Prompts live in `backend/src/main/resources/prompts/study-pack-v1/`. Each quiz mode has its own `{mode}-developer.txt` + `{mode}-system.txt` pair.
 
-**Generation context** is resolved in a shared utility: note-level `courseProgram` is always preferred and profile `courseProgram` is fallback only. Static note/Study Pack content uses course/program; learner level remains in context for quizzes, exams, and exam-pool pre-warm. Do not bypass this resolver.
+**Generation context** is resolved in `StudyPackGenerationContextResolver`; do not bypass it. Authoring domain resolves note `domainContext` -> note `courseProgram` -> profile `courseProgram`, while curriculum level resolves note `learnerLevel` -> profile `learnerLevel` -> `COLLEGE`. Static note/Study Pack content uses the effective domain plus note-authored level. Quizzes and exams keep that level as the curriculum floor; a lower reader level may soften scaffolding and wording but never lower curriculum, terminology, or difficulty.
 
 LLM fan-out batches run on a dedicated `llmParallelTaskExecutor`; the main `studyPackGenerationTaskExecutor` must not be passed to `generateLongExamParallel`.
 

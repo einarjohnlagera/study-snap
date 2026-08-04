@@ -156,6 +156,8 @@ public class DashboardService {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null
         );
     }
@@ -899,6 +901,8 @@ public class DashboardService {
                 noteMetadata.noteTitle(),
                 noteMetadata.subject(),
                 noteMetadata.courseProgram(),
+                noteMetadata.domainContext(),
+                noteMetadata.learnerLevel(),
                 SummaryPreviewUtils.buildSummaryPreview(studyPack.getSummary(), 140),
                 resumeType,
                 reason,
@@ -954,16 +958,20 @@ public class DashboardService {
     private ContinueStudyingNoteMetadata resolveNoteMetadata(StudyPackEntity studyPack) {
         UUID noteId = studyPack.getNoteId();
         if (noteId == null || studyPack.getOwnerUserId() == null) {
-            return new ContinueStudyingNoteMetadata(studyPack.getTitle(), studyPack.getSubject(), null);
+            return new ContinueStudyingNoteMetadata(studyPack.getTitle(), studyPack.getSubject(), null, null, null);
         }
 
         return noteRepository.findByIdAndOwnerUserId(noteId, studyPack.getOwnerUserId())
                 .map(note -> new ContinueStudyingNoteMetadata(
                         normalizeOptionalText(note.getTitle(), studyPack.getTitle()),
                         normalizeOptionalText(note.getSubject(), studyPack.getSubject()),
-                        normalizeOptionalText(note.getCourseProgram(), null)
+                        normalizeOptionalText(note.getCourseProgram(), null),
+                        note.getDomainContext() == null ? null : note.getDomainContext().name(),
+                        note.getLearnerLevel() == null ? null : note.getLearnerLevel().name()
                 ))
-                .orElseGet(() -> new ContinueStudyingNoteMetadata(studyPack.getTitle(), studyPack.getSubject(), null));
+                .orElseGet(() -> new ContinueStudyingNoteMetadata(
+                        studyPack.getTitle(), studyPack.getSubject(), null, null, null
+                ));
     }
 
     private String normalizeOptionalText(String value, String fallback) {
@@ -1209,7 +1217,9 @@ public class DashboardService {
     private record ContinueStudyingNoteMetadata(
             String noteTitle,
             String subject,
-            String courseProgram
+            String courseProgram,
+            String domainContext,
+            String learnerLevel
     ) {
     }
 

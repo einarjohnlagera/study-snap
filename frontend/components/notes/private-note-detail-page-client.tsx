@@ -1259,6 +1259,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         title: nextMetadata.title,
         subject: nextMetadata.subject,
         courseProgram: note.courseProgram ?? null,
+        // PUT is a full replace: omitting these wipes them. Preserve what the note already carries.
+        domainContext: note.domainContext ?? null,
+        learnerLevel: note.learnerLevel ?? null,
         tags: nextMetadata.tags,
         targetProfileType: note.targetProfileType,
         content: note.content,
@@ -1394,6 +1397,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         title: normalizeMetadataInput(metadataDraft.title),
         subject: normalizeMetadataInput(metadataDraft.subject),
         courseProgram: normalizeMetadataInput(metadataDraft.courseProgram),
+        // Not editable on this page, but PUT is a full replace — carry them through untouched.
+        domainContext: note.domainContext ?? null,
+        learnerLevel: note.learnerLevel ?? null,
         tags: metadataDraft.tags,
         targetProfileType: nextTargetProfileType,
         content: note.content,

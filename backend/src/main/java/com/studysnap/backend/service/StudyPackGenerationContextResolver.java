@@ -1,5 +1,7 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
@@ -17,6 +19,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class StudyPackGenerationContextResolver {
+    private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
+
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
 
@@ -30,13 +34,17 @@ public class StudyPackGenerationContextResolver {
                         user.getLearnerLevel(),
                         note == null ? user.getCourseProgram() : firstNonBlank(note.getCourseProgram(), user.getCourseProgram()),
                         note == null ? null : note.getSubject(),
-                        tags
+                        tags,
+                        note == null ? null : note.getDomainContext(),
+                        note == null ? null : note.getLearnerLevel()
                 ))
                 .orElseGet(() -> new StudyPackGenerationContext(
                         null,
                         note == null ? null : note.getCourseProgram(),
                         note == null ? null : note.getSubject(),
-                        tags
+                        tags,
+                        note == null ? null : note.getDomainContext(),
+                        note == null ? null : note.getLearnerLevel()
                 ));
     }
 
@@ -55,14 +63,18 @@ public class StudyPackGenerationContextResolver {
                         null,
                         null,
                         studyPack == null ? null : studyPack.getSubject(),
-                        tags
+                        tags,
+                        null,
+                        null
                 ));
     }
 
     public StudyPackGenerationContext resolveForBulkGeneration(
             UUID ownerUserId,
             String courseProgram,
-            String subject
+            String subject,
+            DomainContext domainContext,
+            LearnerLevel noteLearnerLevel
     ) {
         return userRepository.findById(ownerUserId)
                 .map(user -> new StudyPackGenerationContext(
@@ -71,13 +83,17 @@ public class StudyPackGenerationContextResolver {
                                 firstNonBlank(courseProgram, user.getCourseProgram())
                         ),
                         subject,
-                        List.of()
+                        List.of(),
+                        domainContext,
+                        noteLearnerLevel
                 ))
                 .orElseGet(() -> new StudyPackGenerationContext(
                         null,
                         CourseProgramNormalizationUtils.normalizeForStorage(courseProgram),
                         subject,
-                        List.of()
+                        List.of(),
+                        domainContext,
+                        noteLearnerLevel
                 ));
     }
 
@@ -97,11 +113,33 @@ public class StudyPackGenerationContextResolver {
                 user.getLearnerLevel(),
                 user.getCourseProgram(),
                 studyPack == null ? null : studyPack.getSubject(),
-                tags
+                tags,
+                null,
+                null
         );
     }
 
-    private String firstNonBlank(String primary, String fallback) {
+    public static String effectiveAuthoringDomain(StudyPackGenerationContext context) {
+        if (context == null) {
+            return null;
+        }
+        if (context.domainContext() != null) {
+            return context.domainContext().getLabel();
+        }
+        return firstNonBlank(context.courseProgram(), null);
+    }
+
+    public static LearnerLevel effectiveCurriculumLevel(StudyPackGenerationContext context) {
+        if (context == null) {
+            return DEFAULT_LEARNER_LEVEL;
+        }
+        if (context.noteLearnerLevel() != null) {
+            return context.noteLearnerLevel();
+        }
+        return context.learnerLevel() == null ? DEFAULT_LEARNER_LEVEL : context.learnerLevel();
+    }
+
+    private static String firstNonBlank(String primary, String fallback) {
         if (primary != null && !primary.isBlank()) {
             return primary;
         }

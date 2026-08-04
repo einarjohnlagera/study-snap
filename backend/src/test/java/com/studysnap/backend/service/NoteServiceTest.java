@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.NoteStatusResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.UpsertNoteRequest;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteTargetProfileType;
@@ -22,6 +23,8 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.InvalidDomainContextException;
+import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
@@ -141,6 +144,8 @@ class NoteServiceTest {
                 "Title",
                 "Subject",
                 null,
+                null,
+                null,
                 List.of(),
                 null,
                 "content"
@@ -164,6 +169,8 @@ class NoteServiceTest {
                 "  Intro to React  ",
                 "  Web Dev  ",
                 null,
+                null,
+                null,
                 List.of("react", "frontend"),
                 null,
                 "  hooks and state  "
@@ -178,6 +185,8 @@ class NoteServiceTest {
         assertThat(saved.getStatus()).isEqualTo(NoteStatus.DRAFT);
         assertThat(saved.getVisibility()).isEqualTo(NoteVisibility.PRIVATE);
         assertThat(saved.getCourseProgram()).isEqualTo("Computer Science");
+        assertThat(saved.getDomainContext()).isNull();
+        assertThat(saved.getLearnerLevel()).isNull();
         assertThat(saved.getContent()).isEqualTo("hooks and state");
         assertThat(saved.getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
         assertThat(saved.getCopiedFromUserId()).isNull();
@@ -185,10 +194,106 @@ class NoteServiceTest {
 
         assertThat(created.studyPackStatus()).isEqualTo("DRAFT");
         assertThat(created.courseProgram()).isEqualTo("Computer Science");
+        assertThat(created.domainContext()).isNull();
+        assertThat(created.learnerLevel()).isNull();
         assertThat(created.targetProfileType()).isEqualTo("STUDENT");
         assertThat(created.copiedFromUserId()).isNull();
         assertThat(created.copiedFromPublic()).isFalse();
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.NOTE_CREATED), eq(saved.getId()), any());
+    }
+
+    @Test
+    void create_persistsValidAuthoringAxesCaseInsensitively() {
+        UUID ownerUserId = UUID.randomUUID();
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Engineering algebra",
+                "Algebra",
+                "Civil Engineering",
+                "engineering_mathematics",
+                "college",
+                List.of(),
+                null,
+                "Algebra content"
+        );
+
+        NoteResponse created = noteService.create(request, ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getDomainContext()).isEqualTo(DomainContext.ENGINEERING_MATHEMATICS);
+        assertThat(captor.getValue().getLearnerLevel()).isEqualTo(LearnerLevel.COLLEGE);
+        assertThat(created.domainContext()).isEqualTo("ENGINEERING_MATHEMATICS");
+        assertThat(created.learnerLevel()).isEqualTo("COLLEGE");
+    }
+
+    @Test
+    void create_rejectsUnknownDomainContext() {
+        UUID ownerUserId = UUID.randomUUID();
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", null, "engineering_math", null, List.of(), null, "content"
+        );
+
+        assertThatThrownBy(() -> noteService.create(request, ownerUserId))
+                .isInstanceOf(InvalidDomainContextException.class)
+                .hasMessageContaining("domainContext")
+                .hasMessageContaining("Engineering Mathematics")
+                .extracting(error -> ((AppException) error).getStatus())
+                .isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
+    void create_rejectsUnknownLearnerLevel() {
+        UUID ownerUserId = UUID.randomUUID();
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", null, null, "university", List.of(), null, "content"
+        );
+
+        assertThatThrownBy(() -> noteService.create(request, ownerUserId))
+                .isInstanceOf(InvalidNoteLearnerLevelException.class)
+                .hasMessageContaining("learnerLevel")
+                .hasMessageContaining("College")
+                .extracting(error -> ((AppException) error).getStatus())
+                .isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
+    void update_rejectsUnknownDomainContext() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", null, "not_a_context", null, List.of(), null, "content"
+        );
+
+        assertThatThrownBy(() -> noteService.update(noteId.toString(), request, ownerUserId))
+                .isInstanceOf(InvalidDomainContextException.class)
+                .extracting(error -> ((AppException) error).getStatus())
+                .isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
+    void update_rejectsUnknownLearnerLevel() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", null, null, "not_a_level", List.of(), null, "content"
+        );
+
+        assertThatThrownBy(() -> noteService.update(noteId.toString(), request, ownerUserId))
+                .isInstanceOf(InvalidNoteLearnerLevelException.class)
+                .extracting(error -> ((AppException) error).getStatus())
+                .isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
     }
 
     @Test
@@ -201,6 +306,8 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "Board note",
                 "Subject",
+                null,
+                null,
                 null,
                 List.of(),
                 null,
@@ -223,6 +330,8 @@ class NoteServiceTest {
                 "Professional note",
                 "Subject",
                 null,
+                null,
+                null,
                 List.of(),
                 null,
                 "content"
@@ -243,6 +352,8 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "Teacher note",
                 "Subject",
+                null,
+                null,
                 null,
                 List.of(),
                 null,
@@ -355,6 +466,8 @@ class NoteServiceTest {
                 "Cell note",
                 " biology-cell division ",
                 null,
+                null,
+                null,
                 List.of(),
                 null,
                 "cell notes"
@@ -379,6 +492,8 @@ class NoteServiceTest {
                 "Kinematics",
                 "Physics",
                 null,
+                null,
+                null,
                 List.of(),
                 null,
                 "motion"
@@ -402,7 +517,10 @@ class NoteServiceTest {
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.empty());
         when(noteRepository.findAllSubjectValues()).thenReturn(List.of("Biology – Cell Division"));
 
-        UpsertNoteRequest request = new UpsertNoteRequest("New title", "biology- cell division", "Pre-Med", List.of("cells"), null, "new content");
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "New title", "biology- cell division", "Pre-Med", null, null,
+                List.of("cells"), null, "new content"
+        );
         NoteResponse updated = noteService.update(noteId.toString(), request, ownerUserId);
 
         assertThat(draftNote.getTitle()).isEqualTo("New title");
@@ -423,13 +541,44 @@ class NoteServiceTest {
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(generatedNote));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
-        UpsertNoteRequest request = new UpsertNoteRequest("Title", "Subject", "Nursing", List.of("tag"), null, "edited content");
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", "Nursing", null, null, List.of("tag"), null, "edited content"
+        );
 
         NoteResponse response = noteService.update(noteId.toString(), request, ownerUserId);
 
         assertThat(generatedNote.getContent()).isEqualTo("edited content");
         assertThat(response.content()).isEqualTo("edited content");
         verify(noteRepository).save(generatedNote);
+    }
+
+    @Test
+    void update_setsAndExplicitlyClearsAuthoringAxes() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(draftNote));
+
+        UpsertNoteRequest setRequest = new UpsertNoteRequest(
+                "Title", "Subject", "Engineering", "ENGINEERING_SCIENCES", "SENIOR_HIGH",
+                List.of(), null, "content"
+        );
+        NoteResponse setResponse = noteService.update(noteId.toString(), setRequest, ownerUserId);
+
+        assertThat(draftNote.getDomainContext()).isEqualTo(DomainContext.ENGINEERING_SCIENCES);
+        assertThat(draftNote.getLearnerLevel()).isEqualTo(LearnerLevel.SENIOR_HIGH);
+        assertThat(setResponse.domainContext()).isEqualTo("ENGINEERING_SCIENCES");
+        assertThat(setResponse.learnerLevel()).isEqualTo("SENIOR_HIGH");
+
+        UpsertNoteRequest clearRequest = new UpsertNoteRequest(
+                "Title", "Subject", "Engineering", " ", null, List.of(), null, "content"
+        );
+        NoteResponse clearedResponse = noteService.update(noteId.toString(), clearRequest, ownerUserId);
+
+        assertThat(draftNote.getDomainContext()).isNull();
+        assertThat(draftNote.getLearnerLevel()).isNull();
+        assertThat(clearedResponse.domainContext()).isNull();
+        assertThat(clearedResponse.learnerLevel()).isNull();
     }
 
     @Test
@@ -440,6 +589,8 @@ class NoteServiceTest {
         source.setTitle("Source title");
         source.setSubject("Math");
         source.setCourseProgram("Engineering");
+        source.setDomainContext(DomainContext.ENGINEERING_MATHEMATICS);
+        source.setLearnerLevel(LearnerLevel.COLLEGE);
         source.setTags(new String[]{"algebra"});
         source.setTargetProfileType(NoteTargetProfileType.STUDENT);
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
@@ -452,6 +603,8 @@ class NoteServiceTest {
         assertThat(saved.getStatus()).isEqualTo(NoteStatus.DRAFT);
         assertThat(saved.getSourceNoteId()).isEqualTo(sourceNoteId);
         assertThat(saved.getCourseProgram()).isEqualTo("Engineering");
+        assertThat(saved.getDomainContext()).isEqualTo(DomainContext.ENGINEERING_MATHEMATICS);
+        assertThat(saved.getLearnerLevel()).isEqualTo(LearnerLevel.COLLEGE);
         assertThat(saved.getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
         assertThat(saved.getCopiedFromUserId()).isNull();
         assertThat(saved.getCopiedFromPublic()).isFalse();
@@ -482,6 +635,8 @@ class NoteServiceTest {
         source.setTitle("Public source");
         source.setSubject("History");
         source.setCourseProgram("Humanities");
+        source.setDomainContext(DomainContext.GENERAL_EDUCATION);
+        source.setLearnerLevel(LearnerLevel.SENIOR_HIGH);
         source.setTags(new String[]{"ww2"});
         source.setTargetProfileType(NoteTargetProfileType.BOARD_TAKER);
         StudyPackEntity sourceStudyPack = buildSourceStudyPack(sourceNoteId);
@@ -498,6 +653,8 @@ class NoteServiceTest {
         assertThat(saved.getCopiedFromUserId()).isEqualTo(sourceOwnerUserId);
         assertThat(saved.getCopiedFromTitle()).isEqualTo("Public source");
         assertThat(saved.getCourseProgram()).isEqualTo("Humanities");
+        assertThat(saved.getDomainContext()).isEqualTo(DomainContext.GENERAL_EDUCATION);
+        assertThat(saved.getLearnerLevel()).isEqualTo(LearnerLevel.SENIOR_HIGH);
         assertThat(saved.getTargetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER);
         assertThat(saved.getCopiedFromPublic()).isTrue();
         assertThat(saved.getCopiedAt()).isNotNull();

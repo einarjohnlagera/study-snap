@@ -21,8 +21,8 @@ describe("RootLayout metadata", () => {
       openGraph: expect.objectContaining({
         images: expect.arrayContaining([
           expect.objectContaining({
-            url: "https://notelib.app/og-image.png",
-            alt: "Build your notes library. Turn your notes into summaries and quizzes.",
+            url: "https://notelib.app/og-image-v2.png",
+            alt: "NoteLib — your notes become your study system. Turn notes into Study Packs with summaries, key concepts, quizzes, and flashcards.",
           }),
         ]),
       }),

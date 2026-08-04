@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
@@ -26,7 +27,7 @@ class StudyPackGenerationContextResolverTest {
     private NoteRepository noteRepository;
 
     @Test
-    void resolve_prefersNoteCourseProgramOverProfileCourseProgram() {
+    void resolve_populatesNoteAuthoringAxesAndPrefersDomainContext() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -36,6 +37,8 @@ class StudyPackGenerationContextResolverTest {
 
         NoteEntity note = new NoteEntity();
         note.setCourseProgram("Senior High – STEM");
+        note.setDomainContext(DomainContext.ENGINEERING_SCIENCES);
+        note.setLearnerLevel(LearnerLevel.SENIOR_HIGH);
         note.setSubject("Physics");
         note.setTags(new String[]{"electricity"});
 
@@ -47,10 +50,16 @@ class StudyPackGenerationContextResolverTest {
         assertThat(context.courseProgram()).isEqualTo("Senior High – STEM");
         assertThat(context.subject()).isEqualTo("Physics");
         assertThat(context.tags()).containsExactly("electricity");
+        assertThat(context.domainContext()).isEqualTo(DomainContext.ENGINEERING_SCIENCES);
+        assertThat(context.noteLearnerLevel()).isEqualTo(LearnerLevel.SENIOR_HIGH);
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context))
+                .isEqualTo("Engineering Sciences");
+        assertThat(StudyPackGenerationContextResolver.effectiveCurriculumLevel(context))
+                .isEqualTo(LearnerLevel.SENIOR_HIGH);
     }
 
     @Test
-    void resolve_usesProfileLearnerLevelForNotes() {
+    void resolve_usesNoteProgramAsAuthoringDomainWhenDomainContextIsMissing() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -68,6 +77,9 @@ class StudyPackGenerationContextResolverTest {
 
         assertThat(context.learnerLevel()).isEqualTo(LearnerLevel.PROFESSIONAL);
         assertThat(context.courseProgram()).isEqualTo("Science");
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context)).isEqualTo("Science");
+        assertThat(StudyPackGenerationContextResolver.effectiveCurriculumLevel(context))
+                .isEqualTo(LearnerLevel.PROFESSIONAL);
     }
 
     @Test
@@ -89,6 +101,8 @@ class StudyPackGenerationContextResolverTest {
         StudyPackGenerationContext context = resolver.resolve(userId, note);
 
         assertThat(context.courseProgram()).isEqualTo("Software Engineering");
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context))
+                .isEqualTo("Software Engineering");
     }
 
     @Test
@@ -104,6 +118,8 @@ class StudyPackGenerationContextResolverTest {
         NoteEntity note = new NoteEntity();
         note.setId(noteId);
         note.setCourseProgram("Senior High STEM");
+        note.setDomainContext(DomainContext.GENERAL_EDUCATION);
+        note.setLearnerLevel(LearnerLevel.SENIOR_HIGH);
         note.setSubject("Physics");
         note.setTags(new String[]{"ohms-law"});
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
@@ -121,6 +137,8 @@ class StudyPackGenerationContextResolverTest {
         assertThat(context.courseProgram()).isEqualTo("Senior High STEM");
         assertThat(context.subject()).isEqualTo("Physics");
         assertThat(context.tags()).containsExactly("ohms-law");
+        assertThat(context.domainContext()).isEqualTo(DomainContext.GENERAL_EDUCATION);
+        assertThat(context.noteLearnerLevel()).isEqualTo(LearnerLevel.SENIOR_HIGH);
     }
 
     @Test
@@ -147,6 +165,8 @@ class StudyPackGenerationContextResolverTest {
         assertThat(context.courseProgram()).isEqualTo("Software Engineering");
         assertThat(context.subject()).isEqualTo("Computing");
         assertThat(context.tags()).containsExactly("algorithms");
+        assertThat(context.domainContext()).isNull();
+        assertThat(context.noteLearnerLevel()).isNull();
     }
 
     @Test
@@ -163,12 +183,16 @@ class StudyPackGenerationContextResolverTest {
         StudyPackGenerationContext context = resolver.resolveForBulkGeneration(
                 userId,
                 "Nursing",
-                "Maternal Health"
+                "Maternal Health",
+                DomainContext.NURSING,
+                LearnerLevel.BOARD_EXAM_REVIEW
         );
 
         assertThat(context.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
         assertThat(context.courseProgram()).isEqualTo("Nursing");
         assertThat(context.subject()).isEqualTo("Maternal Health");
+        assertThat(context.domainContext()).isEqualTo(DomainContext.NURSING);
+        assertThat(context.noteLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
     }
 
     @Test
@@ -184,9 +208,30 @@ class StudyPackGenerationContextResolverTest {
         StudyPackGenerationContext context = resolver.resolveForBulkGeneration(
                 userId,
                 "Nursing",
-                "Maternal Health"
+                "Maternal Health",
+                null,
+                null
         );
 
         assertThat(context.learnerLevel()).isNull();
+        assertThat(context.domainContext()).isNull();
+        assertThat(context.noteLearnerLevel()).isNull();
+        assertThat(StudyPackGenerationContextResolver.effectiveCurriculumLevel(context))
+                .isEqualTo(LearnerLevel.COLLEGE);
+    }
+
+    @Test
+    void resolve_allowsNoAuthoringDomainAndDefaultsCurriculumToCollege() {
+        UUID userId = UUID.randomUUID();
+        NoteEntity note = new NoteEntity();
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+
+        StudyPackGenerationContext context = resolver.resolve(userId, note);
+
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context)).isNull();
+        assertThat(StudyPackGenerationContextResolver.effectiveCurriculumLevel(context))
+                .isEqualTo(LearnerLevel.COLLEGE);
     }
 }

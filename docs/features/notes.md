@@ -10,7 +10,7 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 - `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes` (private list), `POST /notes`, `PUT /notes/{id}`, `DELETE /notes/{id}`, `GET /notes/public` (public filter endpoint); subject/courseProgram suggestion endpoints
 - `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — note CRUD, `listMine(userId)`, `listPublic(...)`, visibility change, note copy, subject/courseProgram autocomplete
 - `backend/src/main/java/com/studysnap/backend/service/NoteBulkImportService.java` — bulk material import orchestration; one extracted file becomes one `DRAFT` note without Study Pack generation
-- `backend/src/main/java/com/studysnap/backend/entity/NoteEntity.java` — note schema: `title`, `content`, `subject`, `courseProgram`, `tags`, `visibility`, `studyPackStatus`, `targetProfileType`, `ownerUserId`
+- `backend/src/main/java/com/studysnap/backend/entity/NoteEntity.java` — note schema: `title`, `content`, `subject`, `courseProgram`, `domainContext`, note-level `learnerLevel`, `tags`, `visibility`, `studyPackStatus`, `targetProfileType`, `ownerUserId`
 - `backend/src/main/java/com/studysnap/backend/repository/NoteRepository.java` — JPQL queries for private/public note lists, subject/courseProgram suggestion queries
 
 **Frontend**
@@ -27,7 +27,8 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 
 - Note content is **locked** after Study Pack generation (`STUDY_PACK_READY`) — do not re-enable the content editor for ready notes; only title, courseProgram, subject, and tags remain editable
 - `Generate Study Pack` saves the note then navigates immediately to Note Detail — **never wait** for LLM completion before navigation; generation is always async
-- `courseProgram` on the note is the **authoritative** source for generation context; user profile `courseProgram` is fallback only when the note field is blank
+- `domainContext` is the authoritative authoring-domain signal for generation; fallback is note `courseProgram`, then profile `courseProgram`
+- note-level `learnerLevel` is the authoritative educational-depth signal; fallback is profile `learnerLevel`, then `COLLEGE`
 - AI-generated subject must be a reusable academic label with **no topic suffix** — strip anything after `–`, `:`, or `-` before saving (e.g. `Biology – Cell Division` → `Biology`)
 - The share modal/gate is the **same everywhere**: public content → share modal directly; private content → confirm-to-make-public modal first; do not invent content-specific flows
 - **Official author** is determined by `UserRole.ADMIN` only — `isOfficialAuthor(user)` returns `user != null && user.getRole() == UserRole.ADMIN`; the old email-based `isNoteLibOfficialAccount()` method has been removed; do not recreate it
@@ -36,19 +37,53 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 
 ## Note metadata
 
-Current note-authoring fields:
+### Canonical authoring axes (v0.69.0)
+
+Notes now persist two nullable, author-supplied metadata fields governed by [ADR-001](../architecture/ADR-001-canonical-knowledge-architecture.md):
+
+- `domainContext` records how the note is authored — its authoritative academic or professional domain.
+- note-level `learnerLevel` records how deep the note is authored, independently of the owner's profile-level learner level.
+
+Both fields drive generation through `StudyPackGenerationContextResolver`. Teacher and Admin authors can set them in the Note Editor; both selects are optional and load empty for existing null rows. Domain Context controls academic/professional subject matter, terminology, examples, and framing. Note learner level controls authored depth and difficulty. Omitting either field, sending `null`, or sending a blank value stores `NULL`. A null `domainContext` deliberately falls back to the note's program and then the profile program, while a null note learner level falls back to the profile level and then `COLLEGE`.
+
+The legacy level-in-program cleanup is complete without rewriting any retained `courseProgram` label. V104 classified the 27 pure-level `Grade School` and `Junior High` notes as `GENERAL_EDUCATION` plus `GRADE_SCHOOL` or `JUNIOR_HIGH`. V105 applied the curator's content-based classification to four ambiguous `High School` notes: three now carry `GENERAL_EDUCATION` + `JUNIOR_HIGH`, and one carries `GENERAL_EDUCATION` + `SENIOR_HIGH`. Six `High School` notes remain deliberately unclassified with both axes `NULL` because their content has no defensible K-12 grade anchor; their legacy `courseProgram` remains their only classification and continues through the fallback chain. The 11 Senior High strand notes carry `SENIOR_HIGH` with no Domain Context, preserving STEM, ABM, or HUMSS as the effective authoring domain through the same fallback.
+
+Static note and Study Pack content uses the effective domain plus the note's authored level, never the reader's level when a note level exists. Quizzes and exams keep the note level as their curriculum floor; a lower reader level may soften wording or add support but cannot lower the curriculum, while a higher reader level cannot raise the note's difficulty. Applicable Programs are discovery metadata and never reach prompts.
+
+`DomainContext` is a closed architectural enum with exactly eight ratified values:
+
+- `ENGINEERING_MATHEMATICS` — Engineering Mathematics
+- `ENGINEERING_SCIENCES` — Engineering Sciences
+- `CIVIL_ENGINEERING` — Civil Engineering
+- `PROFESSIONAL_PRACTICE_AND_REGULATION` — Professional Practice & Regulation
+- `GENERAL_EDUCATION` — General Education
+- `PROFESSIONAL_EDUCATION` — Professional Education
+- `NURSING` — Nursing
+- `ACCOUNTANCY` — Accountancy
+
+Adding or changing a Domain Context is an architecture decision, not routine note authoring. Copies inherit both authoring axes because they are note metadata, not generated content.
+
+**Subject-equals-Domain-Context nudge.** Subject and Domain Context are separate axes, so the same value legitimately appearing in both is not an error — a broad survey note about nursing really is `subject = Nursing`. But it usually signals a subject written too broadly to work as a library shelf, which is why ADR-001 asks for a nudge here. When a note's `subject` exactly equals its selected Domain Context's label (compared case-insensitively and trimmed), the Note Editor shows an inline advisory under the Subject field. Rules:
+
+- It is **advisory only** — never a validation error, never a save block, and it does not prevent generation. Saving anyway is a supported outcome.
+- **Exact match only.** `Nursing Pharmacology` under Domain Context `Nursing` is not flagged; only `Nursing` is. A containment check would fire on legitimate specific subjects.
+- It renders only where the Domain Context select renders (Teacher/Admin), and never when Domain Context is blank or the subject is empty.
+- It is computed client-side from the already-loaded values — no new API call, no persisted state, and nothing is recorded when an author dismisses it by editing either field.
+
+Current Note Editor input fields:
 
 - `title` (optional)
-- `learnerLevel` (required before save/generate; pre-filled from the user's profile)
 - `courseProgram` (required before save/generate; pre-filled from the user's profile)
 - `subject` (optional)
 - `tags` (optional)
 - `content` (required before save/generate)
+- Teacher/Admin-only `domainContext` (optional; blank uses the program-name fallback)
+- Teacher/Admin-only note `learnerLevel` (optional; blank uses the profile level, then `COLLEGE`)
 
 Rules:
 
 - `courseProgram` belongs to the note once saved and can differ from the profile default.
-- `courseProgram` is the top-level shelf for the note, while `subject` is the more specific academic topic and `tags` are the finer keywords.
+- `courseProgram` remains the legacy program label and fallback authoring context; Domain Context, Note Learner Level, subject, and tags remain independent axes.
 - `courseProgram` uses autocomplete from curated defaults plus normalized saved values from the user's notes/profile.
 - typing in `courseProgram` filters suggestions in real time instead of keeping the full list visible
 - course/program matching is case-insensitive, trims outer spaces before matching, allows partial matches, and ranks prefix matches ahead of contains matches
@@ -71,10 +106,12 @@ Rules:
 - Topic-level specificity belongs in tags and key concepts, not in subject
 - Subject is a reusable library shelf label — it should group many notes, not describe one note
 - The backend strips any subtopic suffix (`Biology – Cell Division` → `Biology`) before saving
-- `courseProgram` is required before saving or generating a Study Pack and is pre-filled from the user's profile so validation rarely blocks users who completed onboarding.
-- `learnerLevel` remains required on completed profiles for quiz/exam personalization, but it is not a static content-leveling input and a null legacy value must not break note or Study Pack generation.
-- Note-from-topic and Study Pack content use note-first `courseProgram` to calibrate depth, vocabulary, terminology, and examples. They must not use learner level for static content.
-- `learnerLevel` may remain in generation context for quiz/exam generation and exam-question pool pre-warm; content generation must tolerate a null level.
+- `courseProgram` is required before saving or generating a Study Pack.
+- **The profile's course/program pre-fills the field when CREATING a note only.** Editing an existing note never falls back to the editor's profile: the note's own persisted value is the only source, and a note with no course/program hits the normal "Please complete: Course / Program" prompt asking the author to classify it. This is deliberate and is a behavior change from before v0.69.0, where `profileCourseProgram` was consulted in edit mode too — which meant an author editing a null-program note saw an empty field while their own profile value was silently submitted. Profile context may assist creation; it must not become an existing note's persisted metadata without an explicit author decision (ADR-001).
+- Topic generation still resolves the profile course/program as a *generation input* when the draft has none. That value is never persisted onto the note, so it is not affected by the rule above.
+- Profile `learnerLevel` remains required on completed profiles for quiz/exam personalization and legacy fallback, but it does not override a note's authored learner level.
+- Note-from-topic and legacy notes without Domain Context use the resolved program-name fallback as their effective authoring domain until the note-level authoring fields are populated.
+- Static generation and quiz/exam generation must tolerate both note-level axes being null and use the documented fallback chains rather than placeholders.
 - tags stay optional and should include helper guidance rather than mandatory validation pressure.
 
 ## Shared Share Behavior Rule
@@ -115,14 +152,15 @@ Create mode:
 - optional topic-first helper: `Create a Note`
 - the `Import notes` start option reuses the existing OCR/file-extraction flow and inserts extracted text into the main editor before save or Study Pack generation.
 - `/notes/import` is the separate bulk note-creation entry point, reached from the Create-note flow's `Import notes` panel (a "Bulk import multiple files" link). It sends multiple files through `POST /notes/import-batch`, creates one `DRAFT` note per successfully extracted file directly, and never triggers Study Pack generation or LLM calls.
-- note metadata fields (`title`, `subject`, `courseProgram`, `tags`, and teacher/admin `Who is this note for?`) stay available in the collapsed `Add details` section by default so first-time note creation stays focused on content.
+- note metadata fields (`title`, `subject`, `courseProgram`, `tags`, and the Teacher/Admin authoring metadata group) stay available in the collapsed `Add details` section by default so first-time note creation stays focused on content.
 - Target Audience is required on every note. For Student, Board Exam, and Professional profiles the field is hidden and auto-prefilled from profile type at save time (Student -> Student, Board Exam -> Board Taker, Professional -> Professional). For Teacher and Admin profiles the field is visible and user-picked, with all audience values selectable.
+- Domain Context and Note Learner Level are visible only to Teacher/Admin authors in the product UI. Both are optional single-selects; blank remains a real null state rather than a fabricated default.
 - create mode should keep a subtle inline prompt near the primary actions so users can reveal `Add details` without turning the page back into a long form.
 - `Generate Study Pack` first saves the note, queues Study Pack generation, then redirects immediately to Note Detail with the requested default tab.
 - the editor must not wait for the LLM request to finish before navigation.
 - `Create a Note` creates a structured first draft from a topic with clear sections (`Overview`, `Core Concepts`, `Key Details`, optional `Examples`) and should avoid meta filler or instructional language.
 - `Create a Note` must build its request from the current Create Note form state at submit time. The selected draft Course / Program is authoritative for the first generated note; the profile Course / Program is fallback only when the draft field is blank.
-- `Create a Note` calibrates the generated draft from that resolved Course / Program, not from the owner's learner level, so copied notes retain a shared academic depth signal.
+- `Create a Note` sends a selected Teacher/Admin Domain Context into topic-content generation; when blank, the resolved Course / Program remains the Domain fallback. Note Learner Level is persisted when the draft is saved and then controls Study Pack generation; the topic-generation DTO deliberately has no second level source.
 - topic note generation is plan-gated separately from Study Pack generation and OCR.
 
 Bulk import behavior:

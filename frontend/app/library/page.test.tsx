@@ -888,6 +888,8 @@ describe("Library page", () => {
     expect(consumeBulkGenerationRetryStash()).toEqual({
       subject: "Maternal Health",
       courseProgram: "Nursing",
+      domainContext: null,
+      learnerLevel: null,
       targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],

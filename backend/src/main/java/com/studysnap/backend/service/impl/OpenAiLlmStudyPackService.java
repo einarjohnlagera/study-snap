@@ -16,6 +16,7 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
+import com.studysnap.backend.service.StudyPackGenerationContextResolver;
 import com.studysnap.backend.service.model.CompanionGenerationContext;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
@@ -68,13 +69,17 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_GENERATED_NOTE_OVERVIEW_WORDS = 90;
     private static final int MAX_GENERATED_NOTE_KEY_IDEA_WORDS = 40;
     private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
+    // Quick Recall is bounded by characters rather than words. A whitespace word count measures
+    // the wrong thing on notation -- "Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2)" is ~15 "words" of
+    // pure symbols -- so a formula plus its variable definitions could exceed the prose ceiling
+    // while staying visually compact and well under the schema's own length bound.
+    private static final int MAX_GENERATED_NOTE_ITEM_CHARS = 240;
     private static final int COMPANION_FAQ_MIN_ITEMS = 3;
     private static final int COMPANION_FAQ_MAX_ITEMS = 6;
     private static final int COMPANION_MENTOR_TIP_MIN_ITEMS = 1;
     private static final int COMPANION_MENTOR_TIP_MAX_ITEMS = 3;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
     private static final int PARALLEL_BUFFER = 2;
-    private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
     private static final String INVALID_OUTPUT_CODE = "LLM_INVALID_OUTPUT";
     private static final int MAX_LOG_VALUE_LENGTH = 80;
     private static final String LONG_EXAM_FIRST_HALF_HINT = "Generate questions covering the first half of the material.";
@@ -93,6 +98,25 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final String COMPANION_SCHEMA_NAME = "note_lib_companion_draft";
     private static final String COMPANION_INVALID_OUTPUT_MESSAGE =
             "The Companion generation service returned an invalid format. Please try again.";
+    private static final String DOMAIN_CONSTRAINT =
+            "Domain constraint: treat the domain above as the authoritative academic domain. All content, terminology, examples, and question framing must belong to that domain. Do not blend in material from unrelated disciplines.";
+    private static final String CURRICULUM_CONSTRAINT =
+            "Curriculum constraint: treat the curriculum level above as the authoritative educational depth. Keep the curriculum, terminology, and difficulty at that level.";
+    private static final String STATIC_CONTENT_CALIBRATION =
+            "Content calibration: use the Domain and Curriculum level above to set subject matter, depth, vocabulary, terminology, examples, and framing. The note's authored learner level sets depth when present; the reader's learner level must not lower or redirect static note or Study Pack content.";
+    private static final String STATIC_CONTENT_LEVEL_ONLY_CALIBRATION =
+            "Content calibration: use the Curriculum level above to set depth and difficulty. The note's authored learner level sets depth when present; the reader's learner level must not lower or redirect static note or Study Pack content.";
+    private static final String STATIC_CONTENT_DOMAIN_ONLY_CALIBRATION =
+            "Content calibration: use the Domain above to set subject matter, depth, vocabulary, terminology, examples, and framing. This note has no authored learner level, so do not infer one — and the reader's learner level must not lower or redirect static note or Study Pack content.";
+    private static final String STATIC_CONTENT_NO_AXIS_CALIBRATION =
+            "Content calibration: this note has no authored domain and no authored learner level, so infer subject matter and depth from the note content itself. Do not invent either, and the reader's learner level must not lower or redirect static note or Study Pack content.";
+    private static final String READER_SCAFFOLDING_GUIDANCE =
+            "Reader scaffolding: the reader's level is %s, below the note's %s level. You may soften wording and add support, but do not lower the curriculum, terminology, or difficulty below the note's level.";
+    private static final EnumSet<LearnerLevel> SCHOOL_LEVELS = EnumSet.of(
+            LearnerLevel.GRADE_SCHOOL,
+            LearnerLevel.JUNIOR_HIGH,
+            LearnerLevel.SENIOR_HIGH
+    );
     private static final String TRUE_FALSE_GUIDANCE = """
             Mix in True/False questions where appropriate. Use TRUE_FALSE ONLY for a single declarative statement that the learner judges true or false (e.g. "Ohm's Law states that voltage is directly proportional to current — True or False?"). Do NOT use True/False for questions that require nuance, calculation, best-answer judgment, or choosing among statement combinations.
 
@@ -690,7 +714,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private String buildNoteGenerationDeveloperPrompt() {
         return promptResources.noteGenerationDeveloperPromptTemplate()
-                .replace("{MAX_WORDS}", String.valueOf(MAX_GENERATED_NOTE_WORDS));
+                .replace("{MAX_WORDS}", String.valueOf(MAX_GENERATED_NOTE_WORDS))
+                .replace("{MAX_ITEM_CHARS}", String.valueOf(MAX_GENERATED_NOTE_ITEM_CHARS));
     }
 
     private ArrayNode buildAdaptivePracticeInputMessages(
@@ -704,10 +729,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.adaptivePracticeSystemPrompt()));
         boolean quantitativeContext = isQuantitativeContext(context, combineLists(keyConcepts, weakConcepts), studyPackSummary);
+        LearnerLevel curriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(context);
         String adaptivePracticeDeveloperPrompt = promptResources.adaptivePracticeDeveloperPromptTemplate()
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
-                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
-                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.ADAPTIVE_PRACTICE))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(curriculumLevel))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(curriculumLevel, QuizMode.ADAPTIVE_PRACTICE))
                 .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.ADAPTIVE_PRACTICE))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.ADAPTIVE_PRACTICE));
@@ -733,10 +759,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.interviewPracticeSystemPrompt()));
         boolean quantitativeContext = isQuantitativeContext(context, keyConcepts, studyPackSummary);
+        LearnerLevel curriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(context);
         String developerPrompt = promptResources.interviewPracticeDeveloperPromptTemplate()
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
-                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
-                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.INTERVIEW_PRACTICE))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(curriculumLevel))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(curriculumLevel, QuizMode.INTERVIEW_PRACTICE))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.INTERVIEW_PRACTICE));
         input.add(buildTextMessage("developer", developerPrompt));
         input.add(buildTextMessage(
@@ -777,11 +804,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.challengeQuizSystemPrompt()));
         boolean quantitativeContext = isQuantitativeContext(context, keyConcepts, studyPackSummary);
+        LearnerLevel curriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(context);
         String challengeQuizDeveloperPrompt = promptResources.challengeQuizDeveloperPromptTemplate()
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
                 .replace("{DIFFICULTY}", difficulty)
-                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
-                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.CHALLENGE))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(curriculumLevel))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(curriculumLevel, QuizMode.CHALLENGE))
                 .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.CHALLENGE))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.CHALLENGE));
@@ -810,11 +838,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.boardExamSystemPrompt()));
         boolean quantitativeContext = isQuantitativeContext(context, keyConcepts, studyPackSummary);
+        LearnerLevel curriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(context);
         String boardExamDeveloperPrompt = promptResources.boardExamDeveloperPromptTemplate()
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
                 .replace("{DIFFICULTY}", difficulty)
-                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
-                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.BOARD_EXAM))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(curriculumLevel))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(curriculumLevel, QuizMode.BOARD_EXAM))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.BOARD_EXAM))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.BOARD_EXAM));
         input.add(buildTextMessage("developer", boardExamDeveloperPrompt));
@@ -859,12 +888,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.longExamSystemPrompt()));
         boolean quantitativeContext = isQuantitativeContext(context, keyConcepts, studyPackSummary);
+        LearnerLevel curriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(context);
         String longExamDeveloperPrompt = promptResources.longExamDeveloperPromptTemplate()
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
                 .replace("{BATCH_HINT}", batchHint == null ? "" : batchHint)
                 .replace("{DIFFICULTY}", difficulty)
-                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
-                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.LONG_EXAM))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(curriculumLevel))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(curriculumLevel, QuizMode.LONG_EXAM))
                 .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.LONG_EXAM))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.LONG_EXAM));
@@ -888,10 +918,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.teacherQuizSystemPrompt()));
         boolean quantitativeContext = isQuantitativeContext(context, context == null ? List.of() : context.tags(), noteContent);
+        LearnerLevel curriculumLevel = StudyPackGenerationContextResolver.effectiveCurriculumLevel(context);
         String teacherQuizDeveloperPrompt = promptResources.teacherQuizDeveloperPromptTemplate()
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
-                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
-                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.TEACHER_PREVIEW))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(curriculumLevel))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(curriculumLevel, QuizMode.TEACHER_PREVIEW))
                 .replace("{TRUE_FALSE_GUIDANCE}", buildTrueFalseGuidance(true))
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.TEACHER_PREVIEW));
         input.add(buildTextMessage("developer", teacherQuizDeveloperPrompt));
@@ -1127,7 +1158,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         arraySchema.putObject("items")
                 .put("type", "string")
                 .put("minLength", 1)
-                .put("maxLength", 240);
+                .put("maxLength", MAX_GENERATED_NOTE_ITEM_CHARS);
         return arraySchema;
     }
 
@@ -1426,13 +1457,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         };
     }
 
-    private LearnerLevel resolveLearnerLevel(StudyPackGenerationContext context) {
-        if (context == null || context.learnerLevel() == null) {
-            return DEFAULT_LEARNER_LEVEL;
-        }
-        return context.learnerLevel();
-    }
-
     private String toLearnerLevelLabel(LearnerLevel learnerLevel) {
         return switch (learnerLevel) {
             case GRADE_SCHOOL -> "Grade School";
@@ -1529,15 +1553,35 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             boolean includeLearnerLevel
     ) {
         List<String> lines = new ArrayList<>();
-        if (includeLearnerLevel) {
-            lines.add("Learner level: " + toLearnerLevelLabel(resolveLearnerLevel(context)));
+        // ADR-001 rule 1: static content is calibrated by Domain Context + the NOTE's learner level,
+        // never by the reader's. So the static branch reads noteLearnerLevel directly and emits no
+        // level at all when the note has none — falling back to the reader's level here would let a
+        // Grade School reader lower a College note's static content, which is the exact failure the
+        // pre-existing "do not use learner level to calibrate static content" rule prevented.
+        // Quizzes (rule 2) legitimately fall back note -> reader -> COLLEGE.
+        LearnerLevel curriculumLevel = includeLearnerLevel
+                ? StudyPackGenerationContextResolver.effectiveCurriculumLevel(context)
+                : (context == null ? null : context.noteLearnerLevel());
+        if (curriculumLevel != null) {
+            lines.add("Curriculum level: " + toLearnerLevelLabel(curriculumLevel));
         }
-        if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
-            lines.add("Course / Program: " + context.courseProgram().trim());
-            lines.add("Domain constraint: treat the course/program above as the authoritative academic domain. All content, terminology, examples, and question framing must belong to that domain. Do not blend in material from unrelated disciplines.");
-            if (!includeLearnerLevel) {
-                lines.add("Content calibration: use the Course / Program above to set depth, vocabulary, terminology, and examples. Do not use learner level to calibrate static note or Study Pack content.");
+
+        String authoringDomain = StudyPackGenerationContextResolver.effectiveAuthoringDomain(context);
+        boolean hasDomain = authoringDomain != null && !authoringDomain.isBlank();
+        if (hasDomain) {
+            lines.add("Domain: " + promptValue(authoringDomain));
+            lines.add(DOMAIN_CONSTRAINT);
+        }
+        if (includeLearnerLevel) {
+            lines.add(CURRICULUM_CONSTRAINT);
+            if (isReaderBelowNoteLevel(context)) {
+                lines.add(READER_SCAFFOLDING_GUIDANCE.formatted(
+                        toLearnerLevelLabel(context.learnerLevel()),
+                        toLearnerLevelLabel(context.noteLearnerLevel())
+                ));
             }
+        } else {
+            lines.add(resolveStaticContentCalibration(hasDomain, curriculumLevel != null));
         }
         if (context != null && context.subject() != null && !context.subject().isBlank()) {
             lines.add("Current subject: " + context.subject().trim());
@@ -1551,16 +1595,37 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private String buildSubjectSuggestionGuidanceBlock(StudyPackGenerationContext context) {
         List<String> lines = new ArrayList<>();
         lines.add("Subject guidance: use the specific academic subject or professional discipline covered by the note — label only, no topic suffix.");
-        lines.add("For K-12 learners, use the curriculum subject the note belongs to: Biology, Physics, Chemistry, Mathematics, History, English, Economics, Filipino, Science, Social Studies.");
-        lines.add("For college and professional learners, use the specific field of study: Civil Engineering, Electrical Engineering, Mechanical Engineering, Nursing, Anatomy, Pharmacology, Clinical Chemistry, Accountancy, Marketing, Business Finance, Computer Science, Pharmacy, Architecture, Constitutional Law, Criminal Law, Civil Law, Legal Ethics.");
+        // This block is concatenated into the STATIC user prompt (buildStudyPackUserPrompt), so it must
+        // never consult the reader's level. effectiveCurriculumLevel falls back reader -> COLLEGE, which
+        // made two users generating from byte-identical notes receive different subject guidance. Read
+        // the note's authored level directly, exactly as buildGenerationContextBlock's static branch does.
+        LearnerLevel authoredLevel = context == null ? null : context.noteLearnerLevel();
+        boolean schoolLevel = authoredLevel != null && SCHOOL_LEVELS.contains(authoredLevel);
+        boolean collegeOrAbove = authoredLevel != null && !SCHOOL_LEVELS.contains(authoredLevel);
+        // With no authored level, emit BOTH lists — the pre-v0.69.0 behaviour. Narrowing to one list on a
+        // null level would silently pick a side for the ~all-null production rows.
+        if (schoolLevel || authoredLevel == null) {
+            lines.add("For a school-level curriculum, use the curriculum subject the note belongs to: Biology, Physics, Chemistry, Mathematics, History, English, Economics, Filipino, Science, Social Studies.");
+        }
+        if (collegeOrAbove || authoredLevel == null) {
+            lines.add("For college, board-review, professional, or personal-learning curricula, use the specific field of study: Civil Engineering, Electrical Engineering, Mechanical Engineering, Nursing, Anatomy, Pharmacology, Clinical Chemistry, Accountancy, Marketing, Business Finance, Computer Science, Pharmacy, Architecture, Constitutional Law, Criminal Law, Civil Law, Legal Ethics.");
+        }
         lines.add("Do not suggest overly broad subjects such as Business, Medicine, Engineering, or Law.");
         lines.add("If no specific subject is clear, return null/no subject suggestion; do not guess a broad subject.");
         lines.add("Do not combine subject and topic. Incorrect: \"Biology – Cell Division\", \"Physics: Ohm's Law\", \"Math – Derivatives\".");
         lines.add("Topic-level specificity belongs in tags and key concepts, not in subject.");
-        if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
-            lines.add("Course / Program context is: " + context.courseProgram().trim() + ".");
-            lines.add("Do not echo the course/program name as the subject. Derive the subject from the note title and content — it should be the specific sub-field this note covers. Examples: a note in 'Mechanical Engineering Licensure' about fluid machinery → 'Fluid Machinery'; a note in 'BS Nursing' covering pharmacology → 'Pharmacology'; a note in 'CPA Licensure' on auditing theory → 'Auditing Theory'.");
-            lines.add("If the course/program is a K-12 strand or track (e.g. STEM, ABM, HUMSS, GAS, General Education, Senior High – STEM), derive the subject from the note content instead (e.g. Biology, Physics, Economics, English).");
+        String authoringDomain = StudyPackGenerationContextResolver.effectiveAuthoringDomain(context);
+        if (authoringDomain != null && !authoringDomain.isBlank()) {
+            lines.add("Domain context is: " + promptValue(authoringDomain) + ".");
+            lines.add("Do not echo the domain name as the subject. Derive the subject from the note title and content — it should be the specific sub-field this note covers. Examples: a note in 'Engineering Sciences' about fluid machinery → 'Fluid Machinery'; a note in 'Nursing' covering pharmacology → 'Pharmacology'; a note in 'Accountancy' on auditing theory → 'Auditing Theory'.");
+            // Data-driven, never reader-driven. Pre-v0.69.0 this guard sat unconditionally inside the
+            // course/program block; gating it on a reader-derived level meant a legacy 'Senior High – STEM'
+            // note read by a COLLEGE user lost it and would echo "STEM" as its subject — exactly the row
+            // class V104/V105 exist to fix, and exactly the rows most likely to still be mid-migration.
+            lines.add("If the domain above is a K-12 strand or track (e.g. STEM, ABM, HUMSS, GAS, Senior High – STEM), derive the subject from the note content instead (e.g. Biology, Physics, Economics, English).");
+        }
+        if (schoolLevel) {
+            lines.add("Because the note is authored at a school-level curriculum, derive the subject from the note content rather than using a strand, track, or broad domain label (e.g. Biology, Physics, Economics, English).");
         }
         return String.join("\n", lines);
     }
@@ -1568,8 +1633,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private boolean isQuantitativeContext(StudyPackGenerationContext context, List<String> conceptHints, String summary) {
         StringBuilder haystack = new StringBuilder();
         if (context != null) {
-            if (context.courseProgram() != null) {
-                haystack.append(context.courseProgram()).append(' ');
+            String authoringDomain = StudyPackGenerationContextResolver.effectiveAuthoringDomain(context);
+            if (authoringDomain != null) {
+                haystack.append(authoringDomain).append(' ');
             }
             if (context.subject() != null) {
                 haystack.append(context.subject()).append(' ');
@@ -1592,6 +1658,41 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
         }
         return false;
+    }
+
+    private String resolveStaticContentCalibration(boolean hasDomain, boolean hasNoteLevel) {
+        if (hasDomain && hasNoteLevel) {
+            return STATIC_CONTENT_CALIBRATION;
+        }
+        if (hasDomain) {
+            return STATIC_CONTENT_DOMAIN_ONLY_CALIBRATION;
+        }
+        if (hasNoteLevel) {
+            return STATIC_CONTENT_LEVEL_ONLY_CALIBRATION;
+        }
+        // Neither axis resolved. Previously this fell through to the level-only string, which points at
+        // a "Curriculum level above" line that was never emitted — a dangling reference on what is still
+        // the common path, since both columns are nullable and nearly every production row is null.
+        // Pre-v0.69.0 this case produced an empty block.
+        return STATIC_CONTENT_NO_AXIS_CALIBRATION;
+    }
+
+    private boolean isReaderBelowNoteLevel(StudyPackGenerationContext context) {
+        return context != null
+                && context.learnerLevel() != null
+                && context.noteLearnerLevel() != null
+                && learnerLevelRank(context.learnerLevel()) < learnerLevelRank(context.noteLearnerLevel());
+    }
+
+    private int learnerLevelRank(LearnerLevel learnerLevel) {
+        return switch (learnerLevel) {
+            case GRADE_SCHOOL -> 0;
+            case JUNIOR_HIGH -> 1;
+            case SENIOR_HIGH -> 2;
+            case COLLEGE, PERSONAL_LEARNING -> 3;
+            case BOARD_EXAM_REVIEW -> 4;
+            case PROFESSIONAL -> 5;
+        };
     }
 
 
@@ -2289,7 +2390,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 2,
                 "The note generation service returned invalid why-it-matters content. Please try again."
         );
-        List<String> quickRecall = normalizeGeneratedNoteItems(
+        List<String> quickRecall = normalizeQuickRecallItems(
                 generatedNote.quickRecall(),
                 3,
                 "The note generation service returned invalid quick recall content. Please try again."
@@ -2401,6 +2502,24 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .map(value -> normalizeGeneratedNoteText(value, 1, MAX_GENERATED_NOTE_ITEM_WORDS, errorMessage))
                 .toList();
         if (normalized.size() < minItems) {
+            throw invalidOutput(errorMessage);
+        }
+        return normalized;
+    }
+
+    private List<String> normalizeQuickRecallItems(List<String> values, int minItems, String errorMessage) {
+        List<String> normalized = sanitizeStringList(values).stream()
+                .map(value -> normalizeGeneratedNoteChars(value, MAX_GENERATED_NOTE_ITEM_CHARS, errorMessage))
+                .toList();
+        if (normalized.size() < minItems) {
+            throw invalidOutput(errorMessage);
+        }
+        return normalized;
+    }
+
+    private String normalizeGeneratedNoteChars(String value, int maxChars, String errorMessage) {
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(value);
+        if (normalized == null || normalized.length() > maxChars) {
             throw invalidOutput(errorMessage);
         }
         return normalized;

@@ -21,6 +21,8 @@ import {
   isOcrLimitReachedError,
   listCoursePrograms,
   listSubjects,
+  type DomainContext,
+  type LearnerLevel,
   type NoteTargetProfileType,
   trackAnalyticsEvent,
   type NoteResponse,
@@ -104,6 +106,8 @@ function toDraft(note: NoteResponse): NoteEditorDraft {
     title: note.title ?? "",
     subject: note.subject ?? "",
     courseProgram: note.courseProgram ?? "",
+    domainContext: note.domainContext ?? "",
+    learnerLevel: note.learnerLevel ?? "",
     targetProfileType: toSelectableNoteTargetProfile(note.targetProfileType),
     content: note.content,
     tags: note.tags ?? [],
@@ -149,6 +153,8 @@ export function NoteEditorPageClient({
     title: "",
     subject: "",
     courseProgram: "",
+    domainContext: "",
+    learnerLevel: "",
     targetProfileType: "",
     content: "",
     tags: [],
@@ -158,6 +164,7 @@ export function NoteEditorPageClient({
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(noteId ?? null);
   const [loadingNote, setLoadingNote] = useState(isEditMode);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingNote, setIsGeneratingNote] = useState(false);
@@ -582,7 +589,15 @@ export function NoteEditorPageClient({
     if (!targetProfileType) {
       return null;
     }
-    let resolvedCourseProgram = normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram);
+    // The profile program may reduce friction when CREATING a note, but it must never become an
+    // existing note's persisted metadata without an explicit author decision (ADR-001). Editing a
+    // note whose course/program is null previously resolved to the editor's own profile value and
+    // submitted it while the field rendered empty. In edit mode the note's own value is now the
+    // only source; a missing one falls through to the validation prompt below, which asks the
+    // author to classify the note rather than silently classifying it for them.
+    let resolvedCourseProgram = isEditMode
+      ? normalizeOptional(draft.courseProgram)
+      : normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram);
     if (!resolvedCourseProgram && !isEditMode) {
       try {
         const me = await getMe();
@@ -611,6 +626,8 @@ export function NoteEditorPageClient({
       title: normalizeOptional(draft.title),
       subject: normalizeOptional(draft.subject),
       courseProgram: resolvedCourseProgram,
+      domainContext: draft.domainContext || null,
+      learnerLevel: draft.learnerLevel || null,
       tags: draft.tags,
       targetProfileType,
       content: draft.content,
@@ -618,6 +635,8 @@ export function NoteEditorPageClient({
   }, [
     draft.content,
     draft.courseProgram,
+    draft.domainContext,
+    draft.learnerLevel,
     draft.subject,
     draft.tags,
     draft.title,
@@ -717,6 +736,7 @@ export function NoteEditorPageClient({
     }
 
     setIsSaving(true);
+    setFormError(null);
     setSaveStateLabel("Saving...");
     try {
       const saved = await upsertNote();
@@ -739,6 +759,7 @@ export function NoteEditorPageClient({
       router.push(`/notes/${saved.id}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not save note.";
+      setFormError(message);
       showToast(message, "error");
       setSaveStateLabel(null);
     } finally {
@@ -774,6 +795,7 @@ export function NoteEditorPageClient({
     }
 
     setIsGenerating(true);
+    setFormError(null);
     try {
       const saved = await upsertNote();
       if (!saved) {
@@ -796,6 +818,7 @@ export function NoteEditorPageClient({
           openLockedFeaturePaywall("study-pack-limit", "note_editor_generate_error");
         } else {
           showToast(message, "error");
+          setFormError(message);
         }
       }
     } finally {
@@ -843,6 +866,8 @@ export function NoteEditorPageClient({
         title: nextMetadata.title,
         subject: nextMetadata.subject,
         courseProgram: normalizeOptional(draft.courseProgram),
+        domainContext: draft.domainContext || null,
+        learnerLevel: draft.learnerLevel || null,
         tags: nextMetadata.tags,
         targetProfileType,
         content: draft.content,
@@ -861,6 +886,8 @@ export function NoteEditorPageClient({
     applyingSuggestion,
     draft.content,
     draft.courseProgram,
+    draft.domainContext,
+    draft.learnerLevel,
     draft.subject,
     draft.tags,
     draft.title,
@@ -922,11 +949,17 @@ export function NoteEditorPageClient({
 
     const isReplacingContent = draft.content.trim().length > 0;
     setIsGeneratingNote(true);
+    setFormError(null);
     try {
       const resolvedCourseProgram = resolveGenerateFromTopicCourseProgram(draft.courseProgram, profileCourseProgram);
-      const response = resolvedCourseProgram
-        ? await generateNoteFromTopic(normalizedTopic, resolvedCourseProgram)
-        : await generateNoteFromTopic(normalizedTopic);
+      let response;
+      if (draft.domainContext) {
+        response = await generateNoteFromTopic(normalizedTopic, resolvedCourseProgram, draft.domainContext);
+      } else if (resolvedCourseProgram) {
+        response = await generateNoteFromTopic(normalizedTopic, resolvedCourseProgram);
+      } else {
+        response = await generateNoteFromTopic(normalizedTopic);
+      }
       setDraft((previous) => ({
         ...previous,
         title: previous.title.trim().length > 0 ? previous.title : normalizedTopic,
@@ -954,6 +987,7 @@ export function NoteEditorPageClient({
         }
       } else {
         const message = error instanceof Error ? error.message : "Could not create note.";
+        setFormError(message);
         showToast(message, "error");
       }
     } finally {
@@ -969,6 +1003,7 @@ export function NoteEditorPageClient({
     hasReachedNoteGenerationLimit,
     currentPlan,
     draft.courseProgram,
+    draft.domainContext,
     openLockedFeaturePaywall,
     profileCourseProgram,
     refreshUsageSummary,
@@ -1089,6 +1124,12 @@ export function NoteEditorPageClient({
         onTitleChange={(value) => setDraft((previous) => ({ ...previous, title: value }))}
         onSubjectChange={(value) => setDraft((previous) => ({ ...previous, subject: value }))}
         onCourseProgramChange={(value) => setDraft((previous) => ({ ...previous, courseProgram: value }))}
+        onDomainContextChange={(value: DomainContext | "") => {
+          setDraft((previous) => ({ ...previous, domainContext: value }));
+        }}
+        onLearnerLevelChange={(value: LearnerLevel | "") => {
+          setDraft((previous) => ({ ...previous, learnerLevel: value }));
+        }}
         onTargetProfileTypeChange={(value) => {
           setDraft((previous) => ({ ...previous, targetProfileType: value }));
         }}
@@ -1112,6 +1153,7 @@ export function NoteEditorPageClient({
         helperText={helperText}
         showTagsSection
         studyPackMessage={studyPackMessage}
+        formError={formError}
         importFile={importFile}
         importFileInputKey={importFileInputKey}
         importFlowState={importFlowState}
@@ -1156,8 +1198,11 @@ export function NoteEditorPageClient({
         actionVariant={hasGeneratedStudyPack ? "outline" : "default"}
         subjectSuggestions={subjectSuggestions}
         courseProgramSuggestions={availableCourseProgramSuggestions}
-        resolvedCourseProgram={normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram)}
+        resolvedCourseProgram={isEditMode
+          ? normalizeOptional(draft.courseProgram)
+          : normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram)}
         showTargetProfileTypeField={showTargetProfileTypeField}
+        showAuthoringMetadataFields={showTargetProfileTypeField}
         targetProfileTypeHelperText={targetProfileTypeHelperText}
         backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}
         backLabel={isEditMode ? "Note" : "Library"}

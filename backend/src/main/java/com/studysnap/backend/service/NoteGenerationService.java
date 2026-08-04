@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
@@ -30,20 +31,33 @@ public class NoteGenerationService {
     }
 
     public GenerateNoteFromTopicResponse generateFromTopic(GenerateNoteFromTopicRequest request, UUID userId) {
+        return generateFromTopic(request, userId, null);
+    }
+
+    public GenerateNoteFromTopicResponse generateFromTopic(
+            GenerateNoteFromTopicRequest request,
+            UUID userId,
+            StudyPackGenerationContext resolvedContext
+    ) {
         onboardingGuardService.assertProfileComplete(userId);
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
         noteGenerationUsageProtectionService.assertQuotaAvailable(userId, subscriptionService.resolvePlan(userId));
         String normalizedTopic = request.topic().trim();
         contentModerationService.validateOrThrow(normalizedTopic);
+        DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         String resolvedCourseProgram = CourseProgramNormalizationUtils.normalizeForStorage(
                 firstNonBlank(request.courseProgram(), user.getCourseProgram()));
-        StudyPackGenerationContext context = new StudyPackGenerationContext(
-                user.getLearnerLevel(),
-                resolvedCourseProgram,
-                null,
-                List.of()
-        );
+        StudyPackGenerationContext context = resolvedContext == null
+                ? new StudyPackGenerationContext(
+                        user.getLearnerLevel(),
+                        resolvedCourseProgram,
+                        null,
+                        List.of(),
+                        domainContext,
+                        null
+                )
+                : resolvedContext;
         String generatedContent = llmStudyPackService.generateNoteFromTopic(normalizedTopic, context);
         noteGenerationUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         return new GenerateNoteFromTopicResponse(generatedContent);

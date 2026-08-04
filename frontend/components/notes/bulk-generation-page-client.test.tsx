@@ -70,7 +70,7 @@ describe("BulkGenerationPageClient", () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "admin-1", role: "ADMIN", profileType: null });
   });
 
-  it("shows the admin metadata fields without learner level", async () => {
+  it("shows the admin authoring metadata fields", async () => {
     render(<BulkGenerationPageClient />);
     await waitFor(() => expect(getMe).toHaveBeenCalled());
 
@@ -78,7 +78,8 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Note Learner Level/)).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(screen.getByTestId("bulk-metadata-grid")).toHaveClass("sm:grid-cols-2");
     // ADMIN bypasses the quota gate, so no remaining-cap hint should render. Asserts the
@@ -95,7 +96,8 @@ describe("BulkGenerationPageClient", () => {
 
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Note Learner Level/)).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
 
     unmount();
@@ -106,10 +108,24 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Course \/ Program/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Learner Level/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Domain Context/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Note Learner Level/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(await screen.findByText(/Capped by your 7 topic notes left this cycle/i)).toBeInTheDocument();
   });
+
+  it.each(["BOARD_EXAM", "PROFESSIONAL"])(
+    "keeps authoring metadata hidden for %s profiles",
+    async (profileType) => {
+      (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", role: "USER", profileType });
+
+      render(<BulkGenerationPageClient />);
+      await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+      expect(screen.queryByLabelText(/^Domain Context/)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Note Learner Level/)).not.toBeInTheDocument();
+    },
+  );
 
   it("submits the resolved payload, flashes the queued count, and redirects to Library", async () => {
     (bulkGenerateNotes as jest.Mock).mockResolvedValueOnce({
@@ -121,6 +137,12 @@ describe("BulkGenerationPageClient", () => {
     render(<BulkGenerationPageClient />);
     await waitFor(() => expect(getMe).toHaveBeenCalled());
     await fillAdminForm(["Prenatal Care", "Stages of Labor"]);
+    fireEvent.change(screen.getByLabelText(/^Domain Context/), {
+      target: { value: "NURSING" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Note Learner Level/), {
+      target: { value: "BOARD_EXAM_REVIEW" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
@@ -130,6 +152,8 @@ describe("BulkGenerationPageClient", () => {
         topics: ["Prenatal Care", "Stages of Labor"],
         makePublic: true,
         courseProgram: "Nursing",
+        domainContext: "NURSING",
+        learnerLevel: "BOARD_EXAM_REVIEW",
         targetProfileType: "STUDENT",
       });
     });
@@ -141,6 +165,8 @@ describe("BulkGenerationPageClient", () => {
     setBulkGenerationRetryStash({
       subject: "Maternal Health",
       courseProgram: "Nursing",
+      domainContext: "NURSING",
+      learnerLevel: "BOARD_EXAM_REVIEW",
       targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],
@@ -151,6 +177,8 @@ describe("BulkGenerationPageClient", () => {
 
     expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
     expect(screen.getByLabelText(/^Course \/ Program/)).toHaveValue("Nursing");
+    expect(screen.getByLabelText(/^Domain Context/)).toHaveValue("NURSING");
+    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("BOARD_EXAM_REVIEW");
     expect(screen.getByLabelText(/^Target Audience/)).toHaveValue("BOARD_TAKER");
     expect(screen.getByRole("switch", { name: /public/i })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
@@ -183,12 +211,20 @@ describe("BulkGenerationPageClient", () => {
     render(<BulkGenerationPageClient />);
     await waitFor(() => expect(getMe).toHaveBeenCalled());
     await fillAdminForm(["Prenatal Care"]);
+    fireEvent.change(screen.getByLabelText(/^Domain Context/), {
+      target: { value: "NURSING" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Note Learner Level/), {
+      target: { value: "BOARD_EXAM_REVIEW" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Connection lost.");
     expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
     expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
+    expect(screen.getByLabelText(/^Domain Context/)).toHaveValue("NURSING");
+    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("BOARD_EXAM_REVIEW");
   });
 
   it("adds and removes topic rows", async () => {

@@ -111,6 +111,8 @@ public class PublicProfileService {
                                 note.getId().toString(),
                                 note.getTitle(),
                                 normalizeOptionalText(note.getCourseProgram()),
+                                note.getDomainContext() == null ? null : note.getDomainContext().name(),
+                                note.getLearnerLevel() == null ? null : note.getLearnerLevel().name(),
                                 note.getSubject(),
                                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                                 ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),

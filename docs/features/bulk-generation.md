@@ -19,6 +19,8 @@ Every batch contains:
 - one or more `Topics`, capped at 50
 - `Course / Program` for Teacher and Admin profiles
 - `Target Audience` for Teacher and Admin profiles
+- optional `Domain Context` for Teacher and Admin profiles
+- optional `Note Learner Level` for Teacher and Admin profiles
 - a `Public` toggle
 
 Topics are discrete rows with `+ Add topic` and per-row removal. They are not note titles. A topic such as `Newton's Laws of Motion` seeds note-content generation; the Study Pack write-back supplies the AI-refined title and tags. The Topics helper states this expectation inline (title and tags are auto-generated; the subject and other batch details apply to every note) so users are not surprised by AI-named notes in their Library.
@@ -31,8 +33,10 @@ Subject is full-width. The remaining visible metadata uses one responsive two-co
 
 1. Course / Program
 2. Target Audience
+3. Domain Context
+4. Note Learner Level
 
-For Admin and Teacher, this produces `Course / Program · Target Audience`. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
+For Admin and Teacher, the four fields form two responsive rows. Domain Context and Note Learner Level both have explicit blank fallback options. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
 
 ## Submission
 
@@ -46,7 +50,7 @@ The Library auto-refreshes so the queued notes appear without a manual refresh. 
 
 After the poller settles, the Library makes a best-effort read of the terminal result receipt via `GET /notes/bulk-generate/results/{id}`. If the receipt is not ready yet, the Library retries a bounded number of times; if it is still missing, already read, owned by someone else, or a transient request fails, no banner is shown and the Library continues normally. A receipt with no `failedTopics` and no `quotaBlockedTopics` is silent.
 
-When `failedTopics` is non-empty, the dismissible banner lists the full topic strings with `X of Y notes generated. These couldn't be generated — try again:` and offers `Retry these`. That action stores the failed topics plus subject, course/program, target audience, and public toggle in `sessionStorage`, then navigates to `/library/bulk-generate`; the bulk form consumes that stash once, pre-fills the form, and clears it.
+When `failedTopics` is non-empty, the dismissible banner lists the full topic strings with `X of Y notes generated. These couldn't be generated — try again:` and offers `Retry these`. That action stores the failed topics plus subject, course/program, Domain Context, Note Learner Level, target audience, and public toggle in `sessionStorage`, then navigates to `/library/bulk-generate`; the bulk form consumes that stash once, pre-fills the form, and clears it.
 
 When `quotaBlockedTopics` is non-empty, the banner lists those topics separately as monthly note-generation quota blocks and shows the plan-aware upgrade action from `getUpgradeCtas(currentPlan)`. It does not offer `Retry these` for quota-blocked topics because retrying immediately would hit the same limit. Mixed receipts show both groups with their distinct actions.
 
@@ -59,21 +63,23 @@ The server loads the caller and treats profile data as authoritative for hidden 
 | Subject | Request | Request | Request |
 | Course / Program | Profile | Request | Request |
 | Target Audience | Derived from profile type | Request | Request |
+| Domain Context | Hidden in UI; optional request accepted | Optional request | Optional request |
+| Note Learner Level | Hidden in UI; optional request accepted | Optional request | Optional request |
 
-Profile type maps to note target profile as follows: `BOARD_EXAM -> BOARD_TAKER`, `PROFESSIONAL -> PROFESSIONAL`, and all other non-teacher profiles -> `STUDENT`. Client-sent overrides for hidden fields are ignored.
+Profile type maps to note target profile as follows: `BOARD_EXAM -> BOARD_TAKER`, `PROFESSIONAL -> PROFESSIONAL`, and all other non-teacher profiles -> `STUDENT`. Client-sent course/program and target-audience overrides remain ignored for non-Teacher profiles. Domain Context and Note Learner Level are the documented exception: their product controls are hidden, but the API accepts them because this release does not introduce a per-role field policy.
 
-Note content and Study Pack content are calibrated by the resolved Course / Program so copied/shared content remains appropriate for everyone in that program. The owner's profile learner level is still carried best-effort in `StudyPackGenerationContext` only for exam-question pool pre-warm; it is not accepted as bulk input and does not level static content.
+Domain Context and Note Learner Level are parsed through the same validation path as normal note upserts before any background work is dispatched. Unknown values return HTTP 400; omitted or blank values resolve to null. The effective Domain falls back through course/program, while the effective curriculum level falls back through the owner's profile level and then `COLLEGE`.
 
-All profiles use the same pipeline. Teacher/Admin users can provide course/program and target audience; non-teachers use profile-owned course/program and derived target audience.
+All profiles use the same pipeline. Teacher/Admin users can provide course/program, target audience, Domain Context, and Note Learner Level. The product UI hides the two authoring axes for other profiles, but the backend currently accepts and persists them if a non-Teacher/Admin client sends them; there is no API-level per-role field policy in this release.
 
 ## Per-Topic Flow
 
 The endpoint validates the request, queues one throttled background batch on the existing `studyPackGenerationTaskExecutor`, and returns an immediate acknowledgment. The worker processes each topic independently:
 
 1. Validate the topic through content moderation.
-2. Resolve course/program and subject through `StudyPackGenerationContextResolver`, retaining the owner's profile learner level only as best-effort exam-pool context.
+2. Resolve course/program, subject, Domain Context, and Note Learner Level through `StudyPackGenerationContextResolver`.
 3. Generate note content with the existing LLM note-from-topic operation.
-4. Create the note through `NoteService.create` with the topic as its initial title, resolved metadata, and generated content.
+4. Create the note through `NoteService.create` with the topic as its initial title, all resolved batch metadata, and generated content.
 5. Apply PUBLIC visibility when requested.
 6. Start the existing async Study Pack generation pipeline.
 
@@ -81,7 +87,7 @@ One topic failure is caught and logged without aborting later topics. Notes appe
 
 ## Terminal Result Receipt
 
-v0.29.1 adds one bounded exception to the original no-progress-infrastructure rule: `bulk_generation_result`, a terminal outcome receipt. The service generates the receipt id before queuing and returns it as `resultId` in `BulkGenerateNotesResponse`. At batch completion, the worker writes exactly one receipt with owner id, batch context (`subject`, `courseProgram`, `targetProfileType`, `makePublic`), `requestedCount`, `createdCount`, `failedTopics` (topic strings whose content generation failed), and `quotaBlockedTopics` (topic strings blocked by monthly note-generation quota before a note row existed). The receipt is written even when there are zero failures and even when a whole-batch setup failure means all accepted topics failed before note creation.
+v0.29.1 adds one bounded exception to the original no-progress-infrastructure rule: `bulk_generation_result`, a terminal outcome receipt. The service generates the receipt id before queuing and returns it as `resultId` in `BulkGenerateNotesResponse`. At batch completion, the worker writes exactly one receipt with owner id, batch context (`subject`, `courseProgram`, nullable `domainContext`, nullable `learnerLevel`, `targetProfileType`, `makePublic`), `requestedCount`, `createdCount`, `failedTopics` (topic strings whose content generation failed), and `quotaBlockedTopics` (topic strings blocked by monthly note-generation quota before a note row existed). The receipt is written even when there are zero failures and even when a whole-batch setup failure means all accepted topics failed before note creation.
 
 `GET /notes/bulk-generate/results/{id}` is authenticated-user gated and owner-scoped. It returns the receipt only to the owner, deletes it in the same read-once flow, and returns 404 when the id is unknown, already read, or owned by someone else. A scheduled cleanup removes unread receipts older than 24 hours.
 

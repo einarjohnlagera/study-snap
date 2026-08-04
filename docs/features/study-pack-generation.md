@@ -10,13 +10,19 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
 - Study Pack output is the generated enhancement state of a Note.
 - New versions are created via `Make a Copy`, not overwrite on the same Note.
 - Backend generation context may also carry:
-  - `learnerLevel`
-  - `courseProgram`
+  - the reader's profile-level `learnerLevel`
+  - legacy/fallback `courseProgram`
   - note `subject`
   - note `tags`
-- `courseProgram` must resolve from the note first. If `notes.courseProgram` is present, it is the source of truth for Study Pack generation. Only fall back to the profile-level `users.courseProgram` when the note has no course/program saved.
-- Static Study Pack output (summary, key concepts, metadata suggestions, and embedded Quick Review) uses the resolved `courseProgram` to calibrate depth, vocabulary, terminology, and examples. It does not use `learnerLevel`.
-- `learnerLevel` remains in `StudyPackGenerationContext` for taker-specific quiz/exam prompts and exam-question pool pre-warm. Static content generation must succeed when that value is null.
+  - note `domainContext`
+  - note-level `learnerLevel`
+- ADR-001's authoring-domain fallback chain is `notes.domainContext` -> `notes.courseProgram` -> `users.courseProgram`. If nothing resolves, generation omits the Domain line instead of inventing a placeholder.
+- ADR-001's curriculum-level fallback chain is note-level `notes.learnerLevel` -> the reader's profile-level `users.learnerLevel` -> `COLLEGE`.
+- Static content — note drafts, summaries, key concepts, flashcards, memorization, metadata suggestions, embedded Quick Review/static question pools — is calibrated by the effective Domain Context plus the note's learner level. The reader's learner level must not lower or redirect static content.
+- Quizzes and exams use the effective Domain Context plus note learner level as the curriculum floor. When the reader's level is lower than an explicit note level, prompts may soften wording and add scaffolding, but must keep curriculum, terminology, and difficulty at the note's level. A higher reader level never raises the note's authored difficulty.
+- **Subject-suggestion guidance is static content and must never consult the reader's level.** It reads the note's authored `learnerLevel` directly. With no authored level it emits **both** the school-level and the field-of-study subject lists rather than silently picking one, so two users generating from byte-identical notes always receive identical guidance. The K-12 strand guard ("if the domain is a strand or track, derive the subject from note content") is gated on the effective authoring **domain**, never on a level — a legacy `Senior High – STEM` note must keep it regardless of who reads it.
+- When neither an authoring domain nor an authored note level resolves, static calibration says so explicitly and tells the model to infer from note content. It must not reference a "Curriculum level above" that was never emitted.
+- Applicable Programs never reach a generation prompt. All note/user fallback resolution stays in `StudyPackGenerationContextResolver`; generation services must not reconstruct either chain.
 
 ## Output structure
 
@@ -134,6 +140,14 @@ Rules:
 - response fills the editor `Content` field
 - generated note content remains editable before save
 - this is a note-drafting assist, not a saved note or Study Pack
+
+Generated-note item validation (v0.69.0):
+
+- `coreDetails` and `whyItMatters` are prose and are bounded at **28 whitespace-delimited words** per item
+- `quickRecall` is bounded by **characters, not words** — the same 240-character limit the JSON schema already applies to every generated-note array item
+- the split is deliberate. A whitespace word count measures the wrong thing on notation: `Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2)` is roughly 15 "words" of pure symbols, so a formula followed by its variable definitions could exceed a prose ceiling while staying visually compact and well inside the schema's own bound. That mismatch rejected valid Civil Engineering content intermittently — see `docs/claude-prompt/topic-note-quick-recall-validation-review.md`
+- the prompt states the Quick Recall character bound via `{MAX_ITEM_CHARS}`, substituted from the same constant the schema uses. **A bound the model is not told about is enforced by chance** — that is what produced the original four-of-five pass rate. If a new bound is added, state it in the prompt too
+- the whole generated note remains bounded at 700 words independently
 
 Create/Edit Note supports multiple content input paths before save or generation:
 

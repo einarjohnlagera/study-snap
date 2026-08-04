@@ -147,6 +147,8 @@ class DashboardServiceProjectionIntegrationTest {
                     title text,
                     subject varchar(64),
                     course_program varchar(120),
+                    domain_context varchar(64),
+                    learner_level varchar(32),
                     tags varchar array not null,
                     content text not null,
                     status varchar(16) not null,

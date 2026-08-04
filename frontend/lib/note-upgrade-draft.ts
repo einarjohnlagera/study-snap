@@ -51,6 +51,8 @@ export function loadNoteUpgradeDraft(userId: string): PendingNoteUpgradeDraft | 
         title: parsed.draft?.title ?? "",
         subject: parsed.draft?.subject ?? "",
         courseProgram: parsed.draft?.courseProgram ?? "",
+        domainContext: parsed.draft?.domainContext ?? "",
+        learnerLevel: parsed.draft?.learnerLevel ?? "",
         targetProfileType: parsed.draft?.targetProfileType ?? "",
         content: parsed.draft?.content ?? "",
         tags: Array.isArray(parsed.draft?.tags) ? parsed.draft?.tags : [],

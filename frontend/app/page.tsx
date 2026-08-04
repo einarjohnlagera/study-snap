@@ -28,7 +28,7 @@ const landingPageDescription =
   "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.";
 const landingPageTitle = "NoteLib — Build your notes library and turn notes into quizzes";
 const landingPageUrl = "https://www.notelib.app";
-const landingPageOgImage = "https://www.notelib.app/og-image.png";
+const landingPageOgImage = "https://www.notelib.app/og-image-v2.png";
 
 export const metadata: Metadata = {
   title: landingPageTitle,
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
         url: landingPageOgImage,
         width: 1200,
         height: 630,
-        alt: "Build your notes library. Turn your notes into summaries and quizzes.",
+        alt: "NoteLib — your notes become your study system. Turn notes into Study Packs with summaries, key concepts, quizzes, and flashcards.",
       },
     ],
   },

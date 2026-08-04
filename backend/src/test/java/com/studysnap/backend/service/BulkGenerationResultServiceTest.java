@@ -2,6 +2,8 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.BulkGenerationResultResponse;
 import com.studysnap.backend.entity.BulkGenerationResultEntity;
+import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.BulkGenerationResultNotFoundException;
 import com.studysnap.backend.repository.BulkGenerationResultRepository;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,8 @@ class BulkGenerationResultServiceTest {
                 ownerUserId,
                 SUBJECT,
                 COURSE_PROGRAM,
+                DomainContext.NURSING,
+                LearnerLevel.BOARD_EXAM_REVIEW,
                 TARGET_PROFILE_TYPE,
                 true,
                 2,
@@ -57,6 +61,8 @@ class BulkGenerationResultServiceTest {
         assertThat(entity.getOwnerUserId()).isEqualTo(ownerUserId);
         assertThat(entity.getSubject()).isEqualTo(SUBJECT);
         assertThat(entity.getCourseProgram()).isEqualTo(COURSE_PROGRAM);
+        assertThat(entity.getDomainContext()).isEqualTo(DomainContext.NURSING);
+        assertThat(entity.getLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
         assertThat(entity.getTargetProfileType()).isEqualTo(TARGET_PROFILE_TYPE);
         assertThat(entity.getMakePublic()).isTrue();
         assertThat(entity.getRequestedCount()).isEqualTo(2);
@@ -79,6 +85,8 @@ class BulkGenerationResultServiceTest {
         assertThat(response.id()).isEqualTo(resultId);
         assertThat(response.subject()).isEqualTo(SUBJECT);
         assertThat(response.courseProgram()).isEqualTo(COURSE_PROGRAM);
+        assertThat(response.domainContext()).isEqualTo(DomainContext.NURSING.name());
+        assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
         assertThat(response.targetProfileType()).isEqualTo(TARGET_PROFILE_TYPE);
         assertThat(response.makePublic()).isTrue();
         assertThat(response.requestedCount()).isEqualTo(2);
@@ -117,6 +125,8 @@ class BulkGenerationResultServiceTest {
         entity.setOwnerUserId(ownerUserId);
         entity.setSubject(SUBJECT);
         entity.setCourseProgram(COURSE_PROGRAM);
+        entity.setDomainContext(DomainContext.NURSING);
+        entity.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
         entity.setTargetProfileType(TARGET_PROFILE_TYPE);
         entity.setMakePublic(true);
         entity.setRequestedCount(2);

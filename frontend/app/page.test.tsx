@@ -172,8 +172,8 @@ describe("LandingPage", () => {
         siteName: "NoteLib",
         images: expect.arrayContaining([
           expect.objectContaining({
-            url: "https://www.notelib.app/og-image.png",
-            alt: "Build your notes library. Turn your notes into summaries and quizzes.",
+            url: "https://www.notelib.app/og-image-v2.png",
+            alt: "NoteLib — your notes become your study system. Turn notes into Study Packs with summaries, key concepts, quizzes, and flashcards.",
           }),
         ]),
       }),
@@ -182,7 +182,7 @@ describe("LandingPage", () => {
         title: "NoteLib — Build your notes library and turn notes into quizzes",
         description:
           "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
-        images: ["https://www.notelib.app/og-image.png"],
+        images: ["https://www.notelib.app/og-image-v2.png"],
       }),
     });
   });

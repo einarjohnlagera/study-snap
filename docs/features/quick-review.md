@@ -55,6 +55,8 @@ For a learner's first-ever completed quiz — Quick Review or Challenge Quiz, de
 
 Primary CTA rules:
 
+> **Why Challenge Quiz is the primary action here at >= 4/5** (rather than only at 5/5, and rather than the entry point being moved or enlarged) is a recorded product decision — see [`docs/product/CHALLENGE_QUIZ_ADOPTION.md`](../product/CHALLENGE_QUIZ_ADOPTION.md). The rules below remain the source of truth for the behavior; that document explains the reasoning and carries the validation reads that were deferred.
+
 - after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
 - the shared `<PostSessionNextStep>` component renders the dominant next action
 - a Quick Review with two or more missed concepts prioritizes `Retry Incorrect Questions` and keeps Challenge Quiz available as a secondary action

@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 
 export const SITE_NAME = "NoteLib";
 export const SITE_URL = "https://notelib.app";
-export const DEFAULT_OG_IMAGE_URL = `${SITE_URL}/og-image.png`;
-export const DEFAULT_OG_IMAGE_ALT = "Build your notes library. Turn your notes into summaries and quizzes.";
+// Versioned filename on purpose. Facebook, LinkedIn and X cache Open Graph images by URL and can
+// serve a stale copy for weeks; X has no public re-scrape tool. Overwriting og-image.png in place
+// would leave every previously-scraped link showing the old card. Bump the version to force a
+// refetch. The previous /og-image.png is deliberately left in place so already-scraped links that
+// re-fetch do not 404. Source: public/og-image-source.svg — render at exactly 1200x630.
+export const DEFAULT_OG_IMAGE_URL = `${SITE_URL}/og-image-v2.png`;
+export const DEFAULT_OG_IMAGE_ALT = "NoteLib — your notes become your study system. Turn notes into Study Packs with summaries, key concepts, quizzes, and flashcards.";
 
 type PageMetadataInput = {
   title: string;

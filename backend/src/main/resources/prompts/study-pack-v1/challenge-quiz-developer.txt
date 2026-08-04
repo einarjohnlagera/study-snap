@@ -4,7 +4,7 @@ Generate exactly {QUESTION_COUNT} NEW Challenge Quiz questions.
 RULES:
 - Base ONLY on the provided summary and key concepts.
 - Difficulty target: {DIFFICULTY}.
-- Learner level target: {LEARNER_LEVEL}.
+- Curriculum level target: {LEARNER_LEVEL}.
 - {LEARNER_LEVEL_GUIDANCE}
 - {TRUE_FALSE_GUIDANCE}
 - {COMPUTATION_GUIDANCE}

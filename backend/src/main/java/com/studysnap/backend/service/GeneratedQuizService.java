@@ -134,7 +134,13 @@ public class GeneratedQuizService {
             }
             entity.setOwnerUserId(userId);
             entity.setNoteId(noteId);
-            entity.setTargetLearnerLevel(generationContext.learnerLevel());
+            // Only persist a Target Level the teacher actually chose. effectiveCurriculumLevel floors to
+            // COLLEGE and can never return null, which destroyed the "never targeted" state that
+            // findByNoteIdAndTargetLearnerLevelIsNotNullOrderByGeneratedAtDesc exists to encode — the
+            // teacher UI reads it back as lastUsedTargetLearnerLevel and would pre-fill College as though
+            // it had been selected, locking every later generation to it. requestedLearnerLevel is the
+            // explicit choice: withLearnerLevelOverride returns the context untouched when it is absent.
+            entity.setTargetLearnerLevel(LearnerLevel.fromString(requestedLearnerLevel));
             entity.setQuestions(uniqueQuestions);
             entity.setGeneratedAt(now);
             entity.setUpdatedAt(now);
@@ -326,10 +332,12 @@ public class GeneratedQuizService {
             return generationContext;
         }
         return new StudyPackGenerationContext(
-                override,
+                null,
                 generationContext.courseProgram(),
                 generationContext.subject(),
-                generationContext.tags()
+                generationContext.tags(),
+                generationContext.domainContext(),
+                override
         );
     }
 
