@@ -16,6 +16,13 @@ type ApplicableProgramsComboboxProps = {
   disabled?: boolean;
 };
 
+type AvailableProgramFamily = {
+  id: string;
+  name: string;
+  memberIds: string[];
+  unselectedCount: number;
+};
+
 export function ApplicableProgramsCombobox({
   id,
   catalog,
@@ -36,6 +43,32 @@ export function ApplicableProgramsCombobox({
     () => catalog.filter((program) => !selectedIdSet.has(program.id)),
     [catalog, selectedIdSet],
   );
+  const availableProgramFamilies = useMemo(() => {
+    const families = new Map<string, Omit<AvailableProgramFamily, "unselectedCount">>();
+
+    catalog.forEach((program) => {
+      if (!program.programFamilyId || !program.programFamilyName) {
+        return;
+      }
+      const family = families.get(program.programFamilyId);
+      if (family) {
+        family.memberIds.push(program.id);
+        return;
+      }
+      families.set(program.programFamilyId, {
+        id: program.programFamilyId,
+        name: program.programFamilyName,
+        memberIds: [program.id],
+      });
+    });
+
+    return Array.from(families.values())
+      .map((family) => ({
+        ...family,
+        unselectedCount: family.memberIds.filter((id) => !selectedIdSet.has(id)).length,
+      }))
+      .filter((family) => family.unselectedCount > 0);
+  }, [catalog, selectedIdSet]);
   const controlDisabled = disabled || loading || Boolean(error);
 
   const handleSelect = (programName: string) => {
@@ -46,6 +79,23 @@ export function ApplicableProgramsCombobox({
     }
     onChange([...selectedIds, selectedProgram.id]);
     setSelectionDraft("");
+  };
+
+  // ADR-001 ruling 4, binding: family expansion is UNCONDITIONAL. It must never depend on the note's
+  // Subject, Domain Context, learner level, or anything else about the note -- doing so would make
+  // Program Families a second curriculum taxonomy and re-couple the axes ADR-001 separated. This
+  // component deliberately receives no note context, which is the structural guard; do not add one.
+  // Over-selection is intended and safe: the author sees the explicit rows and trims them.
+  const handleFamilyExpansion = (memberIds: string[]) => {
+    const nextIds = [...selectedIds];
+    const nextIdSet = new Set(nextIds);
+    memberIds.forEach((memberId) => {
+      if (!nextIdSet.has(memberId)) {
+        nextIds.push(memberId);
+        nextIdSet.add(memberId);
+      }
+    });
+    onChange(nextIds);
   };
 
   return (
@@ -69,6 +119,21 @@ export function ApplicableProgramsCombobox({
               Retry
             </Button>
           ) : null}
+        </div>
+      ) : null}
+      {!controlDisabled && availableProgramFamilies.length > 0 ? (
+        <div className="flex flex-wrap gap-2" aria-label="Program family shortcuts">
+          {availableProgramFamilies.map((family) => (
+            <Button
+              key={family.id}
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => handleFamilyExpansion(family.memberIds)}
+            >
+              Add all {family.unselectedCount} {family.name} {family.unselectedCount === 1 ? "program" : "programs"}
+            </Button>
+          ))}
         </div>
       ) : null}
       {!error && !loading ? (

@@ -50,12 +50,14 @@ The legacy level-in-program cleanup is complete without rewriting any retained `
 
 Static note and Study Pack content uses the effective domain plus the note's authored level, never the reader's level when a note level exists. Quizzes and exams keep the note level as their curriculum floor; a lower reader level may soften wording or add support but cannot lower the curriculum, while a higher reader level cannot raise the note's difficulty. Applicable Programs are discovery metadata and never reach prompts.
 
-### Applicable Programs (v0.71.0 Slices 1–2)
+### Applicable Programs (v0.71.0 Slices 1–3)
 
 Applicable Programs record every catalog course program where one canonical note is relevant. They are stored as explicit `note_course_program` rows and are independent of the legacy single-valued `notes.course_program` string. Discovery now reads the join first: filters, facets, note-card badges, and Public Library program search use joined catalog names. A note with no join rows falls back to its legacy string, preserving deliberately excluded values and their shareable URLs; once any join row exists, the legacy value is no longer a discovery match. Retiring this fallback is a separate, unscheduled decision.
 
 - A Teacher may curate Applicable Programs on their own notes, an Admin may curate any note, and a Student owner cannot read or write the set.
-- The Note Editor and Note Detail inline metadata panel use the same catalog-backed multi-select. Values are selected from `course_programs`; there is no freetext path and Program Families are not expanded in this slice.
+- The Note Editor and Note Detail inline metadata panel use the same catalog-backed multi-select. Values are selected from `course_programs`; there is no freetext path.
+- The shared control derives Program Families from `course_programs.program_family_id`. A family action unconditionally adds every member to the current selection without removing hand-picked programs, then shows the explicit removable chips immediately so the author can trim before saving. Subject, Domain Context, and learner level never condition expansion.
+- Family expansion is an authoring pre-fill only. The family itself is not persisted or inferred back from a complete member set, and discovery never expands a family at read time; the saved `note_course_program` rows remain the sole applicability truth.
 - `PUT /notes/{id}/applicable-programs` replaces the full desired set. Unknown catalog ids are rejected before any row changes, and retrying the same set is idempotent.
 - New notes seed one derived row when their `courseProgram` resolves by exact catalog name (plus the enumerated `Bsed` → `Education` alias). Excluded strings keep their value and seed no row.
 - On a later note edit, a set that is still exactly what the *pre-edit* legacy string resolved to is "derived" and follows the string to its new value. This deliberately includes the **empty** set when the pre-edit string was null or catalog-excluded — a note created with no course/program, or with an excluded value, gains its join row when the string is later corrected to a catalog value. Multi-row sets, mismatched singletons, and a set deliberately cleared while the string still resolved are treated as curated and survive legacy-string edits unchanged.

@@ -434,6 +434,12 @@ describe("PrivateNoteDetailPageClient", () => {
 
   it("for generated notes, Edit enables inline metadata editing instead of routing", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+      { id: "program-civil", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+      { id: "program-electrical", name: "Electrical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+      { id: "program-mechanical", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+    ]);
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
@@ -457,6 +463,7 @@ describe("PrivateNoteDetailPageClient", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
     expect(await screen.findByLabelText("Add an applicable program")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add all 3 Engineering programs" })).toBeInTheDocument();
     expect(screen.getByText("Changing audience will affect future quiz generation.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
