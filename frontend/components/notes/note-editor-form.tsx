@@ -13,8 +13,9 @@ import {
     Tag,
     UploadCloud
 } from "lucide-react";
-import type {DomainContext, LearnerLevel, NoteTargetProfileType} from "@/lib/api";
+import type {CourseProgramCatalogItem, DomainContext, LearnerLevel, NoteTargetProfileType} from "@/lib/api";
 import {CourseProgramCombobox} from "@/components/metadata/course-program-combobox";
+import {ApplicableProgramsCombobox} from "@/components/metadata/applicable-programs-combobox";
 import {SubjectCombobox} from "@/components/notes/subject-combobox";
 import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
@@ -107,6 +108,12 @@ type NoteEditorFormProps = {
     resolvedCourseProgram?: string | null;
     showTargetProfileTypeField?: boolean;
     showAuthoringMetadataFields?: boolean;
+    applicableProgramCatalog?: CourseProgramCatalogItem[];
+    applicableProgramIds?: string[];
+    onApplicableProgramIdsChange?: (selectedIds: string[]) => void;
+    applicableProgramsLoading?: boolean;
+    applicableProgramsError?: string | null;
+    onRetryApplicablePrograms?: () => void;
     targetProfileTypeHelperText?: string;
     backHref?: string;
     backLabel?: string;
@@ -183,6 +190,12 @@ export function NoteEditorForm({
                                    resolvedCourseProgram = null,
                                    showTargetProfileTypeField = false,
                                    showAuthoringMetadataFields = false,
+                                   applicableProgramCatalog = [],
+                                   applicableProgramIds = [],
+                                   onApplicableProgramIdsChange,
+                                   applicableProgramsLoading = false,
+                                   applicableProgramsError = null,
+                                   onRetryApplicablePrograms,
                                    targetProfileTypeHelperText = "Choose the learner audience for this note.",
                                    backHref,
                                    backLabel,
@@ -416,6 +429,21 @@ export function NoteEditorForm({
 
                         {showAuthoringMetadataFields ? (
                             <>
+                                <div className="space-y-2 sm:col-span-2">
+                                    <label htmlFor="note-applicable-programs" className="text-sm font-medium text-foreground">
+                                        Applicable Programs
+                                    </label>
+                                    <ApplicableProgramsCombobox
+                                        id="note-applicable-programs"
+                                        catalog={applicableProgramCatalog}
+                                        selectedIds={applicableProgramIds}
+                                        onChange={(selectedIds) => onApplicableProgramIdsChange?.(selectedIds)}
+                                        loading={applicableProgramsLoading}
+                                        error={applicableProgramsError}
+                                        onRetry={onRetryApplicablePrograms}
+                                        disabled={isCopying}
+                                    />
+                                </div>
                                 <div className="space-y-2">
                                     <label htmlFor="note-domain-context" className="text-sm font-medium text-foreground">
                                         Domain Context (optional)

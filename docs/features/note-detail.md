@@ -54,7 +54,10 @@ Study Pack Ready actions:
 
 Inline metadata edit:
 
-- fields: `title`, `subject`, `courseProgram`, `tags` for every owner; `targetProfileType`, Domain Context, and Note Learner Level additionally for Teacher/Admin authors (`isTeacherSelectableNoteTarget`, the same gate the Note Editor uses).
+- fields: `title`, `subject`, `courseProgram`, `tags` for every owner; `targetProfileType`, Domain Context, Note Learner Level, and Applicable Programs additionally for Teacher/Admin authors (`isTeacherSelectableNoteTarget`, the same gate the Note Editor uses).
+- Applicable Programs use the shared catalog-backed multi-select and save through their dedicated full-set endpoint; they remain editable when the Study Pack is ready because they are discovery metadata, not note content.
+- when the panel is closed, a non-empty Applicable Programs set is displayed read-only alongside the legacy Course / Program label for authorized Teacher/Admin authors.
+- catalog or Applicable Programs load failures stay inline and do not hide note content. A failed Applicable Programs save restores the last persisted selection, reports the failure, and leaves the edit panel open.
 - the two authoring axes are the only way to correct a note's Domain Context or Note Learner Level once a Study Pack exists, and they shape future generation only — saving them does not touch the existing Study Pack.
 - the Subject field carries the same subject-equals-Domain-Context advisory as the Note Editor: exact case-insensitive match only, advisory text under the field, never a save block.
 - the panel's draft is seeded from the note in five places (load sync, `?edit=1` auto-open, `Edit`, `Cancel`, post-save reset) through one `toMetadataDraft` helper — add new fields there, not at the call sites.

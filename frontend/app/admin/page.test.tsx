@@ -6,6 +6,8 @@ import {
   getAdminDashboardTopContent,
   getAdminOrganicLandings,
   getAdminFeedbackImage,
+  getAdminNoteApplicablePrograms,
+  getCourseProgramCatalog,
 } from "@/lib/api";
 
 const routerMock = {
@@ -26,6 +28,9 @@ jest.mock("@/lib/api", () => ({
   getAdminDashboardRecentEvents: jest.fn(),
   getAdminOrganicLandings: jest.fn(),
   getAdminFeedbackImage: jest.fn(),
+  getAdminNoteApplicablePrograms: jest.fn(),
+  getCourseProgramCatalog: jest.fn(),
+  replaceNoteApplicablePrograms: jest.fn(),
   ApiRequestError: class ApiRequestError extends Error {
     status: number;
 
@@ -49,6 +54,15 @@ describe("AdminPage", () => {
     (getAdminDashboardRecentEvents as jest.Mock).mockReset();
     (getAdminOrganicLandings as jest.Mock).mockReset();
     (getAdminFeedbackImage as jest.Mock).mockReset();
+    (getAdminNoteApplicablePrograms as jest.Mock).mockReset();
+    (getCourseProgramCatalog as jest.Mock).mockReset();
+    (getAdminNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      items: [],
+      page: 0,
+      size: 25,
+      totalElements: 0,
+    });
+    (getCourseProgramCatalog as jest.Mock).mockResolvedValue([]);
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: jest.fn(() => "blob:feedback-screenshot"),

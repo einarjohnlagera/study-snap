@@ -94,6 +94,8 @@ class NoteServiceTest {
     private OnboardingGuardService onboardingGuardService;
     @Mock
     private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
+    @Mock
+    private NoteApplicableProgramsMaintenanceService noteApplicableProgramsMaintenanceService;
     private NoteService noteService;
 
     @BeforeEach
@@ -111,7 +113,8 @@ class NoteServiceTest {
                 analyticsService,
                 contentModerationService,
                 onboardingGuardService,
-                officialChallengeQuizTemplateService
+                officialChallengeQuizTemplateService,
+                noteApplicableProgramsMaintenanceService
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
@@ -199,6 +202,8 @@ class NoteServiceTest {
         assertThat(created.targetProfileType()).isEqualTo("STUDENT");
         assertThat(created.copiedFromUserId()).isNull();
         assertThat(created.copiedFromPublic()).isFalse();
+        verify(noteRepository).flush();
+        verify(noteApplicableProgramsMaintenanceService).seedDerivedSet(saved.getId(), "Computer Science");
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.NOTE_CREATED), eq(saved.getId()), any());
     }
 
@@ -550,6 +555,41 @@ class NoteServiceTest {
         assertThat(generatedNote.getContent()).isEqualTo("edited content");
         assertThat(response.content()).isEqualTo("edited content");
         verify(noteRepository).save(generatedNote);
+    }
+
+    @Test
+    void update_rederivesApplicableProgramsWhenPreEditSetWasDerived() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        note.setCourseProgram("Nursing");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        when(noteApplicableProgramsMaintenanceService.isDerivedSet(noteId, "Nursing")).thenReturn(true);
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", "Pharmacy", null, null, List.of(), null, "content"
+        );
+
+        noteService.update(noteId.toString(), request, ownerUserId);
+
+        verify(noteRepository).flush();
+        verify(noteApplicableProgramsMaintenanceService).replaceWithDerivedSet(noteId, "Pharmacy");
+    }
+
+    @Test
+    void update_preservesCuratedApplicableProgramsWhenLegacyStringChanges() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        note.setCourseProgram("Nursing");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        when(noteApplicableProgramsMaintenanceService.isDerivedSet(noteId, "Nursing")).thenReturn(false);
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", "Pharmacy", null, null, List.of(), null, "content"
+        );
+
+        noteService.update(noteId.toString(), request, ownerUserId);
+
+        verify(noteApplicableProgramsMaintenanceService, never()).replaceWithDerivedSet(any(), any());
     }
 
     @Test

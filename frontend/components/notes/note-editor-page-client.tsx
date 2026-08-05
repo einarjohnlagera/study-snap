@@ -13,14 +13,18 @@ import {
   createStudyPackFromNote,
   extractNoteTextFromFile,
   generateNoteFromTopic,
+  getCourseProgramCatalog,
   getMe,
   getNote,
+  getNoteApplicablePrograms,
   isEmailNotVerifiedError,
   isOcrDisabledError,
   isNoteGenerationLimitReachedError,
   isOcrLimitReachedError,
   listCoursePrograms,
   listSubjects,
+  replaceNoteApplicablePrograms,
+  type CourseProgramCatalogItem,
   type DomainContext,
   type LearnerLevel,
   type NoteTargetProfileType,
@@ -99,6 +103,14 @@ type PendingSuggestion = {
 function normalizeOptional(value: string): string | null {
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function resolveDerivedApplicableProgramId(
+  catalog: CourseProgramCatalogItem[],
+  courseProgram: string,
+): string | null {
+  const catalogName = courseProgram === "Bsed" ? "Education" : courseProgram;
+  return catalog.find((program) => program.name === catalogName)?.id ?? null;
 }
 
 function toDraft(note: NoteResponse): NoteEditorDraft {
@@ -189,6 +201,13 @@ export function NoteEditorPageClient({
   const [revealOptionalDetailsSignal, setRevealOptionalDetailsSignal] = useState(0);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
+  const [applicableProgramCatalog, setApplicableProgramCatalog] = useState<CourseProgramCatalogItem[]>([]);
+  const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
+  const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
+  const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
+  const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
+  const [applicableProgramsDirty, setApplicableProgramsDirty] = useState(false);
+  const [applicableProgramsRetryToken, setApplicableProgramsRetryToken] = useState(0);
   const [profileCourseProgram, setProfileCourseProgram] = useState("");
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
   const generatedContentSectionRef = useRef<HTMLElement | null>(null);
@@ -221,6 +240,54 @@ export function NoteEditorPageClient({
       globalThis.removeEventListener("studysnap-auth-change", syncAuthState);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showTargetProfileTypeField) {
+      return;
+    }
+    let active = true;
+    setApplicableProgramsLoading(true);
+    setApplicableProgramsError(null);
+    const programsRequest = noteId ? getNoteApplicablePrograms(noteId) : Promise.resolve(null);
+    void Promise.all([getCourseProgramCatalog(), programsRequest])
+      .then(([catalog, programs]) => {
+        if (!active) {
+          return;
+        }
+        setApplicableProgramCatalog(catalog);
+        if (programs) {
+          const selectedIds = programs.map((program) => program.id);
+          setApplicableProgramIds(selectedIds);
+          setSavedApplicableProgramIds(selectedIds);
+          setApplicableProgramsDirty(false);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setApplicableProgramsError(
+            error instanceof Error ? error.message : "Could not load Applicable Programs.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setApplicableProgramsLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [applicableProgramsRetryToken, noteId, showTargetProfileTypeField]);
+
+  useEffect(() => {
+    if (isEditMode || applicableProgramsDirty || applicableProgramCatalog.length === 0) {
+      return;
+    }
+    const derivedId = resolveDerivedApplicableProgramId(applicableProgramCatalog, draft.courseProgram);
+    const derivedIds = derivedId ? [derivedId] : [];
+    setApplicableProgramIds(derivedIds);
+    setSavedApplicableProgramIds(derivedIds);
+  }, [applicableProgramCatalog, applicableProgramsDirty, draft.courseProgram, isEditMode]);
 
   useEffect(() => {
     if (!toastMessage) {
@@ -661,11 +728,43 @@ export function NoteEditorPageClient({
       ? await updateNote(currentNoteId, payload)
       : await createNote(payload);
 
+    if (showTargetProfileTypeField && applicableProgramsDirty && !applicableProgramsError) {
+      try {
+        const savedPrograms = await replaceNoteApplicablePrograms(saved.id, applicableProgramIds);
+        const savedIds = savedPrograms.map((program) => program.id);
+        setApplicableProgramIds(savedIds);
+        setSavedApplicableProgramIds(savedIds);
+        setApplicableProgramsDirty(false);
+      } catch (error) {
+        const fallbackIds = currentNoteId
+          ? savedApplicableProgramIds
+          : (() => {
+            const derivedId = resolveDerivedApplicableProgramId(applicableProgramCatalog, saved.courseProgram ?? "");
+            return derivedId ? [derivedId] : [];
+          })();
+        setApplicableProgramIds(fallbackIds);
+        setSavedApplicableProgramIds(fallbackIds);
+        setApplicableProgramsDirty(false);
+        throw error;
+      }
+    }
+
     setCurrentNoteId(saved.id);
     setDraft(toDraft(saved));
     setStudyPackStatus(saved.studyPackStatus ?? "DRAFT");
     return saved;
-  }, [buildRequest, contentEmpty, currentNoteId, showToast]);
+  }, [
+    applicableProgramCatalog,
+    applicableProgramIds,
+    applicableProgramsDirty,
+    applicableProgramsError,
+    buildRequest,
+    contentEmpty,
+    currentNoteId,
+    savedApplicableProgramIds,
+    showTargetProfileTypeField,
+    showToast,
+  ]);
 
   const prepareUpgradeContext = useCallback(async (
     contextType: PaywallContextType,
@@ -1203,6 +1302,15 @@ export function NoteEditorPageClient({
           : normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram)}
         showTargetProfileTypeField={showTargetProfileTypeField}
         showAuthoringMetadataFields={showTargetProfileTypeField}
+        applicableProgramCatalog={applicableProgramCatalog}
+        applicableProgramIds={applicableProgramIds}
+        onApplicableProgramIdsChange={(selectedIds) => {
+          setApplicableProgramIds(selectedIds);
+          setApplicableProgramsDirty(true);
+        }}
+        applicableProgramsLoading={applicableProgramsLoading}
+        applicableProgramsError={applicableProgramsError}
+        onRetryApplicablePrograms={() => setApplicableProgramsRetryToken((value) => value + 1)}
         targetProfileTypeHelperText={targetProfileTypeHelperText}
         backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}
         backLabel={isEditMode ? "Note" : "Library"}

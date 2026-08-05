@@ -1523,6 +1523,33 @@ export type NoteResponse = {
   adaptivePracticeAvailable: boolean;
 };
 
+export type CourseProgramCatalogItem = {
+  id: string;
+  name: string;
+  programFamilyId: string | null;
+  programFamilyName: string | null;
+};
+
+export type ApplicableProgram = {
+  id: string;
+  name: string;
+};
+
+export type AdminNoteApplicableProgramsItem = {
+  noteId: string;
+  title: string | null;
+  ownerEmail: string | null;
+  courseProgram: string | null;
+  applicablePrograms: ApplicableProgram[];
+};
+
+export type AdminNoteApplicableProgramsPage = {
+  items: AdminNoteApplicableProgramsItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+};
+
 export type NoteStudyPackStatus = "DRAFT" | "GENERATING" | "FAILED" | "STUDY_PACK_READY";
 export type NoteVisibility = "PRIVATE" | "PUBLIC";
 export type SubjectSuggestionScope = "mine" | "public";
@@ -2389,6 +2416,24 @@ export async function getAdminOrganicLandings(): Promise<AdminOrganicLandingsRes
     true,
   );
   return parseApiResponse<AdminOrganicLandingsResponse>(response, "Could not load organic landing metrics.");
+}
+
+export async function getAdminNoteApplicablePrograms(
+  page = 0,
+  size = 25,
+): Promise<AdminNoteApplicableProgramsPage> {
+  const response = await fetchWithAuth(
+    `/admin/notes/applicable-programs?page=${encodeURIComponent(String(page))}&size=${encodeURIComponent(String(size))}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminNoteApplicableProgramsPage>(
+    response,
+    "Could not load note Applicable Programs.",
+  );
 }
 
 export async function getAdminFunnelMetrics(days?: number): Promise<AdminFunnelMetricsResponse> {
@@ -4762,6 +4807,46 @@ export async function listCoursePrograms(scope: CourseProgramSuggestionScope = "
         headers: buildAuthHeaders(),
       });
   return parseApiResponse<string[]>(response, "Could not load course/program suggestions.");
+}
+
+export async function getCourseProgramCatalog(): Promise<CourseProgramCatalogItem[]> {
+  const response = await fetchWithAuth(
+    "/course-program-catalog",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<CourseProgramCatalogItem[]>(response, "Could not load the course program catalog.");
+}
+
+export async function getNoteApplicablePrograms(noteId: string): Promise<ApplicableProgram[]> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/applicable-programs`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ApplicableProgram[]>(response, "Could not load Applicable Programs.");
+}
+
+export async function replaceNoteApplicablePrograms(
+  noteId: string,
+  courseProgramIds: string[],
+): Promise<ApplicableProgram[]> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/applicable-programs`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ courseProgramIds }),
+    },
+    true,
+  );
+  return parseApiResponse<ApplicableProgram[]>(response, "Could not save Applicable Programs.");
 }
 
 export async function listTags(scope: "public" = "public"): Promise<string[]> {

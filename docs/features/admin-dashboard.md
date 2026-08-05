@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provide an internal, mostly read-only Admin Dashboard for monitoring product usage, billing health, upgrades, and Public Library growth. The only v1 operational action is admin-initiated billing refunds for exceptional payment issues.
+Provide an internal, mostly read-only Admin Dashboard for monitoring product usage, billing health, upgrades, and Public Library growth. Admin v1 has two narrow operational exceptions: admin-initiated billing refunds for exceptional payment issues and per-note Applicable Programs curation.
 
 ## Access
 
@@ -13,6 +13,7 @@ Provide an internal, mostly read-only Admin Dashboard for monitoring product usa
   - `GET /api/admin/dashboard/recent-events`
   - `POST /api/admin/jobs/subscription-expiry/{subscriptionId}` — expire a specific subscription and downgrade to Free (dev/ops use; subscription `end_at` must already be in the past)
   - `POST /api/admin/billing/refund` — issue a one-off Xendit refund for an eligible paid transaction
+  - `GET /api/admin/notes/applicable-programs` — paginated note applicability curation data
 - Access is restricted to users with the `ADMIN` role.
 - Non-admin users must not be able to use admin endpoints.
 - Frontend should redirect authenticated non-admin users away from `/admin`.
@@ -25,7 +26,7 @@ Keep Admin v1 simple and internal:
 - billing summary cards
 - engagement summary cards
 - basic tables
-- no editing actions beyond the narrow Xendit refund operation
+- no editing actions beyond the narrow Xendit refund operation and the per-note Applicable Programs exception
 - no complex filters or charts
 
 ## Summary Metrics
@@ -75,6 +76,7 @@ Admin v1 tables should include:
 - recent failed payments
 - recent feedback
 - one-click refund actions on Xendit recent premium upgrade rows that have a linked transaction
+- a paginated notes table showing legacy Course / Program and explicit Applicable Programs, with a catalog-backed edit action that changes no other note metadata
 
 ## Funnel Metrics
 

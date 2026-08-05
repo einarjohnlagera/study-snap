@@ -11,6 +11,7 @@ import { PaywallModal, type PaywallModalVariant } from "@/components/billing/pay
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
+import { ApplicableProgramsCombobox } from "@/components/metadata/applicable-programs-combobox";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
 import { NoteDetailSummaryCard } from "@/components/notes/note-detail-summary-card";
@@ -47,21 +48,25 @@ import {
   deleteNote,
   generateGeneratedQuiz,
   getConceptHealth,
+  getCourseProgramCatalog,
   getMe,
   getChallengeQuizPerformanceSummary,
   getMyStudyPack,
   getNote,
+  getNoteApplicablePrograms,
   getQuickReviewPerformanceSummary,
   isEmailNotVerifiedError,
   isQuestionCountNotAllowedError,
   listCoursePrograms,
   listRecentQuizSessions,
   listSubjects,
+  replaceNoteApplicablePrograms,
   trackAnalyticsEvent,
   startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
   type ChallengeQuizPerformanceSummaryResponse,
+  type CourseProgramCatalogItem,
   type ConceptHealthEntry,
   type DomainContext,
   type LearnerLevel,
@@ -476,6 +481,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
   const [metadataTagDraft, setMetadataTagDraft] = useState("");
   const [metadataDraft, setMetadataDraft] = useState<NoteMetadataDraft>(EMPTY_METADATA_DRAFT);
+  const [applicableProgramCatalog, setApplicableProgramCatalog] = useState<CourseProgramCatalogItem[]>([]);
+  const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
+  const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
+  const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
+  const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
+  const [applicableProgramsDirty, setApplicableProgramsDirty] = useState(false);
+  const [applicableProgramsRetryToken, setApplicableProgramsRetryToken] = useState(0);
   const [conceptHash, setConceptHash] = useState("");
   const [highlightedConceptAnchor, setHighlightedConceptAnchor] = useState<string | null>(null);
   const [hasViewedFullNotes, setHasViewedFullNotes] = useState(false);
@@ -846,6 +858,40 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   // Same gate the Note Editor uses for its authoring metadata fieldset, so the two surfaces expose
   // the same axes to the same authors.
   const canEditAuthoringMetadata = canEditTargetProfileType;
+  useEffect(() => {
+    if (!canEditTargetProfileType || !note?.id) {
+      return;
+    }
+    let active = true;
+    setApplicableProgramsLoading(true);
+    setApplicableProgramsError(null);
+    void Promise.all([getCourseProgramCatalog(), getNoteApplicablePrograms(note.id)])
+      .then(([catalog, programs]) => {
+        if (!active) {
+          return;
+        }
+        const selectedIds = programs.map((program) => program.id);
+        setApplicableProgramCatalog(catalog);
+        setApplicableProgramIds(selectedIds);
+        setSavedApplicableProgramIds(selectedIds);
+        setApplicableProgramsDirty(false);
+      })
+      .catch((error) => {
+        if (active) {
+          setApplicableProgramsError(
+            error instanceof Error ? error.message : "Could not load Applicable Programs.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setApplicableProgramsLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [applicableProgramsRetryToken, canEditTargetProfileType, note?.id]);
   const isStudyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const isGeneratingStudyPack = studyPackStatus === "GENERATING";
   const hasGenerationFailed = studyPackStatus === "FAILED";
@@ -1348,6 +1394,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setNoteActionsMenuOpen(false);
     if (!isDraft) {
       setMetadataDraft(toMetadataDraft(note));
+      setApplicableProgramIds(savedApplicableProgramIds);
+      setApplicableProgramsDirty(false);
       setMetadataTagDraft("");
       setIsInlineMetadataEditMode(true);
       return;
@@ -1360,6 +1408,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     setMetadataDraft(toMetadataDraft(note));
+    setApplicableProgramIds(savedApplicableProgramIds);
+    setApplicableProgramsDirty(false);
     setMetadataTagDraft("");
     setIsInlineMetadataEditMode(false);
   };
@@ -1419,6 +1469,22 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         targetProfileType: nextTargetProfileType,
         content: note.content,
       });
+      if (applicableProgramsDirty && !applicableProgramsError) {
+        try {
+          const savedPrograms = await replaceNoteApplicablePrograms(note.id, applicableProgramIds);
+          const savedIds = savedPrograms.map((program) => program.id);
+          setApplicableProgramIds(savedIds);
+          setSavedApplicableProgramIds(savedIds);
+          setApplicableProgramsDirty(false);
+        } catch (error) {
+          setNote(updated);
+          setApplicableProgramIds(savedApplicableProgramIds);
+          setApplicableProgramsDirty(false);
+          setToastTone("warning");
+          setToast(error instanceof Error ? error.message : "Could not save Applicable Programs.");
+          return;
+        }
+      }
       setNote(updated);
       setMetadataDraft(toMetadataDraft(updated));
       setMetadataTagDraft("");
@@ -1815,6 +1881,18 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 {!isInlineMetadataEditMode && courseProgramLabel ? (
                   <p className="text-sm text-foreground/65">{courseProgramLabel}</p>
                 ) : null}
+                {!isInlineMetadataEditMode && savedApplicableProgramIds.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">
+                    <span className="font-medium">Applicable Programs:</span>
+                    {applicableProgramCatalog
+                      .filter((program) => savedApplicableProgramIds.includes(program.id))
+                      .map((program) => (
+                        <span key={program.id} className="rounded-full border border-border px-2 py-0.5">
+                          {program.name}
+                        </span>
+                      ))}
+                  </div>
+                ) : null}
 
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${stateChip(studyPackStatus)}`}>
@@ -2033,6 +2111,26 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <p className="text-xs text-foreground/60">
                       Changing audience will affect future quiz generation.
                     </p>
+                  </div>
+                ) : null}
+                {canEditAuthoringMetadata ? (
+                  <div className="space-y-2">
+                    <label htmlFor="note-applicable-programs-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                      Applicable Programs
+                    </label>
+                    <ApplicableProgramsCombobox
+                      id="note-applicable-programs-inline"
+                      catalog={applicableProgramCatalog}
+                      selectedIds={applicableProgramIds}
+                      onChange={(selectedIds) => {
+                        setApplicableProgramIds(selectedIds);
+                        setApplicableProgramsDirty(true);
+                      }}
+                      loading={applicableProgramsLoading}
+                      error={applicableProgramsError}
+                      onRetry={() => setApplicableProgramsRetryToken((value) => value + 1)}
+                      disabled={savingMetadata}
+                    />
                   </div>
                 ) : null}
                 {canEditAuthoringMetadata ? (
