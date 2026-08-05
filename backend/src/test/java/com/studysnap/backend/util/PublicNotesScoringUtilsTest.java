@@ -191,7 +191,8 @@ class PublicNotesScoringUtilsTest {
                 null,
                 null,
                 false,
-                false
+                false,
+                List.of()
         );
     }
 }

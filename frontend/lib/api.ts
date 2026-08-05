@@ -1560,6 +1560,7 @@ export type NoteListItemResponse = {
   ownerUserId: string | null;
   title: string | null;
   courseProgram: string | null;
+  applicablePrograms?: string[];
   targetProfileType: NoteTargetProfileType;
   subject: string | null;
   tags: string[];

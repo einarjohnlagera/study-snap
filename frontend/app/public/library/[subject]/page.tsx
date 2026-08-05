@@ -83,6 +83,7 @@ function SubjectNoteCard({ note, subjectPath }: Readonly<{ note: SubjectNote; su
         <SharedNoteCard
           title={note.title}
           courseProgram={note.courseProgram}
+          applicablePrograms={note.applicablePrograms}
           subject={note.subject}
           tags={note.tags}
           contentPreview={note.contentPreview}

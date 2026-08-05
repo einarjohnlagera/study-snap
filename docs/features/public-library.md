@@ -253,6 +253,11 @@ The in-app `?subject=` filter and the canonical `/public/library/{subject}` land
 Facet suggestion scope after F8:
 
 - Subject, Course / Program, and Tag choices come from their dedicated whole-public-library endpoints, not the currently loaded note page.
+- Course / Program filtering is join-first: a public note matches every catalog program in `note_course_program`; only a note with no join rows falls back to its legacy `course_program` string. The accepted URL value remains the normalized slug of the displayed program name, so routes and query parameters do not change.
+- Public search matches joined catalog program names. The legacy course/program string remains searchable only for notes with no join rows, so an explicitly curated set can remove the authored legacy program from discovery.
+- Existing shareable URLs for catalog-excluded legacy values (for example `software-engineering`) continue resolving through the zero-join-row fallback. An unmatched slug continues to produce the ordinary empty state.
+- Cards show ordered joined program names, capped with `+N`, and fall back to the legacy string when the note has no rows. The list projection supplies the names in the page query; rendering does not fetch them per card.
+- A note may contribute to several program facets, so those counts can exceed the note total; the filter panel explains this expected behavior.
 - Selecting a Course / Program still filters results server-side after `Apply`, but it does not narrow the modal's draft Subject or Tag suggestion lists; those retain the complete facet set.
 - This intentionally removes the former client-only co-occurrence maps rather than introducing a disproportionate new co-occurrence endpoint.
 
@@ -324,7 +329,7 @@ Supported query params:
 Whole-library Public Library facet values have dedicated anonymous endpoints, independent of the currently loaded result page:
 
 - `GET /subjects?scope=public`
-- `GET /course-programs?scope=public`
+- `GET /course-programs?scope=public` — unions joined catalog names with zero-row and other legacy strings, retaining its existing `List<String>` response. This same widened list intentionally remains available to authoring surfaces that consume the shared course/program suggestion endpoint.
 - `GET /tags?scope=public` — distinct tags from `PUBLIC` notes only, trimmed, case-insensitively deduplicated with first-seen casing retained, and sorted alphabetically
 
 Private Library tags continue to come from `/notes/library/filter-options`; `/tags` intentionally has no `mine` scope.
@@ -340,7 +345,7 @@ Behavior:
 - `Share this list` must copy the same canonical `/public/library?...` URL the page is currently using
 - direct opens of a filtered URL must restore the same selected filters in the UI
 - backend filtering is combinable and returns only `PUBLIC` notes
-- search is case-insensitive and already matches Course / Program and tags alongside the existing note text fields; a query such as `PNLE` finds notes whose canonical program is PNLE without a duplicate search predicate
+- search is case-insensitive and matches joined Applicable Program names (or the legacy Course / Program string when a note has no join rows) and tags alongside the existing note text fields; a query such as `Nursing` finds a note curated for Nursing even when its authored legacy string differs
 - subject, tags, and course/program use normalized slug values in the URL
 - clearing filters should return to `/public/library`
 - Public Library shows the paginated response count near the filter bar: `{totalMatching} notes` with no active filters, or `{items.length} of {totalMatching} notes` when filters are active

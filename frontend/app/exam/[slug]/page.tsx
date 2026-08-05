@@ -91,6 +91,7 @@ function ExamNoteCard({ note }: Readonly<{ note: ExamHubNote }>) {
         <SharedNoteCard
           title={note.title}
           courseProgram={note.courseProgram}
+          applicablePrograms={note.applicablePrograms}
           subject={note.subject}
           tags={note.tags}
           contentPreview={note.contentPreview}

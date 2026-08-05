@@ -51,6 +51,9 @@ import static org.mockito.Mockito.when;
 @SpringBootTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.studysnap.backend.testutil.SqlCaptureStatementInspector")
 @Transactional
 class NoteServicePublicLibraryPaginationIntegrationTest {
+    private static final String NURSING_PROGRAM = "Nursing";
+    private static final String EXCLUDED_PROGRAM = "Software Engineering";
+    private static final String ACCOUNTANCY_PROGRAM = "Accountancy";
     private static final OffsetDateTime BASE_TIME = OffsetDateTime.parse("2026-07-01T09:00:00Z");
     private static final String STUDENT_AUDIENCE = "STUDENT";
     private static final String READY_SOURCE_TAG = "ready-source";
@@ -73,6 +76,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     void initSchema() {
         createSchema();
         jdbcTemplate.execute("delete from study_packs");
+        jdbcTemplate.execute("delete from note_course_program");
+        jdbcTemplate.execute("delete from course_programs");
         jdbcTemplate.execute("delete from notes");
         jdbcTemplate.execute("delete from users");
         likeCounts.clear();
@@ -82,6 +87,62 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         users.clear();
         noteService = createNoteService();
         SqlCaptureStatementInspector.clear();
+    }
+
+    @Test
+    void slugFilterAndProgramSearchPreserveLegacyResultsWithOneOrZeroJoinRows() {
+        UUID ownerId = insertUser("programreader", UserRole.USER);
+        NoteEntity nursing = saveNote(
+                ownerId, "Clinical foundations", "Patient Care", NURSING_PROGRAM,
+                new String[]{"clinical"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 2
+        );
+        NoteEntity excluded = saveNote(
+                ownerId, "Software foundations", "Architecture", EXCLUDED_PROGRAM,
+                new String[]{"systems"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 1
+        );
+        flushAndClear();
+        UUID nursingId = insertCourseProgram(NURSING_PROGRAM);
+        insertApplicableProgram(nursing.getId(), nursingId);
+
+        List<String> nursingFilterIds = ids(page(null, null, "recent", null, List.of(), "nursing", null,
+                null, false, List.of(), 0, 20));
+        List<String> excludedFilterIds = ids(page(null, null, "recent", null, List.of(), "software-engineering", null,
+                null, false, List.of(), 0, 20));
+        List<String> nursingSearchIds = ids(searchPage("nursing"));
+        List<String> excludedSearchIds = ids(searchPage("software engineering"));
+
+        assertThat(nursingFilterIds).containsExactly(nursing.getId().toString());
+        assertThat(excludedFilterIds).containsExactly(excluded.getId().toString());
+        assertThat(nursingSearchIds).containsExactly(nursing.getId().toString());
+        assertThat(excludedSearchIds).containsExactly(excluded.getId().toString());
+    }
+
+    @Test
+    void joinedProgramsDrivePublicSlugSearchAndBlockTheLegacyString() {
+        UUID ownerId = insertUser("multireader", UserRole.USER);
+        NoteEntity curated = saveNote(
+                ownerId, "Cross-program foundations", "Care", "Pharmacy",
+                new String[]{"clinical"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 1
+        );
+        flushAndClear();
+        UUID accountancyId = insertCourseProgram(ACCOUNTANCY_PROGRAM);
+        UUID nursingId = insertCourseProgram(NURSING_PROGRAM);
+        insertApplicableProgram(curated.getId(), accountancyId);
+        insertApplicableProgram(curated.getId(), nursingId);
+
+        PublicNoteListResponse accountancy = page(null, null, "recent", null, List.of(), "accountancy", null,
+                null, false, List.of(), 0, 20);
+
+        assertThat(ids(accountancy)).containsExactly(curated.getId().toString());
+        assertThat(accountancy.items().getFirst().applicablePrograms())
+                .containsExactly(ACCOUNTANCY_PROGRAM, NURSING_PROGRAM);
+        assertThat(ids(searchPage("nursing"))).containsExactly(curated.getId().toString());
+        assertThat(ids(page(null, null, "recent", null, List.of(), "pharmacy", null,
+                null, false, List.of(), 0, 20))).isEmpty();
+        assertThat(ids(searchPage("pharmacy"))).isEmpty();
     }
 
     @Test
@@ -534,6 +595,21 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         studyPacks.put(note.getId(), studyPack);
     }
 
+    private UUID insertCourseProgram(String name) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("insert into course_programs (id, name) values (?, ?)", id, name);
+        return id;
+    }
+
+    private void insertApplicableProgram(UUID noteId, UUID courseProgramId) {
+        jdbcTemplate.update(
+                "insert into note_course_program (id, note_id, course_program_id) values (?, ?, ?)",
+                UUID.randomUUID(),
+                noteId,
+                courseProgramId
+        );
+    }
+
     private UUID insertUser(String username, UserRole role) {
         return insertUserWithId(UUID.randomUUID(), username, role);
     }
@@ -644,7 +720,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 mock(ContentModerationService.class),
                 mock(OnboardingGuardService.class),
                 mock(OfficialChallengeQuizTemplateService.class),
-                mock(NoteApplicableProgramsMaintenanceService.class)
+                mock(NoteApplicableProgramsMaintenanceService.class),
+                mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class)
         );
     }
 
@@ -687,6 +764,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                     updated_at timestamp with time zone not null
                 )
                 """);
+        createApplicableProgramsSchema();
         jdbcTemplate.execute("""
                 create table if not exists study_packs (
                     id uuid primary key,
@@ -768,6 +846,26 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                     study_days_per_week integer,
                     created_at timestamp with time zone not null,
                     updated_at timestamp with time zone not null
+                )
+                """);
+    }
+
+    private void createApplicableProgramsSchema() {
+        jdbcTemplate.execute("""
+                create table if not exists course_programs (
+                    id uuid primary key,
+                    name varchar(120) not null unique
+                )
+                """);
+        jdbcTemplate.execute("""
+                create table if not exists note_course_program (
+                    id uuid primary key,
+                    note_id uuid not null,
+                    course_program_id uuid not null,
+                    created_at timestamp with time zone not null default current_timestamp,
+                    unique (note_id, course_program_id),
+                    foreign key (note_id) references notes(id) on delete cascade,
+                    foreign key (course_program_id) references course_programs(id)
                 )
                 """);
     }

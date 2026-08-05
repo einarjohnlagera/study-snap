@@ -32,6 +32,7 @@ import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.NoteStatusProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
@@ -67,6 +68,7 @@ import static org.mockito.Mockito.when;
 class NoteServiceTest {
 
     private static final String EXISTING_CREATOR_USERNAME = "einarjohn";
+    private static final String ACCOUNTANCY_PROGRAM = "Accountancy";
 
     @Mock
     private NoteRepository noteRepository;
@@ -96,6 +98,8 @@ class NoteServiceTest {
     private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     @Mock
     private NoteApplicableProgramsMaintenanceService noteApplicableProgramsMaintenanceService;
+    @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
     private NoteService noteService;
 
     @BeforeEach
@@ -114,12 +118,15 @@ class NoteServiceTest {
                 contentModerationService,
                 onboardingGuardService,
                 officialChallengeQuizTemplateService,
-                noteApplicableProgramsMaintenanceService
+                noteApplicableProgramsMaintenanceService,
+                noteCourseProgramRepository
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
         lenient().when(noteRepository.findCourseProgramValuesByOwnerUserId(any())).thenReturn(List.of());
         lenient().when(noteRepository.findCourseProgramValuesByVisibility(any())).thenReturn(List.of());
+        lenient().when(noteCourseProgramRepository.findNamesByOwnerUserId(any())).thenReturn(List.of());
+        lenient().when(noteCourseProgramRepository.findNamesByVisibility(any())).thenReturn(List.of());
         lenient().when(generatedQuizRepository.findByNoteId(any())).thenReturn(Optional.empty());
         lenient().when(generatedQuizRepository.findLatestTargetLearnerLevelByNoteId(any())).thenReturn(Optional.empty());
         lenient().when(studyPackRepository.findByNoteId(any())).thenReturn(Optional.empty());
@@ -923,11 +930,25 @@ class NoteServiceTest {
         owner.setCourseProgram("Senior High-STEM");
         when(noteRepository.findCourseProgramValuesByOwnerUserId(ownerUserId))
                 .thenReturn(List.of("  nursing  ", "Nursing", "Senior High – STEM"));
+        when(noteCourseProgramRepository.findNamesByOwnerUserId(ownerUserId))
+                .thenReturn(List.of(ACCOUNTANCY_PROGRAM, "nursing"));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
         List<String> coursePrograms = noteService.listMineCoursePrograms(ownerUserId);
 
-        assertThat(coursePrograms).containsExactly("Nursing", "Senior High – STEM");
+        assertThat(coursePrograms).containsExactly(ACCOUNTANCY_PROGRAM, "Nursing", "Senior High – STEM");
+    }
+
+    @Test
+    void listPublicCoursePrograms_includesProgramsReachableOnlyThroughTheJoin() {
+        when(noteRepository.findCourseProgramValuesByVisibility(NoteVisibility.PUBLIC))
+                .thenReturn(List.of("Software Engineering", "Nursing"));
+        when(noteCourseProgramRepository.findNamesByVisibility(NoteVisibility.PUBLIC.name()))
+                .thenReturn(List.of(ACCOUNTANCY_PROGRAM, "Nursing"));
+
+        List<String> coursePrograms = noteService.listPublicCoursePrograms();
+
+        assertThat(coursePrograms).containsExactly(ACCOUNTANCY_PROGRAM, "Nursing", "Software Engineering");
     }
 
     @Test

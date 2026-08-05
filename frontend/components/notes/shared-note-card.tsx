@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 type SharedNoteCardProps = {
   title: string | null;
   courseProgram?: string | null;
+  applicablePrograms?: string[] | null;
   subject: string | null;
   tags: string[];
   contentPreview: string;
@@ -28,6 +29,7 @@ export type CardExcerpt =
 
 // Below this, the note body is a stub, not a real preview — fall back to the summary instead.
 const MIN_NOTE_PREVIEW_LENGTH = 40;
+const MAX_VISIBLE_PROGRAMS = 2;
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -36,6 +38,20 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
   return tags
     .map((tag) => tag?.trim())
     .filter((tag): tag is string => Boolean(tag && tag.length > 0));
+}
+
+function resolveCardPrograms(
+  applicablePrograms: string[] | null | undefined,
+  courseProgram: string | null | undefined,
+): string[] {
+  const joinedPrograms = Array.isArray(applicablePrograms)
+    ? [...new Set(applicablePrograms.map((program) => program?.trim()).filter(Boolean))]
+    : [];
+  if (joinedPrograms.length > 0) {
+    return joinedPrograms;
+  }
+  const legacyProgram = courseProgram?.trim();
+  return legacyProgram ? [legacyProgram] : [];
 }
 
 /**
@@ -58,6 +74,7 @@ export function resolveCardExcerpt(contentPreview: string | null | undefined, su
 export function SharedNoteCard({
   title,
   courseProgram,
+  applicablePrograms,
   subject,
   tags,
   contentPreview,
@@ -73,7 +90,9 @@ export function SharedNoteCard({
   previewLines = 3,
 }: Readonly<SharedNoteCardProps>) {
   const normalizedTags = normalizeTags(tags);
-  const normalizedCourseProgram = courseProgram?.trim() || null;
+  const programs = resolveCardPrograms(applicablePrograms, courseProgram);
+  const visiblePrograms = programs.slice(0, MAX_VISIBLE_PROGRAMS);
+  const hiddenProgramCount = Math.max(0, programs.length - visiblePrograms.length);
   const hasDiscoveryMetrics = typeof viewCount === "number" || typeof copyCount === "number";
   const hasMetricsRow = hasDiscoveryMetrics || Boolean(metricsTrailing);
   const visibleTags = tagDisplayLimit ? normalizedTags.slice(0, tagDisplayLimit) : normalizedTags;
@@ -86,9 +105,17 @@ export function SharedNoteCard({
         {/* TOP ROW: Subject badge + Course/Program metadata — above title */}
         <div className="flex flex-wrap items-center gap-2">
           <SubjectBadge subject={subject} />
-          {normalizedCourseProgram ? (
-            <span className="text-xs font-medium text-foreground/65">
-              {normalizedCourseProgram}
+          {visiblePrograms.map((program) => (
+            <span key={program} className="text-xs font-medium text-foreground/65">
+              {program}
+            </span>
+          ))}
+          {hiddenProgramCount > 0 ? (
+            <span
+              className="text-xs font-medium text-foreground/55"
+              aria-label={`${hiddenProgramCount} more applicable ${hiddenProgramCount === 1 ? "program" : "programs"}`}
+            >
+              +{hiddenProgramCount}
             </span>
           ) : null}
         </div>

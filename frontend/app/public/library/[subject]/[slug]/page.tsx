@@ -363,6 +363,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                       <SharedNoteCard
                         title={n.title}
                         courseProgram={n.courseProgram}
+                        applicablePrograms={n.applicablePrograms}
                         subject={n.subject}
                         tags={n.tags}
                         contentPreview={n.contentPreview}
@@ -406,6 +407,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                     <SharedNoteCard
                       title={relatedNote.title}
                       courseProgram={relatedNote.courseProgram}
+                      applicablePrograms={relatedNote.applicablePrograms}
                       subject={relatedNote.subject}
                       tags={relatedNote.tags}
                       contentPreview={relatedNote.contentPreview}

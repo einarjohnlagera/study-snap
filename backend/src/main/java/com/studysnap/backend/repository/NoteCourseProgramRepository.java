@@ -29,6 +29,20 @@ public class NoteCourseProgramRepository {
             VALUES (?, ?, ?)
             ON CONFLICT (note_id, course_program_id) DO NOTHING
             """;
+    private static final String FIND_NAMES_BY_OWNER_USER_ID = """
+            SELECT course_programs.name
+            FROM note_course_program
+            JOIN course_programs ON course_programs.id = note_course_program.course_program_id
+            JOIN notes ON notes.id = note_course_program.note_id
+            WHERE notes.owner_user_id = ?
+            """;
+    private static final String FIND_NAMES_BY_VISIBILITY = """
+            SELECT course_programs.name
+            FROM note_course_program
+            JOIN course_programs ON course_programs.id = note_course_program.course_program_id
+            JOIN notes ON notes.id = note_course_program.note_id
+            WHERE notes.visibility = ?
+            """;
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -46,6 +60,14 @@ public class NoteCourseProgramRepository {
                         noteId
                 ).stream()
                 .collect(Collectors.toSet());
+    }
+
+    public List<String> findNamesByOwnerUserId(UUID ownerUserId) {
+        return jdbcTemplate.queryForList(FIND_NAMES_BY_OWNER_USER_ID, String.class, ownerUserId);
+    }
+
+    public List<String> findNamesByVisibility(String visibility) {
+        return jdbcTemplate.queryForList(FIND_NAMES_BY_VISIBILITY, String.class, visibility);
     }
 
     public Map<UUID, List<ApplicableProgramResponse>> findByNoteIds(Collection<UUID> noteIds) {
