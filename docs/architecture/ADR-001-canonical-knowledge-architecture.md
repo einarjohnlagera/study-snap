@@ -30,12 +30,14 @@ Notes model **canonical knowledge**. Programs describe **where that knowledge is
 | Subject | `notes.subject` | 1 | what the note is about |
 | Domain Context | `notes.domain_context` | 1 | **how** it is authored — the LLM domain constraint |
 | Note Learner Level | `notes.learner_level` | 1 | **how deep** it is authored |
-| Applicable Programs | `note_course_program` | N | **where** it appears — discovery only |
+| Course / Program(s) | `note_course_program` | N | **where** it appears — discovery only |
 | Audience framing | `notes.target_profile_type` | 1 | **who** it is written for — never depth |
+
+`notes.course_program` appears in no row above because it is **no longer an axis** — it is a frozen compatibility column, ratified 2026-08-05. See "Course / Program(s) is the only program concept" below.
 
 Binding rules:
 
-1. **Applicable Programs never reach a prompt.** Generation is driven by Domain Context. Programs are a discovery and curriculum-management facet only.
+1. **Course / Program(s) never reach a prompt as a list.** Generation is driven by Domain Context, which is **required** once a note has more than one program. A single-program note may still fall back to that one value; several programs may not be sent as a domain constraint. Programs are a discovery and curriculum-management facet only.
 2. **Static content** (note body, summary, key concepts, flashcards, memorization, static question pool) is calibrated by Domain Context + Note Learner Level. Never by user learner level.
 3. **Quizzes and exams** take Domain Context + Note Learner Level as the floor. User Learner Level may adjust scaffolding and wording; it may **never lower the curriculum**.
 4. **Review Sets compose freely.** A Review Set may contain any note regardless of its Applicable Programs. A Review Set's own course/program is a curation label — never derived from, never validated against, its notes.
@@ -72,6 +74,46 @@ This decouples catalog growth from curriculum completeness. A program may be see
 **Do not pre-seed a program vocabulary.** Seeding every PRC engineering program at once is premature expansion and is explicitly rejected. **Catalog growth is incremental and demand-driven by authoring:** a curator judging that a canonical note is applicable to a program is the trigger to add that program. This keeps the taxonomy grounded in real content.
 
 This refines rather than reverses the catalog's *follow-not-lead* posture (`v0.70.0`, where `Computer Science` and `Software Engineering` were excluded pending real curriculum). Those rulings stand. The standard for seeding is now "canonical notes are applicable to this program," which is weaker than "we have a curriculum for it" but strictly stronger than "a learner might plausibly exist."
+
+### Course / Program(s) is the only program concept — there is no "primary"
+
+**Ratified by the owner 2026-08-05, superseding the two-field model Release B shipped with.**
+
+**A note does not belong to one program. It applies to one or many.** The data model, the API, and every human-facing surface express exactly that: a single many-valued axis labelled **Course / Program(s)**. There is no primary program, no separate "Applicable Programs" section, and no synchronisation between two fields.
+
+**The reasoning that settles it.** Each axis in this ADR owns exactly one responsibility — Subject owns *what*, Domain Context owns *how it is authored*, Note Learner Level owns *how deeply*, Course / Program(s) owns *where it is discovered*. A "primary" program owns **none** of them. It was the note's only program when the schema was single-valued, and after Release B it is merely whichever program happened to be first. The question is therefore not "should we replace primary?" but **"should a concept with no remaining architectural responsibility continue to exist?"** — and the answer is no. Retaining it would reintroduce precisely the overlap this ADR was written to remove.
+
+#### Domain Context is REQUIRED when a note has more than one program
+
+**A many-valued program list must never become the LLM's domain signal.** The generation prompt states: *"treat the domain above as the authoritative academic domain. All content, terminology, examples, and question framing must belong to that domain. Do not blend in material from unrelated disciplines."* That instruction is **logically unsatisfiable given a list** — it names several disciplines while forbidding blending across disciplines. This is the founding observation of this ADR, not a new concern: it is why Domain Context exists as a separate single-valued axis at all.
+
+So:
+
+1. **Domain Context, when set** — always the authoring signal, unchanged.
+2. **A single program, when Domain Context is unset** — today's single-value fallback, unchanged.
+3. **Several programs with no Domain Context** — **rejected at save**, server-side. Not a UI-disabled button.
+
+Sending the full program list to the model is **explicitly rejected.** The hypothesis that a list encourages authoring toward shared knowledge rather than over-specialising is untested and runs opposite to this ADR's premise. **R4 does not cover it** — R4 validated a *broader single* Domain Context, which is a different question. Revisiting this requires an R4-style generate-and-diff read first.
+
+The rule is enforced by **program count at save time**, which means adding a second program to an existing note is the moment Domain Context becomes required. That is intended: it forces the authoring decision exactly when it starts to matter. The error must teach rather than name a mechanism — *"A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in."*
+
+**Introduced at zero cost, and only at this moment.** `V107` produces exactly one join row per note and has not yet reached production, so **no multi-program note exists anywhere**. The requirement lands with no pre-existing violations and no backfill. That cheapness expires the moment curators begin authoring.
+
+#### `notes.course_program` survives as a frozen compatibility column — not an axis
+
+Dropping the column is **rejected for now**, on evidence rather than caution: the catalog deliberately excludes values that exist on real notes (bare levels, bare subjects, the `Engineering` family, and the owner-ruled `Computer Science` / `Software Engineering`). Those notes have no join row and never will, so their relationships **cannot** be migrated into the join table — there is nothing to point at. Dropping the column would either delete their discovery entirely (filter, facet, search, and live public slug URLs) or force re-admitting levels, subjects, and families as catalog programs, reversing settled rulings.
+
+**But it is no longer part of the model.** Four properties make that structural rather than aspirational:
+
+1. **Write-never.** Nothing writes it after this change; the picker writes join rows only. Existing values freeze as historical data. A read-only column is legible as an artifact in a way a still-written one is not — and the absence of a writer is what a future engineer will actually notice.
+2. **The tap is closed.** The legacy field accepted freetext (`CourseProgramCombobox` defaults `allowCustom = true`), so the excluded-value population **grew** with every author who typed an off-catalog value. A single catalog-backed picker means **no new note can enter that population.** It becomes finite, countable, and monotonically shrinking — which is what makes an exit condition possible at all.
+3. **Invisible.** No UI, API, DTO, or product decision treats it as a program concept. Its only sanctioned readers are the two Slice 2 fallback predicates and the generation fallback below.
+4. **A named exit condition**, tracked in `docs/product/ROADMAP.md` — it drops when the excluded population reaches zero or those notes are explicitly ruled strandable. Not "someday."
+
+**Two jobs it still does, recorded so neither is discovered by its absence:**
+
+- **Discovery for catalog-excluded notes** — the Slice 2 join-first-with-legacy-fallback semantics.
+- **The generation fallback for legacy multi-program notes.** The Domain Context requirement cannot apply retroactively, so a pre-existing multi-program note with no Domain Context resolves its domain through its frozen string. Drop the column without handling this and those notes silently begin generating against the *profile's* program instead of their own.
 
 ### Programs and Review Sets answer different questions
 
