@@ -63,7 +63,10 @@ describe("resolveCardExcerpt", () => {
 describe("SharedNoteCard", () => {
   const longNotePreview = "This note body is long enough to count as a real preview for the card.";
 
-  it("shows joined programs with an overflow count instead of the legacy program", () => {
+  // A card states the note's identity (Subject + title) and its reach as a count. Names are not
+  // listed: beside the Subject badge they read as a second identity, and any truncated list drops
+  // names on alphabetical accident. The full list lives on Note Detail.
+  it("summarises several joined programs as a count instead of listing them", () => {
     render(
       <SharedNoteCard
         title="Engineering Mathematics"
@@ -75,11 +78,26 @@ describe("SharedNoteCard", () => {
       />,
     );
 
-    expect(screen.getByText("Civil Engineering")).toBeInTheDocument();
-    expect(screen.getByText("Electrical Engineering")).toBeInTheDocument();
+    expect(screen.getByText("Applies to 3 programs")).toBeInTheDocument();
+    expect(screen.queryByText("Civil Engineering")).not.toBeInTheDocument();
     expect(screen.queryByText("Mechanical Engineering")).not.toBeInTheDocument();
-    expect(screen.getByText("+1")).toHaveAccessibleName("1 more applicable program");
     expect(screen.queryByText("Engineering")).not.toBeInTheDocument();
+  });
+
+  it("names the single program rather than counting it", () => {
+    render(
+      <SharedNoteCard
+        title="Fundamentals of Financial Accounting"
+        courseProgram="Engineering"
+        applicablePrograms={["Accountancy"]}
+        subject="Accounting"
+        tags={[]}
+        contentPreview={longNotePreview}
+      />,
+    );
+
+    expect(screen.getByText("Accountancy")).toBeInTheDocument();
+    expect(screen.queryByText(/Applies to/)).not.toBeInTheDocument();
   });
 
   it("falls back to the legacy program when no joined programs are projected", () => {

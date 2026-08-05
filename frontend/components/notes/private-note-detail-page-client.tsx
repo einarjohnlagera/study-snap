@@ -1878,19 +1878,40 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </p>
                 ) : null}
 
-                {!isInlineMetadataEditMode && courseProgramLabel ? (
-                  <p className="text-sm text-foreground/65">{courseProgramLabel}</p>
-                ) : null}
-                {!isInlineMetadataEditMode && savedApplicableProgramIds.length > 0 ? (
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">
-                    <span className="font-medium">Applicable Programs:</span>
-                    {applicableProgramCatalog
-                      .filter((program) => savedApplicableProgramIds.includes(program.id))
-                      .map((program) => (
-                        <span key={program.id} className="rounded-full border border-border px-2 py-0.5">
-                          {program.name}
-                        </span>
-                      ))}
+                {/* Primary program and Applicable Programs are two different concepts, so they share a
+                    container and each carries its own label rather than being merged into one list.
+                    A curated set may legitimately exclude the note's primary program (Slice 2's
+                    zero-join-row guard), so presenting them as "primary, then the rest" would assert
+                    a containment that is not guaranteed. */}
+                {!isInlineMetadataEditMode && (courseProgramLabel || savedApplicableProgramIds.length > 0) ? (
+                  <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+                    {courseProgramLabel ? (
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
+                          Primary Course / Program
+                        </p>
+                        <p className="text-sm text-foreground/80">{courseProgramLabel}</p>
+                      </div>
+                    ) : null}
+                    {savedApplicableProgramIds.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
+                          Applicable Programs
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {applicableProgramCatalog
+                            .filter((program) => savedApplicableProgramIds.includes(program.id))
+                            .map((program) => (
+                              <span
+                                key={program.id}
+                                className="inline-flex items-center rounded-full border border-border/60 bg-background px-2.5 py-0.5 text-xs font-medium text-foreground/75"
+                              >
+                                {program.name}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -2118,6 +2139,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <label htmlFor="note-applicable-programs-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
                       Applicable Programs
                     </label>
+                    <p className="text-xs text-foreground/60">
+                      Every program whose learners should discover this note. It starts from the Course / Program
+                      above — add others so one note can serve several curricula instead of being duplicated.
+                    </p>
                     <ApplicableProgramsCombobox
                       id="note-applicable-programs-inline"
                       catalog={applicableProgramCatalog}
@@ -2148,7 +2173,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         }))}
                         className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                       >
-                        <option value="">Use Course / Program fallback</option>
+                        <option value="">Automatic — based on the program</option>
                         {DOMAIN_CONTEXT_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
@@ -2173,7 +2198,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         }))}
                         className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                       >
-                        <option value="">Use reader level fallback</option>
+                        <option value="">Automatic — based on the reader</option>
                         {LEARNER_LEVEL_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}

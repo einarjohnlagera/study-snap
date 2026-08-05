@@ -479,7 +479,10 @@ describe("PrivateNoteDetailPageClient", () => {
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    expect(await screen.findByText("Applicable Programs:")).toBeInTheDocument();
+    // Primary and Applicable are labelled separately inside one metadata block: a curated set may
+    // legitimately exclude the note's primary program, so they are never merged into one list.
+    expect(await screen.findByText("Applicable Programs")).toBeInTheDocument();
+    expect(screen.getByText("Primary Course / Program")).toBeInTheDocument();
     expect(screen.getByText("Nursing", { selector: "span" })).toBeInTheDocument();
     expect(getNoteApplicablePrograms).toHaveBeenCalledWith("note-1");
   });
