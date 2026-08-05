@@ -79,6 +79,32 @@ concrete rather than a judgment call:
 **Run slice 2 before curators start adding second programs**, or that equivalence is gone and the
 migration becomes untestable against a known-good baseline.
 
+> **CORRECTION — 2026-08-05, after slice 1 shipped. The paragraph above is wrong as written, and it
+> was wrong when written.** "Exactly one join row per note" is not the population slice 1 produces.
+> `V107` deliberately creates **no** join row for a `course_program` value the catalog excludes —
+> correct per ADR-001 and the `v0.70.0` owner rulings, and not a thing to fix. The real population is
+> *one row per note whose value the catalog includes, and zero for every other note.*
+>
+> So a pure-join rewrite does not preserve counts; it changes **result sets**. An excluded value's
+> facet disappears entirely rather than returning a different number, `course_program = '<excluded>'`
+> returns 0 notes instead of N, and a public shareable slug URL for that value stops resolving. The
+> local dev DB measured 55 of 92 notes-with-a-string on excluded values; production is known to differ
+> sharply and must be read separately (`19-slice-2-facet-equivalence-impact.sql`, query A).
+>
+> **Owner ruling, 2026-08-05: slice 2 reads the join with a legacy-string fallback**, not the join
+> alone —
+> `EXISTS(join rows matching) OR (note has no join rows AND legacy string matches)`. At 1:1 this
+> returns counts and result sets identical to today, which *restores* the equivalence test above as a
+> real regression test. It is also correct once a note carries several programs. The cost, accepted
+> knowingly: `notes.course_program` stays load-bearing on read paths, so slice 2 is a **smaller
+> irreversible step** than this document originally assumed — the join becomes the primary read, not
+> the only one.
+>
+> Retiring the fallback is a separate, later decision that depends on what happens to excluded-value
+> notes. It is not in slice 2, and it is not scheduled. Note also that `CourseProgramCombobox`
+> defaults `allowCustom = true` and neither the Note Editor nor the Note Detail panel overrides it,
+> so the no-join-row population **grows** until that changes.
+
 **Known and correct consequence, not a bug:** once notes carry several programs, facet counts sum
 above the note total. ADR-001 says this explicitly and calls for a UI affordance, not a fix.
 
