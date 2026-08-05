@@ -401,7 +401,7 @@ export function NoteEditorForm({
 
             {showTargetProfileTypeField || showAuthoringMetadataFields ? (
                 <fieldset className="space-y-4 rounded-xl border border-border/80 bg-muted/15 p-4">
-                    <legend className="px-1 text-sm font-semibold text-foreground">Authoring metadata</legend>
+                    <legend className="px-1 text-sm font-semibold text-foreground">Generation &amp; discovery</legend>
                     <div className="grid gap-4 sm:grid-cols-2">
                         {showTargetProfileTypeField ? (
                             <div className="space-y-2 sm:col-span-2">
@@ -433,6 +433,14 @@ export function NoteEditorForm({
                                     <label htmlFor="note-applicable-programs" className="text-sm font-medium text-foreground">
                                         Applicable Programs
                                     </label>
+                                    {/* This helper is doing the real work: it explains why the Course /
+                                        Program value reappears here, which is the exact moment authors
+                                        ask whether these are the same field. */}
+                                    <p className="text-xs text-foreground/60">
+                                        Every program whose learners should discover this note. It starts from your
+                                        Course / Program above — add others so one note can serve several curricula
+                                        instead of being duplicated for each.
+                                    </p>
                                     <ApplicableProgramsCombobox
                                         id="note-applicable-programs"
                                         catalog={applicableProgramCatalog}
@@ -455,13 +463,14 @@ export function NoteEditorForm({
                                         disabled={isCopying}
                                         className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                                     >
-                                        <option value="">Use Course / Program fallback</option>
+                                        <option value="">Automatic — based on the program</option>
                                         {DOMAIN_CONTEXT_OPTIONS.map((option) => (
                                             <option key={option.value} value={option.value}>{option.label}</option>
                                         ))}
                                     </select>
                                     <p className="text-xs text-foreground/60">
-                                        Controls how the AI authors the note&apos;s academic domain and framing.
+                                        Sets the academic domain this note is written in. An Algebra note authored as
+                                        Engineering Mathematics reads differently from one authored as General Education.
                                     </p>
                                 </div>
 
@@ -476,13 +485,14 @@ export function NoteEditorForm({
                                         disabled={isCopying}
                                         className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                                     >
-                                        <option value="">Use reader level fallback</option>
+                                        <option value="">Automatic — based on the reader</option>
                                         {LEARNER_LEVEL_OPTIONS.map((option) => (
                                             <option key={option.value} value={option.value}>{option.label}</option>
                                         ))}
                                     </select>
                                     <p className="text-xs text-foreground/60">
-                                        Controls how deeply the note is authored, independent of who reads it.
+                                        Sets how deeply this note is written, independent of who reads it. A lower-level
+                                        reader gets gentler wording, never easier material.
                                     </p>
                                 </div>
                             </>
