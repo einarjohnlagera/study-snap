@@ -45,6 +45,7 @@ import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteLibraryCandidateProjection;
 import com.studysnap.backend.repository.NoteLibraryFilterCriteria;
 import com.studysnap.backend.repository.NoteLibrarySubjectIdProjection;
@@ -150,6 +151,7 @@ public class NoteService {
     private final OnboardingGuardService onboardingGuardService;
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final NoteApplicableProgramsMaintenanceService noteApplicableProgramsMaintenanceService;
+    private final NoteCourseProgramRepository noteCourseProgramRepository;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
@@ -915,7 +917,8 @@ public class NoteService {
                         null,
                         null,
                         false,
-                        false
+                        false,
+                        List.of()
                 ))
                 .toList();
     }
@@ -1119,6 +1122,7 @@ public class NoteService {
     @Transactional(readOnly = true)
     public List<String> listMineCoursePrograms(UUID ownerUserId) {
         List<String> values = new java.util.ArrayList<>(noteRepository.findCourseProgramValuesByOwnerUserId(ownerUserId));
+        values.addAll(noteCourseProgramRepository.findNamesByOwnerUserId(ownerUserId));
         userRepository.findById(ownerUserId)
                 .map(UserEntity::getCourseProgram)
                 .ifPresent(values::add);
@@ -1132,7 +1136,11 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<String> listPublicCoursePrograms() {
-        return normalizeCoursePrograms(noteRepository.findCourseProgramValuesByVisibility(NoteVisibility.PUBLIC));
+        List<String> values = new ArrayList<>(
+                noteRepository.findCourseProgramValuesByVisibility(NoteVisibility.PUBLIC)
+        );
+        values.addAll(noteCourseProgramRepository.findNamesByVisibility(NoteVisibility.PUBLIC.name()));
+        return normalizeCoursePrograms(values);
     }
 
     @Transactional(readOnly = true)
@@ -1513,8 +1521,16 @@ public class NoteService {
                 generatedQuiz == null || generatedQuiz.getQuestions() == null ? null : generatedQuiz.getQuestions().size(),
                 note.getCopiedFromNoteId() == null ? null : note.getCopiedFromNoteId().toString(),
                 Boolean.TRUE.equals(note.getCopiedFromPublic()),
-                likedByCurrentUser
+                likedByCurrentUser,
+                applicablePrograms(note)
         );
+    }
+
+    private List<String> applicablePrograms(NoteListItemView note) {
+        if (!(note instanceof NoteListItemProjection projection) || projection.getApplicablePrograms() == null) {
+            return List.of();
+        }
+        return Arrays.asList(projection.getApplicablePrograms());
     }
 
     private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack, UUID viewerUserId) {

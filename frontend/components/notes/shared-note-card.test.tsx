@@ -63,6 +63,40 @@ describe("resolveCardExcerpt", () => {
 describe("SharedNoteCard", () => {
   const longNotePreview = "This note body is long enough to count as a real preview for the card.";
 
+  it("shows joined programs with an overflow count instead of the legacy program", () => {
+    render(
+      <SharedNoteCard
+        title="Engineering Mathematics"
+        courseProgram="Engineering"
+        applicablePrograms={["Civil Engineering", "Electrical Engineering", "Mechanical Engineering"]}
+        subject="Algebra"
+        tags={[]}
+        contentPreview={longNotePreview}
+      />,
+    );
+
+    expect(screen.getByText("Civil Engineering")).toBeInTheDocument();
+    expect(screen.getByText("Electrical Engineering")).toBeInTheDocument();
+    expect(screen.queryByText("Mechanical Engineering")).not.toBeInTheDocument();
+    expect(screen.getByText("+1")).toHaveAccessibleName("1 more applicable program");
+    expect(screen.queryByText("Engineering")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the legacy program when no joined programs are projected", () => {
+    render(
+      <SharedNoteCard
+        title="Software Foundations"
+        courseProgram="Software Engineering"
+        applicablePrograms={[]}
+        subject="Architecture"
+        tags={[]}
+        contentPreview={longNotePreview}
+      />,
+    );
+
+    expect(screen.getByText("Software Engineering")).toBeInTheDocument();
+  });
+
   it("renders the note preview without a Summary label when it wins the cascade", () => {
     render(
       <SharedNoteCard

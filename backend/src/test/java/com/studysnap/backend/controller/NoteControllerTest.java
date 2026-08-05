@@ -880,7 +880,8 @@ class NoteControllerTest {
                         null,
                         null,
                         false,
-                        false
+                        false,
+                        List.of("Nursing")
                 )
         );
         when(noteService.listPublic(userId, null, null, null, null, null, null, null, null, null, null, false, null))

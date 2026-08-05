@@ -182,6 +182,7 @@ export function DashboardCommunityNotesSection({
               <SharedNoteCard
                 title={note.title}
                 courseProgram={normalizeCourseProgram(note.courseProgram)}
+                applicablePrograms={note.applicablePrograms}
                 subject={note.subject}
                 tags={note.tags}
                 tagDisplayLimit={3}

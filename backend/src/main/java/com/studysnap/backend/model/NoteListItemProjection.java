@@ -9,4 +9,5 @@ package com.studysnap.backend.model;
  * {@code implements NoteListItemProjection} anywhere.
  */
 public interface NoteListItemProjection extends NoteListItemView {
+    String[] getApplicablePrograms();
 }

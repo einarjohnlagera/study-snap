@@ -215,8 +215,8 @@ Kicked off 2026-08-04, cut from `main` after `v0.70.0` merged and deployed. Open
 
 Sequenced 2026-08-04 in `18-release-b-slice-sequence.md`. **Only slice 3 is gated** — the initial "blocked on applicability" framing read ADR-001's gate more broadly than the ADR does. It requires curator verification *"before **family-expansion defaults** are set"*, not before the join table, the backfill, or per-note curator additions.
 
-1. **`note_course_program` + 1:1 backfill + admin write surface.** Additive, reversible, gated on nothing, and it delivers the ADR's actual purpose: one canonical note applicable to many programs. Nothing reads the join.
-2. **Read paths move to join/`EXISTS`.** The irreversible step. Must run *while every note still has one program row*, because that is what makes it testable against a known-good baseline — facet counts are `count(*)` grouped on `notes` today, so a join returns identical counts at 1:1.
+1. **`note_course_program` + 1:1 backfill + admin write surface — shipped.** Additive, reversible, gated on nothing, and it delivers the ADR's actual purpose: one canonical note applicable to many programs.
+2. **Read paths move to join/`EXISTS` — shipped.** Filters, facets, badges, and Public Library search are join-first with a legacy-string fallback for notes with no join rows. This corrected shape preserves excluded-value results and shareable slugs while allowing multi-program discovery; retiring the fallback is unscheduled.
 3. **Program Family expansion.** Gated.
 
 **The gate on slice 3:** applicability groupings unverified against current PRC board syllabi — `[EFFORT]`, not `[EVIDENCE]`. No query answers it, and **R4 did not settle it**: R4 validated the Domain Context *value set*, not which programs share which subjects.

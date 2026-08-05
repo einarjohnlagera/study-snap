@@ -51,6 +51,12 @@ class NoteServiceLibraryPaginationIntegrationTest {
     private static final String INVALID_FILTER_VALUE = "UNKNOWN";
     private static final String REVIEW_ORDER_SUBJECT = "Review order";
     private static final String HEART_REVIEW_TAG = "heart-review";
+    private static final String NURSING_PROGRAM = "Nursing";
+    private static final String EXCLUDED_PROGRAM = "Software Engineering";
+    private static final String ACCOUNTANCY_PROGRAM = "Accountancy";
+    private static final String PHARMACY_PROGRAM = "Pharmacy";
+    private static final String EDUCATION_PROGRAM = "Education";
+    private static final String BSED_PROGRAM = "Bsed";
 
     @Autowired
     private NoteRepository noteRepository;
@@ -89,6 +95,7 @@ class NoteServiceLibraryPaginationIntegrationTest {
                     updated_at timestamp with time zone not null
                 )
                 """);
+        createApplicableProgramsSchema();
         jdbcTemplate.execute("""
                 create table if not exists study_packs (
                     id uuid primary key,
@@ -130,10 +137,108 @@ class NoteServiceLibraryPaginationIntegrationTest {
                 """);
         jdbcTemplate.execute("delete from generated_quizzes");
         jdbcTemplate.execute("delete from study_packs");
+        jdbcTemplate.execute("delete from note_course_program");
+        jdbcTemplate.execute("delete from course_programs");
         jdbcTemplate.execute("delete from notes");
         reviewedAtByNoteId.clear();
         noteService = createNoteService();
         SqlCaptureStatementInspector.clear();
+    }
+
+    private void createApplicableProgramsSchema() {
+        jdbcTemplate.execute("""
+                create table if not exists course_programs (
+                    id uuid primary key,
+                    name varchar(120) not null unique
+                )
+                """);
+        jdbcTemplate.execute("""
+                create table if not exists note_course_program (
+                    id uuid primary key,
+                    note_id uuid not null,
+                    course_program_id uuid not null,
+                    created_at timestamp with time zone not null default current_timestamp,
+                    unique (note_id, course_program_id),
+                    foreign key (note_id) references notes(id) on delete cascade,
+                    foreign key (course_program_id) references course_programs(id)
+                )
+                """);
+    }
+
+    @Test
+    void courseProgramReadsPreserveLegacyResultsWithOneOrZeroJoinRows() {
+        UUID ownerUserId = UUID.randomUUID();
+        NoteEntity newerNursing = saveNote(ownerUserId, "Newer nursing", "Care", NURSING_PROGRAM,
+                new String[]{"care"}, NoteStatus.DRAFT, NoteVisibility.PRIVATE, 2, 3);
+        NoteEntity olderNursing = saveNote(ownerUserId, "Older nursing", "Care", NURSING_PROGRAM,
+                new String[]{"care"}, NoteStatus.DRAFT, NoteVisibility.PRIVATE, 1, 2);
+        NoteEntity excluded = saveNote(ownerUserId, "Excluded program", "Architecture", EXCLUDED_PROGRAM,
+                new String[]{"software"}, NoteStatus.DRAFT, NoteVisibility.PRIVATE, 3, 4);
+        flushAndClear();
+        UUID nursingId = insertCourseProgram(NURSING_PROGRAM);
+        insertApplicableProgram(newerNursing.getId(), nursingId);
+        insertApplicableProgram(olderNursing.getId(), nursingId);
+
+        NotesLibraryFilterOptionsResponse options = noteService.getLibraryFilterOptions(ownerUserId);
+        List<String> nursingIds = ids(page(ownerUserId, null, FILTER_ALL, NURSING_PROGRAM, null, List.of(),
+                FILTER_ALL, SORT_RECENTLY_UPDATED, 0, 20));
+        List<String> excludedIds = ids(page(ownerUserId, null, FILTER_ALL, EXCLUDED_PROGRAM, null, List.of(),
+                FILTER_ALL, SORT_RECENTLY_UPDATED, 0, 20));
+
+        assertThat(options.coursePrograms()).containsExactly(
+                new FacetCount(NURSING_PROGRAM, 2),
+                new FacetCount(EXCLUDED_PROGRAM, 1)
+        );
+        assertThat(nursingIds).containsExactly(newerNursing.getId().toString(), olderNursing.getId().toString());
+        assertThat(excludedIds).containsExactly(excluded.getId().toString());
+    }
+
+    @Test
+    void multiProgramReadsMatchEveryJoinedProgramAndBlockTheLegacyString() {
+        UUID ownerUserId = UUID.randomUUID();
+        NoteEntity curated = saveNote(ownerUserId, "Cross-program note", "Care", NURSING_PROGRAM,
+                new String[]{"care"}, NoteStatus.DRAFT, NoteVisibility.PRIVATE, 1, 1);
+        flushAndClear();
+        UUID accountancyId = insertCourseProgram(ACCOUNTANCY_PROGRAM);
+        UUID pharmacyId = insertCourseProgram(PHARMACY_PROGRAM);
+        insertApplicableProgram(curated.getId(), accountancyId);
+        insertApplicableProgram(curated.getId(), pharmacyId);
+
+        NotesLibraryFilterOptionsResponse options = noteService.getLibraryFilterOptions(ownerUserId);
+        NotesLibraryPageResponse allNotes = page(ownerUserId, null, FILTER_ALL, null, null, List.of(),
+                FILTER_ALL, SORT_RECENTLY_UPDATED, 0, 20);
+
+        assertThat(options.coursePrograms()).containsExactly(
+                new FacetCount(ACCOUNTANCY_PROGRAM, 1),
+                new FacetCount(PHARMACY_PROGRAM, 1)
+        );
+        assertThat(options.coursePrograms().stream().mapToLong(FacetCount::count).sum())
+                .isGreaterThan(allNotes.totalMatching());
+        assertThat(ids(page(ownerUserId, null, FILTER_ALL, ACCOUNTANCY_PROGRAM, null, List.of(), FILTER_ALL,
+                SORT_RECENTLY_UPDATED, 0, 20))).containsExactly(curated.getId().toString());
+        assertThat(ids(page(ownerUserId, null, FILTER_ALL, PHARMACY_PROGRAM, null, List.of(), FILTER_ALL,
+                SORT_RECENTLY_UPDATED, 0, 20))).containsExactly(curated.getId().toString());
+        assertThat(ids(page(ownerUserId, null, FILTER_ALL, NURSING_PROGRAM, null, List.of(), FILTER_ALL,
+                SORT_RECENTLY_UPDATED, 0, 20))).isEmpty();
+        assertThat(allNotes.items().getFirst().applicablePrograms())
+                .containsExactly(ACCOUNTANCY_PROGRAM, PHARMACY_PROGRAM);
+    }
+
+    @Test
+    void bsedAliasIsDiscoveredAsEducationInsteadOfItsLegacyString() {
+        UUID ownerUserId = UUID.randomUUID();
+        NoteEntity aliased = saveNote(ownerUserId, "Education note", "Teaching", BSED_PROGRAM,
+                new String[]{"teaching"}, NoteStatus.DRAFT, NoteVisibility.PRIVATE, 1, 1);
+        flushAndClear();
+        UUID educationId = insertCourseProgram(EDUCATION_PROGRAM);
+        insertApplicableProgram(aliased.getId(), educationId);
+
+        assertThat(noteService.getLibraryFilterOptions(ownerUserId).coursePrograms())
+                .containsExactly(new FacetCount(EDUCATION_PROGRAM, 1));
+        assertThat(ids(page(ownerUserId, null, FILTER_ALL, EDUCATION_PROGRAM, null, List.of(), FILTER_ALL,
+                SORT_RECENTLY_UPDATED, 0, 20))).containsExactly(aliased.getId().toString());
+        assertThat(ids(page(ownerUserId, null, FILTER_ALL, BSED_PROGRAM, null, List.of(), FILTER_ALL,
+                SORT_RECENTLY_UPDATED, 0, 20))).isEmpty();
     }
 
     @Test
@@ -463,6 +568,21 @@ class NoteServiceLibraryPaginationIntegrationTest {
         );
     }
 
+    private UUID insertCourseProgram(String name) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("insert into course_programs (id, name) values (?, ?)", id, name);
+        return id;
+    }
+
+    private void insertApplicableProgram(UUID noteId, UUID courseProgramId) {
+        jdbcTemplate.update(
+                "insert into note_course_program (id, note_id, course_program_id) values (?, ?, ?)",
+                UUID.randomUUID(),
+                noteId,
+                courseProgramId
+        );
+    }
+
     private void flushAndClear() {
         entityManager.flush();
         entityManager.clear();
@@ -517,7 +637,8 @@ class NoteServiceLibraryPaginationIntegrationTest {
                 mock(ContentModerationService.class),
                 mock(OnboardingGuardService.class),
                 mock(OfficialChallengeQuizTemplateService.class),
-                mock(NoteApplicableProgramsMaintenanceService.class)
+                mock(NoteApplicableProgramsMaintenanceService.class),
+                mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class)
         );
     }
 }

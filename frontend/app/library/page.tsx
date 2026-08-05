@@ -1875,6 +1875,7 @@ export default function LibraryPage() {
                     <SharedNoteCard
                       title={item.title}
                       courseProgram={normalizeCourseProgram(item.courseProgram)}
+                      applicablePrograms={item.applicablePrograms}
                       subject={getLibrarySubject(item)}
                       tags={itemTags}
                       contentPreview={item.contentPreview}
@@ -2142,6 +2143,9 @@ export default function LibraryPage() {
           {availableCoursePrograms.length > 0 ? (
             <div className="space-y-2">
               <p className="text-sm font-medium">Course / Program</p>
+              <p className="text-xs leading-relaxed text-foreground/60">
+                A note can apply to several programs, so these counts can exceed the note total.
+              </p>
               <div className="relative">
                 <input
                   type="text"
