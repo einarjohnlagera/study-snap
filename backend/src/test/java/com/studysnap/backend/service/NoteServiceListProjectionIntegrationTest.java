@@ -336,7 +336,8 @@ class NoteServiceListProjectionIntegrationTest {
                 analyticsService,
                 contentModerationService,
                 onboardingGuardService,
-                mock(OfficialChallengeQuizTemplateService.class)
+                mock(OfficialChallengeQuizTemplateService.class),
+                mock(NoteApplicableProgramsMaintenanceService.class)
         );
     }
 }

@@ -149,6 +149,7 @@ public class NoteService {
     private final ContentModerationService contentModerationService;
     private final OnboardingGuardService onboardingGuardService;
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
+    private final NoteApplicableProgramsMaintenanceService noteApplicableProgramsMaintenanceService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
@@ -175,6 +176,8 @@ public class NoteService {
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
+        noteRepository.flush();
+        noteApplicableProgramsMaintenanceService.seedDerivedSet(saved.getId(), saved.getCourseProgram());
         analyticsService.trackEvent(ownerUserId, AnalyticsEventType.NOTE_CREATED, saved.getId(), buildMetadata(
                 "subject", saved.getSubject(),
                 "visibility", resolveVisibility(saved).name()
@@ -187,6 +190,11 @@ public class NoteService {
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(NoteNotFoundException::new);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
+        String previousCourseProgram = entity.getCourseProgram();
+        boolean hasDerivedApplicablePrograms = noteApplicableProgramsMaintenanceService.isDerivedSet(
+                entity.getId(),
+                previousCourseProgram
+        );
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
@@ -206,6 +214,10 @@ public class NoteService {
         entity.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(entity);
+        noteRepository.flush();
+        if (hasDerivedApplicablePrograms) {
+            noteApplicableProgramsMaintenanceService.replaceWithDerivedSet(saved.getId(), saved.getCourseProgram());
+        }
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(saved.getId());
         if (linkedStudyPack != null && !Objects.equals(linkedStudyPack.getSubject(), saved.getSubject())) {
             linkedStudyPack.setSubject(saved.getSubject());

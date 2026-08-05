@@ -10,12 +10,14 @@ import {
   deleteNote,
   generateGeneratedQuiz,
   getConceptHealth,
+  getCourseProgramCatalog,
   getBillingPricing,
   getMyPlan,
   getMe,
   getChallengeQuizPerformanceSummary,
   getChallengeQuizSessionReview,
   getNote,
+  getNoteApplicablePrograms,
   getMyStudyPack,
   getQuickReviewPerformanceSummary,
   getQuickReviewSessionReview,
@@ -23,6 +25,7 @@ import {
   listCoursePrograms,
   listRecentQuizSessions,
   listSubjects,
+  replaceNoteApplicablePrograms,
   startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
@@ -80,6 +83,7 @@ jest.mock("@/lib/api", () => ({
   deleteNote: jest.fn(),
   generateGeneratedQuiz: jest.fn(),
   getConceptHealth: jest.fn(),
+  getCourseProgramCatalog: jest.fn(),
   getBillingPricing: jest.fn(),
   getMyPlan: jest.fn(),
   getChallengeQuizPerformanceSummary: jest.fn(),
@@ -87,9 +91,11 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
+  getNoteApplicablePrograms: jest.fn(),
   listCoursePrograms: jest.fn(),
   listRecentQuizSessions: jest.fn(),
   listSubjects: jest.fn(),
+  replaceNoteApplicablePrograms: jest.fn(),
   isEmailNotVerifiedError: () => false,
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
@@ -143,6 +149,9 @@ describe("PrivateNoteDetailPageClient", () => {
       configurable: true,
     });
     (getNote as jest.Mock).mockReset();
+    (getCourseProgramCatalog as jest.Mock).mockReset();
+    (getNoteApplicablePrograms as jest.Mock).mockReset();
+    (replaceNoteApplicablePrograms as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (createStudyPackFromNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
@@ -167,6 +176,16 @@ describe("PrivateNoteDetailPageClient", () => {
     (updateNoteVisibility as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry"]);
     (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Senior High – STEM"]);
+    (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+      { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null },
+    ]);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([
+      { id: "program-nursing", name: "Nursing" },
+    ]);
+    (replaceNoteApplicablePrograms as jest.Mock).mockImplementation(async (_noteId: string, ids: string[]) => (
+      ids.map((id) => ({ id, name: id === "program-pharmacy" ? "Pharmacy" : "Nursing" }))
+    ));
     (getConceptHealth as jest.Mock).mockResolvedValue([]);
     (getMe as jest.Mock).mockResolvedValue({
       learnerLevel: "COLLEGE",
@@ -437,9 +456,25 @@ describe("PrivateNoteDetailPageClient", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Add an applicable program")).toBeInTheDocument();
     expect(screen.getByText("Changing audience will affect future quiz generation.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
+  });
+
+  it("loads and displays saved Applicable Programs when note details are closed", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue(baseNote);
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Applicable Programs:")).toBeInTheDocument();
+    expect(screen.getByText("Nursing", { selector: "span" })).toBeInTheDocument();
+    expect(getNoteApplicablePrograms).toHaveBeenCalledWith("note-1");
   });
 
   it("seeds the authoring axes from the note and saves the corrected values for a teacher", async () => {
@@ -517,6 +552,38 @@ describe("PrivateNoteDetailPageClient", () => {
     });
   });
 
+  it("restores the saved Applicable Programs and keeps inline edit open when save fails", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    const readyNote = {
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY" as const,
+      studyPackId: "sp-1",
+    };
+    (getNote as jest.Mock).mockResolvedValue(readyNote);
+    (updateNote as jest.Mock).mockResolvedValue(readyNote);
+    (replaceNoteApplicablePrograms as jest.Mock).mockRejectedValue(new Error("Could not save Applicable Programs."));
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    await screen.findByRole("button", { name: "Remove Nursing" });
+    const programToggles = screen.getAllByLabelText("Toggle course program suggestions");
+    fireEvent.click(programToggles[programToggles.length - 1]);
+    fireEvent.click(screen.getByRole("option", { name: "Pharmacy" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Could not save Applicable Programs.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove Pharmacy" })).not.toBeInTheDocument();
+  });
+
   it("exposes the authoring axes to an admin on a non-teacher profile", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
@@ -567,6 +634,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add an applicable program")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 

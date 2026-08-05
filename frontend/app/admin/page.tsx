@@ -27,6 +27,7 @@ import {
   type AdminRegenerationStatusResponse,
 } from "@/lib/api";
 import { requireAdminUser } from "@/lib/route-guards";
+import { AdminApplicableProgramsSection } from "@/components/admin/admin-applicable-programs-section";
 
 function formatMetric(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
@@ -532,6 +533,7 @@ export default function AdminPage() {
         </Card>
       ) : summary && topContent && recentEvents && organicLandings ? (
         <>
+          <AdminApplicableProgramsSection />
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-foreground">Overview</h2>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

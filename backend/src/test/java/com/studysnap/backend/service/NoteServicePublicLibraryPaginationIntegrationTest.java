@@ -643,7 +643,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 mock(AnalyticsService.class),
                 mock(ContentModerationService.class),
                 mock(OnboardingGuardService.class),
-                mock(OfficialChallengeQuizTemplateService.class)
+                mock(OfficialChallengeQuizTemplateService.class),
+                mock(NoteApplicableProgramsMaintenanceService.class)
         );
     }
 

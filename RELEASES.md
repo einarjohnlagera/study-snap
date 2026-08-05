@@ -34,7 +34,7 @@ Cut into **three slices along the irreversibility boundary**, not by layer — f
 
 ### Shipped
 
-_(nothing yet)_
+- **Slice 1 — Applicable Programs storage and write surfaces.** V107 adds the unmapped JDBC-only `note_course_program` join with uniqueness, lookup indexes, note-delete cascade, and a one-row-per-resolvable-note backfill driven from the live `notes.course_program` string (exact match plus the sole `Bsed` → `Education` alias); excluded strings remain unchanged and receive no row. Authenticated catalog and owner-safe note APIs now support full-set reconciliation for Teacher/Admin authors, note create/update keeps an untouched *derived* set aligned with the legacy string — including the empty set, so a note that gains a catalog-resolvable course/program after creation gains its join row — while preserving curated sets, and the Note Editor, Note Detail, and a paginated Admin Dashboard table expose one shared catalog-backed multi-select. This slice remains additive: filters, facets, badges, search, and URLs still read only the legacy string and nothing learner-facing reads the join.
 
 ## v0.70.0 - Canonical Knowledge Completion
 

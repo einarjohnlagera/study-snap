@@ -8,12 +8,15 @@ import {
   createStudyPackFromNote,
   extractNoteTextFromFile,
   generateNoteFromTopic,
+  getCourseProgramCatalog,
   getBillingPricing,
   getMe,
   getMyPlan,
   getNote,
+  getNoteApplicablePrograms,
   listCoursePrograms,
   listSubjects,
+  replaceNoteApplicablePrograms,
   trackAnalyticsEvent,
   updateNote,
 } from "@/lib/api";
@@ -55,13 +58,16 @@ jest.mock("@/lib/api", () => ({
   createStudyPackFromNote: jest.fn(),
   extractNoteTextFromFile: jest.fn(),
   generateNoteFromTopic: jest.fn(),
+  getCourseProgramCatalog: jest.fn(),
   getBillingPricing: jest.fn(),
   getMe: jest.fn(),
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
+  getNoteApplicablePrograms: jest.fn(),
   isNoteGenerationLimitReachedError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_LIMIT_REACHED",
   listCoursePrograms: jest.fn(),
   listSubjects: jest.fn(),
+  replaceNoteApplicablePrograms: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
   isOcrDisabledError: (error: unknown) => (
@@ -120,6 +126,9 @@ describe("NoteEditorPageClient", () => {
     (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
+    (getCourseProgramCatalog as jest.Mock).mockReset();
+    (getNoteApplicablePrograms as jest.Mock).mockReset();
+    (replaceNoteApplicablePrograms as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
@@ -129,6 +138,16 @@ describe("NoteEditorPageClient", () => {
     (getAuthUser as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Anatomy", "Biology", "Chemistry"]);
     (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Senior High – STEM"]);
+    (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+      { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null },
+    ]);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([
+      { id: "program-nursing", name: "Nursing" },
+    ]);
+    (replaceNoteApplicablePrograms as jest.Mock).mockImplementation(async (_noteId: string, ids: string[]) => (
+      ids.map((id) => ({ id, name: id === "program-pharmacy" ? "Pharmacy" : "Nursing" }))
+    ));
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
       limits: {
@@ -827,6 +846,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
     expect(screen.getByLabelText("Domain Context (optional)")).toBeInTheDocument();
     expect(screen.getByLabelText("Note Learner Level (optional)")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Add an applicable program")).toBeInTheDocument();
     expect(within(screen.getByLabelText("Who is this note for?")).getByRole("option", { name: "Professional" }))
       .toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
@@ -849,6 +869,19 @@ describe("NoteEditorPageClient", () => {
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
   });
 
+  it("keeps the editor usable when the Applicable Programs catalog fails", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getCourseProgramCatalog as jest.Mock).mockRejectedValue(new Error("Catalog unavailable"));
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+    expect(await screen.findByText("Catalog unavailable")).toBeInTheDocument();
+    expect(screen.getByLabelText("Add an applicable program")).toBeDisabled();
+    expect(screen.getByLabelText("Content")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
   it("uses the board exam generate label and helper text for board exam users", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "BOARD_EXAM" });
 
@@ -859,6 +892,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add an applicable program")).not.toBeInTheDocument();
   });
 
   it("keeps target audience hidden for professional note creation", async () => {
@@ -871,6 +905,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add an applicable program")).not.toBeInTheDocument();
   });
 
   it("shows target audience inside Add details for admin note creation", async () => {
@@ -921,6 +956,7 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByLabelText("Domain Context (optional)")).toHaveValue("NURSING");
     expect(screen.getByLabelText("Note Learner Level (optional)")).toHaveValue("COLLEGE");
+    expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Domain Context (optional)"), {
       target: { value: "ENGINEERING_SCIENCES" },
     });
