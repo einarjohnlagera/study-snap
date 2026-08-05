@@ -469,7 +469,10 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
   });
 
-  it("loads and displays saved Applicable Programs when note details are closed", async () => {
+  // The header states reach as a count, never a list -- names live in Edit details and the admin
+  // table. At exactly one applicable program (the seeded default on nearly every note) the count is
+  // suppressed as noise.
+  it("omits the reach count when the note has a single applicable program", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -479,12 +482,30 @@ describe("PrivateNoteDetailPageClient", () => {
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    // Primary and Applicable are labelled separately inside one metadata block: a curated set may
-    // legitimately exclude the note's primary program, so they are never merged into one list.
-    expect(await screen.findByText("Applicable Programs")).toBeInTheDocument();
-    expect(screen.getByText("Primary Course / Program")).toBeInTheDocument();
-    expect(screen.getByText("Nursing", { selector: "span" })).toBeInTheDocument();
+    expect(await screen.findByText("Nursing", { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByText(/Applies to/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Applicable Programs")).not.toBeInTheDocument();
     expect(getNoteApplicablePrograms).toHaveBeenCalledWith("note-1");
+  });
+
+  it("summarises reach as a count, without listing names, above one applicable program", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue(baseNote);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([
+      { id: "program-nursing", name: "Nursing" },
+      { id: "program-pharmacy", name: "Pharmacy" },
+      { id: "program-medicine", name: "Medicine" },
+    ]);
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Nursing · Applies to 3 programs")).toBeInTheDocument();
+    expect(screen.queryByText("Pharmacy")).not.toBeInTheDocument();
+    expect(screen.queryByText("Medicine")).not.toBeInTheDocument();
   });
 
   it("seeds the authoring axes from the note and saves the corrected values for a teacher", async () => {
