@@ -925,6 +925,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const title = note?.title?.trim() || "Untitled note";
   const tags = note?.tags ?? [];
   const courseProgramLabel = normalizeCourseProgram(note?.courseProgram);
+  // One line for both program facts. The reach count only earns its space above one program: a note
+  // seeded from its Course / Program has exactly one applicable program, so "Applies to 1 program"
+  // would be noise on the overwhelming majority of notes. Teacher/Admin authors who need the actual
+  // names open Edit details, which is the only place they can change them anyway.
+  const noteProgramLine = useMemo(() => {
+    const reach = savedApplicableProgramIds.length > 1
+      ? `Applies to ${savedApplicableProgramIds.length} programs`
+      : null;
+    return [courseProgramLabel, reach].filter(Boolean).join(" · ") || null;
+  }, [courseProgramLabel, savedApplicableProgramIds]);
   const visibility = (note?.visibility ?? "PRIVATE");
   const isPublic = visibility === "PUBLIC";
   const canManageVisibility = isEmailVerified || isPublic;
@@ -1878,41 +1888,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </p>
                 ) : null}
 
-                {/* Primary program and Applicable Programs are two different concepts, so they share a
-                    container and each carries its own label rather than being merged into one list.
-                    A curated set may legitimately exclude the note's primary program (Slice 2's
-                    zero-join-row guard), so presenting them as "primary, then the rest" would assert
-                    a containment that is not guaranteed. */}
-                {!isInlineMetadataEditMode && (courseProgramLabel || savedApplicableProgramIds.length > 0) ? (
-                  <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
-                    {courseProgramLabel ? (
-                      <div className="space-y-1">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
-                          Primary Course / Program
-                        </p>
-                        <p className="text-sm text-foreground/80">{courseProgramLabel}</p>
-                      </div>
-                    ) : null}
-                    {savedApplicableProgramIds.length > 0 ? (
-                      <div className="space-y-1.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
-                          Applicable Programs
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {applicableProgramCatalog
-                            .filter((program) => savedApplicableProgramIds.includes(program.id))
-                            .map((program) => (
-                              <span
-                                key={program.id}
-                                className="inline-flex items-center rounded-full border border-border/60 bg-background px-2.5 py-0.5 text-xs font-medium text-foreground/75"
-                              >
-                                {program.name}
-                              </span>
-                            ))}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
+                {/* Applicable Programs answer "who can DISCOVER this note" -- and by the time this page
+                    renders, discovery is already done. So the header states reach as a count, not a
+                    list: names appear where you author them (the Edit details panel, the admin table),
+                    counts appear where you read. The list previously rendered as pills here, which cost
+                    roughly a quarter of the mobile viewport and pushed Start Quick Review and the whole
+                    content tab bar below the fold -- authoring metadata outranking the product.
+                    The count is omitted at one program because the seeded default is exactly that, so
+                    it would be noise on nearly every note. */}
+                {!isInlineMetadataEditMode && noteProgramLine ? (
+                  <p className="text-sm text-foreground/65">{noteProgramLine}</p>
                 ) : null}
 
                 <div className="flex flex-wrap items-center gap-2">
