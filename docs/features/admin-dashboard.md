@@ -76,7 +76,7 @@ Admin v1 tables should include:
 - recent failed payments
 - recent feedback
 - one-click refund actions on Xendit recent premium upgrade rows that have a linked transaction
-- a paginated notes table showing legacy Course / Program and explicit Applicable Programs, with a catalog-backed edit action that changes no other note metadata
+- a paginated notes table showing legacy Course / Program and explicit Applicable Programs, with a catalog-backed edit action that changes no other note metadata; its shared control can add every member of a Program Family in one action, after which the admin can trim the explicit set before saving
 
 ## Funnel Metrics
 

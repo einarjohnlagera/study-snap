@@ -835,6 +835,11 @@ describe("NoteEditorPageClient", () => {
 
   it("uses the teacher generate label and helper text for teacher note creation", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
+      { id: "program-civil", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+      { id: "program-electrical", name: "Electrical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+      { id: "program-mechanical", name: "Mechanical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
+    ]);
 
     const { container } = render(<NoteEditorPageClient initialMode="quiz" />);
 
@@ -847,6 +852,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByLabelText("Domain Context (optional)")).toBeInTheDocument();
     expect(screen.getByLabelText("Note Learner Level (optional)")).toBeInTheDocument();
     expect(await screen.findByLabelText("Add an applicable program")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add all 3 Engineering programs" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Who is this note for?")).getByRole("option", { name: "Professional" }))
       .toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
