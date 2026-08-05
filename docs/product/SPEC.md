@@ -276,7 +276,23 @@ Public Library browsing supports an audience-first filter based on note audience
 
 ## Product Philosophy
 
-Learning loop:
+### What NoteLib is (ratified 2026-08-05)
+
+**NoteLib is a learning system built on top of a knowledge library.** The library is the foundation; **the learning journey is the product.** NoteLib is not primarily a notes library, and framing it as one understates what it is becoming.
+
+The three layers, and what each earns:
+
+| Layer | Mechanism | What it earns |
+|---|---|---|
+| **Trust** | Comprehensive Official Review Sets | *"I can trust NoteLib to cover my review."* |
+| **Habit** | Study Packs, Companion, Progress, Review Sets | The learning system users return to |
+| **Community** | High-quality user-created and shared knowledge | Users' personal knowledge library |
+
+**The order is the point, not an accident of sequencing.** Users must first be able to trust that NoteLib covers their review. Only then does the product earn the right to become their personal knowledge library.
+
+**This does not abandon the community vision — it earns it in the correct order.** Long-term, users creating and sharing their own notes remains a goal. What changed: **community content is no longer the primary acquisition strategy.** Do not propose user-generated content as the top of the funnel, and do not read the de-emphasis as the feature being cut.
+
+### Learning loop
 
 Capture -> Generate -> Review -> Improve -> Copy -> Repeat
 

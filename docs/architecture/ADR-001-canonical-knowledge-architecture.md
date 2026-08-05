@@ -39,11 +39,54 @@ Binding rules:
 2. **Static content** (note body, summary, key concepts, flashcards, memorization, static question pool) is calibrated by Domain Context + Note Learner Level. Never by user learner level.
 3. **Quizzes and exams** take Domain Context + Note Learner Level as the floor. User Learner Level may adjust scaffolding and wording; it may **never lower the curriculum**.
 4. **Review Sets compose freely.** A Review Set may contain any note regardless of its Applicable Programs. A Review Set's own course/program is a curation label — never derived from, never validated against, its notes.
-5. **Program Families are an authoring shortcut only.** Selecting a family expands to explicit `note_course_program` rows at save time. Applicability is never inferred from a family at read time.
+5. **Program Families are an authoring shortcut only.** Selecting a family expands to explicit `note_course_program` rows at save time. Applicability is never inferred from a family at read time. **Ratified in full 2026-08-05 — see "Program Families are a productivity feature" below. The three constraints there are binding.**
 6. **Reuse a note when the learning objective, depth, and treatment are materially the same. Create a new note only when the learning experience itself genuinely differs.** Multiple canonical Algebra notes (Engineering Algebra, Business Algebra, College Algebra, Algebra Foundations) are correct and expected; collapsing them would be a misreading of this ADR.
 7. All resolution stays in `StudyPackGenerationContextResolver`. No service reads these fields directly.
 
 Delivered in two releases (revised 2026-08-03 after the production audit): **Release A** = Domain Context + `course_programs` catalog/families + Note Learner Level, all additive and reversible, with pool/bank re-keying as its own PR inside it. **Release B** = `note_course_program` + read paths, multi-release and not reversible.
+
+### Program Families are a productivity feature, not a curriculum feature
+
+**Ratified by the owner 2026-08-05, closing the gate that stood on Release B's third slice.** Rule 5 said families are an authoring shortcut; this section states what that forbids, because "shortcut" alone did not stop the design drifting toward a curriculum engine.
+
+**A Program Family's only job is to reduce repetitive authoring work.** It is not a curriculum model, not a taxonomy, and not a second source of applicability truth. Three binding constraints:
+
+1. **Expansion is unconditional.** Selecting a family fills in the same rows every time. It must not depend on the note's Subject, Domain Context, learner level, or anything else about the note.
+2. **A family expands to all of its members.** No curated per-family subsets, no preset table beyond `course_programs.program_family_id`. If a family should expand to a different set, that is a change to *membership*, not to expansion logic.
+3. **Expansion never happens at read time.** It is a save-time pre-fill producing explicit rows. No filter, facet, badge, or search predicate may resolve a family into programs.
+
+**Families are deliberately allowed to over-select.** The author sees the filled-in rows immediately and trims what does not apply, and **the Note's explicit `note_course_program` rows are always the source of truth.** A slightly-too-broad default that a human corrects is a healthier long-term trade-off than a subject→program mapping maintained forever — that mapping would re-couple the two axes this ADR exists to separate: *Subject* is what the knowledge is, *Domain Context* is how it is authored, and *Applicable Programs* is where it appears. Families must not become a fourth knowledge model.
+
+> **The tripwire:** if we ever find ourselves maintaining curriculum rules inside Program Families, the feature has exceeded its responsibility. Remove the rules, not the constraint.
+
+Rejected on the record, so neither returns as a "small improvement": **subject-conditioned expansion** (an earlier taxonomy doc proposed `Engineering Mathematics` reaching all engineering programs while `Engineering Sciences` reached only some) and **curated subset expansion**.
+
+### Applicable Programs mean valid applicability, not curriculum coverage
+
+**Ratified by the owner 2026-08-05.** The catalog answers *"who can legitimately study this note?"* — **not** *"which programs do we fully support?"*
+
+This decouples catalog growth from curriculum completeness. A program may be seeded before any comprehensive Review Set exists for it, so canonical notes can be marked applicable to it immediately; that is what makes one Engineering Mathematics note serve many engineering programs without duplication, which is the purpose this ADR was written for. **Review Sets are what communicate curriculum completeness** — Applicable Programs never promise it.
+
+**The catalog still follows curriculum; what changed is what "follows" means.** It does **not** mean waiting for a complete Official Review Set. It means a program earns a catalog entry once there are **legitimate canonical notes applicable to it** — if Engineering Mathematics notes are genuinely applicable to Mechanical Engineering, that alone justifies the entry, with no Mechanical Engineering Review Set required.
+
+**Do not pre-seed a program vocabulary.** Seeding every PRC engineering program at once is premature expansion and is explicitly rejected. **Catalog growth is incremental and demand-driven by authoring:** a curator judging that a canonical note is applicable to a program is the trigger to add that program. This keeps the taxonomy grounded in real content.
+
+This refines rather than reverses the catalog's *follow-not-lead* posture (`v0.70.0`, where `Computer Science` and `Software Engineering` were excluded pending real curriculum). Those rulings stand. The standard for seeding is now "canonical notes are applicable to this program," which is weaker than "we have a curriculum for it" but strictly stronger than "a learner might plausibly exist."
+
+### Programs and Review Sets answer different questions
+
+**Ratified 2026-08-05.** The two surfaces have distinct responsibilities and must not be collapsed:
+
+| Surface | Answers |
+|---|---|
+| **Program** (Applicable Programs) | *"What notes are applicable to me?"* — a **discovery** surface |
+| **Review Set** | *"What is my complete learning journey?"* — the **completeness** signal |
+
+**Consequence:** a seeded program with no applicable notes is invisible to learners by construction — every learner-facing program list (facets, filter dropdowns, search) derives from *notes*, not from the catalog, so coverage is **emergent rather than declared** and the catalog is author-facing. The residual risk is a **thin** shelf, not an empty one: a program carrying a handful of shared foundational notes can read as a curriculum without being one.
+
+**The agreed direction — a design direction, not a shipped mechanism.** Coverage is communicated **at the Program level**, when a learner browses a Program that has no dedicated Official Review Set yet — conceptually *"This Program currently contains shared foundational notes. A dedicated Official Review Set is still being developed."* Explicitly rejected: per-note coverage indicators, and any new coverage metadata system. Tracked in `docs/product/ROADMAP.md`; **not** part of Release B slice 3.
+
+**Consequence to hold onto:** a seeded program with no applicable notes is invisible to learners by construction — every learner-facing program list (facets, filter dropdowns, search) derives from notes, not from the catalog, so coverage is *emergent rather than declared*. The catalog is author-facing. **The open risk is a thin shelf, not an empty one:** once a handful of canonical notes are marked applicable to a program, it looks like a curriculum without being one, and exposing programs to learners requires communicating coverage rather than implying completeness.
 
 ### Choosing a Domain Context value
 

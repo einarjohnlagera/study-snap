@@ -104,6 +104,20 @@ Older released versions (`v0.41.0` and earlier, back to `v0.11.0`) are summarize
 
 ## Prioritization Lens & Strategic Frame (added 2026-07-28 — read before scoping or reprioritizing anything below)
 
+> ### Ratified product vision — 2026-08-05. Read this first; it governs everything below.
+>
+> **NoteLib is a learning system built on top of a knowledge library.** The library is the foundation; **the learning journey is the product.**
+>
+> Three layers, earned strictly in order:
+>
+> 1. **Trust** — comprehensive Official Review Sets, so a learner can say *"I can trust NoteLib to cover my review."*
+> 2. **Habit** — Study Packs, Companion, Progress, and Review Sets forming the system they return to.
+> 3. **Community** — high-quality user-created and shared knowledge, once the first two are earned.
+>
+> **This confirms and sharpens the "journey, not the note" frame below rather than replacing it.** What it adds is the *ordering*, and one prioritization consequence: **community content is no longer the primary acquisition strategy.** Long-term, users creating and sharing their own notes is still absolutely the goal — the vision is not abandoned, it is being earned in the correct order. Only after a learner trusts NoteLib's coverage does the product earn the right to become their personal knowledge library.
+>
+> **What this means when scoping:** work that deepens Official Review Set comprehensiveness or the learning system outranks work that grows user-generated content as a funnel. Do not propose UGC as top-of-funnel acquisition; do not read the de-emphasis as the community feature being cut. Full statement in `docs/product/SPEC.md` → Product Philosophy.
+
 This section exists so a fresh session doesn't have to re-derive from scratch what "NoteLib's center of gravity has shifted toward the learner's journey, not the note" actually means for prioritization. It was added after a strategic reprioritization discussion prompted by noticing that recent releases (Dashboard, Progress, Companion, Coach, Official Review Sets, Reusable Practice Assets) skew journey-centric rather than notes-first.
 
 **This is not a new pivot — it's a long-held bet becoming visible, and internal strategy is already ahead of it.** "A Note Collection is a trackable readiness journey, not a folder" has been the stated direction since v0.33.0; "NoteLib as a personal learning OS" was ratified internally with GPT on 2026-07-23 (5 days before this note), as part of the Company Redefinition effort (see that section above). What changed isn't the direction — it's that enough journey-layer surface area now exists to see the shape in aggregate. Treat this as confirmation the existing direction is compounding, not a trigger to re-litigate it.
@@ -217,9 +231,35 @@ Sequenced 2026-08-04 in `18-release-b-slice-sequence.md`. **Only slice 3 is gate
 
 1. **`note_course_program` + 1:1 backfill + admin write surface — shipped.** Additive, reversible, gated on nothing, and it delivers the ADR's actual purpose: one canonical note applicable to many programs.
 2. **Read paths move to join/`EXISTS` — shipped.** Filters, facets, badges, and Public Library search are join-first with a legacy-string fallback for notes with no join rows. This corrected shape preserves excluded-value results and shareable slugs while allowing multi-program discovery; retiring the fallback is unscheduled.
-3. **Program Family expansion.** Gated.
+3. **Program Family expansion — GATE CLEARED 2026-08-05, not yet scoped.** Unconditional, all-members expansion as a pure authoring shortcut, plus an Engineering catalog expansion. Four owner rulings below.
 
-**The gate on slice 3:** applicability groupings unverified against current PRC board syllabi — `[EFFORT]`, not `[EVIDENCE]`. No query answers it, and **R4 did not settle it**: R4 validated the Domain Context *value set*, not which programs share which subjects.
+**The gate on slice 3 is CLEARED — owner rulings, 2026-08-05.** It previously read: *applicability groupings unverified against current PRC board syllabi — `[EFFORT]`, not `[EVIDENCE]`.* It was cleared by **narrowing the question rather than answering it as posed**. The recorded gate asked whether `Engineering Sciences` spans 8 or 11 engineering programs, but the catalog holds **3** engineering programs and one family; the "11" was an early doc reasoning about Philippine engineering education generally. More decisively, the rulings make expansion **unconditional**, so no subject→program mapping is needed and the syllabus question stops gating anything.
+
+Four rulings, none of which Slice 3 may re-litigate:
+
+1. **The catalog represents *valid applicability*, not curriculum coverage.** It answers "who can legitimately study this note?" — Review Sets communicate completeness. **The catalog still follows curriculum; what changed is what "follows" means.** A program does not need a complete Official Review Set to earn an entry — it earns one once **legitimate canonical notes are applicable to it**. **Do not pre-seed every PRC engineering program**; that is premature expansion and is rejected. Catalog growth is **incremental and demand-driven by authoring**, which refines rather than reverses the `v0.70.0` *follow-not-lead* posture and leaves the `Computer Science` / `Software Engineering` rulings standing. **Practical effect on slice 3: no catalog seed migration ships with it** — the current 21 programs stay until authoring demands more.
+2. **Program Families stay intentionally dumb** — an authoring shortcut, never a curriculum engine. No hidden inference, no read-time applicability, no curriculum intelligence.
+3. **Expansion fills in all family members.** No curated subsets. An author trims what does not apply.
+4. **Expansion is never subject-conditioned** — explicitly rejected. That would quietly make Program Families a second curriculum taxonomy and permanently couple Subject knowledge to applicability rules, re-coupling the axes ADR-001 separated.
+
+**Governing principle, now binding in ADR-001:** Program Families are a **productivity feature, not a curriculum feature.** They are deliberately allowed to over-select, because the Note's explicit Applicable Programs are always the source of truth. Maintaining curriculum rules inside Program Families is the tripwire that says the feature has exceeded its responsibility.
+
+#### Design direction — Programs and Review Sets answer different questions (ratified 2026-08-05, NOT in slice 3)
+
+| Surface | Answers | Role |
+|---|---|---|
+| **Program** (Applicable Programs) | *"What notes are applicable to me?"* | discovery |
+| **Review Set** | *"What is my complete learning journey?"* | curriculum completeness |
+
+Keeping these distinct is what lets the catalog grow on applicability without implying coverage. **Coverage is emergent, not declared:** every learner-facing program list (facets, filter dropdowns, search) derives from *notes* rather than the catalog, so a program with no applicable notes is invisible to learners and the catalog is effectively author-facing. The residual risk is a **thin** shelf, not an empty one — a program carrying a handful of shared foundational notes reads as a curriculum without being one.
+
+**The direction:** communicate coverage **at the Program level**, when a learner browses a Program with no dedicated Official Review Set yet. Conceptually — *"This Program currently contains shared foundational notes. A dedicated Official Review Set is still being developed."*
+
+**Explicitly rejected:** per-note coverage indicators, and any new coverage metadata system. The completeness signal already exists — it is the Review Set — so this is a messaging affordance, not a new axis.
+
+**Status: design direction for the learner experience, deliberately not scoped into slice 3.** It needs its own scoping pass; it becomes live the moment the catalog grows past the programs that have real Review Sets behind them, which under ruling 1 is authoring-driven rather than scheduled.
+
+**R4 still did not settle applicability** — it validated the Domain Context *value set*. That caveat stands; it is simply no longer load-bearing, because unconditional expansion needs no per-subject applicability answer.
 
 ### What ADR-001 warns about, and this release must respect
 

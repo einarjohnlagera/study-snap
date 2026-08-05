@@ -15,7 +15,7 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 Read this block first. Everything below is detail behind it.
 
 1. **What it is:** NoteLib is a notes-first study workspace. Capture notes → generate Study Packs → practice with quizzes → track readiness → reuse the library.
-2. **What we sell:** the *learning system*, not features. Hero: **"Always know what to learn next."** Features are evidence for that promise, never the promise itself.
+2. **What we sell:** the *learning system*, not features. Hero: **"Always know what to learn next."** Features are evidence for that promise, never the promise itself. **Ratified 2026-08-05: NoteLib is a learning system built on top of a knowledge library — the library is the foundation, the learning journey is the product.** Three layers earned strictly in order: **Trust** (comprehensive Official Review Sets) → **Habit** (Study Packs, Companion, Progress, Review Sets) → **Community** (user-created knowledge). **Community content is no longer the primary acquisition strategy** — the community vision is not abandoned, it is being earned in the correct order. Do not propose UGC as top-of-funnel.
 3. **Current state:** `v0.71.0 - Applicable Programs` is **In Progress**. `v0.70.0 - Canonical Knowledge Completion` released 2026-08-04. Release B of `ADR-001` is cut into three slices; **Slices 1 and 2 are merged** (PRs #990, #991) and **Slice 3 is gated on a curator ruling that is the live open question — see "Open decisions: Slice 3."**
 4. **The single biggest constraint:** W1→W2 retention is **2.4%**. It has not moved across multiple releases. Read "Retention Is the Proven Constraint" before proposing anything new.
 5. **Pricing is settled for now** — quota raised, price change deferred pending data. Don't reopen it.
@@ -65,24 +65,27 @@ Twelve pre-existing findings are recorded as **Known Limitations tagged `v0.68.1
 
 ---
 
-## Open decisions: Slice 3 — Program Family expansion (LIVE, 2026-08-05)
+## Slice 3 — Program Family expansion: RATIFIED 2026-08-05 (gate cleared, not yet built)
 
-**This is the question currently blocking `v0.71.0` from closing with all three slices.** Full sheet with the query and rulings: `docs/claude-prompt/canonical-knowledge-architecture-out/20-slice-3-family-expansion-decision-sheet.md`.
+**All four decisions are closed.** Do not re-open them; they are binding in ADR-001. Record of how they were reached: `docs/claude-prompt/canonical-knowledge-architecture-out/20-slice-3-family-expansion-decision-sheet.md`.
 
-**What Program Families are.** ADR-001 rule 5: *Program Families are an authoring shortcut only. Selecting a family expands to explicit `note_course_program` rows at save time. Applicability is never inferred from a family at read time.* So expansion is a save-time pre-fill producing explicit, editable rows — but a pre-fill **is** a default, and the gate was written knowing that. "The author can trim it afterwards" is not grounds to skip the ruling.
+1. **The catalog represents *valid applicability*, not curriculum coverage.** It answers *"who can legitimately study this note?"*; **Review Sets** are what communicate completeness. **The catalog still follows curriculum — a program simply no longer needs a complete Review Set to earn an entry, only legitimate canonical notes applicable to it.** Pre-seeding every PRC engineering program is **rejected as premature**; growth is incremental and demand-driven by authoring. Refines rather than reverses the `v0.70.0` *follow-not-lead* posture; the `Computer Science` / `Software Engineering` exclusions stand.
+2. **Program Families stay intentionally dumb** — an authoring shortcut, never a curriculum engine. No hidden inference, no read-time applicability, no curriculum intelligence.
+3. **Expansion fills in all family members.** No curated subsets; the author trims.
+4. **Expansion is never subject-conditioned** — explicitly rejected, because it would make Families a second curriculum taxonomy and permanently couple Subject knowledge to applicability rules.
 
-**The recorded gate is narrower than three documents imply.** ADR-001, `RELEASES.md`, and the ROADMAP all state it as *"is `Engineering Sciences` shared by all **11 engineering programs**, or a subset?"* — but **NoteLib's catalog holds 3 engineering programs** (Civil, Electrical, Mechanical), and exactly **one** family (`Engineering`). The "11" came from an early taxonomy doc reasoning about Philippine engineering curricula in general, not about the catalog. So the syllabus reading is one sitting's work, not a survey.
+**Binding principle:** Program Families are a **productivity feature, not a curriculum feature.** They are deliberately allowed to over-select, because the Note's explicit Applicable Programs are always the source of truth. **The tripwire:** maintaining curriculum rules inside Program Families means the feature has exceeded its responsibility.
 
-**Four decisions, in the order they change scope:**
+**Programs and Review Sets answer different questions — ratified, and it is the reason the catalog can grow on applicability without implying coverage:**
 
-1. **Does the catalog gain more engineering programs?** A product/expansion call needing a seed migration, separable from any syllabus reading — and it is what makes "8 vs 11" real or moot.
-2. **Does Slice 3 seed additional families?** With 3 members, family expansion ships with almost no reach — worth asking whether it earns a slice at that size. Candidates visible in the catalog: health sciences (Nursing, Pharmacy, Physical Therapy, Medicine, Radiologic Technology), Education + Special Needs Education – Generalist, and the three Senior High strands. **These memberships are the substantive curator decisions**, more than the engineering subset.
-3. **Does a family expand to all its members, or a curated subset?** `V106` defines `program_families(id, name)` plus `course_programs.program_family_id` — **membership and nothing else, no preset table.** If expansion is "all members," the preset already *is* the FK and Slice 3 is materially smaller than scoped.
-4. **Is expansion subject-conditioned?** The biggest scope fork. An early taxonomy doc proposed `Engineering Mathematics` reaching all engineering programs but `Engineering Sciences` only "most — expand explicitly." Unconditional needs no subject logic; conditioned needs a subject→family-subset map, new schema, a curation surface — and it risks re-coupling the two axes `ADR-001` just separated (Applicable Programs = *where a note appears*; Domain Context = *how it is authored*).
+| Surface | Answers | Role |
+|---|---|---|
+| **Program** | *"What notes are applicable to me?"* | discovery |
+| **Review Set** | *"What is my complete learning journey?"* | curriculum completeness |
 
-**House recommendation, open to challenge:** unconditional expansion. It matches rule 5's "authoring shortcut only," keeps the axes separate, and the author's trim-after-expand is the per-note judgment ADR-001 already says carries the real applicability decision.
+**Coverage is emergent, not declared.** Every learner-facing program list derives from *notes*, not the catalog, so a program with no applicable notes is invisible to learners and the catalog is effectively author-facing. The residual risk is a **thin** shelf rather than an empty one — a program carrying a few shared foundational notes reads as a curriculum without being one.
 
-**Evidence available:** a production query in the sheet lists subjects already appearing under more than one program, with note counts — turning part of this from a blank-page syllabus reading into a ruling against real data. **Local data cannot inform it:** the local DB has zero Civil/Electrical/Mechanical Engineering notes, while production holds ~197 Civil Engineering official notes.
+**Agreed design direction, deliberately NOT built in slice 3:** communicate coverage **at the Program level** when a learner browses a Program with no dedicated Official Review Set — conceptually *"This Program currently contains shared foundational notes. A dedicated Official Review Set is still being developed."* **Rejected:** per-note coverage indicators and any new coverage metadata system; the completeness signal already exists and it is the Review Set. Needs its own scoping pass.
 
 ## Open Question — Explore's default tab (STILL unresolved as of v0.69.0, three releases later)
 

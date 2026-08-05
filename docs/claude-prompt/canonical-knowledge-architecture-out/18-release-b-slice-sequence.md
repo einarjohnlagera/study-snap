@@ -116,7 +116,24 @@ check whether anything else still resolves applicability through the legacy stri
 
 ## Slice 3 — Program Family expansion
 
-**The only slice gated on the curator pass.**
+> **GATE CLEARED 2026-08-05 by owner ruling. The paragraphs below describe the gate as it stood and
+> are kept as the record; they no longer block anything.** Full rulings in ADR-001
+> ("Program Families are a productivity feature, not a curriculum feature" and "Applicable Programs
+> mean valid applicability, not curriculum coverage"), `RELEASES.md`, and the ROADMAP.
+>
+> **It was cleared by narrowing the question, not by answering it as posed.** The gate asked whether
+> `Engineering Sciences` spans 8 or 11 engineering programs — but the catalog holds **3** engineering
+> programs and one family; the "11" was `06` reasoning about Philippine engineering education in
+> general, never about the catalog. More decisively, **expansion is now unconditional**, so no
+> subject→program mapping exists to be verified and the syllabus question gates nothing.
+>
+> **What slice 3 now is:** unconditional, all-members expansion as a pure authoring shortcut, plus an
+> Engineering catalog expansion (its own migration, seeded on *valid applicability* rather than
+> curriculum coverage). Subject-conditioned expansion and curated per-family subsets are both
+> **rejected on the record**. Families may over-select; the Note's explicit rows are the source of
+> truth.
+
+**Previously: the only slice gated on the curator pass.**
 
 Selecting a family (e.g. `Engineering`) expands to explicit `note_course_program` rows at save time.
 The expansion **preset** — which programs a family fills in, and which subjects justify it — is the

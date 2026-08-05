@@ -1,7 +1,49 @@
 # Slice 3 — Program Family expansion: curator decision sheet
 
-Prepared 2026-08-05, after Slices 1 and 2 merged (PRs #990, #991). This is the input Slice 3 is gated
-on. **Nothing in Slice 3 can be scoped until questions 1–4 below are answered.**
+Prepared 2026-08-05, after Slices 1 and 2 merged (PRs #990, #991).
+
+> ## ANSWERED 2026-08-05 — all four decided by owner ruling. This sheet is now the record of how they were reached.
+>
+> **1. Catalog growth → YES in principle, but INCREMENTAL — and no seed migration ships with slice 3.**
+> The catalog represents **valid applicability**, not curriculum coverage: it answers *"who can
+> legitimately study this note?"*, while **Review Sets** communicate completeness. **The catalog still
+> follows curriculum; what changed is what "follows" means** — a program no longer needs a complete
+> Official Review Set, it needs **legitimate canonical notes applicable to it**. Pre-seeding every PRC
+> engineering program is **rejected as premature expansion**; growth is demand-driven by authoring, with
+> a curator judging a canonical note applicable to a program as the trigger to add it. This **refines
+> rather than reverses** the follow-not-lead precedent — the `Computer Science` / `Software Engineering`
+> exclusions stand. **This answers the sheet's own "lead or follow" framing with a third option the
+> sheet did not offer: follow, but on applicability rather than on curriculum.**
+>
+> **Coverage → communicated at the Program level, and NOT built in slice 3.** Programs are a discovery
+> surface (*"what notes are applicable to me?"*); Review Sets are the completeness signal (*"what is my
+> complete learning journey?"*). When a learner browses a Program with no dedicated Official Review Set,
+> say so there — conceptually *"This Program currently contains shared foundational notes. A dedicated
+> Official Review Set is still being developed."* **Rejected:** per-note coverage indicators and any new
+> coverage metadata system. Recorded as a design direction in the ROADMAP, with its own scoping pass.
+>
+> **2. More families → families stay, and stay dumb.** Not a curriculum engine. No hidden inference, no
+> read-time applicability, no curriculum intelligence. (The sheet's harder framing — whether the
+> shortcut earns its complexity at 3 members — was answered by keeping it, on the strength of the
+> now-larger engineering catalog from ruling 1.)
+>
+> **3. All members, or curated subset → ALL MEMBERS.** Subset expansion is rejected. The author trims
+> the generated rows. The data model stays as-is: membership via `course_programs.program_family_id`
+> and nothing more.
+>
+> **4. Subject-conditioned → EXPLICITLY REJECTED.** It would quietly turn Program Families into a second
+> curriculum taxonomy and permanently couple Subject knowledge to applicability rules. Applicability
+> belongs to the Note; Domain Context determines authoring; Subject determines knowledge. Families must
+> not become a fourth knowledge model. **The house recommendation in this sheet was accepted.**
+>
+> **Binding principle, now in ADR-001:** Program Families are a **productivity feature, not a curriculum
+> feature.** They are deliberately allowed to over-select, because the Note's explicit Applicable
+> Programs are always the source of truth. Maintaining curriculum rules inside Program Families is the
+> tripwire that says the feature has exceeded its responsibility.
+>
+> **The production overlap query below was not needed to decide** — unconditional expansion removes the
+> per-subject question it was written to inform. It remains useful for curation and for sizing the
+> canonical-note opportunity, so it is kept rather than deleted.
 
 ---
 
