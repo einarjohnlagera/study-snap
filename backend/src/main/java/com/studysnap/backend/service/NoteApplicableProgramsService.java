@@ -8,6 +8,8 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
+import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UnknownCourseProgramException;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
@@ -43,7 +45,7 @@ public class NoteApplicableProgramsService {
 
     @Transactional(readOnly = true)
     public List<ApplicableProgramResponse> get(String noteIdRaw, UUID requesterUserId) {
-        NoteEntity note = findAuthorizedNote(noteIdRaw, requesterUserId);
+        NoteEntity note = findReadableNote(noteIdRaw, requesterUserId);
         return noteCourseProgramRepository.findByNoteId(note.getId());
     }
 
@@ -54,6 +56,9 @@ public class NoteApplicableProgramsService {
             UUID requesterUserId
     ) {
         NoteEntity note = findAuthorizedNote(noteIdRaw, requesterUserId);
+        if (requestedIds == null || requestedIds.isEmpty()) {
+            throw new CourseProgramSelectionRequiredException();
+        }
         LinkedHashSet<UUID> desiredIds = new LinkedHashSet<>(requestedIds);
         if (desiredIds.size() != requestedIds.size()) {
             throw new DuplicateCourseProgramException();
@@ -61,6 +66,9 @@ public class NoteApplicableProgramsService {
         List<UUID> existingIds = courseProgramCatalogRepository.findExistingIds(desiredIds);
         if (existingIds.size() != desiredIds.size()) {
             throw new UnknownCourseProgramException();
+        }
+        if (desiredIds.size() > 1 && note.getDomainContext() == null) {
+            throw new MultiProgramDomainContextRequiredException();
         }
         noteCourseProgramRepository.replace(note.getId(), desiredIds);
         return noteCourseProgramRepository.findByNoteId(note.getId());
@@ -113,5 +121,15 @@ public class NoteApplicableProgramsService {
             throw new NoteNotFoundException();
         }
         return note;
+    }
+
+    private NoteEntity findReadableNote(String noteIdRaw, UUID requesterUserId) {
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(noteIdRaw, NoteNotFoundException::new);
+        NoteEntity note = noteRepository.findById(noteId).orElseThrow(NoteNotFoundException::new);
+        UserEntity requester = userRepository.findById(requesterUserId).orElseThrow(NoteNotFoundException::new);
+        if (requester.getRole() == UserRole.ADMIN || note.getOwnerUserId().equals(requesterUserId)) {
+            return note;
+        }
+        throw new NoteNotFoundException();
     }
 }

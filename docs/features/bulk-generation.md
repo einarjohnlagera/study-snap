@@ -17,9 +17,9 @@ Every batch contains:
 
 - one required `Subject`
 - one or more `Topics`, capped at 50
-- `Course / Program` for Teacher and Admin profiles
+- `Course / Program(s)` for every profile: learners enter one free-text personal program, while Teacher and Admin profiles choose one-or-many catalog selections
 - `Target Audience` for Teacher and Admin profiles
-- optional `Domain Context` for Teacher and Admin profiles
+- Domain Context for Teacher and Admin profiles (optional with one program; required above one)
 - optional `Note Learner Level` for Teacher and Admin profiles
 - a `Public` toggle
 

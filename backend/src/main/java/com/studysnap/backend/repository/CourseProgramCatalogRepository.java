@@ -73,4 +73,16 @@ public class CourseProgramCatalogRepository {
                 ids.toArray()
         );
     }
+
+    public List<String> findNamesByIds(Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        return jdbcTemplate.queryForList(
+                "SELECT name FROM course_programs WHERE id IN (" + placeholders + ") ORDER BY name",
+                String.class,
+                ids.toArray()
+        );
+    }
 }

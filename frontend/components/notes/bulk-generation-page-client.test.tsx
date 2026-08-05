@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BulkGenerationPageClient } from "./bulk-generation-page-client";
-import { bulkGenerateNotes, getMe, getMyPlan, listCoursePrograms, listSubjects } from "@/lib/api";
+import { bulkGenerateNotes, getCourseProgramCatalog, getMe, getMyPlan, listCoursePrograms, listSubjects } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import {
   consumeBulkQueuedFlash,
@@ -32,6 +32,7 @@ jest.mock("@/lib/api", () => ({
     }
   },
   bulkGenerateNotes: jest.fn(),
+  getCourseProgramCatalog: jest.fn(),
   listSubjects: jest.fn(),
   listCoursePrograms: jest.fn(),
   getMe: jest.fn(),
@@ -41,7 +42,9 @@ jest.mock("@/lib/api", () => ({
 
 async function fillAdminForm(topicValues: string[]) {
   fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
-  fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
+  const courseProgramInput = screen.getByLabelText("Add a course or program");
+  fireEvent.change(courseProgramInput, { target: { value: "Nursing" } });
+  fireEvent.click(await screen.findByRole("option", { name: "Nursing" }));
   // Target Audience defaults to "Student" for admin.
   topicValues.forEach((value, index) => {
     if (index > 0) {
@@ -61,6 +64,9 @@ describe("BulkGenerationPageClient", () => {
     (bulkGenerateNotes as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue([]);
     (listCoursePrograms as jest.Mock).mockResolvedValue([]);
+    (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+    ]);
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: "" });
     (getMyPlan as jest.Mock).mockResolvedValue({
       limits: { noteGenerationsPerMonth: 10, studyPacksPerMonth: 10, ocrPerMonth: 20 },
@@ -106,7 +112,7 @@ describe("BulkGenerationPageClient", () => {
     await waitFor(() => expect(getMe).toHaveBeenCalledTimes(2));
 
     expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Course \/ Program/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Domain Context/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Note Learner Level/)).not.toBeInTheDocument();
@@ -151,7 +157,7 @@ describe("BulkGenerationPageClient", () => {
         subject: "Maternal Health",
         topics: ["Prenatal Care", "Stages of Labor"],
         makePublic: true,
-        courseProgram: "Nursing",
+        courseProgramIds: ["program-nursing"],
         domainContext: "NURSING",
         learnerLevel: "BOARD_EXAM_REVIEW",
         targetProfileType: "STUDENT",
@@ -176,7 +182,7 @@ describe("BulkGenerationPageClient", () => {
     await waitFor(() => expect(getMe).toHaveBeenCalled());
 
     expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
-    expect(screen.getByLabelText(/^Course \/ Program/)).toHaveValue("Nursing");
+    expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toHaveValue("NURSING");
     expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("BOARD_EXAM_REVIEW");
     expect(screen.getByLabelText(/^Target Audience/)).toHaveValue("BOARD_TAKER");
@@ -305,6 +311,7 @@ describe("BulkGenerationPageClient", () => {
     render(<BulkGenerationPageClient />);
     await waitFor(() => expect(getMe).toHaveBeenCalled());
     fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Maternal Health" } });
+    fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
     fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Topic 1" } });
     fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
     fireEvent.change(screen.getByLabelText(/^Topic 2$/), { target: { value: "Topic 2" } });

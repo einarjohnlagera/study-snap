@@ -1,11 +1,14 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.dto.ApplicableProgramResponse;
 import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
+import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
@@ -23,6 +26,8 @@ public class StudyPackGenerationContextResolver {
 
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
+    private final NoteCourseProgramRepository noteCourseProgramRepository;
+    private final CourseProgramCatalogRepository courseProgramCatalogRepository;
 
     public StudyPackGenerationContext resolve(UUID ownerUserId, NoteEntity note) {
         List<String> tags = note == null || note.getTags() == null
@@ -32,7 +37,7 @@ public class StudyPackGenerationContextResolver {
         return userRepository.findById(ownerUserId)
                 .map(user -> new StudyPackGenerationContext(
                         user.getLearnerLevel(),
-                        note == null ? user.getCourseProgram() : firstNonBlank(note.getCourseProgram(), user.getCourseProgram()),
+                        resolveCourseProgram(note, user.getCourseProgram()),
                         note == null ? null : note.getSubject(),
                         tags,
                         note == null ? null : note.getDomainContext(),
@@ -40,7 +45,7 @@ public class StudyPackGenerationContextResolver {
                 ))
                 .orElseGet(() -> new StudyPackGenerationContext(
                         null,
-                        note == null ? null : note.getCourseProgram(),
+                        resolveCourseProgram(note, null),
                         note == null ? null : note.getSubject(),
                         tags,
                         note == null ? null : note.getDomainContext(),
@@ -71,7 +76,8 @@ public class StudyPackGenerationContextResolver {
 
     public StudyPackGenerationContext resolveForBulkGeneration(
             UUID ownerUserId,
-            String courseProgram,
+            List<UUID> courseProgramIds,
+            String courseProgramText,
             String subject,
             DomainContext domainContext,
             LearnerLevel noteLearnerLevel
@@ -79,9 +85,7 @@ public class StudyPackGenerationContextResolver {
         return userRepository.findById(ownerUserId)
                 .map(user -> new StudyPackGenerationContext(
                         user.getLearnerLevel(),
-                        CourseProgramNormalizationUtils.normalizeForStorage(
-                                firstNonBlank(courseProgram, user.getCourseProgram())
-                        ),
+                        resolveBulkCourseProgram(courseProgramIds, courseProgramText, user.getCourseProgram()),
                         subject,
                         List.of(),
                         domainContext,
@@ -89,7 +93,7 @@ public class StudyPackGenerationContextResolver {
                 ))
                 .orElseGet(() -> new StudyPackGenerationContext(
                         null,
-                        CourseProgramNormalizationUtils.normalizeForStorage(courseProgram),
+                        resolveBulkCourseProgram(courseProgramIds, courseProgramText, null),
                         subject,
                         List.of(),
                         domainContext,
@@ -97,11 +101,52 @@ public class StudyPackGenerationContextResolver {
                 ));
     }
 
+    public StudyPackGenerationContext resolveForBulkGeneration(
+            UUID ownerUserId,
+            String courseProgramText,
+            String subject,
+            DomainContext domainContext,
+            LearnerLevel noteLearnerLevel
+    ) {
+        return resolveForBulkGeneration(ownerUserId, List.of(), courseProgramText, subject, domainContext, noteLearnerLevel);
+    }
+
     private Optional<NoteEntity> findSourceNote(UUID ownerUserId, StudyPackEntity studyPack) {
         if (studyPack == null || studyPack.getNoteId() == null) {
             return Optional.empty();
         }
         return noteRepository.findByIdAndOwnerUserId(studyPack.getNoteId(), ownerUserId);
+    }
+
+    private String resolveCourseProgram(NoteEntity note, String profileCourseProgram) {
+        if (note == null) {
+            return CourseProgramNormalizationUtils.normalizeForStorage(profileCourseProgram);
+        }
+        List<String> joinedPrograms = noteCourseProgramRepository.findByNoteId(note.getId()).stream()
+                .map(ApplicableProgramResponse::name)
+                .toList();
+        // Exactly one catalog program may reach a prompt as the domain; a list may not (ADR-001).
+        // Everything else falls through to the personal-notes string, which is a permanent path and
+        // not a legacy branch -- it is how every learner-authored note resolves its domain.
+        if (joinedPrograms.size() == 1) {
+            return joinedPrograms.getFirst();
+        }
+        return CourseProgramNormalizationUtils.normalizeForStorage(firstNonBlank(note.getCourseProgram(), profileCourseProgram));
+    }
+
+    private String resolveBulkCourseProgram(
+            List<UUID> courseProgramIds,
+            String courseProgramText,
+            String profileCourseProgram
+    ) {
+        List<UUID> ids = courseProgramIds == null ? List.of() : courseProgramIds;
+        if (ids.size() == 1) {
+            List<String> names = courseProgramCatalogRepository.findNamesByIds(ids);
+            if (names.size() == 1) {
+                return names.getFirst();
+            }
+        }
+        return CourseProgramNormalizationUtils.normalizeForStorage(firstNonBlank(courseProgramText, profileCourseProgram));
     }
 
     private StudyPackGenerationContext buildFromStudyPackFallback(

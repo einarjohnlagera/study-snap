@@ -13,18 +13,26 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.BulkNoteGenerationQuotaExceededException;
+import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
+import com.studysnap.backend.exception.DuplicateCourseProgramException;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
+import com.studysnap.backend.exception.UnknownCourseProgramException;
+import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -54,12 +62,14 @@ public class NoteBulkGenerationService {
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final StudyPackGenerationTaskDispatcher taskDispatcher;
     private final UserRepository userRepository;
+    private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final OnboardingGuardService onboardingGuardService;
     private final BulkGenerationResultService bulkGenerationResultService;
     private final MePlanService mePlanService;
     private final int maxTopics;
     private final int throttleDelayMs;
 
+    @Autowired
     public NoteBulkGenerationService(
             NoteGenerationService noteGenerationService,
             NoteService noteService,
@@ -69,6 +79,7 @@ public class NoteBulkGenerationService {
             StudyPackGenerationContextResolver generationContextResolver,
             StudyPackGenerationTaskDispatcher taskDispatcher,
             UserRepository userRepository,
+            CourseProgramCatalogRepository courseProgramCatalogRepository,
             OnboardingGuardService onboardingGuardService,
             BulkGenerationResultService bulkGenerationResultService,
             MePlanService mePlanService,
@@ -83,11 +94,46 @@ public class NoteBulkGenerationService {
         this.generationContextResolver = generationContextResolver;
         this.taskDispatcher = taskDispatcher;
         this.userRepository = userRepository;
+        this.courseProgramCatalogRepository = courseProgramCatalogRepository;
         this.onboardingGuardService = onboardingGuardService;
         this.bulkGenerationResultService = bulkGenerationResultService;
         this.mePlanService = mePlanService;
         this.maxTopics = Math.clamp(maxTopics, MIN_MAX_TOPICS, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
+    }
+
+    /** Retained for focused unit tests that exercise only personal-note batches. */
+    public NoteBulkGenerationService(
+            NoteGenerationService noteGenerationService,
+            NoteService noteService,
+            StudyPackService studyPackService,
+            LlmStudyPackService llmStudyPackService,
+            ContentModerationService contentModerationService,
+            StudyPackGenerationContextResolver generationContextResolver,
+            StudyPackGenerationTaskDispatcher taskDispatcher,
+            UserRepository userRepository,
+            OnboardingGuardService onboardingGuardService,
+            BulkGenerationResultService bulkGenerationResultService,
+            MePlanService mePlanService,
+            int maxTopics,
+            int throttleDelayMs
+    ) {
+        this(
+                noteGenerationService,
+                noteService,
+                studyPackService,
+                llmStudyPackService,
+                contentModerationService,
+                generationContextResolver,
+                taskDispatcher,
+                userRepository,
+                new CourseProgramCatalogRepository(null),
+                onboardingGuardService,
+                bulkGenerationResultService,
+                mePlanService,
+                maxTopics,
+                throttleDelayMs
+        );
     }
 
     public BulkGenerateNotesResponse queueBatch(
@@ -128,15 +174,26 @@ public class NoteBulkGenerationService {
         AtomicInteger createdCount = new AtomicInteger();
         List<String> failedTopics = new ArrayList<>();
         List<String> quotaBlockedTopics = new ArrayList<>();
+        String resultCourseProgram = null;
 
         try {
-            StudyPackGenerationContext context = generationContextResolver.resolveForBulkGeneration(
-                    ownerUserId,
-                    batch.courseProgram(),
-                    batch.subject(),
-                    batch.domainContext(),
-                    batch.learnerLevel()
-            );
+            StudyPackGenerationContext context = batch.courseProgramIds().isEmpty()
+                    ? generationContextResolver.resolveForBulkGeneration(
+                            ownerUserId,
+                            batch.courseProgramText(),
+                            batch.subject(),
+                            batch.domainContext(),
+                            batch.learnerLevel()
+                    )
+                    : generationContextResolver.resolveForBulkGeneration(
+                            ownerUserId,
+                            batch.courseProgramIds(),
+                            batch.courseProgramText(),
+                            batch.subject(),
+                            batch.domainContext(),
+                            batch.learnerLevel()
+                    );
+            resultCourseProgram = context.courseProgram();
             for (int index = 0; index < batch.items().size(); index++) {
                 BulkGenerationItem item = batch.items().get(index);
                 try {
@@ -175,7 +232,7 @@ public class NoteBulkGenerationService {
                         resultId,
                         ownerUserId,
                         batch.subject(),
-                        batch.courseProgram(),
+                        resultCourseProgram == null ? batch.courseProgramText() : resultCourseProgram,
                         batch.domainContext(),
                         batch.learnerLevel(),
                         batch.targetProfileType().name(),
@@ -216,7 +273,8 @@ public class NoteBulkGenerationService {
                 ? noteGenerationService.generateFromTopic(
                         new GenerateNoteFromTopicRequest(
                                 item.topic(),
-                                batch.courseProgram(),
+                                batch.courseProgramIds(),
+                                batch.courseProgramText(),
                                 batch.domainContext() == null ? null : batch.domainContext().name()
                         ),
                         ownerUserId,
@@ -228,7 +286,8 @@ public class NoteBulkGenerationService {
                 new UpsertNoteRequest(
                         item.topic(),
                         batch.subject(),
-                        batch.courseProgram(),
+                        batch.courseProgramIds(),
+                        batch.courseProgramText(),
                         batch.domainContext() == null ? null : batch.domainContext().name(),
                         batch.learnerLevel() == null ? null : batch.learnerLevel().name(),
                         List.of(),
@@ -306,21 +365,28 @@ public class NoteBulkGenerationService {
 
         boolean isTeacherOrAdmin = owner.getRole() == UserRole.ADMIN
                 || owner.getProfileType() == ProfileType.TEACHER;
-        String courseProgram = isTeacherOrAdmin
-                ? requireText(request.courseProgram(), COURSE_PROGRAM_REQUIRED_MESSAGE)
-                : normalizeOptionalText(owner.getCourseProgram());
-        if (courseProgram != null) {
-            assertMaxLength(courseProgram, MAX_COURSE_PROGRAM_LENGTH, COURSE_PROGRAM_FIELD);
-        }
         NoteTargetProfileType targetProfileType = isTeacherOrAdmin
                 ? requireTargetProfileType(request.targetProfileType())
                 : mapProfileTypeToNoteTargetProfile(owner.getProfileType());
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
+        Set<UUID> courseProgramIds = isTeacherOrAdmin
+                ? validateCuratedProgramIds(request.courseProgramIds())
+                : Set.of();
+        String courseProgramText = isTeacherOrAdmin
+                ? null
+                : requireText(firstNonBlank(request.courseProgramText(), owner.getCourseProgram()), COURSE_PROGRAM_REQUIRED_MESSAGE);
+        if (courseProgramText != null) {
+            assertMaxLength(courseProgramText, MAX_COURSE_PROGRAM_LENGTH, COURSE_PROGRAM_FIELD);
+        }
+        if (courseProgramIds.size() > 1 && domainContext == null) {
+            throw new MultiProgramDomainContextRequiredException();
+        }
 
         return new NormalizedBatch(
                 subject,
-                courseProgram,
+                List.copyOf(courseProgramIds),
+                courseProgramText,
                 domainContext,
                 learnerLevel,
                 targetProfileType,
@@ -339,6 +405,24 @@ public class NoteBulkGenerationService {
 
     private String normalizeOptionalText(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private Set<UUID> validateCuratedProgramIds(List<UUID> requestedIds) {
+        if (requestedIds == null || requestedIds.isEmpty()) {
+            throw new CourseProgramSelectionRequiredException();
+        }
+        Set<UUID> uniqueIds = new LinkedHashSet<>(requestedIds);
+        if (uniqueIds.size() != requestedIds.size()) {
+            throw new DuplicateCourseProgramException();
+        }
+        if (courseProgramCatalogRepository.findExistingIds(uniqueIds).size() != uniqueIds.size()) {
+            throw new UnknownCourseProgramException();
+        }
+        return uniqueIds;
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        return primary != null && !primary.isBlank() ? primary : fallback;
     }
 
     private NoteTargetProfileType requireTargetProfileType(NoteTargetProfileType targetProfileType) {
@@ -383,7 +467,8 @@ public class NoteBulkGenerationService {
 
     private record NormalizedBatch(
             String subject,
-            String courseProgram,
+            List<UUID> courseProgramIds,
+            String courseProgramText,
             DomainContext domainContext,
             LearnerLevel learnerLevel,
             NoteTargetProfileType targetProfileType,

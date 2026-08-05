@@ -97,9 +97,9 @@ class NoteServiceTest {
     @Mock
     private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     @Mock
-    private NoteApplicableProgramsMaintenanceService noteApplicableProgramsMaintenanceService;
-    @Mock
     private NoteCourseProgramRepository noteCourseProgramRepository;
+    @Mock
+    private com.studysnap.backend.repository.CourseProgramCatalogRepository courseProgramCatalogRepository;
     private NoteService noteService;
 
     @BeforeEach
@@ -118,8 +118,8 @@ class NoteServiceTest {
                 contentModerationService,
                 onboardingGuardService,
                 officialChallengeQuizTemplateService,
-                noteApplicableProgramsMaintenanceService,
-                noteCourseProgramRepository
+                noteCourseProgramRepository,
+                courseProgramCatalogRepository
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
@@ -210,7 +210,6 @@ class NoteServiceTest {
         assertThat(created.copiedFromUserId()).isNull();
         assertThat(created.copiedFromPublic()).isFalse();
         verify(noteRepository).flush();
-        verify(noteApplicableProgramsMaintenanceService).seedDerivedSet(saved.getId(), "Computer Science");
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.NOTE_CREATED), eq(saved.getId()), any());
     }
 
@@ -318,7 +317,7 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "Board note",
                 "Subject",
-                null,
+                "Nursing",
                 null,
                 null,
                 List.of(),
@@ -341,7 +340,7 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "Professional note",
                 "Subject",
-                null,
+                "Nursing",
                 null,
                 null,
                 List.of(),
@@ -477,7 +476,7 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "Cell note",
                 " biology-cell division ",
-                null,
+                "Nursing",
                 null,
                 null,
                 List.of(),
@@ -565,41 +564,6 @@ class NoteServiceTest {
     }
 
     @Test
-    void update_rederivesApplicableProgramsWhenPreEditSetWasDerived() {
-        UUID ownerUserId = UUID.randomUUID();
-        UUID noteId = UUID.randomUUID();
-        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
-        note.setCourseProgram("Nursing");
-        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
-        when(noteApplicableProgramsMaintenanceService.isDerivedSet(noteId, "Nursing")).thenReturn(true);
-        UpsertNoteRequest request = new UpsertNoteRequest(
-                "Title", "Subject", "Pharmacy", null, null, List.of(), null, "content"
-        );
-
-        noteService.update(noteId.toString(), request, ownerUserId);
-
-        verify(noteRepository).flush();
-        verify(noteApplicableProgramsMaintenanceService).replaceWithDerivedSet(noteId, "Pharmacy");
-    }
-
-    @Test
-    void update_preservesCuratedApplicableProgramsWhenLegacyStringChanges() {
-        UUID ownerUserId = UUID.randomUUID();
-        UUID noteId = UUID.randomUUID();
-        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
-        note.setCourseProgram("Nursing");
-        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
-        when(noteApplicableProgramsMaintenanceService.isDerivedSet(noteId, "Nursing")).thenReturn(false);
-        UpsertNoteRequest request = new UpsertNoteRequest(
-                "Title", "Subject", "Pharmacy", null, null, List.of(), null, "content"
-        );
-
-        noteService.update(noteId.toString(), request, ownerUserId);
-
-        verify(noteApplicableProgramsMaintenanceService, never()).replaceWithDerivedSet(any(), any());
-    }
-
-    @Test
     void update_setsAndExplicitlyClearsAuthoringAxes() {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -626,6 +590,24 @@ class NoteServiceTest {
         assertThat(draftNote.getLearnerLevel()).isNull();
         assertThat(clearedResponse.domainContext()).isNull();
         assertThat(clearedResponse.learnerLevel()).isNull();
+    }
+
+    @Test
+    void update_byLearnerOwner_preservesJoinRowsInheritedFromACopy() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity copiedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(copiedNote));
+
+        // A learner never authors join rows, but a note copied from curated content inherits them.
+        // Clearing them on a learner save would destroy every inherited program during an unrelated
+        // title fix -- which is exactly what copy inheritance exists to prevent.
+        UpsertNoteRequest titleOnlyEdit = new UpsertNoteRequest(
+                "Corrected title", "Subject", "Course", null, null, List.of("tag"), null, "content"
+        );
+        noteService.update(noteId.toString(), titleOnlyEdit, ownerUserId);
+
+        verify(noteCourseProgramRepository, never()).replace(any(), any());
     }
 
     @Test

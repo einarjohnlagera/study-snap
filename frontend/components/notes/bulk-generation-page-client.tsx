@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
+import { ApplicableProgramsCombobox } from "@/components/metadata/applicable-programs-combobox";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { AppModal } from "@/components/ui/app-modal";
@@ -16,10 +17,12 @@ import {
   ApiRequestError,
   bulkGenerateNotes,
   getMe,
+  getCourseProgramCatalog,
   getMyPlan,
   listCoursePrograms,
   listSubjects,
   type BulkGenerateNotesRequest,
+  type CourseProgramCatalogItem,
   type DomainContext,
   type LearnerLevel,
   type NoteTargetProfileType,
@@ -58,6 +61,11 @@ export function BulkGenerationPageClient() {
   const nextTopicId = useRef(2);
   const [subject, setSubject] = useState("");
   const [courseProgram, setCourseProgram] = useState("");
+  const [courseProgramIds, setCourseProgramIds] = useState<string[]>([]);
+  const [courseProgramCatalog, setCourseProgramCatalog] = useState<CourseProgramCatalogItem[]>([]);
+  const [courseProgramCatalogLoading, setCourseProgramCatalogLoading] = useState(false);
+  const [courseProgramCatalogError, setCourseProgramCatalogError] = useState<string | null>(null);
+  const [courseProgramCatalogRetry, setCourseProgramCatalogRetry] = useState(0);
   const [domainContext, setDomainContext] = useState<DomainContext | "">("");
   const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("");
   const [targetProfileType, setTargetProfileType] = useState<NoteTargetProfileType | "">(
@@ -121,9 +129,7 @@ export function BulkGenerationPageClient() {
         courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : [],
       );
       if (meResult.status === "fulfilled") {
-        if (isTeacherOrAdmin) {
-          setCourseProgram((current) => current || meResult.value.courseProgram || "");
-        }
+        setCourseProgram((current) => current || meResult.value.courseProgram || "");
       }
       if (!isAdmin && planResult.status === "fulfilled" && planResult.value) {
         const noteGenRemaining = planResult.value.remaining.noteGenerationsRemaining;
@@ -143,6 +149,36 @@ export function BulkGenerationPageClient() {
     };
   }, [isAdmin, isTeacherOrAdmin]);
 
+  useEffect(() => {
+    if (!isTeacherOrAdmin) {
+      return;
+    }
+    let active = true;
+    setCourseProgramCatalogLoading(true);
+    setCourseProgramCatalogError(null);
+    void getCourseProgramCatalog()
+      .then((catalog) => {
+        if (active) setCourseProgramCatalog(catalog);
+      })
+      .catch((catalogError) => {
+        if (active) setCourseProgramCatalogError(catalogError instanceof Error ? catalogError.message : "Could not load course programs.");
+      })
+      .finally(() => {
+        if (active) setCourseProgramCatalogLoading(false);
+      });
+    return () => { active = false; };
+  }, [courseProgramCatalogRetry, isTeacherOrAdmin]);
+
+  useEffect(() => {
+    if (!isTeacherOrAdmin || courseProgramIds.length > 0 || !courseProgram.trim()) {
+      return;
+    }
+    const matchingProgram = courseProgramCatalog.find((program) => program.name === courseProgram.trim());
+    if (matchingProgram) {
+      setCourseProgramIds([matchingProgram.id]);
+    }
+  }, [courseProgram, courseProgramCatalog, courseProgramIds.length, isTeacherOrAdmin]);
+
   const validate = (): string | null => {
     if (!subject.trim()) {
       return "Enter a subject for this batch.";
@@ -157,8 +193,14 @@ export function BulkGenerationPageClient() {
       const excess = normalizedTopics.length - quota.noteGenRemaining;
       return `You have ${quota.noteGenRemaining} topic note${quota.noteGenRemaining === 1 ? "" : "s"} left this cycle. Remove ${excess} topic${excess === 1 ? "" : "s"} to continue.`;
     }
-    if (isTeacherOrAdmin && !courseProgram.trim()) {
+    if (isTeacherOrAdmin && courseProgramIds.length === 0) {
+      return "Choose at least one course or program for this batch.";
+    }
+    if (!isTeacherOrAdmin && !courseProgram.trim()) {
       return "Enter a course or program for this batch.";
+    }
+    if (isTeacherOrAdmin && courseProgramIds.length > 1 && !domainContext) {
+      return "A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in.";
     }
     if (isTeacherOrAdmin && !targetProfileType) {
       return "Select a target audience for this batch.";
@@ -250,12 +292,12 @@ export function BulkGenerationPageClient() {
       makePublic,
       ...(isTeacherOrAdmin
         ? {
-            courseProgram: courseProgram.trim(),
+            courseProgramIds,
             domainContext: domainContext || null,
             learnerLevel: learnerLevel || null,
             targetProfileType: targetProfileType as NoteTargetProfileType,
           }
-        : {}),
+        : { courseProgramText: courseProgram.trim() }),
     };
 
     setSubmitting(true);
@@ -337,17 +379,34 @@ export function BulkGenerationPageClient() {
             {isTeacherOrAdmin ? (
               <div className="space-y-2">
                 <label htmlFor="bulk-course-program" className="text-sm font-medium text-foreground">
-                  Course / Program <span className="text-red-500" aria-hidden="true">*</span>
+                  Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
+                </label>
+                <p className="text-xs text-foreground/60">
+                  Choose one or more programs this note applies to. Adding multiple programs lets one note serve several curricula instead of creating duplicates.
+                </p>
+                <ApplicableProgramsCombobox
+                  id="bulk-course-program"
+                  catalog={courseProgramCatalog}
+                  selectedIds={courseProgramIds}
+                  onChange={setCourseProgramIds}
+                  loading={courseProgramCatalogLoading}
+                  error={courseProgramCatalogError}
+                  onRetry={() => setCourseProgramCatalogRetry((value) => value + 1)}
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label htmlFor="bulk-course-program" className="text-sm font-medium text-foreground">
+                  Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
                 </label>
                 <CourseProgramCombobox
                   id="bulk-course-program"
                   value={courseProgram}
                   suggestions={courseProgramSuggestions}
                   onChange={setCourseProgram}
-                  context="note"
                 />
               </div>
-            ) : null}
+            )}
 
             {isTeacherOrAdmin ? (
               <div className="space-y-2">
@@ -374,7 +433,7 @@ export function BulkGenerationPageClient() {
             {isTeacherOrAdmin ? (
               <div className="space-y-2">
                 <label htmlFor="bulk-domain-context" className="text-sm font-medium text-foreground">
-                  Domain Context (optional)
+                  Domain Context {courseProgramIds.length > 1 ? <span className="text-red-500" aria-hidden="true">*</span> : "(optional)"}
                 </label>
                 <select
                   id="bulk-domain-context"
@@ -388,7 +447,9 @@ export function BulkGenerationPageClient() {
                   ))}
                 </select>
                 <p className="text-xs text-foreground/60">
-                  Controls the AI&apos;s academic domain and framing for every note in this batch.
+                  {courseProgramIds.length > 1
+                    ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
+                    : "Required when this note applies to more than one program."}
                 </p>
               </div>
             ) : null}

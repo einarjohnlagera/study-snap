@@ -11,6 +11,8 @@ Primary surfaces:
 - Public Note Detail
 - Public Profile note list
 
+Public Note Detail uses the same single Course / Program(s) viewer as private Note Detail: one program is named directly; several render `Applicable to N programs` and reveal the explicit program list. It never implies a primary program.
+
 ## Public Note Rules
 
 - a note is public only when `visibility=PUBLIC`

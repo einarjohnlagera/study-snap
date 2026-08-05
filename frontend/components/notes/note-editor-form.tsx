@@ -384,9 +384,10 @@ export function NoteEditorForm({
                 </div>
             </div>
 
+            {!showAuthoringMetadataFields ? (
             <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                    <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program <span className="text-red-500" aria-hidden="true">*</span></label>
+                    <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span></label>
                     <CourseProgramCombobox
                         id="note-course-program"
                         value={note.courseProgram}
@@ -398,6 +399,7 @@ export function NoteEditorForm({
                 </div>
 
             </div>
+            ) : null}
 
             {showTargetProfileTypeField || showAuthoringMetadataFields ? (
                 <fieldset className="space-y-4 rounded-xl border border-border/80 bg-muted/15 p-4">
@@ -431,15 +433,11 @@ export function NoteEditorForm({
                             <>
                                 <div className="space-y-2 sm:col-span-2">
                                     <label htmlFor="note-applicable-programs" className="text-sm font-medium text-foreground">
-                                        Applicable Programs
+                                        Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
                                     </label>
-                                    {/* This helper is doing the real work: it explains why the Course /
-                                        Program value reappears here, which is the exact moment authors
-                                        ask whether these are the same field. */}
                                     <p className="text-xs text-foreground/60">
-                                        Every program whose learners should discover this note. It starts from your
-                                        Course / Program above — add others so one note can serve several curricula
-                                        instead of being duplicated for each.
+                                        Choose one or more programs this note applies to. Adding multiple programs lets one
+                                        note serve several curricula instead of creating duplicates.
                                     </p>
                                     <ApplicableProgramsCombobox
                                         id="note-applicable-programs"
@@ -454,7 +452,7 @@ export function NoteEditorForm({
                                 </div>
                                 <div className="space-y-2">
                                     <label htmlFor="note-domain-context" className="text-sm font-medium text-foreground">
-                                        Domain Context (optional)
+                                        Domain Context {applicableProgramIds.length > 1 ? <span className="text-red-500" aria-hidden="true">*</span> : "(optional)"}
                                     </label>
                                     <select
                                         id="note-domain-context"
@@ -469,8 +467,9 @@ export function NoteEditorForm({
                                         ))}
                                     </select>
                                     <p className="text-xs text-foreground/60">
-                                        Sets the academic domain this note is written in. An Algebra note authored as
-                                        Engineering Mathematics reads differently from one authored as General Education.
+                                        {applicableProgramIds.length > 1
+                                            ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
+                                            : "Required when this note applies to more than one program."}
                                     </p>
                                 </div>
 

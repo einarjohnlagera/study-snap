@@ -9,6 +9,7 @@ import { PublicLibraryBackLink } from "@/components/notes/public-library-back-li
 import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
 import { PublicNoteAuthorCard } from "@/components/notes/public-note-author-card";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
+import { CourseProgramsViewer } from "@/components/metadata/course-programs-viewer";
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
@@ -130,6 +131,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
   const fullContentBlocks = splitPublicNoteBlocks(note.content);
   const fullContent = fullContentBlocks.length > 0 ? fullContentBlocks : ["No content yet."];
   const tags = note.tags.map((tag) => normalizePublicNoteText(tag)).filter((tag) => tag.length > 0);
+  const coursePrograms = note.coursePrograms ?? [];
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -184,6 +186,8 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
 
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/70 sm:text-base">{hook}</p>
+
+            <CourseProgramsViewer programs={coursePrograms} />
 
             <PublicNoteAuthorLine
               ownerUserId={note.ownerUserId}

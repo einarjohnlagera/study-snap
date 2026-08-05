@@ -23,7 +23,6 @@ import {
   isOcrLimitReachedError,
   listCoursePrograms,
   listSubjects,
-  replaceNoteApplicablePrograms,
   type CourseProgramCatalogItem,
   type DomainContext,
   type LearnerLevel,
@@ -103,14 +102,6 @@ type PendingSuggestion = {
 function normalizeOptional(value: string): string | null {
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
-}
-
-function resolveDerivedApplicableProgramId(
-  catalog: CourseProgramCatalogItem[],
-  courseProgram: string,
-): string | null {
-  const catalogName = courseProgram === "Bsed" ? "Education" : courseProgram;
-  return catalog.find((program) => program.name === catalogName)?.id ?? null;
 }
 
 function toDraft(note: NoteResponse): NoteEditorDraft {
@@ -265,7 +256,7 @@ export function NoteEditorPageClient({
       .catch((error) => {
         if (active) {
           setApplicableProgramsError(
-            error instanceof Error ? error.message : "Could not load Applicable Programs.",
+            error instanceof Error ? error.message : "Could not load course programs.",
           );
         }
       })
@@ -278,16 +269,6 @@ export function NoteEditorPageClient({
       active = false;
     };
   }, [applicableProgramsRetryToken, noteId, showTargetProfileTypeField]);
-
-  useEffect(() => {
-    if (isEditMode || applicableProgramsDirty || applicableProgramCatalog.length === 0) {
-      return;
-    }
-    const derivedId = resolveDerivedApplicableProgramId(applicableProgramCatalog, draft.courseProgram);
-    const derivedIds = derivedId ? [derivedId] : [];
-    setApplicableProgramIds(derivedIds);
-    setSavedApplicableProgramIds(derivedIds);
-  }, [applicableProgramCatalog, applicableProgramsDirty, draft.courseProgram, isEditMode]);
 
   useEffect(() => {
     if (!toastMessage) {
@@ -683,7 +664,9 @@ export function NoteEditorPageClient({
       }
     }
     const missing: string[] = [];
-    if (!resolvedCourseProgram) missing.push("Course / Program");
+    if (showTargetProfileTypeField ? applicableProgramIds.length === 0 : !resolvedCourseProgram) {
+      missing.push("Course / Program(s)");
+    }
     if (missing.length > 0) {
       setRevealOptionalDetailsSignal((previous) => previous + 1);
       showToast(`Please complete: ${missing.join(", ")}.`, "warning");
@@ -692,7 +675,8 @@ export function NoteEditorPageClient({
     return {
       title: normalizeOptional(draft.title),
       subject: normalizeOptional(draft.subject),
-      courseProgram: resolvedCourseProgram,
+      courseProgramText: showTargetProfileTypeField ? null : resolvedCourseProgram,
+      courseProgramIds: showTargetProfileTypeField ? applicableProgramIds : [],
       domainContext: draft.domainContext || null,
       learnerLevel: draft.learnerLevel || null,
       tags: draft.tags,
@@ -712,6 +696,8 @@ export function NoteEditorPageClient({
     resolveTargetProfileType,
     setRevealOptionalDetailsSignal,
     showToast,
+    showTargetProfileTypeField,
+    applicableProgramIds,
   ]);
 
   const upsertNote = useCallback(async (): Promise<NoteResponse | null> => {
@@ -728,25 +714,9 @@ export function NoteEditorPageClient({
       ? await updateNote(currentNoteId, payload)
       : await createNote(payload);
 
-    if (showTargetProfileTypeField && applicableProgramsDirty && !applicableProgramsError) {
-      try {
-        const savedPrograms = await replaceNoteApplicablePrograms(saved.id, applicableProgramIds);
-        const savedIds = savedPrograms.map((program) => program.id);
-        setApplicableProgramIds(savedIds);
-        setSavedApplicableProgramIds(savedIds);
-        setApplicableProgramsDirty(false);
-      } catch (error) {
-        const fallbackIds = currentNoteId
-          ? savedApplicableProgramIds
-          : (() => {
-            const derivedId = resolveDerivedApplicableProgramId(applicableProgramCatalog, saved.courseProgram ?? "");
-            return derivedId ? [derivedId] : [];
-          })();
-        setApplicableProgramIds(fallbackIds);
-        setSavedApplicableProgramIds(fallbackIds);
-        setApplicableProgramsDirty(false);
-        throw error;
-      }
+    if (showTargetProfileTypeField) {
+      setSavedApplicableProgramIds(applicableProgramIds);
+      setApplicableProgramsDirty(false);
     }
 
     setCurrentNoteId(saved.id);
@@ -754,14 +724,12 @@ export function NoteEditorPageClient({
     setStudyPackStatus(saved.studyPackStatus ?? "DRAFT");
     return saved;
   }, [
-    applicableProgramCatalog,
     applicableProgramIds,
     applicableProgramsDirty,
     applicableProgramsError,
     buildRequest,
     contentEmpty,
     currentNoteId,
-    savedApplicableProgramIds,
     showTargetProfileTypeField,
     showToast,
   ]);
@@ -964,7 +932,8 @@ export function NoteEditorPageClient({
       const updated = await updateNote(pendingSuggestion.noteId, {
         title: nextMetadata.title,
         subject: nextMetadata.subject,
-        courseProgram: normalizeOptional(draft.courseProgram),
+        courseProgramText: showTargetProfileTypeField ? null : normalizeOptional(draft.courseProgram),
+        courseProgramIds: showTargetProfileTypeField ? applicableProgramIds : [],
         domainContext: draft.domainContext || null,
         learnerLevel: draft.learnerLevel || null,
         tags: nextMetadata.tags,
@@ -1047,13 +1016,38 @@ export function NoteEditorPageClient({
     }
 
     const isReplacingContent = draft.content.trim().length > 0;
+    if (showTargetProfileTypeField && applicableProgramIds.length === 0) {
+      const message = "Please complete: Course / Program(s).";
+      setFormError(message);
+      showToast(message, "warning");
+      return;
+    }
+    if (showTargetProfileTypeField && applicableProgramIds.length > 1 && !draft.domainContext) {
+      const message = "A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in.";
+      setFormError(message);
+      showToast(message, "warning");
+      return;
+    }
     setIsGeneratingNote(true);
     setFormError(null);
     try {
       const resolvedCourseProgram = resolveGenerateFromTopicCourseProgram(draft.courseProgram, profileCourseProgram);
       let response;
+      const selectedProgramIds = showTargetProfileTypeField ? applicableProgramIds : undefined;
       if (draft.domainContext) {
-        response = await generateNoteFromTopic(normalizedTopic, resolvedCourseProgram, draft.domainContext);
+        response = await generateNoteFromTopic(
+          normalizedTopic,
+          showTargetProfileTypeField ? undefined : resolvedCourseProgram,
+          draft.domainContext,
+          selectedProgramIds,
+        );
+      } else if (showTargetProfileTypeField && selectedProgramIds?.length) {
+        response = await generateNoteFromTopic(
+          normalizedTopic,
+          undefined,
+          undefined,
+          selectedProgramIds,
+        );
       } else if (resolvedCourseProgram) {
         response = await generateNoteFromTopic(normalizedTopic, resolvedCourseProgram);
       } else {
@@ -1103,6 +1097,8 @@ export function NoteEditorPageClient({
     currentPlan,
     draft.courseProgram,
     draft.domainContext,
+    applicableProgramIds,
+    showTargetProfileTypeField,
     openLockedFeaturePaywall,
     profileCourseProgram,
     refreshUsageSummary,

@@ -109,7 +109,7 @@ export function ApplicableProgramsCombobox({
         disabled={controlDisabled}
         context="note"
         allowCustom={false}
-        ariaLabel="Add an applicable program"
+        ariaLabel="Add a course or program"
       />
       {error ? (
         <div className="flex flex-wrap items-center gap-2 text-xs text-red-600 dark:text-red-400">
@@ -137,7 +137,7 @@ export function ApplicableProgramsCombobox({
         </div>
       ) : null}
       {!error && !loading ? (
-        <div className="flex min-h-8 flex-wrap gap-2" aria-label="Selected applicable programs">
+        <div className="flex min-h-8 flex-wrap gap-2" aria-label="Selected course programs">
           {selectedPrograms.length > 0 ? selectedPrograms.map((program) => (
             <span
               key={program.id}
@@ -155,12 +155,12 @@ export function ApplicableProgramsCombobox({
               </button>
             </span>
           )) : (
-            <span className="text-xs text-foreground/55">No applicable programs selected.</span>
+            <span className="text-xs text-foreground/55">No course programs selected.</span>
           )}
         </div>
       ) : null}
       <p className="text-xs text-foreground/60">
-        Discovery only. These programs never affect Study Pack generation.
+        These programs decide who finds the note; they never affect Study Pack generation.
       </p>
     </div>
   );

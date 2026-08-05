@@ -360,8 +360,8 @@ class NoteServiceListProjectionIntegrationTest {
                 contentModerationService,
                 onboardingGuardService,
                 mock(OfficialChallengeQuizTemplateService.class),
-                mock(NoteApplicableProgramsMaintenanceService.class),
-                mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class)
+                mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class),
+                mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class)
         );
     }
 }
