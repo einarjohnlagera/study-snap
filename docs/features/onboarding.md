@@ -106,6 +106,16 @@ both paths at *Generate Study Pack* — so fixing one is not enough. Regression 
 `app/onboarding/page.test.tsx` asserts both call payloads exactly; `NoteGenerationServiceTest` and
 `NoteServiceTest` cover the request-supplies-it / profile-has-none shape on the backend.
 
+**Nobody curates during onboarding.** Both note-authoring entry points treat a user as a **learner** while
+`onboardingCompletedAt` is null, regardless of role or profile type — `NoteService.isTeacherSelectableOwner` and
+`NoteGenerationService.isCurator` both return false in that window. Onboarding collects personal learning context
+and has no catalog picker, so a curator-role account taking the curator branch here would be asked for
+`courseProgramIds` that no onboarding screen can supply; before this rule, onboarding was uncompletable for every
+ADMIN account. **This grants no less authority than before** — a completed curator account is entirely unchanged,
+and scope-guard tests assert that an onboarded ADMIN still authors through the catalog. It mirrors the exemption
+`OnboardingGuardService.assertProfileComplete` already makes for mid-onboarding users. Do not "tidy" either
+predicate back to a bare role check.
+
 Step 3 cannot be reached with a blank `Course / Program`: `canContinueFromStepTwo` gates the only entry into it,
 draft hydration fills the field from the profile but never clears it, and the input renders only on Step 2.
 
