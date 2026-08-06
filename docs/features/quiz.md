@@ -126,6 +126,15 @@ Shared quiz items support these active formats:
 - `MULTI_SELECT` — 4 choices, `correctIndices` contains 2–3 correct indexes
 - `MATCHING` — 2–4 consecutive single-correct items share the same 4-choice option set through `questionGroup`
 
+IDENTIFICATION rules — **the answer's form, not the subject, decides validity**:
+
+- IDENTIFICATION answers are graded by **exact normalized string equality** (trim, collapse whitespace, lowercase). There is no maths-, chemistry- or code-aware comparison anywhere in the grader.
+- So the answer must be a **term, name, or label a learner can type unambiguously in words**. `MCQ` is the correct format whenever the answer is a **symbolic or notational form** — a mathematical expression or equation, a chemical formula, a code snippet, or a value with units — because those have many equally-correct renderings (`x^2 + y^2`, `x² + y²`, `y² + x²`) and none of them string-match each other.
+- **A formula's *name* is a valid answer; the formula *itself* is not.** "Which law states that force equals mass times acceleration?" → `Newton's Second Law` is valid. "Identify the equation for Newton's Second Law" → `F = ma` is not.
+- This holds for **every subject**. "Identify the chemical formula for water" and "Identify the expression that reverses a list" are as invalid as the algebraic case.
+- `acceptableAnswers[0]` must be the exact thing the stem asks for. **Restating the stem is not an answer** — for "Identify the algebraic expression for the sum of the squares of x and y", `"sum of squares"` merely repeats the question.
+- Enforced in two places, deliberately: the Challenge Quiz prompt states the rule, and `QuizValidationUtils.isFormatStemMismatch` rejects the question when the model ignores it. The guard exists because prompt compliance cannot be tested deterministically — this defect shipped, and two independent generations produced the identical bad question.
+
 True/False rules:
 
 - `TRUE_FALSE` is only for a single declarative statement that the learner judges true or false.
