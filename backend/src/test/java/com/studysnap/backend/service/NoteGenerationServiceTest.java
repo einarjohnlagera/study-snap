@@ -199,6 +199,34 @@ class NoteGenerationServiceTest {
     }
 
     @Test
+    void generateFromTopic_acceptsRequestCourseProgramWhenProfileHasNone() {
+        // Onboarding's first generation runs before the profile course/program is persisted, so the
+        // request is the only source. Every other course/program test here gives the user a profile
+        // value, which is why none of them caught the learner branch throwing on this exact shape and
+        // making onboarding a dead end for every new user (finding B0).
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(llmStudyPackService.generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(StudyPackGenerationContext.class)
+        )).thenReturn("Generated note content");
+
+        noteGenerationService.generateFromTopic(
+                new GenerateNoteFromTopicRequest("Newton's Laws of Motion", "AWS Certification", null),
+                userId
+        );
+
+        ArgumentCaptor<StudyPackGenerationContext> contextCaptor = ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(llmStudyPackService).generateNoteFromTopic(org.mockito.ArgumentMatchers.any(), contextCaptor.capture());
+        assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("AWS Certification");
+    }
+
+    @Test
     void generateFromTopic_fallsBackToProfileCourseProgramWhenRequestCourseProgramIsBlank() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();

@@ -863,7 +863,7 @@ export default function OnboardingPage() {
     });
 
     try {
-      const generated = await generateNoteFromTopic(draft.topic.trim());
+      const generated = await generateNoteFromTopic(draft.topic.trim(), draft.courseProgram.trim());
       setNote(null);
       setDraft((previous) => ({
         ...previous,
@@ -912,6 +912,7 @@ export default function OnboardingPage() {
     try {
       const createdNote = await createNote({
         title: selectedInputMethod === "generate" ? draft.topic.trim() : null,
+        courseProgramText: draft.courseProgram.trim() || null,
         domainContext: null,
         learnerLevel: null,
         targetProfileType: mapProfileTypeToNoteTargetProfile(profileType),

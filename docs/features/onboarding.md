@@ -94,6 +94,21 @@ Teacher Learner Level helper copy frames the field as the default quiz difficult
 
 Board Taker also gets an inline optional `Exam Date` field on this step.
 
+**The Step 2 `Course / Program` must be sent on both Step 3 note calls** — as `courseProgramText` on `createNote`
+and as the `courseProgram` argument to `generateNoteFromTopic`. It is not optional on either. The learner branch
+of both `NoteGenerationService.resolveAuthoringContext` and `NoteService.resolveRequestedCourseProgram` throws
+`CourseProgramSelectionRequiredException` when the request omits the program and the profile has none, and
+onboarding does not persist the profile value until Step 5 — so the collected value is the *only* source at
+Step 3. Omitting it from either call makes onboarding a dead end: the account receives *"Choose at least one
+course or program."* on a screen with no such field, and can never reach the dashboard. The two calls fail
+independently — `generateNoteFromTopic` breaks the generate path at the *Generate* button, `createNote` breaks
+both paths at *Generate Study Pack* — so fixing one is not enough. Regression coverage:
+`app/onboarding/page.test.tsx` asserts both call payloads exactly; `NoteGenerationServiceTest` and
+`NoteServiceTest` cover the request-supplies-it / profile-has-none shape on the backend.
+
+Step 3 cannot be reached with a blank `Course / Program`: `canContinueFromStepTwo` gates the only entry into it,
+draft hydration fills the field from the profile but never clears it, and the input renders only on Step 2.
+
 #### Practice-first Board Taker branch
 
 After a Board Taker submits the required learner level and course/program, onboarding checks the

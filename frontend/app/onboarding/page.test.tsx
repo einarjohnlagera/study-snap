@@ -578,9 +578,15 @@ describe("OnboardingPage", () => {
     expect(screen.getByRole("button", { name: "Go to Dashboard" })).toHaveClass("bg-transparent");
     fireEvent.click(studyPackButton);
 
-    expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion");
+    // Both calls must carry the Step 2 Course / Program. The learner branch of both
+    // NoteGenerationService.resolveAuthoringContext and NoteService.resolveRequestedCourseProgram
+    // throws CourseProgramSelectionRequiredException when the request omits it and the profile has
+    // none — and onboarding only persists the profile value at Step 5, after both calls. Omitting it
+    // here made onboarding a dead end for every new user (finding B0).
+    expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion", "AWS Certification");
     expect(createNote).toHaveBeenCalledWith({
       title: "Newton's Laws of Motion",
+      courseProgramText: "AWS Certification",
       // Explicit nulls, not omissions: UpsertNoteRequest requires both authoring axes so a caller
       // cannot silently drop them (PUT is a full replace and omission persists as null).
       domainContext: null,
