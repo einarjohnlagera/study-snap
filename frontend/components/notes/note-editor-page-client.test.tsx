@@ -867,6 +867,48 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByText("No course programs selected.")).not.toBeInTheDocument();
   });
 
+  // C5. The sticky bar read `resolvedCourseProgram` -- the LEARNER free-text axis. For a curator that is
+  // empty by design (the backend nulls it) so it fell back to the PROFILE program, and the bar claimed
+  // "Tailored for: Software Engineering" while zero programs were selected. The "Add details" nag was
+  // gated on the same value, so it stayed hidden too: both signals said a required field was done, and
+  // Save then failed on exactly that field.
+  it("does not claim a curator note is tailored to the profile program when no programs are selected", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([]);
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: null, courseProgram: "Software Engineering" });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByRole("button", { name: "Add details" });
+
+    expect(screen.queryByText(/Tailored for: Software Engineering/)).not.toBeInTheDocument();
+  });
+
+  // C6. Save was the only one of four surfaces not pre-validating the multi-program rule, so a curator
+  // who family-expanded with "Add details" collapsed -- the default -- got a raw 400 naming a field
+  // inside the closed accordion. Reveal it and never send the request.
+  it("blocks Save on several programs with no Domain Context instead of letting the API reject it", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([]);
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.change(await screen.findByLabelText("Content"), {
+      target: { value: "Some note content long enough to save." },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+    // Profile pre-fills Nursing; adding Pharmacy makes it a multi-program note with no Domain Context.
+    fireEvent.change(await screen.findByLabelText("Add a course or program"), { target: { value: "Pharmacy" } });
+    expect(await screen.findByRole("button", { name: "Remove Pharmacy" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
+    // Curators must pick an audience; buildRequest returns early without it, before the rule under test.
+    fireEvent.change(screen.getByLabelText("Who is this note for?"), { target: { value: "STUDENT" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    expect(await screen.findAllByText(/needs a Domain Context/)).not.toHaveLength(0);
+    expect(createNote).not.toHaveBeenCalled();
+  });
+
   it("does not preselect a profile program the catalog does not carry", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
     (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([]);

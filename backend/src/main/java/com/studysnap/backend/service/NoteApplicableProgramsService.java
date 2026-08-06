@@ -97,6 +97,7 @@ public class NoteApplicableProgramsService {
                     note.getTitle(),
                     ownerEmailById.get(note.getOwnerUserId()),
                     note.getCourseProgram(),
+                    note.getDomainContext() == null ? null : note.getDomainContext().name(),
                     programsByNoteId.getOrDefault(note.getId(), List.of())
             ));
         }

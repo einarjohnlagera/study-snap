@@ -1189,8 +1189,11 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<String> listPublicCoursePrograms() {
+        // The legacy half must exclude notes that carry join rows, or a stale personal string publishes a
+        // filter value that returns zero notes. findCourseProgramValuesByVisibility has no such guard,
+        // which is what made the dropdown offer dead chips (C2).
         List<String> values = new ArrayList<>(
-                noteRepository.findCourseProgramValuesByVisibility(NoteVisibility.PUBLIC)
+                noteCourseProgramRepository.findLegacyCourseProgramValuesByVisibility(NoteVisibility.PUBLIC.name())
         );
         values.addAll(noteCourseProgramRepository.findNamesByVisibility(NoteVisibility.PUBLIC.name()));
         return normalizeCoursePrograms(values);
