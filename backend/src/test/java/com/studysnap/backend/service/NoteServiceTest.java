@@ -168,6 +168,38 @@ class NoteServiceTest {
     }
 
     @Test
+    void create_usesRequestCourseProgramWhenOwnerHasNone() {
+        // Onboarding creates its first note before the profile course/program is persisted, so the
+        // request carries the only value. resolveRequestedCourseProgram throws when both are absent,
+        // which made onboarding a dead end for every new user (finding B0). Uses the canonical
+        // constructor rather than the compatibility overload so this exercises the production shape.
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity owner = new UserEntity();
+        owner.setId(ownerUserId);
+        owner.setCourseProgram(null);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Newton's Laws of Motion",
+                null,
+                List.of(),
+                "AWS Certification",
+                null,
+                null,
+                List.of(),
+                null,
+                "content"
+        );
+
+        NoteResponse created = noteService.create(request, ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getCourseProgram()).isEqualTo("AWS Certification");
+        assertThat(created.courseProgram()).isEqualTo("AWS Certification");
+    }
+
+    @Test
     void create_createsDraftPrivateNote() {
         UUID ownerUserId = UUID.randomUUID();
         UserEntity owner = new UserEntity();

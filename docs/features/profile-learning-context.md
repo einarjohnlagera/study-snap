@@ -60,7 +60,10 @@ Teacher Profile also owns one export-specific default outside the learning conte
 - Per-note `courseProgram` takes precedence over the profile default when set.
 - Challenge Quiz, Board Exam, and Adaptive Practice must use the same note-first `courseProgram` resolution as Study Pack generation.
 - Create from Topic accepts an optional `courseProgram` in `GenerateNoteFromTopicRequest`; the current draft Course / Program selected in Create Note must be read at submit time, sent on the first generation request, and used as the domain for the generated note. Fall back to the profile value only when the draft value is blank.
-- When neither is set, the prompt falls back to subject-only context.
+- When neither is set, generation is **rejected**, not degraded: both `POST /notes/generate` and `POST /notes`
+  throw `CourseProgramSelectionRequiredException` on the learner branch. Corrected in `v0.71.0` — this line
+  previously claimed a fall back to subject-only context, which the slice 4 requirement removed. Any caller that
+  can run before the profile value is persisted (onboarding is the one that does) must send the program itself.
 
 **Autocomplete rules:**
 - Suggestions come from `GET /api/course-programs?scope=mine|public`.
