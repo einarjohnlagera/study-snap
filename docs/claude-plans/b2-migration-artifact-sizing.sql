@@ -1,3 +1,18 @@
+-- ============================================================================
+-- CLOSED 2026-08-06 — NO LONGER A GATE. Retained only as a post-deploy check.
+--
+-- This gate closed BY CONSTRUCTION rather than by being run: production never received
+-- note_course_program (V107 ships unreleased; production stopped at V106), so the affected count is 0 --
+-- the owner's pre-set "prevent future divergence, no UI" threshold. The decision is Option 7, prevent the
+-- mechanical derivation, ratified in ADR-001 -> "Representation authority" and shipped as
+-- V108__remove_derived_learner_note_programs.sql, which deletes join rows on learner-owned NON-COPY notes
+-- and preserves curator-authored and copy-inherited rows.
+--
+-- Still useful AFTER deploying V107+V108 together: Query 1's `backfill_derived` must read 0. Any other
+-- value means V108 did not do its job. Note that the queries below describe the pre-V108 world, so their
+-- framing ("this is the decision gate", the thresholds) is historical -- do not re-derive a decision from it.
+-- ============================================================================
+--
 -- B2 / Decision A — sizing the V107 migration artifact. RUN AGAINST PRODUCTION.
 --
 -- This is the DECISION GATE. Owner ruling 2026-08-06: do not choose a fix before knowing the size.

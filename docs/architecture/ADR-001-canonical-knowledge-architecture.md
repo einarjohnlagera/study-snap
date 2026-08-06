@@ -126,6 +126,33 @@ NoteLib has **two authoring modes**, and this is a product distinction rather th
 - **The generation fallback for legacy multi-program notes.** The Domain Context requirement cannot apply retroactively, so a pre-existing multi-program note with no Domain Context resolves its domain through its string. That path must survive any future change to this column.
 - **Catalog-excluded historical values** (bare levels, bare subjects, the `Engineering` family, the owner-ruled `Computer Science` / `Software Engineering`) keep working through the same personal-notes path, which is why nothing needs migrating.
 
+### Representation authority: what may author an Applicable Program row
+
+**Ratified 2026-08-06**, closing pressure-test finding B2 (Decision A). The rule is about **provenance**, not ownership:
+
+> **A learner's personal free-text Course / Program must not be mechanically materialized into a catalog Applicable Program row.**
+
+**This is deliberately narrower than "learner-owned notes cannot carry join rows", and that broader phrasing is wrong.** It would contradict copy inheritance and the standing ruling that ownership must not change the semantics of the metadata model. Learner-owned notes may carry join rows whenever those rows have legitimate curated provenance.
+
+The canonical shapes:
+
+| Shape | `notes.course_program` | `note_course_program` |
+|---|---|---|
+| **Learner-authored personal note** | the program | **no mechanically derived rows** |
+| **Curator-authored note** | null | one or more authored rows |
+| **Curated note copied by a learner** | as copied | inherited rows, preserved as authored metadata |
+
+**Read semantics are identical for all three** and do not consult ownership: *joined programs first when joined programs exist; otherwise the personal program string.* Option 7 therefore does not make the same metadata mean different things depending on who owns it — it prevents one representation from being populated by a source with no authority to author it. A learner's string is that learner's own representation, permanently; materializing it into the curated axis invents metadata nobody authored, and the learner cannot then reach it to correct it.
+
+**A learner-authored note using the personal-string fallback is a canonical, fully supported shape — not a degraded one.** Join rows exist to express curated multi-program applicability. They are not a superior representation of every single-program note, and discovery parity is not a reason to manufacture them.
+
+**Consequences:**
+
+- **`V107`'s unfiltered backfill is corrected by an additive follow-up migration** rather than by editing it, because editing a migration that has already run elsewhere breaks its checksum. Curator rows remain; future inherited rows remain. Shipped as `V108__remove_derived_learner_note_programs.sql`.
+- **No learner-facing Applicable Programs UI**, no `source` provenance column, and no learner-save synchronization. Each was considered and rejected: the first leaks the curator publishing model into personal authoring, the second is schema weight for a population this rule keeps empty, and the third cannot distinguish a mechanically derived row from an inherited curator-authored row when both match the learner's old string — so it can silently delete valid inherited applicability.
+- **Zero affected users strengthens the case for prevention rather than weakening it.** It is not a reason to deploy a deterministic divergence mechanism and monitor the resulting harm.
+- **Any future backfill or bulk process is bound by this rule**, not just `V107`. No runtime path currently derives join rows from the personal string — all writes are curator-authored or copy-inherited — and that must stay true.
+
 ### Programs and Review Sets answer different questions
 
 **Ratified 2026-08-05.** The two surfaces have distinct responsibilities and must not be collapsed:
