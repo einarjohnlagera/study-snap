@@ -564,7 +564,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                     Correct Answer
                   </p>
                   <p className="mt-1 text-sm text-foreground">
-                    {String.fromCharCode(65 + resolveQuizCorrectIndex(question))}. {question.choices[resolveQuizCorrectIndex(question)]}
+                    {String.fromCharCode(65 + resolveQuizCorrectIndex(question))}. {renderMathText(question.choices[resolveQuizCorrectIndex(question)])}
                   </p>
                 </div>
                 <div className="space-y-1">

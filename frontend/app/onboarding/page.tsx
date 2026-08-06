@@ -57,6 +57,7 @@ import {
 } from "@/app/dashboard/dashboard-study-plan-section";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type GenerationSectionKey = "summary" | "concepts" | "quiz";
 type StepName = "profile" | "learning-context" | "input" | "confirm-practice" | "study-pack" | "completion";
@@ -1449,7 +1450,7 @@ export default function OnboardingPage() {
               >
                 {quizPreview ? (
                   <div className="space-y-3">
-                    <p className="font-medium text-foreground">{quizPreview.question}</p>
+                    <p className="font-medium text-foreground">{renderMathText(quizPreview.question)}</p>
                     {quizPreview.choices.length > 0 ? (
                       <ul className="space-y-2">
                         {quizPreview.choices.map((choice, index) => (
@@ -1457,7 +1458,7 @@ export default function OnboardingPage() {
                             key={`${quizPreview.question}-${choice}-${index}`}
                             className="rounded-xl border border-border bg-background px-3 py-2"
                           >
-                            {choice}
+                            {renderMathText(choice)}
                           </li>
                         ))}
                       </ul>

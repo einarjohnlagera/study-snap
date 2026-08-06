@@ -11,7 +11,7 @@ import { QuizIdentificationInput } from "@/components/study-pack/quiz-identifica
 import { QuizEnumerationInput } from "@/components/study-pack/quiz-enumeration-input";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
-import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
+import { hasComputationalWorkingSolution, QuizWorkingSolution, renderMathText } from "@/components/study-pack/quiz-working-solution";
 import type { QuizItem } from "@/lib/api";
 import {
   computeConceptBreakdown,
@@ -427,7 +427,9 @@ export function QuizAnswerReview({
                 <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground/80">
                   <p className="font-medium text-foreground">Explanation</p>
                   <p className="break-words leading-relaxed">
-                    {currentItem.item.explanation?.trim() || "No explanation available for this question."}
+                    {currentItem.item.explanation?.trim()
+                      ? renderMathText(currentItem.item.explanation.trim())
+                      : "No explanation available for this question."}
                   </p>
                   {hasComputationalWorkingSolution(currentItem.item) ? (
                     <QuizWorkingSolution

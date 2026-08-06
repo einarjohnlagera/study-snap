@@ -38,7 +38,7 @@ export function QuizMatchingGroup({
           {choices.map((choice, index) => (
             <li key={`${index}-${choice}`} className="flex gap-2 rounded-md border border-border bg-background px-3 py-2">
               <span className="font-semibold text-foreground">{choiceLabel(index)}.</span>
-              <span className="text-foreground/75">{sanitizeQuizChoiceText(choice)}</span>
+              <span className="text-foreground/75">{renderMathText(sanitizeQuizChoiceText(choice))}</span>
             </li>
           ))}
         </ul>

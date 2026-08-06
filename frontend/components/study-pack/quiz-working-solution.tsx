@@ -44,15 +44,74 @@ function findDelimiterAt(text: string, index: number) {
   return null;
 }
 
-function findNextDelimiterIndex(text: string, fromIndex: number) {
-  let nextIndex = -1;
+/**
+ * A lone `$` is currency, not math. `"What is the cost of $5?"` has a delimiter *start* but no closing
+ * delimiter, and `"Item A costs $5 and item B costs $10"` has two `$` that are not a math span at all —
+ * treating them as one made KaTeX render the middle of the sentence as italic math with the dollar signs
+ * swallowed. Both are routine: Accountancy and Business Administration are seeded programs.
+ *
+ * So `$` opens a span only when the next character is not whitespace, and closes only when the previous
+ * character is not whitespace — the same rule markdown math parsers use. `\(`, `\[` and `$$` are
+ * unambiguous and need only a closing delimiter.
+ */
+function isInlineDollarOpen(text: string, index: number) {
+  const next = text[index + 1];
+  return next !== undefined && !/\s/.test(next);
+}
+
+function findInlineDollarCloseIndex(text: string, fromIndex: number) {
   for (let index = fromIndex; index < text.length; index += 1) {
-    if (findDelimiterAt(text, index)) {
-      nextIndex = index;
-      break;
+    if (text[index] !== "$") {
+      continue;
+    }
+    if (text.startsWith(BLOCK_DOLLAR_DELIMITER.start, index)) {
+      index += 1;
+      continue;
+    }
+    const previous = text[index - 1];
+    if (previous !== undefined && !/\s/.test(previous)) {
+      return index;
     }
   }
-  return nextIndex;
+  return -1;
+}
+
+type MathSpan = {
+  contentEnd: number;
+  contentStart: number;
+  delimiter: MathDelimiter;
+  start: number;
+};
+
+/**
+ * The single source of truth for "is there renderable math here, and where". Both the guard in
+ * `renderMathText` and the tokenizer in `renderWorkingSolution` go through this, so they cannot disagree
+ * about what counts as math — the disagreement between them is what produced the stray-wrapper bug.
+ */
+function findMathSpanFrom(text: string, fromIndex: number): MathSpan | null {
+  for (let index = fromIndex; index < text.length; index += 1) {
+    const delimiter = findDelimiterAt(text, index);
+    if (!delimiter) {
+      continue;
+    }
+    const contentStart = index + delimiter.start.length;
+    if (delimiter === INLINE_DOLLAR_DELIMITER) {
+      if (!isInlineDollarOpen(text, index)) {
+        continue;
+      }
+      const contentEnd = findInlineDollarCloseIndex(text, contentStart);
+      if (contentEnd === -1) {
+        continue;
+      }
+      return { contentEnd, contentStart, delimiter, start: index };
+    }
+    const contentEnd = text.indexOf(delimiter.end, contentStart);
+    if (contentEnd === -1) {
+      continue;
+    }
+    return { contentEnd, contentStart, delimiter, start: index };
+  }
+  return null;
 }
 
 function renderPlainTextSegment(segment: string, key: string) {
@@ -89,14 +148,14 @@ function renderMathSegment(latex: string, delimiter: MathDelimiter, key: string)
  * `break-words` off the element tests assert against. Structure is only added where math exists.
  */
 export function renderMathText(text: string): ReactNode {
-  if (!MATH_DELIMITERS.some((delimiter) => text.includes(delimiter.start))) {
+  if (!findMathSpanFrom(text, 0)) {
     return text;
   }
   return <>{renderWorkingSolution(text)}</>;
 }
 
 export function renderWorkingSolution(text: string): ReactNode[] {
-  if (!MATH_DELIMITERS.some((delimiter) => text.includes(delimiter.start))) {
+  if (!findMathSpanFrom(text, 0)) {
     return [renderPlainTextSegment(text, "plain-0")];
   }
 
@@ -104,30 +163,22 @@ export function renderWorkingSolution(text: string): ReactNode[] {
   let cursor = 0;
   let keyIndex = 0;
   while (cursor < text.length) {
-    const delimiter = findDelimiterAt(text, cursor);
-    if (!delimiter) {
-      const nextDelimiterIndex = findNextDelimiterIndex(text, cursor);
-      const plainEnd = nextDelimiterIndex === -1 ? text.length : nextDelimiterIndex;
-      const plainText = text.slice(cursor, plainEnd);
-      if (plainText) {
-        nodes.push(renderPlainTextSegment(plainText, `plain-${keyIndex}`));
-        keyIndex += 1;
-      }
-      cursor = plainEnd;
-      continue;
-    }
-
-    const contentStart = cursor + delimiter.start.length;
-    const contentEnd = text.indexOf(delimiter.end, contentStart);
-    if (contentEnd === -1) {
+    const span = findMathSpanFrom(text, cursor);
+    if (!span) {
       nodes.push(renderPlainTextSegment(text.slice(cursor), `plain-${keyIndex}`));
       break;
     }
 
-    const latex = text.slice(contentStart, contentEnd);
-    nodes.push(renderMathSegment(latex, delimiter, `math-${keyIndex}`));
+    const plainText = text.slice(cursor, span.start);
+    if (plainText) {
+      nodes.push(renderPlainTextSegment(plainText, `plain-${keyIndex}`));
+      keyIndex += 1;
+    }
+
+    const latex = text.slice(span.contentStart, span.contentEnd);
+    nodes.push(renderMathSegment(latex, span.delimiter, `math-${keyIndex}`));
     keyIndex += 1;
-    cursor = contentEnd + delimiter.end.length;
+    cursor = span.contentEnd + span.delimiter.end.length;
   }
   return nodes;
 }

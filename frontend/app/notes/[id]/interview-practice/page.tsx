@@ -29,6 +29,7 @@ import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type InterviewPhase = "prestart" | "generating" | "running" | "completed" | "forfeited" | "error";
 type ChoiceLetter = "A" | "B" | "C" | "D";
@@ -506,7 +507,7 @@ export default function InterviewPracticePage() {
                 {formatTimer(remainingSeconds)}
               </div>
             </div>
-            <h1 className="text-xl font-semibold leading-relaxed">{currentQuestion.question}</h1>
+            <h1 className="text-xl font-semibold leading-relaxed">{renderMathText(currentQuestion.question)}</h1>
             <div className="space-y-2">
               {currentQuestion.choices.map((choice, index) => {
                 const letter = toChoiceLetter(index);
@@ -523,7 +524,7 @@ export default function InterviewPracticePage() {
                         : "border-border bg-background text-foreground/80 hover:border-foreground/30",
                     )}
                   >
-                    <span className="font-semibold">{letter}.</span> {choice}
+                    <span className="font-semibold">{letter}.</span> {renderMathText(choice)}
                   </button>
                 );
               })}
@@ -542,8 +543,8 @@ export default function InterviewPracticePage() {
                   <span className="inline-flex rounded-full border border-foreground/15 bg-background px-3 py-1 text-xs font-semibold">
                     {critique.verdict === "STRONG" ? "Strong" : critique.verdict === "WORKABLE" ? "Workable" : "Reconsider"}
                   </span>
-                  <p className="text-sm text-foreground/80">{critique.rationale}</p>
-                  <p className="text-sm font-medium text-foreground">{critique.followUp}</p>
+                  <p className="text-sm text-foreground/80">{renderMathText(critique.rationale)}</p>
+                  <p className="text-sm font-medium text-foreground">{renderMathText(critique.followUp)}</p>
                 </div>
                 {isLastQuestion ? (
                   <Button type="button" onClick={() => void handleComplete()} disabled={submittingComplete}>
