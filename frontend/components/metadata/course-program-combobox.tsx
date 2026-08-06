@@ -17,6 +17,12 @@ type CourseProgramComboboxProps = {
   errorText?: string | null;
   allowCustom?: boolean;
   inlineDropdown?: boolean;
+  /**
+   * Pass null to suppress the default helper text. The default says "Choose or type", which is wrong
+   * wherever `allowCustom` is false — and a caller that already explains the field (the curator
+   * multi-select) should not stack a third helper under one input.
+   */
+  helperText?: string | null;
 };
 
 export function CourseProgramCombobox({
@@ -32,7 +38,11 @@ export function CourseProgramCombobox({
   errorText = null,
   allowCustom = true,
   inlineDropdown = false,
+  helperText,
 }: Readonly<CourseProgramComboboxProps>) {
+  const resolvedHelperText = helperText === undefined
+    ? getCourseProgramHelperText(learnerLevel, context)
+    : helperText;
   return (
     <div className="space-y-2">
       <SuggestionCombobox
@@ -43,7 +53,7 @@ export function CourseProgramCombobox({
         ariaLabel={ariaLabel}
         placeholder={allowCustom ? placeholder : "Choose a course/program"}
         disabled={disabled}
-        helperText={getCourseProgramHelperText(learnerLevel, context)}
+        helperText={resolvedHelperText ?? undefined}
         allowCustom={allowCustom}
         toggleLabel="Toggle course program suggestions"
         customOptionLabel="Custom"

@@ -384,22 +384,48 @@ export function NoteEditorForm({
                 </div>
             </div>
 
-            {!showAuthoringMetadataFields ? (
+            {/* Course / Program(s) keeps its original position in the main metadata grid for BOTH
+                authoring modes. This is not a new field — it is the same field gaining several values
+                for curators — so moving it into the gated fieldset would misfile it and disorient
+                returning authors. Only the control differs: learners get one free-text value, curators
+                get a catalog-backed multi-select. */}
             <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                    <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span></label>
-                    <CourseProgramCombobox
-                        id="note-course-program"
-                        value={note.courseProgram}
-                        suggestions={courseProgramSuggestions}
-                        onChange={onCourseProgramChange}
-                        disabled={isCopying}
-                        context="note"
-                    />
+                <div className="space-y-2 sm:col-span-2">
+                    <label
+                        htmlFor={showAuthoringMetadataFields ? "note-applicable-programs" : "note-course-program"}
+                        className="text-sm font-medium text-foreground"
+                    >
+                        Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
+                    </label>
+                    {showAuthoringMetadataFields ? (
+                        <>
+                            <p className="text-xs text-foreground/60">
+                                Choose one or more programs this note applies to. Adding multiple programs lets one
+                                note serve several curricula instead of creating duplicates.
+                            </p>
+                            <ApplicableProgramsCombobox
+                                id="note-applicable-programs"
+                                catalog={applicableProgramCatalog}
+                                selectedIds={applicableProgramIds}
+                                onChange={(selectedIds) => onApplicableProgramIdsChange?.(selectedIds)}
+                                loading={applicableProgramsLoading}
+                                error={applicableProgramsError}
+                                onRetry={onRetryApplicablePrograms}
+                                disabled={isCopying}
+                            />
+                        </>
+                    ) : (
+                        <CourseProgramCombobox
+                            id="note-course-program"
+                            value={note.courseProgram}
+                            suggestions={courseProgramSuggestions}
+                            onChange={onCourseProgramChange}
+                            disabled={isCopying}
+                            context="note"
+                        />
+                    )}
                 </div>
-
             </div>
-            ) : null}
 
             {showTargetProfileTypeField || showAuthoringMetadataFields ? (
                 <fieldset className="space-y-4 rounded-xl border border-border/80 bg-muted/15 p-4">
@@ -431,25 +457,6 @@ export function NoteEditorForm({
 
                         {showAuthoringMetadataFields ? (
                             <>
-                                <div className="space-y-2 sm:col-span-2">
-                                    <label htmlFor="note-applicable-programs" className="text-sm font-medium text-foreground">
-                                        Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
-                                    </label>
-                                    <p className="text-xs text-foreground/60">
-                                        Choose one or more programs this note applies to. Adding multiple programs lets one
-                                        note serve several curricula instead of creating duplicates.
-                                    </p>
-                                    <ApplicableProgramsCombobox
-                                        id="note-applicable-programs"
-                                        catalog={applicableProgramCatalog}
-                                        selectedIds={applicableProgramIds}
-                                        onChange={(selectedIds) => onApplicableProgramIdsChange?.(selectedIds)}
-                                        loading={applicableProgramsLoading}
-                                        error={applicableProgramsError}
-                                        onRetry={onRetryApplicablePrograms}
-                                        disabled={isCopying}
-                                    />
-                                </div>
                                 <div className="space-y-2">
                                     <label htmlFor="note-domain-context" className="text-sm font-medium text-foreground">
                                         Domain Context {applicableProgramIds.length > 1 ? <span className="text-red-500" aria-hidden="true">*</span> : "(optional)"}

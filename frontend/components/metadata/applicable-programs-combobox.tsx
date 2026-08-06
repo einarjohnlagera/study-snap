@@ -109,6 +109,9 @@ export function ApplicableProgramsCombobox({
         disabled={controlDisabled}
         context="note"
         allowCustom={false}
+        // The caller already explains this field above the input, and the default helper says
+        // "Choose or type" — which is wrong here, since curators select from the catalog only.
+        helperText={null}
         ariaLabel="Add a course or program"
       />
       {error ? (
