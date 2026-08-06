@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 import {
   ApiRequestError,
   getPublicSharedQuiz,
@@ -197,7 +198,7 @@ export default function SharedQuizPage() {
                     })}
                   </div>
                   {result?.explanation ? (
-                    <p className="text-sm leading-6 text-foreground/75">{result.explanation}</p>
+                    <p className="text-sm leading-6 text-foreground/75">{renderMathText(result.explanation)}</p>
                   ) : null}
                 </Card>
               );

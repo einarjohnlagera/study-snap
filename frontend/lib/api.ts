@@ -135,7 +135,9 @@ export type BulkGenerateNotesRequest = {
   subject: string;
   topics: string[];
   makePublic: boolean;
-  courseProgram?: string;
+  courseProgramIds?: string[];
+  /** Free-text personal-note value. Curator requests use courseProgramIds instead. */
+  courseProgramText?: string | null;
   domainContext?: DomainContext | null;
   learnerLevel?: LearnerLevel | null;
   targetProfileType?: NoteTargetProfileType;
@@ -1480,7 +1482,9 @@ export type UpdateStudyPackMetadataRequest = {
 export type UpsertNoteRequest = {
   title?: string | null;
   subject?: string | null;
-  courseProgram?: string | null;
+  courseProgramIds?: string[];
+  /** Free-text personal-note value. Curator requests use courseProgramIds instead. */
+  courseProgramText?: string | null;
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
   tags?: string[];
@@ -1791,6 +1795,7 @@ export type PublicNoteDetailResponse = {
   ownerUserId: string | null;
   title: string | null;
   subject: string | null;
+  coursePrograms?: string[];
   tags: string[];
   content: string;
   contentPreview: string;
@@ -2825,10 +2830,14 @@ export async function generateNoteFromTopic(
   topic: string,
   courseProgram?: string,
   domainContext?: DomainContext,
+  courseProgramIds?: string[],
 ): Promise<GenerateNoteFromTopicResponse> {
-  const body: Record<string, string> = { topic };
+  const body: Record<string, string | string[]> = { topic };
   if (courseProgram && courseProgram.trim().length > 0) {
-    body.courseProgram = courseProgram.trim();
+    body.courseProgramText = courseProgram.trim();
+  }
+  if (courseProgramIds && courseProgramIds.length > 0) {
+    body.courseProgramIds = courseProgramIds;
   }
   if (domainContext) {
     body.domainContext = domainContext;
@@ -4831,7 +4840,7 @@ export async function getNoteApplicablePrograms(noteId: string): Promise<Applica
     },
     true,
   );
-  return parseApiResponse<ApplicableProgram[]>(response, "Could not load Applicable Programs.");
+  return parseApiResponse<ApplicableProgram[]>(response, "Could not load Course / Program(s).");
 }
 
 export async function replaceNoteApplicablePrograms(
@@ -4847,7 +4856,7 @@ export async function replaceNoteApplicablePrograms(
     },
     true,
   );
-  return parseApiResponse<ApplicableProgram[]>(response, "Could not save Applicable Programs.");
+  return parseApiResponse<ApplicableProgram[]>(response, "Could not save Course / Program(s).");
 }
 
 export async function listTags(scope: "public" = "public"): Promise<string[]> {

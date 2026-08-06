@@ -9,6 +9,9 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.CourseProgramCatalogRepository;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +35,14 @@ class NoteGenerationServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private NoteRepository noteRepository;
+
+    @Mock
+    private CourseProgramCatalogRepository courseProgramCatalogRepository;
+    @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
 
     @Mock
     private LlmStudyPackService llmStudyPackService;
@@ -58,7 +69,14 @@ class NoteGenerationServiceTest {
                 noteGenerationUsageProtectionService,
                 llmStudyPackService,
                 contentModerationService,
-                onboardingGuardService
+                onboardingGuardService,
+                new StudyPackGenerationContextResolver(
+                        userRepository,
+                        noteRepository,
+                        noteCourseProgramRepository,
+                        courseProgramCatalogRepository
+                ),
+                courseProgramCatalogRepository
         );
     }
 

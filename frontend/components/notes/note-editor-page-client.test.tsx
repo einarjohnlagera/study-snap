@@ -425,7 +425,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Please complete: Course \/ Program\./)).toBeInTheDocument();
+      expect(screen.getByText(/Please complete: Course \/ Program\(s\)\./)).toBeInTheDocument();
     });
     expect(updateNote).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
@@ -451,7 +451,7 @@ describe("NoteEditorPageClient", () => {
 
     await waitFor(() => {
       expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
-        courseProgram: "Nursing",
+        courseProgramText: "Nursing",
       }));
     });
   });
@@ -486,7 +486,7 @@ describe("NoteEditorPageClient", () => {
     });
     expect((createNote as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
       subject: "Microbiology Lab",
-      courseProgram: "Nursing",
+      courseProgramText: "Nursing",
       targetProfileType: "STUDENT",
     }));
   });
@@ -503,7 +503,7 @@ describe("NoteEditorPageClient", () => {
       expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
         title: null,
         subject: null,
-        courseProgram: "Nursing",
+        courseProgramText: "Nursing",
         domainContext: null,
         learnerLevel: null,
         tags: [],
@@ -538,6 +538,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(screen.getByLabelText("Content"), {
       target: { value: "A long engineering algebra note remains intact." },
     });
+    const programInput = screen.getByLabelText("Add a course or program");
+    fireEvent.change(programInput, { target: { value: "Nursing" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Nursing" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("domainContext");
@@ -569,7 +572,7 @@ describe("NoteEditorPageClient", () => {
       expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
         title: null,
         subject: null,
-        courseProgram: "Nursing",
+        courseProgramText: "Nursing",
         tags: [],
         targetProfileType: "STUDENT",
       }));
@@ -833,6 +836,50 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByText("Save your note or generate a Study Pack when ready.")).toBeInTheDocument();
   });
 
+  // Subject is surfaced in the always-visible sticky bar rather than moved up the form, so authors
+  // learn it exists and is editable without "Add details" being expanded by default. Naming it as
+  // missing is the point -- a silent omission teaches nothing.
+  it("names Subject in the sticky bar, including when it is not set yet", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    expect(await screen.findByText(/Tailored for: Nursing · no subject yet/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add details" }));
+    fireEvent.change(await screen.findByLabelText(/Subject/), { target: { value: "Algebra" } });
+
+    expect(screen.getByText(/Tailored for: Nursing · Algebra/)).toBeInTheDocument();
+  });
+
+  // A curator's Course / Program(s) must pre-fill from their profile on a NEW note, the same way the
+  // single-valued field always did. Slice 4 seeded only the learner free-text draft, so curators saw
+  // "No course programs selected" while the footer read "Tailored for: Nursing".
+  it("preselects the profile course/program for a curator creating a note", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([]);
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+
+    expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
+    expect(screen.queryByText("No course programs selected.")).not.toBeInTheDocument();
+  });
+
+  it("does not preselect a profile program the catalog does not carry", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([]);
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: null, courseProgram: "Software Engineering" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+
+    expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
+    expect(screen.getByText("No course programs selected.")).toBeInTheDocument();
+  });
+
   it("uses the teacher generate label and helper text for teacher note creation", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
     (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
@@ -851,7 +898,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
     expect(screen.getByLabelText("Domain Context (optional)")).toBeInTheDocument();
     expect(screen.getByLabelText("Note Learner Level (optional)")).toBeInTheDocument();
-    expect(await screen.findByLabelText("Add an applicable program")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add all 3 Engineering programs" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Who is this note for?")).getByRole("option", { name: "Professional" }))
       .toBeInTheDocument();
@@ -875,7 +922,7 @@ describe("NoteEditorPageClient", () => {
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
   });
 
-  it("keeps the editor usable when the Applicable Programs catalog fails", async () => {
+  it("keeps the editor usable when the Course / Program(s) catalog fails", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
     (getCourseProgramCatalog as jest.Mock).mockRejectedValue(new Error("Catalog unavailable"));
 
@@ -883,7 +930,7 @@ describe("NoteEditorPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
     expect(await screen.findByText("Catalog unavailable")).toBeInTheDocument();
-    expect(screen.getByLabelText("Add an applicable program")).toBeDisabled();
+    expect(screen.getByLabelText("Add a course or program")).toBeDisabled();
     expect(screen.getByLabelText("Content")).toBeEnabled();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
@@ -898,7 +945,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Add an applicable program")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
   });
 
   it("keeps target audience hidden for professional note creation", async () => {
@@ -911,7 +958,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Add an applicable program")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
   });
 
   it("shows target audience inside Add details for admin note creation", async () => {
@@ -995,6 +1042,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(screen.getByLabelText("Domain Context (optional)"), {
       target: { value: "ENGINEERING_MATHEMATICS" },
     });
+    const programInput = screen.getByLabelText("Add a course or program");
+    fireEvent.change(programInput, { target: { value: "Nursing" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Nursing" }));
     fireEvent.click(screen.getByText("Create from topic"));
     fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Engineering Algebra" } });
     fireEvent.click(screen.getByRole("button", { name: "Create a Note" }));
@@ -1004,8 +1054,9 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByLabelText("Domain Context (optional)")).toHaveValue("ENGINEERING_MATHEMATICS");
     expect(generateNoteFromTopic).toHaveBeenCalledWith(
       "Engineering Algebra",
-      "Nursing",
+      undefined,
       "ENGINEERING_MATHEMATICS",
+      ["program-nursing"],
     );
   });
 
@@ -1587,6 +1638,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(screen.getByLabelText("Note Learner Level (optional)"), {
       target: { value: "COLLEGE" },
     });
+    const programInput = screen.getByLabelText("Add a course or program");
+    fireEvent.change(programInput, { target: { value: "Nursing" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Nursing" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
 

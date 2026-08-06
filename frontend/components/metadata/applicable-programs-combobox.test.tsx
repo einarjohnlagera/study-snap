@@ -141,7 +141,7 @@ describe("ApplicableProgramsCombobox", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Add an applicable program")).toBeDisabled();
+    expect(screen.getByLabelText("Add a course or program")).toBeDisabled();
     expect(screen.queryByLabelText("Program family shortcuts")).not.toBeInTheDocument();
 
     rerender(
@@ -169,7 +169,7 @@ describe("ApplicableProgramsCombobox", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Add an applicable program")).toBeDisabled();
+    expect(screen.getByLabelText("Add a course or program")).toBeDisabled();
     expect(screen.queryByLabelText("Program family shortcuts")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledTimes(1);

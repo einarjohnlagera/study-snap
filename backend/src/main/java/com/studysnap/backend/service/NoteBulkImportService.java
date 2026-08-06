@@ -115,7 +115,7 @@ public class NoteBulkImportService {
 
         String title = deriveTitle(fileName);
         NoteResponse note = noteService.create(
-                new UpsertNoteRequest(title, null, null, null, null, List.of(), null, extractedText),
+                new UpsertNoteRequest(title, null, List.of(), null, null, null, List.of(), null, extractedText),
                 userId
         );
         created.add(new BulkImportResultResponse.ImportedNoteResult(

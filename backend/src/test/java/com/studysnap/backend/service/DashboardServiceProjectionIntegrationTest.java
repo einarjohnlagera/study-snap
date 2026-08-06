@@ -513,8 +513,8 @@ class DashboardServiceProjectionIntegrationTest {
                 mock(ContentModerationService.class),
                 mock(OnboardingGuardService.class),
                 mock(OfficialChallengeQuizTemplateService.class),
-                mock(NoteApplicableProgramsMaintenanceService.class),
-                mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class)
+                mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class),
+                mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class)
         );
     }
 

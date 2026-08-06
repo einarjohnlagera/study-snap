@@ -7,6 +7,7 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UnknownCourseProgramException;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
@@ -90,14 +91,11 @@ class NoteApplicableProgramsServiceTest {
     }
 
     @Test
-    void studentOwnerIsHiddenAsNotFound() {
+    void studentOwnerCanReadProgramsForTheDetailViewer() {
         UUID userId = UUID.randomUUID();
         NoteEntity note = note(UUID.randomUUID(), userId);
         authorize(note, user(userId, UserRole.USER, ProfileType.STUDENT));
-        String noteId = note.getId().toString();
-
-        assertThatThrownBy(() -> service.get(noteId, userId))
-                .isInstanceOf(NoteNotFoundException.class);
+        assertThat(service.get(note.getId().toString(), userId)).isEmpty();
     }
 
     @Test
@@ -138,6 +136,23 @@ class NoteApplicableProgramsServiceTest {
         assertThatThrownBy(() -> service.replace(noteId, requestedIds, teacherId))
                 .isInstanceOf(DuplicateCourseProgramException.class);
         verify(courseProgramCatalogRepository, never()).findExistingIds(any());
+        verify(noteCourseProgramRepository, never()).replace(any(), any());
+    }
+
+    @Test
+    void multipleProgramsWithoutDomainContextRejectBeforeReconcile() {
+        UUID teacherId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), teacherId);
+        UUID firstProgramId = UUID.randomUUID();
+        UUID secondProgramId = UUID.randomUUID();
+        authorize(note, user(teacherId, UserRole.USER, ProfileType.TEACHER));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(firstProgramId, secondProgramId)))
+                .thenReturn(List.of(firstProgramId, secondProgramId));
+
+        assertThatThrownBy(() -> service.replace(
+                note.getId().toString(), List.of(firstProgramId, secondProgramId), teacherId
+        )).isInstanceOf(MultiProgramDomainContextRequiredException.class);
+
         verify(noteCourseProgramRepository, never()).replace(any(), any());
     }
 

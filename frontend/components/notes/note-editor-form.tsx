@@ -349,8 +349,15 @@ export function NoteEditorForm({
 
     const renderMetadataFields = () => (
         <div className="space-y-5">
+            {/* Field order is Title -> Subject -> Course / Program(s), which is how students
+                actually create notes: name it, say what it is about, then say where it belongs. This
+                was reordered twice during review and put back both times -- do not "improve" it.
+                Subject is surfaced instead through the sticky bar, which names it without moving it. */}
             <div className="space-y-2">
                 <label htmlFor="note-title" className="text-sm font-medium text-foreground">Title (optional)</label>
+                <p className="text-xs text-foreground/60">
+                    Left blank, the AI writes one for you when you generate a Study Pack.
+                </p>
                 <input
                     id="note-title"
                     type="text"
@@ -365,6 +372,10 @@ export function NoteEditorForm({
             <div className="space-y-2">
                 <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject
                     (optional)</label>
+                <p className="text-xs text-foreground/60">
+                    Helps organize your library, and improves your Study Pack — the subject is sent to the
+                    AI when you generate.
+                </p>
                 <SubjectCombobox
                     id="note-subject"
                     value={note.subject}
@@ -384,19 +395,47 @@ export function NoteEditorForm({
                 </div>
             </div>
 
+            {/* Course / Program(s) keeps its original position in the main metadata grid for BOTH
+                authoring modes. This is not a new field — it is the same field gaining several values
+                for curators — so moving it into the gated fieldset would misfile it and disorient
+                returning authors. Only the control differs: learners get one free-text value, curators
+                get a catalog-backed multi-select. */}
             <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                    <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program <span className="text-red-500" aria-hidden="true">*</span></label>
-                    <CourseProgramCombobox
-                        id="note-course-program"
-                        value={note.courseProgram}
-                        suggestions={courseProgramSuggestions}
-                        onChange={onCourseProgramChange}
-                        disabled={isCopying}
-                        context="note"
-                    />
+                <div className="space-y-2 sm:col-span-2">
+                    <label
+                        htmlFor={showAuthoringMetadataFields ? "note-applicable-programs" : "note-course-program"}
+                        className="text-sm font-medium text-foreground"
+                    >
+                        Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
+                    </label>
+                    {showAuthoringMetadataFields ? (
+                        <>
+                            <p className="text-xs text-foreground/60">
+                                Choose one or more programs this note applies to. Adding multiple programs lets one
+                                note serve several curricula instead of creating duplicates.
+                            </p>
+                            <ApplicableProgramsCombobox
+                                id="note-applicable-programs"
+                                catalog={applicableProgramCatalog}
+                                selectedIds={applicableProgramIds}
+                                onChange={(selectedIds) => onApplicableProgramIdsChange?.(selectedIds)}
+                                loading={applicableProgramsLoading}
+                                error={applicableProgramsError}
+                                onRetry={onRetryApplicablePrograms}
+                                disabled={isCopying}
+                            />
+                        </>
+                    ) : (
+                        <CourseProgramCombobox
+                            id="note-course-program"
+                            value={note.courseProgram}
+                            suggestions={courseProgramSuggestions}
+                            onChange={onCourseProgramChange}
+                            disabled={isCopying}
+                            context="note"
+                        />
+                    )}
                 </div>
-
             </div>
 
             {showTargetProfileTypeField || showAuthoringMetadataFields ? (
@@ -429,32 +468,9 @@ export function NoteEditorForm({
 
                         {showAuthoringMetadataFields ? (
                             <>
-                                <div className="space-y-2 sm:col-span-2">
-                                    <label htmlFor="note-applicable-programs" className="text-sm font-medium text-foreground">
-                                        Applicable Programs
-                                    </label>
-                                    {/* This helper is doing the real work: it explains why the Course /
-                                        Program value reappears here, which is the exact moment authors
-                                        ask whether these are the same field. */}
-                                    <p className="text-xs text-foreground/60">
-                                        Every program whose learners should discover this note. It starts from your
-                                        Course / Program above — add others so one note can serve several curricula
-                                        instead of being duplicated for each.
-                                    </p>
-                                    <ApplicableProgramsCombobox
-                                        id="note-applicable-programs"
-                                        catalog={applicableProgramCatalog}
-                                        selectedIds={applicableProgramIds}
-                                        onChange={(selectedIds) => onApplicableProgramIdsChange?.(selectedIds)}
-                                        loading={applicableProgramsLoading}
-                                        error={applicableProgramsError}
-                                        onRetry={onRetryApplicablePrograms}
-                                        disabled={isCopying}
-                                    />
-                                </div>
                                 <div className="space-y-2">
                                     <label htmlFor="note-domain-context" className="text-sm font-medium text-foreground">
-                                        Domain Context (optional)
+                                        Domain Context {applicableProgramIds.length > 1 ? <span className="text-red-500" aria-hidden="true">*</span> : "(optional)"}
                                     </label>
                                     <select
                                         id="note-domain-context"
@@ -469,8 +485,9 @@ export function NoteEditorForm({
                                         ))}
                                     </select>
                                     <p className="text-xs text-foreground/60">
-                                        Sets the academic domain this note is written in. An Algebra note authored as
-                                        Engineering Mathematics reads differently from one authored as General Education.
+                                        {applicableProgramIds.length > 1
+                                            ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
+                                            : "Required when this note applies to more than one program."}
                                     </p>
                                 </div>
 
@@ -716,6 +733,24 @@ export function NoteEditorForm({
         </div>
     );
 
+    // A collapsed accordion should summarise its CONTENT, not restate its rules. Since Course /
+    // Program(s) now pre-fills from the author's profile, "Course / Program is required" was usually
+    // telling people to do something already done. This shows what is set, and spends the remaining
+    // words teaching the one field with real upside — Subject, which reaches the generation prompt.
+    const selectedProgramLabels = showAuthoringMetadataFields
+        ? applicableProgramCatalog
+            .filter((program) => applicableProgramIds.includes(program.id))
+            .map((program) => program.name)
+        : [note.courseProgram.trim()].filter(Boolean);
+    const programSummary = selectedProgramLabels.length > 2
+        ? `${selectedProgramLabels.length} programs`
+        : selectedProgramLabels.join(" · ");
+    const subjectSummary = note.subject.trim();
+    const optionalDetailsSummary = programSummary
+        ? [programSummary, subjectSummary || "Add a Subject to improve organization and your Study Pack."]
+            .join(" · ")
+        : "Course / Program(s) is required. A Subject improves organization and your Study Pack.";
+
     const renderOptionalDetailsSection = () => (
         <section ref={optionalDetailsSectionRef} className="rounded-2xl border border-border/80 bg-muted/15">
             <button
@@ -728,9 +763,7 @@ export function NoteEditorForm({
             >
                 <div className="space-y-1">
                     <p className="text-sm font-semibold text-foreground">Add details</p>
-                    <p className="max-w-2xl text-xs text-foreground/65">
-                        Course / Program is required. Title, subject, and tags are optional.
-                    </p>
+                    <p className="max-w-2xl text-xs text-foreground/65">{optionalDetailsSummary}</p>
                 </div>
                 <ChevronDown
                     className={`mt-0.5 h-4 w-4 shrink-0 text-foreground/55 transition-transform ${
@@ -940,8 +973,15 @@ export function NoteEditorForm({
                     <div className="min-w-0 space-y-0.5">
                         <p className="text-xs font-medium text-foreground/75">{saveStateLabel ?? "Save your note or generate a Study Pack when ready."}</p>
                         {(() => {
-                            const parts = [resolvedCourseProgram?.trim() || null].filter(Boolean);
-                            if (parts.length === 0) return null;
+                            // Subject rides along here rather than moving up the form. The sticky bar is
+                            // always visible while writing, so naming Subject makes authors aware it
+                            // exists and is editable -- and "Adjust" surfaces Add details, which is how
+                            // the panel gets opened without defaulting it open. Naming it as missing is
+                            // the point: a silent omission teaches nothing.
+                            const tailoredProgram = resolvedCourseProgram?.trim() || null;
+                            const tailoredSubject = note.subject.trim() || null;
+                            if (!tailoredProgram && !tailoredSubject) return null;
+                            const parts = [tailoredProgram, tailoredSubject ?? "no subject yet"].filter(Boolean);
                             return (
                                 <p className="text-xs text-foreground/55">
                                     Tailored for: {parts.join(" · ")}

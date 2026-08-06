@@ -30,10 +30,10 @@ Notes model **canonical knowledge**. Programs describe **where that knowledge is
 | Subject | `notes.subject` | 1 | what the note is about |
 | Domain Context | `notes.domain_context` | 1 | **how** it is authored — the LLM domain constraint |
 | Note Learner Level | `notes.learner_level` | 1 | **how deep** it is authored |
-| Course / Program(s) | `note_course_program` | N | **where** it appears — discovery only |
+| Course / Program(s) | `note_course_program` (curated) / `notes.course_program` (personal) | N curated, 1 personal | **where** it appears — discovery only |
 | Audience framing | `notes.target_profile_type` | 1 | **who** it is written for — never depth |
 
-`notes.course_program` appears in no row above because it is **no longer an axis** — it is a frozen compatibility column, ratified 2026-08-05. See "Course / Program(s) is the only program concept" below.
+The **Course / Program(s)** row covers two stores, because NoteLib has two authoring modes: curated notes carry catalog programs in `note_course_program` (one or many), and personal notes carry one free-text value in `notes.course_program`. Both are current; neither is legacy. See "Two authoring modes — and therefore two program fields" below.
 
 Binding rules:
 
@@ -99,21 +99,32 @@ The rule is enforced by **program count at save time**, which means adding a sec
 
 **Introduced at zero cost, and only at this moment.** `V107` produces exactly one join row per note and has not yet reached production, so **no multi-program note exists anywhere**. The requirement lands with no pre-existing violations and no backfill. That cheapness expires the moment curators begin authoring.
 
-#### `notes.course_program` survives as a frozen compatibility column — not an axis
+#### Two authoring modes — and therefore two program fields
 
-Dropping the column is **rejected for now**, on evidence rather than caution: the catalog deliberately excludes values that exist on real notes (bare levels, bare subjects, the `Engineering` family, and the owner-ruled `Computer Science` / `Software Engineering`). Those notes have no join row and never will, so their relationships **cannot** be migrated into the join table — there is nothing to point at. Dropping the column would either delete their discovery entirely (filter, facet, search, and live public slug URLs) or force re-admitting levels, subjects, and families as catalog programs, reversing settled rulings.
+**Ratified by the owner 2026-08-05.** This section **supersedes an earlier framing in this same ADR** that called `notes.course_program` a *"frozen compatibility column"* with a *"closed tap"* and an exit condition. That framing was wrong, and it is corrected here rather than quietly edited: it assumed every author would be restricted to the catalog, which is not the product we want.
 
-**But it is no longer part of the model.** Four properties make that structural rather than aspirational:
+NoteLib has **two authoring modes**, and this is a product distinction rather than a permission workaround:
 
-1. **Write-never.** Nothing writes it after this change; the picker writes join rows only. Existing values freeze as historical data. A read-only column is legible as an artifact in a way a still-written one is not — and the absence of a writer is what a future engineer will actually notice.
-2. **The tap is closed.** The legacy field accepted freetext (`CourseProgramCombobox` defaults `allowCustom = true`), so the excluded-value population **grew** with every author who typed an off-catalog value. A single catalog-backed picker means **no new note can enter that population.** It becomes finite, countable, and monotonically shrinking — which is what makes an exit condition possible at all.
-3. **Invisible.** No UI, API, DTO, or product decision treats it as a program concept. Its only sanctioned readers are the two Slice 2 fallback predicates and the generation fallback below.
-4. **A named exit condition**, tracked in `docs/product/ROADMAP.md` — it drops when the excluded population reaches zero or those notes are explicitly ruled strandable. Not "someday."
+| Mode | Who | Programs | Vocabulary | Stored in |
+|---|---|---|---|---|
+| **Personal note-taking** | learners | exactly one | **free text** | `notes.course_program` |
+| **Curation** | Teacher / Admin | one or many | **catalog only** | `note_course_program` |
 
-**Two jobs it still does, recorded so neither is discovered by its absence:**
+**Selecting several applicable programs is a curation act, not everyday note-taking.** A learner's note serves that learner; canonical material serving many curricula is authored deliberately, by someone doing that job. Restricting multi-program authoring therefore follows from what the two activities *are* — it is not a UI workaround for a permission problem, and it should never be documented as one.
 
-- **Discovery for catalog-excluded notes** — the Slice 2 join-first-with-legacy-fallback semantics.
-- **The generation fallback for legacy multi-program notes.** The Domain Context requirement cannot apply retroactively, so a pre-existing multi-program note with no Domain Context resolves its domain through its frozen string. Drop the column without handling this and those notes silently begin generating against the *profile's* program instead of their own.
+**Free text is retained for personal notes on purpose.** NoteLib behaves like a notebook, not a closed LMS. Someone studying a niche subject, or a program the catalog does not yet cover, must still be able to describe their own material naturally. The catalog is the controlled vocabulary for **curated content**, not a restriction on personal learning.
+
+**The two splits follow one line.** Cardinality and vocabulary are both gated on Teacher/Admin — curators get catalog-only and many, learners get free text and one. Splitting them on different conditions would make the model harder to explain than either split alone.
+
+**So `notes.course_program` is not legacy and is not frozen.** It is **the personal-notes program field**, permanently, and it is still written by learner authoring. `note_course_program` is the curated-content axis. Both are current; neither is awaiting removal.
+
+**This is what Slice 2's read semantics were actually describing.** Join-first with a legacy-string fallback was scoped as legacy handling, but it maps exactly onto the mode boundary: curated notes resolve through the join, personal notes through the string. The fallback is the personal-notes path, not a compatibility shim.
+
+**Consequences to hold onto:**
+
+- **The column has no exit condition and needs none.** Retiring it would delete personal-note discovery. `19-slice-2-facet-equivalence-impact.sql` query A still usefully sizes how much *existing* content sits outside the catalog, but it is no longer gating a removal.
+- **The generation fallback for legacy multi-program notes.** The Domain Context requirement cannot apply retroactively, so a pre-existing multi-program note with no Domain Context resolves its domain through its string. That path must survive any future change to this column.
+- **Catalog-excluded historical values** (bare levels, bare subjects, the `Engineering` family, the owner-ruled `Computer Science` / `Software Engineering`) keep working through the same personal-notes path, which is why nothing needs migrating.
 
 ### Programs and Review Sets answer different questions
 

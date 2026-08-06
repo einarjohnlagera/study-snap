@@ -462,16 +462,15 @@ describe("PrivateNoteDetailPageClient", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
-    expect(await screen.findByLabelText("Add an applicable program")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add all 3 Engineering programs" })).toBeInTheDocument();
     expect(screen.getByText("Changing audience will affect future quiz generation.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
   });
 
-  // The header states reach as a count, never a list -- names live in Edit details and the admin
-  // table. At exactly one applicable program (the seeded default on nearly every note) the count is
-  // suppressed as noise.
+  // A single program names the note's applicability directly; a multi-program note opens the
+  // explicit viewer rather than implying one program is primary.
   it("omits the reach count when the note has a single applicable program", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
@@ -488,7 +487,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(getNoteApplicablePrograms).toHaveBeenCalledWith("note-1");
   });
 
-  it("summarises reach as a count, without listing names, above one applicable program", async () => {
+  it("opens the program viewer above one applicable program", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -503,9 +502,12 @@ describe("PrivateNoteDetailPageClient", () => {
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    expect(await screen.findByText("Nursing · Applies to 3 programs")).toBeInTheDocument();
+    const viewerButton = await screen.findByRole("button", { name: "Applicable to 3 programs" });
     expect(screen.queryByText("Pharmacy")).not.toBeInTheDocument();
     expect(screen.queryByText("Medicine")).not.toBeInTheDocument();
+    fireEvent.click(viewerButton);
+    expect(await screen.findByText("Pharmacy")).toBeInTheDocument();
+    expect(screen.getByText("Medicine")).toBeInTheDocument();
   });
 
   it("seeds the authoring axes from the note and saves the corrected values for a teacher", async () => {
@@ -583,7 +585,7 @@ describe("PrivateNoteDetailPageClient", () => {
     });
   });
 
-  it("restores the saved Applicable Programs and keeps inline edit open when save fails", async () => {
+  it("keeps the selected programs and inline edit open when save fails", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -595,8 +597,7 @@ describe("PrivateNoteDetailPageClient", () => {
       studyPackId: "sp-1",
     };
     (getNote as jest.Mock).mockResolvedValue(readyNote);
-    (updateNote as jest.Mock).mockResolvedValue(readyNote);
-    (replaceNoteApplicablePrograms as jest.Mock).mockRejectedValue(new Error("Could not save Applicable Programs."));
+    (updateNote as jest.Mock).mockRejectedValue(new Error("Could not save Course / Program(s)."));
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
@@ -607,12 +608,14 @@ describe("PrivateNoteDetailPageClient", () => {
     const programToggles = screen.getAllByLabelText("Toggle course program suggestions");
     fireEvent.click(programToggles[programToggles.length - 1]);
     fireEvent.click(screen.getByRole("option", { name: "Pharmacy" }));
+    await screen.findByText(/You've added more than one program/);
+    fireEvent.change(screen.getByRole("combobox", { name: /Domain Context/ }), { target: { value: "NURSING" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await screen.findByText("Could not save Applicable Programs.")).toBeInTheDocument();
+    expect(await screen.findByText("Could not save Course / Program(s).")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Remove Pharmacy" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Pharmacy" })).toBeInTheDocument();
   });
 
   it("exposes the authoring axes to an admin on a non-teacher profile", async () => {
@@ -665,7 +668,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Add an applicable program")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -2008,7 +2011,7 @@ describe("PrivateNoteDetailPageClient", () => {
       expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
         title: "My Note",
         subject: "Biology",
-        courseProgram: "Nursing",
+        courseProgramText: "Nursing",
         tags: ["review", "cells", "Memory"],
       }));
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=summary");
