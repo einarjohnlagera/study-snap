@@ -19,6 +19,27 @@ const reviewQuiz = [
 ];
 
 describe("QuizAnswerReview", () => {
+  // C3. This component is the shared answer review behind five call sites — quick-review,
+  // adaptive-practice, challenge-quiz (x2) and session-history review — and its explanation rendered raw
+  // while the question directly above it rendered correctly, so it read as a rendering bug rather than
+  // bad content. The rule in docs/features/quiz.md: any surface showing a question, option, or
+  // explanation routes through renderMathText, and a raw {item.explanation} is the bug.
+  it("renders LaTeX in the explanation, not just in the question", () => {
+    const mathQuiz = [{
+      question: "Which expression is equivalent?",
+      choices: ["A", "B", "C", "D"],
+      correctIndex: 0,
+      concept: "Algebra",
+      explanation: "Because \\(x^2 + 2x\\) factors to \\(x(x + 2)\\).",
+    }];
+
+    const { container } = render(<QuizAnswerReview quiz={mathQuiz} selectedChoices={{ 0: 0 }} />);
+
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+    expect(screen.queryByText(/\\\(/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/x\^2/)).not.toBeInTheDocument();
+  });
+
   it("shows the selected answer, correct answer, explanation, and concept", () => {
     render(<QuizAnswerReview quiz={reviewQuiz} selectedChoices={{ 0: 1, 1: 0 }} />);
 

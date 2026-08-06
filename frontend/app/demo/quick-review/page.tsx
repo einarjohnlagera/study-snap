@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { DEMO_STUDY_PACK_RESULT } from "@/app/study/demo-content";
 import { isQuizSelectionCorrect, resolveQuizCorrectIndex } from "@/lib/quiz";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
 
@@ -210,7 +211,7 @@ export default function DemoQuickReviewPage() {
 
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold">
-              {currentQuestionIndex + 1}. {currentQuestion.question}
+              {currentQuestionIndex + 1}. {renderMathText(currentQuestion.question)}
             </h2>
             <QuizChoiceList
               questionKey={currentQuestion.question}
@@ -225,7 +226,7 @@ export default function DemoQuickReviewPage() {
               <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}
-                  {currentQuestion.explanation}
+                  {renderMathText(currentQuestion.explanation)}
                 </p>
               </div>
             ) : null}

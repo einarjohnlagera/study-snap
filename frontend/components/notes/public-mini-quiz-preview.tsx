@@ -11,6 +11,7 @@ import { buildPublicLibraryNotePath, buildPublicLibrarySubjectPath } from "@/lib
 import { resolveCardExcerpt } from "@/components/notes/shared-note-card";
 import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 const MAX_PREVIEW_QUESTIONS = 3;
 
@@ -193,7 +194,7 @@ export function PublicMiniQuizPreview({ quiz, noteId, relatedNotes }: PublicMini
         ) : null}
       </div>
 
-      <p className="text-sm font-medium text-foreground">{normalizedQuestion}</p>
+      <p className="text-sm font-medium text-foreground">{renderMathText(normalizedQuestion)}</p>
 
       <div className="space-y-2" role="group" aria-label="Answer choices">
         {choices.map((choice) => (
@@ -206,7 +207,7 @@ export function PublicMiniQuizPreview({ quiz, noteId, relatedNotes }: PublicMini
             onClick={() => handleSelectChoice(choice.canonicalIndex)}
           >
             <span className="mr-2 font-semibold">{choice.label}.</span>
-            {choice.text}
+            {renderMathText(choice.text)}
           </button>
         ))}
       </div>
@@ -229,7 +230,7 @@ export function PublicMiniQuizPreview({ quiz, noteId, relatedNotes }: PublicMini
               {isCorrect ? getCorrectFeedback(currentIndex) : "Almost there."}
             </p>
             {normalizedExplanation ? (
-              <p className="leading-relaxed text-foreground/75">{normalizedExplanation}</p>
+              <p className="leading-relaxed text-foreground/75">{renderMathText(normalizedExplanation)}</p>
             ) : null}
           </div>
 

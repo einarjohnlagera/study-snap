@@ -4,6 +4,7 @@ import {
   resolveEnumerationAcceptedAnswerGroups,
 } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type QuizEnumerationInputProps = {
   item: QuizItem;
@@ -87,7 +88,7 @@ export function QuizEnumerationInput({
             <p className="break-words text-foreground/75">
               Accepted answers:{" "}
               {acceptedAnswerGroups.length > 0
-                ? acceptedAnswerGroups.map((group) => group.join(" / ")).join("; ")
+                ? renderMathText(acceptedAnswerGroups.map((group) => group.join(" / ")).join("; "))
                 : "Unavailable"}
             </p>
           </div>

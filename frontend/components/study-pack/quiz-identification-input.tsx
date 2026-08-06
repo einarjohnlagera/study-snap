@@ -4,6 +4,7 @@ import {
   resolveIdentificationAcceptedAnswers,
 } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type QuizIdentificationInputProps = {
   item: QuizItem;
@@ -72,7 +73,7 @@ export function QuizIdentificationInput({
               {isCorrect ? "Correct" : hasAnswer ? "Incorrect" : "No answer entered"}
             </p>
             <p className="break-words text-foreground/75">
-              Accepted answer{acceptedAnswers.length === 1 ? "" : "s"}: {acceptedAnswers.length > 0 ? acceptedAnswers.join("; ") : "Unavailable"}
+              Accepted answer{acceptedAnswers.length === 1 ? "" : "s"}: {acceptedAnswers.length > 0 ? renderMathText(acceptedAnswers.join("; ")) : "Unavailable"}
             </p>
           </div>
         ) : null}

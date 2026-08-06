@@ -25,6 +25,34 @@ describe("QuizQuestionText", () => {
     expect(container.querySelector("span")).not.toBeInTheDocument();
   });
 
+  // C4. A lone `$` is currency, not math. The old guard only checked for a delimiter *start*, so these
+  // reached the tokenizer: the single-dollar case came back as two spans instead of a bare string —
+  // reintroducing the exact break-words displacement the test above guards — and the two-dollar case had
+  // the middle of the sentence rendered as italic math with both dollar signs swallowed. Accountancy and
+  // Business Administration are seeded programs, so cost questions are routine.
+  it("treats a lone dollar sign as currency, not an unclosed math delimiter", () => {
+    const { container } = render(<QuizQuestionText text="What is the cost of $5?" />);
+
+    expect(container.querySelector(".katex")).not.toBeInTheDocument();
+    expect(container.textContent).toBe("What is the cost of $5?");
+    expect(container.querySelector("span")).not.toBeInTheDocument();
+  });
+
+  it("does not turn two currency amounts into one math span", () => {
+    const { container } = render(<QuizQuestionText text="Item A costs $5 and item B costs $10" />);
+
+    expect(container.querySelector(".katex")).not.toBeInTheDocument();
+    expect(container.textContent).toBe("Item A costs $5 and item B costs $10");
+    expect(container.querySelector("span")).not.toBeInTheDocument();
+  });
+
+  it("still renders genuine inline dollar math", () => {
+    const { container } = render(<QuizQuestionText text={"Simplify $x^2 + 2x$ fully."} />);
+
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("$");
+  });
+
   it("still splits Statement-labelled prompts onto their own lines", () => {
     render(
       <QuizQuestionText text={"Evaluate both.\nStatement 1: Water boils at 100C.\nStatement 2: Ice melts at 0C."} />,
