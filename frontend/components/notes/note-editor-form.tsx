@@ -349,8 +349,16 @@ export function NoteEditorForm({
 
     const renderMetadataFields = () => (
         <div className="space-y-5">
+            {/* Ordering is deliberate and was set by the owner: Title stays first, and Subject sits
+                BELOW Course / Program(s). The flow authors expect is write the note, optionally name it,
+                choose where it belongs, then optionally classify it further. Subject also happens to be
+                an input to Study Pack generation (it reaches the prompt via StudyPackGenerationContext),
+                which is why its helper text sells the benefit rather than just marking it optional. */}
             <div className="space-y-2">
                 <label htmlFor="note-title" className="text-sm font-medium text-foreground">Title (optional)</label>
+                <p className="text-xs text-foreground/60">
+                    Left blank, the AI writes one for you when you generate a Study Pack.
+                </p>
                 <input
                     id="note-title"
                     type="text"
@@ -360,28 +368,6 @@ export function NoteEditorForm({
                     disabled={isCopying}
                     className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
                 />
-            </div>
-
-            <div className="space-y-2">
-                <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject
-                    (optional)</label>
-                <SubjectCombobox
-                    id="note-subject"
-                    value={note.subject}
-                    suggestions={subjectSuggestions}
-                    onChange={onSubjectChange}
-                    disabled={isCopying}
-                />
-                {/* Live region stays mounted so the advisory is announced when it appears, not just rendered. */}
-                <div aria-live="polite">
-                    {showAuthoringMetadataFields && isSubjectSameAsDomainContext(note.subject, note.domainContext) ? (
-                        <p className="text-xs text-amber-700 dark:text-amber-300">
-                            Subject matches the Domain Context, so it is probably too broad to be a useful
-                            library shelf. Consider a specific subject like Algebra or Pharmacology and let
-                            Domain Context carry the domain. Saving anyway is fine.
-                        </p>
-                    ) : null}
-                </div>
             </div>
 
             {/* Course / Program(s) keeps its original position in the main metadata grid for BOTH
@@ -424,6 +410,32 @@ export function NoteEditorForm({
                             context="note"
                         />
                     )}
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject
+                    (optional)</label>
+                <p className="text-xs text-foreground/60">
+                    Helps organize your library, and improves your Study Pack — the subject is sent to the
+                    AI when you generate.
+                </p>
+                <SubjectCombobox
+                    id="note-subject"
+                    value={note.subject}
+                    suggestions={subjectSuggestions}
+                    onChange={onSubjectChange}
+                    disabled={isCopying}
+                />
+                {/* Live region stays mounted so the advisory is announced when it appears, not just rendered. */}
+                <div aria-live="polite">
+                    {showAuthoringMetadataFields && isSubjectSameAsDomainContext(note.subject, note.domainContext) ? (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                            Subject matches the Domain Context, so it is probably too broad to be a useful
+                            library shelf. Consider a specific subject like Algebra or Pharmacology and let
+                            Domain Context carry the domain. Saving anyway is fine.
+                        </p>
+                    ) : null}
                 </div>
             </div>
 
@@ -722,6 +734,24 @@ export function NoteEditorForm({
         </div>
     );
 
+    // A collapsed accordion should summarise its CONTENT, not restate its rules. Since Course /
+    // Program(s) now pre-fills from the author's profile, "Course / Program is required" was usually
+    // telling people to do something already done. This shows what is set, and spends the remaining
+    // words teaching the one field with real upside — Subject, which reaches the generation prompt.
+    const selectedProgramLabels = showAuthoringMetadataFields
+        ? applicableProgramCatalog
+            .filter((program) => applicableProgramIds.includes(program.id))
+            .map((program) => program.name)
+        : [note.courseProgram.trim()].filter(Boolean);
+    const programSummary = selectedProgramLabels.length > 2
+        ? `${selectedProgramLabels.length} programs`
+        : selectedProgramLabels.join(" · ");
+    const subjectSummary = note.subject.trim();
+    const optionalDetailsSummary = programSummary
+        ? [programSummary, subjectSummary || "Add a Subject to improve organization and your Study Pack."]
+            .join(" · ")
+        : "Course / Program(s) is required. A Subject improves organization and your Study Pack.";
+
     const renderOptionalDetailsSection = () => (
         <section ref={optionalDetailsSectionRef} className="rounded-2xl border border-border/80 bg-muted/15">
             <button
@@ -734,9 +764,7 @@ export function NoteEditorForm({
             >
                 <div className="space-y-1">
                     <p className="text-sm font-semibold text-foreground">Add details</p>
-                    <p className="max-w-2xl text-xs text-foreground/65">
-                        Course / Program is required. Title, subject, and tags are optional.
-                    </p>
+                    <p className="max-w-2xl text-xs text-foreground/65">{optionalDetailsSummary}</p>
                 </div>
                 <ChevronDown
                     className={`mt-0.5 h-4 w-4 shrink-0 text-foreground/55 transition-transform ${
