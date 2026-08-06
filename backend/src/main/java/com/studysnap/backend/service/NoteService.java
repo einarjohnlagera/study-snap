@@ -773,8 +773,15 @@ public class NoteService {
         } else {
             notes = noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
         }
-        List<NoteListItemResponse> allItems = toListItems(notes, viewerUserId, false);
-        int total = allItems.size();
+        int total = notes.size();
+        List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
+        List<NoteListItemProjection> projections = noteIds.isEmpty()
+                ? List.of()
+                : orderListItemProjections(
+                        noteRepository.findPublicLibraryListItemProjectionsByIdIn(noteIds),
+                        noteIds
+                );
+        List<NoteListItemResponse> allItems = toListItems(projections, viewerUserId, false);
         List<NoteListItemResponse> items = filterPublicLibraryItems(allItems, search, subject, tags, courseProgram);
         items = filterPublicLibraryAdditiveFilters(items, readyOnly, sources);
         items = sortPublicLibraryItems(items, sort);
@@ -1025,7 +1032,8 @@ public class NoteService {
 
         return containsIgnoreCase(item.title(), normalizedSearch)
                 || containsIgnoreCase(item.subject(), normalizedSearch)
-                || containsIgnoreCase(item.courseProgram(), normalizedSearch)
+                || publicLibraryPrograms(item).stream()
+                        .anyMatch(program -> containsIgnoreCase(program, normalizedSearch))
                 || containsIgnoreCase(item.contentPreview(), normalizedSearch)
                 || containsIgnoreCase(item.summaryPreview(), normalizedSearch)
                 || item.tags().stream().anyMatch(tag -> containsIgnoreCase(tag, normalizedSearch));
@@ -1042,7 +1050,16 @@ public class NoteService {
         if (normalizedCourseProgramFilter == null) {
             return true;
         }
-        return normalizedCourseProgramFilter.equals(normalizePublicLibraryFilterSlug(item.courseProgram()));
+        return publicLibraryPrograms(item).stream()
+                .map(this::normalizePublicLibraryFilterSlug)
+                .anyMatch(normalizedCourseProgramFilter::equals);
+    }
+
+    private List<String> publicLibraryPrograms(NoteListItemResponse item) {
+        if (item.applicablePrograms() != null && !item.applicablePrograms().isEmpty()) {
+            return item.applicablePrograms();
+        }
+        return item.courseProgram() == null ? List.of() : List.of(item.courseProgram());
     }
 
     private boolean matchesPublicLibraryTags(NoteListItemResponse item, List<String> normalizedTagFilters) {
