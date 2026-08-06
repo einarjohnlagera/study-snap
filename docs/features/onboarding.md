@@ -27,10 +27,19 @@ Route: `/onboarding`
 Five steps:
 
 1. `Profile Type`
-2. `Study Goal`
+2. `Learning Context` (Learner Level + Course / Program, and an optional Exam Date for Exam Reviewers)
 3. `Input Method`
 4. `Study Pack Generation`
 5. `Completion`
+
+> **Being redesigned — `v0.71.0` slice 5.** This five-step flow is scheduled to be replaced by an intent-routing
+> flow in which Step 3 asks *what the learner wants to do first* rather than *how they want to input a note*.
+> Plan: `docs/claude-plans/onboarding-activation-and-intent-router.md`. Governing philosophy, owner-ratified
+> 2026-08-06: **onboarding is no longer profile collection — it is an intelligent router that helps every learner
+> reach the fastest successful study experience available to them.** The sections below describe current shipped
+> behavior and remain authoritative until that ships. Note that `docs/features/dashboard.md:235` still carries an
+> anti-drift lock on this flow (and names the nonexistent "Study Goal" step); that lock is consciously superseded
+> by the slice 5 ruling and must be updated when the redesign lands.
 
 ### Step 1 — Profile Type
 
@@ -69,11 +78,14 @@ Copy-on-signup is a distinct, narrow alternate path for a newly verified visitor
 
 This does not alter the five-step `/onboarding` flow, its order, or the legacy profile-type-only re-prompt for any other cohort. If marker storage is unavailable, the app fails open to the existing `/onboarding` redirect behavior.
 
-### Step 2 — Study Goal
+### Step 2 — Learning Context
 
-Goal options are filtered by the selected profile type.
+**CORRECTED 2026-08-06 — this step was previously documented as "Study Goal", with the claim that "goal options
+are filtered by the selected profile type." No study-goal selector exists anywhere in the onboarding flow.**
+`studyGoal` is a separate profile field written by `PUT /users/profile/goal`, which onboarding never calls. The
+step numbering list above carried the same stale name and is corrected with it.
 
-Step 2 also requires:
+Step 2 collects and requires:
 
 - `Learner Level`
 - `Course / Program`
@@ -210,7 +222,29 @@ The following are **not** persisted by onboarding completion itself:
 - `engagementMode`
 - reminder preferences
 
-`learnerLevel` and `courseProgram` are saved before the user advances through onboarding via the shared Learning Profile update path.
+**CORRECTED 2026-08-06 — this section previously claimed `learnerLevel` and `courseProgram` "are saved before the
+user advances through onboarding." That was false.** Both are written only at Step 5, *after* `completeOnboarding`
+resolves, and the call is **fire-and-forget with a swallowed error** (`onboarding/page.tsx:610-613`, and
+identically at `:774-777` on the practice-first path). If it fails — or the user closes the tab in the ~1s window
+— `learnerLevel` and `courseProgram` are permanently lost with no user-visible error, while
+`onboardingCompletedAt` is already set, so the user is never routed back to supply them again.
+
+Two further persistence facts this section omitted:
+
+- **`courseProgram` is not part of onboarding completion at all.** `CompleteOnboardingRequest` carries only
+  `profileType` and `examDate`. The program rides solely on the fire-and-forget call above.
+- **`POST /auth/onboarding` nulls `examDate` for any non-`BOARD_EXAM` profile type**, unconditionally
+  (`AuthService.java:383` with `resolveExamDate` at `:615-620`). Switching profile type therefore silently clears
+  a previously-set exam date. No test covers this.
+
+`profileType` is likewise persisted **only at Step 5**, not at Step 1 — which is why `OnboardingGuardService`
+deliberately exempts users mid-onboarding (see Server-Side Boundary below; do not narrow that guard without
+changing this ordering first).
+
+These are recorded as defects, not as intended behavior. The fix is scoped as `v0.71.0` slice 5 —
+`docs/claude-plans/onboarding-activation-and-intent-router.md` §4, which moves `profileType` to Step 1 and
+learning context to Step 2 behind a new narrow `PUT /users/profile/learning-context`. **This section describes
+current behavior and must be rewritten when that ships.**
 
 The practice-first branch uses the same completion persistence from its `Start this plan` action,
 then routes to the adopted Review Set's detail page; it intentionally does not render Step 5 for
