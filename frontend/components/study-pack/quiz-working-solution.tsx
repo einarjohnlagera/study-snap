@@ -122,9 +122,31 @@ function renderPlainTextSegment(segment: string, key: string) {
   );
 }
 
+/**
+ * Inline (text-style) KaTeX renders these constructs at script size — a `\frac` numerator and denominator
+ * come out around 0.7em, so a fraction in a question stem reads noticeably smaller than the words around
+ * it even though `.katex` is already 1.21em. `\displaystyle` restores full size while keeping the math
+ * inline.
+ *
+ * Applied ONLY to segments that contain a construct which actually shrinks. A blanket `\displaystyle`
+ * would make every inline expression taller for no gain, and raising the `.katex` font size instead would
+ * oversize simple variables like `$x$` against body text.
+ */
+// The boundary is a negative lookahead for a letter, not `\b`: LaTeX macro names are letters only, and
+// `\b` fails after `\sum_` or `\int_` because `_` counts as a word character. This form also avoids
+// matching a longer macro that merely starts with one of these names.
+const DISPLAY_STYLE_CONSTRUCT_PATTERN = /\\(?:d?frac|[dt]?binom|sum|prod|int|oint|lim)(?![a-zA-Z])/;
+
+export function applyInlineDisplayStyle(latex: string, displayMode: boolean): string {
+  if (displayMode || !DISPLAY_STYLE_CONSTRUCT_PATTERN.test(latex)) {
+    return latex;
+  }
+  return `\\displaystyle ${latex}`;
+}
+
 function renderMathSegment(latex: string, delimiter: MathDelimiter, key: string) {
   try {
-    const rendered = katex.renderToString(latex, {
+    const rendered = katex.renderToString(applyInlineDisplayStyle(latex, delimiter.displayMode), {
       displayMode: delimiter.displayMode,
       throwOnError: false,
       output: "html",
