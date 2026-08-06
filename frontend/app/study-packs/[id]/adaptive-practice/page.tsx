@@ -50,6 +50,7 @@ import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { isQuizSelectionCorrect, resolveQuizCorrectIndex, resolveQuizItemGroupAt } from "@/lib/quiz";
 import { mapPerformanceLevel } from "@/lib/challenge-quiz-results";
 import type { AppPlanType } from "@/src/config/plans";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 function AdaptivePracticeLoading() {
   return (
@@ -884,7 +885,7 @@ export default function AdaptivePracticePage() {
               <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}
-                  {currentQuestion.explanation}
+                  {renderMathText(currentQuestion.explanation)}
                 </p>
                 {hasComputationalWorkingSolution(currentQuestion) ? (
                   <QuizWorkingSolution

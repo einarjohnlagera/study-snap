@@ -73,6 +73,7 @@ import {
 } from "@/lib/quiz";
 import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { cn } from "@/lib/utils";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
 type SessionStatePayload = {
@@ -1393,7 +1394,7 @@ export default function QuickReviewPage() {
               <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
                 <p>
                   <span className="font-medium text-foreground">Explanation:</span>{" "}
-                  {currentQuestion.explanation}
+                  {renderMathText(currentQuestion.explanation)}
                 </p>
                 {hasComputationalWorkingSolution(currentQuestion) ? (
                   <QuizWorkingSolution

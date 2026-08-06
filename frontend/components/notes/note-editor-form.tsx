@@ -349,11 +349,10 @@ export function NoteEditorForm({
 
     const renderMetadataFields = () => (
         <div className="space-y-5">
-            {/* Ordering is deliberate and was set by the owner: Title stays first, and Subject sits
-                BELOW Course / Program(s). The flow authors expect is write the note, optionally name it,
-                choose where it belongs, then optionally classify it further. Subject also happens to be
-                an input to Study Pack generation (it reaches the prompt via StudyPackGenerationContext),
-                which is why its helper text sells the benefit rather than just marking it optional. */}
+            {/* Field order is Title -> Subject -> Course / Program(s), which is how students
+                actually create notes: name it, say what it is about, then say where it belongs. This
+                was reordered twice during review and put back both times -- do not "improve" it.
+                Subject is surfaced instead through the sticky bar, which names it without moving it. */}
             <div className="space-y-2">
                 <label htmlFor="note-title" className="text-sm font-medium text-foreground">Title (optional)</label>
                 <p className="text-xs text-foreground/60">
@@ -368,6 +367,32 @@ export function NoteEditorForm({
                     disabled={isCopying}
                     className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
                 />
+            </div>
+
+            <div className="space-y-2">
+                <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject
+                    (optional)</label>
+                <p className="text-xs text-foreground/60">
+                    Helps organize your library, and improves your Study Pack — the subject is sent to the
+                    AI when you generate.
+                </p>
+                <SubjectCombobox
+                    id="note-subject"
+                    value={note.subject}
+                    suggestions={subjectSuggestions}
+                    onChange={onSubjectChange}
+                    disabled={isCopying}
+                />
+                {/* Live region stays mounted so the advisory is announced when it appears, not just rendered. */}
+                <div aria-live="polite">
+                    {showAuthoringMetadataFields && isSubjectSameAsDomainContext(note.subject, note.domainContext) ? (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                            Subject matches the Domain Context, so it is probably too broad to be a useful
+                            library shelf. Consider a specific subject like Algebra or Pharmacology and let
+                            Domain Context carry the domain. Saving anyway is fine.
+                        </p>
+                    ) : null}
+                </div>
             </div>
 
             {/* Course / Program(s) keeps its original position in the main metadata grid for BOTH
@@ -410,32 +435,6 @@ export function NoteEditorForm({
                             context="note"
                         />
                     )}
-                </div>
-            </div>
-
-            <div className="space-y-2">
-                <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject
-                    (optional)</label>
-                <p className="text-xs text-foreground/60">
-                    Helps organize your library, and improves your Study Pack — the subject is sent to the
-                    AI when you generate.
-                </p>
-                <SubjectCombobox
-                    id="note-subject"
-                    value={note.subject}
-                    suggestions={subjectSuggestions}
-                    onChange={onSubjectChange}
-                    disabled={isCopying}
-                />
-                {/* Live region stays mounted so the advisory is announced when it appears, not just rendered. */}
-                <div aria-live="polite">
-                    {showAuthoringMetadataFields && isSubjectSameAsDomainContext(note.subject, note.domainContext) ? (
-                        <p className="text-xs text-amber-700 dark:text-amber-300">
-                            Subject matches the Domain Context, so it is probably too broad to be a useful
-                            library shelf. Consider a specific subject like Algebra or Pharmacology and let
-                            Domain Context carry the domain. Saving anyway is fine.
-                        </p>
-                    ) : null}
                 </div>
             </div>
 
@@ -974,8 +973,15 @@ export function NoteEditorForm({
                     <div className="min-w-0 space-y-0.5">
                         <p className="text-xs font-medium text-foreground/75">{saveStateLabel ?? "Save your note or generate a Study Pack when ready."}</p>
                         {(() => {
-                            const parts = [resolvedCourseProgram?.trim() || null].filter(Boolean);
-                            if (parts.length === 0) return null;
+                            // Subject rides along here rather than moving up the form. The sticky bar is
+                            // always visible while writing, so naming Subject makes authors aware it
+                            // exists and is editable -- and "Adjust" surfaces Add details, which is how
+                            // the panel gets opened without defaulting it open. Naming it as missing is
+                            // the point: a silent omission teaches nothing.
+                            const tailoredProgram = resolvedCourseProgram?.trim() || null;
+                            const tailoredSubject = note.subject.trim() || null;
+                            if (!tailoredProgram && !tailoredSubject) return null;
+                            const parts = [tailoredProgram, tailoredSubject ?? "no subject yet"].filter(Boolean);
                             return (
                                 <p className="text-xs text-foreground/55">
                                     Tailored for: {parts.join(" · ")}

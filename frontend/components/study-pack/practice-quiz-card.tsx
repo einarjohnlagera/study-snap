@@ -2,6 +2,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import type { QuizItem } from "@/lib/api";
 import { resolveQuizCorrectIndex } from "@/lib/quiz";
 import { QuizChoiceList } from "./quiz-choice-list";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type PracticeQuizCardProps = {
   quiz: QuizItem[];
@@ -15,7 +16,7 @@ export function PracticeQuizCard({ quiz }: PracticeQuizCardProps) {
         {quiz.map((item, index) => (
           <Card key={`${item.question}-${index}`} className="space-y-3 p-4 sm:p-6">
             <CardTitle className="text-base">
-              {index + 1}. {item.question}
+              {index + 1}. {renderMathText(item.question)}
             </CardTitle>
             <QuizChoiceList
               questionKey={item.question}
@@ -25,7 +26,7 @@ export function PracticeQuizCard({ quiz }: PracticeQuizCardProps) {
             />
             <CardDescription className="text-sm">
               <span className="font-medium text-foreground">Explanation:</span>{" "}
-              {item.explanation}
+              {renderMathText(item.explanation)}
             </CardDescription>
           </Card>
         ))}

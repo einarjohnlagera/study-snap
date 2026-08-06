@@ -836,6 +836,22 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByText("Save your note or generate a Study Pack when ready.")).toBeInTheDocument();
   });
 
+  // Subject is surfaced in the always-visible sticky bar rather than moved up the form, so authors
+  // learn it exists and is editable without "Add details" being expanded by default. Naming it as
+  // missing is the point -- a silent omission teaches nothing.
+  it("names Subject in the sticky bar, including when it is not set yet", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    expect(await screen.findByText(/Tailored for: Nursing · no subject yet/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add details" }));
+    fireEvent.change(await screen.findByLabelText(/Subject/), { target: { value: "Algebra" } });
+
+    expect(screen.getByText(/Tailored for: Nursing · Algebra/)).toBeInTheDocument();
+  });
+
   // A curator's Course / Program(s) must pre-fill from their profile on a NEW note, the same way the
   // single-valued field always did. Slice 4 seeded only the learner free-text draft, so curators saw
   // "No course programs selected" while the footer read "Tailored for: Nursing".
