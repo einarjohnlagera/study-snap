@@ -745,6 +745,15 @@ export function NoteEditorForm({
     const programSummary = selectedProgramLabels.length > 2
         ? `${selectedProgramLabels.length} programs`
         : selectedProgramLabels.join(" · ");
+    // The sticky bar and the "Add details" nag must read the axis the author is actually editing.
+    // `resolvedCourseProgram` is the learner free-text field; for a curator it is empty by design (the
+    // backend nulls it) and falls back to the *profile* program, so the bar claimed "Tailored for: BSN"
+    // with zero programs selected while the nag -- gated on the same value -- stayed hidden. Both signals
+    // said a required field was done, and Save then failed on exactly that field. Editing a curated
+    // multi-program note collapsed the bar to the subject alone for the same reason.
+    const tailoredProgramLabel = showAuthoringMetadataFields
+        ? programSummary || null
+        : resolvedCourseProgram?.trim() || null;
     const subjectSummary = note.subject.trim();
     const optionalDetailsSummary = programSummary
         ? [programSummary, subjectSummary || "Add a Subject to improve organization and your Study Pack."]
@@ -978,7 +987,7 @@ export function NoteEditorForm({
                             // exists and is editable -- and "Adjust" surfaces Add details, which is how
                             // the panel gets opened without defaulting it open. Naming it as missing is
                             // the point: a silent omission teaches nothing.
-                            const tailoredProgram = resolvedCourseProgram?.trim() || null;
+                            const tailoredProgram = tailoredProgramLabel;
                             const tailoredSubject = note.subject.trim() || null;
                             if (!tailoredProgram && !tailoredSubject) return null;
                             const parts = [tailoredProgram, tailoredSubject ?? "no subject yet"].filter(Boolean);
@@ -996,7 +1005,7 @@ export function NoteEditorForm({
                                 </p>
                             );
                         })()}
-                        {showGenerateNoteEntry && !resolvedCourseProgram ? (
+                        {showGenerateNoteEntry && !tailoredProgramLabel ? (
                             <button
                                 type="button"
                                 onClick={handleRevealOptionalDetails}

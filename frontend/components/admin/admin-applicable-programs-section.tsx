@@ -25,7 +25,6 @@ export function AdminApplicableProgramsSection() {
   const [error, setError] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState<AdminNoteApplicableProgramsItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [savedIds, setSavedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveFailure, setSaveFailure] = useState<string | null>(null);
 
@@ -54,7 +53,6 @@ export function AdminApplicableProgramsSection() {
     const ids = item.applicablePrograms.map((program) => program.id);
     setEditingNote(item);
     setSelectedIds(ids);
-    setSavedIds(ids);
     setSaveFailure(null);
   };
 
@@ -70,6 +68,17 @@ export function AdminApplicableProgramsSection() {
     if (!editingNote || saving) {
       return;
     }
+    // C7. This screen has no Domain Context control, and the endpoint validates the new program set
+    // against the note's already-persisted domainContext -- so expanding a blank-domain note past one
+    // program 400s with no way to act on it from here. Catch it before the request and say where the
+    // field lives, instead of surfacing a raw API error on a field this screen does not show.
+    if (selectedIds.length > 1 && !editingNote.domainContext) {
+      setSaveFailure(
+        "A note shared across several programs needs a Domain Context. This screen cannot set it — "
+        + "open the note and set Domain Context under \"Generation & discovery\", then reapply these programs.",
+      );
+      return;
+    }
     setSaving(true);
     setSaveFailure(null);
     try {
@@ -82,7 +91,9 @@ export function AdminApplicableProgramsSection() {
       } : current);
       setEditingNote(null);
     } catch (saveError) {
-      setSelectedIds(savedIds);
+      // Deliberately do NOT reset the selection here. A failed save used to restore the persisted set,
+      // wiping every new pick, so a curator who family-expanded to several programs had to re-choose all
+      // of them before they could even retry. Keep the work; the error explains what to change.
       setSaveFailure(saveError instanceof Error ? saveError.message : "Could not save Applicable Programs.");
     } finally {
       setSaving(false);

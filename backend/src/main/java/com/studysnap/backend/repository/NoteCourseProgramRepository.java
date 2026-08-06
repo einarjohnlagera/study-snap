@@ -44,6 +44,25 @@ public class NoteCourseProgramRepository {
             WHERE notes.visibility = ?
             """;
 
+    /**
+     * The personal-string half of the public Course / Program vocabulary. The {@code NOT EXISTS} guard is
+     * what makes it the *fallback* half rather than a second, competing source: slice 2 reads join rows
+     * first and consults the legacy string only for notes that have none, so a note with join rows
+     * {@code [Nursing]} and a stale string {@code Accountancy} must not publish {@code Accountancy} into
+     * the filter dropdown -- selecting it returns zero notes under a chip the app itself offered.
+     * Mirrors the guard {@code countLibraryCoursePrograms} already applies to its facet counts.
+     */
+    private static final String FIND_LEGACY_VALUES_BY_VISIBILITY = """
+            SELECT DISTINCT notes.course_program
+            FROM notes
+            WHERE notes.visibility = ?
+              AND notes.course_program IS NOT NULL
+              AND trim(notes.course_program) <> ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM note_course_program WHERE note_course_program.note_id = notes.id
+              )
+            """;
+
     private final JdbcTemplate jdbcTemplate;
 
     public List<ApplicableProgramResponse> findByNoteId(UUID noteId) {
@@ -68,6 +87,10 @@ public class NoteCourseProgramRepository {
 
     public List<String> findNamesByVisibility(String visibility) {
         return jdbcTemplate.queryForList(FIND_NAMES_BY_VISIBILITY, String.class, visibility);
+    }
+
+    public List<String> findLegacyCourseProgramValuesByVisibility(String visibility) {
+        return jdbcTemplate.queryForList(FIND_LEGACY_VALUES_BY_VISIBILITY, String.class, visibility);
     }
 
     public Map<UUID, List<ApplicableProgramResponse>> findByNoteIds(Collection<UUID> noteIds) {

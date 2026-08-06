@@ -126,6 +126,8 @@ function resolveGenerateHelperText(_profileType: string | null | undefined): str
 }
 
 const GENERATE_NOTE_TIP_ID = "create-note-generate-topic";
+const MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE =
+  "A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in.";
 const NOTE_CONTENT_SCROLL_DELAY_MS = 140;
 const IMPORT_LOADING_MESSAGE = "Extracting text from your file...";
 const IMPORT_SUCCESS_MESSAGE = "Text imported. Review and edit it before continuing.";
@@ -705,6 +707,16 @@ export function NoteEditorPageClient({
       showToast(`Please complete: ${missing.join(", ")}.`, "warning");
       return null;
     }
+    // C6. The three sibling surfaces (Create a Note, Note Detail, Bulk Generate) all pre-validate this
+    // rule; Save did not, so a curator who family-expanded to several programs with "Add details"
+    // collapsed -- the default -- got a raw 400 naming a field that was off screen inside the closed
+    // accordion, with no way to act on it. Reveal the panel as well as reporting it.
+    if (showTargetProfileTypeField && applicableProgramIds.length > 1 && !draft.domainContext) {
+      setRevealOptionalDetailsSignal((previous) => previous + 1);
+      setFormError(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE);
+      showToast(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE, "warning");
+      return null;
+    }
     return {
       title: normalizeOptional(draft.title),
       subject: normalizeOptional(draft.subject),
@@ -1056,9 +1068,8 @@ export function NoteEditorPageClient({
       return;
     }
     if (showTargetProfileTypeField && applicableProgramIds.length > 1 && !draft.domainContext) {
-      const message = "A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in.";
-      setFormError(message);
-      showToast(message, "warning");
+      setFormError(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE);
+      showToast(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE, "warning");
       return;
     }
     setIsGeneratingNote(true);

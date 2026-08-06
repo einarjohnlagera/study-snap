@@ -8,6 +8,7 @@ public record AdminNoteApplicableProgramsItemResponse(
         String title,
         String ownerEmail,
         String courseProgram,
+        String domainContext,
         List<ApplicableProgramResponse> applicablePrograms
 ) {
 }
