@@ -171,6 +171,8 @@ public class NoteService {
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
         NoteTargetProfileType targetProfileType = resolveTargetProfileType(request.targetProfileType(), owner);
         Set<UUID> courseProgramIds = curator ? validateCuratedProgramIds(request.courseProgramIds()) : Set.of();
+        // Create needs no stored-row lookup, unlike update: the note does not exist yet, so the request
+        // set is the whole post-create truth, and a learner create writes no join rows at all.
         assertMultiProgramHasDomainContext(courseProgramIds.size(), domainContext);
         entity.setCourseProgram(curator ? null : resolveRequestedCourseProgram(request.courseProgramText(), owner));
         entity.setDomainContext(domainContext);
@@ -210,7 +212,18 @@ public class NoteService {
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
-        assertMultiProgramHasDomainContext(courseProgramIds.size(), domainContext);
+        // Validate the program set that will be in effect *after* this update, which is not the same
+        // source for both authors. A curator's request is the new set -- it is written below via
+        // replace() -- so validating stored rows would both block a legal 6-to-1 reduction and let an
+        // illegal 1-to-6 expansion through. A learner's request carries no programs at all
+        // (courseProgramIds is Set.of() above) while the stored rows survive the update untouched, so
+        // the request always reported 0 and the invariant was unenforceable on the one author who can
+        // reach it -- a learner could clear domainContext on a copied multi-program note and the
+        // client was the only thing preventing it.
+        int effectiveProgramCount = curator
+                ? courseProgramIds.size()
+                : noteCourseProgramRepository.findIdsByNoteId(noteId).size();
+        assertMultiProgramHasDomainContext(effectiveProgramCount, domainContext);
 
         entity.setContent(normalizedRequestedContent);
         entity.setTitle(normalizeOptionalText(request.title()));

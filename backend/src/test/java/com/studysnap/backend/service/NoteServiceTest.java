@@ -25,6 +25,7 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
@@ -51,6 +52,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -630,6 +632,11 @@ class NoteServiceTest {
         UUID noteId = UUID.randomUUID();
         NoteEntity copiedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(copiedNote));
+        // Stub one inherited row explicitly rather than leaning on Mockito's default empty Set. Since C1
+        // this method decides whether the multi-program invariant fires, so an unstubbed default would
+        // make this test pass by exercising the zero-program path -- which is not what it claims to
+        // cover, and would start throwing the moment anyone stubbed a wider set in setUp.
+        when(noteCourseProgramRepository.findIdsByNoteId(noteId)).thenReturn(Set.of(UUID.randomUUID()));
 
         // A learner never authors join rows, but a note copied from curated content inherits them.
         // Clearing them on a learner save would destroy every inherited program during an unrelated
@@ -640,6 +647,55 @@ class NoteServiceTest {
         noteService.update(noteId.toString(), titleOnlyEdit, ownerUserId);
 
         verify(noteCourseProgramRepository, never()).replace(any(), any());
+    }
+
+    @Test
+    void update_byLearnerOwner_rejectsClearingDomainContextOnAMultiProgramNote() {
+        // C1. A learner's request carries no programs, so validating the request always saw 0 and the
+        // invariant was unenforceable on the one author who can reach it: a learner could copy a
+        // curated multi-program note and clear domainContext, producing exactly the state slice 4
+        // forbids. The stored rows -- which a learner update leaves untouched -- are the truth here.
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity copiedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(copiedNote));
+        when(noteCourseProgramRepository.findIdsByNoteId(noteId))
+                .thenReturn(Set.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()));
+
+        UpsertNoteRequest clearsDomainContext = new UpsertNoteRequest(
+                "Title", "Subject", "Course", null, null, List.of(), null, "content"
+        );
+
+        assertThatThrownBy(() -> noteService.update(noteId.toString(), clearsDomainContext, ownerUserId))
+                .isInstanceOf(MultiProgramDomainContextRequiredException.class);
+    }
+
+    @Test
+    void update_byCuratorOwner_validatesTheRequestedProgramsRatherThanTheStoredRows() {
+        // The curator's request IS the new set -- replace() writes it moments later -- so the stored
+        // rows are the *pre*-update state and must not be what the invariant reads. Validating them
+        // here would block this legal reduction from three stored programs to one while clearing
+        // domainContext, and would equally let an illegal one-to-many expansion through.
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID keptProgramId = UUID.randomUUID();
+        UserEntity curator = buildUser(ownerUserId, "teacher@example.com");
+        curator.setProfileType(ProfileType.TEACHER);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator));
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        lenient().when(noteCourseProgramRepository.findIdsByNoteId(noteId))
+                .thenReturn(Set.of(UUID.randomUUID(), UUID.randomUUID(), keptProgramId));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(keptProgramId)))
+                .thenReturn(List.of(keptProgramId));
+
+        UpsertNoteRequest reducesToOneProgram = new UpsertNoteRequest(
+                "Title", "Subject", List.of(keptProgramId), null, null, null,
+                List.of(), "STUDENT", "content"
+        );
+        noteService.update(noteId.toString(), reducesToOneProgram, ownerUserId);
+
+        verify(noteCourseProgramRepository).replace(noteId, Set.of(keptProgramId));
     }
 
     @Test
