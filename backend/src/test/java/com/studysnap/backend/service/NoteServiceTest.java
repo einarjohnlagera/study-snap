@@ -23,6 +23,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
@@ -213,6 +214,45 @@ class NoteServiceTest {
         verify(noteRepository).save(captor.capture());
         assertThat(captor.getValue().getCourseProgram()).isEqualTo("AWS Certification");
         assertThat(created.courseProgram()).isEqualTo("AWS Certification");
+    }
+
+    @Test
+    void create_treatsAMidOnboardingAdminAsALearnerRatherThanACurator() {
+        // Onboarding's own-note path posts to POST /notes with a free-text program and no catalog ids,
+        // because onboarding has no catalog picker. An ADMIN mid-onboarding used to take the curator
+        // branch and be rejected for missing courseProgramIds, so onboarding could not be completed.
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity admin = buildUser(ownerUserId, "admin@example.com");
+        admin.setRole(UserRole.ADMIN);
+        admin.setCourseProgram(null);
+        admin.setOnboardingCompletedAt(null);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(admin));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Newton's Laws", null, List.of(), "Accountancy", null, null, List.of(), "STUDENT", "content"
+        );
+
+        NoteResponse created = noteService.create(request, ownerUserId);
+
+        assertThat(created.courseProgram()).isEqualTo("Accountancy");
+        verify(noteCourseProgramRepository, never()).replace(any(), any());
+    }
+
+    @Test
+    void create_stillRequiresCatalogProgramsForAnOnboardedAdmin() {
+        // Scope guard: the exemption is onboarding-only. A fully onboarded admin remains a curator and
+        // still authors through the catalog -- without this the fix would demote every curator silently.
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity admin = buildUser(ownerUserId, "admin@example.com");
+        admin.setRole(UserRole.ADMIN);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(admin));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Newton's Laws", null, List.of(), "Accountancy", null, null, List.of(), "STUDENT", "content"
+        );
+
+        assertThatThrownBy(() -> noteService.create(request, ownerUserId))
+                .isInstanceOf(CourseProgramSelectionRequiredException.class);
     }
 
     @Test
@@ -1932,6 +1972,10 @@ class NoteServiceTest {
         user.setEmail(email);
         user.setRole(UserRole.USER);
         user.setProfileType(ProfileType.STUDENT);
+        // A fully onboarded account is the realistic default for every test here. Curator branches are
+        // gated on onboarding being complete -- nobody curates mid-onboarding -- so a null value would
+        // silently make every ADMIN/TEACHER fixture behave as a learner.
+        user.setOnboardingCompletedAt(OffsetDateTime.now());
         return user;
     }
 

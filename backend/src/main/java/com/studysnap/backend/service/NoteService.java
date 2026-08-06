@@ -1455,7 +1455,18 @@ public class NoteService {
                 : mapOwnerProfileTypeToNoteTarget(owner.getProfileType());
     }
 
+    /**
+     * Nobody curates during onboarding. The flow collects personal learning context and has no catalog
+     * picker, so a curator-role account reaching a note-authoring path mid-onboarding was asked for
+     * {@code courseProgramIds} that no onboarding screen can supply -- which made onboarding
+     * uncompletable for every ADMIN account. This removes no authority: once onboarding is complete the
+     * account is a full curator again. Mirrors the exemption {@code OnboardingGuardService} already makes
+     * for mid-onboarding users, and matches {@code NoteGenerationService.isCurator}.
+     */
     private boolean isTeacherSelectableOwner(UserEntity owner) {
+        if (owner.getOnboardingCompletedAt() == null) {
+            return false;
+        }
         return owner.getRole() == UserRole.ADMIN || owner.getProfileType() == ProfileType.TEACHER;
     }
 

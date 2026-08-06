@@ -114,6 +114,15 @@ public class NoteGenerationService {
     }
 
     private boolean isCurator(UserEntity user) {
+        // Nobody curates during onboarding. The flow collects personal learning context and has no
+        // catalog picker at all, so a curator-role account reaching here mid-onboarding was asked for
+        // courseProgramIds that no onboarding screen can supply -- which made onboarding uncompletable
+        // for every ADMIN and for a TEACHER whose profile type was already persisted. This removes no
+        // authority: once onboarding is complete the account is a full curator again. Mirrors the
+        // exemption OnboardingGuardService already makes for mid-onboarding users.
+        if (user.getOnboardingCompletedAt() == null) {
+            return false;
+        }
         return user.getRole() == UserRole.ADMIN || user.getProfileType() == ProfileType.TEACHER;
     }
 }
