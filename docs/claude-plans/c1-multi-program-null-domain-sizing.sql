@@ -1,6 +1,32 @@
 -- C1 sizing: do any notes already violate the multi-program => Domain Context invariant?
 --
--- WHY THIS EXISTS
+-- ============================================================================================
+-- STATUS 2026-08-06: THIS GATE IS CLOSED BY CONSTRUCTION. DO NOT RUN AGAINST PRODUCTION YET --
+-- THE TABLE DOES NOT EXIST THERE.
+--
+-- Production has not received `note_course_program` at all: the whole of v0.71.0, slices 1
+-- through 4, deploys as one unit when the release merges. That closes the window this file was
+-- written to measure:
+--
+--   * V107's backfill creates AT MOST ONE row per note -- it joins `course_programs.name`,
+--     which is unique, on a single `notes.course_program` value (plus the one `Bsed` alias).
+--     So no note can leave the migration multi-program.
+--   * The slice 4 invariant ships in the SAME deploy, so both curator write paths
+--     (`NoteService` and `NoteApplicableProgramsService.replace`) enforce it from the first
+--     request.
+--   * C1 closes the learner path in that same deploy.
+--   * `copyNote` inherits join rows and `domain_context` together, so a copy of a legal note
+--     is legal.
+--
+-- The pre-existing violating population this file was meant to size therefore cannot exist,
+-- and no corrective migration or Known Limitation is owed. C1 is fully resolved.
+--
+-- KEEP THIS FILE as a POST-DEPLOY verification, not a pre-signoff gate. Run query 2 after
+-- v0.71.0 reaches production and any time the invariant's enforcement changes; a non-zero
+-- result then means a write path regressed, which is a live bug rather than legacy data.
+-- ============================================================================================
+--
+-- WHY THIS EXISTS (original framing, retained for the reasoning)
 -- C1 makes NoteService.update validate the *stored* join rows for learner owners, so a learner can no
 -- longer clear domainContext on a copied multi-program note. That is the fix. The open question is
 -- what it does to notes that are ALREADY in the violating state.
