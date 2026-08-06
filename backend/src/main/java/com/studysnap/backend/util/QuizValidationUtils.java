@@ -28,6 +28,27 @@ public class QuizValidationUtils {
     private static final Pattern STATEMENT_ONE_PATTERN = Pattern.compile("statement\\s*1");
     private static final Pattern STATEMENT_TWO_PATTERN = Pattern.compile("statement\\s*2");
     private static final Pattern ALL_EXCEPT_PATTERN = Pattern.compile("all of the following.{0,40}except");
+    /**
+     * An IDENTIFICATION answer is graded by exact normalized string equality, so it must be a term, name or
+     * label a learner can type unambiguously in words. A stem asking for the *notation itself* — an
+     * expression, formula, equation — cannot be graded that way: {@code x^2 + y^2}, {@code x² + y²} and
+     * {@code y² + x²} are all correct and none of them string-match each other.
+     *
+     * <p>Observed in production data: "Identify the algebraic expression for the sum of the squares of two
+     * variables $x$ and $y$." shipped as IDENTIFICATION with acceptableAnswers
+     * {@code ["sum of squares", "x squared plus y squared", ...]} — so the expression the stem explicitly
+     * asked for was marked WRONG, while echoing the stem back was marked right. Two independent generations
+     * produced it, so this is reproducible model behaviour rather than one bad sample.
+     *
+     * <p>The prompt already permitted a formula's *name* ("formula name") and the model read that as the
+     * formula. This guard is deliberately about the ANSWER'S FORM, not the subject, so it covers chemical
+     * formulas and code as well as maths. The prompt rule is the primary fix; this catches the case when the
+     * model ignores it.
+     */
+    private static final Pattern NOTATION_ANSWER_STEM_PATTERN = Pattern.compile(
+            "(identify|give|write|state|provide|what is)\\b.{0,40}\\b(algebraic|mathematical|chemical)?\\s*"
+            + "(expression|formula|equation|notation)\\b"
+    );
 
     public boolean hasInvalidChoices(List<String> choices, String questionFormat) {
         if (IDENTIFICATION_FORMAT.equals(questionFormat) || ENUMERATION_FORMAT.equals(questionFormat)) {
@@ -72,10 +93,15 @@ public class QuizValidationUtils {
     }
 
     public boolean isFormatStemMismatch(String question, List<String> choices, String questionFormat) {
+        String normalizedStem = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(question);
+        if (IDENTIFICATION_FORMAT.equals(questionFormat)) {
+            return normalizedStem != null
+                    && NOTATION_ANSWER_STEM_PATTERN.matcher(normalizedStem.toLowerCase(Locale.ROOT)).find();
+        }
         if (!isEffectivelyTrueFalse(choices, questionFormat)) {
             return false;
         }
-        String normalizedQuestion = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(question);
+        String normalizedQuestion = normalizedStem;
         if (normalizedQuestion == null) {
             return false;
         }

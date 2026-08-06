@@ -59,6 +59,57 @@ class QuizValidationUtilsTest {
         assertThat(QuizValidationUtils.hasInvalidChoices(List.of("True", "True"), "TRUE_FALSE")).isTrue();
     }
 
+    // An IDENTIFICATION answer is graded by exact normalized string equality, so a stem asking for the
+    // notation ITSELF cannot be graded fairly -- x^2 + y^2, x² + y² and y² + x² are all correct and none
+    // match as text. This is the exact question that shipped and marked the correct answer wrong.
+    @Test
+    void isFormatStemMismatch_rejectsIdentificationAskingForAnAlgebraicExpression() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Identify the algebraic expression for the sum of the squares of two variables $x$ and $y$.",
+                List.of(),
+                "IDENTIFICATION"
+        )).isTrue();
+    }
+
+    // The rule is about the ANSWER'S FORM, not the subject -- it must cover every subject NoteLib serves.
+    @Test
+    void isFormatStemMismatch_rejectsIdentificationAskingForNotationInAnySubject() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Identify the chemical formula for water.", List.of(), "IDENTIFICATION"
+        )).isTrue();
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Write the equation for Newton's Second Law.", List.of(), "IDENTIFICATION"
+        )).isTrue();
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "State the mathematical expression for kinetic energy.", List.of(), "IDENTIFICATION"
+        )).isTrue();
+    }
+
+    // False-positive guard. A formula's NAME is a perfectly valid IDENTIFICATION answer -- only the
+    // notation itself is not. Over-rejecting would silently delete a legitimate question format.
+    @Test
+    void isFormatStemMismatch_allowsIdentificationAskingForANameOrTerm() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Which law states that force equals mass times acceleration?", List.of(), "IDENTIFICATION"
+        )).isFalse();
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Identify the organelle that produces ATP.", List.of(), "IDENTIFICATION"
+        )).isFalse();
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Name the process by which plants convert light into chemical energy.", List.of(), "IDENTIFICATION"
+        )).isFalse();
+    }
+
+    // The IDENTIFICATION branch must not change how other formats are judged.
+    @Test
+    void isFormatStemMismatch_leavesNonIdentificationFormatsUnchanged() {
+        assertThat(QuizValidationUtils.isFormatStemMismatch(
+                "Identify the algebraic expression for the sum of the squares.",
+                List.of("A", "B", "C", "D"),
+                "MULTI_CHOICE"
+        )).isFalse();
+    }
+
     @Test
     void isFormatStemMismatch_detectsTrueFalseWhichIsCorrectStem() {
         assertThat(QuizValidationUtils.isFormatStemMismatch(
