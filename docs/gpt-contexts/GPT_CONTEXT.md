@@ -67,7 +67,7 @@ Twelve pre-existing findings are recorded as **Known Limitations tagged `v0.68.1
 
 ## Slice 3 — Program Family expansion: RATIFIED 2026-08-05 (gate cleared, not yet built)
 
-**All four decisions are closed.** Do not re-open them; they are binding in ADR-001. Record of how they were reached: `docs/claude-prompt/canonical-knowledge-architecture-out/20-slice-3-family-expansion-decision-sheet.md`.
+**All four decisions are closed.** Do not re-open them; they are binding in `docs/architecture/ADR-001-canonical-knowledge-architecture.md`, and the shipped behaviour is recorded under `RELEASES.md` v0.71.0 → Slice 3. (The working decision sheet that produced them, `20-slice-3-family-expansion-decision-sheet.md`, was removed 2026-08-06 once the slice shipped and the rulings were absorbed into the ADR; recover it from git history if the reasoning is ever needed.)
 
 1. **The catalog represents *valid applicability*, not curriculum coverage.** It answers *"who can legitimately study this note?"*; **Review Sets** are what communicate completeness. **The catalog still follows curriculum — a program simply no longer needs a complete Review Set to earn an entry, only legitimate canonical notes applicable to it.** Pre-seeding every PRC engineering program is **rejected as premature**; growth is incremental and demand-driven by authoring. Refines rather than reverses the `v0.70.0` *follow-not-lead* posture; the `Computer Science` / `Software Engineering` exclusions stand.
 2. **Program Families stay intentionally dumb** — an authoring shortcut, never a curriculum engine. No hidden inference, no read-time applicability, no curriculum intelligence.

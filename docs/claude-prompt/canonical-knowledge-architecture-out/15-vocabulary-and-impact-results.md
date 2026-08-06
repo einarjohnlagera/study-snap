@@ -75,7 +75,7 @@ v0.69.0 subject-equals-context nudge was built to surface.
 
 ### Query D — legacy level labels, post-V105
 
-Matches `13-post-deploy-verification.sql` exactly: Grade School 3, Junior High 24, High School
+Matches the post-deploy verification run exactly (`13-post-deploy-verification.sql`, removed 2026-08-06 after the v0.70.0 deploy it verified): Grade School 3, Junior High 24, High School
 3+1+6 (classified/classified/deliberately unclassified), the three strands 4/4/3 at `SENIOR_HIGH`
 with NULL Domain Context. `Senior High – ABM` is 4 notes but only 3 public — the one non-public
 row in the legacy set.
