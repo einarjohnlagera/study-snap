@@ -53,4 +53,19 @@ describe("getServerPublicNoteCount", () => {
     expect(after).toEqual(before);
     expect(after).toEqual([nursingNote]);
   });
+
+  it("matches joined curator programs and personal-note scalar programs without using a stale scalar", async () => {
+    const curatedNote = { id: "curated", courseProgram: null, applicablePrograms: [" Nursing "] };
+    const personalNote = { id: "personal", courseProgram: "nursing", applicablePrograms: [] };
+    const mixedNote = { id: "mixed", courseProgram: "Accountancy", applicablePrograms: ["Nursing"] };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [curatedNote, personalNote, mixedNote], total: 3 }),
+    });
+
+    await expect(getServerPublicNotesByCoursePrograms(["NURSING"]))
+      .resolves.toEqual([curatedNote, personalNote, mixedNote]);
+    await expect(getServerPublicNotesByCoursePrograms(["Accountancy"]))
+      .resolves.toEqual([]);
+  });
 });

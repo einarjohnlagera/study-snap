@@ -99,7 +99,16 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
     .slice(0, 3)
     .map((n) => ({ id: n.id, title: n.title, subject: n.subject, summaryPreview: n.summaryPreview, contentPreview: n.contentPreview }));
 
-  const courseProgram = allSubjectNotes.find((n) => n.id === note.id)?.courseProgram ?? null;
+  const currentListItem = allSubjectNotes.find((n) => n.id === note.id);
+  // Join rows first, personal-note string only as the fallback -- the same order every other program
+  // read uses (backend publicLibraryPrograms, getNormalizedNotePrograms). Reading the scalar first
+  // would resolve a mixed-shape note to its stale legacy value, and the rail below then filters
+  // join-first, so the page would advertise "More {stale program} notes" on a note that is no longer
+  // in that program. This contextual link is intentionally single-valued; discovery keeps every
+  // joined program.
+  const courseProgram = currentListItem?.applicablePrograms?.[0]
+    ?? currentListItem?.courseProgram
+    ?? null;
   const examSlug = await getServerExamSlugForCourseProgram(courseProgram);
   const moreByCourseProgram = courseProgram
     ? (await getServerPublicNotesByCourseProgram(courseProgram))

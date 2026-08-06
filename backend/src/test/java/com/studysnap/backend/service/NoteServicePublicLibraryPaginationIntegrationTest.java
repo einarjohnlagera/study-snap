@@ -146,6 +146,54 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     }
 
     @Test
+    void legacyModeUsesJoinedProgramsBeforeThePersonalNoteStringAndMatchesPaginatedResults() {
+        UUID ownerId = insertUser("legacyjoinreader", UserRole.USER);
+        NoteEntity curated = saveNote(
+                ownerId, "Curated nursing foundations", "Patient Care", null,
+                new String[]{"clinical"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 3
+        );
+        NoteEntity personal = saveNote(
+                ownerId, "Personal nursing foundations", "Patient Care", NURSING_PROGRAM,
+                new String[]{"personal"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 2
+        );
+        NoteEntity mixed = saveNote(
+                ownerId, "Mixed program foundations", "Patient Care", ACCOUNTANCY_PROGRAM,
+                new String[]{"mixed"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 1
+        );
+        flushAndClear();
+        UUID nursingId = insertCourseProgram(NURSING_PROGRAM);
+        insertApplicableProgram(curated.getId(), nursingId);
+        insertApplicableProgram(mixed.getId(), nursingId);
+
+        PublicNoteListResponse legacyNursing = noteService.listPublic(
+                null, null, "recent", null, List.of(), NURSING_PROGRAM, null, null, null
+        );
+        PublicNoteListResponse paginatedNursing = page(
+                null, null, "recent", null, List.of(), NURSING_PROGRAM, null,
+                null, false, List.of(), 0, 20
+        );
+        PublicNoteListResponse staleLegacyProgram = noteService.listPublic(
+                null, null, "recent", null, List.of(), ACCOUNTANCY_PROGRAM, null, null, null
+        );
+        PublicNoteListResponse programSearch = noteService.listPublic(
+                null, NURSING_PROGRAM, "recent", null, List.of(), null, null, null, null
+        );
+
+        assertThat(ids(legacyNursing))
+                .containsExactly(curated.getId().toString(), personal.getId().toString(), mixed.getId().toString());
+        assertThat(ids(legacyNursing)).containsExactlyElementsOf(ids(paginatedNursing));
+        assertThat(legacyNursing.items()).allSatisfy(item -> assertThat(item.applicablePrograms()).isNotNull());
+        assertThat(legacyNursing.items().stream()
+                .filter(item -> item.id().equals(curated.getId().toString()))
+                .findFirst().orElseThrow().applicablePrograms()).containsExactly(NURSING_PROGRAM);
+        assertThat(ids(staleLegacyProgram)).doesNotContain(mixed.getId().toString());
+        assertThat(ids(programSearch)).contains(curated.getId().toString());
+    }
+
+    @Test
     void legacyModePreservesCombinedFiltersTotalAndNullablePaginationFields() {
         UUID creatorId = insertUser("nursecreator", UserRole.USER);
         UUID otherOwnerId = insertUser("othercreator", UserRole.USER);

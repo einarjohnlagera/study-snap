@@ -51,6 +51,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -103,9 +105,11 @@ class NoteServiceTest {
     @Mock
     private com.studysnap.backend.repository.CourseProgramCatalogRepository courseProgramCatalogRepository;
     private NoteService noteService;
+    private final Map<UUID, NoteEntity> noteFixtures = new HashMap<>();
 
     @BeforeEach
     void setUp() {
+        noteFixtures.clear();
         noteService = new NoteService(
                 noteRepository,
                 analyticsEventRepository,
@@ -125,6 +129,14 @@ class NoteServiceTest {
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
+        lenient().when(noteRepository.findPublicLibraryListItemProjectionsByIdIn(any())).thenAnswer(invocation -> {
+            List<UUID> noteIds = invocation.getArgument(0);
+            return noteIds.stream()
+                    .map(noteFixtures::get)
+                    .filter(java.util.Objects::nonNull)
+                    .map(this::buildListItemProjection)
+                    .toList();
+        });
         lenient().when(noteRepository.findCourseProgramValuesByOwnerUserId(any())).thenReturn(List.of());
         lenient().when(noteRepository.findCourseProgramValuesByVisibility(any())).thenReturn(List.of());
         lenient().when(noteCourseProgramRepository.findNamesByOwnerUserId(any())).thenReturn(List.of());
@@ -1428,6 +1440,26 @@ class NoteServiceTest {
     }
 
     @Test
+    void listPublic_legacyModeDropsMissingProjectionWithoutChangingPreFilterTotal() {
+        NoteEntity retained = buildNote(
+                UUID.randomUUID(), UUID.randomUUID(), NoteStatus.DRAFT, NoteVisibility.PUBLIC, "retained"
+        );
+        NoteEntity deletedBetweenQueries = buildNote(
+                UUID.randomUUID(), UUID.randomUUID(), NoteStatus.DRAFT, NoteVisibility.PUBLIC, "deleted"
+        );
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(retained, deletedBetweenQueries));
+        org.mockito.Mockito.doReturn(List.of(buildListItemProjection(retained)))
+                .when(noteRepository).findPublicLibraryListItemProjectionsByIdIn(any());
+
+        var result = noteService.listPublic(null, null, null, null, null, null, null, null, null);
+
+        assertThat(result.total()).isEqualTo(2);
+        assertThat(result.items()).extracting(NoteListItemResponse::id)
+                .containsExactly(retained.getId().toString());
+    }
+
+    @Test
     void listPublic_withSortFeatured_sortsByScoreDescThenNewestFirst() {
         UUID ownerId = UUID.randomUUID();
         UUID highScoreId = UUID.randomUUID();
@@ -1899,7 +1931,29 @@ class NoteServiceTest {
         note.setCopiedAt(null);
         note.setCreatedAt(OffsetDateTime.now().minusDays(1));
         note.setUpdatedAt(OffsetDateTime.now().minusHours(1));
+        noteFixtures.put(noteId, note);
         return note;
+    }
+
+    private NoteListItemProjection buildListItemProjection(NoteEntity note) {
+        NoteListItemProjection projection = mock(NoteListItemProjection.class);
+        lenient().when(projection.getId()).thenReturn(note.getId());
+        lenient().when(projection.getOwnerUserId()).thenReturn(note.getOwnerUserId());
+        lenient().when(projection.getTitle()).thenAnswer(ignored -> note.getTitle());
+        lenient().when(projection.getCourseProgram()).thenAnswer(ignored -> note.getCourseProgram());
+        lenient().when(projection.getDomainContext()).thenAnswer(ignored -> note.getDomainContext());
+        lenient().when(projection.getLearnerLevel()).thenAnswer(ignored -> note.getLearnerLevel());
+        lenient().when(projection.getTargetProfileType()).thenAnswer(ignored -> note.getTargetProfileType());
+        lenient().when(projection.getSubject()).thenAnswer(ignored -> note.getSubject());
+        lenient().when(projection.getTags()).thenAnswer(ignored -> note.getTags());
+        lenient().when(projection.getContent()).thenAnswer(ignored -> note.getContent());
+        lenient().when(projection.getStatus()).thenAnswer(ignored -> note.getStatus());
+        lenient().when(projection.getVisibility()).thenAnswer(ignored -> note.getVisibility());
+        lenient().when(projection.getCreatedAt()).thenAnswer(ignored -> note.getCreatedAt());
+        lenient().when(projection.getUpdatedAt()).thenAnswer(ignored -> note.getUpdatedAt());
+        lenient().when(projection.getCopiedFromNoteId()).thenAnswer(ignored -> note.getCopiedFromNoteId());
+        lenient().when(projection.getCopiedFromPublic()).thenAnswer(ignored -> note.getCopiedFromPublic());
+        return projection;
     }
 
     private NoteListItemProjection buildListItemProjection(UUID noteId, UUID ownerUserId, NoteStatus status) {

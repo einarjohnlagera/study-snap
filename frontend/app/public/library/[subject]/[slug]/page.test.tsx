@@ -482,6 +482,51 @@ describe("PublicLibrarySeoPage", () => {
     expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Business Administration");
   });
 
+  it("derives the contextual course/program from a curated note's joined programs", async () => {
+    (getServerExamSlugForCourseProgram as jest.Mock).mockResolvedValue("pnle");
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: null, applicablePrograms: ["Nursing", "Midwifery"] },
+    ]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Vital Signs", applicablePrograms: ["Nursing"] },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(getServerExamSlugForCourseProgram).toHaveBeenCalledWith("Nursing");
+    expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Nursing");
+    expect(screen.getByRole("heading", { name: "More Nursing notes" })).toBeInTheDocument();
+  });
+
+  it("prefers a mixed-shape note's joined program over its stale personal-note string", async () => {
+    // The scalar survives on a note that later gained join rows. Reading it first would link the exam
+    // hub and the rail to a program the note is no longer in, while the rail's own filter resolves
+    // join-first -- so the page would advertise "More Accountancy notes" on a Nursing note.
+    (getServerExamSlugForCourseProgram as jest.Mock).mockResolvedValue("pnle");
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
+      { ...baseNote, courseProgram: "Accountancy", applicablePrograms: ["Nursing"] },
+    ]);
+    (getServerPublicNotesByCourseProgram as jest.Mock).mockResolvedValue([
+      { ...baseNote, id: "note-2", title: "Vital Signs", applicablePrograms: ["Nursing"] },
+    ]);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(getServerExamSlugForCourseProgram).toHaveBeenCalledWith("Nursing");
+    expect(getServerPublicNotesByCourseProgram).toHaveBeenCalledWith("Nursing");
+    expect(screen.getByRole("heading", { name: "More Nursing notes" })).toBeInTheDocument();
+  });
+
   it("saves the course/program-filtered Public Library URL as the return URL when a related-course/program note is clicked", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([
