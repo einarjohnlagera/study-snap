@@ -45,6 +45,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -62,6 +63,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -777,6 +779,28 @@ class NoteServiceTest {
         assertThat(copied.copiedFromUserId()).isNull();
         assertThat(copied.copiedFromPublic()).isFalse();
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+    }
+
+    @Test
+    void copyNote_flushesTheParentBeforeWritingInheritedJoinRows() {
+        // B1. replace() is raw JDBC and cannot see JPA's pending persistence context, so without a flush
+        // between them the child insert hits the foreign key before the parent note row exists and copyNote
+        // throws on any note carrying join rows -- since slice 4, every curated note. Asserting the ORDER
+        // rather than merely that flush() was called is what makes this fail if the flush is removed or
+        // moved below the join write.
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        NoteEntity source = buildNote(sourceNoteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "source content");
+        source.setCourseProgram("Engineering");
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+        when(noteCourseProgramRepository.findIdsByNoteId(sourceNoteId)).thenReturn(Set.of(UUID.randomUUID()));
+
+        noteService.copyNote(sourceNoteId.toString(), ownerUserId);
+
+        InOrder inOrder = inOrder(noteRepository, noteCourseProgramRepository);
+        inOrder.verify(noteRepository).save(any(NoteEntity.class));
+        inOrder.verify(noteRepository).flush();
+        inOrder.verify(noteCourseProgramRepository).replace(any(), any());
     }
 
     @Test

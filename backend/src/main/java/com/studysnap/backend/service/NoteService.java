@@ -350,6 +350,11 @@ public class NoteService {
         copy.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(copy);
+        // Flush before the join write, matching create (:193-194) and update (:244-245). replace() is raw JDBC,
+        // so it does not see JPA's pending persistence context: without this the child insert hits the FK
+        // before the parent row exists and copyNote throws on any note carrying join rows -- which, since
+        // slice 4, is every curated note.
+        noteRepository.flush();
         noteCourseProgramRepository.replace(saved.getId(), noteCourseProgramRepository.findIdsByNoteId(source.getId()));
         StudyPackEntity copiedStudyPack = null;
         if (!isOwner) {

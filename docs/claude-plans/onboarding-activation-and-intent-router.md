@@ -28,7 +28,37 @@ first impression must reflect that immediately. This is the reason the redesign 
 | **5** | Propagate all decisions into `ROADMAP.md`, `RELEASES.md`, and onboarding documentation before implementation. Remove tracked `.DS_Store` files and gitignore them. | Done — see §11 and the changelog at the foot of this file. |
 | **6–11** | **Second ruling pass, 2026-08-06** — final UX direction for the intent step, the unsupported-program experience, the Dashboard question, teacher copy, completion behaviour, and the analytics set. | **See §13, which is the authoritative UX specification.** It supersedes §1.3-REVISED and §6 where they differ. |
 
-### Open decision A — B2 is not resolved by decision 1
+### ~~Open decision A~~ — RESOLVED 2026-08-06. Option 7: prevent the mechanical derivation.
+
+**The owner locked Option 7 and the doctrine is now ratified in `ADR-001` → "Representation authority: what may
+author an Applicable Program row".** That section is the source of truth; this one is kept for the reasoning that
+led there.
+
+> A learner's personal free-text Course / Program must not be mechanically materialized into a catalog
+> Applicable Program row.
+
+**Stated narrowly on purpose.** "Learner-owned notes cannot carry join rows" is the wrong rule — it would
+contradict copy inheritance and decision 1. Learner-owned notes keep join rows of legitimate curated
+provenance. Read semantics stay identical for every note and never consult ownership.
+
+**The sizing gate is closed without being run.** Production never received `note_course_program` — `V107` ships
+with this unreleased version and production stopped at `V106` — so the gate metric is 0 by construction, which
+is the owner's pre-set "prevent future divergence, no UI" threshold. The remaining work is preventive, and the
+window closes at deploy.
+
+**Option 3 (learner-save synchronization) was rejected**: it cannot reliably distinguish a mechanically derived
+row from an inherited curator-authored row when both match the learner's old string, so it adds permanent hidden
+coupling to the learner save path and can delete valid inherited applicability. The discovery parity it
+preserves is not worth that risk — a learner note on the personal-string fallback is a canonical shape, not a
+degraded one.
+
+**Implementation:** an additive follow-up migration removes the learner-note rows `V107` derives, rather than
+editing `V107` (whose checksum is already fixed wherever it has run). Curator rows remain. Future inherited rows
+remain. No learner-facing UI, no `source` column, no learner-save synchronization.
+
+---
+
+#### Original framing, retained for the reasoning
 
 Decision 1 fixes C1 but **not B2** (a learner's Course / Program edit is permanently inert because a stale
 V107-backfilled join row wins every read). Keeping rows and not clearing them leaves that untouched.
