@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { getDisplayedQuizChoices } from "@/lib/quiz";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type QuizChoiceListProps = {
   questionKey: string;
@@ -113,7 +114,8 @@ export function QuizChoiceList({
               ) : null}
               <span className="min-w-0 flex-1">
                 <span className="mr-2 font-semibold text-foreground">{choice.label}.</span>
-                <span>{choice.text}</span>
+                {/* Options carry LaTeX for the same reason questions do -- see quiz-question-text. */}
+                <span>{renderMathText(choice.text)}</span>
                 {revealAnswer && isCorrect ? (
                   <span className="ml-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                     ✓ Correct

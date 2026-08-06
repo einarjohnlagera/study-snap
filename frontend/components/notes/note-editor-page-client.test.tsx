@@ -836,6 +836,34 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByText("Save your note or generate a Study Pack when ready.")).toBeInTheDocument();
   });
 
+  // A curator's Course / Program(s) must pre-fill from their profile on a NEW note, the same way the
+  // single-valued field always did. Slice 4 seeded only the learner free-text draft, so curators saw
+  // "No course programs selected" while the footer read "Tailored for: Nursing".
+  it("preselects the profile course/program for a curator creating a note", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([]);
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+
+    expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
+    expect(screen.queryByText("No course programs selected.")).not.toBeInTheDocument();
+  });
+
+  it("does not preselect a profile program the catalog does not carry", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([]);
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: null, courseProgram: "Software Engineering" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+
+    expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
+    expect(screen.getByText("No course programs selected.")).toBeInTheDocument();
+  });
+
   it("uses the teacher generate label and helper text for teacher note creation", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
     (getCourseProgramCatalog as jest.Mock).mockResolvedValue([

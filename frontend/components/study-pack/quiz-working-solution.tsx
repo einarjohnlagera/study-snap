@@ -80,6 +80,21 @@ function renderMathSegment(latex: string, delimiter: MathDelimiter, key: string)
   }
 }
 
+/**
+ * Renders text that MAY contain LaTeX, for callers that already have their own wrapper element.
+ *
+ * Returns the raw string untouched when the text contains no math delimiters, which is the
+ * overwhelming majority of questions and options. That matters: wrapping every plain string in an
+ * extra span changes which element `getByText` resolves to, and would silently move styling like
+ * `break-words` off the element tests assert against. Structure is only added where math exists.
+ */
+export function renderMathText(text: string): ReactNode {
+  if (!MATH_DELIMITERS.some((delimiter) => text.includes(delimiter.start))) {
+    return text;
+  }
+  return <>{renderWorkingSolution(text)}</>;
+}
+
 export function renderWorkingSolution(text: string): ReactNode[] {
   if (!MATH_DELIMITERS.some((delimiter) => text.includes(delimiter.start))) {
     return [renderPlainTextSegment(text, "plain-0")];

@@ -236,3 +236,11 @@ Currently all quiz questions use a fixed format: 4 choices, 1 correct index. Pla
 - **Matching type** — shipped as `MATCHING` with `questionGroup` shared option blocks; each item remains independently scored
 
 Do not implement format additions without a `EXAM_MODES.md` review — they affect scoring logic across all five quiz modes.
+
+## Math rendering in questions and options
+
+Generated questions can contain inline LaTeX — the model emits `\( ... \)` for algebraic prompts, so a Quick Review question would otherwise read literally as `simplify \(\frac{x^3 - 4x^2 + 5x}{x - 2}\)?`.
+
+- `QuizQuestionText` and `QuizChoiceList` render through `renderMathText` (`quiz-working-solution.tsx`), the same KaTeX-backed renderer working solutions already used. It had only ever been wired to working solutions.
+- **`renderMathText` returns the raw string untouched when the text contains no math delimiters**, which is the overwhelming majority of questions. That is deliberate: wrapping every plain string in an extra element changes which node `getByText` resolves to and silently relocates styling such as `break-words` off the element callers put it on. Structure is added only where math actually exists.
+- Rendering falls back to plain text when a segment fails to parse, so malformed LaTeX degrades to the original markup rather than breaking the page.

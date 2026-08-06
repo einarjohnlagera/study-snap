@@ -200,6 +200,7 @@ export function NoteEditorPageClient({
   const [applicableProgramsDirty, setApplicableProgramsDirty] = useState(false);
   const [applicableProgramsRetryToken, setApplicableProgramsRetryToken] = useState(0);
   const [profileCourseProgram, setProfileCourseProgram] = useState("");
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
   const generatedContentSectionRef = useRef<HTMLElement | null>(null);
   const [generatedContentRefreshToken, setGeneratedContentRefreshToken] = useState(0);
@@ -252,6 +253,7 @@ export function NoteEditorPageClient({
           setSavedApplicableProgramIds(selectedIds);
           setApplicableProgramsDirty(false);
         }
+        setCatalogLoaded(true);
       })
       .catch((error) => {
         if (active) {
@@ -306,6 +308,37 @@ export function NoteEditorPageClient({
       active = false;
     };
   }, []);
+
+  // Seed a curator's Course / Program(s) from their profile on a NEW note, matching the long-standing
+  // behaviour of the single-valued field. It needs both the profile value and the catalog to map a
+  // name onto an id, so it cannot live in either fetch effect alone. Only ever a pre-fill: it never
+  // runs in edit mode, and never once the author has touched the selection.
+  useEffect(() => {
+    if (isEditMode || !showTargetProfileTypeField || !catalogLoaded) {
+      return;
+    }
+    if (applicableProgramsDirty || applicableProgramIds.length > 0) {
+      return;
+    }
+    const profileProgram = profileCourseProgram.trim();
+    if (!profileProgram) {
+      return;
+    }
+    const match = applicableProgramCatalog.find(
+      (program) => program.name.toLocaleLowerCase("en") === profileProgram.toLocaleLowerCase("en"),
+    );
+    if (match) {
+      setApplicableProgramIds([match.id]);
+    }
+  }, [
+    applicableProgramCatalog,
+    applicableProgramIds.length,
+    applicableProgramsDirty,
+    catalogLoaded,
+    isEditMode,
+    profileCourseProgram,
+    showTargetProfileTypeField,
+  ]);
 
   useEffect(() => {
     let active = true;
