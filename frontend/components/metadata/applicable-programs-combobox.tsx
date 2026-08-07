@@ -163,7 +163,7 @@ export function ApplicableProgramsCombobox({
         </div>
       ) : null}
       <p className="text-xs text-foreground/60">
-        These programs decide who finds the note; they never affect Study Pack generation.
+        These programs decide who finds the note. A program list is never sent to the AI — only a single program can inform the writing domain, and Domain Context overrides it.
       </p>
     </div>
   );

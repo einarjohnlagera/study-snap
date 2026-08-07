@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QuizAnswerReview } from "./quiz-answer-review";
+import { getDisplayedQuizChoices } from "@/lib/quiz";
 
 const reviewQuiz = [
   {
@@ -36,8 +37,36 @@ describe("QuizAnswerReview", () => {
     const { container } = render(<QuizAnswerReview quiz={mathQuiz} selectedChoices={{ 0: 0 }} />);
 
     expect(container.querySelector(".katex")).toBeInTheDocument();
-    expect(screen.queryByText(/\\\(/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/x\^2/)).not.toBeInTheDocument();
+    // Visual branch only -- the MathML <annotation> legitimately carries the TeX source and is never
+    // rendered. See the note in quiz-question-text.test.tsx.
+    const visualBranch = container.querySelector(".katex-html");
+    expect(visualBranch?.textContent).not.toContain("\\(");
+    expect(visualBranch?.textContent).not.toContain("x^2");
+  });
+
+  // M7. The choice order is a deterministic shuffle seeded on the question. The review screen used to
+  // seed on `${question}-${originalIndex}` while the live session pages seed on the question alone, so
+  // the letters moved between answering and reviewing: a learner who picked B was told "Your Answer: D".
+  // Grading was never wrong -- it tracks canonicalIndex -- which made it worse, not better: the product
+  // looked broken while behaving correctly.
+  it("labels choices the same way the live session did", () => {
+    const item = {
+      question: "What powers the cell?",
+      choices: ["Mitochondria", "Nucleus", "Ribosome", "Cell wall"],
+      correctIndex: 0,
+      concept: "Cell organelles",
+      explanation: "Mitochondria produce ATP for the cell.",
+    };
+    // What the session page renders, seeded on the question text alone.
+    const sessionOrder = getDisplayedQuizChoices(item).map((choice) => `${choice.label}. ${choice.text}`);
+
+    render(<QuizAnswerReview quiz={[item]} selectedChoices={{ 0: 1 }} />);
+
+    sessionOrder.forEach((labelled) => {
+      const [label, text] = labelled.split(". ");
+      const rendered = screen.getByText(text).closest("button, li, div");
+      expect(rendered?.textContent).toContain(label);
+    });
   });
 
   it("shows the selected answer, correct answer, explanation, and concept", () => {

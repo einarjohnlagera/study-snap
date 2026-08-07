@@ -149,7 +149,11 @@ function renderMathSegment(latex: string, delimiter: MathDelimiter, key: string)
     const rendered = katex.renderToString(applyInlineDisplayStyle(latex, delimiter.displayMode), {
       displayMode: delimiter.displayMode,
       throwOnError: false,
-      output: "html",
+      // "html" alone emits aria-hidden markup and no MathML, so rendered math is INVISIBLE to screen
+      // readers. That was survivable while it only affected working solutions; the v0.71.0 sweep
+      // extended it to every question, option and explanation in the app, which made a narrow gap a
+      // broad one. "htmlAndMathml" adds a MathML branch for assistive tech at no visual cost.
+      output: "htmlAndMathml",
     });
     if (rendered.includes(KATEX_ERROR_CLASS)) {
       return renderPlainTextSegment(delimiter.start + latex + delimiter.end, key);
