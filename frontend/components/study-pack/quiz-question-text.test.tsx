@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { QuizQuestionText } from "./quiz-question-text";
+import { applyInlineDisplayStyle } from "./quiz-working-solution";
 
 describe("QuizQuestionText", () => {
   // The model emits inline LaTeX for algebraic prompts. Before this was wired up, a question read
@@ -51,6 +52,42 @@ describe("QuizQuestionText", () => {
 
     expect(container.querySelector(".katex")).toBeInTheDocument();
     expect(container.textContent).not.toContain("$");
+  });
+
+  // Inline KaTeX renders \frac numerator/denominator at script size, so a fraction in a question stem
+  // reads much smaller than the words around it. \displaystyle restores full size while staying inline.
+  // These assert the SELECTION LOGIC only -- whether it looks right is a visual judgement, not a test.
+  describe("inline display style", () => {
+    it("promotes size-collapsing constructs so they are not rendered at script size", () => {
+      expect(applyInlineDisplayStyle("\\frac{x^3 - 4x^2 + 5x}{x - 2}", false))
+        .toBe("\\displaystyle \\frac{x^3 - 4x^2 + 5x}{x - 2}");
+      expect(applyInlineDisplayStyle("\\sum_{i=1}^{n} i", false)).toContain("\\displaystyle");
+      expect(applyInlineDisplayStyle("\\int_0^1 x\\,dx", false)).toContain("\\displaystyle");
+    });
+
+    it("leaves ordinary inline math untouched, so simple variables do not grow", () => {
+      expect(applyInlineDisplayStyle("x", false)).toBe("x");
+      expect(applyInlineDisplayStyle("x^2 + y^2", false)).toBe("x^2 + y^2");
+      // A longer macro that merely starts with one of the names must not match.
+      expect(applyInlineDisplayStyle("\\intercal", false)).toBe("\\intercal");
+    });
+
+    it("leaves block math untouched, since it is already display style", () => {
+      expect(applyInlineDisplayStyle("\\frac{a}{b}", true)).toBe("\\frac{a}{b}");
+    });
+
+    // The helper tests above pass even if nothing calls it, so this asserts the WIRING through the real
+    // render. KaTeX emits a `reset-size6 size3` sizing span for a text-style fraction (the script-sized
+    // numerator/denominator that made this look small) and omits it in display style.
+    // Deliberately a fraction with no superscripts: KaTeX also emits that sizing span for exponents,
+    // which are legitimately script-sized, so `x^3` in the stem would match for the wrong reason.
+    it("renders a fraction in a question at full size, not script size", () => {
+      const { container } = render(<QuizQuestionText text={"Which operation simplifies $\\frac{a + b}{c - d}$?"} />);
+
+      expect(container.querySelector(".katex")).toBeInTheDocument();
+      expect(container.querySelector(".mfrac")).toBeInTheDocument();
+      expect(container.querySelector(".reset-size6.size3")).not.toBeInTheDocument();
+    });
   });
 
   it("still splits Statement-labelled prompts onto their own lines", () => {
