@@ -247,8 +247,19 @@ The following are **not** persisted by onboarding completion itself:
 - `engagementMode`
 - reminder preferences
 
-**CORRECTED 2026-08-06 — this section previously claimed `learnerLevel` and `courseProgram` "are saved before the
-user advances through onboarding." That was false.** Both are written only at Step 5, *after* `completeOnboarding`
+**FIXED 2026-08-07 — the original claim is now true, having been false for the whole of this release's history.**
+`learnerLevel` and `courseProgram` are persisted at **Step 2 submit**, awaited, through the narrow
+`PUT /users/profile/learning-context`, and a failure **blocks the step and is shown to the user** while the values
+are still on screen and retryable. `profileType` is persisted at **Step 1**, deliberately fire-and-forget —
+`completeOnboarding` re-sends it, so nothing is at risk there; the Step 2 values had no second writer, which is
+exactly why losing them was permanent. `examDate` is persisted at Step 2 for `BOARD_EXAM`, and
+`completeOnboarding` no longer nulls it. **Do not reinstate a learning-context write at Step 5** — a second
+writer would re-open the hole and could overwrite a value the user has since edited.
+
+The description of the defect is retained below, because it explains why the flow is shaped this way.
+
+**~~CORRECTED 2026-08-06 — this section previously claimed `learnerLevel` and `courseProgram` "are saved before the
+user advances through onboarding." That was false.~~** Both are written only at Step 5, *after* `completeOnboarding`
 resolves, and the call is **fire-and-forget with a swallowed error** (`onboarding/page.tsx:610-613`, and
 identically at `:774-777` on the practice-first path). If it fails — or the user closes the tab in the ~1s window
 — `learnerLevel` and `courseProgram` are permanently lost with no user-visible error, while
