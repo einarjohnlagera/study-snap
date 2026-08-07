@@ -22,6 +22,7 @@ import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateFocusSubjectsRequest;
+import com.studysnap.backend.dto.UpdateLearningContextRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
@@ -91,6 +92,7 @@ public class AuthService {
     private static final String FIRST_NAME_REQUIRED_MESSAGE = "First name is required.";
     private static final String EMAIL_REQUIRED_MESSAGE = "Email is required.";
     private static final String LEARNER_LEVEL_REQUIRED_MESSAGE = "Learner level is required.";
+    private static final String COURSE_PROGRAM_REQUIRED_MESSAGE = "Course / Program is required.";
     private static final String FOCUS_SUBJECT_LENGTH_MESSAGE = "Focus subjects must be 120 characters or less.";
     private static final int USERNAME_MIN_LENGTH = 3;
     private static final int USERNAME_MAX_LENGTH = 30;
@@ -380,7 +382,7 @@ public class AuthService {
 
         OffsetDateTime now = OffsetDateTime.now();
         user.setProfileType(request.profileType());
-        user.setExamDate(resolveExamDate(request));
+        applyOnboardingExamDate(user, request);
         if (user.getOnboardingCompletedAt() == null) {
             user.setOnboardingCompletedAt(now);
         }
@@ -459,6 +461,37 @@ public class AuthService {
     public MeResponse updateUserProfile(UUID userId, UpdateUserProfileRequest request) {
         UserEntity user = findUserOrThrow(userId);
         updateProfileFields(user, request);
+        user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
+
+    /**
+     * Persists the two fields onboarding Step 2 collects, as a single atomic write.
+     *
+     * <p>Onboarding previously deferred both to Step 5 and wrote them fire-and-forget with a swallowed
+     * error, so a failure lost the learner's level and program permanently and silently while
+     * {@code onboardingCompletedAt} was already set — the user was never routed back to fix it. Five real
+     * accounts finished onboarding with a missing value that way. Writing at Step 2 through a narrow
+     * endpoint lets the caller surface a failure while the user is still on the screen that collects them.
+     *
+     * <p>Both fields are required together on purpose: a partial write is what produced the half-configured
+     * accounts, and Step 2's own Continue guard already requires both before it can be submitted.
+     */
+    @Transactional
+    public MeResponse updateLearningContext(UUID userId, UpdateLearningContextRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+        LearnerLevel normalizedLearnerLevel = requireLearnerLevel(request.learnerLevel());
+        String normalizedCourseProgram = normalizeOptionalCourseProgram(request.courseProgram());
+        if (normalizedCourseProgram == null) {
+            throw new AppException(
+                    "INVALID_PROFILE",
+                    COURSE_PROGRAM_REQUIRED_MESSAGE,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+
+        user.setLearnerLevel(normalizedLearnerLevel);
+        user.setCourseProgram(normalizedCourseProgram);
         user.setUpdatedAt(OffsetDateTime.now());
         return toMeResponse(user);
     }
@@ -612,11 +645,28 @@ public class AuthService {
         }
     }
 
-    private LocalDate resolveExamDate(CompleteOnboardingRequest request) {
-        if (request.profileType() != com.studysnap.backend.entity.ProfileType.BOARD_EXAM) {
-            return null;
+    /**
+     * Completion may only ever SET an exam date, never clear one.
+     *
+     * <p>This previously wrote {@code resolveExamDate(request)} unconditionally, which returned null for any
+     * non-BOARD_EXAM profile type — so completing onboarding as anything other than an exam taker silently
+     * destroyed a date the user had already given. That was undocumented and untested.
+     *
+     * <p>It is not a harmless tidy-up: `docs/product/ROADMAP.md`'s target-habit definition segments retention
+     * on whether {@code examDate} is set and says so explicitly — *"not by profile_type — a coarser proxy for
+     * the same thing; some non-BOARD_EXAM accounts may also set a real exam date"*. Nulling here destroys the
+     * exact signal that metric reads.
+     *
+     * <p>It also has to change before onboarding persists the date at Step 2: a value written there would be
+     * reverted at Step 5 for anyone who is not a BOARD_EXAM at completion.
+     *
+     * <p>Clearing a date remains possible through the dedicated {@code PUT /users/profile/exam-date}, which is
+     * the surface that owns that intent.
+     */
+    private void applyOnboardingExamDate(UserEntity user, CompleteOnboardingRequest request) {
+        if (request.examDate() != null) {
+            user.setExamDate(request.examDate());
         }
-        return request.examDate();
     }
 
     private String normalizeOptionalCourseProgram(String value) {
