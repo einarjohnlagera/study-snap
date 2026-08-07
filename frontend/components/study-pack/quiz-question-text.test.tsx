@@ -11,8 +11,12 @@ describe("QuizQuestionText", () => {
     );
 
     expect(container.querySelector(".katex")).toBeInTheDocument();
-    expect(screen.queryByText(/\\frac/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/\\\(/)).not.toBeInTheDocument();
+    // Assert against the VISUAL branch only. KaTeX's `htmlAndMathml` output also emits a MathML
+    // <annotation> carrying the original TeX source -- that is standard, is never rendered, and is what
+    // assistive tech may fall back to. Searching the whole DOM for raw markup would flag it wrongly.
+    const visualBranch = container.querySelector(".katex-html");
+    expect(visualBranch?.textContent).not.toContain("\\frac");
+    expect(visualBranch?.textContent).not.toContain("\\(");
   });
 
   // Plain text must come back as a bare string, not wrapped in an extra element: wrapping moves which

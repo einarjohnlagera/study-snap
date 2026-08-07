@@ -68,6 +68,13 @@ export function AdminApplicableProgramsSection() {
     if (!editingNote || saving) {
       return;
     }
+    // M5. Every other Applicable Programs call site guards zero-selection client-side; this one relied on
+    // the backend's CourseProgramSelectionRequiredException, so an admin met a raw 400 for a rule the
+    // screen could have stated. Applicable Programs is a required field, not an optional one.
+    if (selectedIds.length === 0) {
+      setSaveFailure("Select at least one course or program. A curated note must stay discoverable.");
+      return;
+    }
     // C7. This screen has no Domain Context control, and the endpoint validates the new program set
     // against the note's already-persisted domainContext -- so expanding a blank-domain note past one
     // program 400s with no way to act on it from here. Catch it before the request and say where the

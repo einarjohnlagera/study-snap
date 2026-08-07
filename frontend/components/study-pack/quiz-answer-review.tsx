@@ -68,7 +68,13 @@ export function QuizAnswerReview({
 
   const reviewItems = useMemo(() => {
     return quiz.map((item, originalIndex) => {
-      const displayedChoices = getDisplayedQuizChoices({ ...item, question: `${item.question}-${originalIndex}` });
+      // Seed the choice order on the question text ALONE, exactly as the live session pages do.
+      // Appending the index here made the review screen shuffle differently from the session the answer
+      // was given in, so a learner who picked B was told "Your Answer: D". Grading was never wrong -- it
+      // tracks canonicalIndex -- which is worse, not better: the product looked broken while behaving
+      // correctly. The index cannot be part of the seed because the session's active index and the
+      // original index are different numbers; the question text is the only key both contexts share.
+      const displayedChoices = getDisplayedQuizChoices(item);
       const selectedChoiceIndex = selectedChoices[originalIndex] ?? null;
       const selectedMultiChoiceIndices = selectedMultiChoices[originalIndex] ?? [];
       const selectedIdentificationAnswer = selectedIdentificationAnswers[originalIndex] ?? "";
@@ -376,7 +382,7 @@ export function QuizAnswerReview({
             />
           ) : (
             <QuizChoiceList
-              questionKey={`${currentItem.item.question}-${currentItem.originalIndex}`}
+              questionKey={currentItem.item.question}
               choices={currentItem.item.choices}
               correctIndex={currentItem.correctIndex}
               correctIndices={currentItem.correctIndices}
