@@ -2287,22 +2287,38 @@ export async function updateProfileLearnerLevel(level: LearnerLevel): Promise<Me
   });
 }
 
+/**
+ * Writes the two learning-context fields through the narrow `PUT /users/profile/learning-context`.
+ *
+ * This used to `getMe()` and then full-replace through `PUT /users/profile`, which meant resending
+ * firstName, email and username on every call — a lost update against any concurrent profile edit, and a
+ * `pendingEmail` clobber. It also could not run before those identity fields existed, which is why
+ * onboarding deferred it to the very last step and lost the values outright when it failed.
+ *
+ * The caller is expected to await this and surface a failure. It must not be fire-and-forget.
+ */
 export async function updateLearningProfileContext(
   learnerLevel: LearnerLevel | null,
   courseProgram: string | null,
 ): Promise<MeResponse> {
-  const current = await getMe();
-  return updateUserProfile({
-    firstName: current.firstName,
-    lastName: current.lastName ?? "",
-    displayName: current.displayName ?? "",
-    username: current.username ?? "",
-    bio: current.bio ?? "",
-    learnerLevel: learnerLevel ?? current.learnerLevel ?? null,
-    courseProgram: courseProgram?.trim() || current.courseProgram || "",
-    schoolName: current.schoolName ?? "",
-    email: current.email,
-  });
+  const response = await fetchWithAuth(
+    "/users/profile/learning-context",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({
+        learnerLevel,
+        courseProgram: courseProgram?.trim() || null,
+      }),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(
+    response,
+    "Could not save your learner level and course / program. Please try again.",
+  );
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function updateExamDate(examDate: string | null): Promise<MeResponse> {

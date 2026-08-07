@@ -17,6 +17,7 @@ import {
   isNoteGenerationLimitReachedError,
   getNote,
   trackAnalyticsEvent,
+  updateExamDate,
   updateLearningProfileContext,
   type LearnerLevel,
   type NoteCollectionSummary,
@@ -249,6 +250,7 @@ export default function OnboardingPage() {
   const [profileTypeSaveError, setProfileTypeSaveError] = useState<string | null>(null);
   const [showNoteGenerationLimitModal, setShowNoteGenerationLimitModal] = useState(false);
   const [checkingPracticeFirstPlan, setCheckingPracticeFirstPlan] = useState(false);
+  const [stepTwoError, setStepTwoError] = useState<string | null>(null);
   const [practiceFirstPlan, setPracticeFirstPlan] = useState<NoteCollectionSummary | null>(null);
   const [isDesktop, setIsDesktop] = useState(true);
   const [previewOpen, setPreviewOpen] = useState<Record<GenerationSectionKey, boolean>>({
@@ -607,12 +609,11 @@ export default function OnboardingPage() {
             productOnboardingCompletedAt: me.productOnboardingCompletedAt,
           });
         }
-        if (draft.learnerLevel !== null || draft.courseProgram.trim() !== "") {
-          void updateLearningProfileContext(draft.learnerLevel, draft.courseProgram.trim() || null)
-            .catch(() => {
-              // Learning context can be adjusted later in profile settings.
-            });
-        }
+        // Learning context is NOT written here any more -- it is persisted at Step 2, awaited, with the
+        // failure surfaced while the user is still on the screen that collects it. This call used to be
+        // fire-and-forget with a swallowed error, so a failure lost the learner level and program
+        // permanently and silently while onboardingCompletedAt was already set. Do not reinstate it: a
+        // second write here would re-open that hole and could overwrite a value the user has since edited.
       })
       .catch(() => {
         const userId = userIdRef.current;
@@ -656,6 +657,33 @@ export default function OnboardingPage() {
     trackOnboardingEvent("ONBOARDING_V2_PROFILE_SELECTED", {
       profile_type: value,
     });
+  };
+
+  /**
+   * Persists Profile Type at Step 1 instead of Step 5.
+   *
+   * The server saw `profileType = null` for the entire flow, so every server-side decision keyed on it --
+   * including which authoring branch a note-creation call takes -- ran blind for the whole of onboarding.
+   * Writing it here costs one request and makes the value real from the first step.
+   *
+   * Failure is NOT blocking: profile type is re-sent by `completeOnboarding` at the end, so a transient
+   * failure here self-heals. Advancing keeps the user moving; the value is not lost either way.
+   */
+  const handleContinueFromStepOne = () => {
+    if (!profileType) {
+      return;
+    }
+    // Advance immediately; do not hold the transition on the network.
+    //
+    // This is deliberately fire-and-forget, which is the OPPOSITE of the Step 2 rule below, and the
+    // difference is that nothing is at risk here: `completeOnboarding` re-sends profileType at the end,
+    // so a failure self-heals. The Step 2 values had no such second writer, which is exactly why losing
+    // them was permanent and silent. Persisting early is about the server not seeing null for the whole
+    // flow -- it is not the last chance to save this field.
+    void completeOnboardingProfileType({ profileType }).catch(() => {
+      // Non-blocking by design -- see above.
+    });
+    goToStep(2);
   };
 
   const handleSaveProfileTypeOnly = async () => {
@@ -721,12 +749,38 @@ export default function OnboardingPage() {
       return;
     }
     setPracticeFirstPlan(null);
+    setStepTwoError(null);
+    setCheckingPracticeFirstPlan(true);
+
+    // Persist learner level and course / program HERE, awaited, with the failure surfaced.
+    //
+    // These were previously written at Step 5, fire-and-forget, with the error swallowed: if the call
+    // failed the values were lost permanently and silently, while onboardingCompletedAt was already set --
+    // so the user was never routed back and had no idea anything was missing. Five real accounts finished
+    // onboarding that way. Blocking here is the point: the user is still on the screen that collects these,
+    // so a retry costs them nothing, and every downstream decision (note authoring domain, Review Set
+    // availability, the intent router) reads values that are now actually stored.
+    try {
+      await updateLearningProfileContext(draft.learnerLevel, draft.courseProgram.trim() || null);
+      if (profileType === "BOARD_EXAM" && draft.examDate) {
+        await updateExamDate(draft.examDate);
+      }
+    } catch (error) {
+      setCheckingPracticeFirstPlan(false);
+      setStepTwoError(
+        error instanceof Error
+          ? error.message
+          : "Could not save your learner level and course / program. Please try again.",
+      );
+      return;
+    }
+
     if (profileType !== "BOARD_EXAM") {
+      setCheckingPracticeFirstPlan(false);
       goToStep(3);
       return;
     }
 
-    setCheckingPracticeFirstPlan(true);
     try {
       const matchingPlan = (await listCourseProgramStudyPlans(draft.courseProgram))[0] ?? null;
       if (
@@ -737,7 +791,9 @@ export default function OnboardingPage() {
         setPracticeFirstPlan(matchingPlan);
       }
     } catch {
-      // This is an optional fast path. Learners can always continue through the normal flow.
+      // The availability lookup fails OPEN, unlike the persistence above. Asserting "no Review Set" when
+      // one exists is the worse error -- it tells a learner content does not exist when it does -- so on
+      // failure we fall through to the normal flow rather than claiming absence.
     } finally {
       goToStep(3);
       setCheckingPracticeFirstPlan(false);
@@ -772,10 +828,7 @@ export default function OnboardingPage() {
         examDate: draft.examDate || null,
       });
       syncCompletedOnboardingUser(me);
-      void updateLearningProfileContext(draft.learnerLevel, draft.courseProgram.trim() || null)
-        .catch(() => {
-          // Learning context can be adjusted later in profile settings.
-        });
+      // Learning context is persisted at Step 2 -- see the note on the other completion path above.
       if (!completionTrackedRef.current) {
         completionTrackedRef.current = true;
         trackOnboardingEvent("ONBOARDING_V2_COMPLETED", {
@@ -1144,7 +1197,14 @@ export default function OnboardingPage() {
             </section>
 
             <section className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Course / Program</p>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">
+                  Course / Program <span className="text-red-500" aria-hidden="true">*</span>
+                </p>
+                <p className="text-xs text-foreground/60">
+                  Required. It sets the academic domain your notes and quizzes are written for.
+                </p>
+              </div>
               <CourseProgramCombobox
                 id="onboarding-course-program"
                 value={draft.courseProgram}
@@ -1558,7 +1618,9 @@ export default function OnboardingPage() {
           <Button
             type="button"
             className="min-h-12 text-base sm:min-w-40"
-            onClick={profileTypeOnlyMode ? () => void handleSaveProfileTypeOnly() : () => goToStep(2)}
+            onClick={profileTypeOnlyMode
+              ? () => void handleSaveProfileTypeOnly()
+              : handleContinueFromStepOne}
             disabled={!canContinueFromStepOne}
             loading={savingProfileType}
             loadingText="Saving..."
@@ -1571,20 +1633,27 @@ export default function OnboardingPage() {
 
     if (currentStep === 2) {
       return (
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
-            Back
-          </Button>
-          <Button
-            type="button"
-            className="min-h-12 text-base sm:min-w-40"
-            onClick={() => void handleContinueFromStepTwo()}
-            disabled={!canContinueFromStepTwo || checkingPracticeFirstPlan}
-            loading={checkingPracticeFirstPlan}
-            loadingText="Continuing..."
-          >
-            Continue
-          </Button>
+        <div className="space-y-3">
+          {/* Surfaced, not swallowed. The whole point of persisting here is that a failure is visible and
+              retryable while the user is still on the screen that collects these values. */}
+          {stepTwoError ? (
+            <p className="text-sm text-red-600 dark:text-red-400" role="alert">{stepTwoError}</p>
+          ) : null}
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+            <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+              Back
+            </Button>
+            <Button
+              type="button"
+              className="min-h-12 text-base sm:min-w-40"
+              onClick={() => void handleContinueFromStepTwo()}
+              disabled={!canContinueFromStepTwo || checkingPracticeFirstPlan}
+              loading={checkingPracticeFirstPlan}
+              loadingText="Saving..."
+            >
+              Continue
+            </Button>
+          </div>
         </div>
       );
     }

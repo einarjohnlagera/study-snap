@@ -674,6 +674,54 @@ describe("OnboardingPage", () => {
     });
   });
 
+  // The whole point of stage 2. These values were previously written at Step 5, fire-and-forget, with the
+  // error swallowed -- so a failure lost them permanently and silently while onboardingCompletedAt was
+  // already set, and the user was never routed back. Five real accounts finished onboarding that way.
+  it("persists the learning context at Step 2, before advancing", async () => {
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
+    fillLearningProfile("COLLEGE", "Nursing");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => {
+      expect(updateLearningProfileContext).toHaveBeenCalledWith("COLLEGE", "Nursing");
+    });
+    expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
+  });
+
+  it("blocks Step 2 and surfaces the error when the learning context cannot be saved", async () => {
+    (updateLearningProfileContext as jest.Mock).mockRejectedValue(new Error("Network unavailable"));
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
+    fillLearningProfile("COLLEGE", "Nursing");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("Network unavailable")).toBeInTheDocument();
+    // Still on Step 2 -- the user can retry while the values are still on screen.
+    expect(screen.getByText("Set up your learning profile")).toBeInTheDocument();
+    expect(screen.queryByText("How do you want to start?")).not.toBeInTheDocument();
+  });
+
+  it("persists the profile type at Step 1 without blocking the transition", async () => {
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    // Advances immediately: profileType is re-sent by completeOnboarding, so nothing is at risk if this
+    // call fails. That is why it is fire-and-forget here and emphatically not at Step 2.
+    expect(screen.getByText("Set up your learning profile")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(completeOnboardingProfileType).toHaveBeenCalledWith({ profileType: "STUDENT" });
+    });
+  });
+
   it("switches between modes and only shows the active input surface", async () => {
     render(<OnboardingPage />);
 
@@ -683,6 +731,8 @@ describe("OnboardingPage", () => {
     fillLearningProfile();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    // Step 2 now persists the learning context before advancing, so the transition is asynchronous.
+    expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
     expect(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion...")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Paste or write your notes here...")).not.toBeInTheDocument();
@@ -730,6 +780,8 @@ describe("OnboardingPage", () => {
     expect(await screen.findByText("Set up your learning profile")).toBeInTheDocument();
     fillLearningProfile();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    // Step 2 now persists the learning context before advancing, so the transition is asynchronous.
+    expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
 
     expect(screen.getByText("You've reached your topic note limit for this month.")).toBeInTheDocument();
