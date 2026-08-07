@@ -624,6 +624,172 @@ class AuthServiceTest {
         assertThat(user.getOnboardingCompletedAt()).isNotNull();
     }
 
+    // The narrow endpoint onboarding Step 2 writes through. It exists so the learner level and program are
+    // persisted while the user is still on the screen that collects them -- the old flow deferred both to
+    // Step 5 and wrote them fire-and-forget with a swallowed error, which permanently and silently lost
+    // them for five real accounts while onboardingCompletedAt was already set.
+    @Test
+    void updateLearningContext_persistsBothFieldsTogether() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+        MeResponse response = authService.updateLearningContext(
+            userId,
+            new com.studysnap.backend.dto.UpdateLearningContextRequest(
+                com.studysnap.backend.entity.LearnerLevel.COLLEGE,
+                "  Nursing  "
+            )
+        );
+
+        assertThat(user.getLearnerLevel()).isEqualTo(com.studysnap.backend.entity.LearnerLevel.COLLEGE);
+        assertThat(user.getCourseProgram()).isEqualTo("Nursing");
+        assertThat(response.courseProgram()).isEqualTo("Nursing");
+    }
+
+    // Both fields are required together on purpose: a partial write is exactly what produced the
+    // half-configured accounts, and Step 2's Continue guard already requires both before it can submit.
+    @Test
+    void updateLearningContext_rejectsAMissingLearnerLevel() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        com.studysnap.backend.dto.UpdateLearningContextRequest request =
+            new com.studysnap.backend.dto.UpdateLearningContextRequest(null, "Nursing");
+
+        assertThatThrownBy(() -> authService.updateLearningContext(userId, request))
+            .isInstanceOf(AppException.class);
+        assertThat(user.getCourseProgram()).isNull();
+    }
+
+    @Test
+    void updateLearningContext_rejectsABlankCourseProgram() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        com.studysnap.backend.dto.UpdateLearningContextRequest request =
+            new com.studysnap.backend.dto.UpdateLearningContextRequest(
+                com.studysnap.backend.entity.LearnerLevel.COLLEGE, "   ");
+
+        assertThatThrownBy(() -> authService.updateLearningContext(userId, request))
+            .isInstanceOf(AppException.class);
+        assertThat(user.getLearnerLevel()).isNull();
+    }
+
+    // Completion may only ever SET an exam date, never clear one. It previously wrote null for any
+    // non-BOARD_EXAM profile type, silently destroying a date the user had already given -- and
+    // ROADMAP.md's target-habit definition segments retention on examDate precisely BECAUSE some
+    // non-BOARD_EXAM accounts legitimately set one. It also has to hold before onboarding persists the
+    // date at Step 2, or that write is reverted at Step 5.
+    @Test
+    void completeOnboarding_preservesAnExistingExamDateForNonBoardExamProfiles() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+        LocalDate existingExamDate = LocalDate.of(2026, 11, 9);
+        user.setExamDate(existingExamDate);
+
+        MeResponse response = authService.completeOnboarding(
+            userId,
+            new CompleteOnboardingRequest(ProfileType.STUDENT, null)
+        );
+
+        assertThat(response.profileType()).isEqualTo(ProfileType.STUDENT);
+        assertThat(user.getExamDate()).isEqualTo(existingExamDate);
+        assertThat(response.examDate()).isEqualTo(existingExamDate);
+    }
+
+    @Test
+    void completeOnboarding_preservesAnExistingExamDateWhenTheRequestOmitsOne() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+        LocalDate existingExamDate = LocalDate.of(2026, 12, 1);
+        user.setExamDate(existingExamDate);
+
+        authService.completeOnboarding(
+            userId,
+            new CompleteOnboardingRequest(ProfileType.BOARD_EXAM, null)
+        );
+
+        assertThat(user.getExamDate()).isEqualTo(existingExamDate);
+    }
+
     @Test
     void completeOnboarding_savesOptionalExamDateForBoardExamUsers() {
         UUID userId = UUID.randomUUID();

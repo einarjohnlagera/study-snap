@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.dto.UpdateFocusSubjectsRequest;
+import com.studysnap.backend.dto.UpdateLearningContextRequest;
 import com.studysnap.backend.dto.UpdateStudyGoalRequest;
 import com.studysnap.backend.dto.UpdateStudyDaysPerWeekRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
@@ -41,6 +42,15 @@ public class UserProfileController {
             @RequestBody UpdateExamDateRequest request
     ) {
         return authService.updateExamDate(user.userId(), request);
+    }
+
+    @PutMapping("/profile/learning-context")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse updateLearningContext(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestBody UpdateLearningContextRequest request
+    ) {
+        return authService.updateLearningContext(user.userId(), request);
     }
 
     @PutMapping("/profile/goal")
