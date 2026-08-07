@@ -1470,10 +1470,14 @@ export default function OnboardingPage() {
             </Card>
           ) : null}
 
+          {/* Pass the plan we already resolved and qualified at Step 2. Letting this component re-fetch
+              would mean the gate (itemCount > 0 && readyCount > 0) and the render disagree, since its
+              own effect takes publicPlans[0] with no such predicate. */}
           <DashboardStudyPlanSection
             courseProgram={draft.courseProgram}
             profileType={profileType}
             context="practice-first"
+            resolvedPlan={practiceFirstPlan}
             onPlanStarted={handlePracticeFirstPlanStarted}
           />
 

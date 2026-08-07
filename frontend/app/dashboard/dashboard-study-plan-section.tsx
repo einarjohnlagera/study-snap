@@ -45,6 +45,16 @@ type DashboardStudyPlanSectionProps = {
   // link on the zero-note Dashboard — set true there so this section only renders when a
   // Primary Review Set actually exists to continue.
   suppressPointerWhenNoPrimary?: boolean;
+  /**
+   * An already-resolved, already-qualified plan. When supplied this component does NOT re-fetch.
+   *
+   * Onboarding gates the practice-first screen on `itemCount > 0 && readyCount > 0`, but this component's
+   * own effect renders `publicPlans[0]` with no such predicate -- so the gate and the render could
+   * disagree, and a second fetch could return a different or newly-unqualified plan between the two.
+   * Passing the resolved plan down removes the disagreement by construction rather than duplicating the
+   * predicate in two places that can drift apart.
+   */
+  resolvedPlan?: NoteCollectionSummary | null;
   onPlanStarted?: (context: StudyPlanStartContext) => Promise<void>;
 };
 
@@ -81,6 +91,7 @@ export function DashboardStudyPlanSection({
   primaryCollectionId,
   discoveryPresentation = "full",
   suppressPointerWhenNoPrimary = false,
+  resolvedPlan,
   onPlanStarted,
 }: Readonly<DashboardStudyPlanSectionProps>) {
   const router = useRouter();
@@ -131,6 +142,14 @@ export function DashboardStudyPlanSection({
   }, [primaryCollectionId]);
 
   useEffect(() => {
+    // Caller already resolved and qualified the plan -- trust it and do not re-fetch.
+    if (resolvedPlan !== undefined) {
+      setPlan(resolvedPlan);
+      setAdoptedPlan(null);
+      setLoadedCourseProgram(normalizedCourseProgram);
+      return;
+    }
+
     if (discoveryPresentation === "pointer") {
       setPlan(null);
       setAdoptedPlan(null);
@@ -177,7 +196,7 @@ export function DashboardStudyPlanSection({
     return () => {
       cancelled = true;
     };
-  }, [discoveryPresentation, normalizedCourseProgram]);
+  }, [discoveryPresentation, normalizedCourseProgram, resolvedPlan]);
 
   const primaryPending = Boolean(primaryCollectionId) && !primaryLoaded;
   const usingPrimary = Boolean(primaryCollectionId) && primaryLoaded && primaryMatch !== null;
@@ -276,6 +295,16 @@ export function DashboardStudyPlanSection({
         return;
       }
       const result = await adoptStudyPlan(displayPlan.id);
+      // A zero-copy adopt yields an EMPTY collection. Routing to it as if it succeeded strands the
+      // learner on a plan with nothing in it at the most abandonment-sensitive moment -- and this is the
+      // first thing they chose to do. skippedCount was already surfaced; copiedCount was not checked.
+      if (result.copiedCount <= 0) {
+        setError(
+          `This ${isGoal ? labels.goalSingular : labels.singular} has no notes ready to study yet. `
+          + "Try another one, or start from your own notes.",
+        );
+        return;
+      }
       setStudyPlanSkippedNotice(result.collectionId, result.skippedCount);
       const startContext = {
         collectionId: result.collectionId,
