@@ -215,6 +215,18 @@ describe("OnboardingPage", () => {
     });
   }
 
+  const chooseReadyMadeIntent = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: /Study with ready-made materials|Use existing teaching and study materials/ }));
+  };
+
+  /**
+   * Step 3 is now the first-intent step. Reaching the note-input screen means choosing the "own notes"
+   * door first -- the input-method question (generate vs paste) is a sub-choice inside that branch.
+   */
+  const chooseOwnNotesIntent = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: /Build from my own notes|Create teaching or study materials/ }));
+  };
+
   it("redirects users who already completed onboarding", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
@@ -260,6 +272,7 @@ describe("OnboardingPage", () => {
 
     fillLearningProfile();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await chooseOwnNotesIntent();
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
 
     expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
@@ -381,6 +394,7 @@ describe("OnboardingPage", () => {
     fillLearningProfile("COLLEGE", "LET");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    await chooseReadyMadeIntent();
     expect(await screen.findByText("You're preparing for LET.")).toBeInTheDocument();
     expect(await screen.findByText("2 of 3 notes practice-ready")).toBeInTheDocument();
     expect(screen.queryByText("How do you want to start?")).not.toBeInTheDocument();
@@ -443,6 +457,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fillLearningProfile("COLLEGE", "LET");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await chooseReadyMadeIntent();
     fireEvent.click(await screen.findByRole("button", { name: "Start this Goal" }));
 
     await waitFor(() => {
@@ -455,7 +470,7 @@ describe("OnboardingPage", () => {
     ["Student", "STUDENT"],
     ["Teacher", "TEACHER"],
     ["Professional", "PROFESSIONAL"],
-  ])("keeps the create-first Step 3 unchanged for %s", async (profileLabel) => {
+  ])("still reaches the create-first input screen for %s via the own-notes intent", async (profileLabel) => {
     render(<OnboardingPage />);
 
     fireEvent.click(await screen.findByLabelText(profileLabel));
@@ -463,9 +478,12 @@ describe("OnboardingPage", () => {
     fillLearningProfile();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    await chooseOwnNotesIntent();
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create a note" })).toBeInTheDocument();
-    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+    // Availability is now resolved for EVERY profile type, not only BOARD_EXAM -- that is the one
+    // structural eligibility change in the Intent Router. This previously asserted the opposite.
+    await waitFor(() => expect(listPublicStudyPlans).toHaveBeenCalled());
   });
 
   it("falls through to the unchanged input step when a published Board Review Set has no ready notes", async () => {
@@ -493,6 +511,7 @@ describe("OnboardingPage", () => {
     fillLearningProfile("COLLEGE", "LET");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    await chooseOwnNotesIntent();
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
     expect(screen.queryByText("You're preparing for LET.")).not.toBeInTheDocument();
   });
@@ -532,6 +551,7 @@ describe("OnboardingPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    await chooseOwnNotesIntent();
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
     fireEvent.change(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion..."), {
@@ -647,6 +667,7 @@ describe("OnboardingPage", () => {
     fillLearningProfile("COLLEGE", "AWS Certification");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    await chooseOwnNotesIntent();
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
     fireEvent.change(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion..."), {
@@ -689,6 +710,7 @@ describe("OnboardingPage", () => {
     await waitFor(() => {
       expect(updateLearningProfileContext).toHaveBeenCalledWith("COLLEGE", "Nursing");
     });
+    await chooseOwnNotesIntent();
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
   });
 
@@ -722,6 +744,109 @@ describe("OnboardingPage", () => {
     });
   });
 
+  // ---- Intent Router --------------------------------------------------------------------------------
+
+  it("offers both intent doors, neither disabled, and labels an unavailable Review Set neutrally", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile("COLLEGE", "Nursing");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    const readyMade = await screen.findByRole("button", { name: /Study with ready-made materials/ });
+    const ownNotes = screen.getByRole("button", { name: /Build from my own notes/ });
+    // Never disabled: its next screen still offers useful alternatives, and disabling it would make the
+    // path read as a dead end before the user has seen what is behind it.
+    expect(readyMade).not.toBeDisabled();
+    expect(ownNotes).not.toBeDisabled();
+    expect(screen.getByText("No Official Study Plan yet for Nursing")).toBeInTheDocument();
+  });
+
+  it("does not claim a Review Set is missing when the availability lookup fails", async () => {
+    // Fails OPEN. Asserting absence when content exists is the worse error, so an unknown result renders
+    // no availability line at all rather than a false negative.
+    (listPublicStudyPlans as jest.Mock).mockRejectedValue(new Error("network"));
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile("COLLEGE", "Nursing");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await screen.findByRole("button", { name: /Study with ready-made materials/ });
+    expect(screen.queryByText(/No Official .* yet for/)).not.toBeInTheDocument();
+  });
+
+  it("shows the honest unavailable state with all three fallbacks, and never auto-redirects", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile("COLLEGE", "Nursing");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await chooseReadyMadeIntent();
+
+    expect(await screen.findByText(/still building an Official Study Plan for Nursing/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Build from my own notes/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Explore related public notes/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finish setup" })).toBeInTheDocument();
+    expect(routerMock.push).not.toHaveBeenCalled();
+  });
+
+  it("completes onboarding BEFORE navigating away on a terminal fallback", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    const callOrder: string[] = [];
+    (completeOnboarding as jest.Mock).mockImplementation(async () => {
+      callOrder.push("complete");
+      return { ...baseMe, onboardingCompletedAt: "2026-08-07T00:00:00Z" };
+    });
+    routerMock.push.mockImplementation(() => { callOrder.push("push"); });
+
+    render(<OnboardingPage />);
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile("COLLEGE", "Nursing");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await chooseReadyMadeIntent();
+    fireEvent.click(await screen.findByRole("button", { name: /Explore related public notes/ }));
+
+    // Navigating first would leave a user who closes the tab mid-transition permanently un-onboarded.
+    await waitFor(() => expect(callOrder).toEqual(["complete", "push"]));
+    expect(routerMock.push).toHaveBeenCalledWith("/public/library?courseProgram=Nursing");
+  });
+
+  it("routes the own-notes fallback into the create flow without completing onboarding", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile("COLLEGE", "Nursing");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await chooseReadyMadeIntent();
+    fireEvent.click(await screen.findByRole("button", { name: /Build from my own notes/ }));
+
+    // Stays inside onboarding and finishes through the create flow, so completion must NOT fire here.
+    expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
+    expect(completeOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("adapts the intent copy for teachers", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Teacher"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fillLearningProfile("COLLEGE", "Nursing");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("button", { name: /Use existing teaching and study materials/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Create teaching or study materials/ })).toBeInTheDocument();
+  });
+
   it("switches between modes and only shows the active input surface", async () => {
     render(<OnboardingPage />);
 
@@ -732,6 +857,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     // Step 2 now persists the learning context before advancing, so the transition is asynchronous.
+    await chooseOwnNotesIntent();
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
     expect(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion...")).toBeInTheDocument();
@@ -781,6 +907,7 @@ describe("OnboardingPage", () => {
     fillLearningProfile();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     // Step 2 now persists the learning context before advancing, so the transition is asynchronous.
+    await chooseOwnNotesIntent();
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create a note" }));
 
@@ -829,6 +956,7 @@ describe("OnboardingPage", () => {
     fillLearningProfile("BOARD_EXAM_REVIEW", "Pharmacy");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    await chooseOwnNotesIntent();
     fireEvent.click(await screen.findByRole("button", { name: "Write or paste my own note" }));
     fireEvent.change(screen.getByPlaceholderText("Paste or write your notes here..."), {
       target: { value: longNote },
@@ -866,6 +994,7 @@ describe("OnboardingPage", () => {
 
     fillLearningProfile("PROFESSIONAL", "Medicine");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await chooseOwnNotesIntent();
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
   });
 
@@ -878,6 +1007,7 @@ describe("OnboardingPage", () => {
     fillLearningProfile("GRADE_SCHOOL", "Grade 5 Science");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    await chooseOwnNotesIntent();
     fireEvent.click(await screen.findByRole("button", { name: "Write or paste my own note" }));
     fireEvent.change(screen.getByPlaceholderText("Paste or write your notes here..."), {
       target: { value: "Short onboarding note draft." },
