@@ -1074,7 +1074,8 @@ class NoteServiceTest {
         UserEntity owner = new UserEntity();
         owner.setId(ownerUserId);
         owner.setCourseProgram("Senior High-STEM");
-        when(noteRepository.findCourseProgramValuesByOwnerUserId(ownerUserId))
+        // Personal strings now come from the join-guarded source (F6), same as the public list.
+        when(noteCourseProgramRepository.findLegacyCourseProgramValuesByOwnerUserId(ownerUserId))
                 .thenReturn(List.of("  nursing  ", "Nursing", "Senior High – STEM"));
         when(noteCourseProgramRepository.findNamesByOwnerUserId(ownerUserId))
                 .thenReturn(List.of(ACCOUNTANCY_PROGRAM, "nursing"));
@@ -1083,6 +1084,24 @@ class NoteServiceTest {
         List<String> coursePrograms = noteService.listMineCoursePrograms(ownerUserId);
 
         assertThat(coursePrograms).containsExactly(ACCOUNTANCY_PROGRAM, "Nursing", "Senior High – STEM");
+    }
+
+    @Test
+    void listMineCoursePrograms_usesTheJoinGuardedSourceLikeThePublicListDoes() {
+        // F6. C2 added the NOT EXISTS guard to the PUBLIC vocabulary but not the owner-scoped one, so the
+        // private editor's own datalist kept suggesting a stale personal string from a note whose join rows
+        // say something else. Same defect, same fix, one surface later. Asserts the WIRING; the guard
+        // itself is SQL-level (finding B4).
+        UUID ownerUserId = UUID.randomUUID();
+        when(noteCourseProgramRepository.findLegacyCourseProgramValuesByOwnerUserId(ownerUserId))
+                .thenReturn(List.of("Software Engineering"));
+        when(noteCourseProgramRepository.findNamesByOwnerUserId(ownerUserId))
+                .thenReturn(List.of(ACCOUNTANCY_PROGRAM));
+
+        List<String> coursePrograms = noteService.listMineCoursePrograms(ownerUserId);
+
+        assertThat(coursePrograms).contains(ACCOUNTANCY_PROGRAM, "Software Engineering");
+        verify(noteRepository, never()).findCourseProgramValuesByOwnerUserId(any());
     }
 
     @Test

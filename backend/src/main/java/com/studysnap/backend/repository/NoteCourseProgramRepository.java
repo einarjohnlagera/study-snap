@@ -63,6 +63,23 @@ public class NoteCourseProgramRepository {
               )
             """;
 
+    /**
+     * Owner-scoped twin of {@link #FIND_LEGACY_VALUES_BY_VISIBILITY}, with the same {@code NOT EXISTS}
+     * guard and for the same reason: a note whose join rows say {@code Nursing} must not offer its stale
+     * {@code Accountancy} string as a suggestion. Only the visibility-scoped half was guarded when C2 was
+     * fixed, so the private editor's own datalist kept the defect.
+     */
+    private static final String FIND_LEGACY_VALUES_BY_OWNER = """
+            SELECT DISTINCT notes.course_program
+            FROM notes
+            WHERE notes.owner_user_id = ?
+              AND notes.course_program IS NOT NULL
+              AND trim(notes.course_program) <> ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM note_course_program WHERE note_course_program.note_id = notes.id
+              )
+            """;
+
     private final JdbcTemplate jdbcTemplate;
 
     public List<ApplicableProgramResponse> findByNoteId(UUID noteId) {
@@ -91,6 +108,10 @@ public class NoteCourseProgramRepository {
 
     public List<String> findLegacyCourseProgramValuesByVisibility(String visibility) {
         return jdbcTemplate.queryForList(FIND_LEGACY_VALUES_BY_VISIBILITY, String.class, visibility);
+    }
+
+    public List<String> findLegacyCourseProgramValuesByOwnerUserId(UUID ownerUserId) {
+        return jdbcTemplate.queryForList(FIND_LEGACY_VALUES_BY_OWNER, String.class, ownerUserId);
     }
 
     public Map<UUID, List<ApplicableProgramResponse>> findByNoteIds(Collection<UUID> noteIds) {

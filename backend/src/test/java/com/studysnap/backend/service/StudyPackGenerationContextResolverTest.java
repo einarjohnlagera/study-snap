@@ -109,7 +109,52 @@ class StudyPackGenerationContextResolverTest {
 
     @Test
     void resolve_neverTurnsMultipleJoinedProgramsIntoAnLlmDomain() {
+        // This test used to leave userRepository.findById UNSTUBBED, so Mockito returned Optional.empty()
+        // and both assertions passed because the user was not found -- not because of the multi-program
+        // rule they claimed to prove. Every other test in this class stubs it. Stubbing a real user here
+        // is what makes this exercise the production path.
         UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram("Software Engineering");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setDomainContext(DomainContext.NURSING);
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(
+                new com.studysnap.backend.dto.ApplicableProgramResponse(UUID.randomUUID(), "Nursing"),
+                new com.studysnap.backend.dto.ApplicableProgramResponse(UUID.randomUUID(), "Pharmacy")
+        ));
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository
+        );
+
+        StudyPackGenerationContext context = resolver.resolve(userId, note);
+
+        // The binding guarantee (ADR-001) is that a program LIST never becomes the authoring domain. With
+        // more than one joined program the single-program branch is skipped, and Domain Context -- which
+        // the invariant makes mandatory above one program -- is what reaches the prompt.
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context))
+                .isEqualTo(DomainContext.NURSING.getLabel());
+        assertThat(context.courseProgram()).doesNotContain("Pharmacy");
+    }
+
+    @Test
+    void resolve_multiProgramNoteWithoutDomainContextFallsBackToASingleValueNotAList() {
+        // The invariant forbids this state going forward (Domain Context is required above one program),
+        // but pre-invariant rows exist. What matters is that the fallback is still a SINGLE value, never a
+        // list. It is the author's profile program, which is why NoteBulkGenerationService's result row
+        // shows that value for a multi-program bulk note -- cosmetic, and recorded rather than changed.
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram("Software Engineering");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
         NoteEntity note = new NoteEntity();
         note.setId(UUID.randomUUID());
         when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(
@@ -118,13 +163,14 @@ class StudyPackGenerationContextResolverTest {
         ));
 
         StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
-                userRepository, noteRepository, noteCourseProgramRepository, null
+                userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository
         );
 
         StudyPackGenerationContext context = resolver.resolve(userId, note);
 
-        assertThat(context.courseProgram()).isNull();
-        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context)).isNull();
+        assertThat(context.courseProgram()).isEqualTo("Software Engineering");
+        assertThat(context.courseProgram()).doesNotContain("Nursing");
+        assertThat(context.courseProgram()).doesNotContain("Pharmacy");
     }
 
     @Test
