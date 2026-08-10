@@ -21,6 +21,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Course / Program must not be mechanically materialized into a catalog Applicable Program row. That is
  * deliberately narrower than "learner-owned notes cannot carry join rows" -- curator-authored rows and rows
  * inherited by copying a curated note are legitimate and must survive.
+ *
+ * <p><strong>The discriminator is the catalog name, not whether the note is a copy.</strong> An earlier
+ * version of this test asserted that a row on a learner-owned COPY must survive, which encoded a bug:
+ * {@code NoteService.copyNote} sets {@code source_note_id} on every copy, so that rule preserved exactly the
+ * derived rows the migration exists to delete. A derived row is one whose catalog name still equals what
+ * V107 would have derived from the note's own string -- that equality is the signature, and it is the exact
+ * inverse of V107's insert rather than a heuristic.
  */
 class DerivedLearnerNoteProgramRemovalMigrationTest {
     private static final String MIGRATION_PATH = "db/migration/V108__remove_derived_learner_note_programs.sql";
@@ -31,25 +38,33 @@ class DerivedLearnerNoteProgramRemovalMigrationTest {
     private static final String TEACHER_USER_ID = "00000000-0000-0000-0000-000000000003";
     private static final String MISSING_USER_ID = "00000000-0000-0000-0000-0000000000ff";
 
-    private static final String LEARNER_NON_COPY_NOTE_ID = "00000000-0000-0000-0000-000000000101";
-    private static final String LEARNER_MULTI_ROW_NOTE_ID = "00000000-0000-0000-0000-000000000102";
-    private static final String LEARNER_NO_ROW_NOTE_ID = "00000000-0000-0000-0000-000000000103";
-    private static final String ADMIN_NOTE_ID = "00000000-0000-0000-0000-000000000104";
-    private static final String TEACHER_NOTE_ID = "00000000-0000-0000-0000-000000000105";
-    private static final String LEARNER_COPIED_FROM_NOTE_ID = "00000000-0000-0000-0000-000000000106";
-    private static final String LEARNER_SOURCE_NOTE_ID = "00000000-0000-0000-0000-000000000107";
-    private static final String ORPHAN_OWNER_NOTE_ID = "00000000-0000-0000-0000-000000000108";
+    private static final String NURSING_ID = "00000000-0000-0000-0000-0000000000a1";
+    private static final String ACCOUNTANCY_ID = "00000000-0000-0000-0000-0000000000a2";
+    private static final String EDUCATION_ID = "00000000-0000-0000-0000-0000000000a3";
 
+    // Derived: the joined catalog name equals the note's own course_program, i.e. exactly V107's output.
+    private static final String DERIVED_PLAIN_NOTE_ID = "00000000-0000-0000-0000-000000000101";
+    private static final String DERIVED_ON_COPIED_FROM_NOTE_ID = "00000000-0000-0000-0000-000000000102";
+    private static final String DERIVED_ON_SOURCE_COPY_NOTE_ID = "00000000-0000-0000-0000-000000000103";
+    private static final String DERIVED_VIA_BSED_ALIAS_NOTE_ID = "00000000-0000-0000-0000-000000000104";
+    // Legitimate: name differs from the note's string, so V107 cannot have produced it.
+    private static final String INHERITED_ON_COPY_NOTE_ID = "00000000-0000-0000-0000-000000000105";
+    private static final String ADMIN_NOTE_ID = "00000000-0000-0000-0000-000000000106";
+    private static final String TEACHER_NOTE_ID = "00000000-0000-0000-0000-000000000107";
+    private static final String ORPHAN_OWNER_NOTE_ID = "00000000-0000-0000-0000-000000000108";
+    private static final String LEARNER_NO_ROW_NOTE_ID = "00000000-0000-0000-0000-000000000109";
+
+    private static final List<String> REMOVED_NOTE_IDS = List.of(
+            DERIVED_PLAIN_NOTE_ID,
+            DERIVED_ON_COPIED_FROM_NOTE_ID,
+            DERIVED_ON_SOURCE_COPY_NOTE_ID,
+            DERIVED_VIA_BSED_ALIAS_NOTE_ID
+    );
     private static final List<String> SURVIVING_NOTE_IDS = List.of(
+            INHERITED_ON_COPY_NOTE_ID,
             ADMIN_NOTE_ID,
             TEACHER_NOTE_ID,
-            LEARNER_COPIED_FROM_NOTE_ID,
-            LEARNER_SOURCE_NOTE_ID,
             ORPHAN_OWNER_NOTE_ID
-    );
-    private static final List<String> REMOVED_NOTE_IDS = List.of(
-            LEARNER_NON_COPY_NOTE_ID,
-            LEARNER_MULTI_ROW_NOTE_ID
     );
 
     @Test
@@ -60,32 +75,56 @@ class DerivedLearnerNoteProgramRemovalMigrationTest {
                 createSchema(statement);
                 seedFixtures(statement);
 
-                // Seven fixture notes carry rows, one of them two rows: eight rows before the delete.
                 assertThat(count(statement, JOIN_TABLE)).isEqualTo(8);
 
                 String migration = strippedMigration();
                 statement.execute(migration);
 
-                // The rows V107 mechanically derived from a learner's personal string are gone...
+                // Every row V107 derived from a learner's own string is gone -- INCLUDING the ones on copies,
+                // which the previous predicate wrongly preserved because copyNote sets source_note_id on
+                // every copy. That is the finding which made the migration a no-op for the copy population.
                 REMOVED_NOTE_IDS.forEach(noteId -> assertThat(joinRowCountFor(statement, noteId))
-                        .as("derived rows on learner-owned non-copy note %s", noteId)
+                        .as("derived row on learner-owned note %s", noteId)
                         .isZero());
-                // ...and everything with legitimate provenance survives. Asserting the survivors, not only
-                // the deletions, is what makes an over-broad DELETE fail instead of passing.
+                // ...and everything with legitimate provenance survives. Asserting survivors, not only
+                // deletions, is what makes an over-broad DELETE fail instead of passing.
                 SURVIVING_NOTE_IDS.forEach(noteId -> assertThat(joinRowCountFor(statement, noteId))
                         .as("legitimately provenanced row on note %s must survive", noteId)
                         .isEqualTo(1));
-                assertThat(count(statement, JOIN_TABLE)).isEqualTo(5);
+                assertThat(count(statement, JOIN_TABLE)).isEqualTo(4);
                 assertThat(noteIdsWithJoinRows(statement)).containsExactlyInAnyOrderElementsOf(SURVIVING_NOTE_IDS);
 
-                // A learner-owned non-copy note that never had a row is untouched and raises nothing.
                 assertThat(joinRowCountFor(statement, LEARNER_NO_ROW_NOTE_ID)).isZero();
-                assertThat(count(statement, "notes")).isEqualTo(8);
+                assertThat(count(statement, "notes")).isEqualTo(9);
 
                 // Re-running is a no-op.
                 statement.execute(migration);
-                assertThat(count(statement, JOIN_TABLE)).isEqualTo(5);
+                assertThat(count(statement, JOIN_TABLE)).isEqualTo(4);
                 assertThat(noteIdsWithJoinRows(statement)).containsExactlyInAnyOrderElementsOf(SURVIVING_NOTE_IDS);
+            }
+        }
+    }
+
+    /**
+     * A note carrying BOTH a derived and an inherited row must lose only the derived one. This is why the
+     * DELETE targets {@code note_course_program.id} rather than {@code note_id}.
+     */
+    @Test
+    void migrationRemovesTheDerivedRowWithoutTakingAnInheritedOneOnTheSameNote() throws Exception {
+        String databaseName = "derived-learner-mixed-" + UUID.randomUUID();
+        try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:" + databaseName + ";MODE=PostgreSQL")) {
+            try (Statement statement = connection.createStatement()) {
+                createSchema(statement);
+                seedUsersAndCatalog(statement);
+                insertNote(statement, DERIVED_ON_COPIED_FROM_NOTE_ID, LEARNER_USER_ID, "Nursing", ADMIN_NOTE_ID, null);
+                insertJoinRow(statement, DERIVED_ON_COPIED_FROM_NOTE_ID, NURSING_ID);      // derived
+                insertJoinRow(statement, DERIVED_ON_COPIED_FROM_NOTE_ID, ACCOUNTANCY_ID);  // inherited
+
+                statement.execute(strippedMigration());
+
+                assertThat(joinRowCountFor(statement, DERIVED_ON_COPIED_FROM_NOTE_ID)).isEqualTo(1);
+                assertThat(remainingProgramIdsFor(statement, DERIVED_ON_COPIED_FROM_NOTE_ID))
+                        .containsExactly(ACCOUNTANCY_ID);
             }
         }
     }
@@ -94,7 +133,6 @@ class DerivedLearnerNoteProgramRemovalMigrationTest {
      * Structural guard against the trap documented in pressure-test finding B4: {@code V107}'s backfill sits
      * inside its PL/pgSQL block, which this strip helper removes, so nothing tests it. If someone later moves
      * {@code V108}'s DELETE into its reporting block, this test would keep passing while asserting nothing.
-     * Assert the statement is still present after stripping so that move fails loudly instead.
      */
     @Test
     void deleteSurvivesThePlPgSqlStrippingThatWouldOtherwiseHideIt() throws Exception {
@@ -108,7 +146,7 @@ class DerivedLearnerNoteProgramRemovalMigrationTest {
 
     /**
      * H2 has no PL/pgSQL, so the migration's trailing reporting block cannot be parsed here. It only emits
-     * {@code RAISE NOTICE} residual counts for the deploy log and asserts nothing. Mirrors
+     * {@code RAISE NOTICE} counts for the deploy log and asserts nothing. Mirrors
      * {@code CourseProgramCatalogMigrationTest}'s helper deliberately: the DELETE under test is kept above
      * the block precisely so that this stripping costs no coverage.
      */
@@ -126,9 +164,16 @@ class DerivedLearnerNoteProgramRemovalMigrationTest {
                 )
                 """);
         statement.execute("""
+                create table course_programs (
+                    id uuid primary key,
+                    name varchar(120) not null
+                )
+                """);
+        statement.execute("""
                 create table notes (
                     id uuid primary key,
                     owner_user_id uuid not null,
+                    course_program varchar(120),
                     copied_from_note_id uuid,
                     source_note_id uuid
                 )
@@ -142,9 +187,9 @@ class DerivedLearnerNoteProgramRemovalMigrationTest {
                 """);
     }
 
-    private void seedFixtures(Statement statement) throws Exception {
-        // The two owner fixtures are deliberately discriminating on ONE attribute each, so that dropping
-        // either half of condition 1 fails a test: the admin is not a teacher, the teacher is not an admin.
+    private void seedUsersAndCatalog(Statement statement) throws Exception {
+        // The owner fixtures discriminate on ONE attribute each, so dropping either half of the owner
+        // condition fails a test: the admin is not a teacher, the teacher is not an admin.
         statement.execute("""
                 insert into users (id, role, profile_type) values
                     ('%s', 'USER', 'STUDENT'),
@@ -152,39 +197,77 @@ class DerivedLearnerNoteProgramRemovalMigrationTest {
                     ('%s', 'USER', 'TEACHER')
                 """.formatted(LEARNER_USER_ID, ADMIN_USER_ID, TEACHER_USER_ID));
         statement.execute("""
-                insert into notes (id, owner_user_id, copied_from_note_id, source_note_id) values
-                    ('%s', '%s', null, null),
-                    ('%s', '%s', null, null),
-                    ('%s', '%s', null, null),
-                    ('%s', '%s', null, null),
-                    ('%s', '%s', null, null),
-                    ('%s', '%s', '%s', null),
-                    ('%s', '%s', null, '%s'),
-                    ('%s', '%s', null, null)
-                """.formatted(
-                LEARNER_NON_COPY_NOTE_ID, LEARNER_USER_ID,
-                LEARNER_MULTI_ROW_NOTE_ID, LEARNER_USER_ID,
-                LEARNER_NO_ROW_NOTE_ID, LEARNER_USER_ID,
-                ADMIN_NOTE_ID, ADMIN_USER_ID,
-                TEACHER_NOTE_ID, TEACHER_USER_ID,
-                LEARNER_COPIED_FROM_NOTE_ID, LEARNER_USER_ID, TEACHER_NOTE_ID,
-                LEARNER_SOURCE_NOTE_ID, LEARNER_USER_ID, TEACHER_NOTE_ID,
-                ORPHAN_OWNER_NOTE_ID, MISSING_USER_ID
-        ));
-        // The multi-row learner note proves the DELETE assumes no cardinality: V107 creates at most one row
-        // per note, but both of these must go.
-        insertJoinRow(statement, LEARNER_NON_COPY_NOTE_ID);
-        insertJoinRow(statement, LEARNER_MULTI_ROW_NOTE_ID);
-        insertJoinRow(statement, LEARNER_MULTI_ROW_NOTE_ID);
-        SURVIVING_NOTE_IDS.forEach(noteId -> insertJoinRow(statement, noteId));
+                insert into course_programs (id, name) values
+                    ('%s', 'Nursing'),
+                    ('%s', 'Accountancy'),
+                    ('%s', 'Education')
+                """.formatted(NURSING_ID, ACCOUNTANCY_ID, EDUCATION_ID));
     }
 
-    private void insertJoinRow(Statement statement, String noteId) {
+    private void seedFixtures(Statement statement) throws Exception {
+        seedUsersAndCatalog(statement);
+
+        // Derived: joined name == the note's own course_program, i.e. exactly V107's output.
+        insertNote(statement, DERIVED_PLAIN_NOTE_ID, LEARNER_USER_ID, "Nursing", null, null);
+        insertJoinRow(statement, DERIVED_PLAIN_NOTE_ID, NURSING_ID);
+        // Both copy shapes. These are the F1 regression: copyNote sets source_note_id on EVERY copy, so a
+        // predicate keyed on "is a copy" preserved these derived rows permanently.
+        insertNote(statement, DERIVED_ON_COPIED_FROM_NOTE_ID, LEARNER_USER_ID, "Nursing", ADMIN_NOTE_ID, null);
+        insertJoinRow(statement, DERIVED_ON_COPIED_FROM_NOTE_ID, NURSING_ID);
+        insertNote(statement, DERIVED_ON_SOURCE_COPY_NOTE_ID, LEARNER_USER_ID, "Nursing", null, ADMIN_NOTE_ID);
+        insertJoinRow(statement, DERIVED_ON_SOURCE_COPY_NOTE_ID, NURSING_ID);
+        // V107's sole alias: 'Bsed' was backfilled to the 'Education' catalog row, so the names differ and a
+        // naive equality check would miss it.
+        insertNote(statement, DERIVED_VIA_BSED_ALIAS_NOTE_ID, LEARNER_USER_ID, "Bsed", null, null);
+        insertJoinRow(statement, DERIVED_VIA_BSED_ALIAS_NOTE_ID, EDUCATION_ID);
+
+        // Legitimate: the joined name differs from the note's string, so V107 cannot have produced it.
+        insertNote(statement, INHERITED_ON_COPY_NOTE_ID, LEARNER_USER_ID, "Nursing", null, ADMIN_NOTE_ID);
+        insertJoinRow(statement, INHERITED_ON_COPY_NOTE_ID, ACCOUNTANCY_ID);
+        insertNote(statement, ADMIN_NOTE_ID, ADMIN_USER_ID, null, null, null);
+        insertJoinRow(statement, ADMIN_NOTE_ID, NURSING_ID);
+        insertNote(statement, TEACHER_NOTE_ID, TEACHER_USER_ID, null, null, null);
+        insertJoinRow(statement, TEACHER_NOTE_ID, NURSING_ID);
+        insertNote(statement, ORPHAN_OWNER_NOTE_ID, MISSING_USER_ID, "Nursing", null, null);
+        insertJoinRow(statement, ORPHAN_OWNER_NOTE_ID, NURSING_ID);
+
+        insertNote(statement, LEARNER_NO_ROW_NOTE_ID, LEARNER_USER_ID, "Nursing", null, null);
+    }
+
+    private void insertNote(
+            Statement statement,
+            String noteId,
+            String ownerId,
+            String courseProgram,
+            String copiedFromNoteId,
+            String sourceNoteId
+    ) {
+        try {
+            statement.execute("""
+                    insert into notes (id, owner_user_id, course_program, copied_from_note_id, source_note_id)
+                    values ('%s', '%s', %s, %s, %s)
+                    """.formatted(
+                    noteId,
+                    ownerId,
+                    quoteOrNull(courseProgram),
+                    quoteOrNull(copiedFromNoteId),
+                    quoteOrNull(sourceNoteId)
+            ));
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to seed note " + noteId, exception);
+        }
+    }
+
+    private String quoteOrNull(String value) {
+        return value == null ? "null" : "'" + value + "'";
+    }
+
+    private void insertJoinRow(Statement statement, String noteId, String courseProgramId) {
         try {
             statement.execute("""
                     insert into note_course_program (id, note_id, course_program_id)
                     values ('%s', '%s', '%s')
-                    """.formatted(UUID.randomUUID(), noteId, UUID.randomUUID()));
+                    """.formatted(UUID.randomUUID(), noteId, courseProgramId));
         } catch (Exception exception) {
             throw new IllegalStateException("failed to seed a join row for note " + noteId, exception);
         }
@@ -199,6 +282,18 @@ class DerivedLearnerNoteProgramRemovalMigrationTest {
         } catch (Exception exception) {
             throw new IllegalStateException("failed to count join rows for note " + noteId, exception);
         }
+    }
+
+    private List<String> remainingProgramIdsFor(Statement statement, String noteId) throws Exception {
+        List<String> ids = new ArrayList<>();
+        try (ResultSet resultSet = statement.executeQuery(
+                "select course_program_id from " + JOIN_TABLE + " where note_id = '" + noteId + "'"
+        )) {
+            while (resultSet.next()) {
+                ids.add(resultSet.getObject("course_program_id", UUID.class).toString());
+            }
+        }
+        return ids;
     }
 
     private List<String> noteIdsWithJoinRows(Statement statement) throws Exception {
