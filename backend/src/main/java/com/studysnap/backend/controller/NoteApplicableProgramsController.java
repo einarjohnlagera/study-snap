@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ApplicableProgramResponse;
+import com.studysnap.backend.dto.NoteApplicableProgramsResponse;
 import com.studysnap.backend.dto.ReplaceApplicableProgramsRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.NoteApplicableProgramsService;
@@ -25,7 +26,7 @@ public class NoteApplicableProgramsController {
     private final NoteApplicableProgramsService noteApplicableProgramsService;
 
     @GetMapping
-    public List<ApplicableProgramResponse> get(
+    public NoteApplicableProgramsResponse get(
             @PathVariable String noteId,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {

@@ -65,7 +65,7 @@ describe("SharedNoteCard", () => {
 
   // A card states the note's identity (Subject + title) and its reach as a count. Names are not
   // listed: beside the Subject badge they read as a second identity, and any truncated list drops
-  // names on alphabetical accident. The full list lives on Note Detail.
+  // names on alphabetical accident. The full read-only list lives on Note Detail.
   it("summarises several joined programs as a count instead of listing them", () => {
     render(
       <SharedNoteCard

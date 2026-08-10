@@ -2,6 +2,8 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.ApplicableProgramResponse;
 import com.studysnap.backend.dto.AdminNoteApplicableProgramsPageResponse;
+import com.studysnap.backend.dto.NoteApplicableProgramsResponse;
+import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
@@ -60,14 +62,47 @@ class NoteApplicableProgramsServiceTest {
     }
 
     @Test
-    void teacherOwnerCanReadApplicablePrograms() {
+    void oneJoinedProgramShadowsCourseProgramWithoutDomainContext() {
         UUID userId = UUID.randomUUID();
         NoteEntity note = note(UUID.randomUUID(), userId);
         ApplicableProgramResponse program = new ApplicableProgramResponse(UUID.randomUUID(), "Nursing");
         authorize(note, user(userId, UserRole.USER, ProfileType.TEACHER));
         when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(program));
 
-        assertThat(service.get(note.getId().toString(), userId)).containsExactly(program);
+        NoteApplicableProgramsResponse result = service.get(note.getId().toString(), userId);
+
+        assertThat(result.programs()).containsExactly(program);
+        assertThat(result.courseProgramShadowed()).isTrue();
+    }
+
+    @Test
+    void multipleJoinedProgramsShadowCourseProgramWithDomainContext() {
+        UUID userId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), userId);
+        note.setDomainContext(DomainContext.NURSING);
+        authorize(note, user(userId, UserRole.USER, ProfileType.STUDENT));
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(
+                new ApplicableProgramResponse(UUID.randomUUID(), "Nursing"),
+                new ApplicableProgramResponse(UUID.randomUUID(), "Pharmacy")
+        ));
+
+        NoteApplicableProgramsResponse result = service.get(note.getId().toString(), userId);
+
+        assertThat(result.courseProgramShadowed()).isTrue();
+    }
+
+    @Test
+    void domainContextShadowsCourseProgramWithoutJoinedPrograms() {
+        UUID userId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), userId);
+        note.setDomainContext(DomainContext.ENGINEERING_SCIENCES);
+        authorize(note, user(userId, UserRole.USER, ProfileType.STUDENT));
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of());
+
+        NoteApplicableProgramsResponse result = service.get(note.getId().toString(), userId);
+
+        assertThat(result.programs()).isEmpty();
+        assertThat(result.courseProgramShadowed()).isTrue();
     }
 
     @Test
@@ -91,11 +126,16 @@ class NoteApplicableProgramsServiceTest {
     }
 
     @Test
-    void studentOwnerCanReadProgramsForTheDetailViewer() {
+    void noJoinedProgramsAndNoDomainContextLeavesCourseProgramReadable() {
         UUID userId = UUID.randomUUID();
         NoteEntity note = note(UUID.randomUUID(), userId);
         authorize(note, user(userId, UserRole.USER, ProfileType.STUDENT));
-        assertThat(service.get(note.getId().toString(), userId)).isEmpty();
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of());
+
+        NoteApplicableProgramsResponse result = service.get(note.getId().toString(), userId);
+
+        assertThat(result.programs()).isEmpty();
+        assertThat(result.courseProgramShadowed()).isFalse();
     }
 
     @Test

@@ -180,9 +180,10 @@ describe("PrivateNoteDetailPageClient", () => {
       { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
       { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null },
     ]);
-    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([
-      { id: "program-nursing", name: "Nursing" },
-    ]);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [{ id: "program-nursing", name: "Nursing" }],
+      courseProgramShadowed: true,
+    });
     (replaceNoteApplicablePrograms as jest.Mock).mockImplementation(async (_noteId: string, ids: string[]) => (
       ids.map((id) => ({ id, name: id === "program-pharmacy" ? "Pharmacy" : "Nursing" }))
     ));
@@ -494,11 +495,14 @@ describe("PrivateNoteDetailPageClient", () => {
       profileType: "TEACHER",
     });
     (getNote as jest.Mock).mockResolvedValue(baseNote);
-    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([
-      { id: "program-nursing", name: "Nursing" },
-      { id: "program-pharmacy", name: "Pharmacy" },
-      { id: "program-medicine", name: "Medicine" },
-    ]);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [
+        { id: "program-nursing", name: "Nursing" },
+        { id: "program-pharmacy", name: "Pharmacy" },
+        { id: "program-medicine", name: "Medicine" },
+      ],
+      courseProgramShadowed: true,
+    });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
@@ -508,6 +512,117 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(viewerButton);
     expect(await screen.findByText("Pharmacy")).toBeInTheDocument();
     expect(screen.getByText("Medicine")).toBeInTheDocument();
+  });
+
+  it("shows copied applicable programs as read-only provenance for a learner on refresh", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      courseProgram: null,
+      copiedFromNoteId: "source-note",
+    });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [
+        { id: "program-civil", name: "Civil Engineering" },
+        { id: "program-mechanical", name: "Mechanical Engineering" },
+      ],
+      courseProgramShadowed: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Civil Engineering · Mechanical Engineering")).toBeInTheDocument();
+    expect(screen.getByText(
+      "Set by the note this was copied from. Your own course or program is on your profile.",
+    )).toBeInTheDocument();
+    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
+  });
+
+  it("does not claim copy provenance for an owner self-copy", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      courseProgram: null,
+      sourceNoteId: "owner-source-note",
+      copiedFromNoteId: null,
+    });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [{ id: "program-nursing", name: "Nursing" }],
+      courseProgramShadowed: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Nursing", { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByText(/Set by the note this was copied from/)).not.toBeInTheDocument();
+  });
+
+  it("saves a shadowed learner note without requiring a personal course or program", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    const shadowedNote = {
+      ...baseNote,
+      courseProgram: null,
+      studyPackStatus: "STUDY_PACK_READY" as const,
+      studyPackId: "sp-1",
+    };
+    (getNote as jest.Mock).mockResolvedValue(shadowedNote);
+    (updateNote as jest.Mock).mockResolvedValue(shadowedNote);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [{ id: "program-nursing", name: "Nursing" }],
+      courseProgramShadowed: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Nursing", { selector: "p" });
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        courseProgramText: null,
+      }));
+    });
+  });
+
+  it("keeps applicable-program load errors recoverable without blocking save", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    const noteWithoutProgram = {
+      ...baseNote,
+      courseProgram: null,
+      studyPackStatus: "STUDY_PACK_READY" as const,
+      studyPackId: "sp-1",
+    };
+    (getNote as jest.Mock).mockResolvedValue(noteWithoutProgram);
+    (getNoteApplicablePrograms as jest.Mock).mockRejectedValue(new Error("Could not load Course / Program(s)."));
+    (updateNote as jest.Mock).mockResolvedValue(noteWithoutProgram);
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Could not load Course / Program(s)." )).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
   });
 
   it("seeds the authoring axes from the note and saves the corrected values for a teacher", async () => {
@@ -1896,6 +2011,7 @@ describe("PrivateNoteDetailPageClient", () => {
       .mockResolvedValueOnce({ ...baseNote, studyPackStatus: "DRAFT" })
       .mockResolvedValueOnce({
         ...baseNote,
+        courseProgram: null,
         studyPackStatus: "STUDY_PACK_READY",
         studyPackId: "sp-1",
         quickReviewAvailable: true,
@@ -1965,6 +2081,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (getNote as jest.Mock)
       .mockResolvedValueOnce({
         ...baseNote,
+        courseProgram: null,
         title: "My Note",
         subject: "General Science",
         tags: ["review"],
@@ -1972,6 +2089,7 @@ describe("PrivateNoteDetailPageClient", () => {
       })
       .mockResolvedValueOnce({
         ...baseNote,
+        courseProgram: null,
         title: "My Note",
         subject: "General Science",
         tags: ["review"],
@@ -2011,7 +2129,7 @@ describe("PrivateNoteDetailPageClient", () => {
       expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
         title: "My Note",
         subject: "Biology",
-        courseProgramText: "Nursing",
+        courseProgramText: null,
         tags: ["review", "cells", "Memory"],
       }));
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=summary");

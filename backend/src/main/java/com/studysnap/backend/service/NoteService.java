@@ -72,6 +72,7 @@ import com.studysnap.backend.util.PublicNotesScoringUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
+import com.studysnap.backend.util.NoteCourseProgramShadowing;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.PageRequest;
@@ -229,7 +230,21 @@ public class NoteService {
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
         if (!curator) {
-            entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgramText(), owner));
+            boolean courseProgramShadowed = NoteCourseProgramShadowing.isShadowed(
+                    effectiveProgramCount,
+                    domainContext
+            );
+            // A shadowed note's personal string is unreadable on every path, so it is neither required
+            // nor updated here -- the stored value is left exactly as it is. Writing null instead would
+            // silently discard the string a pre-slice-4 curated note carried into its copy (V107
+            // backfilled one join row per note WITHOUT clearing the string, so that shape is real), and
+            // the value would be unrecoverable if the join rows were ever removed. Falling through to
+            // resolveRequestedCourseProgram would be worse still: the surface renders no field, so
+            // courseProgramText arrives null and the profile program would be stamped onto the note --
+            // exactly what docs/features/notes.md forbids on an edit.
+            if (!courseProgramShadowed) {
+                entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgramText(), owner));
+            }
         }
         entity.setDomainContext(domainContext);
         entity.setLearnerLevel(learnerLevel);
