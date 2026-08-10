@@ -11,6 +11,7 @@ import { getNote, type NoteResponse } from "@/lib/api";
 import { buildFlashcardDeck } from "@/lib/flashcards";
 import { buildNoteDetailPathWithTab } from "@/lib/note-entry";
 import { cn } from "@/lib/utils";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -169,7 +170,7 @@ export function FlashcardsPageClient({ noteId }: Readonly<{ noteId: string }>) {
                     </p>
                     {currentCard.explanation ? (
                       <p className="text-xl font-medium leading-relaxed text-foreground sm:text-2xl">
-                        {currentCard.explanation}
+                        {renderMathText(currentCard.explanation)}
                       </p>
                     ) : (
                       <div className="space-y-2 rounded-lg border border-dashed border-border bg-background/70 px-4 py-4">

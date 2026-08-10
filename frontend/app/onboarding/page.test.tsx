@@ -779,6 +779,50 @@ describe("OnboardingPage", () => {
     expect(screen.queryByText(/No Official .* yet for/)).not.toBeInTheDocument();
   });
 
+  // A resumed draft loses `practiceFirstPlan` (component state) while keeping `reviewSetAvailable: true`
+  // (localStorage). Before the re-resolve, one click on the ready-made door hit `!practiceFirstPlan` and
+  // told the learner their program had no Review Set -- contradicting the state the screen was painted
+  // from -- and two of the three exits offered there complete onboarding and navigate away.
+  it("re-resolves the plan on a resumed draft instead of claiming no Review Set exists", async () => {
+    const qualifyingPlan = {
+      id: "source-plan-1",
+      title: "Nursing Review Set",
+      description: "A curated Nursing sequence.",
+      visibility: "PUBLIC",
+      courseProgram: "Nursing",
+      sourcePlanId: null,
+      parentCollectionId: null,
+      itemCount: 3,
+      childCount: 0,
+      readyCount: 2,
+      notesPracticed: 0,
+      createdAt: "2026-06-01T00:00:00Z",
+      updatedAt: "2026-06-02T00:00:00Z",
+    };
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([qualifyingPlan]);
+    window.localStorage.setItem("notelib.onboarding-v2:user-1", JSON.stringify({
+      startedAtMs: Date.now(),
+      currentStep: 3,
+      profileType: "STUDENT",
+      learnerLevel: "COLLEGE",
+      courseProgram: "Nursing",
+      reviewSetAvailable: true,
+      intent: "ready_made",
+      examDate: "",
+      inputMethod: null,
+      topic: "",
+      noteContent: "",
+      generatedNoteReady: false,
+      noteId: null,
+      studyPackId: null,
+    }));
+
+    render(<OnboardingPage />);
+
+    expect(await screen.findByText("You're preparing for Nursing.")).toBeInTheDocument();
+    expect(screen.queryByText(/still building an Official/)).not.toBeInTheDocument();
+  });
+
   it("shows the honest unavailable state with all three fallbacks, and never auto-redirects", async () => {
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
     render(<OnboardingPage />);
@@ -815,7 +859,10 @@ describe("OnboardingPage", () => {
 
     // Navigating first would leave a user who closes the tab mid-transition permanently un-onboarded.
     await waitFor(() => expect(callOrder).toEqual(["complete", "push"]));
-    expect(routerMock.push).toHaveBeenCalledWith("/public/library?courseProgram=Nursing");
+    // A SLUG, not the raw value. The consumer resolves this with resolvePublicLibraryValueBySlug, so
+    // "Nursing" never matches "nursing" and the UI showed no active filter while the API still filtered.
+    // This assertion previously enshrined that defect.
+    expect(routerMock.push).toHaveBeenCalledWith("/public/library?courseProgram=nursing");
   });
 
   it("routes the own-notes fallback into the create flow without completing onboarding", async () => {

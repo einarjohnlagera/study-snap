@@ -51,8 +51,12 @@ function findDelimiterAt(text: string, index: number) {
  * swallowed. Both are routine: Accountancy and Business Administration are seeded programs.
  *
  * So `$` opens a span only when the next character is not whitespace, and closes only when the previous
- * character is not whitespace — the same rule markdown math parsers use. `\(`, `\[` and `$$` are
- * unambiguous and need only a closing delimiter.
+ * character is neither whitespace NOR a binary operator. The operator half matters as much as the
+ * whitespace half: `"$10-$20"` and `"$5+$3"` both satisfy "previous character is not whitespace", so the
+ * first version of this rule captured `"10-"` as LaTeX — which KaTeX renders happily, since a trailing
+ * binary operator is legal, so the error fallback never fired and the reader saw a subtraction with the
+ * dollar signs swallowed. A `$` sitting immediately after an operator is a new amount, not a close.
+ * `\(`, `\[` and `$$` are unambiguous and need only a closing delimiter.
  */
 function isInlineDollarOpen(text: string, index: number) {
   const next = text[index + 1];
@@ -69,7 +73,7 @@ function findInlineDollarCloseIndex(text: string, fromIndex: number) {
       continue;
     }
     const previous = text[index - 1];
-    if (previous !== undefined && !/\s/.test(previous)) {
+    if (previous !== undefined && !/[\s+\-*/=<>^~]/.test(previous)) {
       return index;
     }
   }
@@ -173,7 +177,14 @@ function renderMathSegment(latex: string, delimiter: MathDelimiter, key: string)
  * extra span changes which element `getByText` resolves to, and would silently move styling like
  * `break-words` off the element tests assert against. Structure is only added where math exists.
  */
-export function renderMathText(text: string): ReactNode {
+export function renderMathText(text: string | null | undefined): ReactNode {
+  // The C3 sweep replaced ~15 bare `{value}` expressions with `renderMathText(value)`. React rendered a
+  // null or undefined value as nothing; this reads `text.length` and would throw, taking the page down.
+  // One call site can genuinely pass undefined: `choices[resolveQuizCorrectIndex(item)]` where that
+  // resolver returns -1.
+  if (!text) {
+    return text ?? null;
+  }
   if (!findMathSpanFrom(text, 0)) {
     return text;
   }
