@@ -946,7 +946,7 @@ Ratified 2026-07-31 (Company Redefinition Phase 4, considered and narrowed 2026-
 - `learnerLevel` lives on `User`, not on Note or a separate learner-profile table.
 - `User.courseProgram` remains the profile-level default for new notes.
 - Notes may also store an optional note-level `courseProgram`, defaulted from the user's profile and editable per note.
-- For Study Pack generation the authoring domain resolves `notes.domainContext` -> `notes.courseProgram` -> `users.courseProgram`, and the curriculum level resolves `notes.learnerLevel` -> `users.learnerLevel` -> `COLLEGE`. The level chain never reads `courseProgram`.
+- For Study Pack generation the authoring domain resolves `notes.domainContext` -> **exactly one joined catalog program (`note_course_program`)** -> `notes.courseProgram` -> `users.courseProgram`, and the curriculum level resolves `notes.learnerLevel` -> `users.learnerLevel` -> `COLLEGE`. The level chain never reads `courseProgram`. **The join step is only consulted at exactly one row** (`v0.71.0`): a note applicable to several programs has no single authoring domain, so the chain falls through to the strings rather than picking one arbitrarily. It is not a legacy branch — it is how every learner-authored note resolves its domain. Program *lists* never reach a prompt.
 - Metadata hierarchy should stay:
   - `courseProgram` -> top-level track/domain
   - `subject` -> reusable academic topic

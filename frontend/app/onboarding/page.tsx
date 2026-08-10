@@ -811,8 +811,15 @@ export default function OnboardingPage() {
       if (userId) {
         setDeferredOnboardingCompletion(userId);
       }
-      // Do NOT block the user on a failed completion -- the deferred marker retries it, and stranding
-      // them here is the redirect-loop this fallback exists to prevent.
+      // Do NOT block the user on a failed completion -- stranding them here is the redirect-loop this
+      // fallback exists to prevent.
+      //
+      // The marker does NOT retry. Nothing re-POSTs completeOnboarding anywhere; setDeferredOnboardingCompletion
+      // only suppresses the guard's redirect, so the server's onboardingCompletedAt stays null and is masked by a
+      // localStorage key scoped to one browser -- clear storage or switch device and the user is un-onboarded
+      // again. An earlier version of this comment claimed a retry; it was never written. Adding one is a
+      // recorded v0.71.1 candidate. Does NOT affect the Diagnostic Read, which keys on the analytics event
+      // fired in the finally block below, on every path, not on onboardingCompletedAt.
     } finally {
       if (!completionTrackedRef.current) {
         completionTrackedRef.current = true;
