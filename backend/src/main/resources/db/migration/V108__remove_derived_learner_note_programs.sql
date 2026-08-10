@@ -24,32 +24,41 @@
 -- Flyway checksum and break startup there, and AGENTS.md holds migrations append-only. V108 therefore runs
 -- immediately after V107 in the same deploy, closing the window before production ever sees the table.
 --
--- WHY CONDITION 2 IS EXACT RATHER THAN A created_at HEURISTIC.
--- Join rows reach a learner-owned note through exactly one legitimate route: inheritance via
--- NoteService.copyNote, which copies the source note's rows onto the copy. Every other write is
--- curator-gated -- all four noteCourseProgramRepository.replace call sites are either the curator branch of
--- note create/update or the curator-gated NoteApplicableProgramsService -- and
--- NoteApplicableProgramsMaintenanceService was removed in slice 4. No runtime path derives join rows from
--- the personal string. So "not a copy" is not a proxy for provenance; it is provenance: a non-copy
--- learner-owned note has no legitimate route to a join row at all.
+-- WHY THE PREDICATE MIRRORS V107'S OWN INSERT, AND NOT "IS THIS NOTE A COPY".
+-- An earlier version of this migration deleted rows where the note was learner-owned AND not a copy
+-- (copied_from_note_id IS NULL AND source_note_id IS NULL), reasoning that copy-inheritance is the only
+-- legitimate route to a join row on a learner note. That reasoning conflated "is a copy" with "has
+-- INHERITED rows", and it was wrong: NoteService.copyNote sets source_note_id on EVERY copy -- self-copy
+-- and public copy alike -- and has done so since long before this release. So every PRE-EXISTING copy was
+-- skipped by that predicate while still carrying the row V107 derived from its own course_program string.
+-- The migration preserved precisely the rows it exists to delete. Measured on a dev database: 8 of 11
+-- learner-owned rows on copies were derived, i.e. wrongly protected.
 --
--- In production at V108 time the predicate is unambiguous anyway -- V107 has just run, the app has served no
--- traffic, and copy-inheritance of join rows is itself new in this release, so every row present came from
--- V107's backfill. Condition 2 earns its place in NON-PRODUCTION environments, where V107 already ran and the
--- app has served traffic: local dev holds ~8 genuinely inherited rows, and without condition 2 this migration
--- would destroy them.
+-- Copy-inheritance of join rows is itself NEW in this release, so at V108 time a pre-existing copy cannot
+-- have inherited rows -- only derived ones. The copy check therefore protected nothing that existed yet.
+--
+-- The predicate below is not a heuristic and not a proxy: it is the exact INVERSE of V107's insert. V107
+-- joined course_programs.name against the note's own course_program (with the single 'Bsed' -> 'Education'
+-- alias); this deletes learner-owned rows where that same equality still holds. It therefore removes
+-- exactly V107's output for learner notes and nothing else. Rows whose catalog name DIFFERS from the note's
+-- string cannot have come from V107 and are preserved -- on the same dev database, the remaining 3.
+--
+-- Deletion is by note_course_program.id, not by note_id, so a note carrying both a derived and an
+-- inherited row loses only the derived one.
+--
+-- KNOWN AMBIGUITY, accepted: a copy whose inherited row happens to carry the same catalog name as the
+-- copy's own string is indistinguishable from a derived row, and is deleted. This cannot arise in
+-- production, where no inherited rows exist at V108 time. Resolving it would need the `source` provenance
+-- column the owner considered and rejected.
 --
 -- ACCEPTED LIMITATION, documented rather than solved: an ADMIN can set programs on another user's note
--- through the shared Applicable Programs endpoint. If an admin curated a non-copy learner-owned note before
--- this migration runs, its rows are removed here. This cannot occur in production (no traffic between V107
--- and V108) and is vanishingly unlikely elsewhere. A `source` provenance column was considered and rejected
--- by the owner -- this rule keeps that population empty.
+-- through the shared Applicable Programs endpoint. If an admin curated a learner-owned note with a program
+-- matching that note's own string before this migration runs, the row is removed here. Unreachable in
+-- production (no traffic between V107 and V108) and vanishingly unlikely elsewhere.
 --
--- ORPHANED OWNER BEHAVIOUR: the owner test is an EXISTS against users, not an outer join, so a note whose
--- owner_user_id has no users row is NOT treated as learner-owned and its rows are KEPT. Deletion is
--- destructive, so absence of evidence must not authorize it. The case is unreachable in practice --
--- notes.owner_user_id is NOT NULL REFERENCES users(id) -- and the form is chosen to make the behaviour
--- explicit rather than incidental.
+-- ORPHANED OWNER BEHAVIOUR: the users join is an INNER JOIN, so a note whose owner_user_id has no users row
+-- does not match and its rows are KEPT. Deletion is destructive; absence of evidence must not authorize it.
+-- Unreachable in practice (notes.owner_user_id is NOT NULL REFERENCES users(id)) and made explicit anyway.
 --
 -- IDEMPOTENT BY CONSTRUCTION: the DELETE removes every row matching the predicate, so a second run matches
 -- nothing and deletes nothing. A fresh database matches nothing and succeeds, deleting zero.
@@ -60,48 +69,47 @@
 -- block is what makes V108's test genuine. Do not move it.
 
 DELETE FROM note_course_program
-WHERE note_id IN (
-    SELECT notes.id
-    FROM notes
-    WHERE notes.copied_from_note_id IS NULL
-      AND notes.source_note_id IS NULL
-      AND EXISTS (
-          SELECT 1
-          FROM users
-          WHERE users.id = notes.owner_user_id
-            AND users.role <> 'ADMIN'
-            AND users.profile_type IS DISTINCT FROM 'TEACHER'
-      )
+WHERE id IN (
+    SELECT ncp.id
+    FROM note_course_program ncp
+    JOIN notes n ON n.id = ncp.note_id
+    JOIN course_programs cp ON cp.id = ncp.course_program_id
+    JOIN users u ON u.id = n.owner_user_id
+    WHERE u.role <> 'ADMIN'
+      AND u.profile_type IS DISTINCT FROM 'TEACHER'
+      AND cp.name = CASE
+          WHEN n.course_program = 'Bsed' THEN 'Education'
+          ELSE n.course_program
+      END
 );
 
 DO $$
 DECLARE
     remaining_rows INTEGER;
-    residual_derived_notes INTEGER;
+    remaining_learner_rows INTEGER;
 BEGIN
-    -- Informational, never fatal. ROW_COUNT is not reported here on purpose: GET DIAGNOSTICS reflects the
-    -- last statement executed INSIDE this block, and the DELETE above deliberately sits outside it, so a
-    -- deleted-row count taken here would be wrong. The residual invariant is the stronger post-condition
-    -- anyway -- residual_derived_notes must be 0, and any other value means the predicate did not hold.
+    -- Informational, never fatal. ROW_COUNT is not reported: GET DIAGNOSTICS reflects the last statement
+    -- executed INSIDE this block, and the DELETE deliberately sits outside it.
+    --
+    -- The check below is DELIBERATELY NOT the delete predicate re-run. The previous version of this file
+    -- asserted "0 learner-owned non-copy notes still carry rows" using the same predicate the DELETE used,
+    -- so it reported 0 by construction no matter what survived -- which is exactly why the predicate being
+    -- wrong went unnoticed. Count something the DELETE did not target instead: ALL rows still attached to a
+    -- learner-owned note. In production that must be 0, because copy-inheritance of join rows is new in
+    -- this release and no traffic runs between V107 and V108, so every row present came from V107's
+    -- backfill and every one of them matches the predicate. A non-zero value in production means a row
+    -- survived that should not have. Elsewhere -- a dev database where V107 ran long ago and traffic has
+    -- flowed since -- a small non-zero count is expected and correct: those are genuinely inherited rows
+    -- whose catalog name differs from the note's own string, and they must be preserved.
     SELECT count(*) INTO remaining_rows FROM note_course_program;
-    SELECT count(DISTINCT notes.id)
-      INTO residual_derived_notes
-      FROM notes
-      JOIN note_course_program ON note_course_program.note_id = notes.id
-     WHERE notes.copied_from_note_id IS NULL
-       AND notes.source_note_id IS NULL
-       AND EXISTS (
-           SELECT 1
-             FROM users
-            WHERE users.id = notes.owner_user_id
-              AND users.role <> 'ADMIN'
-              AND users.profile_type IS DISTINCT FROM 'TEACHER'
-       );
+    SELECT count(*)
+      INTO remaining_learner_rows
+      FROM note_course_program ncp
+      JOIN notes n ON n.id = ncp.note_id
+      JOIN users u ON u.id = n.owner_user_id
+     WHERE u.role <> 'ADMIN'
+       AND u.profile_type IS DISTINCT FROM 'TEACHER';
 
-    RAISE NOTICE 'V108: % note_course_program rows remain (curator-authored and copy-inherited); % learner-owned non-copy notes still carry rows',
-        remaining_rows, residual_derived_notes;
-
-    IF residual_derived_notes > 0 THEN
-        RAISE NOTICE 'V108: expected 0 learner-owned non-copy notes with join rows after the delete -- investigate before anything reads note_course_program';
-    END IF;
+    RAISE NOTICE 'V108: % note_course_program rows remain in total; % of them sit on learner-owned notes (expected 0 in production, small and non-zero only where traffic ran between V107 and V108)',
+        remaining_rows, remaining_learner_rows;
 END $$;
