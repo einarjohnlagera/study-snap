@@ -142,9 +142,10 @@ describe("NoteEditorPageClient", () => {
       { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
       { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null },
     ]);
-    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([
-      { id: "program-nursing", name: "Nursing" },
-    ]);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [{ id: "program-nursing", name: "Nursing" }],
+      courseProgramShadowed: false,
+    });
     (replaceNoteApplicablePrograms as jest.Mock).mockImplementation(async (_noteId: string, ids: string[]) => (
       ids.map((id) => ({ id, name: id === "program-pharmacy" ? "Pharmacy" : "Nursing" }))
     ));
@@ -429,6 +430,82 @@ describe("NoteEditorPageClient", () => {
     });
     expect(updateNote).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("shows copied applicable programs read-only and saves a shadowed learner note without a personal program", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      courseProgram: null,
+      copiedFromNoteId: "source-note",
+    });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [
+        { id: "program-civil", name: "Civil Engineering" },
+        { id: "program-mechanical", name: "Mechanical Engineering" },
+      ],
+      courseProgramShadowed: true,
+    });
+    (updateNote as jest.Mock).mockResolvedValue({ ...baseNote, courseProgram: null });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    expect(await screen.findByText("Civil Engineering · Mechanical Engineering")).toBeInTheDocument();
+    expect(screen.getByText(
+      "Set by the note this was copied from. Your own course or program is on your profile.",
+    )).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Course \/ Program/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        courseProgramText: null,
+      }));
+    });
+  });
+
+  it("renders owner self-copy program names without copied provenance", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      courseProgram: null,
+      sourceNoteId: "owner-source-note",
+      copiedFromNoteId: null,
+    });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [{ id: "program-nursing", name: "Nursing" }],
+      courseProgramShadowed: true,
+    });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    expect(await screen.findByText("Nursing", { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByText(/Set by the note this was copied from/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Course \/ Program/)).not.toBeInTheDocument();
+  });
+
+  it("does not block a learner save when applicable-program provenance fails to load", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, courseProgram: null });
+    (getNoteApplicablePrograms as jest.Mock).mockRejectedValue(new Error("Could not load Course / Program(s)."));
+    (updateNote as jest.Mock).mockResolvedValue({ ...baseNote, courseProgram: null });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    expect(await screen.findByText("Could not load Course / Program(s)." )).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
   });
 
   it("saves an edited note using its own Course/Program, not the editor's profile", async () => {

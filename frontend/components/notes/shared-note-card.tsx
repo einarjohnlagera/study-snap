@@ -56,7 +56,7 @@ function resolveCardPrograms(
 /**
  * One program is worth naming — it is unambiguous and it is the common case. Several are not: on a
  * card the useful signal is that the note is broadly applicable, and any truncated list has to pick
- * which names to drop on alphabetical accident. The full list lives on Note Detail.
+ * which names to drop on alphabetical accident. The full read-only list lives on Note Detail.
  */
 function resolveProgramSummary(programs: string[]): string | null {
   if (programs.length === 0) {

@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AdminNoteApplicableProgramsItemResponse;
 import com.studysnap.backend.dto.AdminNoteApplicableProgramsPageResponse;
 import com.studysnap.backend.dto.ApplicableProgramResponse;
+import com.studysnap.backend.dto.NoteApplicableProgramsResponse;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
@@ -17,6 +18,7 @@ import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.UuidParsingUtils;
+import com.studysnap.backend.util.NoteCourseProgramShadowing;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -44,9 +46,14 @@ public class NoteApplicableProgramsService {
     private final NoteCourseProgramRepository noteCourseProgramRepository;
 
     @Transactional(readOnly = true)
-    public List<ApplicableProgramResponse> get(String noteIdRaw, UUID requesterUserId) {
+    public NoteApplicableProgramsResponse get(String noteIdRaw, UUID requesterUserId) {
         NoteEntity note = findReadableNote(noteIdRaw, requesterUserId);
-        return noteCourseProgramRepository.findByNoteId(note.getId());
+        List<ApplicableProgramResponse> programs = noteCourseProgramRepository.findByNoteId(note.getId());
+        boolean courseProgramShadowed = NoteCourseProgramShadowing.isShadowed(
+                programs.size(),
+                note.getDomainContext()
+        );
+        return new NoteApplicableProgramsResponse(programs, courseProgramShadowed);
     }
 
     @Transactional

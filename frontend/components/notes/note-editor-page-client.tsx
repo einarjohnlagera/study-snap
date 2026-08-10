@@ -197,6 +197,9 @@ export function NoteEditorPageClient({
   const [applicableProgramCatalog, setApplicableProgramCatalog] = useState<CourseProgramCatalogItem[]>([]);
   const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
   const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
+  const [savedApplicableProgramNames, setSavedApplicableProgramNames] = useState<string[]>([]);
+  const [courseProgramShadowed, setCourseProgramShadowed] = useState<boolean | null>(null);
+  const [copiedFromNoteId, setCopiedFromNoteId] = useState<string | null>(null);
   const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
   const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
   const [applicableProgramsDirty, setApplicableProgramsDirty] = useState(false);
@@ -236,23 +239,26 @@ export function NoteEditorPageClient({
   }, []);
 
   useEffect(() => {
-    if (!showTargetProfileTypeField) {
+    if (!showTargetProfileTypeField && !noteId) {
       return;
     }
     let active = true;
     setApplicableProgramsLoading(true);
     setApplicableProgramsError(null);
+    const catalogRequest = showTargetProfileTypeField ? getCourseProgramCatalog() : Promise.resolve([]);
     const programsRequest = noteId ? getNoteApplicablePrograms(noteId) : Promise.resolve(null);
-    void Promise.all([getCourseProgramCatalog(), programsRequest])
-      .then(([catalog, programs]) => {
+    void Promise.all([catalogRequest, programsRequest])
+      .then(([catalog, response]) => {
         if (!active) {
           return;
         }
         setApplicableProgramCatalog(catalog);
-        if (programs) {
-          const selectedIds = programs.map((program) => program.id);
+        if (response) {
+          const selectedIds = response.programs.map((program) => program.id);
           setApplicableProgramIds(selectedIds);
           setSavedApplicableProgramIds(selectedIds);
+          setSavedApplicableProgramNames(response.programs.map((program) => program.name));
+          setCourseProgramShadowed(response.courseProgramShadowed);
           setApplicableProgramsDirty(false);
         }
         setCatalogLoaded(true);
@@ -568,6 +574,7 @@ export function NoteEditorPageClient({
         }
         setDraft(toDraft(note));
         setCurrentNoteId(note.id);
+        setCopiedFromNoteId(note.copiedFromNoteId);
         setStudyPackStatus(note.studyPackStatus ?? "DRAFT");
       })
       .catch((error) => {
@@ -699,7 +706,9 @@ export function NoteEditorPageClient({
       }
     }
     const missing: string[] = [];
-    if (showTargetProfileTypeField ? applicableProgramIds.length === 0 : !resolvedCourseProgram) {
+    if (showTargetProfileTypeField
+      ? applicableProgramIds.length === 0
+      : (!isEditMode || courseProgramShadowed === false) && !resolvedCourseProgram) {
       missing.push("Course / Program(s)");
     }
     if (missing.length > 0) {
@@ -743,6 +752,7 @@ export function NoteEditorPageClient({
     showToast,
     showTargetProfileTypeField,
     applicableProgramIds,
+    courseProgramShadowed,
   ]);
 
   const upsertNote = useCallback(async (): Promise<NoteResponse | null> => {
@@ -1351,6 +1361,11 @@ export function NoteEditorPageClient({
         applicableProgramsLoading={applicableProgramsLoading}
         applicableProgramsError={applicableProgramsError}
         onRetryApplicablePrograms={() => setApplicableProgramsRetryToken((value) => value + 1)}
+        courseProgramShadowed={courseProgramShadowed ?? (
+          isEditMode && (applicableProgramsLoading || Boolean(applicableProgramsError)) ? true : null
+        )}
+        savedApplicableProgramNames={savedApplicableProgramNames}
+        copiedFromNoteId={copiedFromNoteId}
         targetProfileTypeHelperText={targetProfileTypeHelperText}
         backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}
         backLabel={isEditMode ? "Note" : "Library"}
