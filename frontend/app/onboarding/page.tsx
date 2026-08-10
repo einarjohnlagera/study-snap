@@ -27,6 +27,7 @@ import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { getPaidPlanCtaLabel } from "@/src/config/plans";
 import { mapProfileTypeToNoteTargetProfile } from "@/lib/note-target-profile";
 import {
@@ -261,6 +262,7 @@ export default function OnboardingPage() {
   const [checkingPracticeFirstPlan, setCheckingPracticeFirstPlan] = useState(false);
   const [stepTwoError, setStepTwoError] = useState<string | null>(null);
   const [practiceFirstPlan, setPracticeFirstPlan] = useState<NoteCollectionSummary | null>(null);
+  const [resolvingAvailability, setResolvingAvailability] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
   const [previewOpen, setPreviewOpen] = useState<Record<GenerationSectionKey, boolean>>({
     summary: true,
@@ -776,7 +778,12 @@ export default function OnboardingPage() {
     }
 
     const destination = fallback === "explore"
-      ? `/public/library?courseProgram=${encodeURIComponent(draft.courseProgram.trim())}`
+      // Must be a SLUG, and must go through the canonical builder. Every other producer in the repo emits
+      // one, and the consumer resolves it with resolvePublicLibraryValueBySlug -- so a raw value silently
+      // fails to match on case alone ("Nursing" vs "nursing"). The API still filtered (the backend
+      // slugifies its side), so the list looked filtered while the UI showed no active filter, no way to
+      // clear it, and the next Apply silently dropped the program entirely.
+      ? buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(draft.courseProgram) })
       : "/dashboard";
     await completeOnboardingAndLeave(destination, "ready_made", fallback);
   };
@@ -843,6 +850,53 @@ export default function OnboardingPage() {
       currentStep: nextStep,
     }));
   };
+
+  // Re-resolve the qualifying plan when step 3 is reached without one in memory.
+  //
+  // `draft.intent` and `draft.reviewSetAvailable` persist to localStorage; `practiceFirstPlan` is component
+  // state set only by the Step 2 submit. So ANY reload on step 3 -- the doors screen is exactly where users
+  // pause -- dropped the plan while the draft still said a Review Set was available. One click on "Study
+  // with ready-made materials" then hit `!practiceFirstPlan` and told the learner "We're still building an
+  // Official Review Set for {Program}", contradicting the state the screen was painted from. Two of the
+  // three exits offered there complete onboarding and navigate away, so the learner left on a false basis.
+  // It also inflated ONBOARDING_V2_INTENT_UNSUPPORTED_VIEWED with every resumed session.
+  useEffect(() => {
+    if (currentStep !== 3 || practiceFirstPlan || resolvingAvailability) {
+      return;
+    }
+    // `false` is a known answer -- don't re-query it. `null` means unknown (the lookup failed, and it fails
+    // open), so re-resolving is the correct thing to do rather than asserting absence.
+    if (draft.reviewSetAvailable === false || !draft.courseProgram.trim()) {
+      return;
+    }
+
+    let cancelled = false;
+    setResolvingAvailability(true);
+    void listCourseProgramStudyPlans(draft.courseProgram)
+      .then((plans) => {
+        if (cancelled) {
+          return;
+        }
+        const matchingPlan = plans[0] ?? null;
+        const qualifies = Boolean(
+          matchingPlan && matchingPlan.itemCount > 0 && (matchingPlan.readyCount ?? 0) > 0,
+        );
+        setPracticeFirstPlan(qualifies ? matchingPlan : null);
+        setDraft((previous) => ({ ...previous, reviewSetAvailable: qualifies }));
+      })
+      .catch(() => {
+        // Still fails open: leave availability unknown rather than asserting absence.
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setResolvingAvailability(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStep, practiceFirstPlan, resolvingAvailability, draft.reviewSetAvailable, draft.courseProgram]);
 
   const handleContinueFromStepTwo = async () => {
     if (!canContinueFromStepTwo || checkingPracticeFirstPlan) {
@@ -1401,10 +1455,27 @@ export default function OnboardingPage() {
       );
     }
 
+    // While a re-resolution is in flight the learner has already chosen "ready-made", so falling through
+    // to the create-flow screen would show them the path they did not pick. Hold the step instead.
+    if (currentStep === 3 && draft.intent === "ready_made" && !practiceFirstPlan && resolvingAvailability) {
+      return (
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
+          <div className="space-y-2 text-center sm:text-left">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+              Finding materials for {draft.courseProgram.trim()}...
+            </CardTitle>
+            <CardDescription className="text-sm">
+              One moment while we check what&apos;s ready for your program.
+            </CardDescription>
+          </div>
+        </div>
+      );
+    }
+
     // ---- Step 3b: the honest unavailable state ------------------------------------------------------
     // A soft, explained re-route rather than a rejection. The primary action is the OTHER intent, which is
     // what lets the door above stay selectable. The user always chooses; nothing auto-redirects.
-    if (currentStep === 3 && draft.intent === "ready_made" && !practiceFirstPlan) {
+    if (currentStep === 3 && draft.intent === "ready_made" && !practiceFirstPlan && !resolvingAvailability) {
       const programLabel = draft.courseProgram.trim();
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">

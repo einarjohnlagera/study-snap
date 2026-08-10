@@ -9,6 +9,7 @@ import { buildMatchedFlashcards } from "@/lib/flashcards";
 import type { QuizItem } from "@/lib/api";
 import { normalizePublicNoteText } from "@/lib/public-note-text";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 const MAX_PREVIEW_CARDS = 3;
 
@@ -105,7 +106,7 @@ export function PublicFlashcardsPreview({ keyConcepts, quiz, noteId }: PublicFla
               {normalizePublicNoteText(currentCard.concept)}
             </p>
             <p className="text-lg font-medium leading-relaxed text-foreground sm:text-xl">
-              {normalizePublicNoteText(currentCard.explanation)}
+              {renderMathText(normalizePublicNoteText(currentCard.explanation))}
             </p>
           </div>
         ) : (

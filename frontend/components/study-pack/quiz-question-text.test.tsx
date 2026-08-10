@@ -51,6 +51,21 @@ describe("QuizQuestionText", () => {
     expect(container.querySelector("span")).not.toBeInTheDocument();
   });
 
+  // A `$` immediately after a binary operator is a new amount, not a closing delimiter. The first version
+  // of the currency rule only rejected whitespace, so "$10-$20" captured "10-" as LaTeX -- which KaTeX
+  // renders happily (a trailing binary operator is legal), so the error fallback never fired and the
+  // reader saw a subtraction with both dollar signs swallowed.
+  it.each([
+    ["Prices range $10-$20 per unit.", "Prices range $10-$20 per unit."],
+    ["Compare $5+$3 against $8.", "Compare $5+$3 against $8."],
+    ["Margin fell from $12/$4 last year.", "Margin fell from $12/$4 last year."],
+  ])("keeps operator-separated currency as plain text: %s", (input, expected) => {
+    const { container } = render(<QuizQuestionText text={input} />);
+
+    expect(container.querySelector(".katex")).not.toBeInTheDocument();
+    expect(container.textContent).toBe(expected);
+  });
+
   it("still renders genuine inline dollar math", () => {
     const { container } = render(<QuizQuestionText text={"Simplify $x^2 + 2x$ fully."} />);
 

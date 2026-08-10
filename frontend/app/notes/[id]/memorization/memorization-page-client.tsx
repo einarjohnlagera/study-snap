@@ -19,6 +19,7 @@ import { normalizeConceptKey } from "@/lib/concepts";
 import { buildMatchedFlashcards, type MatchedFlashcard } from "@/lib/flashcards";
 import { buildNoteDetailPathWithTab } from "@/lib/note-entry";
 import { cn } from "@/lib/utils";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -293,7 +294,7 @@ export function MemorizationPageClient({ noteId }: Readonly<{ noteId: string }>)
                 {revealed ? (
                   <div className="rounded-xl border border-border bg-muted/30 p-4 text-center">
                     <p className="text-lg font-medium leading-relaxed text-foreground sm:text-xl">
-                      {currentCard.explanation}
+                      {renderMathText(currentCard.explanation)}
                     </p>
                   </div>
                 ) : (
