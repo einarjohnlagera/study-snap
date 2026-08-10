@@ -1,5 +1,5 @@
 -- PR 5 input, round 2 — the seed list itself, plus the third source nobody read.
--- Written 2026-08-05. Run against PRODUCTION. Read-only: no INSERT, UPDATE, DELETE, or DDL.
+-- Written 2026-08-04. Run against PRODUCTION. Read-only: no INSERT, UPDATE, DELETE, or DDL.
 --
 -- ============================================================================
 -- WHY THIS EXISTS, WHEN `11` ALREADY RAN
@@ -45,6 +45,21 @@
 -- en-dash bug is how the trap catches the person setting it. Query B enumerates every non-ASCII
 -- value across all three tables instead, which is robust by construction and would have found
 -- both the fourth and the fifth without anyone knowing to look.
+--
+-- ============================================================================
+-- ANSWERED 2026-08-04 — the hypothesis above was WRONG, and usefully so
+-- ============================================================================
+-- Query B returned exactly FOUR non-ASCII values: the three `Senior High - ...` strands and
+-- `Special Needs Education - Generalist` (both with U+2013). `Medical - Surgical Nursing` appears
+-- in NONE of the three tables — 0 notes, 0 users, 0 collections. It was never a collection-side
+-- value; it is a phantom that has matched zero rows since it was configured.
+--
+-- Query A returned 32 rows and collections contributed no values of their own. Query C found zero
+-- collisions across all three sources.
+--
+-- The owner ruled 2026-08-04 to drop it from PNLE, which `v0.70.0` shipped. Full results and the
+-- 21/11 seed/exclude split are in `15-vocabulary-and-impact-results.md` Part 3 (FINDING 4).
+-- Recorded here so a future reader does not inherit the collection-side hypothesis as fact.
 
 -- ============================================================================
 -- QUERY 0 — schema/state check

@@ -11,6 +11,8 @@ Primary surfaces:
 - Public Note Detail
 - Public Profile note list
 
+Public Note Detail uses the same single Course / Program(s) viewer as private Note Detail: one program is named directly; several render `Applicable to N programs` and reveal the explicit program list. It never implies a primary program.
+
 ## Public Note Rules
 
 - a note is public only when `visibility=PUBLIC`
@@ -101,6 +103,8 @@ When a visitor completes the visible Quick Check, the page shows an inline outco
 Post-copy landing must match the CTA's verb. `Quiz yourself on this note` is only shown when the public source has a ready Study Pack with at least one quiz question (the same gate used by the Mini Quiz preview). It copies that Study Pack as-is and auto-launches Quick Review on the copy (`redirectTarget="quick-review"` → `?copied=1&startQuickReview=1`, never `generate=1`). If the source Study Pack is no longer ready at copy time, the user keeps the copied note and lands on its plain detail page with the existing manual `Generate Study Pack` action; no generation or Quick Review redirect is triggered. `Add to Library` is the copy-promise secondary: it lands on the **copied note's detail page** with the available Study Pack rather than dropping the viewer straight into a quiz. Do not route copy-verb CTAs to `quick-review`.
 
 Related discovery stays supplementary and its two sections omit independently. The public detail page offers a `More in {Subject}` module when the existing `GET /notes/public?subject=X` query returns at least two other notes: it excludes the current note, fetches up to three cards, reuses `shared-note-card.tsx`, and renders them in the same two-column grid used by the `More {Course/Program} notes` section above it. Both sections link onward with the same `See all →` label (`aria-label`d as `See all in {Subject}` / `See all in {Course/Program}` for accessibility, since the visible text no longer differs) to the canonical subject landing page or course/program-filtered Public Library. Empty or too-thin subject results, including fetch failures, omit the section silently. It also offers a `More from {Display Name}` link using the existing creator-filtered Public Library URL, omitted when author fields are unavailable.
+
+For a curated note whose personal-note scalar is null, the `More {Course/Program} notes` rail and Exam Hub callout derive their single contextual program from the first joined Applicable Program. This is navigation context only: discovery retains the full joined set, and no program list becomes a generation input.
 
 Copy-first generation rule:
 

@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 import {
   ApiRequestError,
   getPublicSharedQuiz,
@@ -189,7 +190,7 @@ export default function SharedQuizPage() {
                             isUserAnswer && !isCorrect ? "border-red-500/40 bg-red-500/10" : "",
                           ].join(" ")}
                         >
-                          <span className="font-semibold">{String.fromCharCode(65 + choiceIndex)}.</span> {choice}
+                          <span className="font-semibold">{String.fromCharCode(65 + choiceIndex)}.</span> {renderMathText(choice)}
                           {isUserAnswer ? <span className="ml-2 text-xs text-foreground/60">Your answer</span> : null}
                           {isCorrect ? <span className="ml-2 text-xs text-emerald-700 dark:text-emerald-300">Correct</span> : null}
                         </div>
@@ -197,7 +198,7 @@ export default function SharedQuizPage() {
                     })}
                   </div>
                   {result?.explanation ? (
-                    <p className="text-sm leading-6 text-foreground/75">{result.explanation}</p>
+                    <p className="text-sm leading-6 text-foreground/75">{renderMathText(result.explanation)}</p>
                   ) : null}
                 </Card>
               );
@@ -245,7 +246,7 @@ export default function SharedQuizPage() {
                   disabled={selectedAnswer !== null}
                 >
                   <span className="mr-2 font-semibold">{String.fromCharCode(65 + index)}.</span>
-                  {choice}
+                  {renderMathText(choice)}
                 </button>
               ))}
             </div>

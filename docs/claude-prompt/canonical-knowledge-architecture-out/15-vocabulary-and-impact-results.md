@@ -75,7 +75,7 @@ v0.69.0 subject-equals-context nudge was built to surface.
 
 ### Query D — legacy level labels, post-V105
 
-Matches `13-post-deploy-verification.sql` exactly: Grade School 3, Junior High 24, High School
+Matches the post-deploy verification run exactly (`13-post-deploy-verification.sql`, removed 2026-08-06 after the v0.70.0 deploy it verified): Grade School 3, Junior High 24, High School
 3+1+6 (classified/classified/deliberately unclassified), the three strands 4/4/3 at `SENIOR_HIGH`
 with NULL Domain Context. `Senior High – ABM` is 4 notes but only 3 public — the one non-public
 row in the legacy set.
@@ -117,7 +117,7 @@ questions exist).
 
 `unstamped = 256` — roughly 20% of READY pools have a NULL `learner_level`.
 
-> **CORRECTED 2026-08-05, after PR 6a (#986) shipped. The paragraph below originally claimed all 256
+> **CORRECTED 2026-08-04, after PR 6a (#986) shipped. The paragraph below originally claimed all 256
 > "already fail `sameLearnerLevel` and regenerate on access today, before any PR 6 change." That is
 > wrong for 40 of them, and the error mattered.**
 >
@@ -141,7 +141,7 @@ by the re-keying. Worth its own look; not part of PR 6a.
 
 ---
 
-## Part 3 — the seed list itself (Query `16`, 2026-08-05)
+## Part 3 — the seed list itself (Query `16`, 2026-08-04)
 
 `15` recorded Query A's *findings* but never its *output*, so the exact program strings did not exist
 anywhere in the repo and PR 5 could not be written from this document. `16-program-vocabulary-seed-followup.sql`
@@ -166,10 +166,10 @@ asserting that "CourseProgram values must match production DB values exactly." I
 dedupe — a case that cannot occur. The value is also a PNLE board *subject area* rather than a degree
 program, failing the catalog's classification rule on the same grounds as `Biology`.
 
-**Owner ruled 2026-08-05: drop it.** PNLE maps to `Nursing` only. Behavior-preserving in effect, since
+**Owner ruled 2026-08-04: drop it.** PNLE maps to `Nursing` only. Behavior-preserving in effect, since
 the dropped value matched nothing.
 
-### The seed decisions, ratified 2026-08-05
+### The seed decisions, ratified 2026-08-04
 
 The full 32-row table, the 21/11 seed/exclude split, and the reasons are in
 `docs/codex-prompts/v0.70.0-course-programs-catalog.md`. Recorded here so they survive that file being

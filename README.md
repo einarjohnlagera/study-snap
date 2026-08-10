@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.70.0 - Canonical Knowledge Completion` (In Progress); previous: `v0.69.0 - Canonical Knowledge Foundation` (Released)
+Current release baseline: `v0.71.0 - Applicable Programs` (In Progress); previous: `v0.70.0 - Canonical Knowledge Completion` (Released)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 

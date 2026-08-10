@@ -34,6 +34,7 @@ const publicPlan = {
   visibility: "PUBLIC" as const,
   courseProgram: "LET",
   sourcePlanId: null,
+  parentCollectionId: null,
   itemCount: 3,
   childCount: 0,
   notesPracticed: 0,
@@ -52,6 +53,43 @@ describe("DashboardStudyPlanSection", () => {
     (setJustAdoptedNotice as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([publicPlan]);
     (listCollections as jest.Mock).mockResolvedValue([]);
+  });
+
+  // A zero-copy adopt yields an EMPTY collection. Routing to it as if it succeeded strands the learner
+  // on a plan with nothing in it, at the most abandonment-sensitive moment and on the first thing they
+  // chose to do. skippedCount was already surfaced; copiedCount was never checked.
+  it("does not present a zero-copy adopt as success", async () => {
+    (adoptStudyPlan as jest.Mock).mockResolvedValue({
+      collectionId: "personal-plan-1",
+      copiedCount: 0,
+      skippedCount: 4,
+      alreadyAdopted: false,
+    });
+
+    render(<DashboardStudyPlanSection courseProgram=" let " profileType="STUDENT" />);
+
+    expect(await screen.findByRole("heading", { name: "Recommended Study Plan" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
+
+    expect(await screen.findByText(/no notes ready to study yet/i)).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // The caller has already resolved AND qualified the plan. Re-fetching would let the gate
+  // (itemCount > 0 && readyCount > 0) and the render disagree, since this component's own effect takes
+  // publicPlans[0] with no such predicate.
+  it("uses a caller-resolved plan without re-fetching", async () => {
+    render(
+      <DashboardStudyPlanSection
+        courseProgram=" let "
+        profileType="STUDENT"
+        context="practice-first"
+        resolvedPlan={publicPlan}
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: /Study Plan/ })).toBeInTheDocument();
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
   });
 
   it("keeps full discovery as the default and starts adoption from a matching public plan", async () => {

@@ -1157,6 +1157,9 @@ describe("Library page", () => {
     expect(screen.queryByRole("button", { name: "Quiz Ready" })).not.toBeInTheDocument();
     expect(screen.queryByText("Quiz Ready")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Study Pack Ready" })).toBeInTheDocument();
+    expect(screen.getByText(
+      "A note can apply to several programs, so these counts can exceed the note total.",
+    )).toBeInTheDocument();
   });
 
   it("hides Quiz Ready filter and badges for board taker profiles", async () => {

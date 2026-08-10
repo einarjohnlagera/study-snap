@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 type SharedNoteCardProps = {
   title: string | null;
   courseProgram?: string | null;
+  applicablePrograms?: string[] | null;
   subject: string | null;
   tags: string[];
   contentPreview: string;
@@ -38,6 +39,35 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
     .filter((tag): tag is string => Boolean(tag && tag.length > 0));
 }
 
+function resolveCardPrograms(
+  applicablePrograms: string[] | null | undefined,
+  courseProgram: string | null | undefined,
+): string[] {
+  const joinedPrograms = Array.isArray(applicablePrograms)
+    ? [...new Set(applicablePrograms.map((program) => program?.trim()).filter(Boolean))]
+    : [];
+  if (joinedPrograms.length > 0) {
+    return joinedPrograms;
+  }
+  const legacyProgram = courseProgram?.trim();
+  return legacyProgram ? [legacyProgram] : [];
+}
+
+/**
+ * One program is worth naming — it is unambiguous and it is the common case. Several are not: on a
+ * card the useful signal is that the note is broadly applicable, and any truncated list has to pick
+ * which names to drop on alphabetical accident. The full list lives on Note Detail.
+ */
+function resolveProgramSummary(programs: string[]): string | null {
+  if (programs.length === 0) {
+    return null;
+  }
+  if (programs.length === 1) {
+    return programs[0];
+  }
+  return `Applies to ${programs.length} programs`;
+}
+
 /**
  * The note is the source object; the summary is a fallback preview of a derivative.
  * One excerpt per card, never both — see docs/features/public-library.md.
@@ -58,6 +88,7 @@ export function resolveCardExcerpt(contentPreview: string | null | undefined, su
 export function SharedNoteCard({
   title,
   courseProgram,
+  applicablePrograms,
   subject,
   tags,
   contentPreview,
@@ -73,7 +104,8 @@ export function SharedNoteCard({
   previewLines = 3,
 }: Readonly<SharedNoteCardProps>) {
   const normalizedTags = normalizeTags(tags);
-  const normalizedCourseProgram = courseProgram?.trim() || null;
+  const programs = resolveCardPrograms(applicablePrograms, courseProgram);
+  const programSummary = resolveProgramSummary(programs);
   const hasDiscoveryMetrics = typeof viewCount === "number" || typeof copyCount === "number";
   const hasMetricsRow = hasDiscoveryMetrics || Boolean(metricsTrailing);
   const visibleTags = tagDisplayLimit ? normalizedTags.slice(0, tagDisplayLimit) : normalizedTags;
@@ -83,14 +115,9 @@ export function SharedNoteCard({
   return (
     <div className="flex h-full min-w-0 flex-col justify-between gap-4">
       <div className="space-y-4">
-        {/* TOP ROW: Subject badge + Course/Program metadata — above title */}
+        {/* TOP ROW: Subject badge alone — the note's identity, above title */}
         <div className="flex flex-wrap items-center gap-2">
           <SubjectBadge subject={subject} />
-          {normalizedCourseProgram ? (
-            <span className="text-xs font-medium text-foreground/65">
-              {normalizedCourseProgram}
-            </span>
-          ) : null}
         </div>
 
         <div className="space-y-3">
@@ -104,6 +131,13 @@ export function SharedNoteCard({
               </div>
             ) : null}
           </div>
+
+          {/* Reach, not identity: a count rather than names. Names beside the Subject badge read as a
+              second identity, have no delimiter between them, and are largely redundant in a
+              program-filtered view. The specific list lives on Note Detail. */}
+          {programSummary ? (
+            <p className="text-xs font-medium text-foreground/60">{programSummary}</p>
+          ) : null}
 
           {/* BELOW TITLE: Study Pack Ready badge (stateBadge) + quality badges */}
           {(stateBadge || metadataBadges) ? (

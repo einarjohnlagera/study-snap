@@ -1104,7 +1104,7 @@ export default function LongExamPage() {
                             <>
                                 <h1 className="text-xl font-semibold leading-relaxed text-foreground sm:text-2xl"><QuizQuestionText text={currentQuestion.question} /></h1>
                                 <QuizChoiceList
-                                    questionKey={`${currentQuestion.question}-${currentQuestionIndex}`}
+                                    questionKey={currentQuestion.question}
                                     choices={currentQuestion.choices}
                                     correctIndex={resolveQuizCorrectIndex(currentQuestion)}
                                     correctIndices={currentQuestion.correctIndices}

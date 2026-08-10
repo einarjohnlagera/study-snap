@@ -2,6 +2,12 @@ import type { LearnerLevel, ProfileType } from "@/lib/api";
 
 export type OnboardingProfileType = Extract<ProfileType, "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL">;
 export type OnboardingInputMethod = "generate" | "own_note";
+/**
+ * The first-intent choice: what the learner wants to do first, which is not the same question as
+ * `OnboardingInputMethod` ("generate from a topic vs paste my own"). Input method is now a sub-choice
+ * inside the create branch.
+ */
+export type OnboardingIntent = "ready_made" | "own_notes";
 
 export type OnboardingProfileOption = {
   value: OnboardingProfileType;
@@ -44,6 +50,14 @@ export type OnboardingDraft = {
   learnerLevel: LearnerLevel | null;
   courseProgram: string;
   examDate: string;
+  intent: OnboardingIntent | null;
+  /**
+   * Whether a qualifying Official Review Set resolved for the learner's program, decided at Step 2 submit
+   * and carried forward so the intent step paints instantly. `null` means UNKNOWN, not absent -- the
+   * lookup fails open, and an unknown value must never render the "no Review Set yet" line, because
+   * asserting content does not exist when it does is the worse error.
+   */
+  reviewSetAvailable: boolean | null;
   inputMethod: OnboardingInputMethod | null;
   topic: string;
   noteContent: string;
@@ -68,6 +82,8 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
     learnerLevel: null,
     courseProgram: "",
     examDate: "",
+    intent: null,
+    reviewSetAvailable: null,
     inputMethod: null,
     topic: "",
     noteContent: "",

@@ -82,6 +82,11 @@ public enum AnalyticsEventType {
     ONBOARDING_V2_STEP_VIEWED,
     ONBOARDING_V2_PROFILE_SELECTED,
     ONBOARDING_V2_EXAM_DATE_SET,
+    // Intent is "what do I want to do first"; INPUT_METHOD_SELECTED is "generate from a topic vs paste my
+    // own", now a sub-choice inside the create branch. Both are needed and they are not the same signal.
+    ONBOARDING_V2_INTENT_SELECTED,
+    ONBOARDING_V2_INTENT_UNSUPPORTED_VIEWED,
+    ONBOARDING_V2_FALLBACK_SELECTED,
     ONBOARDING_V2_INPUT_METHOD_SELECTED,
     ONBOARDING_V2_TOPIC_SUBMITTED,
     ONBOARDING_V2_OWN_NOTE_SUBMITTED,

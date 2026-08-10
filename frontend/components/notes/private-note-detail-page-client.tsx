@@ -11,6 +11,8 @@ import { PaywallModal, type PaywallModalVariant } from "@/components/billing/pay
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
+import { ApplicableProgramsCombobox } from "@/components/metadata/applicable-programs-combobox";
+import { CourseProgramsViewer } from "@/components/metadata/course-programs-viewer";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
 import { NoteDetailSummaryCard } from "@/components/notes/note-detail-summary-card";
@@ -47,10 +49,12 @@ import {
   deleteNote,
   generateGeneratedQuiz,
   getConceptHealth,
+  getCourseProgramCatalog,
   getMe,
   getChallengeQuizPerformanceSummary,
   getMyStudyPack,
   getNote,
+  getNoteApplicablePrograms,
   getQuickReviewPerformanceSummary,
   isEmailNotVerifiedError,
   isQuestionCountNotAllowedError,
@@ -62,6 +66,7 @@ import {
   updateNote,
   updateNoteVisibility,
   type ChallengeQuizPerformanceSummaryResponse,
+  type CourseProgramCatalogItem,
   type ConceptHealthEntry,
   type DomainContext,
   type LearnerLevel,
@@ -476,6 +481,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
   const [metadataTagDraft, setMetadataTagDraft] = useState("");
   const [metadataDraft, setMetadataDraft] = useState<NoteMetadataDraft>(EMPTY_METADATA_DRAFT);
+  const [applicableProgramCatalog, setApplicableProgramCatalog] = useState<CourseProgramCatalogItem[]>([]);
+  const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
+  const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
+  const [savedApplicableProgramNames, setSavedApplicableProgramNames] = useState<string[]>([]);
+  const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
+  const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
+  const [applicableProgramsDirty, setApplicableProgramsDirty] = useState(false);
+  const [applicableProgramsRetryToken, setApplicableProgramsRetryToken] = useState(0);
   const [conceptHash, setConceptHash] = useState("");
   const [highlightedConceptAnchor, setHighlightedConceptAnchor] = useState<string | null>(null);
   const [hasViewedFullNotes, setHasViewedFullNotes] = useState(false);
@@ -846,6 +859,41 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   // Same gate the Note Editor uses for its authoring metadata fieldset, so the two surfaces expose
   // the same axes to the same authors.
   const canEditAuthoringMetadata = canEditTargetProfileType;
+  useEffect(() => {
+    if (!note?.id) {
+      return;
+    }
+    let active = true;
+    setApplicableProgramsLoading(true);
+    setApplicableProgramsError(null);
+    void Promise.all([getCourseProgramCatalog(), getNoteApplicablePrograms(note.id)])
+      .then(([catalog, programs]) => {
+        if (!active) {
+          return;
+        }
+        const selectedIds = programs.map((program) => program.id);
+        setApplicableProgramCatalog(catalog);
+        setApplicableProgramIds(selectedIds);
+        setSavedApplicableProgramIds(selectedIds);
+        setSavedApplicableProgramNames(programs.map((program) => program.name));
+        setApplicableProgramsDirty(false);
+      })
+      .catch((error) => {
+        if (active) {
+          setApplicableProgramsError(
+            error instanceof Error ? error.message : "Could not load course programs.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setApplicableProgramsLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [applicableProgramsRetryToken, note?.id]);
   const isStudyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const isGeneratingStudyPack = studyPackStatus === "GENERATING";
   const hasGenerationFailed = studyPackStatus === "FAILED";
@@ -879,6 +927,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const title = note?.title?.trim() || "Untitled note";
   const tags = note?.tags ?? [];
   const courseProgramLabel = normalizeCourseProgram(note?.courseProgram);
+  const selectedProgramNames = savedApplicableProgramNames;
+  const noteProgramLine = useMemo(() => {
+    if (selectedProgramNames.length === 1) return selectedProgramNames[0];
+    if (selectedProgramNames.length > 1) return `Applicable to ${selectedProgramNames.length} programs`;
+    return courseProgramLabel;
+  }, [courseProgramLabel, selectedProgramNames]);
   const visibility = (note?.visibility ?? "PRIVATE");
   const isPublic = visibility === "PUBLIC";
   const canManageVisibility = isEmailVerified || isPublic;
@@ -1278,7 +1332,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       const updated = await updateNote(pendingSuggestion.noteId, {
         title: nextMetadata.title,
         subject: nextMetadata.subject,
-        courseProgram: note.courseProgram ?? null,
+        courseProgramText: canEditAuthoringMetadata ? null : note.courseProgram ?? null,
+        courseProgramIds: canEditAuthoringMetadata ? savedApplicableProgramIds : [],
         // PUT is a full replace: omitting these wipes them. Preserve what the note already carries.
         domainContext: note.domainContext ?? null,
         learnerLevel: note.learnerLevel ?? null,
@@ -1348,6 +1403,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setNoteActionsMenuOpen(false);
     if (!isDraft) {
       setMetadataDraft(toMetadataDraft(note));
+      setApplicableProgramIds(savedApplicableProgramIds);
+      setApplicableProgramsDirty(false);
       setMetadataTagDraft("");
       setIsInlineMetadataEditMode(true);
       return;
@@ -1360,6 +1417,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     setMetadataDraft(toMetadataDraft(note));
+    setApplicableProgramIds(savedApplicableProgramIds);
+    setApplicableProgramsDirty(false);
     setMetadataTagDraft("");
     setIsInlineMetadataEditMode(false);
   };
@@ -1386,7 +1445,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     const missing: string[] = [];
-    if (!metadataDraft.courseProgram.trim()) missing.push("Course / Program");
+    if (canEditAuthoringMetadata ? applicableProgramIds.length === 0 : !metadataDraft.courseProgram.trim()) {
+      missing.push("Course / Program(s)");
+    }
+    if (canEditAuthoringMetadata && applicableProgramIds.length > 1 && !metadataDraft.domainContext) {
+      setToastTone("warning");
+      setToast("A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in.");
+      return;
+    }
     if (missing.length > 0) {
       setToastTone("warning");
       setToast(`Please complete: ${missing.join(", ")}.`);
@@ -1412,13 +1478,21 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       const updated = await updateNote(note.id, {
         title: normalizeMetadataInput(metadataDraft.title),
         subject: normalizeMetadataInput(metadataDraft.subject),
-        courseProgram: normalizeMetadataInput(metadataDraft.courseProgram),
+        courseProgramText: canEditAuthoringMetadata ? null : normalizeMetadataInput(metadataDraft.courseProgram),
+        courseProgramIds: canEditAuthoringMetadata ? applicableProgramIds : [],
         domainContext: nextDomainContext,
         learnerLevel: nextLearnerLevel,
         tags: metadataDraft.tags,
         targetProfileType: nextTargetProfileType,
         content: note.content,
       });
+      if (canEditAuthoringMetadata) {
+        setSavedApplicableProgramIds(applicableProgramIds);
+        setSavedApplicableProgramNames(applicableProgramCatalog
+          .filter((program) => applicableProgramIds.includes(program.id))
+          .map((program) => program.name));
+        setApplicableProgramsDirty(false);
+      }
       setNote(updated);
       setMetadataDraft(toMetadataDraft(updated));
       setMetadataTagDraft("");
@@ -1426,7 +1500,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast("Note details updated");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update note details.";
-      setError(message);
+      setToastTone("warning");
+      setToast(message);
     } finally {
       setSavingMetadata(false);
     }
@@ -1812,8 +1887,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </p>
                 ) : null}
 
-                {!isInlineMetadataEditMode && courseProgramLabel ? (
-                  <p className="text-sm text-foreground/65">{courseProgramLabel}</p>
+                {!isInlineMetadataEditMode && noteProgramLine ? (
+                  selectedProgramNames.length > 0
+                    ? <CourseProgramsViewer programs={selectedProgramNames} />
+                    : <p className="text-sm text-foreground/65">{noteProgramLine}</p>
                 ) : null}
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -1994,10 +2071,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     ) : null}
                   </div>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
+                {!canEditAuthoringMetadata ? <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <label htmlFor="note-course-program-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                      Course / Program <span className="text-red-500" aria-hidden="true">*</span>
+                      Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
                     </label>
                     <CourseProgramCombobox
                       id="note-course-program-inline"
@@ -2007,7 +2084,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       context="note"
                     />
                   </div>
-                </div>
+                </div> : null}
                 {canEditTargetProfileType ? (
                   <div className="space-y-2">
                     <label htmlFor="note-target-profile-type-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
@@ -2036,10 +2113,33 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </div>
                 ) : null}
                 {canEditAuthoringMetadata ? (
+                  <div className="space-y-2">
+                    <label htmlFor="note-applicable-programs-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                      Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
+                    </label>
+                    <p className="text-xs text-foreground/60">
+                      Choose one or more programs this note applies to. Adding multiple programs lets one note serve several curricula instead of creating duplicates.
+                    </p>
+                    <ApplicableProgramsCombobox
+                      id="note-applicable-programs-inline"
+                      catalog={applicableProgramCatalog}
+                      selectedIds={applicableProgramIds}
+                      onChange={(selectedIds) => {
+                        setApplicableProgramIds(selectedIds);
+                        setApplicableProgramsDirty(true);
+                      }}
+                      loading={applicableProgramsLoading}
+                      error={applicableProgramsError}
+                      onRetry={() => setApplicableProgramsRetryToken((value) => value + 1)}
+                      disabled={savingMetadata}
+                    />
+                  </div>
+                ) : null}
+                {canEditAuthoringMetadata ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <label htmlFor="note-domain-context-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                        Domain Context (optional)
+                        Domain Context {applicableProgramIds.length > 1 ? <span className="text-red-500" aria-hidden="true">*</span> : "(optional)"}
                       </label>
                       <select
                         id="note-domain-context-inline"
@@ -2050,15 +2150,15 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         }))}
                         className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                       >
-                        <option value="">Use Course / Program fallback</option>
+                        <option value="">Automatic — based on the program</option>
                         {DOMAIN_CONTEXT_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>
                       <p className="text-xs text-foreground/60">
-                        Controls how the AI authors the note&apos;s academic domain and framing. Applies to
-                        the next generation only — quiz and exam questions already generated for this note
-                        keep their original domain.
+                        {applicableProgramIds.length > 1
+                          ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
+                          : "Required when this note applies to more than one program."}
                       </p>
                     </div>
 
@@ -2075,7 +2175,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         }))}
                         className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                       >
-                        <option value="">Use reader level fallback</option>
+                        <option value="">Automatic — based on the reader</option>
                         {LEARNER_LEVEL_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}

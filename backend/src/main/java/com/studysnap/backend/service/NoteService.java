@@ -33,7 +33,11 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidLibraryQueryException;
 import com.studysnap.backend.exception.InvalidPublicLibraryQueryException;
+import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
+import com.studysnap.backend.exception.DuplicateCourseProgramException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.UnknownCourseProgramException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.model.NoteListItemView;
 import com.studysnap.backend.model.NoteLibraryReadiness;
@@ -43,8 +47,10 @@ import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySource;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteLibraryCandidateProjection;
 import com.studysnap.backend.repository.NoteLibraryFilterCriteria;
 import com.studysnap.backend.repository.NoteLibrarySubjectIdProjection;
@@ -149,6 +155,8 @@ public class NoteService {
     private final ContentModerationService contentModerationService;
     private final OnboardingGuardService onboardingGuardService;
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
+    private final NoteCourseProgramRepository noteCourseProgramRepository;
+    private final CourseProgramCatalogRepository courseProgramCatalogRepository;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
@@ -158,14 +166,22 @@ public class NoteService {
         entity.setOwnerUserId(ownerUserId);
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
-        entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgram(), owner));
-        entity.setDomainContext(NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext()));
-        entity.setLearnerLevel(NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel()));
+        boolean curator = isTeacherSelectableOwner(owner);
+        DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
+        LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
+        NoteTargetProfileType targetProfileType = resolveTargetProfileType(request.targetProfileType(), owner);
+        Set<UUID> courseProgramIds = curator ? validateCuratedProgramIds(request.courseProgramIds()) : Set.of();
+        // Create needs no stored-row lookup, unlike update: the note does not exist yet, so the request
+        // set is the whole post-create truth, and a learner create writes no join rows at all.
+        assertMultiProgramHasDomainContext(courseProgramIds.size(), domainContext);
+        entity.setCourseProgram(curator ? null : resolveRequestedCourseProgram(request.courseProgramText(), owner));
+        entity.setDomainContext(domainContext);
+        entity.setLearnerLevel(learnerLevel);
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setContent(normalizeRequiredContent(request.content()));
         entity.setStatus(NoteStatus.DRAFT);
         entity.setVisibility(NoteVisibility.PRIVATE);
-        entity.setTargetProfileType(resolveTargetProfileType(request.targetProfileType(), owner));
+        entity.setTargetProfileType(targetProfileType);
         entity.setSourceNoteId(null);
         entity.setCopiedFromNoteId(null);
         entity.setCopiedFromUserId(null);
@@ -175,6 +191,10 @@ public class NoteService {
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
+        noteRepository.flush();
+        if (curator) {
+            noteCourseProgramRepository.replace(saved.getId(), courseProgramIds);
+        }
         analyticsService.trackEvent(ownerUserId, AnalyticsEventType.NOTE_CREATED, saved.getId(), buildMetadata(
                 "subject", saved.getSubject(),
                 "visibility", resolveVisibility(saved).name()
@@ -187,14 +207,30 @@ public class NoteService {
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(NoteNotFoundException::new);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
+        boolean curator = isTeacherSelectableOwner(owner);
+        Set<UUID> courseProgramIds = curator ? validateCuratedProgramIds(request.courseProgramIds()) : Set.of();
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
+        // Validate the program set that will be in effect *after* this update, which is not the same
+        // source for both authors. A curator's request is the new set -- it is written below via
+        // replace() -- so validating stored rows would both block a legal 6-to-1 reduction and let an
+        // illegal 1-to-6 expansion through. A learner's request carries no programs at all
+        // (courseProgramIds is Set.of() above) while the stored rows survive the update untouched, so
+        // the request always reported 0 and the invariant was unenforceable on the one author who can
+        // reach it -- a learner could clear domainContext on a copied multi-program note and the
+        // client was the only thing preventing it.
+        int effectiveProgramCount = curator
+                ? courseProgramIds.size()
+                : noteCourseProgramRepository.findIdsByNoteId(noteId).size();
+        assertMultiProgramHasDomainContext(effectiveProgramCount, domainContext);
 
         entity.setContent(normalizedRequestedContent);
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
-        entity.setCourseProgram(normalizeOptionalCourseProgram(request.courseProgram()));
+        if (!curator) {
+            entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgramText(), owner));
+        }
         entity.setDomainContext(domainContext);
         entity.setLearnerLevel(learnerLevel);
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
@@ -206,6 +242,14 @@ public class NoteService {
         entity.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(entity);
+        noteRepository.flush();
+        if (curator) {
+            noteCourseProgramRepository.replace(saved.getId(), courseProgramIds);
+        }
+        // A learner update deliberately leaves join rows alone rather than clearing them. A learner
+        // never authors them, but a note copied from curated content inherits them -- and clearing
+        // here would silently destroy all of them on an unrelated edit (changing the title), which
+        // is exactly what copy inheritance exists to prevent.
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(saved.getId());
         if (linkedStudyPack != null && !Objects.equals(linkedStudyPack.getSubject(), saved.getSubject())) {
             linkedStudyPack.setSubject(saved.getSubject());
@@ -306,6 +350,12 @@ public class NoteService {
         copy.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(copy);
+        // Flush before the join write, matching create (:193-194) and update (:244-245). replace() is raw JDBC,
+        // so it does not see JPA's pending persistence context: without this the child insert hits the FK
+        // before the parent row exists and copyNote throws on any note carrying join rows -- which, since
+        // slice 4, is every curated note.
+        noteRepository.flush();
+        noteCourseProgramRepository.replace(saved.getId(), noteCourseProgramRepository.findIdsByNoteId(source.getId()));
         StudyPackEntity copiedStudyPack = null;
         if (!isOwner) {
             copiedStudyPack = copySourceStudyPack(sourceStudyPack, saved);
@@ -728,8 +778,15 @@ public class NoteService {
         } else {
             notes = noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
         }
-        List<NoteListItemResponse> allItems = toListItems(notes, viewerUserId, false);
-        int total = allItems.size();
+        int total = notes.size();
+        List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
+        List<NoteListItemProjection> projections = noteIds.isEmpty()
+                ? List.of()
+                : orderListItemProjections(
+                        noteRepository.findPublicLibraryListItemProjectionsByIdIn(noteIds),
+                        noteIds
+                );
+        List<NoteListItemResponse> allItems = toListItems(projections, viewerUserId, false);
         List<NoteListItemResponse> items = filterPublicLibraryItems(allItems, search, subject, tags, courseProgram);
         items = filterPublicLibraryAdditiveFilters(items, readyOnly, sources);
         items = sortPublicLibraryItems(items, sort);
@@ -903,7 +960,8 @@ public class NoteService {
                         null,
                         null,
                         false,
-                        false
+                        false,
+                        List.of()
                 ))
                 .toList();
     }
@@ -979,7 +1037,8 @@ public class NoteService {
 
         return containsIgnoreCase(item.title(), normalizedSearch)
                 || containsIgnoreCase(item.subject(), normalizedSearch)
-                || containsIgnoreCase(item.courseProgram(), normalizedSearch)
+                || publicLibraryPrograms(item).stream()
+                        .anyMatch(program -> containsIgnoreCase(program, normalizedSearch))
                 || containsIgnoreCase(item.contentPreview(), normalizedSearch)
                 || containsIgnoreCase(item.summaryPreview(), normalizedSearch)
                 || item.tags().stream().anyMatch(tag -> containsIgnoreCase(tag, normalizedSearch));
@@ -996,7 +1055,16 @@ public class NoteService {
         if (normalizedCourseProgramFilter == null) {
             return true;
         }
-        return normalizedCourseProgramFilter.equals(normalizePublicLibraryFilterSlug(item.courseProgram()));
+        return publicLibraryPrograms(item).stream()
+                .map(this::normalizePublicLibraryFilterSlug)
+                .anyMatch(normalizedCourseProgramFilter::equals);
+    }
+
+    private List<String> publicLibraryPrograms(NoteListItemResponse item) {
+        if (item.applicablePrograms() != null && !item.applicablePrograms().isEmpty()) {
+            return item.applicablePrograms();
+        }
+        return item.courseProgram() == null ? List.of() : List.of(item.courseProgram());
     }
 
     private boolean matchesPublicLibraryTags(NoteListItemResponse item, List<String> normalizedTagFilters) {
@@ -1106,7 +1174,12 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<String> listMineCoursePrograms(UUID ownerUserId) {
-        List<String> values = new java.util.ArrayList<>(noteRepository.findCourseProgramValuesByOwnerUserId(ownerUserId));
+        // Same join guard the public list already applies (C2): a note carrying join rows must not also
+        // offer its stale personal string as a suggestion. Only the public half was fixed at the time.
+        List<String> values = new java.util.ArrayList<>(
+                noteCourseProgramRepository.findLegacyCourseProgramValuesByOwnerUserId(ownerUserId)
+        );
+        values.addAll(noteCourseProgramRepository.findNamesByOwnerUserId(ownerUserId));
         userRepository.findById(ownerUserId)
                 .map(UserEntity::getCourseProgram)
                 .ifPresent(values::add);
@@ -1120,7 +1193,14 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<String> listPublicCoursePrograms() {
-        return normalizeCoursePrograms(noteRepository.findCourseProgramValuesByVisibility(NoteVisibility.PUBLIC));
+        // The legacy half must exclude notes that carry join rows, or a stale personal string publishes a
+        // filter value that returns zero notes. findCourseProgramValuesByVisibility has no such guard,
+        // which is what made the dropdown offer dead chips (C2).
+        List<String> values = new ArrayList<>(
+                noteCourseProgramRepository.findLegacyCourseProgramValuesByVisibility(NoteVisibility.PUBLIC.name())
+        );
+        values.addAll(noteCourseProgramRepository.findNamesByVisibility(NoteVisibility.PUBLIC.name()));
+        return normalizeCoursePrograms(values);
     }
 
     @Transactional(readOnly = true)
@@ -1322,7 +1402,31 @@ public class NoteService {
         if (normalizedRequested != null) {
             return normalizedRequested;
         }
-        return normalizeOptionalCourseProgram(owner.getCourseProgram());
+        String resolved = normalizeOptionalCourseProgram(owner.getCourseProgram());
+        if (resolved == null) {
+            throw new CourseProgramSelectionRequiredException();
+        }
+        return resolved;
+    }
+
+    private Set<UUID> validateCuratedProgramIds(List<UUID> requestedIds) {
+        if (requestedIds == null || requestedIds.isEmpty()) {
+            throw new CourseProgramSelectionRequiredException();
+        }
+        Set<UUID> uniqueIds = new java.util.LinkedHashSet<>(requestedIds);
+        if (uniqueIds.size() != requestedIds.size()) {
+            throw new DuplicateCourseProgramException();
+        }
+        if (courseProgramCatalogRepository.findExistingIds(uniqueIds).size() != uniqueIds.size()) {
+            throw new UnknownCourseProgramException();
+        }
+        return uniqueIds;
+    }
+
+    private void assertMultiProgramHasDomainContext(int courseProgramCount, DomainContext domainContext) {
+        if (courseProgramCount > 1 && domainContext == null) {
+            throw new MultiProgramDomainContextRequiredException();
+        }
     }
 
     private String normalizeOptionalCourseProgram(String value) {
@@ -1355,7 +1459,18 @@ public class NoteService {
                 : mapOwnerProfileTypeToNoteTarget(owner.getProfileType());
     }
 
+    /**
+     * Nobody curates during onboarding. The flow collects personal learning context and has no catalog
+     * picker, so a curator-role account reaching a note-authoring path mid-onboarding was asked for
+     * {@code courseProgramIds} that no onboarding screen can supply -- which made onboarding
+     * uncompletable for every ADMIN account. This removes no authority: once onboarding is complete the
+     * account is a full curator again. Mirrors the exemption {@code OnboardingGuardService} already makes
+     * for mid-onboarding users, and matches {@code NoteGenerationService.isCurator}.
+     */
     private boolean isTeacherSelectableOwner(UserEntity owner) {
+        if (owner.getOnboardingCompletedAt() == null) {
+            return false;
+        }
         return owner.getRole() == UserRole.ADMIN || owner.getProfileType() == ProfileType.TEACHER;
     }
 
@@ -1501,8 +1616,16 @@ public class NoteService {
                 generatedQuiz == null || generatedQuiz.getQuestions() == null ? null : generatedQuiz.getQuestions().size(),
                 note.getCopiedFromNoteId() == null ? null : note.getCopiedFromNoteId().toString(),
                 Boolean.TRUE.equals(note.getCopiedFromPublic()),
-                likedByCurrentUser
+                likedByCurrentUser,
+                applicablePrograms(note)
         );
+    }
+
+    private List<String> applicablePrograms(NoteListItemView note) {
+        if (!(note instanceof NoteListItemProjection projection) || projection.getApplicablePrograms() == null) {
+            return List.of();
+        }
+        return Arrays.asList(projection.getApplicablePrograms());
     }
 
     private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack, UUID viewerUserId) {
@@ -1513,6 +1636,7 @@ public class NoteService {
                 null,
                 note.getTitle(),
                 note.getSubject(),
+                resolvePublicDetailPrograms(note),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                 note.getContent(),
                 ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),
@@ -1526,6 +1650,17 @@ public class NoteService {
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getUpdatedAt()
         );
+    }
+
+    private List<String> resolvePublicDetailPrograms(NoteEntity note) {
+        List<String> joinedPrograms = noteCourseProgramRepository.findByNoteId(note.getId()).stream()
+                .map(program -> program.name())
+                .toList();
+        if (!joinedPrograms.isEmpty()) {
+            return joinedPrograms;
+        }
+        String personalProgram = normalizeOptionalCourseProgram(note.getCourseProgram());
+        return personalProgram == null ? List.of() : List.of(personalProgram);
     }
 
     private String resolvePublicAuthorName(UserEntity user) {

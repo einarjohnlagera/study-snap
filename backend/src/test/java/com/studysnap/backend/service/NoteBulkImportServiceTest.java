@@ -127,7 +127,7 @@ class NoteBulkImportServiceTest {
                 .containsExactly(BIOLOGY_CONTENT, CHEMISTRY_CONTENT, PHYSICS_CONTENT);
         assertThat(requestCaptor.getAllValues()).allSatisfy(request -> {
             assertThat(request.subject()).isNull();
-            assertThat(request.courseProgram()).isNull();
+            assertThat(request.courseProgramText()).isNull();
             assertThat(request.domainContext()).isNull();
             assertThat(request.learnerLevel()).isNull();
             assertThat(request.tags()).isEmpty();

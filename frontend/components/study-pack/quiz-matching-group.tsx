@@ -1,6 +1,7 @@
 import type { QuizItem } from "@/lib/api";
 import { resolveQuizCorrectIndex, sanitizeQuizChoiceText } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 const CHOICE_LABELS = ["A", "B", "C", "D"] as const;
 
@@ -37,7 +38,7 @@ export function QuizMatchingGroup({
           {choices.map((choice, index) => (
             <li key={`${index}-${choice}`} className="flex gap-2 rounded-md border border-border bg-background px-3 py-2">
               <span className="font-semibold text-foreground">{choiceLabel(index)}.</span>
-              <span className="text-foreground/75">{sanitizeQuizChoiceText(choice)}</span>
+              <span className="text-foreground/75">{renderMathText(sanitizeQuizChoiceText(choice))}</span>
             </li>
           ))}
         </ul>
@@ -52,7 +53,7 @@ export function QuizMatchingGroup({
           return (
             <div key={`${questionIndex}-${item.question}`} className="space-y-2 rounded-md border border-border p-3">
               <p className="text-sm font-medium leading-relaxed text-foreground">
-                {itemOffset + 1}. {item.question}
+                {itemOffset + 1}. {renderMathText(item.question)}
               </p>
               <div className="grid grid-cols-4 gap-2" role="group" aria-label={`Matching answer for item ${itemOffset + 1}`}>
                 {choices.map((choice, choiceIndex) => {

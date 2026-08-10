@@ -135,7 +135,7 @@ export async function getServerPublicNotesBySubject(subject: string) {
 export async function getServerPublicNotesByCourseProgram(courseProgram: string) {
   const notes = await getServerPublicNotes();
   const normalizedCourseProgram = courseProgram.trim().toLowerCase();
-  return notes.filter((note) => note.courseProgram?.trim().toLowerCase() === normalizedCourseProgram);
+  return notes.filter((note) => getNormalizedNotePrograms(note).includes(normalizedCourseProgram));
 }
 
 export async function getServerPublicNotesByCoursePrograms(coursePrograms: readonly string[]) {
@@ -149,8 +149,19 @@ export async function getServerPublicNotesByCoursePrograms(coursePrograms: reado
   }
 
   const notes = await getServerPublicNotes();
-  return notes.filter((note) => {
-    const courseProgram = note.courseProgram?.trim().toLowerCase();
-    return courseProgram ? normalizedCoursePrograms.has(courseProgram) : false;
-  });
+  return notes.filter((note) =>
+    getNormalizedNotePrograms(note).some((courseProgram) => normalizedCoursePrograms.has(courseProgram)),
+  );
+}
+
+function getNormalizedNotePrograms(note: NoteListItemResponse) {
+  const joinedPrograms = note.applicablePrograms
+    ?.map((courseProgram) => courseProgram.trim().toLowerCase())
+    .filter((courseProgram) => courseProgram.length > 0) ?? [];
+  if (joinedPrograms.length > 0) {
+    return joinedPrograms;
+  }
+
+  const personalNoteProgram = note.courseProgram?.trim().toLowerCase();
+  return personalNoteProgram ? [personalNoteProgram] : [];
 }

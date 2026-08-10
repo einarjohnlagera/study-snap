@@ -38,6 +38,7 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
     private static final String OWNER_USER_ID_ALIAS = "ownerUserId";
     private static final String TITLE_ALIAS = "title";
     private static final String COURSE_PROGRAM_ALIAS = "courseProgram";
+    private static final String APPLICABLE_PROGRAMS_ALIAS = "applicablePrograms";
     private static final String DOMAIN_CONTEXT_ALIAS = "domainContext";
     private static final String LEARNER_LEVEL_ALIAS = "learnerLevel";
     private static final String TARGET_PROFILE_TYPE_ALIAS = "targetProfileType";
@@ -57,6 +58,7 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
                    n.owner_user_id as "ownerUserId",
                    n.title as title,
                    n.course_program as "courseProgram",
+                   note_programs.program_names as "applicablePrograms",
                    n.domain_context as "domainContext",
                    n.learner_level as "learnerLevel",
                    n.target_profile_type as "targetProfileType",
@@ -90,6 +92,17 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
                    n.course_program as "courseProgram"
             """;
     private static final String NOTES_FROM = " from notes n ";
+    private static final String NOTE_LIST_ITEMS_FROM = """
+             from notes n
+             left join (
+                 select ncp.note_id, array_agg(cp.name order by cp.name) as program_names
+                 from note_course_program ncp
+                 join course_programs cp on cp.id = ncp.course_program_id
+                 join notes program_note on program_note.id = ncp.note_id
+                 where program_note.owner_user_id = :ownerUserId
+                 group by ncp.note_id
+             ) note_programs on note_programs.note_id = n.id
+            """;
     private static final String STUDY_PACK_READY_PREDICATE = """
             (
                 n.status = 'GENERATED'
@@ -116,7 +129,9 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
             int limit
     ) {
         FilterSql filter = buildFilter(criteria);
-        Query query = createNativeQuery(NOTE_LIST_ITEM_SELECT + NOTES_FROM + filter.whereClause() + orderBy(sort));
+        Query query = createNativeQuery(
+                NOTE_LIST_ITEM_SELECT + NOTE_LIST_ITEMS_FROM + filter.whereClause() + orderBy(sort)
+        );
         bind(query, filter.parameters());
         query.setFirstResult(offset);
         query.setMaxResults(limit);
@@ -177,7 +192,7 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
         Map<String, Object> parameters = new LinkedHashMap<>();
         parameters.put(OWNER_USER_ID_ALIAS, ownerUserId);
         String placeholders = bindValues("pageNoteId", noteIds, parameters);
-        Query query = createNativeQuery(NOTE_LIST_ITEM_SELECT + NOTES_FROM + """
+        Query query = createNativeQuery(NOTE_LIST_ITEM_SELECT + NOTE_LIST_ITEMS_FROM + """
                  where n.owner_user_id = :ownerUserId
                    and n.id in (""" + placeholders + ")");
         bind(query, parameters);
@@ -194,13 +209,31 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
     @Override
     public List<NoteLibraryValueCountProjection> countLibraryCoursePrograms(UUID ownerUserId) {
         Query query = createNativeQuery("""
-                select n.course_program as "libraryValue", count(*) as "libraryCount"
-                from notes n
-                where n.owner_user_id = :ownerUserId
-                  and n.course_program is not null
-                  and trim(n.course_program) <> ''
-                group by n.course_program
-                order by count(*) desc, n.course_program asc
+                select applicable_programs.library_value as "libraryValue",
+                       count(*) as "libraryCount"
+                from (
+                    select cp.name as library_value
+                    from notes n
+                    join note_course_program ncp on ncp.note_id = n.id
+                    join course_programs cp on cp.id = ncp.course_program_id
+                    where n.owner_user_id = :ownerUserId
+
+                    union all
+
+                    select n.course_program as library_value
+                    from notes n
+                    left join (
+                        select ncp.note_id
+                        from note_course_program ncp
+                        group by ncp.note_id
+                    ) notes_with_programs on notes_with_programs.note_id = n.id
+                    where n.owner_user_id = :ownerUserId
+                      and n.course_program is not null
+                      and trim(n.course_program) <> ''
+                      and notes_with_programs.note_id is null
+                ) applicable_programs
+                group by applicable_programs.library_value
+                order by count(*) desc, applicable_programs.library_value asc
                 """);
         query.setParameter(OWNER_USER_ID_ALIAS, ownerUserId);
         return tuples(query).stream()
@@ -283,7 +316,23 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
             parameters.put("searchPattern", criteria.searchPattern());
         }
         if (criteria.courseProgram() != null) {
-            where.append(" and n.course_program = :courseProgram");
+            where.append("""
+                     and (
+                         exists (
+                             select 1
+                             from note_course_program ncp
+                             join course_programs cp on cp.id = ncp.course_program_id
+                             where ncp.note_id = n.id
+                               and cp.name = :courseProgram
+                         )
+                         or (
+                             not exists (
+                                 select 1 from note_course_program ncp where ncp.note_id = n.id
+                             )
+                             and n.course_program = :courseProgram
+                         )
+                     )
+                    """);
             parameters.put(COURSE_PROGRAM_ALIAS, criteria.courseProgram());
         }
         if (criteria.visibility() != null) {
@@ -380,6 +429,7 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
         values.put(OWNER_USER_ID_ALIAS, toUuid(tuple.get(OWNER_USER_ID_ALIAS)));
         values.put(TITLE_ALIAS, stringValue(tuple, TITLE_ALIAS));
         values.put(COURSE_PROGRAM_ALIAS, stringValue(tuple, COURSE_PROGRAM_ALIAS));
+        values.put(APPLICABLE_PROGRAMS_ALIAS, stringArray(tuple.get(APPLICABLE_PROGRAMS_ALIAS)));
         values.put(DOMAIN_CONTEXT_ALIAS, enumValue(
                 DomainContext.class, stringValue(tuple, DOMAIN_CONTEXT_ALIAS)
         ));

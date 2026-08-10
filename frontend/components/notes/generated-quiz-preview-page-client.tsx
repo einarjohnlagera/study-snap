@@ -40,6 +40,7 @@ import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { resolveQuizCorrectIndex } from "@/lib/quiz";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type GeneratedQuizPreviewPageClientProps = {
   noteId: string;
@@ -549,7 +550,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                     Question {index + 1}
                   </p>
                   <h2 className="text-lg font-semibold text-foreground">
-                    {question.question}
+                    {renderMathText(question.question)}
                   </h2>
                 </div>
                 <QuizChoiceList
@@ -563,7 +564,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                     Correct Answer
                   </p>
                   <p className="mt-1 text-sm text-foreground">
-                    {String.fromCharCode(65 + resolveQuizCorrectIndex(question))}. {question.choices[resolveQuizCorrectIndex(question)]}
+                    {String.fromCharCode(65 + resolveQuizCorrectIndex(question))}. {renderMathText(question.choices[resolveQuizCorrectIndex(question)])}
                   </p>
                 </div>
                 <div className="space-y-1">
@@ -571,7 +572,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                     Explanation
                   </p>
                   <p className="text-sm leading-7 text-foreground/80">
-                    {question.explanation}
+                    {renderMathText(question.explanation)}
                   </p>
                   {hasComputationalWorkingSolution(question) ? (
                     <QuizWorkingSolution workingSolution={question.workingSolution} alwaysShow />

@@ -135,7 +135,9 @@ export type BulkGenerateNotesRequest = {
   subject: string;
   topics: string[];
   makePublic: boolean;
-  courseProgram?: string;
+  courseProgramIds?: string[];
+  /** Free-text personal-note value. Curator requests use courseProgramIds instead. */
+  courseProgramText?: string | null;
   domainContext?: DomainContext | null;
   learnerLevel?: LearnerLevel | null;
   targetProfileType?: NoteTargetProfileType;
@@ -590,6 +592,11 @@ export type AnalyticsEventType =
   | "ONBOARDING_V2_STEP_VIEWED"
   | "ONBOARDING_V2_PROFILE_SELECTED"
   | "ONBOARDING_V2_EXAM_DATE_SET"
+  // Intent is "what do I want to do first"; INPUT_METHOD_SELECTED is "generate from a topic vs paste my
+  // own", a sub-choice inside the create branch. Both are needed; they are not the same signal.
+  | "ONBOARDING_V2_INTENT_SELECTED"
+  | "ONBOARDING_V2_INTENT_UNSUPPORTED_VIEWED"
+  | "ONBOARDING_V2_FALLBACK_SELECTED"
   | "ONBOARDING_V2_INPUT_METHOD_SELECTED"
   | "ONBOARDING_V2_TOPIC_SUBMITTED"
   | "ONBOARDING_V2_OWN_NOTE_SUBMITTED"
@@ -1480,7 +1487,9 @@ export type UpdateStudyPackMetadataRequest = {
 export type UpsertNoteRequest = {
   title?: string | null;
   subject?: string | null;
-  courseProgram?: string | null;
+  courseProgramIds?: string[];
+  /** Free-text personal-note value. Curator requests use courseProgramIds instead. */
+  courseProgramText?: string | null;
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
   tags?: string[];
@@ -1523,6 +1532,34 @@ export type NoteResponse = {
   adaptivePracticeAvailable: boolean;
 };
 
+export type CourseProgramCatalogItem = {
+  id: string;
+  name: string;
+  programFamilyId: string | null;
+  programFamilyName: string | null;
+};
+
+export type ApplicableProgram = {
+  id: string;
+  name: string;
+};
+
+export type AdminNoteApplicableProgramsItem = {
+  noteId: string;
+  title: string | null;
+  ownerEmail: string | null;
+  courseProgram: string | null;
+  domainContext: DomainContext | null;
+  applicablePrograms: ApplicableProgram[];
+};
+
+export type AdminNoteApplicableProgramsPage = {
+  items: AdminNoteApplicableProgramsItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+};
+
 export type NoteStudyPackStatus = "DRAFT" | "GENERATING" | "FAILED" | "STUDY_PACK_READY";
 export type NoteVisibility = "PRIVATE" | "PUBLIC";
 export type SubjectSuggestionScope = "mine" | "public";
@@ -1533,6 +1570,7 @@ export type NoteListItemResponse = {
   ownerUserId: string | null;
   title: string | null;
   courseProgram: string | null;
+  applicablePrograms?: string[];
   targetProfileType: NoteTargetProfileType;
   subject: string | null;
   tags: string[];
@@ -1763,6 +1801,7 @@ export type PublicNoteDetailResponse = {
   ownerUserId: string | null;
   title: string | null;
   subject: string | null;
+  coursePrograms?: string[];
   tags: string[];
   content: string;
   contentPreview: string;
@@ -2248,22 +2287,38 @@ export async function updateProfileLearnerLevel(level: LearnerLevel): Promise<Me
   });
 }
 
+/**
+ * Writes the two learning-context fields through the narrow `PUT /users/profile/learning-context`.
+ *
+ * This used to `getMe()` and then full-replace through `PUT /users/profile`, which meant resending
+ * firstName, email and username on every call — a lost update against any concurrent profile edit, and a
+ * `pendingEmail` clobber. It also could not run before those identity fields existed, which is why
+ * onboarding deferred it to the very last step and lost the values outright when it failed.
+ *
+ * The caller is expected to await this and surface a failure. It must not be fire-and-forget.
+ */
 export async function updateLearningProfileContext(
   learnerLevel: LearnerLevel | null,
   courseProgram: string | null,
 ): Promise<MeResponse> {
-  const current = await getMe();
-  return updateUserProfile({
-    firstName: current.firstName,
-    lastName: current.lastName ?? "",
-    displayName: current.displayName ?? "",
-    username: current.username ?? "",
-    bio: current.bio ?? "",
-    learnerLevel: learnerLevel ?? current.learnerLevel ?? null,
-    courseProgram: courseProgram?.trim() || current.courseProgram || "",
-    schoolName: current.schoolName ?? "",
-    email: current.email,
-  });
+  const response = await fetchWithAuth(
+    "/users/profile/learning-context",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({
+        learnerLevel,
+        courseProgram: courseProgram?.trim() || null,
+      }),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(
+    response,
+    "Could not save your learner level and course / program. Please try again.",
+  );
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function updateExamDate(examDate: string | null): Promise<MeResponse> {
@@ -2389,6 +2444,24 @@ export async function getAdminOrganicLandings(): Promise<AdminOrganicLandingsRes
     true,
   );
   return parseApiResponse<AdminOrganicLandingsResponse>(response, "Could not load organic landing metrics.");
+}
+
+export async function getAdminNoteApplicablePrograms(
+  page = 0,
+  size = 25,
+): Promise<AdminNoteApplicableProgramsPage> {
+  const response = await fetchWithAuth(
+    `/admin/notes/applicable-programs?page=${encodeURIComponent(String(page))}&size=${encodeURIComponent(String(size))}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminNoteApplicableProgramsPage>(
+    response,
+    "Could not load note Applicable Programs.",
+  );
 }
 
 export async function getAdminFunnelMetrics(days?: number): Promise<AdminFunnelMetricsResponse> {
@@ -2779,10 +2852,14 @@ export async function generateNoteFromTopic(
   topic: string,
   courseProgram?: string,
   domainContext?: DomainContext,
+  courseProgramIds?: string[],
 ): Promise<GenerateNoteFromTopicResponse> {
-  const body: Record<string, string> = { topic };
+  const body: Record<string, string | string[]> = { topic };
   if (courseProgram && courseProgram.trim().length > 0) {
-    body.courseProgram = courseProgram.trim();
+    body.courseProgramText = courseProgram.trim();
+  }
+  if (courseProgramIds && courseProgramIds.length > 0) {
+    body.courseProgramIds = courseProgramIds;
   }
   if (domainContext) {
     body.domainContext = domainContext;
@@ -4762,6 +4839,46 @@ export async function listCoursePrograms(scope: CourseProgramSuggestionScope = "
         headers: buildAuthHeaders(),
       });
   return parseApiResponse<string[]>(response, "Could not load course/program suggestions.");
+}
+
+export async function getCourseProgramCatalog(): Promise<CourseProgramCatalogItem[]> {
+  const response = await fetchWithAuth(
+    "/course-program-catalog",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<CourseProgramCatalogItem[]>(response, "Could not load the course program catalog.");
+}
+
+export async function getNoteApplicablePrograms(noteId: string): Promise<ApplicableProgram[]> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/applicable-programs`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ApplicableProgram[]>(response, "Could not load Course / Program(s).");
+}
+
+export async function replaceNoteApplicablePrograms(
+  noteId: string,
+  courseProgramIds: string[],
+): Promise<ApplicableProgram[]> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/applicable-programs`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ courseProgramIds }),
+    },
+    true,
+  );
+  return parseApiResponse<ApplicableProgram[]>(response, "Could not save Course / Program(s).");
 }
 
 export async function listTags(scope: "public" = "public"): Promise<string[]> {

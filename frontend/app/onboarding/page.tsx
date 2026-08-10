@@ -17,6 +17,7 @@ import {
   isNoteGenerationLimitReachedError,
   getNote,
   trackAnalyticsEvent,
+  updateExamDate,
   updateLearningProfileContext,
   type LearnerLevel,
   type NoteCollectionSummary,
@@ -25,6 +26,8 @@ import {
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
+import { getCollectionLabels } from "@/lib/collection-labels";
+import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { getPaidPlanCtaLabel } from "@/src/config/plans";
 import { mapProfileTypeToNoteTargetProfile } from "@/lib/note-target-profile";
 import {
@@ -37,6 +40,7 @@ import {
   setDeferredOnboardingCompletion,
   type OnboardingDraft,
   type OnboardingInputMethod,
+  type OnboardingIntent,
   type OnboardingProfileType,
 } from "@/lib/onboarding-v2";
 import {
@@ -57,6 +61,7 @@ import {
 } from "@/app/dashboard/dashboard-study-plan-section";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type GenerationSectionKey = "summary" | "concepts" | "quiz";
 type StepName = "profile" | "learning-context" | "input" | "confirm-practice" | "study-pack" | "completion";
@@ -157,12 +162,18 @@ function ModeOptionButton({
   description,
   selected,
   onClick,
+  footnote = null,
 }: Readonly<{
-  icon: "✨" | "📝";
+  icon: string;
   label: string;
   description: string;
   selected: boolean;
   onClick: () => void;
+  /**
+   * A small neutral availability line -- not a warning, not a badge competing with the title, and never a
+   * disabled state. The option stays selectable because its next screen still offers useful alternatives.
+   */
+  footnote?: string | null;
 }>) {
   return (
     <button
@@ -178,6 +189,7 @@ function ModeOptionButton({
       <div className="space-y-1.5 text-left">
         <div className="text-base font-semibold text-foreground sm:text-lg">{icon} {label}</div>
         <p className="text-sm leading-relaxed text-foreground/70 sm:text-base">{description}</p>
+        {footnote ? <p className="text-xs text-foreground/50">{footnote}</p> : null}
       </div>
     </button>
   );
@@ -248,7 +260,9 @@ export default function OnboardingPage() {
   const [profileTypeSaveError, setProfileTypeSaveError] = useState<string | null>(null);
   const [showNoteGenerationLimitModal, setShowNoteGenerationLimitModal] = useState(false);
   const [checkingPracticeFirstPlan, setCheckingPracticeFirstPlan] = useState(false);
+  const [stepTwoError, setStepTwoError] = useState<string | null>(null);
   const [practiceFirstPlan, setPracticeFirstPlan] = useState<NoteCollectionSummary | null>(null);
+  const [resolvingAvailability, setResolvingAvailability] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
   const [previewOpen, setPreviewOpen] = useState<Record<GenerationSectionKey, boolean>>({
     summary: true,
@@ -271,7 +285,11 @@ export default function OnboardingPage() {
 
   const profileType = draft.profileType;
   const currentStep = draft.currentStep;
-  const isPracticeFirstScreen = currentStep === 3 && practiceFirstPlan !== null;
+  // Gated on the INTENT now, not just availability: a learner who chose "build from my own notes" must not
+  // be shown the adopt screen simply because a qualifying set happens to exist for their program.
+  const isPracticeFirstScreen = currentStep === 3
+    && draft.intent === "ready_made"
+    && practiceFirstPlan !== null;
   const currentStepName = isPracticeFirstScreen ? "confirm-practice" : getStepName(currentStep);
   // Display-only: this screen replaces Steps 3-4 and is the last thing the learner sees before
   // onboarding completes on this path, so the header should read as the final step. The underlying
@@ -606,12 +624,11 @@ export default function OnboardingPage() {
             productOnboardingCompletedAt: me.productOnboardingCompletedAt,
           });
         }
-        if (draft.learnerLevel !== null || draft.courseProgram.trim() !== "") {
-          void updateLearningProfileContext(draft.learnerLevel, draft.courseProgram.trim() || null)
-            .catch(() => {
-              // Learning context can be adjusted later in profile settings.
-            });
-        }
+        // Learning context is NOT written here any more -- it is persisted at Step 2, awaited, with the
+        // failure surfaced while the user is still on the screen that collects it. This call used to be
+        // fire-and-forget with a swallowed error, so a failure lost the learner level and program
+        // permanently and silently while onboardingCompletedAt was already set. Do not reinstate it: a
+        // second write here would re-open that hole and could overwrite a value the user has since edited.
       })
       .catch(() => {
         const userId = userIdRef.current;
@@ -657,6 +674,33 @@ export default function OnboardingPage() {
     });
   };
 
+  /**
+   * Persists Profile Type at Step 1 instead of Step 5.
+   *
+   * The server saw `profileType = null` for the entire flow, so every server-side decision keyed on it --
+   * including which authoring branch a note-creation call takes -- ran blind for the whole of onboarding.
+   * Writing it here costs one request and makes the value real from the first step.
+   *
+   * Failure is NOT blocking: profile type is re-sent by `completeOnboarding` at the end, so a transient
+   * failure here self-heals. Advancing keeps the user moving; the value is not lost either way.
+   */
+  const handleContinueFromStepOne = () => {
+    if (!profileType) {
+      return;
+    }
+    // Advance immediately; do not hold the transition on the network.
+    //
+    // This is deliberately fire-and-forget, which is the OPPOSITE of the Step 2 rule below, and the
+    // difference is that nothing is at risk here: `completeOnboarding` re-sends profileType at the end,
+    // so a failure self-heals. The Step 2 values had no such second writer, which is exactly why losing
+    // them was permanent and silent. Persisting early is about the server not seeing null for the whole
+    // flow -- it is not the last chance to save this field.
+    void completeOnboardingProfileType({ profileType }).catch(() => {
+      // Non-blocking by design -- see above.
+    });
+    goToStep(2);
+  };
+
   const handleSaveProfileTypeOnly = async () => {
     if (!profileType || savingProfileType) {
       return;
@@ -696,6 +740,105 @@ export default function OnboardingPage() {
     }));
   };
 
+  const collectionLabels = getCollectionLabels(profileType);
+
+  const selectIntent = (intent: OnboardingIntent) => {
+    setDraft((previous) => ({ ...previous, intent }));
+    trackOnboardingEvent("ONBOARDING_V2_INTENT_SELECTED", {
+      intent,
+      review_set_available: draft.reviewSetAvailable,
+      course_program: draft.courseProgram.trim() || null,
+    });
+    if (intent === "ready_made" && !practiceFirstPlan) {
+      trackOnboardingEvent("ONBOARDING_V2_INTENT_UNSUPPORTED_VIEWED", {
+        course_program: draft.courseProgram.trim() || null,
+      });
+    }
+  };
+
+  /**
+   * The three fallbacks on the unavailable screen. Two of them LEAVE onboarding, so completion has to be
+   * persisted here rather than at a shared step 5 that these paths never reach.
+   *
+   * §13.5's rules, all load-bearing:
+   *  - persist `onboardingCompletedAt` BEFORE `router.push`, never after. Navigating first leaves a user
+   *    who closes the tab mid-transition permanently un-onboarded.
+   *  - keep the deferred-completion fallback, so a failed completion cannot trap the user in a redirect
+   *    loop back into onboarding they are unable to finish.
+   *  - keep the once-per-mount guard, so React StrictMode's double-invoke cannot POST twice.
+   */
+  const handleUnsupportedFallback = async (fallback: "own_notes" | "explore" | "finish_setup") => {
+    const courseProgram = draft.courseProgram.trim() || null;
+    trackOnboardingEvent("ONBOARDING_V2_FALLBACK_SELECTED", { fallback, course_program: courseProgram });
+
+    if (fallback === "own_notes") {
+      // Stays inside onboarding and finishes through the create flow, so completion is NOT persisted here.
+      setDraft((previous) => ({ ...previous, intent: "own_notes" }));
+      return;
+    }
+
+    const destination = fallback === "explore"
+      // Must be a SLUG, and must go through the canonical builder. Every other producer in the repo emits
+      // one, and the consumer resolves it with resolvePublicLibraryValueBySlug -- so a raw value silently
+      // fails to match on case alone ("Nursing" vs "nursing"). The API still filtered (the backend
+      // slugifies its side), so the list looked filtered while the UI showed no active filter, no way to
+      // clear it, and the next Apply silently dropped the program entirely.
+      ? buildPublicLibraryUrl({ courseProgram: slugifyPublicLibraryFilterValue(draft.courseProgram) })
+      : "/dashboard";
+    await completeOnboardingAndLeave(destination, "ready_made", fallback);
+  };
+
+  /**
+   * Shared terminal exit: complete, THEN navigate. Modelled on the practice-first path, which is the one
+   * exit that already did this correctly.
+   */
+  const completeOnboardingAndLeave = async (
+    destination: string,
+    intent: OnboardingIntent,
+    destinationName: string,
+  ) => {
+    if (!profileType || completionAttemptedRef.current) {
+      return;
+    }
+    completionAttemptedRef.current = true;
+    setCompletingOnboarding(true);
+    setCompletionError(null);
+    try {
+      const me = await completeOnboarding({ profileType, examDate: draft.examDate || null });
+      syncCompletedOnboardingUser(me);
+    } catch {
+      const userId = userIdRef.current;
+      if (userId) {
+        setDeferredOnboardingCompletion(userId);
+      }
+      // Do NOT block the user on a failed completion -- stranding them here is the redirect-loop this
+      // fallback exists to prevent.
+      //
+      // The marker does NOT retry. Nothing re-POSTs completeOnboarding anywhere; setDeferredOnboardingCompletion
+      // only suppresses the guard's redirect, so the server's onboardingCompletedAt stays null and is masked by a
+      // localStorage key scoped to one browser -- clear storage or switch device and the user is un-onboarded
+      // again. An earlier version of this comment claimed a retry; it was never written. Adding one is a
+      // recorded v0.71.1 candidate. Does NOT affect the Diagnostic Read, which keys on the analytics event
+      // fired in the finally block below, on every path, not on onboardingCompletedAt.
+    } finally {
+      if (!completionTrackedRef.current) {
+        completionTrackedRef.current = true;
+        shouldTrackAbandonmentRef.current = false;
+        trackOnboardingEvent("ONBOARDING_V2_COMPLETED", {
+          profile_type: profileType,
+          learner_level: draft.learnerLevel ?? null,
+          course_program: draft.courseProgram.trim() || null,
+          method: draft.inputMethod,
+          intent,
+          destination: destinationName,
+          time_elapsed_seconds: Math.max(0, Math.round((Date.now() - draft.startedAtMs) / 1000)),
+        });
+      }
+      setCompletingOnboarding(false);
+      router.push(destination);
+    }
+  };
+
   const selectInputMethod = (value: OnboardingInputMethod) => {
     setStepThreeError(null);
     setDraft((previous) => ({
@@ -715,28 +858,103 @@ export default function OnboardingPage() {
     }));
   };
 
+  // Re-resolve the qualifying plan when step 3 is reached without one in memory.
+  //
+  // `draft.intent` and `draft.reviewSetAvailable` persist to localStorage; `practiceFirstPlan` is component
+  // state set only by the Step 2 submit. So ANY reload on step 3 -- the doors screen is exactly where users
+  // pause -- dropped the plan while the draft still said a Review Set was available. One click on "Study
+  // with ready-made materials" then hit `!practiceFirstPlan` and told the learner "We're still building an
+  // Official Review Set for {Program}", contradicting the state the screen was painted from. Two of the
+  // three exits offered there complete onboarding and navigate away, so the learner left on a false basis.
+  // It also inflated ONBOARDING_V2_INTENT_UNSUPPORTED_VIEWED with every resumed session.
+  useEffect(() => {
+    if (currentStep !== 3 || practiceFirstPlan || resolvingAvailability) {
+      return;
+    }
+    // `false` is a known answer -- don't re-query it. `null` means unknown (the lookup failed, and it fails
+    // open), so re-resolving is the correct thing to do rather than asserting absence.
+    if (draft.reviewSetAvailable === false || !draft.courseProgram.trim()) {
+      return;
+    }
+
+    let cancelled = false;
+    setResolvingAvailability(true);
+    void listCourseProgramStudyPlans(draft.courseProgram)
+      .then((plans) => {
+        if (cancelled) {
+          return;
+        }
+        const matchingPlan = plans[0] ?? null;
+        const qualifies = Boolean(
+          matchingPlan && matchingPlan.itemCount > 0 && (matchingPlan.readyCount ?? 0) > 0,
+        );
+        setPracticeFirstPlan(qualifies ? matchingPlan : null);
+        setDraft((previous) => ({ ...previous, reviewSetAvailable: qualifies }));
+      })
+      .catch(() => {
+        // Still fails open: leave availability unknown rather than asserting absence.
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setResolvingAvailability(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStep, practiceFirstPlan, resolvingAvailability, draft.reviewSetAvailable, draft.courseProgram]);
+
   const handleContinueFromStepTwo = async () => {
     if (!canContinueFromStepTwo || checkingPracticeFirstPlan) {
       return;
     }
     setPracticeFirstPlan(null);
-    if (profileType !== "BOARD_EXAM") {
-      goToStep(3);
+    setStepTwoError(null);
+    setCheckingPracticeFirstPlan(true);
+
+    // Persist learner level and course / program HERE, awaited, with the failure surfaced.
+    //
+    // These were previously written at Step 5, fire-and-forget, with the error swallowed: if the call
+    // failed the values were lost permanently and silently, while onboardingCompletedAt was already set --
+    // so the user was never routed back and had no idea anything was missing. Five real accounts finished
+    // onboarding that way. Blocking here is the point: the user is still on the screen that collects these,
+    // so a retry costs them nothing, and every downstream decision (note authoring domain, Review Set
+    // availability, the intent router) reads values that are now actually stored.
+    try {
+      await updateLearningProfileContext(draft.learnerLevel, draft.courseProgram.trim() || null);
+      if (profileType === "BOARD_EXAM" && draft.examDate) {
+        await updateExamDate(draft.examDate);
+      }
+    } catch (error) {
+      setCheckingPracticeFirstPlan(false);
+      setStepTwoError(
+        error instanceof Error
+          ? error.message
+          : "Could not save your learner level and course / program. Please try again.",
+      );
       return;
     }
 
-    setCheckingPracticeFirstPlan(true);
+    // Availability is resolved for EVERY profile type now, not only BOARD_EXAM. Opening this is the one
+    // structural eligibility change in the Intent Router: BOARD_EXAM is ~71% of profile-typed accounts and
+    // STUDENT ~27%, so a qualifying set was previously unreachable for a quarter of users who could have
+    // used it. Resolving here -- where the program is persisted anyway -- means the intent step paints
+    // instantly instead of showing a spinner on the availability line.
     try {
       const matchingPlan = (await listCourseProgramStudyPlans(draft.courseProgram))[0] ?? null;
-      if (
+      const qualifies = Boolean(
         matchingPlan
         && matchingPlan.itemCount > 0
-        && (matchingPlan.readyCount ?? 0) > 0
-      ) {
-        setPracticeFirstPlan(matchingPlan);
-      }
+        && (matchingPlan.readyCount ?? 0) > 0,
+      );
+      setPracticeFirstPlan(qualifies ? matchingPlan : null);
+      setDraft((previous) => ({ ...previous, reviewSetAvailable: qualifies }));
     } catch {
-      // This is an optional fast path. Learners can always continue through the normal flow.
+      // Fails OPEN, unlike the persistence above. `reviewSetAvailable` stays null, which the intent step
+      // reads as UNKNOWN and renders without the "no Review Set yet" line -- telling a learner content
+      // does not exist when it does is the worse error.
+      setDraft((previous) => ({ ...previous, reviewSetAvailable: null }));
     } finally {
       goToStep(3);
       setCheckingPracticeFirstPlan(false);
@@ -771,10 +989,7 @@ export default function OnboardingPage() {
         examDate: draft.examDate || null,
       });
       syncCompletedOnboardingUser(me);
-      void updateLearningProfileContext(draft.learnerLevel, draft.courseProgram.trim() || null)
-        .catch(() => {
-          // Learning context can be adjusted later in profile settings.
-        });
+      // Learning context is persisted at Step 2 -- see the note on the other completion path above.
       if (!completionTrackedRef.current) {
         completionTrackedRef.current = true;
         trackOnboardingEvent("ONBOARDING_V2_COMPLETED", {
@@ -830,6 +1045,13 @@ export default function OnboardingPage() {
       from_step: currentStep,
     });
 
+    // Step 3 now has sub-screens (intent doors -> chosen branch). Back from a branch returns to the doors
+    // rather than skipping the user two screens back to the learning profile.
+    if (currentStep === 3 && draft.intent !== null) {
+      setDraft((previous) => ({ ...previous, intent: null }));
+      return;
+    }
+
     if (currentStep === 4) {
       setGenerationError(null);
       setNote(null);
@@ -863,7 +1085,7 @@ export default function OnboardingPage() {
     });
 
     try {
-      const generated = await generateNoteFromTopic(draft.topic.trim());
+      const generated = await generateNoteFromTopic(draft.topic.trim(), draft.courseProgram.trim());
       setNote(null);
       setDraft((previous) => ({
         ...previous,
@@ -912,6 +1134,7 @@ export default function OnboardingPage() {
     try {
       const createdNote = await createNote({
         title: selectedInputMethod === "generate" ? draft.topic.trim() : null,
+        courseProgramText: draft.courseProgram.trim() || null,
         domainContext: null,
         learnerLevel: null,
         targetProfileType: mapProfileTypeToNoteTargetProfile(profileType),
@@ -1142,7 +1365,14 @@ export default function OnboardingPage() {
             </section>
 
             <section className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Course / Program</p>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">
+                  Course / Program <span className="text-red-500" aria-hidden="true">*</span>
+                </p>
+                <p className="text-xs text-foreground/60">
+                  Required. It sets the academic domain your notes and quizzes are written for.
+                </p>
+              </div>
               <CourseProgramCombobox
                 id="onboarding-course-program"
                 value={draft.courseProgram}
@@ -1184,6 +1414,120 @@ export default function OnboardingPage() {
       );
     }
 
+    // ---- Step 3a: the first-intent step -------------------------------------------------------------
+    // Two EQUAL-WEIGHT doors. Neither is ever disabled: option 1's next screen offers genuinely useful
+    // alternatives even with no Review Set, and disabling it would make an ~18% path read as a dead end
+    // before the user has seen what is behind it.
+    if (currentStep === 3 && draft.intent === null) {
+      const isTeacher = profileType === "TEACHER";
+      const programLabel = draft.courseProgram.trim();
+      // Only render the availability line when we AFFIRMATIVELY know there is no set. `null` means the
+      // lookup failed or has not run, and asserting absence then is the worse error.
+      const showUnavailableLine = draft.reviewSetAvailable === false;
+      return (
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
+          <div className="space-y-2 text-center sm:text-left">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+              What would you like to do first?
+            </CardTitle>
+            <CardDescription className="text-sm">
+              You can do both later — this just decides where you start.
+            </CardDescription>
+          </div>
+
+          <div className="grid gap-2.5">
+            <ModeOptionButton
+              icon="📚"
+              label={isTeacher ? "Use existing teaching and study materials" : "Study with ready-made materials"}
+              description={isTeacher
+                ? "Browse Official Review Sets and public notes."
+                : `Start with an Official ${collectionLabels.singular} built for your program.`}
+              selected={false}
+              onClick={() => selectIntent("ready_made")}
+              footnote={showUnavailableLine && programLabel
+                ? `No Official ${collectionLabels.singular} yet for ${programLabel}`
+                : null}
+            />
+            <ModeOptionButton
+              icon="✍️"
+              label={isTeacher ? "Create teaching or study materials" : "Build from my own notes"}
+              description={isTeacher
+                ? "Write, paste, or create notes for yourself or your learners."
+                : "Write, paste, or create a note and turn it into a Study Pack."}
+              selected={false}
+              onClick={() => selectIntent("own_notes")}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // While a re-resolution is in flight the learner has already chosen "ready-made", so falling through
+    // to the create-flow screen would show them the path they did not pick. Hold the step instead.
+    if (currentStep === 3 && draft.intent === "ready_made" && !practiceFirstPlan && resolvingAvailability) {
+      return (
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
+          <div className="space-y-2 text-center sm:text-left">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+              Finding materials for {draft.courseProgram.trim()}...
+            </CardTitle>
+            <CardDescription className="text-sm">
+              One moment while we check what&apos;s ready for your program.
+            </CardDescription>
+          </div>
+        </div>
+      );
+    }
+
+    // ---- Step 3b: the honest unavailable state ------------------------------------------------------
+    // A soft, explained re-route rather than a rejection. The primary action is the OTHER intent, which is
+    // what lets the door above stay selectable. The user always chooses; nothing auto-redirects.
+    if (currentStep === 3 && draft.intent === "ready_made" && !practiceFirstPlan && !resolvingAvailability) {
+      const programLabel = draft.courseProgram.trim();
+      return (
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
+          <div className="space-y-2 text-center sm:text-left">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+              We&apos;re still building an Official {collectionLabels.singular} for {programLabel}.
+            </CardTitle>
+            <CardDescription className="text-sm">
+              You can still start learning today with your own notes or explore material already shared in
+              NoteLib.
+            </CardDescription>
+          </div>
+
+          <div className="grid gap-2.5">
+            <ModeOptionButton
+              icon="✍️"
+              label="Build from my own notes"
+              description="Write, paste, or create a note and turn it into a Study Pack."
+              selected={false}
+              onClick={() => handleUnsupportedFallback("own_notes")}
+            />
+            <ModeOptionButton
+              icon="🔎"
+              label="Explore related public notes"
+              description="See what other learners have already shared for your program."
+              selected={false}
+              onClick={() => void handleUnsupportedFallback("explore")}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void handleUnsupportedFallback("finish_setup")}
+            className="self-center text-sm text-foreground/60 underline-offset-4 transition hover:text-foreground hover:underline"
+          >
+            Finish setup
+          </button>
+
+          {completionError ? (
+            <p className="text-sm text-red-600 dark:text-red-400">{completionError}</p>
+          ) : null}
+        </div>
+      );
+    }
+
     if (isPracticeFirstScreen && practiceFirstPlan) {
       const examCountdown = draft.examDate ? getExamCountdownCopy(draft.examDate) : null;
       return (
@@ -1204,10 +1548,14 @@ export default function OnboardingPage() {
             </Card>
           ) : null}
 
+          {/* Pass the plan we already resolved and qualified at Step 2. Letting this component re-fetch
+              would mean the gate (itemCount > 0 && readyCount > 0) and the render disagree, since its
+              own effect takes publicPlans[0] with no such predicate. */}
           <DashboardStudyPlanSection
             courseProgram={draft.courseProgram}
             profileType={profileType}
             context="practice-first"
+            resolvedPlan={practiceFirstPlan}
             onPlanStarted={handlePracticeFirstPlanStarted}
           />
 
@@ -1448,7 +1796,7 @@ export default function OnboardingPage() {
               >
                 {quizPreview ? (
                   <div className="space-y-3">
-                    <p className="font-medium text-foreground">{quizPreview.question}</p>
+                    <p className="font-medium text-foreground">{renderMathText(quizPreview.question)}</p>
                     {quizPreview.choices.length > 0 ? (
                       <ul className="space-y-2">
                         {quizPreview.choices.map((choice, index) => (
@@ -1456,7 +1804,7 @@ export default function OnboardingPage() {
                             key={`${quizPreview.question}-${choice}-${index}`}
                             className="rounded-xl border border-border bg-background px-3 py-2"
                           >
-                            {choice}
+                            {renderMathText(choice)}
                           </li>
                         ))}
                       </ul>
@@ -1556,7 +1904,9 @@ export default function OnboardingPage() {
           <Button
             type="button"
             className="min-h-12 text-base sm:min-w-40"
-            onClick={profileTypeOnlyMode ? () => void handleSaveProfileTypeOnly() : () => goToStep(2)}
+            onClick={profileTypeOnlyMode
+              ? () => void handleSaveProfileTypeOnly()
+              : handleContinueFromStepOne}
             disabled={!canContinueFromStepOne}
             loading={savingProfileType}
             loadingText="Saving..."
@@ -1569,26 +1919,45 @@ export default function OnboardingPage() {
 
     if (currentStep === 2) {
       return (
-        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
-            Back
-          </Button>
-          <Button
-            type="button"
-            className="min-h-12 text-base sm:min-w-40"
-            onClick={() => void handleContinueFromStepTwo()}
-            disabled={!canContinueFromStepTwo || checkingPracticeFirstPlan}
-            loading={checkingPracticeFirstPlan}
-            loadingText="Continuing..."
-          >
-            Continue
-          </Button>
+        <div className="space-y-3">
+          {/* Surfaced, not swallowed. The whole point of persisting here is that a failure is visible and
+              retryable while the user is still on the screen that collects these values. */}
+          {stepTwoError ? (
+            <p className="text-sm text-red-600 dark:text-red-400" role="alert">{stepTwoError}</p>
+          ) : null}
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+            <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+              Back
+            </Button>
+            <Button
+              type="button"
+              className="min-h-12 text-base sm:min-w-40"
+              onClick={() => void handleContinueFromStepTwo()}
+              disabled={!canContinueFromStepTwo || checkingPracticeFirstPlan}
+              loading={checkingPracticeFirstPlan}
+              loadingText="Saving..."
+            >
+              Continue
+            </Button>
+          </div>
         </div>
       );
     }
 
     if (currentStep === 3) {
       if (isPracticeFirstScreen) {
+        return (
+          <div className="flex">
+            <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+              Back
+            </Button>
+          </div>
+        );
+      }
+
+      // The intent doors and the unavailable screen both advance by SELECTION, so they need no Continue --
+      // only a way back. Selecting is the action; a Continue would add a second click to every path.
+      if (draft.intent === null || (draft.intent === "ready_made" && !practiceFirstPlan)) {
         return (
           <div className="flex">
             <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>

@@ -42,6 +42,20 @@ Identification items use:
 
 `acceptableAnswers` should contain 2-3 short synonyms or answer variants, with the primary answer first. Concepts that require a vague explanation, a multi-part response, or subjective judgment should stay as another question format.
 
+### The answer may never be a symbolic form (`v0.71.0`)
+
+**An Identification answer must be something a human writes exactly one way.** Scoring is exact normalized string equality — no maths-, chemistry-, or code-aware comparison exists anywhere in the path — so any answer with several equally correct notations is **ungradeable by construction**, not merely hard to grade.
+
+The question that forced this rule shipped as: *"Identify the algebraic expression for the sum of the squares of two variables $x$ and $y$."* with `acceptableAnswers` of `["sum of squares", "x squared plus y squared", ...]`. A learner typing `x^2 + y^2` — the answer the stem asks for, and the one the item's *own explanation* gives — was marked wrong, while echoing the stem back in words was marked right. `x^2 + y^2`, `x² + y²` and `y² + x²` are all correct and none match as text.
+
+Two independent generations produced the identical question for different users from different study packs, and a survey found **no counter-example: every Identification question in local data was defective**. That is why this is stated as a construction rule rather than a prompt nicety.
+
+- **The rule is stated for every subject, not for mathematics** — chemical formulae, code expressions, and logical notation fail the same way. It is written against the *form of the answer*, never against the note's subject.
+- **The valid case stays explicit:** a formula's *name* is a fine Identification answer; the formula *itself* is not.
+- **Restating the stem as the answer is forbidden**, which is the failure the defective item rewarded.
+- **A deterministic guard backs the prompt**, because prompt compliance is not testable and this is: `QuizValidationUtils.isFormatStemMismatch` rejects the item when the model ignores the instruction. It runs in `OpenAiLlmStudyPackService` validation and `AdminStudyPackTransactionHelper`, so it covers **every** generation path app-wide, not just the one where the defect was observed. False-positive tests cover legitimate name/term identification, since over-rejecting would silently delete a valid format.
+- **Pre-existing rows were not migrated.** This prevents new defective items; it does not repair old ones.
+
 ## Scoring
 
 Identification is scored deterministically.

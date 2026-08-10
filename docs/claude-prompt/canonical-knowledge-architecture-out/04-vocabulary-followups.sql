@@ -1,4 +1,5 @@
 -- Follow-up reads after 03-course-program-vocabulary.sql ran against production 2026-08-03.
+-- (03 was removed 2026-08-06 once Release A shipped; its results live in 05-vocabulary-results.md.)
 -- Read-only. Three questions the first pass raised or answered badly.
 --
 -- ============================================================================

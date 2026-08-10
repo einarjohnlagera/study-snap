@@ -1,6 +1,6 @@
 # Vocabulary Audit Results — production, 2026-08-03
 
-`03-course-program-vocabulary.sql` run against production 2026-08-03. **These are the §9 pre-Step-1 baselines and cannot be re-taken once `notes.domain_context` exists.** Recorded here for that reason.
+`03-course-program-vocabulary.sql` run against production 2026-08-03 (that query file was removed 2026-08-06 once Release A shipped; these results are the durable record — recover the SQL from git history if it needs re-running). **These are the §9 pre-Step-1 baselines and cannot be re-taken once `notes.domain_context` exists.** Recorded here for that reason.
 
 Three of `01`'s estimates change as a result. Two of `03`'s own queries turned out to measure the wrong thing; `04-vocabulary-followups.sql` corrects them.
 

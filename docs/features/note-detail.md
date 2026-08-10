@@ -54,7 +54,11 @@ Study Pack Ready actions:
 
 Inline metadata edit:
 
-- fields: `title`, `subject`, `courseProgram`, `tags` for every owner; `targetProfileType`, Domain Context, and Note Learner Level additionally for Teacher/Admin authors (`isTeacherSelectableNoteTarget`, the same gate the Note Editor uses).
+- fields: `title`, `subject`, `Course / Program(s)`, `tags` for every owner; Teacher/Admin use the catalog-backed multi-select while learners retain one free-text personal value. Domain Context is visible from the start and required above one curator-selected program.
+- When the catalog contains Program Families, the same control offers an unconditional all-members shortcut. Added programs appear immediately as the existing removable chips, so the author can trim the explicit set before the normal Note Detail save persists it; the family itself is never saved.
+- when the panel is closed, a single-program note names that program. A multi-program note says `Applicable to N programs`; activating it opens a popover on desktop and a bottom sheet on mobile with the explicit program list. The same viewer is available on public note detail.
+- **Do not restore a pill list or a bordered metadata block here.** A previous pass rendered the full set as pills, which consumed roughly a quarter of the mobile viewport and pushed `Start Quick Review` and the entire content tab bar below the fold — authoring metadata outranking the product. Library cards retain their existing count presentation.
+- catalog or Course / Program(s) load failures stay inline and do not hide note content. A failed program-set save restores the last persisted selection, reports the failure, and leaves the edit panel open.
 - the two authoring axes are the only way to correct a note's Domain Context or Note Learner Level once a Study Pack exists, and they shape future generation only — saving them does not touch the existing Study Pack.
 - the Subject field carries the same subject-equals-Domain-Context advisory as the Note Editor: exact case-insensitive match only, advisory text under the field, never a save block.
 - the panel's draft is seeded from the note in five places (load sync, `?edit=1` auto-open, `Edit`, `Cancel`, post-save reset) through one `toMetadataDraft` helper — add new fields there, not at the call sites.

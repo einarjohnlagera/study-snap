@@ -3,12 +3,19 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
+
+import java.time.OffsetDateTime;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.CourseProgramCatalogRepository;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +39,14 @@ class NoteGenerationServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private NoteRepository noteRepository;
+
+    @Mock
+    private CourseProgramCatalogRepository courseProgramCatalogRepository;
+    @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
 
     @Mock
     private LlmStudyPackService llmStudyPackService;
@@ -58,7 +73,14 @@ class NoteGenerationServiceTest {
                 noteGenerationUsageProtectionService,
                 llmStudyPackService,
                 contentModerationService,
-                onboardingGuardService
+                onboardingGuardService,
+                new StudyPackGenerationContextResolver(
+                        userRepository,
+                        noteRepository,
+                        noteCourseProgramRepository,
+                        courseProgramCatalogRepository
+                ),
+                courseProgramCatalogRepository
         );
     }
 
@@ -178,6 +200,85 @@ class NoteGenerationServiceTest {
         ArgumentCaptor<StudyPackGenerationContext> contextCaptor = ArgumentCaptor.forClass(StudyPackGenerationContext.class);
         verify(llmStudyPackService).generateNoteFromTopic(org.mockito.ArgumentMatchers.any(), contextCaptor.capture());
         assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("Civil Engineering");
+    }
+
+    @Test
+    void generateFromTopic_acceptsRequestCourseProgramWhenProfileHasNone() {
+        // Onboarding's first generation runs before the profile course/program is persisted, so the
+        // request is the only source. Every other course/program test here gives the user a profile
+        // value, which is why none of them caught the learner branch throwing on this exact shape and
+        // making onboarding a dead end for every new user (finding B0).
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(llmStudyPackService.generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(StudyPackGenerationContext.class)
+        )).thenReturn("Generated note content");
+
+        noteGenerationService.generateFromTopic(
+                new GenerateNoteFromTopicRequest("Newton's Laws of Motion", "AWS Certification", null),
+                userId
+        );
+
+        ArgumentCaptor<StudyPackGenerationContext> contextCaptor = ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(llmStudyPackService).generateNoteFromTopic(org.mockito.ArgumentMatchers.any(), contextCaptor.capture());
+        assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("AWS Certification");
+    }
+
+    @Test
+    void generateFromTopic_treatsAMidOnboardingAdminAsALearnerRatherThanACurator() {
+        // Nobody curates during onboarding. An ADMIN reaching this mid-onboarding used to take the
+        // curator branch, which ignores courseProgramText and demands courseProgramIds that no
+        // onboarding screen can supply -- so onboarding threw COURSE_PROGRAM_SELECTION_REQUIRED and was
+        // uncompletable for every admin account. There was no curator-branch test here at all, which is
+        // why the wider change did not surface it.
+        UUID userId = UUID.randomUUID();
+        UserEntity admin = new UserEntity();
+        admin.setId(userId);
+        admin.setRole(UserRole.ADMIN);
+        admin.setLearnerLevel(LearnerLevel.COLLEGE);
+        admin.setCourseProgram(null);
+        admin.setOnboardingCompletedAt(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(admin));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(llmStudyPackService.generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(StudyPackGenerationContext.class)
+        )).thenReturn("Generated note content");
+
+        noteGenerationService.generateFromTopic(
+                new GenerateNoteFromTopicRequest("Newton's Laws", "Accountancy", null),
+                userId
+        );
+
+        ArgumentCaptor<StudyPackGenerationContext> contextCaptor = ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(llmStudyPackService).generateNoteFromTopic(org.mockito.ArgumentMatchers.any(), contextCaptor.capture());
+        assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("Accountancy");
+    }
+
+    @Test
+    void generateFromTopic_stillRequiresCatalogProgramsForAnOnboardedAdmin() {
+        // The guard above must be scoped to onboarding only -- a fully onboarded admin is a curator and
+        // still authors through the catalog. Without this, the fix would silently demote every curator.
+        UUID userId = UUID.randomUUID();
+        UserEntity admin = new UserEntity();
+        admin.setId(userId);
+        admin.setRole(UserRole.ADMIN);
+        admin.setLearnerLevel(LearnerLevel.COLLEGE);
+        admin.setOnboardingCompletedAt(OffsetDateTime.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(admin));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        GenerateNoteFromTopicRequest request =
+                new GenerateNoteFromTopicRequest("Newton's Laws", "Accountancy", null);
+
+        assertThatThrownBy(() -> noteGenerationService.generateFromTopic(request, userId))
+                .isInstanceOf(CourseProgramSelectionRequiredException.class);
     }
 
     @Test

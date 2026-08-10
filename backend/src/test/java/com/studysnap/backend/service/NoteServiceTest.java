@@ -23,8 +23,10 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
@@ -32,6 +34,7 @@ import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.NoteStatusProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
@@ -43,13 +46,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +64,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -67,6 +75,7 @@ import static org.mockito.Mockito.when;
 class NoteServiceTest {
 
     private static final String EXISTING_CREATOR_USERNAME = "einarjohn";
+    private static final String ACCOUNTANCY_PROGRAM = "Accountancy";
 
     @Mock
     private NoteRepository noteRepository;
@@ -94,10 +103,16 @@ class NoteServiceTest {
     private OnboardingGuardService onboardingGuardService;
     @Mock
     private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
+    @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
+    @Mock
+    private com.studysnap.backend.repository.CourseProgramCatalogRepository courseProgramCatalogRepository;
     private NoteService noteService;
+    private final Map<UUID, NoteEntity> noteFixtures = new HashMap<>();
 
     @BeforeEach
     void setUp() {
+        noteFixtures.clear();
         noteService = new NoteService(
                 noteRepository,
                 analyticsEventRepository,
@@ -111,12 +126,24 @@ class NoteServiceTest {
                 analyticsService,
                 contentModerationService,
                 onboardingGuardService,
-                officialChallengeQuizTemplateService
+                officialChallengeQuizTemplateService,
+                noteCourseProgramRepository,
+                courseProgramCatalogRepository
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
+        lenient().when(noteRepository.findPublicLibraryListItemProjectionsByIdIn(any())).thenAnswer(invocation -> {
+            List<UUID> noteIds = invocation.getArgument(0);
+            return noteIds.stream()
+                    .map(noteFixtures::get)
+                    .filter(java.util.Objects::nonNull)
+                    .map(this::buildListItemProjection)
+                    .toList();
+        });
         lenient().when(noteRepository.findCourseProgramValuesByOwnerUserId(any())).thenReturn(List.of());
         lenient().when(noteRepository.findCourseProgramValuesByVisibility(any())).thenReturn(List.of());
+        lenient().when(noteCourseProgramRepository.findNamesByOwnerUserId(any())).thenReturn(List.of());
+        lenient().when(noteCourseProgramRepository.findNamesByVisibility(any())).thenReturn(List.of());
         lenient().when(generatedQuizRepository.findByNoteId(any())).thenReturn(Optional.empty());
         lenient().when(generatedQuizRepository.findLatestTargetLearnerLevelByNoteId(any())).thenReturn(Optional.empty());
         lenient().when(studyPackRepository.findByNoteId(any())).thenReturn(Optional.empty());
@@ -155,6 +182,77 @@ class NoteServiceTest {
                 .isSameAs(exception);
 
         verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
+    void create_usesRequestCourseProgramWhenOwnerHasNone() {
+        // Onboarding creates its first note before the profile course/program is persisted, so the
+        // request carries the only value. resolveRequestedCourseProgram throws when both are absent,
+        // which made onboarding a dead end for every new user (finding B0). Uses the canonical
+        // constructor rather than the compatibility overload so this exercises the production shape.
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity owner = new UserEntity();
+        owner.setId(ownerUserId);
+        owner.setCourseProgram(null);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Newton's Laws of Motion",
+                null,
+                List.of(),
+                "AWS Certification",
+                null,
+                null,
+                List.of(),
+                null,
+                "content"
+        );
+
+        NoteResponse created = noteService.create(request, ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getCourseProgram()).isEqualTo("AWS Certification");
+        assertThat(created.courseProgram()).isEqualTo("AWS Certification");
+    }
+
+    @Test
+    void create_treatsAMidOnboardingAdminAsALearnerRatherThanACurator() {
+        // Onboarding's own-note path posts to POST /notes with a free-text program and no catalog ids,
+        // because onboarding has no catalog picker. An ADMIN mid-onboarding used to take the curator
+        // branch and be rejected for missing courseProgramIds, so onboarding could not be completed.
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity admin = buildUser(ownerUserId, "admin@example.com");
+        admin.setRole(UserRole.ADMIN);
+        admin.setCourseProgram(null);
+        admin.setOnboardingCompletedAt(null);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(admin));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Newton's Laws", null, List.of(), "Accountancy", null, null, List.of(), "STUDENT", "content"
+        );
+
+        NoteResponse created = noteService.create(request, ownerUserId);
+
+        assertThat(created.courseProgram()).isEqualTo("Accountancy");
+        verify(noteCourseProgramRepository, never()).replace(any(), any());
+    }
+
+    @Test
+    void create_stillRequiresCatalogProgramsForAnOnboardedAdmin() {
+        // Scope guard: the exemption is onboarding-only. A fully onboarded admin remains a curator and
+        // still authors through the catalog -- without this the fix would demote every curator silently.
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity admin = buildUser(ownerUserId, "admin@example.com");
+        admin.setRole(UserRole.ADMIN);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(admin));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Newton's Laws", null, List.of(), "Accountancy", null, null, List.of(), "STUDENT", "content"
+        );
+
+        assertThatThrownBy(() -> noteService.create(request, ownerUserId))
+                .isInstanceOf(CourseProgramSelectionRequiredException.class);
     }
 
     @Test
@@ -199,6 +297,7 @@ class NoteServiceTest {
         assertThat(created.targetProfileType()).isEqualTo("STUDENT");
         assertThat(created.copiedFromUserId()).isNull();
         assertThat(created.copiedFromPublic()).isFalse();
+        verify(noteRepository).flush();
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.NOTE_CREATED), eq(saved.getId()), any());
     }
 
@@ -306,7 +405,7 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "Board note",
                 "Subject",
-                null,
+                "Nursing",
                 null,
                 null,
                 List.of(),
@@ -329,7 +428,7 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "Professional note",
                 "Subject",
-                null,
+                "Nursing",
                 null,
                 null,
                 List.of(),
@@ -465,7 +564,7 @@ class NoteServiceTest {
         UpsertNoteRequest request = new UpsertNoteRequest(
                 "Cell note",
                 " biology-cell division ",
-                null,
+                "Nursing",
                 null,
                 null,
                 List.of(),
@@ -582,6 +681,78 @@ class NoteServiceTest {
     }
 
     @Test
+    void update_byLearnerOwner_preservesJoinRowsInheritedFromACopy() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity copiedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(copiedNote));
+        // Stub one inherited row explicitly rather than leaning on Mockito's default empty Set. Since C1
+        // this method decides whether the multi-program invariant fires, so an unstubbed default would
+        // make this test pass by exercising the zero-program path -- which is not what it claims to
+        // cover, and would start throwing the moment anyone stubbed a wider set in setUp.
+        when(noteCourseProgramRepository.findIdsByNoteId(noteId)).thenReturn(Set.of(UUID.randomUUID()));
+
+        // A learner never authors join rows, but a note copied from curated content inherits them.
+        // Clearing them on a learner save would destroy every inherited program during an unrelated
+        // title fix -- which is exactly what copy inheritance exists to prevent.
+        UpsertNoteRequest titleOnlyEdit = new UpsertNoteRequest(
+                "Corrected title", "Subject", "Course", null, null, List.of("tag"), null, "content"
+        );
+        noteService.update(noteId.toString(), titleOnlyEdit, ownerUserId);
+
+        verify(noteCourseProgramRepository, never()).replace(any(), any());
+    }
+
+    @Test
+    void update_byLearnerOwner_rejectsClearingDomainContextOnAMultiProgramNote() {
+        // C1. A learner's request carries no programs, so validating the request always saw 0 and the
+        // invariant was unenforceable on the one author who can reach it: a learner could copy a
+        // curated multi-program note and clear domainContext, producing exactly the state slice 4
+        // forbids. The stored rows -- which a learner update leaves untouched -- are the truth here.
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity copiedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(copiedNote));
+        when(noteCourseProgramRepository.findIdsByNoteId(noteId))
+                .thenReturn(Set.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()));
+
+        UpsertNoteRequest clearsDomainContext = new UpsertNoteRequest(
+                "Title", "Subject", "Course", null, null, List.of(), null, "content"
+        );
+
+        assertThatThrownBy(() -> noteService.update(noteId.toString(), clearsDomainContext, ownerUserId))
+                .isInstanceOf(MultiProgramDomainContextRequiredException.class);
+    }
+
+    @Test
+    void update_byCuratorOwner_validatesTheRequestedProgramsRatherThanTheStoredRows() {
+        // The curator's request IS the new set -- replace() writes it moments later -- so the stored
+        // rows are the *pre*-update state and must not be what the invariant reads. Validating them
+        // here would block this legal reduction from three stored programs to one while clearing
+        // domainContext, and would equally let an illegal one-to-many expansion through.
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID keptProgramId = UUID.randomUUID();
+        UserEntity curator = buildUser(ownerUserId, "teacher@example.com");
+        curator.setProfileType(ProfileType.TEACHER);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator));
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        lenient().when(noteCourseProgramRepository.findIdsByNoteId(noteId))
+                .thenReturn(Set.of(UUID.randomUUID(), UUID.randomUUID(), keptProgramId));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(keptProgramId)))
+                .thenReturn(List.of(keptProgramId));
+
+        UpsertNoteRequest reducesToOneProgram = new UpsertNoteRequest(
+                "Title", "Subject", List.of(keptProgramId), null, null, null,
+                List.of(), "STUDENT", "content"
+        );
+        noteService.update(noteId.toString(), reducesToOneProgram, ownerUserId);
+
+        verify(noteCourseProgramRepository).replace(noteId, Set.of(keptProgramId));
+    }
+
+    @Test
     void update_preservesStoredTargetProfileTypeForNonTeacherOwner() {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -648,6 +819,28 @@ class NoteServiceTest {
         assertThat(copied.copiedFromUserId()).isNull();
         assertThat(copied.copiedFromPublic()).isFalse();
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+    }
+
+    @Test
+    void copyNote_flushesTheParentBeforeWritingInheritedJoinRows() {
+        // B1. replace() is raw JDBC and cannot see JPA's pending persistence context, so without a flush
+        // between them the child insert hits the foreign key before the parent note row exists and copyNote
+        // throws on any note carrying join rows -- since slice 4, every curated note. Asserting the ORDER
+        // rather than merely that flush() was called is what makes this fail if the flush is removed or
+        // moved below the join write.
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        NoteEntity source = buildNote(sourceNoteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "source content");
+        source.setCourseProgram("Engineering");
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+        when(noteCourseProgramRepository.findIdsByNoteId(sourceNoteId)).thenReturn(Set.of(UUID.randomUUID()));
+
+        noteService.copyNote(sourceNoteId.toString(), ownerUserId);
+
+        InOrder inOrder = inOrder(noteRepository, noteCourseProgramRepository);
+        inOrder.verify(noteRepository).save(any(NoteEntity.class));
+        inOrder.verify(noteRepository).flush();
+        inOrder.verify(noteCourseProgramRepository).replace(any(), any());
     }
 
     @Test
@@ -881,13 +1074,52 @@ class NoteServiceTest {
         UserEntity owner = new UserEntity();
         owner.setId(ownerUserId);
         owner.setCourseProgram("Senior High-STEM");
-        when(noteRepository.findCourseProgramValuesByOwnerUserId(ownerUserId))
+        // Personal strings now come from the join-guarded source (F6), same as the public list.
+        when(noteCourseProgramRepository.findLegacyCourseProgramValuesByOwnerUserId(ownerUserId))
                 .thenReturn(List.of("  nursing  ", "Nursing", "Senior High – STEM"));
+        when(noteCourseProgramRepository.findNamesByOwnerUserId(ownerUserId))
+                .thenReturn(List.of(ACCOUNTANCY_PROGRAM, "nursing"));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
         List<String> coursePrograms = noteService.listMineCoursePrograms(ownerUserId);
 
-        assertThat(coursePrograms).containsExactly("Nursing", "Senior High – STEM");
+        assertThat(coursePrograms).containsExactly(ACCOUNTANCY_PROGRAM, "Nursing", "Senior High – STEM");
+    }
+
+    @Test
+    void listMineCoursePrograms_usesTheJoinGuardedSourceLikeThePublicListDoes() {
+        // F6. C2 added the NOT EXISTS guard to the PUBLIC vocabulary but not the owner-scoped one, so the
+        // private editor's own datalist kept suggesting a stale personal string from a note whose join rows
+        // say something else. Same defect, same fix, one surface later. Asserts the WIRING; the guard
+        // itself is SQL-level (finding B4).
+        UUID ownerUserId = UUID.randomUUID();
+        when(noteCourseProgramRepository.findLegacyCourseProgramValuesByOwnerUserId(ownerUserId))
+                .thenReturn(List.of("Software Engineering"));
+        when(noteCourseProgramRepository.findNamesByOwnerUserId(ownerUserId))
+                .thenReturn(List.of(ACCOUNTANCY_PROGRAM));
+
+        List<String> coursePrograms = noteService.listMineCoursePrograms(ownerUserId);
+
+        assertThat(coursePrograms).contains(ACCOUNTANCY_PROGRAM, "Software Engineering");
+        verify(noteRepository, never()).findCourseProgramValuesByOwnerUserId(any());
+    }
+
+    @Test
+    void listPublicCoursePrograms_includesProgramsReachableOnlyThroughTheJoin() {
+        // C2. The personal-string half must come from the join-guarded source, not the unguarded
+        // findCourseProgramValuesByVisibility -- otherwise a note with join rows [Nursing] and a stale
+        // string "Accountancy" publishes "Accountancy" into the filter dropdown, where selecting it
+        // returns zero notes under a chip the app itself offered. This asserts the WIRING; the NOT EXISTS
+        // guard is SQL-level and cannot be exercised through a mocked repository, which is finding B4.
+        when(noteCourseProgramRepository.findLegacyCourseProgramValuesByVisibility(NoteVisibility.PUBLIC.name()))
+                .thenReturn(List.of("Software Engineering", "Nursing"));
+        when(noteCourseProgramRepository.findNamesByVisibility(NoteVisibility.PUBLIC.name()))
+                .thenReturn(List.of(ACCOUNTANCY_PROGRAM, "Nursing"));
+
+        List<String> coursePrograms = noteService.listPublicCoursePrograms();
+
+        assertThat(coursePrograms).containsExactly(ACCOUNTANCY_PROGRAM, "Nursing", "Software Engineering");
+        verify(noteRepository, never()).findCourseProgramValuesByVisibility(any());
     }
 
     @Test
@@ -1294,6 +1526,26 @@ class NoteServiceTest {
 
         assertThat(result.total()).isEqualTo(6);
         assertThat(result.items()).hasSize(6);
+    }
+
+    @Test
+    void listPublic_legacyModeDropsMissingProjectionWithoutChangingPreFilterTotal() {
+        NoteEntity retained = buildNote(
+                UUID.randomUUID(), UUID.randomUUID(), NoteStatus.DRAFT, NoteVisibility.PUBLIC, "retained"
+        );
+        NoteEntity deletedBetweenQueries = buildNote(
+                UUID.randomUUID(), UUID.randomUUID(), NoteStatus.DRAFT, NoteVisibility.PUBLIC, "deleted"
+        );
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(retained, deletedBetweenQueries));
+        org.mockito.Mockito.doReturn(List.of(buildListItemProjection(retained)))
+                .when(noteRepository).findPublicLibraryListItemProjectionsByIdIn(any());
+
+        var result = noteService.listPublic(null, null, null, null, null, null, null, null, null);
+
+        assertThat(result.total()).isEqualTo(2);
+        assertThat(result.items()).extracting(NoteListItemResponse::id)
+                .containsExactly(retained.getId().toString());
     }
 
     @Test
@@ -1739,6 +1991,10 @@ class NoteServiceTest {
         user.setEmail(email);
         user.setRole(UserRole.USER);
         user.setProfileType(ProfileType.STUDENT);
+        // A fully onboarded account is the realistic default for every test here. Curator branches are
+        // gated on onboarding being complete -- nobody curates mid-onboarding -- so a null value would
+        // silently make every ADMIN/TEACHER fixture behave as a learner.
+        user.setOnboardingCompletedAt(OffsetDateTime.now());
         return user;
     }
 
@@ -1768,7 +2024,29 @@ class NoteServiceTest {
         note.setCopiedAt(null);
         note.setCreatedAt(OffsetDateTime.now().minusDays(1));
         note.setUpdatedAt(OffsetDateTime.now().minusHours(1));
+        noteFixtures.put(noteId, note);
         return note;
+    }
+
+    private NoteListItemProjection buildListItemProjection(NoteEntity note) {
+        NoteListItemProjection projection = mock(NoteListItemProjection.class);
+        lenient().when(projection.getId()).thenReturn(note.getId());
+        lenient().when(projection.getOwnerUserId()).thenReturn(note.getOwnerUserId());
+        lenient().when(projection.getTitle()).thenAnswer(ignored -> note.getTitle());
+        lenient().when(projection.getCourseProgram()).thenAnswer(ignored -> note.getCourseProgram());
+        lenient().when(projection.getDomainContext()).thenAnswer(ignored -> note.getDomainContext());
+        lenient().when(projection.getLearnerLevel()).thenAnswer(ignored -> note.getLearnerLevel());
+        lenient().when(projection.getTargetProfileType()).thenAnswer(ignored -> note.getTargetProfileType());
+        lenient().when(projection.getSubject()).thenAnswer(ignored -> note.getSubject());
+        lenient().when(projection.getTags()).thenAnswer(ignored -> note.getTags());
+        lenient().when(projection.getContent()).thenAnswer(ignored -> note.getContent());
+        lenient().when(projection.getStatus()).thenAnswer(ignored -> note.getStatus());
+        lenient().when(projection.getVisibility()).thenAnswer(ignored -> note.getVisibility());
+        lenient().when(projection.getCreatedAt()).thenAnswer(ignored -> note.getCreatedAt());
+        lenient().when(projection.getUpdatedAt()).thenAnswer(ignored -> note.getUpdatedAt());
+        lenient().when(projection.getCopiedFromNoteId()).thenAnswer(ignored -> note.getCopiedFromNoteId());
+        lenient().when(projection.getCopiedFromPublic()).thenAnswer(ignored -> note.getCopiedFromPublic());
+        return projection;
     }
 
     private NoteListItemProjection buildListItemProjection(UUID noteId, UUID ownerUserId, NoteStatus status) {

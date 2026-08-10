@@ -126,6 +126,15 @@ Shared quiz items support these active formats:
 - `MULTI_SELECT` — 4 choices, `correctIndices` contains 2–3 correct indexes
 - `MATCHING` — 2–4 consecutive single-correct items share the same 4-choice option set through `questionGroup`
 
+IDENTIFICATION rules — **the answer's form, not the subject, decides validity**:
+
+- IDENTIFICATION answers are graded by **exact normalized string equality** (trim, collapse whitespace, lowercase). There is no maths-, chemistry- or code-aware comparison anywhere in the grader.
+- So the answer must be a **term, name, or label a learner can type unambiguously in words**. `MCQ` is the correct format whenever the answer is a **symbolic or notational form** — a mathematical expression or equation, a chemical formula, a code snippet, or a value with units — because those have many equally-correct renderings (`x^2 + y^2`, `x² + y²`, `y² + x²`) and none of them string-match each other.
+- **A formula's *name* is a valid answer; the formula *itself* is not.** "Which law states that force equals mass times acceleration?" → `Newton's Second Law` is valid. "Identify the equation for Newton's Second Law" → `F = ma` is not.
+- This holds for **every subject**. "Identify the chemical formula for water" and "Identify the expression that reverses a list" are as invalid as the algebraic case.
+- `acceptableAnswers[0]` must be the exact thing the stem asks for. **Restating the stem is not an answer** — for "Identify the algebraic expression for the sum of the squares of x and y", `"sum of squares"` merely repeats the question.
+- Enforced in two places, deliberately: the Challenge Quiz prompt states the rule, and `QuizValidationUtils.isFormatStemMismatch` rejects the question when the model ignores it. The guard exists because prompt compliance cannot be tested deterministically — this defect shipped, and two independent generations produced the identical bad question.
+
 True/False rules:
 
 - `TRUE_FALSE` is only for a single declarative statement that the learner judges true or false.
@@ -162,8 +171,7 @@ Computational working solution rules:
 
 - `COMPUTATIONAL` questions may include `workingSolution` with formula, substitution, and final-result steps
 - `workingSolution` math expressions use LaTeX delimiters: inline `$...$` and display `$$...$$`
-- the frontend renders `workingSolution` math with KaTeX inside the working-solution panel only
-- question text, choices, and explanations remain plain text and do not receive KaTeX rendering
+- **Retired in `v0.71.0`:** these two lines used to read *"KaTeX inside the working-solution panel only"* and *"question text, choices, and explanations remain plain text"*. Both are false now — question text, choices, and explanations all render math. See "Inline math in question text" below for the current rule and the full surface list; do not restore the panel-only claim.
 - plain-text working solutions remain supported as a fallback for older generated content
 
 ## Admin Repair Tooling
@@ -236,3 +244,17 @@ Currently all quiz questions use a fixed format: 4 choices, 1 correct index. Pla
 - **Matching type** — shipped as `MATCHING` with `questionGroup` shared option blocks; each item remains independently scored
 
 Do not implement format additions without a `EXAM_MODES.md` review — they affect scoring logic across all five quiz modes.
+
+## Math rendering in questions and options
+
+Generated questions can contain inline LaTeX — the model emits `\( ... \)` for algebraic prompts, so a Quick Review question would otherwise read literally as `simplify \(\frac{x^3 - 4x^2 + 5x}{x - 2}\)?`.
+
+- `QuizQuestionText` and `QuizChoiceList` render through `renderMathText` (`quiz-working-solution.tsx`), the same KaTeX-backed renderer working solutions already used. It had only ever been wired to working solutions.
+- **Every surface that shows a question, an option, or an explanation must go through it.** Live session pages (Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, shared quiz) reach it via `QuizQuestionText`, but the **result and preview** surfaces render question text directly and were missed on the first pass: `practice-quiz-card.tsx`, `generated-quiz-preview-page-client.tsx`, and `quiz-matching-group.tsx`. **Explanations carry math too** and were raw on every surface. When adding a new quiz surface, route question, option, and explanation text through `renderMathText` — a raw `{item.question}` is the bug.
+- **The sweep was completed in `v0.71.0`, and the rule above was false until then** — the first pass fixed the components it happened to have open rather than a mapped inventory. Now covered: the shared `quiz-answer-review` **explanation** (one component behind five call sites — quick-review, adaptive-practice, challenge-quiz ×2, session-history review, where the question above it rendered correctly so it read as a rendering bug); **options** on the unauthenticated `/quiz/[token]` page; all four Interview Practice surfaces (question, options, critique rationale, follow-up); the generated-quiz preview's Correct Answer echo; the matching-group **option bank**; Identification and Enumeration "Accepted answer(s)"; the public mini-quiz preview (question, option, explanation — an unauthenticated SEO surface); the onboarding quiz preview; and both demo pages. **The way to extend this is a grep, not a walk through the files you have open.**
+- **The "cards, not quiz content" exclusion written here was factually wrong and is retired (`v0.71.0` signoff).** It claimed flashcards and memorization were out of scope because they render cards rather than quiz content. They do not: `buildFlashcardDeck` reads `item.question` and `item.explanation` **straight off the quiz array**, so those surfaces — plus the *unauthenticated* public preview (`public-flashcards-preview.tsx`, `public-mini-quiz-preview.tsx`) — were showing raw `\frac{...}` to readers. All now route through `renderMathText`. **The lesson worth keeping: derive the scope boundary from where the content comes from, not from what the surface is called.** This claim was falsified three times before it was checked against `buildFlashcardDeck`.
+- **Still out of scope, and for a reason that survives that check:** learn articles, the Ask Companion guide FAQ (`collection-detail-page-client.tsx`), and the landing-page FAQ. These are authored prose that never touches the quiz array. Whether they *should* render math is a separate product decision.
+- **A lone `$` is currency, not math.** `renderMathText` treats `$` as opening a span only when the next character is not whitespace, and closing only when the previous character is not whitespace — the rule markdown math parsers use. Before this, `"What is the cost of $5?"` produced two stray `<span>` wrappers (reintroducing the `break-words` displacement described below) and `"Item A costs $5 and item B costs $10"` rendered the middle of the sentence as italic math with both dollar signs swallowed. Accountancy and Business Administration are seeded programs, so cost questions are routine. **The guard and the tokenizer share one scan** (`findMathSpanFrom`) precisely so they cannot disagree about what counts as math — their disagreement is what produced the stray wrappers.
+- **Inline fractions and large operators are promoted to `\displaystyle`.** Inline (text-style) KaTeX renders `\frac` numerator and denominator at roughly 0.7em, so a fraction inside a question stem reads noticeably smaller than the words around it even though `.katex` is already 1.21em. `applyInlineDisplayStyle` prepends `\displaystyle` to inline segments containing a size-collapsing construct (`\frac`, `\binom`, `\sum`, `\prod`, `\int`, `\oint`, `\lim`). **Only those** — a blanket `\displaystyle` would make every inline expression taller for nothing, and raising the `.katex` font size instead would oversize simple variables like `$x$` against body text. Block math is untouched, being display style already. The macro boundary is a negative lookahead for a letter rather than `\b`, because `_` is a word character and `\b` fails after `\sum_`.
+- **`renderMathText` returns the raw string untouched when the text contains no math delimiters**, which is the overwhelming majority of questions. That is deliberate: wrapping every plain string in an extra element changes which node `getByText` resolves to and silently relocates styling such as `break-words` off the element callers put it on. Structure is added only where math actually exists.
+- Rendering falls back to plain text when a segment fails to parse, so malformed LaTeX degrades to the original markup rather than breaking the page.

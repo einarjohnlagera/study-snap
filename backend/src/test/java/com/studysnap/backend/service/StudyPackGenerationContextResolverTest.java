@@ -8,9 +8,12 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -25,6 +28,10 @@ class StudyPackGenerationContextResolverTest {
     private UserRepository userRepository;
     @Mock
     private NoteRepository noteRepository;
+    @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
+    @Mock
+    private CourseProgramCatalogRepository courseProgramCatalogRepository;
 
     @Test
     void resolve_populatesNoteAuthoringAxesAndPrefersDomainContext() {
@@ -42,7 +49,7 @@ class StudyPackGenerationContextResolverTest {
         note.setSubject("Physics");
         note.setTags(new String[]{"electricity"});
 
-        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
 
         StudyPackGenerationContext context = resolver.resolve(userId, note);
 
@@ -71,7 +78,7 @@ class StudyPackGenerationContextResolverTest {
         note.setCourseProgram("Science");
         note.setSubject("Biology");
 
-        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
 
         StudyPackGenerationContext context = resolver.resolve(userId, note);
 
@@ -80,6 +87,90 @@ class StudyPackGenerationContextResolverTest {
         assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context)).isEqualTo("Science");
         assertThat(StudyPackGenerationContextResolver.effectiveCurriculumLevel(context))
                 .isEqualTo(LearnerLevel.PROFESSIONAL);
+    }
+
+    @Test
+    void resolve_usesExactlyOneJoinedProgramNameBeforeThePersonalString() {
+        UUID userId = UUID.randomUUID();
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setCourseProgram("Personal note program");
+        when(noteCourseProgramRepository.findByNoteId(note.getId()))
+                .thenReturn(List.of(new com.studysnap.backend.dto.ApplicableProgramResponse(UUID.randomUUID(), "Nursing")));
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                userRepository, noteRepository, noteCourseProgramRepository, null
+        );
+
+        StudyPackGenerationContext context = resolver.resolve(userId, note);
+
+        assertThat(context.courseProgram()).isEqualTo("Nursing");
+    }
+
+    @Test
+    void resolve_neverTurnsMultipleJoinedProgramsIntoAnLlmDomain() {
+        // This test used to leave userRepository.findById UNSTUBBED, so Mockito returned Optional.empty()
+        // and both assertions passed because the user was not found -- not because of the multi-program
+        // rule they claimed to prove. Every other test in this class stubs it. Stubbing a real user here
+        // is what makes this exercise the production path.
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram("Software Engineering");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setDomainContext(DomainContext.NURSING);
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(
+                new com.studysnap.backend.dto.ApplicableProgramResponse(UUID.randomUUID(), "Nursing"),
+                new com.studysnap.backend.dto.ApplicableProgramResponse(UUID.randomUUID(), "Pharmacy")
+        ));
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository
+        );
+
+        StudyPackGenerationContext context = resolver.resolve(userId, note);
+
+        // The binding guarantee (ADR-001) is that a program LIST never becomes the authoring domain. With
+        // more than one joined program the single-program branch is skipped, and Domain Context -- which
+        // the invariant makes mandatory above one program -- is what reaches the prompt.
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context))
+                .isEqualTo(DomainContext.NURSING.getLabel());
+        assertThat(context.courseProgram()).doesNotContain("Pharmacy");
+    }
+
+    @Test
+    void resolve_multiProgramNoteWithoutDomainContextFallsBackToASingleValueNotAList() {
+        // The invariant forbids this state going forward (Domain Context is required above one program),
+        // but pre-invariant rows exist. What matters is that the fallback is still a SINGLE value, never a
+        // list. It is the author's profile program, which is why NoteBulkGenerationService's result row
+        // shows that value for a multi-program bulk note -- cosmetic, and recorded rather than changed.
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram("Software Engineering");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(
+                new com.studysnap.backend.dto.ApplicableProgramResponse(UUID.randomUUID(), "Nursing"),
+                new com.studysnap.backend.dto.ApplicableProgramResponse(UUID.randomUUID(), "Pharmacy")
+        ));
+
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository
+        );
+
+        StudyPackGenerationContext context = resolver.resolve(userId, note);
+
+        assertThat(context.courseProgram()).isEqualTo("Software Engineering");
+        assertThat(context.courseProgram()).doesNotContain("Nursing");
+        assertThat(context.courseProgram()).doesNotContain("Pharmacy");
     }
 
     @Test
@@ -96,7 +187,7 @@ class StudyPackGenerationContextResolverTest {
         note.setSubject("Computing");
         note.setTags(new String[]{"algorithms"});
 
-        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
 
         StudyPackGenerationContext context = resolver.resolve(userId, note);
 
@@ -129,7 +220,7 @@ class StudyPackGenerationContextResolverTest {
         studyPack.setSubject("Fallback Physics");
         studyPack.setTags(new String[]{"fallback"});
 
-        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
 
         StudyPackGenerationContext context = resolver.resolveForStudyPack(userId, studyPack);
 
@@ -157,7 +248,7 @@ class StudyPackGenerationContextResolverTest {
         studyPack.setSubject("Computing");
         studyPack.setTags(new String[]{"algorithms"});
 
-        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
 
         StudyPackGenerationContext context = resolver.resolveForStudyPack(userId, studyPack);
 
@@ -178,7 +269,7 @@ class StudyPackGenerationContextResolverTest {
         user.setCourseProgram("Profile Course");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
 
         StudyPackGenerationContext context = resolver.resolveForBulkGeneration(
                 userId,
@@ -203,7 +294,7 @@ class StudyPackGenerationContextResolverTest {
         user.setCourseProgram("Nursing");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
 
         StudyPackGenerationContext context = resolver.resolveForBulkGeneration(
                 userId,
@@ -226,7 +317,7 @@ class StudyPackGenerationContextResolverTest {
         NoteEntity note = new NoteEntity();
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository);
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository);
 
         StudyPackGenerationContext context = resolver.resolve(userId, note);
 

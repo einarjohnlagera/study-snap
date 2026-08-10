@@ -212,6 +212,7 @@ Each exam hub is server-rendered with:
 - Canonical URL under `/exam/{slug}`.
 - CollectionPage structured data, including an `ItemList` (`mainEntity`) of every member note's name and canonical URL — not just the visible Featured/Popular/Recent cards — so the structured data proves the hub's real depth even where the page caps visible cards.
 - Featured, popular, and recent discovery sections that suppress empty headers, plus a "Browse by Subject" section (real per-subject note counts linking to the matching subject-landing pages) and a "More {Exam} Notes" section listing every remaining note not already shown above — together these make every note in a hub's course/program bucket reachable on-page, not just the first 18.
+- Course/program membership resolves from joined Applicable Programs first and falls back to the personal-note scalar only when no join rows exist. Curator notes with a NULL scalar therefore participate in every hub section and its structured-data item list.
 
 Zero-note exam states should honestly say: `No {Exam Name} notes have been shared yet.` They must offer the existing intent-preserving `Start preparing for the {short exam name}` signup CTA as the primary path, alongside a secondary link to the main Public Library and a tertiary link to the matching Learn category (see Product Value Strip above) — a dead end with no signup path is the worst outcome on an acquisition page, and Wave 2 exams will hit this state often, not rarely.
 

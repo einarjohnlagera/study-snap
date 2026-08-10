@@ -30,20 +30,143 @@ Notes model **canonical knowledge**. Programs describe **where that knowledge is
 | Subject | `notes.subject` | 1 | what the note is about |
 | Domain Context | `notes.domain_context` | 1 | **how** it is authored — the LLM domain constraint |
 | Note Learner Level | `notes.learner_level` | 1 | **how deep** it is authored |
-| Applicable Programs | `note_course_program` | N | **where** it appears — discovery only |
+| Course / Program(s) | `note_course_program` (curated) / `notes.course_program` (personal) | N curated, 1 personal | **where** it appears — discovery only |
 | Audience framing | `notes.target_profile_type` | 1 | **who** it is written for — never depth |
+
+The **Course / Program(s)** row covers two stores, because NoteLib has two authoring modes: curated notes carry catalog programs in `note_course_program` (one or many), and personal notes carry one free-text value in `notes.course_program`. Both are current; neither is legacy. See "Two authoring modes — and therefore two program fields" below.
 
 Binding rules:
 
-1. **Applicable Programs never reach a prompt.** Generation is driven by Domain Context. Programs are a discovery and curriculum-management facet only.
+1. **Course / Program(s) never reach a prompt as a list.** Generation is driven by Domain Context, which is **required** once a note has more than one program. A single-program note may still fall back to that one value; several programs may not be sent as a domain constraint. Programs are a discovery and curriculum-management facet only.
 2. **Static content** (note body, summary, key concepts, flashcards, memorization, static question pool) is calibrated by Domain Context + Note Learner Level. Never by user learner level.
 3. **Quizzes and exams** take Domain Context + Note Learner Level as the floor. User Learner Level may adjust scaffolding and wording; it may **never lower the curriculum**.
 4. **Review Sets compose freely.** A Review Set may contain any note regardless of its Applicable Programs. A Review Set's own course/program is a curation label — never derived from, never validated against, its notes.
-5. **Program Families are an authoring shortcut only.** Selecting a family expands to explicit `note_course_program` rows at save time. Applicability is never inferred from a family at read time.
+5. **Program Families are an authoring shortcut only.** Selecting a family expands to explicit `note_course_program` rows at save time. Applicability is never inferred from a family at read time. **Ratified in full 2026-08-05 — see "Program Families are a productivity feature" below. The three constraints there are binding.**
 6. **Reuse a note when the learning objective, depth, and treatment are materially the same. Create a new note only when the learning experience itself genuinely differs.** Multiple canonical Algebra notes (Engineering Algebra, Business Algebra, College Algebra, Algebra Foundations) are correct and expected; collapsing them would be a misreading of this ADR.
 7. All resolution stays in `StudyPackGenerationContextResolver`. No service reads these fields directly.
 
 Delivered in two releases (revised 2026-08-03 after the production audit): **Release A** = Domain Context + `course_programs` catalog/families + Note Learner Level, all additive and reversible, with pool/bank re-keying as its own PR inside it. **Release B** = `note_course_program` + read paths, multi-release and not reversible.
+
+### Program Families are a productivity feature, not a curriculum feature
+
+**Ratified by the owner 2026-08-05, closing the gate that stood on Release B's third slice.** Rule 5 said families are an authoring shortcut; this section states what that forbids, because "shortcut" alone did not stop the design drifting toward a curriculum engine.
+
+**A Program Family's only job is to reduce repetitive authoring work.** It is not a curriculum model, not a taxonomy, and not a second source of applicability truth. Three binding constraints:
+
+1. **Expansion is unconditional.** Selecting a family fills in the same rows every time. It must not depend on the note's Subject, Domain Context, learner level, or anything else about the note.
+2. **A family expands to all of its members.** No curated per-family subsets, no preset table beyond `course_programs.program_family_id`. If a family should expand to a different set, that is a change to *membership*, not to expansion logic.
+3. **Expansion never happens at read time.** It is a save-time pre-fill producing explicit rows. No filter, facet, badge, or search predicate may resolve a family into programs.
+
+**Families are deliberately allowed to over-select.** The author sees the filled-in rows immediately and trims what does not apply, and **the Note's explicit `note_course_program` rows are always the source of truth.** A slightly-too-broad default that a human corrects is a healthier long-term trade-off than a subject→program mapping maintained forever — that mapping would re-couple the two axes this ADR exists to separate: *Subject* is what the knowledge is, *Domain Context* is how it is authored, and *Applicable Programs* is where it appears. Families must not become a fourth knowledge model.
+
+> **The tripwire:** if we ever find ourselves maintaining curriculum rules inside Program Families, the feature has exceeded its responsibility. Remove the rules, not the constraint.
+
+Rejected on the record, so neither returns as a "small improvement": **subject-conditioned expansion** (an earlier taxonomy doc proposed `Engineering Mathematics` reaching all engineering programs while `Engineering Sciences` reached only some) and **curated subset expansion**.
+
+### Applicable Programs mean valid applicability, not curriculum coverage
+
+**Ratified by the owner 2026-08-05.** The catalog answers *"who can legitimately study this note?"* — **not** *"which programs do we fully support?"*
+
+This decouples catalog growth from curriculum completeness. A program may be seeded before any comprehensive Review Set exists for it, so canonical notes can be marked applicable to it immediately; that is what makes one Engineering Mathematics note serve many engineering programs without duplication, which is the purpose this ADR was written for. **Review Sets are what communicate curriculum completeness** — Applicable Programs never promise it.
+
+**The catalog still follows curriculum; what changed is what "follows" means.** It does **not** mean waiting for a complete Official Review Set. It means a program earns a catalog entry once there are **legitimate canonical notes applicable to it** — if Engineering Mathematics notes are genuinely applicable to Mechanical Engineering, that alone justifies the entry, with no Mechanical Engineering Review Set required.
+
+**Do not pre-seed a program vocabulary.** Seeding every PRC engineering program at once is premature expansion and is explicitly rejected. **Catalog growth is incremental and demand-driven by authoring:** a curator judging that a canonical note is applicable to a program is the trigger to add that program. This keeps the taxonomy grounded in real content.
+
+This refines rather than reverses the catalog's *follow-not-lead* posture (`v0.70.0`, where `Computer Science` and `Software Engineering` were excluded pending real curriculum). Those rulings stand. The standard for seeding is now "canonical notes are applicable to this program," which is weaker than "we have a curriculum for it" but strictly stronger than "a learner might plausibly exist."
+
+### Course / Program(s) is the only program concept — there is no "primary"
+
+**Ratified by the owner 2026-08-05, superseding the two-field model Release B shipped with.**
+
+**A note does not belong to one program. It applies to one or many.** The data model, the API, and every human-facing surface express exactly that: a single many-valued axis labelled **Course / Program(s)**. There is no primary program, no separate "Applicable Programs" section, and no synchronisation between two fields.
+
+**The reasoning that settles it.** Each axis in this ADR owns exactly one responsibility — Subject owns *what*, Domain Context owns *how it is authored*, Note Learner Level owns *how deeply*, Course / Program(s) owns *where it is discovered*. A "primary" program owns **none** of them. It was the note's only program when the schema was single-valued, and after Release B it is merely whichever program happened to be first. The question is therefore not "should we replace primary?" but **"should a concept with no remaining architectural responsibility continue to exist?"** — and the answer is no. Retaining it would reintroduce precisely the overlap this ADR was written to remove.
+
+#### Domain Context is REQUIRED when a note has more than one program
+
+**A many-valued program list must never become the LLM's domain signal.** The generation prompt states: *"treat the domain above as the authoritative academic domain. All content, terminology, examples, and question framing must belong to that domain. Do not blend in material from unrelated disciplines."* That instruction is **logically unsatisfiable given a list** — it names several disciplines while forbidding blending across disciplines. This is the founding observation of this ADR, not a new concern: it is why Domain Context exists as a separate single-valued axis at all.
+
+So:
+
+1. **Domain Context, when set** — always the authoring signal, unchanged.
+2. **A single program, when Domain Context is unset** — today's single-value fallback, unchanged.
+3. **Several programs with no Domain Context** — **rejected at save**, server-side. Not a UI-disabled button.
+
+Sending the full program list to the model is **explicitly rejected.** The hypothesis that a list encourages authoring toward shared knowledge rather than over-specialising is untested and runs opposite to this ADR's premise. **R4 does not cover it** — R4 validated a *broader single* Domain Context, which is a different question. Revisiting this requires an R4-style generate-and-diff read first.
+
+The rule is enforced by **program count at save time**, which means adding a second program to an existing note is the moment Domain Context becomes required. That is intended: it forces the authoring decision exactly when it starts to matter. The error must teach rather than name a mechanism — *"A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in."*
+
+**Introduced at zero cost, and only at this moment.** `V107` produces exactly one join row per note and has not yet reached production, so **no multi-program note exists anywhere**. The requirement lands with no pre-existing violations and no backfill. That cheapness expires the moment curators begin authoring.
+
+#### Two authoring modes — and therefore two program fields
+
+**Ratified by the owner 2026-08-05.** This section **supersedes an earlier framing in this same ADR** that called `notes.course_program` a *"frozen compatibility column"* with a *"closed tap"* and an exit condition. That framing was wrong, and it is corrected here rather than quietly edited: it assumed every author would be restricted to the catalog, which is not the product we want.
+
+NoteLib has **two authoring modes**, and this is a product distinction rather than a permission workaround:
+
+| Mode | Who | Programs | Vocabulary | Stored in |
+|---|---|---|---|---|
+| **Personal note-taking** | learners | exactly one | **free text** | `notes.course_program` |
+| **Curation** | Teacher / Admin | one or many | **catalog only** | `note_course_program` |
+
+**Selecting several applicable programs is a curation act, not everyday note-taking.** A learner's note serves that learner; canonical material serving many curricula is authored deliberately, by someone doing that job. Restricting multi-program authoring therefore follows from what the two activities *are* — it is not a UI workaround for a permission problem, and it should never be documented as one.
+
+**Free text is retained for personal notes on purpose.** NoteLib behaves like a notebook, not a closed LMS. Someone studying a niche subject, or a program the catalog does not yet cover, must still be able to describe their own material naturally. The catalog is the controlled vocabulary for **curated content**, not a restriction on personal learning.
+
+**The two splits follow one line.** Cardinality and vocabulary are both gated on Teacher/Admin — curators get catalog-only and many, learners get free text and one. Splitting them on different conditions would make the model harder to explain than either split alone.
+
+**So `notes.course_program` is not legacy and is not frozen.** It is **the personal-notes program field**, permanently, and it is still written by learner authoring. `note_course_program` is the curated-content axis. Both are current; neither is awaiting removal.
+
+**This is what Slice 2's read semantics were actually describing.** Join-first with a legacy-string fallback was scoped as legacy handling, but it maps exactly onto the mode boundary: curated notes resolve through the join, personal notes through the string. The fallback is the personal-notes path, not a compatibility shim.
+
+**Consequences to hold onto:**
+
+- **The column has no exit condition and needs none.** Retiring it would delete personal-note discovery. `19-slice-2-facet-equivalence-impact.sql` query A still usefully sizes how much *existing* content sits outside the catalog, but it is no longer gating a removal.
+- **The generation fallback for legacy multi-program notes.** The Domain Context requirement cannot apply retroactively, so a pre-existing multi-program note with no Domain Context resolves its domain through its string. That path must survive any future change to this column.
+- **Catalog-excluded historical values** (bare levels, bare subjects, the `Engineering` family, the owner-ruled `Computer Science` / `Software Engineering`) keep working through the same personal-notes path, which is why nothing needs migrating.
+
+### Representation authority: what may author an Applicable Program row
+
+**Ratified 2026-08-06**, closing pressure-test finding B2 (Decision A). The rule is about **provenance**, not ownership:
+
+> **A learner's personal free-text Course / Program must not be mechanically materialized into a catalog Applicable Program row.**
+
+**This is deliberately narrower than "learner-owned notes cannot carry join rows", and that broader phrasing is wrong.** It would contradict copy inheritance and the standing ruling that ownership must not change the semantics of the metadata model. Learner-owned notes may carry join rows whenever those rows have legitimate curated provenance.
+
+The canonical shapes:
+
+| Shape | `notes.course_program` | `note_course_program` |
+|---|---|---|
+| **Learner-authored personal note** | the program | **no mechanically derived rows** |
+| **Curator-authored note** | null | one or more authored rows |
+| **Curated note copied by a learner** | as copied | inherited rows, preserved as authored metadata |
+
+**Read semantics are identical for all three** and do not consult ownership: *joined programs first when joined programs exist; otherwise the personal program string.* Option 7 therefore does not make the same metadata mean different things depending on who owns it — it prevents one representation from being populated by a source with no authority to author it. A learner's string is that learner's own representation, permanently; materializing it into the curated axis invents metadata nobody authored, and the learner cannot then reach it to correct it.
+
+**A learner-authored note using the personal-string fallback is a canonical, fully supported shape — not a degraded one.** Join rows exist to express curated multi-program applicability. They are not a superior representation of every single-program note, and discovery parity is not a reason to manufacture them.
+
+**Consequences:**
+
+- **`V107`'s unfiltered backfill is corrected by an additive follow-up migration** rather than by editing it, because editing a migration that has already run elsewhere breaks its checksum. Curator rows remain; future inherited rows remain. Shipped as `V108__remove_derived_learner_note_programs.sql`.
+- **No learner-facing Applicable Programs UI**, no `source` provenance column, and no learner-save synchronization. Each was considered and rejected: the first leaks the curator publishing model into personal authoring, the second is schema weight for a population this rule keeps empty, and the third cannot distinguish a mechanically derived row from an inherited curator-authored row when both match the learner's old string — so it can silently delete valid inherited applicability.
+- **Zero affected users strengthens the case for prevention rather than weakening it.** It is not a reason to deploy a deterministic divergence mechanism and monitor the resulting harm.
+- **Any future backfill or bulk process is bound by this rule**, not just `V107`. No runtime path currently derives join rows from the personal string — all writes are curator-authored or copy-inherited — and that must stay true.
+
+### Programs and Review Sets answer different questions
+
+**Ratified 2026-08-05.** The two surfaces have distinct responsibilities and must not be collapsed:
+
+| Surface | Answers |
+|---|---|
+| **Program** (Applicable Programs) | *"What notes are applicable to me?"* — a **discovery** surface |
+| **Review Set** | *"What is my complete learning journey?"* — the **completeness** signal |
+
+**Consequence:** a seeded program with no applicable notes is invisible to learners by construction — every learner-facing program list (facets, filter dropdowns, search) derives from *notes*, not from the catalog, so coverage is **emergent rather than declared** and the catalog is author-facing. The residual risk is a **thin** shelf, not an empty one: a program carrying a handful of shared foundational notes can read as a curriculum without being one.
+
+**The agreed direction — a design direction, not a shipped mechanism.** Coverage is communicated **at the Program level**, when a learner browses a Program that has no dedicated Official Review Set yet — conceptually *"This Program currently contains shared foundational notes. A dedicated Official Review Set is still being developed."* Explicitly rejected: per-note coverage indicators, and any new coverage metadata system. Tracked in `docs/product/ROADMAP.md`; **not** part of Release B slice 3.
+
+**Consequence to hold onto:** a seeded program with no applicable notes is invisible to learners by construction — every learner-facing program list (facets, filter dropdowns, search) derives from notes, not from the catalog, so coverage is *emergent rather than declared*. The catalog is author-facing. **The open risk is a thin shelf, not an empty one:** once a handful of canonical notes are marked applicable to a program, it looks like a curriculum without being one, and exposing programs to learners requires communicating coverage rather than implying completeness.
 
 ### Choosing a Domain Context value
 
@@ -70,6 +193,20 @@ A longer rule enumerating four conjunctive criteria was considered and rejected 
 This is the clearest worked example of the rule, and it is worth preserving as one: a program can be among the largest in the library and still not warrant a Domain Context.
 
 **Applicability defaults for these values are NOT yet verified against current PRC board syllabi** and must be curator-checked before family-expansion defaults are set. Whether `Engineering Sciences` spans 8 or 11 engineering programs is a curriculum fact, not an architecture decision.
+
+### R4 verification — RESOLVED 2026-08-04. The 8-value set is not amended.
+
+**Risk R4 (`01`): a Domain Context is often broader than the `course_program` it replaces, and a vaguer domain constraint could make generated content drift generic.** No automated test can detect this — the prompt-building tests assert which values reach the model, never whether the output is good. The check was owed as a post-deploy checkpoint from `v0.69.0`, carried through `v0.70.0`, and run against production on 2026-08-04 once `v0.70.0` deployed. Runbook and scoring rubric: `docs/claude-prompt/canonical-knowledge-architecture-out/17-r4-verification-runbook.md`.
+
+**Result: passed on all three steps. Bulk authoring is unblocked.**
+
+- **Control** — `Design and Function of Irrigation Canals in Hydraulic Structures` set to `Civil Engineering` + `Board Exam Review` and regenerated. Output near-identical to its prior pack, slightly richer. The domain label barely moved and neither did the output, so the wiring introduces no regression of its own.
+- **The actual test** — `Fundamentals and Design Principles of Pressure Vessels` (subject `Strength of Materials`, program `Civil Engineering`) set to the deliberately broader `Engineering Sciences`, learner level left NULL, and regenerated. **Zero of five drift checks fired.** `hoop (circumferential)` and `longitudinal` stress, `Lame's equations`, the `ASME Boiler and Pressure Vessel Code`, `carbon steel and stainless steel`, the thin/thick-wall classification, and the civil-engineering application framing all survived the broader label. Verified afterwards in production that only `domain_context` changed and `learner_level` remained NULL, so this is a clean single-variable result.
+- **Level precedence** — a quiz generated from the control note (authored `BOARD_EXAM_REVIEW`) by a reader whose profile level is `COLLEGE` produced board-level questions, scored against `docs/features/challenge-quiz.md`'s own level rubric: plausible-distractor `NOT`/`INCORRECT` framings, and a four-step problem (trapezoid area → wetted perimeter from side slopes → hydraulic radius → Manning's) rather than the single plug-in a College-level item would use. **Rule 3 held**: the reader's lower level did not lower the curriculum.
+
+**What this does and does not settle.** It validates the **8-value Domain Context set** — a broader value does not degrade authored content, so the taxonomy does not need narrowing. It says nothing about the **applicability groupings** in `06`/`08`, which the paragraph above still flags as unverified against current PRC board syllabi. Those remain a curator question and are exactly what Release B's family-expansion defaults depend on. Do not read "R4 passed" as "applicability is settled."
+
+**One incidental finding, logged separately rather than here.** The regenerated Pressure Vessels summary dropped a comparison table and a Common Misconceptions block that its prior version had. This is **not** drift: the surviving prose stayed fully domain-specific, and a level-signal explanation is falsified by the note's own history — the original pack also had `learner_level` NULL and *did* carry the table. Recorded as one-sample structural variance on optional summary blocks, cause unestablished, with its own ROADMAP Backlog Index row on the user-facing grounds that a regeneration can silently drop content a learner valued.
 
 ### Domain Context governance
 
@@ -117,7 +254,9 @@ One consequence to expect rather than act on: because these rows keep `domain_co
 
 What counts as a *program* value — and therefore whether `Grade School` and `Junior High` survive at all — is properly PR 5's decision, which must already rule on `Civil Service`, `Biology`, `Professional / Board Exam Review`, and `Self Study / Personal Learning`. Adding two more exclusions there is zero marginal work; doing it here is an irreversible write with a known active hazard.
 
-**Left open, deliberately, at the time this corollary was written:** the same eviction applies in weaker form to the 11 Senior High strand notes, which keep `course_program` and gain `domain_context = GENERAL_EDUCATION` — so `Senior High – STEM` stops reaching the prompt and STEM, ABM, and HUMSS collapse to one domain constraint. The level is preserved there, so it is not this regression; it is risk R4 (a broader domain label replacing a narrower one) on live notes. It is not decided here because it is answerable empirically for less than it costs to argue: a strand note is the cheapest available R4 subject, and ADR-001 already prescribes generate-under-both-values as the tie-break of last resort. Resolve it in the owed R4 pass and record the answer here.
+**Left open, deliberately, at the time this corollary was written — CLOSED 2026-08-03, before R4 ran:** the same eviction applies in weaker form to the 11 Senior High strand notes, which would keep `course_program` and gain `domain_context = GENERAL_EDUCATION` — so `Senior High – STEM` would stop reaching the prompt and STEM, ABM, and HUMSS would collapse to one domain constraint. The level is preserved there, so it is not this regression; it is risk R4 (a broader domain label replacing a narrower one) on live notes.
+
+**Resolution:** production review found Physics notes under both ABM and STEM whose strand-specific framing would have collapsed, and the curator confirmed keeping the strand in the authoring-domain fallback. **V105 therefore sets only `learner_level = SENIOR_HIGH` and leaves `domain_context` NULL**, so the strand keeps reaching the prompt. This was settled on production evidence rather than the generate-under-both-values tie-break, and it is why the wider R4 pass (see "R4 verification" above, resolved 2026-08-04) used a Strength of Materials note instead of a strand note. `v0.70.0` subsequently seeded all three strands into the `course_programs` catalog, consistent with treating them as curriculum tracks rather than bare levels.
 
 > The word "unpublished" appeared in the ratifying instruction alongside "unclassified." This ADR interprets it conservatively as *leave unclassified*, and does **not** authorize flipping `visibility` from `PUBLIC` to `PRIVATE` — all 11 notes are live official public content, and silently withdrawing published material is precisely the kind of destructive side effect rule 2 below forbids. If actively unpublishing them is intended, that needs its own explicit decision.
 

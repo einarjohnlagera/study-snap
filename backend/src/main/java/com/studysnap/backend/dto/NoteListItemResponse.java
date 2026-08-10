@@ -36,6 +36,7 @@ public record NoteListItemResponse(
         Integer generatedQuizQuestionCount,
         String copiedFromNoteId,
         boolean copiedFromPublic,
-        boolean likedByCurrentUser
+        boolean likedByCurrentUser,
+        List<String> applicablePrograms
 ) {
 }

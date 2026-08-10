@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.70.0 — Canonical Knowledge Completion** (In Progress, base branch `releases/v0.70.0`). Completes Release A of `docs/architecture/ADR-001-canonical-knowledge-architecture.md` (`v0.69.0`, Released 2026-08-04). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
+Current version: **v0.71.0 — Applicable Programs** (In Progress, base branch `releases/v0.71.0`). Opens Release B of `docs/architecture/ADR-001-canonical-knowledge-architecture.md`; Release A closed with `v0.70.0` (Released 2026-08-04). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -122,7 +122,7 @@ The core async flow that touches the most files:
 
 Prompts live in `backend/src/main/resources/prompts/study-pack-v1/`. Each quiz mode has its own `{mode}-developer.txt` + `{mode}-system.txt` pair.
 
-**Generation context** is resolved in `StudyPackGenerationContextResolver`; do not bypass it. Authoring domain resolves note `domainContext` -> note `courseProgram` -> profile `courseProgram`, while curriculum level resolves note `learnerLevel` -> profile `learnerLevel` -> `COLLEGE`. Static note/Study Pack content uses the effective domain plus note-authored level. Quizzes and exams keep that level as the curriculum floor; a lower reader level may soften scaffolding and wording but never lower curriculum, terminology, or difficulty.
+**Generation context** is resolved in `StudyPackGenerationContextResolver`; do not bypass it. Authoring domain resolves note `domainContext` -> exactly one joined catalog program (`note_course_program`) -> note `courseProgram` -> profile `courseProgram`, while curriculum level resolves note `learnerLevel` -> profile `learnerLevel` -> `COLLEGE`. Static note/Study Pack content uses the effective domain plus note-authored level. Quizzes and exams keep that level as the curriculum floor; a lower reader level may soften scaffolding and wording but never lower curriculum, terminology, or difficulty.
 
 LLM fan-out batches run on a dedicated `llmParallelTaskExecutor`; the main `studyPackGenerationTaskExecutor` must not be passed to `generateLongExamParallel`.
 
@@ -141,6 +141,8 @@ Recent Sessions and library `lastSessionCompletedAt` aggregate completed activit
 Profile type (`ProfileType` enum: `STUDENT`, `BOARD_EXAM`, `TEACHER`, `PARENT`, `PROFESSIONAL`) drives dashboard emphasis, quiz mode availability, and some generation behavior. It does **not** fork entity tables — all profiles share the same Note/StudyPack/Session model.
 
 Teacher detection in services uses: `user.getProfileType() == ProfileType.TEACHER || user.getRole() == UserRole.ADMIN`
+
+**On note-authoring paths that gate on curator status, that check is preceded by an onboarding guard** (`v0.71.0`): `NoteService.isTeacherSelectableOwner` and `NoteGenerationService.isCurator` both return `false` when `onboardingCompletedAt == null`, *then* apply the role check. Nobody curates during onboarding — the flow has no catalog picker, so a curator-role account reaching a note-authoring path mid-onboarding was asked for `courseProgramIds` no onboarding screen can supply, which made onboarding uncompletable for every ADMIN account. This removes no authority; once onboarding completes the account is a full curator. Do not restore the bare role check on these paths. (`NoteBulkGenerationService` still uses the bare form — a recorded `v0.71.0` Known Limitation, not a pattern to copy.)
 
 `PARENT` and `PROFESSIONAL` exist as enum values with no feature implementation yet.
 

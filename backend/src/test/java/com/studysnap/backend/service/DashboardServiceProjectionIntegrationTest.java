@@ -164,6 +164,7 @@ class DashboardServiceProjectionIntegrationTest {
                     updated_at timestamp with time zone not null
                 )
                 """);
+        createApplicableProgramsSchema();
         jdbcTemplate.execute("""
                 create table if not exists study_packs (
                     id uuid primary key,
@@ -233,11 +234,33 @@ class DashboardServiceProjectionIntegrationTest {
         jdbcTemplate.execute("delete from quick_review_sessions");
         jdbcTemplate.execute("delete from study_packs");
         jdbcTemplate.execute("delete from user_activity_events");
+        jdbcTemplate.execute("delete from note_course_program");
+        jdbcTemplate.execute("delete from course_programs");
         jdbcTemplate.execute("delete from notes");
         jdbcTemplate.execute("delete from users");
         conceptHealthService.reset();
         noteService = createNoteService();
         SqlCaptureStatementInspector.clear();
+    }
+
+    private void createApplicableProgramsSchema() {
+        jdbcTemplate.execute("""
+                create table if not exists course_programs (
+                    id uuid primary key,
+                    name varchar(120) not null unique
+                )
+                """);
+        jdbcTemplate.execute("""
+                create table if not exists note_course_program (
+                    id uuid primary key,
+                    note_id uuid not null,
+                    course_program_id uuid not null,
+                    created_at timestamp with time zone not null default current_timestamp,
+                    unique (note_id, course_program_id),
+                    foreign key (note_id) references notes(id) on delete cascade,
+                    foreign key (course_program_id) references course_programs(id)
+                )
+                """);
     }
 
     @Test
@@ -489,7 +512,9 @@ class DashboardServiceProjectionIntegrationTest {
                 mock(AnalyticsService.class),
                 mock(ContentModerationService.class),
                 mock(OnboardingGuardService.class),
-                mock(OfficialChallengeQuizTemplateService.class)
+                mock(OfficialChallengeQuizTemplateService.class),
+                mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class),
+                mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class)
         );
     }
 

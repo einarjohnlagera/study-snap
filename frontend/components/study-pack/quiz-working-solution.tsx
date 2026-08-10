@@ -44,15 +44,78 @@ function findDelimiterAt(text: string, index: number) {
   return null;
 }
 
-function findNextDelimiterIndex(text: string, fromIndex: number) {
-  let nextIndex = -1;
+/**
+ * A lone `$` is currency, not math. `"What is the cost of $5?"` has a delimiter *start* but no closing
+ * delimiter, and `"Item A costs $5 and item B costs $10"` has two `$` that are not a math span at all —
+ * treating them as one made KaTeX render the middle of the sentence as italic math with the dollar signs
+ * swallowed. Both are routine: Accountancy and Business Administration are seeded programs.
+ *
+ * So `$` opens a span only when the next character is not whitespace, and closes only when the previous
+ * character is neither whitespace NOR a binary operator. The operator half matters as much as the
+ * whitespace half: `"$10-$20"` and `"$5+$3"` both satisfy "previous character is not whitespace", so the
+ * first version of this rule captured `"10-"` as LaTeX — which KaTeX renders happily, since a trailing
+ * binary operator is legal, so the error fallback never fired and the reader saw a subtraction with the
+ * dollar signs swallowed. A `$` sitting immediately after an operator is a new amount, not a close.
+ * `\(`, `\[` and `$$` are unambiguous and need only a closing delimiter.
+ */
+function isInlineDollarOpen(text: string, index: number) {
+  const next = text[index + 1];
+  return next !== undefined && !/\s/.test(next);
+}
+
+function findInlineDollarCloseIndex(text: string, fromIndex: number) {
   for (let index = fromIndex; index < text.length; index += 1) {
-    if (findDelimiterAt(text, index)) {
-      nextIndex = index;
-      break;
+    if (text[index] !== "$") {
+      continue;
+    }
+    if (text.startsWith(BLOCK_DOLLAR_DELIMITER.start, index)) {
+      index += 1;
+      continue;
+    }
+    const previous = text[index - 1];
+    if (previous !== undefined && !/[\s+\-*/=<>^~]/.test(previous)) {
+      return index;
     }
   }
-  return nextIndex;
+  return -1;
+}
+
+type MathSpan = {
+  contentEnd: number;
+  contentStart: number;
+  delimiter: MathDelimiter;
+  start: number;
+};
+
+/**
+ * The single source of truth for "is there renderable math here, and where". Both the guard in
+ * `renderMathText` and the tokenizer in `renderWorkingSolution` go through this, so they cannot disagree
+ * about what counts as math — the disagreement between them is what produced the stray-wrapper bug.
+ */
+function findMathSpanFrom(text: string, fromIndex: number): MathSpan | null {
+  for (let index = fromIndex; index < text.length; index += 1) {
+    const delimiter = findDelimiterAt(text, index);
+    if (!delimiter) {
+      continue;
+    }
+    const contentStart = index + delimiter.start.length;
+    if (delimiter === INLINE_DOLLAR_DELIMITER) {
+      if (!isInlineDollarOpen(text, index)) {
+        continue;
+      }
+      const contentEnd = findInlineDollarCloseIndex(text, contentStart);
+      if (contentEnd === -1) {
+        continue;
+      }
+      return { contentEnd, contentStart, delimiter, start: index };
+    }
+    const contentEnd = text.indexOf(delimiter.end, contentStart);
+    if (contentEnd === -1) {
+      continue;
+    }
+    return { contentEnd, contentStart, delimiter, start: index };
+  }
+  return null;
 }
 
 function renderPlainTextSegment(segment: string, key: string) {
@@ -63,12 +126,38 @@ function renderPlainTextSegment(segment: string, key: string) {
   );
 }
 
+/**
+ * Inline (text-style) KaTeX renders these constructs at script size — a `\frac` numerator and denominator
+ * come out around 0.7em, so a fraction in a question stem reads noticeably smaller than the words around
+ * it even though `.katex` is already 1.21em. `\displaystyle` restores full size while keeping the math
+ * inline.
+ *
+ * Applied ONLY to segments that contain a construct which actually shrinks. A blanket `\displaystyle`
+ * would make every inline expression taller for no gain, and raising the `.katex` font size instead would
+ * oversize simple variables like `$x$` against body text.
+ */
+// The boundary is a negative lookahead for a letter, not `\b`: LaTeX macro names are letters only, and
+// `\b` fails after `\sum_` or `\int_` because `_` counts as a word character. This form also avoids
+// matching a longer macro that merely starts with one of these names.
+const DISPLAY_STYLE_CONSTRUCT_PATTERN = /\\(?:d?frac|[dt]?binom|sum|prod|int|oint|lim)(?![a-zA-Z])/;
+
+export function applyInlineDisplayStyle(latex: string, displayMode: boolean): string {
+  if (displayMode || !DISPLAY_STYLE_CONSTRUCT_PATTERN.test(latex)) {
+    return latex;
+  }
+  return `\\displaystyle ${latex}`;
+}
+
 function renderMathSegment(latex: string, delimiter: MathDelimiter, key: string) {
   try {
-    const rendered = katex.renderToString(latex, {
+    const rendered = katex.renderToString(applyInlineDisplayStyle(latex, delimiter.displayMode), {
       displayMode: delimiter.displayMode,
       throwOnError: false,
-      output: "html",
+      // "html" alone emits aria-hidden markup and no MathML, so rendered math is INVISIBLE to screen
+      // readers. That was survivable while it only affected working solutions; the v0.71.0 sweep
+      // extended it to every question, option and explanation in the app, which made a narrow gap a
+      // broad one. "htmlAndMathml" adds a MathML branch for assistive tech at no visual cost.
+      output: "htmlAndMathml",
     });
     if (rendered.includes(KATEX_ERROR_CLASS)) {
       return renderPlainTextSegment(delimiter.start + latex + delimiter.end, key);
@@ -80,8 +169,30 @@ function renderMathSegment(latex: string, delimiter: MathDelimiter, key: string)
   }
 }
 
+/**
+ * Renders text that MAY contain LaTeX, for callers that already have their own wrapper element.
+ *
+ * Returns the raw string untouched when the text contains no math delimiters, which is the
+ * overwhelming majority of questions and options. That matters: wrapping every plain string in an
+ * extra span changes which element `getByText` resolves to, and would silently move styling like
+ * `break-words` off the element tests assert against. Structure is only added where math exists.
+ */
+export function renderMathText(text: string | null | undefined): ReactNode {
+  // The C3 sweep replaced ~15 bare `{value}` expressions with `renderMathText(value)`. React rendered a
+  // null or undefined value as nothing; this reads `text.length` and would throw, taking the page down.
+  // One call site can genuinely pass undefined: `choices[resolveQuizCorrectIndex(item)]` where that
+  // resolver returns -1.
+  if (!text) {
+    return text ?? null;
+  }
+  if (!findMathSpanFrom(text, 0)) {
+    return text;
+  }
+  return <>{renderWorkingSolution(text)}</>;
+}
+
 export function renderWorkingSolution(text: string): ReactNode[] {
-  if (!MATH_DELIMITERS.some((delimiter) => text.includes(delimiter.start))) {
+  if (!findMathSpanFrom(text, 0)) {
     return [renderPlainTextSegment(text, "plain-0")];
   }
 
@@ -89,30 +200,22 @@ export function renderWorkingSolution(text: string): ReactNode[] {
   let cursor = 0;
   let keyIndex = 0;
   while (cursor < text.length) {
-    const delimiter = findDelimiterAt(text, cursor);
-    if (!delimiter) {
-      const nextDelimiterIndex = findNextDelimiterIndex(text, cursor);
-      const plainEnd = nextDelimiterIndex === -1 ? text.length : nextDelimiterIndex;
-      const plainText = text.slice(cursor, plainEnd);
-      if (plainText) {
-        nodes.push(renderPlainTextSegment(plainText, `plain-${keyIndex}`));
-        keyIndex += 1;
-      }
-      cursor = plainEnd;
-      continue;
-    }
-
-    const contentStart = cursor + delimiter.start.length;
-    const contentEnd = text.indexOf(delimiter.end, contentStart);
-    if (contentEnd === -1) {
+    const span = findMathSpanFrom(text, cursor);
+    if (!span) {
       nodes.push(renderPlainTextSegment(text.slice(cursor), `plain-${keyIndex}`));
       break;
     }
 
-    const latex = text.slice(contentStart, contentEnd);
-    nodes.push(renderMathSegment(latex, delimiter, `math-${keyIndex}`));
+    const plainText = text.slice(cursor, span.start);
+    if (plainText) {
+      nodes.push(renderPlainTextSegment(plainText, `plain-${keyIndex}`));
+      keyIndex += 1;
+    }
+
+    const latex = text.slice(span.contentStart, span.contentEnd);
+    nodes.push(renderMathSegment(latex, span.delimiter, `math-${keyIndex}`));
     keyIndex += 1;
-    cursor = contentEnd + delimiter.end.length;
+    cursor = span.contentEnd + span.delimiter.end.length;
   }
   return nodes;
 }

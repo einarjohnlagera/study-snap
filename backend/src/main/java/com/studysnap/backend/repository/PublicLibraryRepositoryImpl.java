@@ -39,6 +39,7 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     private static final String OWNER_USER_ID_ALIAS = "ownerUserId";
     private static final String TITLE_ALIAS = "title";
     private static final String COURSE_PROGRAM_ALIAS = "courseProgram";
+    private static final String APPLICABLE_PROGRAMS_ALIAS = "applicablePrograms";
     private static final String DOMAIN_CONTEXT_ALIAS = "domainContext";
     private static final String LEARNER_LEVEL_ALIAS = "learnerLevel";
     private static final String TARGET_PROFILE_TYPE_ALIAS = "targetProfileType";
@@ -58,11 +59,23 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     private static final String RANKED_SORT_PATH_REQUIRED_MESSAGE =
             "Ranked public-library sorts must use the materialized path.";
     private static final String NOTES_FROM = " from notes n ";
+    private static final String NOTE_LIST_ITEMS_FROM = """
+             from notes n
+             left join (
+                 select ncp.note_id, array_agg(cp.name order by cp.name) as program_names
+                 from note_course_program ncp
+                 join course_programs cp on cp.id = ncp.course_program_id
+                 join notes program_note on program_note.id = ncp.note_id
+                 where program_note.visibility = 'PUBLIC'
+                 group by ncp.note_id
+             ) note_programs on note_programs.note_id = n.id
+            """;
     private static final String NOTE_LIST_ITEM_SELECT = """
             select n.id as id,
                    n.owner_user_id as "ownerUserId",
                    n.title as title,
                    n.course_program as "courseProgram",
+                   note_programs.program_names as "applicablePrograms",
                    n.domain_context as "domainContext",
                    n.learner_level as "learnerLevel",
                    n.target_profile_type as "targetProfileType",
@@ -123,7 +136,9 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
             throw new IllegalArgumentException(RANKED_SORT_PATH_REQUIRED_MESSAGE);
         }
         FilterSql filter = buildFilter(criteria);
-        Query query = createNativeQuery(NOTE_LIST_ITEM_SELECT + NOTES_FROM + filter.whereClause() + orderBy(sort));
+        Query query = createNativeQuery(
+                NOTE_LIST_ITEM_SELECT + NOTE_LIST_ITEMS_FROM + filter.whereClause() + orderBy(sort)
+        );
         bind(query, filter.parameters());
         query.setFirstResult(offset);
         query.setMaxResults(limit);
@@ -169,7 +184,7 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         }
         Map<String, Object> parameters = new LinkedHashMap<>();
         String placeholders = bindValues("publicPageNoteId", noteIds, parameters);
-        Query query = createNativeQuery(NOTE_LIST_ITEM_SELECT + NOTES_FROM
+        Query query = createNativeQuery(NOTE_LIST_ITEM_SELECT + NOTE_LIST_ITEMS_FROM
                 + " where n.visibility = 'PUBLIC' and n.id in (" + placeholders + ")");
         bind(query, parameters);
         return tuples(query).stream().map(this::toListItemProjection).toList();
@@ -202,7 +217,15 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
             parameters.put("subjectSlug", criteria.subjectSlug());
         }
         if (criteria.courseProgramSlug() != null) {
-            where.append(" and ").append(normalizedSlugSql("n.course_program")).append(" = :courseProgramSlug");
+            where.append("\n and (exists (select 1 from note_course_program ncp ")
+                    .append("join course_programs cp on cp.id = ncp.course_program_id ")
+                    .append("where ncp.note_id = n.id and ")
+                    .append(normalizedSlugSql("cp.name"))
+                    .append(" = :courseProgramSlug) or (")
+                    .append("not exists (select 1 from note_course_program ncp where ncp.note_id = n.id) ")
+                    .append("and ")
+                    .append(normalizedSlugSql("n.course_program"))
+                    .append(" = :courseProgramSlug))");
             parameters.put("courseProgramSlug", criteria.courseProgramSlug());
         }
         if (criteria.tagSlugs() != null && !criteria.tagSlugs().isEmpty()) {
@@ -238,7 +261,19 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                  and (
                      lower(coalesce(n.title, '')) like :searchPattern escape '\\'
                      or lower(coalesce(n.subject, '')) like :searchPattern escape '\\'
-                     or lower(coalesce(n.course_program, '')) like :searchPattern escape '\\'
+                     or exists (
+                         select 1
+                         from note_course_program search_ncp
+                         join course_programs search_cp on search_cp.id = search_ncp.course_program_id
+                         where search_ncp.note_id = n.id
+                           and lower(search_cp.name) like :searchPattern escape '\\'
+                     )
+                     or (
+                         not exists (
+                             select 1 from note_course_program search_ncp where search_ncp.note_id = n.id
+                         )
+                         and lower(coalesce(n.course_program, '')) like :searchPattern escape '\\'
+                     )
                      or %s like :searchPattern escape '\\'
                      or exists (
                          select 1 from study_packs search_sp
@@ -360,6 +395,7 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         values.put(OWNER_USER_ID_ALIAS, toUuid(tuple.get(OWNER_USER_ID_ALIAS)));
         values.put(TITLE_ALIAS, stringValue(tuple, TITLE_ALIAS));
         values.put(COURSE_PROGRAM_ALIAS, stringValue(tuple, COURSE_PROGRAM_ALIAS));
+        values.put(APPLICABLE_PROGRAMS_ALIAS, stringArray(tuple.get(APPLICABLE_PROGRAMS_ALIAS)));
         values.put(DOMAIN_CONTEXT_ALIAS, enumValue(
                 DomainContext.class, stringValue(tuple, DOMAIN_CONTEXT_ALIAS)
         ));

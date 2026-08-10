@@ -10,6 +10,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import type { QuizItem } from "@/lib/api";
 import { resolveQuizCorrectIndex } from "@/lib/quiz";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type DemoStep = "choose" | "input" | "note" | "pack-loading" | "results";
 
@@ -235,7 +236,7 @@ function DemoQuizQuestion({ item, index }: Readonly<{ item: QuizItem; index: num
   return (
     <Card className="space-y-3 p-4 sm:p-6">
       <CardTitle className="text-base">
-        {index + 1}. {item.question}
+        {index + 1}. {renderMathText(item.question)}
       </CardTitle>
       <QuizChoiceList
         questionKey={item.question}
@@ -247,7 +248,7 @@ function DemoQuizQuestion({ item, index }: Readonly<{ item: QuizItem; index: num
       />
       {revealed ? (
         <CardDescription className="text-sm">
-          <span className="font-medium text-foreground">Explanation:</span> {item.explanation}
+          <span className="font-medium text-foreground">Explanation:</span> {renderMathText(item.explanation)}
         </CardDescription>
       ) : null}
     </Card>

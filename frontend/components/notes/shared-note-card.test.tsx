@@ -63,6 +63,58 @@ describe("resolveCardExcerpt", () => {
 describe("SharedNoteCard", () => {
   const longNotePreview = "This note body is long enough to count as a real preview for the card.";
 
+  // A card states the note's identity (Subject + title) and its reach as a count. Names are not
+  // listed: beside the Subject badge they read as a second identity, and any truncated list drops
+  // names on alphabetical accident. The full list lives on Note Detail.
+  it("summarises several joined programs as a count instead of listing them", () => {
+    render(
+      <SharedNoteCard
+        title="Engineering Mathematics"
+        courseProgram="Engineering"
+        applicablePrograms={["Civil Engineering", "Electrical Engineering", "Mechanical Engineering"]}
+        subject="Algebra"
+        tags={[]}
+        contentPreview={longNotePreview}
+      />,
+    );
+
+    expect(screen.getByText("Applies to 3 programs")).toBeInTheDocument();
+    expect(screen.queryByText("Civil Engineering")).not.toBeInTheDocument();
+    expect(screen.queryByText("Mechanical Engineering")).not.toBeInTheDocument();
+    expect(screen.queryByText("Engineering")).not.toBeInTheDocument();
+  });
+
+  it("names the single program rather than counting it", () => {
+    render(
+      <SharedNoteCard
+        title="Fundamentals of Financial Accounting"
+        courseProgram="Engineering"
+        applicablePrograms={["Accountancy"]}
+        subject="Accounting"
+        tags={[]}
+        contentPreview={longNotePreview}
+      />,
+    );
+
+    expect(screen.getByText("Accountancy")).toBeInTheDocument();
+    expect(screen.queryByText(/Applies to/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to the legacy program when no joined programs are projected", () => {
+    render(
+      <SharedNoteCard
+        title="Software Foundations"
+        courseProgram="Software Engineering"
+        applicablePrograms={[]}
+        subject="Architecture"
+        tags={[]}
+        contentPreview={longNotePreview}
+      />,
+    );
+
+    expect(screen.getByText("Software Engineering")).toBeInTheDocument();
+  });
+
   it("renders the note preview without a Summary label when it wins the cascade", () => {
     render(
       <SharedNoteCard

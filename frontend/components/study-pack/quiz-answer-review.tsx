@@ -11,7 +11,7 @@ import { QuizIdentificationInput } from "@/components/study-pack/quiz-identifica
 import { QuizEnumerationInput } from "@/components/study-pack/quiz-enumeration-input";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
-import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/components/study-pack/quiz-working-solution";
+import { hasComputationalWorkingSolution, QuizWorkingSolution, renderMathText } from "@/components/study-pack/quiz-working-solution";
 import type { QuizItem } from "@/lib/api";
 import {
   computeConceptBreakdown,
@@ -68,7 +68,13 @@ export function QuizAnswerReview({
 
   const reviewItems = useMemo(() => {
     return quiz.map((item, originalIndex) => {
-      const displayedChoices = getDisplayedQuizChoices({ ...item, question: `${item.question}-${originalIndex}` });
+      // Seed the choice order on the question text ALONE, exactly as the live session pages do.
+      // Appending the index here made the review screen shuffle differently from the session the answer
+      // was given in, so a learner who picked B was told "Your Answer: D". Grading was never wrong -- it
+      // tracks canonicalIndex -- which is worse, not better: the product looked broken while behaving
+      // correctly. The index cannot be part of the seed because the session's active index and the
+      // original index are different numbers; the question text is the only key both contexts share.
+      const displayedChoices = getDisplayedQuizChoices(item);
       const selectedChoiceIndex = selectedChoices[originalIndex] ?? null;
       const selectedMultiChoiceIndices = selectedMultiChoices[originalIndex] ?? [];
       const selectedIdentificationAnswer = selectedIdentificationAnswers[originalIndex] ?? "";
@@ -376,7 +382,7 @@ export function QuizAnswerReview({
             />
           ) : (
             <QuizChoiceList
-              questionKey={`${currentItem.item.question}-${currentItem.originalIndex}`}
+              questionKey={currentItem.item.question}
               choices={currentItem.item.choices}
               correctIndex={currentItem.correctIndex}
               correctIndices={currentItem.correctIndices}
@@ -427,7 +433,9 @@ export function QuizAnswerReview({
                 <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground/80">
                   <p className="font-medium text-foreground">Explanation</p>
                   <p className="break-words leading-relaxed">
-                    {currentItem.item.explanation?.trim() || "No explanation available for this question."}
+                    {currentItem.item.explanation?.trim()
+                      ? renderMathText(currentItem.item.explanation.trim())
+                      : "No explanation available for this question."}
                   </p>
                   {hasComputationalWorkingSolution(currentItem.item) ? (
                     <QuizWorkingSolution

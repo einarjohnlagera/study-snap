@@ -3,8 +3,15 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
+import com.studysnap.backend.exception.DuplicateCourseProgramException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
+import com.studysnap.backend.exception.UnknownCourseProgramException;
 import com.studysnap.backend.exception.UserNotFoundException;
+import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
@@ -14,6 +21,8 @@ import org.springframework.stereotype.Service;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -25,6 +34,8 @@ public class NoteGenerationService {
     private final LlmStudyPackService llmStudyPackService;
     private final ContentModerationService contentModerationService;
     private final OnboardingGuardService onboardingGuardService;
+    private final StudyPackGenerationContextResolver generationContextResolver;
+    private final CourseProgramCatalogRepository courseProgramCatalogRepository;
 
     private static String firstNonBlank(String primary, String fallback) {
         return (primary != null && !primary.isBlank()) ? primary : fallback;
@@ -45,21 +56,73 @@ public class NoteGenerationService {
         noteGenerationUsageProtectionService.assertQuotaAvailable(userId, subscriptionService.resolvePlan(userId));
         String normalizedTopic = request.topic().trim();
         contentModerationService.validateOrThrow(normalizedTopic);
-        DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
-        String resolvedCourseProgram = CourseProgramNormalizationUtils.normalizeForStorage(
-                firstNonBlank(request.courseProgram(), user.getCourseProgram()));
         StudyPackGenerationContext context = resolvedContext == null
-                ? new StudyPackGenerationContext(
-                        user.getLearnerLevel(),
-                        resolvedCourseProgram,
-                        null,
-                        List.of(),
-                        domainContext,
-                        null
-                )
+                ? resolveAuthoringContext(request, user)
                 : resolvedContext;
         String generatedContent = llmStudyPackService.generateNoteFromTopic(normalizedTopic, context);
         noteGenerationUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         return new GenerateNoteFromTopicResponse(generatedContent);
+    }
+
+    private StudyPackGenerationContext resolveAuthoringContext(
+            GenerateNoteFromTopicRequest request,
+            UserEntity user
+    ) {
+        DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
+        if (isCurator(user)) {
+            Set<UUID> courseProgramIds = validateCuratedProgramIds(request.courseProgramIds());
+            if (courseProgramIds.size() > 1 && domainContext == null) {
+                throw new MultiProgramDomainContextRequiredException();
+            }
+            return generationContextResolver.resolveForBulkGeneration(
+                    user.getId(),
+                    List.copyOf(courseProgramIds),
+                    null,
+                    null,
+                    domainContext,
+                    null
+            );
+        }
+
+        String courseProgramText = CourseProgramNormalizationUtils.normalizeForStorage(
+                firstNonBlank(request.courseProgramText(), user.getCourseProgram()));
+        if (courseProgramText == null) {
+            throw new CourseProgramSelectionRequiredException();
+        }
+        return generationContextResolver.resolveForBulkGeneration(
+                user.getId(),
+                List.of(),
+                courseProgramText,
+                null,
+                domainContext,
+                null
+        );
+    }
+
+    private Set<UUID> validateCuratedProgramIds(List<UUID> requestedIds) {
+        if (requestedIds == null || requestedIds.isEmpty()) {
+            throw new CourseProgramSelectionRequiredException();
+        }
+        Set<UUID> uniqueIds = new LinkedHashSet<>(requestedIds);
+        if (uniqueIds.size() != requestedIds.size()) {
+            throw new DuplicateCourseProgramException();
+        }
+        if (courseProgramCatalogRepository.findExistingIds(uniqueIds).size() != uniqueIds.size()) {
+            throw new UnknownCourseProgramException();
+        }
+        return uniqueIds;
+    }
+
+    private boolean isCurator(UserEntity user) {
+        // Nobody curates during onboarding. The flow collects personal learning context and has no
+        // catalog picker at all, so a curator-role account reaching here mid-onboarding was asked for
+        // courseProgramIds that no onboarding screen can supply -- which made onboarding uncompletable
+        // for every ADMIN and for a TEACHER whose profile type was already persisted. This removes no
+        // authority: once onboarding is complete the account is a full curator again. Mirrors the
+        // exemption OnboardingGuardService already makes for mid-onboarding users.
+        if (user.getOnboardingCompletedAt() == null) {
+            return false;
+        }
+        return user.getRole() == UserRole.ADMIN || user.getProfileType() == ProfileType.TEACHER;
     }
 }
