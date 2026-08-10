@@ -947,6 +947,15 @@ Ratified 2026-07-31 (Company Redefinition Phase 4, considered and narrowed 2026-
 - `User.courseProgram` remains the profile-level default for new notes.
 - Notes may also store an optional note-level `courseProgram`, defaulted from the user's profile and editable per note.
 - For Study Pack generation the authoring domain resolves `notes.domainContext` -> **exactly one joined catalog program (`note_course_program`)** -> `notes.courseProgram` -> `users.courseProgram`, and the curriculum level resolves `notes.learnerLevel` -> `users.learnerLevel` -> `COLLEGE`. The level chain never reads `courseProgram`. **The join step is only consulted at exactly one row** (`v0.71.0`): a note applicable to several programs has no single authoring domain, so the chain falls through to the strings rather than picking one arbitrarily. It is not a legacy branch — it is how every learner-authored note resolves its domain. Program *lists* never reach a prompt.
+- **`notes.courseProgram` is unreadable — "shadowed" — under an exact condition, and any code gating on it must use that condition (`v0.71.1`, ratified in `ADR-001`):**
+
+  ```
+  shadowed = (joinRowCount == 1) || (domainContext != null)
+  ```
+
+  Discovery ignores the string whenever *any* join row exists (every library and public read is `EXISTS(join) OR (NOT EXISTS(join) AND legacy matches)`), and generation reads it only through `effectiveAuthoringDomain` — which returns the Domain Context label when set, and otherwise calls `resolveCourseProgram`, which returns the joined catalog name at exactly one row and falls through to the string at 0 or 2+. A copy of a curated note is shadowed on both paths by two independent mechanisms: the inherited Domain Context at 2+ programs, the joined name at exactly one. **Do not simplify this to `joinRowCount > 0`.** That form depends on the invariant *2+ rows implies a non-null Domain Context* holding on every write path, present and future; no code enforces it, and the predicate above is correct whether or not it holds.
+- **Never make the personal Course / Program field required on a shadowed note.** Requiring a value nothing can read is a live defect, not a validation. `NoteService.resolveRequestedCourseProgram` falls back to the owner's profile program and throws only when both are null; that residual throw is reachable from the inline editor **and** from `applySuggestions`, which sends `courseProgramText` from stored state through the same `PUT /notes/{id}`. Both close with the predicate above.
+- **A learner may be shown their note's Applicable Programs read-only, with provenance; a learner may never author them.** `ADR-001`'s *"No learner-facing Applicable Programs UI"* governs authoring **controls**, not provenance **display** (clarified 2026-08-10). This binds **every** surface that renders a learner's programs — Note Detail today, and library cards the moment the private list projection stops returning an empty `applicablePrograms` array.
 - Metadata hierarchy should stay:
   - `courseProgram` -> top-level track/domain
   - `subject` -> reusable academic topic
