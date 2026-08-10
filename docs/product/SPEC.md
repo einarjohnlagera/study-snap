@@ -492,12 +492,15 @@ Favicon requirements:
   - `/notes/{id}/edit` for Draft notes -> edit mode with `Save Changes`, `Cancel`, and `Generate`
   - `/notes/{id}/edit` for Study Pack Ready notes -> metadata edit mode with `Save Changes`, `Cancel`, and `Make a Copy`
 - Existing notes on `/notes/{id}/edit` must render `Edit Note` copy, not the create-note title/description.
-- Note Editor metadata fields are `title`, `courseProgram`, `subject`, `tags`, and `content`.
+> **Superseded in part by `docs/architecture/ADR-001-canonical-knowledge-architecture.md` (Accepted 2026-08-03) and by `v0.71.0` — read both before changing this block.** The single-axis "`courseProgram` is the top-level track" model below is exactly the defect ADR-001 exists to fix; metadata is now **five independent axes** (Subject, Domain Context, Note Learner Level, Applicable Programs, Target Audience). The editor no longer has one `courseProgram` field: curators send `courseProgramIds` (catalog ids, many, persisted to `note_course_program`) and learners send `courseProgramText` (free text, one, persisted to `notes.course_program`). **Do not restore the retired single-field model.**
+
+- Note Editor metadata fields are `title`, Course / Program(s), `subject`, `tags`, `domainContext`, `learnerLevel`, `targetAudience`, and `content`.
 - Metadata hierarchy should stay:
-  - `courseProgram` -> top-level academic track or domain
+  - Applicable Programs -> **where the note applies** (discovery only; never reaches a prompt)
+  - `domainContext` -> **how it is authored** (the sole LLM domain constraint)
   - `subject` -> reusable academic topic for grouping/filtering
   - `tags` -> fine-grained keywords
-- New notes default `courseProgram` from the user's profile, but it remains editable per note.
+- New **learner** notes default their personal Course / Program from the user's profile, editable per note. Curator notes default to no catalog selection and store `null` in `notes.course_program`.
 - Course / Program suggestions should come from curated defaults plus normalized saved values returned by `GET /api/course-programs?scope=mine`.
 - Course / Program autocomplete must filter suggestions in real time while the user types.
 - Matching should be case-insensitive, trim leading/trailing spaces before comparison, allow partial matches, and rank results as:
@@ -942,11 +945,10 @@ Users can:
   - example targets: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `Nursing`, `Criminal Law`
   - no normalized `subjects` table is required for the current version
 - Course / Program persistence and suggestions:
-  - `users.courseProgram` is the profile-level default and `notes.courseProgram` is the note-level persisted source of truth
-  - the current course/program catalog is derived from saved values, not from a separate `course_programs` table
-  - `GET /api/course-programs?scope=mine` returns normalized distinct course/program values from the authenticated user's notes plus their profile default
-  - `GET /api/course-programs?scope=public` returns normalized distinct course/program values from public notes
-  - users can still type a custom course/program and save it directly into `notes.courseProgram`
+  > **The "no separate table" clause below was retired by `v0.70.0` and `v0.71.0`.** A real `course_programs` catalog table exists (`V106`), and `note_course_program` (`V107`) makes applicability many-to-many. **Do not restore the derived-from-saved-values claim.** The vocabulary endpoints survive as a *fallback* half, not as the catalog: since `v0.71.0` they read join rows first and consult the legacy string only for notes that have none — a note with join rows must never publish its stale string into a filter chip that then returns zero notes.
+  - `users.courseProgram` is the profile-level default; `notes.courseProgram` holds a **learner's** personal free-text program, while a **curator's** applicable programs live in `note_course_program` as catalog ids
+  - `GET /api/course-programs?scope=mine` and `?scope=public` return catalog names from join rows, unioned with normalized legacy strings **only from notes carrying no join rows**
+  - learners can still type a custom course/program and save it directly into `notes.courseProgram`; curators pick from the catalog and cannot free-type
   - saved custom course/program values become future suggestions after the note is persisted
   - normalize saved course/program values for whitespace and dash formatting and reuse them case-insensitively when possible
 - Library and Public Library should share the same control order:

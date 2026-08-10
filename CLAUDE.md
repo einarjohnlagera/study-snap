@@ -142,6 +142,8 @@ Profile type (`ProfileType` enum: `STUDENT`, `BOARD_EXAM`, `TEACHER`, `PARENT`, 
 
 Teacher detection in services uses: `user.getProfileType() == ProfileType.TEACHER || user.getRole() == UserRole.ADMIN`
 
+**On note-authoring paths that gate on curator status, that check is preceded by an onboarding guard** (`v0.71.0`): `NoteService.isTeacherSelectableOwner` and `NoteGenerationService.isCurator` both return `false` when `onboardingCompletedAt == null`, *then* apply the role check. Nobody curates during onboarding — the flow has no catalog picker, so a curator-role account reaching a note-authoring path mid-onboarding was asked for `courseProgramIds` no onboarding screen can supply, which made onboarding uncompletable for every ADMIN account. This removes no authority; once onboarding completes the account is a full curator. Do not restore the bare role check on these paths. (`NoteBulkGenerationService` still uses the bare form — a recorded `v0.71.0` Known Limitation, not a pattern to copy.)
+
 `PARENT` and `PROFESSIONAL` exist as enum values with no feature implementation yet.
 
 ### Feature gating

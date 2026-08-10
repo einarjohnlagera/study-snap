@@ -46,7 +46,9 @@ Subject storage rule:
 
 Course / Program storage rule:
 
-- `users.course_program` is the profile-level default and `notes.course_program` is the note-level persisted source of truth for current authoring and discovery behavior.
+**Two representations coexist by design (`v0.71.0`), one per authoring mode.** A **learner** stores one personal free-text program in `notes.course_program`; a **curator** (TEACHER or ADMIN, post-onboarding) stores one-or-many catalog ids in `note_course_program` and leaves `notes.course_program` null. Neither is "the" source of truth — which one applies is decided by who authored the note. Copies inherit both.
+
+- `users.course_program` is the profile-level default; `notes.course_program` is the note-level persisted value **for learner-authored notes**.
 - `course_programs` is the curated program catalog; `program_families` holds architecture-level groupings such as `Engineering`.
 - `notes.course_program_id` and `users.course_program_id` are nullable references populated by the V106 audited-vocabulary backfill. Current note/user flows do not read them.
 - Distinct course/program suggestions are derived from persisted note values plus the authenticated user's saved profile value.
@@ -59,6 +61,11 @@ Program catalog fields:
 
 - `program_families`: `id`, unique `name`, `created_at`.
 - `course_programs`: `id`, unique `name`, nullable `program_family_id`, nullable `exam_goal_slug`, `created_at`.
+- `note_course_program` (`V107`): `id`, `note_id`, `course_program_id`, `created_at`. Unique on `(note_id, course_program_id)`; FK to `notes` is `ON DELETE CASCADE`, FK to `course_programs` is not. Indexed on both FK columns.
+- **`V107`'s 1:1 backfill inserted one row per note whose string matched the catalog exactly** (plus the `Bsed` -> `Education` alias) — for *every* note, learner-authored included. **`V108` deletes the learner-authored subset**, because a learner's personal free-text program must not be mechanically materialized into a catalog Applicable Program row: doing so silently turns a private label into a discovery fact the learner never asserted and cannot edit. `V108`'s predicate is the exact inverse of `V107`'s insert, restricted to non-curator owners. **Do not "restore" those rows.**
+- **Read semantics are join-first with a legacy-string fallback**: `EXISTS(join rows) OR (no join rows AND legacy string matches)`. Identical to pre-`v0.71.0` behavior at one row per note, and correct once a note carries several. `notes.course_program` therefore stays load-bearing on read paths; retiring the fallback is a separate, unscheduled decision.
+- **Facet counts sum above the note total** once a note carries several programs. That is correct per `ADR-001` and needs a UI affordance, not a fix.
+- **Applicable Programs never reach an LLM prompt.** The generation resolver consults the join only when a note has *exactly one* row; several rows mean there is no single authoring domain, so it falls through to the strings rather than picking arbitrarily.
 - Catalog seed values are deterministic curator data. They are never derived from `SELECT DISTINCT` over author-supplied strings.
 - V106 backfills FKs by exact string equality only, except for the one sanctioned literal alias `Bsed` -> `Education`. It never clears, normalizes, or rewrites a legacy `course_program` string.
 - Excluded levels, subjects, goals, families, and contested values retain their strings with null FKs.

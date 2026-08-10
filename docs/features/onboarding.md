@@ -119,9 +119,17 @@ predicate back to a bare role check.
 Step 3 cannot be reached with a blank `Course / Program`: `canContinueFromStepTwo` gates the only entry into it,
 draft hydration fills the field from the profile but never clears it, and the input renders only on Step 2.
 
-#### Practice-first Board Taker branch
+#### Practice-first branch
 
-After a Board Taker submits the required learner level and course/program, onboarding checks the
+> **`v0.71.0` slice 5 opened this branch to every profile type and put it behind an explicit intent choice.**
+> It was `BOARD_EXAM`-only, which made a qualifying Review Set unreachable for `STUDENT` (~27% of
+> profile-typed accounts) even when one existed. Eligibility is now
+> `draft.intent === "ready_made" && practiceFirstPlan !== null` — availability is resolved for all profile
+> types, and **the intent gate matters as much as availability**: a learner who chose "own notes" is never
+> shown the adopt screen just because a set happens to exist. Read the Intent Router section below first;
+> the paragraphs here describe the adopt screen the branch leads to, not who reaches it.
+
+After a learner submits the required learner level and course/program, onboarding checks the
 existing published Official Review Sets for that course/program. When the first match has both
 `itemCount > 0` and `readyCount > 0`, Steps 3–4 are replaced with a `Confirm & Practice` screen.
 It confirms the collected course/program (and reuses the optional exam-countdown presentation),
@@ -131,7 +139,9 @@ quiz — a brand-new learner should land somewhere oriented, not cold inside a q
 no note authoring and no AI generation.
 
 The check fails open: no qualifying set, a zero-ready set, or a lookup error continues to the
-normal five-step path. `STUDENT`, `TEACHER`, and `PROFESSIONAL` never enter this branch.
+normal five-step path. **The failure mode this protects against is telling a learner that content does not
+exist when it does** — so an *unknown* availability result renders no availability line at all, rather than a
+negative one.
 
 The header shows `Step 5 of 5` (full progress bar) on this screen, display-only — the underlying
 step-machine state stays at 3 so Back and transition logic are unaffected. This screen is the last
@@ -265,22 +275,21 @@ identically at `:774-777` on the practice-first path). If it fails — or the us
 — `learnerLevel` and `courseProgram` are permanently lost with no user-visible error, while
 `onboardingCompletedAt` is already set, so the user is never routed back to supply them again.
 
-Two further persistence facts this section omitted:
+**The three defects this section used to record as pending were fixed by `v0.71.0` slice 5, stage 2.** What follows is current behavior.
 
-- **`courseProgram` is not part of onboarding completion at all.** `CompleteOnboardingRequest` carries only
-  `profileType` and `examDate`. The program rides solely on the fire-and-forget call above.
-- **`POST /auth/onboarding` nulls `examDate` for any non-`BOARD_EXAM` profile type**, unconditionally
-  (`AuthService.java:383` with `resolveExamDate` at `:615-620`). Switching profile type therefore silently clears
-  a previously-set exam date. No test covers this.
+- **`profileType` persists at Step 1**, via `POST /auth/onboarding/profile-type`, not at Step 5.
+- **Learning context (`learnerLevel` + `courseProgram`) persists at Step 2**, through the narrow
+  `PUT /users/profile/learning-context`. This replaced a fire-and-forget write that could silently lose a
+  user's learner level and program. `CompleteOnboardingRequest` still carries only `profileType` and
+  `examDate` — correct now, because the program no longer rides on completion at all.
+- **`POST /auth/onboarding` no longer nulls `examDate` for non-`BOARD_EXAM` profile types.** It previously
+  wrote `resolveExamDate(request)` unconditionally, so completing onboarding as anything but an exam taker
+  destroyed a date the user had already given — and `ROADMAP.md`'s target-habit definition segments retention
+  on exactly that field, explicitly *not* on `profileType`. Now covered by tests.
 
-`profileType` is likewise persisted **only at Step 5**, not at Step 1 — which is why `OnboardingGuardService`
-deliberately exempts users mid-onboarding (see Server-Side Boundary below; do not narrow that guard without
-changing this ordering first).
-
-These are recorded as defects, not as intended behavior. The fix is scoped as `v0.71.0` slice 5 —
-`docs/claude-plans/onboarding-activation-and-intent-router.md` §4, which moves `profileType` to Step 1 and
-learning context to Step 2 behind a new narrow `PUT /users/profile/learning-context`. **This section describes
-current behavior and must be rewritten when that ships.**
+**`OnboardingGuardService`'s mid-onboarding exemption still stands and is now load-bearing for a second
+reason** — the curator predicates (`NoteService.isTeacherSelectableOwner`, `NoteGenerationService.isCurator`)
+key on `onboardingCompletedAt` too. Do not narrow it. See Server-Side Boundary below.
 
 The practice-first branch uses the same completion persistence from its `Start this plan` action,
 then routes to the adopted Review Set's detail page; it intentionally does not render Step 5 for
@@ -348,7 +357,7 @@ Profile type is required before these authenticated mutations can create or gene
 
 The backend throws `ProfileSetupRequiredException` with HTTP `403`, code `ONBOARDING_REQUIRED`, and action `COMPLETE_PROFILE_TYPE`.
 
-The guard fires only for the legacy **completed-but-null** cohort: `profileType == null` **and** `onboardingCompletedAt != null`. Users still mid-onboarding (`onboardingCompletedAt == null`) are exempt because onboarding persists `profileType` only at its final step while generating content earlier; copy-on-signup is likewise exempt because it runs before onboarding completes. Gating on `profileType == null` alone would 403 every new user's first generation and silently lose copy-on-signup intent — do not narrow the condition back to that.
+The guard fires only for the legacy **completed-but-null** cohort: `profileType == null` **and** `onboardingCompletedAt != null`. Users still mid-onboarding (`onboardingCompletedAt == null`) are exempt; copy-on-signup is likewise exempt because it runs before onboarding completes. **The original reason for the mid-onboarding exemption expired in `v0.71.0`** — `profileType` now persists at Step 1, not at the final step — but the exemption is *more* load-bearing than before, for a new reason: the curator predicates key on `onboardingCompletedAt` as well, so narrowing this guard would re-open the ADMIN-uncompletable-onboarding defect from the other direction. Gating on `profileType == null` alone would 403 every new user's first generation and silently lose copy-on-signup intent — do not narrow the condition back to that.
 
 Do not gate recovery paths:
 
@@ -359,6 +368,18 @@ Do not gate recovery paths:
 - logout/auth/session endpoints
 - product-onboarding
 - read-only endpoints
+
+## Analytics
+
+Twenty `ONBOARDING_V2_*` events, all declared in the `AnalyticsEventType` Java enum before being fired (per `CLAUDE.md`). The emitted set and the enum currently match exactly; verify that when adding one.
+
+Slice 5 added four: `ONBOARDING_V2_INTENT_SELECTED`, `ONBOARDING_V2_INTENT_UNSUPPORTED_VIEWED`, `ONBOARDING_V2_PRACTICE_FIRST_ELIGIBLE`, and `ONBOARDING_V2_PRACTICE_FIRST_PLAN_ADOPTED`. The two practice-first events dedupe per collection id through a ref, so a re-render or a StrictMode double-mount cannot double-count them.
+
+**`ONBOARDING_V2_COMPLETED` has three emit sites with inconsistent payloads — do not assume the router fields are always present.** All three carry `profile_type`, `learner_level`, `course_program`, and `time_elapsed_seconds`. Only the **fallback exit** (`completeOnboardingAndLeave`) also carries `intent` and `destination`; the two *success* paths — Step 5 create completion and practice-first adopt — carry neither, and the adopt path additionally sends `method: null`.
+
+The practical consequence: **"did the user reach the first experience they selected?" is not answerable from a single event on the paths that matter most.** `intent` remains inferable from `method` there; `destination` does not. Completing the field on all three exits is a recorded `v0.71.1` candidate — it was deliberately not widened at signoff rather than quietly patched.
+
+**Completion analytics fire in a `finally` block on every path**, including a failed `completeOnboarding`. Anything keying on the event (the Diagnostic Read does) is therefore unaffected by the deferred-completion gap described under Persistence, which leaves `onboardingCompletedAt` null.
 
 ## Product-Onboarding Relationship
 
