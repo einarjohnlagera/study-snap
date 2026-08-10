@@ -1,5 +1,42 @@
 # RELEASES.md - NoteLib
 
+## v0.71.1 - Applicable Programs Follow-ups
+
+**Status: In Progress**
+
+Theme: clear what `v0.71.0` deferred rather than fixed. Release B shipped the many-to-many applicability model and signed off with four architectural findings marked *needs a decision, not a patch* plus twenty Medium/Low pressure-test findings carried as `v0.71.1` candidates. This release makes those decisions and lands the patches, so the join-first model stops carrying a backlog of surfaces that half-know about it.
+
+**This is a patch release, not Release C.** Nothing here extends `ADR-001`'s scope. The only architectural output is a decision on how curator-authored Applicable Programs and a learner's own note interact — a question `v0.71.0` opened and did not close, whose answer belongs in `ADR-001` rather than in a service.
+
+### Planned Scope
+
+**Group 1 — the four deferred architectural findings** (`docs/claude-findings/v0.71.0-signoff-pressure-test.md`). Each needs its decision made when its branch is cut, per the kickoff ruling; the decision is recorded in `ADR-001` or the relevant feature doc in the same PR as the fix.
+
+- **`NoteApplicableProgramsService.replace` can recreate the `V108` class post-deploy (backend).** An admin may set catalog programs on any learner's note, and a learner update never clears them — the same permanent override `V108` deleted, reachable again by ordinary admin action. **Open question:** whether the ratified *representation authority* rule ("a learner's personal free-text Course / Program must not be mechanically materialized into a catalog Applicable Program row") should also constrain a *deliberate* admin write, or whether provenance needs recording so the two cases can be told apart. `V108` deliberately declined a `source` column; that decision is in scope to revisit here, not to assume.
+- **A learner sees inherited programs on their own note that they cannot edit (frontend + backend).** The applicable-programs fetch gates on note id rather than curator status, so a learner on a copied curated note is shown programs, is forced to fill a required Course / Program, and that value then has no visible effect — discovery still reads the inherited rows. **Touches the ratified "do not expose Applicable Programs to learners" ruling, so this needs a product answer before code:** hide, show read-only with an explanation of whose they are, or make the learner's own value actually govern their copy.
+- **`NoteBulkGenerationService` still uses the bare curator predicate (backend).** The two note-authoring paths corrected in `adfa797f` guard on `onboardingCompletedAt` first; this third one does not. Not UI-reachable — `requireAuthenticatedOnboardedUser` redirects mid-onboarding users away from bulk generate — so this is consistency work on a rule `CLAUDE.md` states as a rule, not a live activation bug.
+- **AI-suggestion apply dead-ends on a copy of a curated note (frontend).** For accounts with a null profile program it sends the stored value rather than a form field, so there is no field on that surface to fix it. Narrow population; likely the cheapest of the four.
+
+**Group 2 — carried Medium/Low findings, triaged.** All twenty were re-verified against current code on 2026-08-07; full `file:line` detail is in `docs/claude-findings/v0.71.0-pre-signoff-pressure-test.md`. Taken here:
+
+- **Contracts that lie about themselves.** M2 (`GET /notes` always returns `applicablePrograms: []` — the projection does not select the field its DTO advertises; no consumer reads it today, which is exactly why it will be trusted wrongly later), M1 (no `@JsonAlias` on the `courseProgram` → `courseProgramIds`/`courseProgramText` rename, so a learner on a stale bundle reads their program as null), M10 (the pre-checkout draft save swallows its exception, hiding the Domain Context instruction behind a generic message).
+- **Consumers still blind to the join.** M3 — `PostSessionNextStepService` skips the next-step recommendation for a curated note, `PublicProfileService` renders no program on profile cards, `DashboardService` degrades to null. M4 — Interview Practice's source picker offers the whole ready library instead of program-matched notes when the legacy string is absent.
+- **Copy and control defects.** M11 (the facet explainer sits on a dropdown that renders no counts, while the Subjects facet that *does* render counts can never exceed the total), L12 (cards and Note Detail phrase program reach differently), L1 (`CourseProgramCombobox` discards a caller's `placeholder`), L3 (`public-profile-page-client.tsx` is the only `SharedNoteCard` call site omitting `applicablePrograms`).
+- **Query-path hygiene, if the group-1 work leaves room.** L4 (no index on `notes(course_program)`, and the public slug fallback wraps it in `regexp_replace`), L5 (`array_agg(... order by name)` is the only un-gated dialect call). **Not taken:** L6 is not UI-reachable and L7 matches 0 notes per the project's own production read, so neither earns a change; **L8 — the two dead `V106` FK columns — is not a cleanup this release may do**, because the only obvious fix is a `DROP COLUMN`, which is exactly what `v0.71.0` declined on irreversibility grounds and what this section's own "migrations stay additive" rule forbids. It is recorded, not scheduled.
+
+Anti-drift — locked, and **not** re-litigated by anything in this release:
+
+- **No new axes, no ADR scope change.** The five `ADR-001` axes stand. Applicable Programs remains discovery-only and never reaches a prompt; Domain Context remains the sole LLM domain constraint.
+- **The join-first read with legacy-string fallback stays.** `v0.71.0` recorded retiring `notes.course_program` as *"a separate, unscheduled decision."* It stays unscheduled. Nothing here makes the join the only read.
+- **The four `2026-08-05` Program Family rulings stand** — the catalog represents valid applicability not curriculum coverage, families stay dumb, expansion fills all members, expansion is never subject-conditioned. No catalog seed migration ships here either.
+- **C8 and C9 stay out of scope and stay carried.** Both are onboarding-vocabulary findings whose fixes belong to the Onboarding Intent Router work (`docs/claude-plans/onboarding-activation-and-intent-router.md` §3 and §1.4), not to the program axis. So do **M13**, **M15** and **M16**, which are the same vocabulary and guard question in different clothes. "Known Limitations cleanup" must not read as having absorbed them — if this release signs off without them, they are re-recorded, not closed.
+- **M12 and M9 stay decisions, and neither is forced here.** M12 — whether `courseProgram` is guaranteed non-null after onboarding, and therefore whether `effectiveAuthoringDomain` should have a final fallback the way `effectiveCurriculumLevel` defaults to `COLLEGE` — is an ADR-level question, and answering it inside a patch release is how an architecture decision gets made by accident. M9 — a stale cached `profileType`/`role` in localStorage making the client send curator-shaped payloads — needs a reconciliation strategy, not a patch. Both may be *answered* here; neither may be patched around.
+- **Migrations stay additive.** If group 1 concludes a provenance column is needed, it is a new `V1NN`, never an edit to `V107` or `V108`.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.71.0 - Applicable Programs
 
 **Status: Released** (signed off 2026-08-10)

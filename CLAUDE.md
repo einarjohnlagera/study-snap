@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.71.0 — Applicable Programs** (In Progress, base branch `releases/v0.71.0`). Opens Release B of `docs/architecture/ADR-001-canonical-knowledge-architecture.md`; Release A closed with `v0.70.0` (Released 2026-08-04). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
+Current version: **v0.71.1 — Applicable Programs Follow-ups** (In Progress, base branch `releases/v0.71.1`). A patch release clearing findings `v0.71.0` deferred rather than fixed; previous: **v0.71.0 — Applicable Programs** (Released 2026-08-10), which opened Release B of `docs/architecture/ADR-001-canonical-knowledge-architecture.md`. Release A closed with `v0.70.0` (Released 2026-08-04). Full shipped scope is in `RELEASES.md`; forward-looking scope and candidates are in `docs/product/ROADMAP.md`.
 
 ## Source-of-truth docs (read before implementing anything)
 
@@ -223,5 +223,5 @@ A typical isolated bug fix needs neither — direct verification or a single `ad
 5. Update documentation baseline and version reference in `AGENTS.md`.
 6. Update release baseline line in `README.md`.
 7. Write release notes to `docs/releases/v{X.Y.Z}.md` for the version just closed.
-8. Scan `ROADMAP.md`'s Backlog Index: bump `Last reviewed`, check whether any `Gate` condition became true, and verify every `docs/claude-prompt/*-out/` planning directory still has a row — this is the only enforced checkpoint against a large planning effort (a multi-document Fable session, a paused exploration) silently going unindexed across release cycles.
+8. Scan `ROADMAP.md`'s Backlog Index: bump `Last reviewed`, check whether any `Gate` condition became true, and verify every `docs/claude-prompt/*-out/` planning directory **and every `docs/claude-plans/` file** still has a row — this is the only enforced checkpoint against a large planning effort (a multi-document Fable session, a paused exploration) silently going unindexed across release cycles. The `docs/claude-plans/` half was added 2026-08-10 after the `v0.71.1` kickoff found four files there unindexed; the Backlog Index intro carries the narrow *release artifact* exemption that covers finished one-off consultation prompts and sizing queries. Check both directories — the invariant always said "or session-plan file," but the checklist only ever named one of them.
 9. Scan the Backlog Index for `[CHECKPOINT — due YYYY-MM-DD]` rows past their due date (see "Gate types" in the Backlog Index intro) — a checkpoint that's overdue and unactioned is the same silent-drift risk step 8 guards against, just for vision-driven work shipped ahead of evidence instead of unindexed planning docs.

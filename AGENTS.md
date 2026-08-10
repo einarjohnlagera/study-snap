@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.71.0 - Applicable Programs` (In Progress); previous: `v0.70.0 - Canonical Knowledge Completion` (Released)
+- `v0.71.1 - Applicable Programs Follow-ups` (In Progress); previous: `v0.71.0 - Applicable Programs` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
