@@ -2,7 +2,7 @@
 
 ## v0.71.0 - Applicable Programs
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-08-10)
 
 Theme: a canonical note stops belonging to one program. `note_course_program` makes applicability a many-to-many fact, so an Algebra note authored once for Engineering Mathematics can surface under every engineering program that needs it — which is the payoff Release A built the foundations for.
 
@@ -100,7 +100,7 @@ Also carried: **the deferred-completion marker is never retried.** Nothing re-PO
 - **The two `v0.70.0` Known Limitations**, both documented rather than fixed: the Challenge bank orphaning on a learner-level correction (including the write path whose duplicate-key failure surfaces at commit, outside its own catch, contradicting `docs/features/challenge-quiz.md`'s best-effort claim), and the null-by-null pool/bank cohort (40 pools, 15 bank rows). Each now has a ROADMAP Backlog Index row.
 - **Regeneration is not structure-preserving** — observed during R4, logged with its own Backlog Index row.
 
-### Pre-signoff pressure test — run 2026-08-06, ALL FINDINGS RESOLVED
+### Pre-signoff pressure test — run 2026-08-06, ALL FINDINGS DISPOSITIONED
 
 The full pressure test required by `CLAUDE.md` ran against the whole release (112 files, 17 non-merge commits).
 **Full findings: `docs/claude-findings/v0.71.0-pre-signoff-pressure-test.md`.** Every finding below is now
