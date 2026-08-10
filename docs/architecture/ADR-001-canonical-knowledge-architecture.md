@@ -153,6 +153,38 @@ The canonical shapes:
 - **Zero affected users strengthens the case for prevention rather than weakening it.** It is not a reason to deploy a deterministic divergence mechanism and monitor the resulting harm.
 - **Any future backfill or bulk process is bound by this rule**, not just `V107`. No runtime path currently derives join rows from the personal string — all writes are curator-authored or copy-inherited — and that must stay true.
 
+### "No learner-facing Applicable Programs UI" governs authoring, not provenance display
+
+**Ratified 2026-08-10**, scoped into `v0.71.1`, clarifying the first clause of the Consequences bullet above. It is a clarification of what that rule always meant, not a reversal — but it was genuinely ambiguous, and the ambiguity was blocking a fix.
+
+> **A learner may be shown the Applicable Programs their note carries, read-only, with their provenance. A learner may never author, add, remove, or edit them.**
+
+**Why the question arose.** The two rulings above are each correct and jointly produce a shape neither anticipated. The canonical-shapes table defines a curated note copied by a learner as carrying **both** representations — `notes.course_program` "as copied" plus inherited join rows — while *Read semantics are identical for all three* makes the join rows win whenever they exist. On that shape the string is therefore **unreadable**, and the note-authoring surfaces were still presenting it to the learner as a required field. The learner was compelled to fill a field that nothing reads, on a note filed under programs they were shown but could not explain.
+
+It is worth stating plainly that this was an *interaction* defect, not a mistake in either ruling. Copy inheritance is right. Ownership-blind read semantics are right. Their conjunction was not examined.
+
+**The shadowing predicate — use this, not "the note has join rows."**
+
+```
+shadowed = (joinRowCount == 1) || (domainContext != null)
+```
+
+This is the exact condition under which `notes.course_program` cannot be read on any path, derived from the two resolvers rather than inferred:
+
+- **Discovery** ignores the string whenever *any* join row exists — every library and public read is `EXISTS(join rows) OR (NOT EXISTS(join rows) AND legacy string matches)`.
+- **Generation** reads the string only through `effectiveAuthoringDomain`, which returns the Domain Context label when one is set, and otherwise calls `resolveCourseProgram` — which returns the joined catalog name at **exactly one** row and falls through to the string at 0 or 2+.
+
+So a copy of a curated note is shadowed on both paths, by two independent mechanisms: at 2+ programs the inherited Domain Context wins (curated multi-program notes are *required* to carry one, and `copyNote` inherits it); at exactly one program the joined catalog name wins. **Do not simplify the predicate to "has join rows."** That would rest on the invariant *2+ rows ⟹ Domain Context non-null* holding across every write path, present and future. The predicate above is correct whether or not that invariant holds, and a fix that depends on an invariant nobody enforces is a fix waiting to rot.
+
+**Consequences:**
+
+- **Permitted:** read-only display of a note's Applicable Programs to its learner owner, naming their provenance (inherited from the note that was copied). Withholding this was the worse option — it leaves the learner unable to explain why their own note is filed where it is.
+- **Still forbidden, unchanged:** any learner-facing control that adds, removes, or edits Applicable Programs; any path that derives a join row from a learner's personal string; the `source` provenance column; learner-save synchronization.
+- **The personal Course / Program field must not be required on a shadowed note.** Requiring a value nothing can read is the defect this ruling exists to close. `NoteService.resolveRequestedCourseProgram` already falls back to the owner's profile program and throws only when both are null — that residual throw is the same defect on the AI-suggestion surface, and closes with the same predicate.
+- **This ruling binds every surface that renders a learner's Applicable Programs, not just the one that prompted it.** Note Detail is the only such surface today because the private list projection returns an empty array; the moment that projection is corrected, library cards become a second surface and inherit this rule with its provenance copy.
+
+**Deliberately left open — the overlapping-representation class itself.** Two options would close it outright rather than patching its symptom: **not inheriting join rows on copy** (a learner's copy becomes a personal-string note), and **letting a learner's own value clear the inherited rows on their copy**. Both amend ratified text — the canonical-shapes table and the learner-save-synchronization rejection respectively — so neither is a patch-release decision, and both are deferred with a Backlog Index row rather than folded in. **The sharpest evidence for eventually taking one of them:** a learner can flip their copy to `PUBLIC`, and public discovery is join-first, so inherited curator rows can drive *public* shelves for a note the curator never published. Default-private is not stays-private.
+
 ### Programs and Review Sets answer different questions
 
 **Ratified 2026-08-05.** The two surfaces have distinct responsibilities and must not be collapsed:
