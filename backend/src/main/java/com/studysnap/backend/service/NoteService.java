@@ -1174,7 +1174,11 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<String> listMineCoursePrograms(UUID ownerUserId) {
-        List<String> values = new java.util.ArrayList<>(noteRepository.findCourseProgramValuesByOwnerUserId(ownerUserId));
+        // Same join guard the public list already applies (C2): a note carrying join rows must not also
+        // offer its stale personal string as a suggestion. Only the public half was fixed at the time.
+        List<String> values = new java.util.ArrayList<>(
+                noteCourseProgramRepository.findLegacyCourseProgramValuesByOwnerUserId(ownerUserId)
+        );
         values.addAll(noteCourseProgramRepository.findNamesByOwnerUserId(ownerUserId));
         userRepository.findById(ownerUserId)
                 .map(UserEntity::getCourseProgram)
