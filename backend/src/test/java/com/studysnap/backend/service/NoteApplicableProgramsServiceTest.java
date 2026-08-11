@@ -34,6 +34,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -106,23 +108,75 @@ class NoteApplicableProgramsServiceTest {
     }
 
     @Test
-    void adminCanReplaceProgramsOnAnotherUsersNote() {
+    void adminCannotReplaceProgramsOnAnotherUsersNote() {
         UUID adminId = UUID.randomUUID();
         NoteEntity note = note(UUID.randomUUID(), UUID.randomUUID());
+        UUID programId = UUID.randomUUID();
+        authorize(note, user(adminId, UserRole.ADMIN, ProfileType.STUDENT));
+        String noteId = note.getId().toString();
+        List<UUID> requestedIds = List.of(programId);
+
+        assertThatThrownBy(() -> service.replace(noteId, requestedIds, adminId))
+                .isInstanceOf(NoteNotFoundException.class);
+
+        verify(noteCourseProgramRepository, never()).replace(any(), any());
+    }
+
+    @Test
+    void adminCanReplaceProgramsOnOwnedNote() {
+        UUID adminId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), adminId);
         UUID programId = UUID.randomUUID();
         authorize(note, user(adminId, UserRole.ADMIN, ProfileType.STUDENT));
         when(courseProgramCatalogRepository.findExistingIds(Set.of(programId))).thenReturn(List.of(programId));
         when(noteCourseProgramRepository.findByNoteId(note.getId()))
                 .thenReturn(List.of(new ApplicableProgramResponse(programId, "Pharmacy")));
 
-        List<ApplicableProgramResponse> result = service.replace(
-                note.getId().toString(),
-                List.of(programId),
-                adminId
-        );
+        List<ApplicableProgramResponse> result = service.replace(note.getId().toString(), List.of(programId), adminId);
 
         assertThat(result).extracting(ApplicableProgramResponse::id).containsExactly(programId);
         verify(noteCourseProgramRepository).replace(note.getId(), new java.util.LinkedHashSet<>(List.of(programId)));
+    }
+
+    @Test
+    void teacherOwnerCanReplacePrograms() {
+        UUID teacherId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), teacherId);
+        UUID programId = UUID.randomUUID();
+        authorize(note, user(teacherId, UserRole.USER, ProfileType.TEACHER));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(programId))).thenReturn(List.of(programId));
+        when(noteCourseProgramRepository.findByNoteId(note.getId()))
+                .thenReturn(List.of(new ApplicableProgramResponse(programId, "Nursing")));
+
+        List<ApplicableProgramResponse> result = service.replace(note.getId().toString(), List.of(programId), teacherId);
+
+        assertThat(result).extracting(ApplicableProgramResponse::id).containsExactly(programId);
+    }
+
+    @Test
+    void teacherCannotReplaceProgramsOnAnotherTeachersNote() {
+        UUID teacherId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), UUID.randomUUID());
+        UUID programId = UUID.randomUUID();
+        authorize(note, user(teacherId, UserRole.USER, ProfileType.TEACHER));
+        String noteId = note.getId().toString();
+        List<UUID> requestedIds = List.of(programId);
+
+        assertThatThrownBy(() -> service.replace(noteId, requestedIds, teacherId))
+                .isInstanceOf(NoteNotFoundException.class);
+    }
+
+    @Test
+    void learnerOwnerCannotReplacePrograms() {
+        UUID learnerId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), learnerId);
+        UUID programId = UUID.randomUUID();
+        authorize(note, user(learnerId, UserRole.USER, ProfileType.STUDENT));
+        String noteId = note.getId().toString();
+        List<UUID> requestedIds = List.of(programId);
+
+        assertThatThrownBy(() -> service.replace(noteId, requestedIds, learnerId))
+                .isInstanceOf(NoteNotFoundException.class);
     }
 
     @Test
@@ -136,6 +190,32 @@ class NoteApplicableProgramsServiceTest {
 
         assertThat(result.programs()).isEmpty();
         assertThat(result.courseProgramShadowed()).isFalse();
+    }
+
+    @Test
+    void adminCanReadAnotherUsersApplicablePrograms() {
+        UUID adminId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), UUID.randomUUID());
+        ApplicableProgramResponse program = new ApplicableProgramResponse(UUID.randomUUID(), "Nursing");
+        authorize(note, user(adminId, UserRole.ADMIN, ProfileType.STUDENT));
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(program));
+
+        NoteApplicableProgramsResponse result = service.get(note.getId().toString(), adminId);
+
+        assertThat(result.programs()).containsExactly(program);
+    }
+
+    @Test
+    void learnerOwnerCanReadOwnApplicablePrograms() {
+        UUID learnerId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), learnerId);
+        ApplicableProgramResponse program = new ApplicableProgramResponse(UUID.randomUUID(), "Nursing");
+        authorize(note, user(learnerId, UserRole.USER, ProfileType.STUDENT));
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(program));
+
+        NoteApplicableProgramsResponse result = service.get(note.getId().toString(), learnerId);
+
+        assertThat(result.programs()).containsExactly(program);
     }
 
     @Test
@@ -197,30 +277,47 @@ class NoteApplicableProgramsServiceTest {
     }
 
     @Test
-    void adminPagePaginatesAndLoadsProgramsForThePageInOneQuery() {
-        UUID ownerId = UUID.randomUUID();
-        NoteEntity note = note(UUID.randomUUID(), ownerId);
+    void adminPagePaginatesOwnedNotesInUpdatedAtDescendingOrderAndLoadsProgramsInOneQuery() {
+        UUID adminId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), adminId);
         note.setTitle("Algebra");
         note.setCourseProgram("Civil Engineering");
-        UserEntity owner = user(ownerId, UserRole.USER, ProfileType.TEACHER);
+        user(adminId, UserRole.ADMIN, ProfileType.STUDENT);
         ApplicableProgramResponse program = new ApplicableProgramResponse(UUID.randomUUID(), "Civil Engineering");
-        when(noteRepository.findAll(any(Pageable.class)))
+        when(noteRepository.findByOwnerUserId(eq(adminId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(note), org.springframework.data.domain.PageRequest.of(1, 1), 2));
         when(noteCourseProgramRepository.findByNoteIds(List.of(note.getId())))
                 .thenReturn(Map.of(note.getId(), List.of(program)));
-        when(userRepository.findAllById(Set.of(ownerId))).thenReturn(List.of(owner));
 
-        AdminNoteApplicableProgramsPageResponse result = service.getAdminPage(1, 1);
+        AdminNoteApplicableProgramsPageResponse result = service.getAdminPage(1, 1, adminId);
 
         assertThat(result.page()).isEqualTo(1);
         assertThat(result.size()).isEqualTo(1);
         assertThat(result.totalElements()).isEqualTo(2);
         assertThat(result.items()).singleElement().satisfies(item -> {
             assertThat(item.noteId()).isEqualTo(note.getId());
-            assertThat(item.ownerEmail()).isEqualTo(owner.getEmail());
             assertThat(item.applicablePrograms()).containsExactly(program);
         });
+        verify(noteRepository).findByOwnerUserId(eq(adminId), argThat(pageable ->
+                pageable.getPageNumber() == 1
+                        && pageable.getPageSize() == 1
+                        && pageable.getSort().getOrderFor("updatedAt") != null
+                        && pageable.getSort().getOrderFor("updatedAt").isDescending()
+        ));
         verify(noteCourseProgramRepository).findByNoteIds(List.of(note.getId()));
+    }
+
+    @Test
+    void adminPageReturnsAnEmptyPageWhenRequesterOwnsNoNotes() {
+        UUID adminId = UUID.randomUUID();
+        when(noteRepository.findByOwnerUserId(eq(adminId), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(0, 25), 0));
+
+        AdminNoteApplicableProgramsPageResponse result = service.getAdminPage(0, 25, adminId);
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.totalElements()).isZero();
+        verify(noteCourseProgramRepository).findByNoteIds(List.of());
     }
 
     private void authorize(NoteEntity note, UserEntity requester) {

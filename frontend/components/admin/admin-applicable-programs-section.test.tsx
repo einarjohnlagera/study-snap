@@ -28,7 +28,6 @@ describe("AdminApplicableProgramsSection", () => {
       items: [{
         noteId: "note-1",
         title: "Engineering Algebra",
-        ownerEmail: "teacher@example.com",
         courseProgram: "Civil Engineering",
         // Multi-program saves require a Domain Context, so the default fixture carries one -- without it
         // every multi-select case below would be an illegal save that the backend rejects.
@@ -48,6 +47,28 @@ describe("AdminApplicableProgramsSection", () => {
     expect(getAdminNoteApplicablePrograms).toHaveBeenCalledWith(0, 25);
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await waitFor(() => expect(getAdminNoteApplicablePrograms).toHaveBeenCalledWith(1, 25));
+  });
+
+  it("renders only note metadata columns because every listed note belongs to the viewer", async () => {
+    render(<AdminApplicableProgramsSection />);
+
+    expect(await screen.findByText("Engineering Algebra")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Owner" })).not.toBeInTheDocument();
+    expect(screen.queryByText("teacher@example.com")).not.toBeInTheDocument();
+    expect(screen.getByText(/your canonical notes/)).toBeInTheDocument();
+  });
+
+  it("shows an owned-note empty state when the requesting admin has no notes", async () => {
+    (getAdminNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      items: [],
+      page: 0,
+      size: 25,
+      totalElements: 0,
+    });
+
+    render(<AdminApplicableProgramsSection />);
+
+    expect(await screen.findByText("No owned notes found.")).toBeInTheDocument();
   });
 
   it("reconciles the full selected set and shows the persisted result", async () => {
@@ -97,7 +118,6 @@ describe("AdminApplicableProgramsSection", () => {
       items: [{
         noteId: "note-1",
         title: "Engineering Algebra",
-        ownerEmail: "teacher@example.com",
         courseProgram: "Civil Engineering",
         domainContext: null,
         applicablePrograms: [{ id: "program-a", name: "Civil Engineering" }],
