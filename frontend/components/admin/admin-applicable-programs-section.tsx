@@ -214,6 +214,8 @@ export function AdminApplicableProgramsSection() {
           catalog={catalog}
           selectedIds={selectedIds}
           onChange={setSelectedIds}
+          canCreateCatalogProgram
+          onCatalogProgramCreated={(program) => setCatalog((current) => [...current, program])}
           disabled={saving}
         />
         {saveFailure ? <p className="text-sm text-red-600 dark:text-red-400">{saveFailure}</p> : null}

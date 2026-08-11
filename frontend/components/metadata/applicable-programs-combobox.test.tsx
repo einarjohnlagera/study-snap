@@ -1,5 +1,22 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ApplicableProgramsCombobox } from "./applicable-programs-combobox";
+import { createCourseProgram, findSimilarCoursePrograms } from "@/lib/api";
+
+jest.mock("@/lib/api", () => ({
+  ApiRequestError: class ApiRequestError extends Error {
+    code: string | null;
+    details: string | null;
+    status: number;
+    constructor(message: string, options: { code?: string | null; details?: string | null; status: number }) {
+      super(message);
+      this.code = options.code ?? null;
+      this.details = options.details ?? null;
+      this.status = options.status;
+    }
+  },
+  createCourseProgram: jest.fn(),
+  findSimilarCoursePrograms: jest.fn(),
+}));
 
 const catalog = [
   { id: "program-a", name: "Civil Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" },
@@ -13,6 +30,11 @@ const familyCatalog = [
 ];
 
 describe("ApplicableProgramsCombobox", () => {
+  beforeEach(() => {
+    (createCourseProgram as jest.Mock).mockReset();
+    (findSimilarCoursePrograms as jest.Mock).mockReset();
+    (findSimilarCoursePrograms as jest.Mock).mockResolvedValue([]);
+  });
   it("selects only catalog rows and removes selected programs", () => {
     const onChange = jest.fn();
     const { rerender } = render(
@@ -173,5 +195,88 @@ describe("ApplicableProgramsCombobox", () => {
     expect(screen.queryByLabelText("Program family shortcuts")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows catalog creation only to an admin curator when typed text has no exact match", async () => {
+    const { rerender } = render(
+      <ApplicableProgramsCombobox id="no-create" catalog={catalog} selectedIds={[]} onChange={jest.fn()} />,
+    );
+    fireEvent.focus(screen.getByLabelText("Add a course or program"));
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Chemical Engineering" } });
+    expect(screen.queryByRole("button", { name: /Add “Chemical Engineering” to the catalog/ })).not.toBeInTheDocument();
+
+    rerender(
+      <ApplicableProgramsCombobox id="can-create" catalog={catalog} selectedIds={[]} onChange={jest.fn()} canCreateCatalogProgram />,
+    );
+    fireEvent.focus(screen.getByLabelText("Add a course or program"));
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Chemical Engineering" } });
+    expect(await screen.findByRole("button", { name: /Add “Chemical Engineering” to the catalog/ })).toBeInTheDocument();
+  });
+
+  it("renders near matches before the explicit create action", async () => {
+    (findSimilarCoursePrograms as jest.Mock).mockResolvedValue([catalog[0]]);
+    render(<ApplicableProgramsCombobox id="near-match" catalog={catalog} selectedIds={[]} onChange={jest.fn()} canCreateCatalogProgram />);
+
+    fireEvent.focus(screen.getByLabelText("Add a course or program"));
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Civil Engineer" } });
+
+    expect(await screen.findByRole("button", { name: "Select Civil Engineering" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add “Civil Engineer” to the catalog/ })).toBeInTheDocument();
+  });
+
+  it("creates and selects a catalog program without losing existing selections", async () => {
+    const onChange = jest.fn();
+    const created = { id: "program-new", name: "Chemical Engineering", programFamilyId: "family-engineering", programFamilyName: "Engineering" };
+    (createCourseProgram as jest.Mock).mockResolvedValue(created);
+    render(<ApplicableProgramsCombobox id="create-program" catalog={catalog} selectedIds={["program-a"]} onChange={onChange} canCreateCatalogProgram />);
+
+    fireEvent.focus(screen.getByLabelText("Add a course or program"));
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: created.name } });
+    fireEvent.click(await screen.findByRole("button", { name: /Add “Chemical Engineering” to the catalog/ }));
+    fireEvent.change(screen.getByLabelText("Program Family (optional)"), { target: { value: "family-engineering" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add and select" }));
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(["program-a", "program-new"]));
+    expect(createCourseProgram).toHaveBeenCalledWith({
+      name: "Chemical Engineering",
+      programFamilyId: "family-engineering",
+      examGoalSlug: null,
+    });
+  });
+
+  it("keeps typed text and current selections after a failed create", async () => {
+    (createCourseProgram as jest.Mock).mockRejectedValue(new Error("Network unavailable"));
+    render(<ApplicableProgramsCombobox id="failed-create" catalog={catalog} selectedIds={["program-a"]} onChange={jest.fn()} canCreateCatalogProgram />);
+
+    const input = screen.getByLabelText("Add a course or program");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Chemical Engineering" } });
+    fireEvent.click(await screen.findByRole("button", { name: /Add “Chemical Engineering” to the catalog/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add and select" }));
+
+    expect(await screen.findByText("Network unavailable")).toBeInTheDocument();
+    expect(input).toHaveValue("Chemical Engineering");
+    expect(screen.getByRole("button", { name: "Remove Civil Engineering" })).toBeInTheDocument();
+  });
+
+  it("turns a duplicate response into a select-existing action", async () => {
+    const { ApiRequestError } = jest.requireMock("@/lib/api") as typeof import("@/lib/api");
+    const onChange = jest.fn();
+    (findSimilarCoursePrograms as jest.Mock).mockResolvedValue([catalog[0]]);
+    (createCourseProgram as jest.Mock).mockRejectedValue(new ApiRequestError(
+      "A Course / Program named \"Civil Engineering\" already exists.",
+      { code: "COURSE_PROGRAM_CATALOG_NAME_CONFLICT", details: "Civil Engineering", status: 409 },
+    ));
+    render(<ApplicableProgramsCombobox id="duplicate-create" catalog={catalog} selectedIds={["program-b"]} onChange={onChange} canCreateCatalogProgram />);
+
+    fireEvent.focus(screen.getByLabelText("Add a course or program"));
+    fireEvent.change(screen.getByLabelText("Add a course or program"), { target: { value: "Civil Engineer" } });
+    await screen.findByRole("button", { name: "Select Civil Engineering" });
+    fireEvent.click(screen.getByRole("button", { name: /Add “Civil Engineer” to the catalog/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add and select" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Add Course / Program" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Select Civil Engineering" }));
+    expect(onChange).toHaveBeenCalledWith(["program-b", "program-a"]);
   });
 });

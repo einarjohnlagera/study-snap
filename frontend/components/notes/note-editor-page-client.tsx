@@ -1373,6 +1373,8 @@ export function NoteEditorPageClient({
           setApplicableProgramIds(selectedIds);
           setApplicableProgramsDirty(true);
         }}
+        canCreateCatalogProgram={currentUserRole === "ADMIN"}
+        onCatalogProgramCreated={(program) => setApplicableProgramCatalog((current) => [...current, program])}
         applicableProgramsLoading={applicableProgramsLoading}
         applicableProgramsError={applicableProgramsError}
         onRetryApplicablePrograms={() => setApplicableProgramsRetryToken((value) => value + 1)}

@@ -14,8 +14,7 @@ Civil Engineering notes are being authored in production now, with Algebra as th
 
 ### Planned Scope
 
-- **Admin catalog CRUD, add-only (backend + frontend).** One `POST` plus a form on the existing Admin surface. The read endpoint, repository and admin page already exist, so the new surface is small. This is the mechanism `ADR-001` already names: *"a curator judging that a canonical note is applicable to a program is the trigger to add that program."*
-- **Duplicate and near-duplicate protection.** `course_programs.name` is already unique; the surface needs to fail gracefully on a collision rather than 500, and should make an existing near-match visible before a curator creates a second spelling of the same program.
+_(all planned implementation scope shipped; release signoff remains pending)_
 
 Anti-drift — locked:
 
@@ -25,15 +24,21 @@ Anti-drift — locked:
 - **Migrations stay additive.** No edit to `V106`, `V107` or `V108`.
 - **The five `ADR-001` axes are unchanged.** Applicable Programs remains discovery-only and never reaches a prompt; Domain Context remains the sole LLM domain constraint.
 
-### Decisions to settle at kickoff of the implementation branch
+### Known limitations
 
-- **Rename and delete, or add-only?** Recommendation is add-only first, so the URL question gets its own answer rather than riding along.
-- **Does the Applicable Programs control need a "not listed?" affordance** pointing a curator at the admin page, or is adding programs out-of-band sufficient at a curator headcount of one?
+- **A `TEACHER` curator can select catalog programs but cannot add one, and has no in-product path to ask for one.** The create endpoint is `hasRole('ADMIN')` and every call site gates the inline action on `ADMIN` specifically, so the frontend and backend agree — this is a deliberate permission boundary, not a leak. It is recorded because *curator* means ADMIN **or** TEACHER everywhere else in this codebase, and because the unresolved *Request Program* proposal (`docs/claude-plans/course-program-canonical-catalog-proposal.md`) is where that gap would be closed. Zero impact at the current curator headcount of one.
+- **Case-insensitive uniqueness is enforced by the service, not the database, so it is best-effort under concurrency.** `uk_course_programs_name` is an exact-match constraint, so two simultaneous creates of `Civil Engineering` and `civil engineering` would both satisfy it; the `DataIntegrityViolationException` catch only re-checks the exact case. The real fix is a functional unique index on the normalized name, deliberately not added here — it is a migration, and at one curator the race is unreachable.
+- **`SuggestionCombobox.normalize` now collapses internal whitespace for every consumer**, not just Course / Program — subject and tag matching became slightly more lenient as a side effect. Benign and arguably an improvement, but it is a shared-primitive change that was not in the prompt's scope, so it is named rather than discovered later.
+
+### Kickoff decisions
+
+- **Add-only.** Rename and delete remain separate decisions because of public shelf URLs and existing applicability rows.
+- **Inline creation ships as an explicit Admin action.** It is not `allowCustom`, does not run on blur or Enter, shows near matches first, and requires confirmation before writing the catalog.
 - **Deletion has a latent dependency carried from `v0.71.1`.** The shadow flag is fed by two different row counts — `findByNoteId().size()` inner-joins `course_programs`, `findIdsByNoteId().size()` reads the raw table. They can only disagree if a `course_programs` row disappears while its join rows survive, which the FK currently prevents. **If this release adds deletion, that disagreement becomes reachable** and must be closed in the same change.
 
 ### Shipped
 
-_(nothing yet)_
+- **Demand-driven Course / Program catalog creation (backend + frontend).** Added the Admin-only create and near-match APIs with normalized duplicate protection, optional existing-family and exam-goal assignment, named 409/400 errors, and a transactional write path. The Admin dashboard now lists and creates catalog programs, while every shared Applicable Programs authoring surface offers Admins a confirmed inline create-and-select action without enabling `allowCustom`; failed creates preserve typed text and existing selections, learners retain free-text personal authoring unchanged, and no migration or seed was added.
 
 ## v0.71.1 - Applicable Programs Follow-ups
 

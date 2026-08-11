@@ -28,6 +28,7 @@ import {
 } from "@/lib/api";
 import { requireAdminUser } from "@/lib/route-guards";
 import { AdminApplicableProgramsSection } from "@/components/admin/admin-applicable-programs-section";
+import { AdminCourseProgramCatalogSection } from "@/components/admin/admin-course-program-catalog-section";
 
 function formatMetric(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
@@ -533,6 +534,7 @@ export default function AdminPage() {
         </Card>
       ) : summary && topContent && recentEvents && organicLandings ? (
         <>
+          <AdminCourseProgramCatalogSection />
           <AdminApplicableProgramsSection />
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-foreground">Overview</h2>
