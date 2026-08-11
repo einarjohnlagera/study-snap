@@ -868,7 +868,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     let active = true;
     setApplicableProgramsLoading(true);
     setApplicableProgramsError(null);
-    void Promise.all([getCourseProgramCatalog(), getNoteApplicablePrograms(note.id)])
+    // The catalog is only ever used by the curator combobox, so a learner must not be blocked by its
+    // failure: rejecting the whole Promise.all left courseProgramShadowed null forever, which hides the
+    // learner's own Course / Program field AND skips its required validation. Guarded the way the Note
+    // Editor already guards it.
+    void Promise.all([
+      canEditAuthoringMetadata ? getCourseProgramCatalog() : Promise.resolve([]),
+      getNoteApplicablePrograms(note.id),
+    ])
       .then(([catalog, response]) => {
         if (!active) {
           return;
@@ -896,7 +903,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     return () => {
       active = false;
     };
-  }, [applicableProgramsRetryToken, note?.id]);
+  }, [applicableProgramsRetryToken, canEditAuthoringMetadata, note?.id]);
   const isStudyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const isGeneratingStudyPack = studyPackStatus === "GENERATING";
   const hasGenerationFailed = studyPackStatus === "FAILED";
@@ -2106,9 +2113,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 </div>
                 {!canEditAuthoringMetadata ? <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <label htmlFor={courseProgramShadowed !== false ? undefined : "note-course-program-inline"} className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                      Course / Program(s) {courseProgramShadowed === false ? <span className="text-red-500" aria-hidden="true">*</span> : null}
-                    </label>
+                    {/* <p> rather than a label with no target when the control is read-only text. */}
+                    {courseProgramShadowed === false ? (
+                      <label htmlFor="note-course-program-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                        Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
+                      </label>
+                    ) : (
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Course / Program(s)</p>
+                    )}
                     {courseProgramShadowed !== false ? (
                       <ApplicableProgramsProvenance
                         programs={selectedProgramNames}

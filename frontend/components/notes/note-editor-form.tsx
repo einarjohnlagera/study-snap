@@ -409,16 +409,19 @@ export function NoteEditorForm({
                 get a catalog-backed multi-select. */}
             <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2 sm:col-span-2">
-                    <label
-                        htmlFor={showAuthoringMetadataFields
-                            ? "note-applicable-programs"
-                            : courseProgramShadowed ? undefined : "note-course-program"}
-                        className="text-sm font-medium text-foreground"
-                    >
-                        Course / Program(s) {showAuthoringMetadataFields || !courseProgramShadowed
-                            ? <span className="text-red-500" aria-hidden="true">*</span>
-                            : null}
-                    </label>
+                    {/* A <label> with no `for` and no wrapped control has no target, so when the field
+                        is replaced by read-only provenance this becomes a <p> instead of a dangling
+                        label. */}
+                    {showAuthoringMetadataFields || !courseProgramShadowed ? (
+                        <label
+                            htmlFor={showAuthoringMetadataFields ? "note-applicable-programs" : "note-course-program"}
+                            className="text-sm font-medium text-foreground"
+                        >
+                            Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
+                        </label>
+                    ) : (
+                        <p className="text-sm font-medium text-foreground">Course / Program(s)</p>
+                    )}
                     {showAuthoringMetadataFields ? (
                         <>
                             <p className="text-xs text-foreground/60">

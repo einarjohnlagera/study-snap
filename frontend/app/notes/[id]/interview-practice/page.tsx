@@ -111,16 +111,22 @@ export default function InterviewPracticePage() {
         );
         setNote(noteResult);
         setViewerPlanType(me.planType === "FREE" || me.planType === "PLUS" || me.planType === "PRO" ? me.planType : null);
-        const resolveDefaultAvailableNotes = () => notes.filter((item) => {
-          if (item.id === noteId || item.studyPackStatus !== "STUDY_PACK_READY") return false;
-          // No resolvable program on the current note keeps the previous behaviour: offer everything,
-          // rather than an empty picker the learner cannot act on.
-          if (currentPrograms.length === 0) return true;
-          return sharesAnyProgram(
+        const resolveDefaultAvailableNotes = () => {
+          const ready = notes.filter((item) => (
+            item.id !== noteId && item.studyPackStatus === "STUDY_PACK_READY"
+          ));
+          if (currentPrograms.length === 0) return ready;
+          const programMatched = ready.filter((item) => sharesAnyProgram(
             currentPrograms,
             resolveEffectivePrograms(item.applicablePrograms, item.courseProgram),
-          );
-        });
+          ));
+          // Prefer program-matched sources, but never hand back an empty picker: the whole section is
+          // gated on availableNotes.length > 0, so zero matches makes "Add context from more notes"
+          // vanish with no explanation. Matching now compares catalog names against learner free text,
+          // which legitimately misses (catalog "Nursing" vs a typed "BS Nursing"), so an empty result is
+          // a vocabulary mismatch rather than a real absence of usable notes.
+          return programMatched.length > 0 ? programMatched : ready;
+        };
         if (collectionId) {
           try {
             const collection = await getCollection(collectionId);

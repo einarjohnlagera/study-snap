@@ -94,7 +94,11 @@ class NoteApplicableProgramsServiceTest {
     }
 
     @Test
-    void domainContextShadowsCourseProgramWithoutJoinedPrograms() {
+    void domainContextAloneDoesNotShadowCourseProgramWithoutJoinedPrograms() {
+        // Regression for the pressure-test finding. This previously asserted `isTrue()`, pinning the
+        // defect: with zero join rows the legacy string is the ONLY value discovery can match on, so it
+        // is maximally readable, not shadowed. A Domain Context suppresses it for GENERATION only, and
+        // shadowing requires BOTH readers to ignore it.
         UUID userId = UUID.randomUUID();
         NoteEntity note = note(UUID.randomUUID(), userId);
         note.setDomainContext(DomainContext.ENGINEERING_SCIENCES);
@@ -104,7 +108,42 @@ class NoteApplicableProgramsServiceTest {
         NoteApplicableProgramsResponse result = service.get(note.getId().toString(), userId);
 
         assertThat(result.programs()).isEmpty();
-        assertThat(result.courseProgramShadowed()).isTrue();
+        assertThat(result.courseProgramShadowed()).isFalse();
+    }
+
+    @Test
+    void midOnboardingCuratorCannotReplaceProgramsOnItsOwnNote() {
+        // Nobody curates during onboarding -- the fourth curator predicate now carries the same guard as
+        // the three in NoteService, NoteGenerationService and NoteBulkGenerationService.
+        UUID adminId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), adminId);
+        UUID programId = UUID.randomUUID();
+        authorize(note, midOnboardingUser(adminId, UserRole.ADMIN, ProfileType.STUDENT));
+        String noteId = note.getId().toString();
+        List<UUID> requestedIds = List.of(programId);
+
+        assertThatThrownBy(() -> service.replace(noteId, requestedIds, adminId))
+                .isInstanceOf(NoteNotFoundException.class);
+
+        verify(noteCourseProgramRepository, never()).replace(any(), any());
+    }
+
+    @Test
+    void twoJoinedProgramsWithoutDomainContextDoNotShadowCourseProgram() {
+        // The other branch the old predicate got wrong in the safe direction, now pinned explicitly:
+        // at 2+ rows with no Domain Context, generation falls through to the string, so it is readable.
+        UUID userId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), userId);
+        note.setDomainContext(null);
+        authorize(note, user(userId, UserRole.USER, ProfileType.STUDENT));
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(
+                new ApplicableProgramResponse(UUID.randomUUID(), "Nursing"),
+                new ApplicableProgramResponse(UUID.randomUUID(), "Pharmacy")
+        ));
+
+        NoteApplicableProgramsResponse result = service.get(note.getId().toString(), userId);
+
+        assertThat(result.courseProgramShadowed()).isFalse();
     }
 
     @Test
@@ -339,6 +378,16 @@ class NoteApplicableProgramsServiceTest {
         user.setEmail(userId + "@example.com");
         user.setRole(role);
         user.setProfileType(profileType);
+        // Onboarded by default: this endpoint is not reachable mid-onboarding, so a null value would
+        // model a state the surface cannot be in -- and would route every curator test down the
+        // unauthorized branch. Mirrors the same correction made in NoteBulkGenerationServiceTest.
+        user.setOnboardingCompletedAt(OffsetDateTime.now());
+        return user;
+    }
+
+    private UserEntity midOnboardingUser(UUID userId, UserRole role, ProfileType profileType) {
+        UserEntity user = user(userId, role, profileType);
+        user.setOnboardingCompletedAt(null);
         return user;
     }
 }

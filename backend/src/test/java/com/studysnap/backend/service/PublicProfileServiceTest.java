@@ -20,6 +20,7 @@ import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
+import com.studysnap.backend.dto.ApplicableProgramResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +31,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -168,6 +170,47 @@ class PublicProfileServiceTest {
                                 "atomic-bonds"
                         )
                 );
+    }
+
+    @Test
+    void getByUserId_resolvesApplicableProgramsFromTheJoinForACuratedNote() {
+        // M3/L3 regression. The mock was previously left unstubbed, so it returned an empty map and the
+        // join-first path was never exercised -- every assertion passed off the legacy string alone.
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("creator@example.com");
+        user.setFirstName("Creator");
+        user.setUsername("creator");
+        user.setRole(UserRole.USER);
+        user.setPublicProfileVisible(true);
+
+        // A curated note: legacy string null by ADR-001 definition, applicability only in the join.
+        NoteEntity curated = buildPublicNote(noteId, userId, "Algebra", "Mathematics", new String[]{});
+        curated.setCourseProgram(null);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of(curated));
+        when(noteRepository.countSubjectsByOwnerUserIdAndVisibility(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of());
+        when(noteCourseProgramRepository.findByNoteIds(List.of(noteId))).thenReturn(Map.of(
+                noteId,
+                List.of(
+                        new ApplicableProgramResponse(UUID.randomUUID(), "Civil Engineering"),
+                        new ApplicableProgramResponse(UUID.randomUUID(), "Mechanical Engineering")
+                )
+        ));
+
+        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
+
+        assertThat(response.publicNotes()).singleElement()
+                .satisfies(note -> {
+                    assertThat(note.courseProgram()).isNull();
+                    assertThat(note.applicablePrograms())
+                            .containsExactly("Civil Engineering", "Mechanical Engineering");
+                });
     }
 
     @Test

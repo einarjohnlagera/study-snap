@@ -114,8 +114,13 @@ public class NoteApplicableProgramsService {
         NoteEntity note = noteRepository.findById(noteId).orElseThrow(NoteNotFoundException::new);
         UserEntity requester = userRepository.findById(requesterUserId).orElseThrow(NoteNotFoundException::new);
         boolean isOwner = note.getOwnerUserId().equals(requesterUserId);
-        boolean isCurator = requester.getRole() == UserRole.ADMIN
-                || requester.getProfileType() == ProfileType.TEACHER;
+        // Nobody curates during onboarding. This is the FOURTH curator predicate; the pressure test
+        // found it created without the guard in the same release that added the guard to the third and
+        // recorded in CLAUDE.md that all of them carry it. Not UI-reachable mid-onboarding
+        // (requireAuthenticatedOnboardedUser gates both note surfaces), so this is consistency work --
+        // but a rule with a live in-repo exception decays, and the doc claiming otherwise was false.
+        boolean isCurator = requester.getOnboardingCompletedAt() != null
+                && (requester.getRole() == UserRole.ADMIN || requester.getProfileType() == ProfileType.TEACHER);
         if (!isOwner || !isCurator) {
             throw new NoteNotFoundException();
         }

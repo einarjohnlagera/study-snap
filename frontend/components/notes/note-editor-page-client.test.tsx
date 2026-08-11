@@ -312,7 +312,9 @@ describe("NoteEditorPageClient", () => {
     expect(addDetailsButton).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByLabelText("Title (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Subject (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Course \/ Program/)).not.toBeInTheDocument();
+    // Assert on the input id: querying by label text returned nothing either way once the label
+    // stopped carrying htmlFor, so the old assertion could not fail.
+    expect(document.querySelector("#note-course-program")).toBeNull();
   });
 
   it("shows write, generate, and import start options on the new note page", async () => {
@@ -457,7 +459,9 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByText(
       "Set by the note this was copied from. Your own course or program is on your profile.",
     )).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Course \/ Program/)).not.toBeInTheDocument();
+    // Assert on the input id: querying by label text returned nothing either way once the label
+    // stopped carrying htmlFor, so the old assertion could not fail.
+    expect(document.querySelector("#note-course-program")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
 
@@ -488,7 +492,9 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByText("Nursing", { selector: "p" })).toBeInTheDocument();
     expect(screen.queryByText(/Set by the note this was copied from/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Course \/ Program/)).not.toBeInTheDocument();
+    // Assert on the input id: querying by label text returned nothing either way once the label
+    // stopped carrying htmlFor, so the old assertion could not fail.
+    expect(document.querySelector("#note-course-program")).toBeNull();
   });
 
   it("does not block a learner save when applicable-program provenance fails to load", async () => {
@@ -1064,7 +1070,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
+    expect(document.querySelector("#note-applicable-programs")).toBeNull();
   });
 
   it("keeps target audience hidden for professional note creation", async () => {
@@ -1077,7 +1083,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
+    expect(document.querySelector("#note-applicable-programs")).toBeNull();
   });
 
   it("shows target audience inside Add details for admin note creation", async () => {
