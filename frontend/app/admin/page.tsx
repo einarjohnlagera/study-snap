@@ -27,8 +27,6 @@ import {
   type AdminRegenerationStatusResponse,
 } from "@/lib/api";
 import { requireAdminUser } from "@/lib/route-guards";
-import { AdminApplicableProgramsSection } from "@/components/admin/admin-applicable-programs-section";
-import { AdminCourseProgramCatalogSection } from "@/components/admin/admin-course-program-catalog-section";
 
 function formatMetric(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
@@ -488,6 +486,9 @@ export default function AdminPage() {
             <Link href="/admin/funnel" className="text-sm text-foreground/55 hover:text-foreground/80">
               Funnel →
             </Link>
+            <Link href="/admin/course-programs" className="text-sm text-foreground/55 hover:text-foreground/80">
+              Course / Programs →
+            </Link>
           </div>
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <Button
@@ -534,8 +535,6 @@ export default function AdminPage() {
         </Card>
       ) : summary && topContent && recentEvents && organicLandings ? (
         <>
-          <AdminCourseProgramCatalogSection />
-          <AdminApplicableProgramsSection />
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-foreground">Overview</h2>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
