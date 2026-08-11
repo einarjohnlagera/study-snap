@@ -111,6 +111,8 @@ class DashboardServiceProjectionIntegrationTest {
                     referrer varchar(2048),
                     profile_type varchar(32),
                     exam_date date,
+                    review_days text array,
+                    review_commitment_prompted_at timestamp with time zone,
                     engagement_mode varchar(32) not null,
                     inactivity_reminders_enabled boolean not null,
                     weak_concept_reminders_enabled boolean not null,

@@ -58,7 +58,7 @@ Anti-drift — locked:
 
 ### Shipped
 
-_(nothing yet)_
+- **H1 commitment + H5 one-tap return loop (backend + frontend).** After **any** learner completes their first session — there is deliberately no profile-type gate, since the commitment collected is the review days and gating those behind an exam date would exclude every `STUDENT`, ~27% of accounts, the shared post-session surface now asks once for an exam date and chosen review weekdays; commit and decline are persisted atomically on the user, failed saves preserve the outstanding prompt, and the schedule remains editable in Email Preferences. The due-concepts digest keeps null/empty schedules on the existing cadence, otherwise filters weekdays in `Asia/Manila`, and links to Quick Review for the owned note with the most due concepts with a dashboard fallback. Analytics cover prompt shown/committed/declined plus digest landing/first answer; no quiz mode or readiness behavior changed. **Recorded deviation from H1 as written:** this release collects weekdays only, not times of day, because the existing digest scheduler runs daily and there is no per-user timezone; the tested mechanism remains a learner-authored schedule.
 
 ## v0.71.2 - Catalog Management
 

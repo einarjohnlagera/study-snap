@@ -521,6 +521,11 @@ export type AnalyticsEventType =
   | "QUICK_REVIEW_STARTED"
   | "QUICK_REVIEW_COMPLETED"
   | "QUICK_REVIEW_OPEN_LOOP_SHOWN"
+  | "REVIEW_COMMITMENT_PROMPT_SHOWN"
+  | "REVIEW_COMMITMENT_COMMITTED"
+  | "REVIEW_COMMITMENT_DECLINED"
+  | "DUE_CONCEPTS_DIGEST_LANDED"
+  | "DUE_CONCEPTS_DIGEST_FIRST_ANSWER_SUBMITTED"
   | "CHALLENGE_QUIZ_STARTED"
   | "CHALLENGE_QUIZ_COMPLETED"
   | "BOARD_EXAM_STARTED"
@@ -895,6 +900,8 @@ export type MeResponse = {
   countryCode: string | null;
   profileType: ProfileType | null;
   examDate: string | null;
+  reviewDays: ReviewDay[];
+  reviewCommitmentOutstanding: boolean;
   engagementMode: EngagementMode;
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
@@ -939,6 +946,21 @@ export type UpdateEmailPreferencesRequest = {
   dueConceptsDigestRemindersEnabled: boolean;
   knowledgeImpactDigestRemindersEnabled: boolean;
   marketingEmailsEnabled: boolean;
+  reviewDays: ReviewDay[];
+};
+
+export type ReviewDay =
+  | "MONDAY"
+  | "TUESDAY"
+  | "WEDNESDAY"
+  | "THURSDAY"
+  | "FRIDAY"
+  | "SATURDAY"
+  | "SUNDAY";
+
+export type UpdateReviewCommitmentRequest = {
+  examDate: string | null;
+  reviewDays: ReviewDay[];
 };
 
 export type UpdateMobileTabBarPreferenceRequest = {
@@ -2787,6 +2809,21 @@ export async function updateEmailPreferences(request: UpdateEmailPreferencesRequ
     true,
   );
   const me = await parseApiResponse<MeResponse>(response, "Could not update email preferences. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
+}
+
+export async function updateReviewCommitment(request: UpdateReviewCommitmentRequest): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/users/review-commitment",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(response, "Could not save your review plan. Please try again.");
   syncStoredAuthUserFromMe(me);
   return me;
 }

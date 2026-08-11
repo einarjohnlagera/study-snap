@@ -811,6 +811,7 @@ describe("Settings page cancellation flow", () => {
       dueConceptsDigestRemindersEnabled: true,
       knowledgeImpactDigestRemindersEnabled: true,
       marketingEmailsEnabled: true,
+      reviewDays: ["MONDAY"],
     });
 
     render(<SettingsPage />);
@@ -825,6 +826,7 @@ describe("Settings page cancellation flow", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Due-concepts digest/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Knowledge Impact digest/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Product news & tips/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Mon" }));
     fireEvent.click(screen.getByRole("button", { name: "Save email preferences" }));
 
     await waitFor(() => {
@@ -835,6 +837,7 @@ describe("Settings page cancellation flow", () => {
         dueConceptsDigestRemindersEnabled: true,
         knowledgeImpactDigestRemindersEnabled: true,
         marketingEmailsEnabled: true,
+        reviewDays: ["MONDAY"],
       });
     });
     expect(await screen.findByText("Email preferences updated.")).toBeInTheDocument();

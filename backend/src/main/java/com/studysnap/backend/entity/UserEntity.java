@@ -98,6 +98,13 @@ public class UserEntity {
     @Column(name = "exam_date")
     private LocalDate examDate;
 
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "review_days", columnDefinition = "text[]")
+    private String[] reviewDays;
+
+    @Column(name = "review_commitment_prompted_at")
+    private OffsetDateTime reviewCommitmentPromptedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "engagement_mode", nullable = false, length = 32)
     private EngagementMode engagementMode;

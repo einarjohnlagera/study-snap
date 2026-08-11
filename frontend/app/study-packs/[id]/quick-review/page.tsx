@@ -16,6 +16,7 @@ import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
+import { ReviewCommitmentPrompt } from "@/components/study-pack/review-commitment-prompt";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { CompanionResultBridgeCard, hasCompanionResultBridgeExcerpt } from "@/components/study-pack/companion-result-bridge-card";
 import { ResultGuidanceGroup } from "@/components/study-pack/result-guidance-group";
@@ -215,6 +216,8 @@ export default function QuickReviewPage() {
   const loadedNoteIdRef = useRef<string | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const openLoopTrackedSessionIdRef = useRef<string | null>(null);
+  const digestLandingTrackedRef = useRef(false);
+  const digestFirstAnswerTrackedRef = useRef(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -223,6 +226,34 @@ export default function QuickReviewPage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const queryString = useMemo(() => searchParams.toString(), [searchParams]);
+  const isDueConceptsDigestVisit = useMemo(
+    () => new URLSearchParams(queryString).get("source") === "due-concepts-digest",
+    [queryString],
+  );
+
+  useEffect(() => {
+    if (!isDueConceptsDigestVisit || !noteId || digestLandingTrackedRef.current) {
+      return;
+    }
+    digestLandingTrackedRef.current = true;
+    void trackAnalyticsEvent({
+      eventType: "DUE_CONCEPTS_DIGEST_LANDED",
+      entityId: noteId,
+      metadata: { path: pathname },
+    });
+  }, [isDueConceptsDigestVisit, noteId, pathname]);
+
+  const trackDigestFirstAnswer = useCallback(() => {
+    if (!isDueConceptsDigestVisit || digestFirstAnswerTrackedRef.current) {
+      return;
+    }
+    digestFirstAnswerTrackedRef.current = true;
+    void trackAnalyticsEvent({
+      eventType: "DUE_CONCEPTS_DIGEST_FIRST_ANSWER_SUBMITTED",
+      entityId: currentSessionId ?? noteId,
+      metadata: { noteId, path: pathname },
+    });
+  }, [currentSessionId, isDueConceptsDigestVisit, noteId, pathname]);
   const openAdaptivePracticePaywall = useCallback((source: string) => {
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
@@ -755,6 +786,7 @@ export default function QuickReviewPage() {
     };
     setRoundSelections(nextRoundSelections);
     setSelectedChoices(nextSelectedChoices);
+    trackDigestFirstAnswer();
     persistProgress({
       currentQuestionIndex: currentRoundIndex,
       currentRound: currentRoundType,
@@ -782,6 +814,7 @@ export default function QuickReviewPage() {
     };
     setRoundSelections(nextRoundSelections);
     setSelectedChoices(nextSelectedChoices);
+    trackDigestFirstAnswer();
     persistProgress({
       currentQuestionIndex: currentRoundIndex,
       currentRound: currentRoundType,
@@ -820,6 +853,11 @@ export default function QuickReviewPage() {
       roundSelections,
       roundMultiSelections: nextRoundMultiSelections,
     });
+  };
+
+  const handleSubmitMultiSelect = () => {
+    setMultiSelectSubmitted(true);
+    trackDigestFirstAnswer();
   };
 
   const handleNext = () => {
@@ -1094,6 +1132,10 @@ export default function QuickReviewPage() {
             ) : null}
           </div>
 
+          <ReviewCommitmentPrompt
+            isFirstCompletedSessionEver={persistedResult?.isFirstCompletedSessionEver}
+            noteId={note?.id ?? null}
+          />
           {hasNextStepGuidance ? (
             <ResultGuidanceGroup label="What to do next" testId="quick-review-next-step-guidance">
               <PostSessionNextStep
@@ -1413,7 +1455,7 @@ export default function QuickReviewPage() {
               <Button
                 type="button"
                 className="w-full sm:w-auto"
-                onClick={currentQuestionIsMultiSelect && !multiSelectSubmitted ? () => setMultiSelectSubmitted(true) : handleNext}
+                onClick={currentQuestionIsMultiSelect && !multiSelectSubmitted ? handleSubmitMultiSelect : handleNext}
                 disabled={!hasAnsweredCurrent}
               >
                 {currentQuestionIsMultiSelect && !multiSelectSubmitted
