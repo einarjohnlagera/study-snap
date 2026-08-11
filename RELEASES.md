@@ -1,5 +1,40 @@
 # RELEASES.md - NoteLib
 
+## v0.71.2 - Catalog Management
+
+**Status: In Progress**
+
+Theme: a curator can add a Course / Program the moment a note needs one. Today the only way to grow the catalog is a migration, which blocks the exact thing Release B was built for — one canonical note serving every program it legitimately applies to.
+
+**This is new capability, not deferred-findings cleanup.** `v0.71.1`'s anti-drift was written for a patch release clearing a known list; do not copy that framing here. The rules below are written for a release that adds a surface.
+
+### The blocker, stated concretely
+
+Civil Engineering notes are being authored in production now, with Algebra as the case — the exact example `ADR-001` was written around. Extending that one note to the other engineering programs is impossible: the catalog holds **3** engineering programs (Civil, Electrical, Mechanical), and `CourseProgramCatalogController` exposes only `list()` while `CourseProgramCatalogRepository` has no write method. **A migration is the only path.** Audit findings are recorded in `ROADMAP.md`'s `v0.71.2` section and were verified in code on 2026-08-11.
+
+### Planned Scope
+
+- **Admin catalog CRUD, add-only (backend + frontend).** One `POST` plus a form on the existing Admin surface. The read endpoint, repository and admin page already exist, so the new surface is small. This is the mechanism `ADR-001` already names: *"a curator judging that a canonical note is applicable to a program is the trigger to add that program."*
+- **Duplicate and near-duplicate protection.** `course_programs.name` is already unique; the surface needs to fail gracefully on a collision rather than 500, and should make an existing near-match visible before a curator creates a second spelling of the same program.
+
+Anti-drift — locked:
+
+- **No pre-seeding.** `ADR-001:74` explicitly rejects seeding the PRC engineering programs as premature expansion, and a bundled seed was scoped into this release on 2026-08-10 and **removed on 2026-08-11** when the pressure test found it contradicted that ruling and cited the ADR as if it supported it. Catalog growth is one program at a time, at the moment authoring needs it. Do not reintroduce a seed migration.
+- **No learner-facing catalog authoring.** `ADR-001` → *Representation authority* still forbids a learner's personal free-text program becoming a catalog row, and *Curation authority* still requires ownership to author an Applicable Program row. Neither is reopened here. Learner free-text authoring is unaffected and must stay that way.
+- **Add-only unless explicitly decided otherwise.** Renaming a catalog program changes public shelf URLs; deleting one orphans `note_course_program` rows behind an FK that currently blocks it. Both are separate decisions — see below.
+- **Migrations stay additive.** No edit to `V106`, `V107` or `V108`.
+- **The five `ADR-001` axes are unchanged.** Applicable Programs remains discovery-only and never reaches a prompt; Domain Context remains the sole LLM domain constraint.
+
+### Decisions to settle at kickoff of the implementation branch
+
+- **Rename and delete, or add-only?** Recommendation is add-only first, so the URL question gets its own answer rather than riding along.
+- **Does the Applicable Programs control need a "not listed?" affordance** pointing a curator at the admin page, or is adding programs out-of-band sufficient at a curator headcount of one?
+- **Deletion has a latent dependency carried from `v0.71.1`.** The shadow flag is fed by two different row counts — `findByNoteId().size()` inner-joins `course_programs`, `findIdsByNoteId().size()` reads the raw table. They can only disagree if a `course_programs` row disappears while its join rows survive, which the FK currently prevents. **If this release adds deletion, that disagreement becomes reachable** and must be closed in the same change.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.71.1 - Applicable Programs Follow-ups
 
 **Status: Released** (signed off 2026-08-11)
