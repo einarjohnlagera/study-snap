@@ -280,7 +280,15 @@ Kicked off 2026-08-11, cut from `main` after `v0.72.1` merged and deployed.
 
 ### Planned Scope
 
-Eight items, full detail in `RELEASES.md`. The shape: land the learner on their Study Pack instead of a three-CTA decision screen; make the generation wait build the artifact in view; outcome cards with tap-to-advance at step 1; sentence-form learning context at step 2; outcome copy with real note counts at step 3; the unsupported-program fallback reframed as invitation; **C8 and C9 folded in here rather than scoped twice**; and step-level completion instrumentation, because we still cannot tell *which* step the 132 abandon on.
+**Revised 2026-08-11 after an owner design pass**, which changed the governing principle from *restyle the wizard* to **"the learner is telling NoteLib their learning story, not configuring settings — every screen answers one question."** Ten items, full detail in `RELEASES.md`.
+
+**The structural change: one question per screen, 5 screens → 8.** Today step 2 asks three questions at once and step 3 asks two. Target flow: profile type → course/program → learner level → first intent → input method → the note itself → generating → done. **Auto-advance applies only to closed-set choices**; a typed combobox and free text keep an explicit Continue, because the system cannot know when a learner has finished typing. **Actual length rises; perceived effort should fall** — the tradeoff was stated and the owner chose it.
+
+**Two changes worth surfacing here rather than burying in `RELEASES.md`:**
+- **The exam-date question is removed from onboarding** — `v0.72.0`'s post-session prompt already asks for it, prefills it, and *requires* it before a review plan can be set. A field deleted rather than restyled, and a duplicate ask across two surfaces resolved. The only change that shortens onboarding on evidence rather than taste.
+- **Scope item 1 (delete the three-CTA completion screen) is DROPPED** by owner ruling. Verified while scoping it: that screen is the note-creating flow's ending only, and **nothing in onboarding navigates to Quick Review today**, so the owner's actual requirement was already true and is now written as an anti-drift rule instead of built.
+
+Also: step 1 story cards with tap-to-advance and a selection beat; step 2 as question-plus-placeholders (**not** sentence-form, owner-rejected for mobile wrapping and validation); step 3 outcome copy with real note counts; the fallback as invitation; a typography and rhythm pass, mobile-first at 360px; **C8 and C9 folded in rather than scoped twice**; and step-level instrumentation, which stops being optional once the flow goes from 5 screens to 8.
 
 **Pre-declared at kickoff:** this ships on a falsifiable belief, so it **will owe a `[CHECKPOINT]`** at signoff — onboarding completion rate against the **62.4%** baseline, made readable per step by the instrumentation item. The signoff gate must not close without it.
 
