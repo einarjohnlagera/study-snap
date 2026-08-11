@@ -2,7 +2,17 @@
 
 ## v0.72.1 - Constraint Check
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-08-11)
+
+### Checkpoint gate — RUN at signoff, result: nothing owed
+
+The gate added to `/signoff` in this same release (`.claude/commands/signoff.md`) asks whether anything here shipped **ahead of its own evidence**. Nothing did, and the reasoning is recorded rather than left implicit:
+
+- **The four-window metric shipped *because of* Query 5**, which ran in this release, before the build, and is recorded above in full. Its `EVIDENCE` gate was cleared by the release's own read rather than deferred past it — the opposite of the shape this gate exists to catch.
+- **No product hypothesis is being bet on.** The change corrects an instrument; it makes no claim about learner behaviour that a future date could falsify. A checkpoint here would be decorative in the other direction — a dated obligation with nothing to disconfirm.
+- **The recorded fallback was genuine and was actually exercised.** `v0.72.0` recorded the CPALE Exam Hub as a fallback that had already shipped as `v0.54.0`, so its fallback was empty. This release's fallback — the Query 5 metric read — was verified unbuilt by construction and is the thing the release went on to ship (`countReturnedAfterDay7Users` and friends first appear in `db7e6108`, this release).
+
+**Verification owed, deliberately recorded as verification and NOT as a checkpoint:** once deployed, the admin funnel should read approximately **1.97% / 4.61% / 6.58% / 7.24%** across the four windows on a wide eligible set of ~152, matching the Query 5 result above. If it does not, the discrepancy is a defect in the shipped queries, not a finding about learners. This is a deploy sanity check with a known expected answer, which is precisely why it is not dressed up as a dated obligation.
 
 Theme: find out which constraint is real — and then whether the number the whole roadmap defers to is measuring what it claims. A patch on `v0.72.0`'s line because it continues the same question rather than opening a new one.
 
