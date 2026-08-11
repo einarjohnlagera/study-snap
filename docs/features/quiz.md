@@ -110,7 +110,7 @@ Quota rule:
 
 ## Due-concepts digest return path
 
-The due-concepts digest is a trigger into the existing Quick Review mode, not a separate cross-note session or sixth quiz mode. On an eligible send day, the backend selects the owned note whose Study Pack has the most due concepts and links to `/notes/{noteId}/quick-review?source=due-concepts-digest`. If that note cannot be resolved, the link falls back to `/dashboard`; if no concepts are due, no email is sent.
+The due-concepts digest is a trigger into the existing Quick Review mode, not a separate cross-note session or sixth quiz mode. On a dispatch day matching the learner's chosen review days (the digest now dispatches daily; see `retention-emails.md`), the backend selects the owned note whose Study Pack has the most due concepts and links to `/notes/{noteId}/quick-review?source=due-concepts-digest`. If that note cannot be resolved, the link falls back to `/dashboard`; if no concepts are due, no email is sent.
 
 Configured review weekdays are matched in `Asia/Manila`, the retention email budget zone. Null or empty review days preserve the pre-v0.72.0 digest cadence. The Quick Review page records the digest landing and the first submitted answer once each so trigger-to-answer conversion can be measured without changing scoring, ConceptHealth, or readiness.
 

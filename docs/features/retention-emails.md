@@ -22,7 +22,8 @@ Current reminders include:
   - cooldown: `7` days
 - `DUE_CONCEPTS_DIGEST`
   - trigger: weekly run finds due concepts across the user's owned Study Packs through `ConceptHealthService`
-  - includes the total due-concept count and up to three Study Pack titles with the most due concepts, linking to Dashboard Today Focus
+  - includes the total due-concept count and up to three Study Pack titles with the most due concepts. **As of `v0.72.0` the CTA deep-links to `/notes/{noteId}/quick-review?source=due-concepts-digest`** for the owned note with the most due concepts — one tap to the first question — falling back to the dashboard only when no owned note resolves. It previously linked to Dashboard Today Focus, which left a decision in the way.
+  - **Dispatches daily and selects recipients by their chosen review weekdays** (`users.review_days`, matched in `Asia/Manila`). A null or empty value means the existing schedule, never "never send". `dueConceptsDigestCooldownDays` (7) remains the frequency cap, so the daily sweep decides *which day* a learner's single weekly digest lands on, not how many they get. **This digest moved off the weekly Sunday job in `v0.72.0`**: on a weekly dispatch only one weekday could ever match, so any learner choosing other days was silently dropped.
   - gated by `dueConceptsDigestRemindersEnabled` (default on for new signups; existing users retain their previously persisted preference)
   - cooldown: `7` days
 - `RE_ENGAGEMENT_2025`

@@ -559,6 +559,11 @@ public class AuthService {
     public MeResponse updateReviewCommitment(UUID userId, UpdateReviewCommitmentRequest request) {
         List<String> reviewDays = normalizeReviewDays(request.reviewDays());
         UserEntity user = findUserOrThrow(userId);
+        // Symmetric with examDate below: a request that OMITS reviewDays must not wipe an existing
+        // schedule. An explicit empty list still clears it -- that is how a decline is expressed -- but
+        // null means "not supplied". Without this, a client omitting the field silently unsubscribes the
+        // learner from the days they chose, by the same mechanism the examDate guard exists to prevent.
+        boolean reviewDaysSupplied = request.reviewDays() != null;
         OffsetDateTime now = OffsetDateTime.now();
 
         // Only write the exam date when one is supplied. This endpoint does NOT own that field --
@@ -568,7 +573,9 @@ public class AuthService {
         if (request.examDate() != null) {
             user.setExamDate(request.examDate());
         }
-        user.setReviewDays(reviewDays.toArray(String[]::new));
+        if (reviewDaysSupplied) {
+            user.setReviewDays(reviewDays.toArray(String[]::new));
+        }
         user.setReviewCommitmentPromptedAt(now);
         user.setUpdatedAt(now);
         return toMeResponse(user);

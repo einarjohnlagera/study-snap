@@ -217,7 +217,7 @@ export default function QuickReviewPage() {
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const openLoopTrackedSessionIdRef = useRef<string | null>(null);
   const digestLandingTrackedRef = useRef(false);
-  const digestFirstAnswerTrackedRef = useRef(false);
+  const digestFirstAnswerTrackedRef = useRef<string | null>(null);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -235,7 +235,17 @@ export default function QuickReviewPage() {
     if (!isDueConceptsDigestVisit || !noteId || digestLandingTrackedRef.current) {
       return;
     }
+    // Dedup across reloads, not just across renders. A plain ref resets on every remount, so a reload
+    // or Back-navigation re-fired this -- inflating the denominator of the exact conversion this
+    // release exists to measure, on a cohort small enough (~31) for that to matter. sessionStorage is
+    // the right scope: one arrival per tab, while a genuinely new email click opens a new one.
+    const arrivalKey = `notelib-digest-landed-${noteId}`;
+    if (globalThis.sessionStorage?.getItem(arrivalKey)) {
+      digestLandingTrackedRef.current = true;
+      return;
+    }
     digestLandingTrackedRef.current = true;
+    globalThis.sessionStorage?.setItem(arrivalKey, "1");
     void trackAnalyticsEvent({
       eventType: "DUE_CONCEPTS_DIGEST_LANDED",
       entityId: noteId,
@@ -244,10 +254,12 @@ export default function QuickReviewPage() {
   }, [isDueConceptsDigestVisit, noteId, pathname]);
 
   const trackDigestFirstAnswer = useCallback(() => {
-    if (!isDueConceptsDigestVisit || digestFirstAnswerTrackedRef.current) {
+    // Keyed by session id, matching openLoopTrackedSessionIdRef above: once per quiz session rather
+    // than once per mount, so a reload mid-session cannot report a second "first answer".
+    if (!isDueConceptsDigestVisit || digestFirstAnswerTrackedRef.current === (currentSessionId ?? noteId)) {
       return;
     }
-    digestFirstAnswerTrackedRef.current = true;
+    digestFirstAnswerTrackedRef.current = currentSessionId ?? noteId;
     void trackAnalyticsEvent({
       eventType: "DUE_CONCEPTS_DIGEST_FIRST_ANSWER_SUBMITTED",
       entityId: currentSessionId ?? noteId,
