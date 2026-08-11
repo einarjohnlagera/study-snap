@@ -2,7 +2,7 @@
 
 ## v0.71.1 - Applicable Programs Follow-ups
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-08-11)
 
 Theme: clear what `v0.71.0` deferred rather than fixed. Release B shipped the many-to-many applicability model and signed off with four architectural findings marked *needs a decision, not a patch* plus twenty Medium/Low pressure-test findings carried as `v0.71.1` candidates. This release makes those decisions and lands the patches, so the join-first model stops carrying a backlog of surfaces that half-know about it.
 
