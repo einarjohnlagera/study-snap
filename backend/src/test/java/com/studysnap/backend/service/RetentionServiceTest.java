@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EmailLogEntity;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.RetentionEmailType;
@@ -238,6 +239,99 @@ class RetentionServiceTest {
         assertThat(candidate.dueConceptCount()).isEqualTo(3);
         assertThat(candidate.studyPackTitles()).containsExactly("Cell Biology", "Anatomy");
         assertThat(candidate.dashboardUrl()).isEqualTo("https://www.notelib.app/dashboard");
+    }
+
+    @Test
+    void findDueConceptsDigestUsers_nullAndEmptyReviewDaysKeepExistingScheduleEligibility() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        UserEntity nullScheduleUser = verifiedUser(UUID.randomUUID(), "null@example.com");
+        UserEntity emptyScheduleUser = verifiedUser(UUID.randomUUID(), "empty@example.com");
+        emptyScheduleUser.setReviewDays(new String[0]);
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(nullScheduleUser, emptyScheduleUser));
+        UUID packId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPackWithConcepts(packId, "Cell Biology", List.of("Mitosis"));
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(any(), eq(Pageable.unpaged())))
+                .thenReturn(List.of(studyPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(any(), any(), eq(now)))
+                .thenReturn(Map.of(packId, List.of("Mitosis")));
+
+        List<RetentionService.DueConceptsDigestReminder> candidates = retentionService.findDueConceptsDigestUsers(now);
+
+        assertThat(candidates).extracting(RetentionService.DueConceptsDigestReminder::userId)
+                .containsExactly(nullScheduleUser.getId(), emptyScheduleUser.getId());
+    }
+
+    @Test
+    void findDueConceptsDigestUsers_matchesReviewDayInAsiaManila() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-24T18:00:00Z");
+        UserEntity chosenDayUser = verifiedUser(UUID.randomUUID(), "chosen@example.com");
+        chosenDayUser.setReviewDays(new String[]{"WEDNESDAY"});
+        UserEntity unchosenDayUser = verifiedUser(UUID.randomUUID(), "unchosen@example.com");
+        unchosenDayUser.setReviewDays(new String[]{"TUESDAY"});
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(chosenDayUser, unchosenDayUser));
+        UUID packId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPackWithConcepts(packId, "Cell Biology", List.of("Mitosis"));
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(chosenDayUser.getId(), Pageable.unpaged()))
+                .thenReturn(List.of(studyPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(chosenDayUser.getId()), any(), eq(now)))
+                .thenReturn(Map.of(packId, List.of("Mitosis")));
+
+        List<RetentionService.DueConceptsDigestReminder> candidates = retentionService.findDueConceptsDigestUsers(now);
+
+        assertThat(candidates).extracting(RetentionService.DueConceptsDigestReminder::userId)
+                .containsExactly(chosenDayUser.getId());
+        verify(studyPackRepository, never())
+                .findByOwnerUserIdOrderByCreatedAtDescIdDesc(unchosenDayUser.getId(), Pageable.unpaged());
+    }
+
+    @Test
+    void findDueConceptsDigestUsers_linksMostDueNoteToQuickReview() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        UserEntity user = verifiedUser();
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        UUID smallerPackId = UUID.randomUUID();
+        UUID targetPackId = UUID.randomUUID();
+        UUID smallerNoteId = UUID.randomUUID();
+        UUID targetNoteId = UUID.randomUUID();
+        StudyPackEntity smallerPack = studyPackWithConcepts(smallerPackId, "Anatomy", List.of("Bones"));
+        smallerPack.setNoteId(smallerNoteId);
+        StudyPackEntity targetPack = studyPackWithConcepts(targetPackId, "Cell Biology", List.of("Mitosis", "Meiosis"));
+        targetPack.setNoteId(targetNoteId);
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(user.getId(), Pageable.unpaged()))
+                .thenReturn(List.of(smallerPack, targetPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(user.getId()), any(), eq(now)))
+                .thenReturn(Map.of(smallerPackId, List.of("Bones"), targetPackId, List.of("Mitosis", "Meiosis")));
+        when(noteRepository.findByIdAndOwnerUserId(targetNoteId, user.getId())).thenReturn(Optional.of(new NoteEntity()));
+
+        RetentionService.DueConceptsDigestReminder reminder = retentionService.findDueConceptsDigestUsers(now).getFirst();
+
+        assertThat(reminder.dashboardUrl()).isEqualTo(
+                "https://www.notelib.app/notes/" + targetNoteId + "/quick-review?source=due-concepts-digest"
+        );
+    }
+
+    @Test
+    void findDueConceptsDigestUsers_fallsBackToDashboardWhenTargetNoteCannotBeResolved() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+        UserEntity user = verifiedUser();
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        UUID packId = UUID.randomUUID();
+        UUID deletedNoteId = UUID.randomUUID();
+        StudyPackEntity studyPack = studyPackWithConcepts(packId, "Cell Biology", List.of("Mitosis"));
+        studyPack.setNoteId(deletedNoteId);
+        when(studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(user.getId(), Pageable.unpaged()))
+                .thenReturn(List.of(studyPack));
+        when(conceptHealthService.getDueConceptsByStudyPackIds(eq(user.getId()), any(), eq(now)))
+                .thenReturn(Map.of(packId, List.of("Mitosis")));
+        when(noteRepository.findByIdAndOwnerUserId(deletedNoteId, user.getId())).thenReturn(Optional.empty());
+
+        RetentionService.DueConceptsDigestReminder reminder = retentionService.findDueConceptsDigestUsers(now).getFirst();
+
+        assertThat(reminder.dashboardUrl()).isEqualTo("https://www.notelib.app/dashboard");
     }
 
     @Test

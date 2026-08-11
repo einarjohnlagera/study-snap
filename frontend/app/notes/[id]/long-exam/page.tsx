@@ -15,6 +15,7 @@ import {QuizChoiceList} from "@/components/study-pack/quiz-choice-list";
 import {QuizMatchingGroup} from "@/components/study-pack/quiz-matching-group";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import {QuizGenerationOverlay} from "@/components/study-pack/quiz-generation-overlay";
+import {ReviewCommitmentPrompt} from "@/components/study-pack/review-commitment-prompt";
 import {useQuizSessionGuard} from "@/components/study-pack/quiz-session-guard";
 import {StickyAssessmentFooter} from "@/components/ui/sticky-assessment-footer";
 import {PaywallModal} from "@/components/billing/paywall-modal";
@@ -1215,6 +1216,11 @@ export default function LongExamPage() {
                             <p className="mt-3 text-sm text-foreground/70">No weak domains flagged.</p>
                         )}
                     </div>
+
+                    <ReviewCommitmentPrompt
+                        isFirstCompletedSessionEver={masteryReport.isFirstCompletedSessionEver}
+                        noteId={noteId}
+                    />
 
                     <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
                         <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">Suggested Next Step</h2>

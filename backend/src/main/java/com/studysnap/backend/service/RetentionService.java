@@ -27,9 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.time.DayOfWeek;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -48,6 +50,7 @@ public class RetentionService {
     private static final String FIRST_NAME_PARAMETER = "firstName";
     private static final String DASHBOARD_URL_PARAMETER = "dashboardUrl";
     private static final String DASHBOARD_PATH = "/dashboard";
+    private static final String QUICK_REVIEW_PATH_SUFFIX = "/quick-review?source=due-concepts-digest";
     private static final String DEFAULT_STUDY_PACK_TITLE = "your study pack";
     private static final String KNOWLEDGE_IMPACT_DIGEST_TEMPLATE = "knowledge-impact-digest";
     private static final String PUBLIC_CREATOR_PATH_PREFIX = "/public/creator/";
@@ -176,7 +179,9 @@ public class RetentionService {
     }
 
     List<DueConceptsDigestReminder> findDueConceptsDigestUsers(OffsetDateTime now) {
+        DayOfWeek dispatchDay = now.atZoneSameInstant(EMAIL_BUDGET_ZONE).getDayOfWeek();
         return userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndDueConceptsDigestRemindersEnabledTrue(UserStatus.ACTIVE).stream()
+                .filter(user -> isEligibleReviewDay(user, dispatchDay))
                 .map(user -> findDueConceptsDigestReminderForUser(user, now))
                 .flatMap(Optional::stream)
                 .toList();
@@ -358,10 +363,32 @@ public class RetentionService {
                 .map(entry -> titlesByStudyPackId.getOrDefault(entry.getKey(), DEFAULT_STUDY_PACK_TITLE))
                 .limit(3)
                 .toList();
+        UUID targetStudyPackId = dueConceptsByStudyPackId.entrySet().stream()
+                .filter(entry -> !entry.getValue().isEmpty())
+                .sorted((left, right) -> Integer.compare(right.getValue().size(), left.getValue().size()))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
+        String actionPath = studyPacks.stream()
+                .filter(studyPack -> Objects.equals(targetStudyPackId, studyPack.getId()))
+                .map(StudyPackEntity::getNoteId)
+                .filter(Objects::nonNull)
+                .filter(noteId -> noteRepository.findByIdAndOwnerUserId(noteId, user.getId()).isPresent())
+                .map(noteId -> "/notes/" + noteId + QUICK_REVIEW_PATH_SUFFIX)
+                .findFirst()
+                .orElse(DASHBOARD_PATH);
         return Optional.of(new DueConceptsDigestReminder(
                 user.getId(), user.getEmail(), resolveFirstName(user), dueConceptCount, studyPackTitles,
-                buildAbsoluteUrl(DASHBOARD_PATH)
+                buildAbsoluteUrl(actionPath)
         ));
+    }
+
+    private boolean isEligibleReviewDay(UserEntity user, DayOfWeek dispatchDay) {
+        String[] reviewDays = user.getReviewDays();
+        if (reviewDays == null || reviewDays.length == 0) {
+            return true;
+        }
+        return Arrays.stream(reviewDays).anyMatch(dispatchDay.name()::equals);
     }
 
     private Optional<KnowledgeImpactDigestReminder> buildKnowledgeImpactDigestReminder(

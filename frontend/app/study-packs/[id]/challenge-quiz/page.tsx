@@ -20,6 +20,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
+import { ReviewCommitmentPrompt } from "@/components/study-pack/review-commitment-prompt";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { CompanionResultBridgeCard, hasCompanionResultBridgeExcerpt } from "@/components/study-pack/companion-result-bridge-card";
 import { ResultGuidanceGroup } from "@/components/study-pack/result-guidance-group";
@@ -2366,6 +2367,10 @@ export default function ChallengeQuizPage() {
           </div>
 
           <div ref={weakConceptsRef} className="space-y-4">
+            <ReviewCommitmentPrompt
+              isFirstCompletedSessionEver={result.isFirstCompletedSessionEver}
+              noteId={note?.id ?? null}
+            />
             {hasNextStepGuidance ? (
               <ResultGuidanceGroup label="What to do next" testId="board-exam-next-step-guidance">
                 <PostSessionNextStep
@@ -2584,6 +2589,10 @@ export default function ChallengeQuizPage() {
             )}
           </Card>
           <div ref={weakConceptsRef} className="space-y-4">
+            <ReviewCommitmentPrompt
+              isFirstCompletedSessionEver={result.isFirstCompletedSessionEver}
+              noteId={note?.id ?? null}
+            />
             {hasNextStepGuidance ? (
               <ResultGuidanceGroup label="What to do next" testId="challenge-quiz-next-step-guidance">
                 <PostSessionNextStep

@@ -165,6 +165,12 @@ Due-concepts actions reuse the Focus Areas three-way behavior:
 
 The card is loaded as a non-critical Dashboard request, so a focus-resolution failure never blocks the rest of Dashboard.
 
+## First-session review commitment
+
+The shared post-session next-step surface asks a learner to schedule their next review after their first completed session. **There is deliberately no profile-type gate** — it appears for every profile while `MeResponse.reviewCommitmentOutstanding` is true. The commitment being collected is the **review days**, and gating those behind an exam date would exclude every `STUDENT` (~27% of accounts), since onboarding only collects that date for `BOARD_EXAM`. The surface is its own filter: it exists only after a completed session, so people who never study never see it, and teachers preview with `generatedQuiz` rather than sessions and do not reach it. The **exam-date sub-field** renders only for users who already have an `examDate` or are `BOARD_EXAM`; everyone else sees the review-days picker alone, and the date is never required from them.
+
+The learner chooses review weekdays — confirming or setting an exam date too, where that field applies — or declines with `Not now`. **This endpoint never clears an existing exam date:** it does not own that field, and a learner with no date sends null on every save, so the write is applied only when a date is supplied. Both successful choices resolve the prompt through `PUT /users/review-commitment`; a failed save leaves it outstanding and preserves the form state. Resolution is stored in `users.review_commitment_prompted_at`, never `localStorage`, so the prompt stays resolved across browsers and reloads. Review weekdays remain editable in Settings → Email Preferences.
+
 ## Focus Areas
 
 Focus Areas should show weak concepts for all learners when data exists.

@@ -40,6 +40,7 @@ import {
   type EngagementMode,
   type MePlanResponse,
   type MeResponse,
+  type ReviewDay,
   type SubscriptionCancellationReason,
 } from "@/lib/api";
 import { buildLoginPath, clearAuthUser, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
@@ -54,6 +55,16 @@ import {
   isPaidPlanType,
 } from "@/lib/plans";
 import { PASS_NO_AUTO_CHARGE_FOOTER, PLANS, TEACHER_PLUS_EXPORT_CALLOUT, getPaidPlanCtaLabel } from "@/src/config/plans";
+
+const REVIEW_DAY_OPTIONS: ReadonlyArray<{ value: ReviewDay; label: string }> = [
+  { value: "MONDAY", label: "Mon" },
+  { value: "TUESDAY", label: "Tue" },
+  { value: "WEDNESDAY", label: "Wed" },
+  { value: "THURSDAY", label: "Thu" },
+  { value: "FRIDAY", label: "Fri" },
+  { value: "SATURDAY", label: "Sat" },
+  { value: "SUNDAY", label: "Sun" },
+];
 
 function SettingsLoading() {
   return (
@@ -202,6 +213,7 @@ export default function SettingsPage() {
   const [weakConceptRemindersEnabled, setWeakConceptRemindersEnabled] = useState(false);
   const [weeklySummaryRemindersEnabled, setWeeklySummaryRemindersEnabled] = useState(false);
   const [dueConceptsDigestRemindersEnabled, setDueConceptsDigestRemindersEnabled] = useState(false);
+  const [reviewDays, setReviewDays] = useState<ReviewDay[]>([]);
   const [knowledgeImpactDigestRemindersEnabled, setKnowledgeImpactDigestRemindersEnabled] = useState(false);
   const [hasPublicNotes, setHasPublicNotes] = useState(false);
   const [impactCheckFailed, setImpactCheckFailed] = useState(false);
@@ -275,6 +287,7 @@ export default function SettingsPage() {
       setWeakConceptRemindersEnabled(me.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(me.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(me.dueConceptsDigestRemindersEnabled);
+      setReviewDays(me.reviewDays ?? []);
       setKnowledgeImpactDigestRemindersEnabled(me.knowledgeImpactDigestRemindersEnabled);
       setHasPublicNotes(Boolean(impact.value?.notes.length));
       setImpactCheckFailed(!impact.ok);
@@ -347,6 +360,7 @@ export default function SettingsPage() {
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(updated.dueConceptsDigestRemindersEnabled);
+      setReviewDays(updated.reviewDays ?? []);
       setKnowledgeImpactDigestRemindersEnabled(updated.knowledgeImpactDigestRemindersEnabled);
       setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEngagementModeMessage("Learning style updated.");
@@ -369,6 +383,7 @@ export default function SettingsPage() {
         dueConceptsDigestRemindersEnabled,
         knowledgeImpactDigestRemindersEnabled,
         marketingEmailsEnabled,
+        reviewDays,
       });
       setProfile(updated);
       setSelectedEngagementMode(updated.engagementMode);
@@ -376,6 +391,7 @@ export default function SettingsPage() {
       setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setWeeklySummaryRemindersEnabled(updated.weeklySummaryRemindersEnabled);
       setDueConceptsDigestRemindersEnabled(updated.dueConceptsDigestRemindersEnabled);
+      setReviewDays(updated.reviewDays ?? []);
       setKnowledgeImpactDigestRemindersEnabled(updated.knowledgeImpactDigestRemindersEnabled);
       setMarketingEmailsEnabled(updated.marketingEmailsEnabled);
       setEmailPreferencesMessage("Email preferences updated.");
@@ -888,6 +904,33 @@ export default function SettingsPage() {
                   onChange={setInactivityRemindersEnabled}
                   disabled={savingEmailPreferences}
                 />
+              </div>
+              <div className="space-y-3 p-4">
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Review days</span>
+                  <span className="block text-xs text-foreground/60">
+                    Pick when due-concept reminders may arrive. With no days selected, the existing weekly schedule continues.
+                  </span>
+                </span>
+                <div className="flex flex-wrap gap-2" aria-label="Review days">
+                  {REVIEW_DAY_OPTIONS.map((option) => {
+                    const selected = reviewDays.includes(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={selected}
+                        className={`rounded-full border px-3 py-1.5 text-sm ${selected ? "border-blue-600 bg-blue-600 text-white" : "border-border bg-background"}`}
+                        onClick={() => setReviewDays((current) => current.includes(option.value)
+                          ? current.filter((day) => day !== option.value)
+                          : [...current, option.value])}
+                        disabled={savingEmailPreferences}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="flex items-start justify-between gap-4 p-4">
                 <span className="space-y-1">
