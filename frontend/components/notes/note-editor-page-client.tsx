@@ -837,10 +837,16 @@ export function NoteEditorPageClient({
       // validation contract (MultiProgramDomainContextRequiredException,
       // CourseProgramSelectionRequiredException), not an infrastructure failure -- and keep the generic
       // draft-preservation notice for everything else.
+      // Both messages matter and they answer different questions: the server's message says what to
+      // FIX, the fallback says the draft is SAFE. The first version of this used `else if`, which was
+      // dead code -- parseApiResponse always throws with a non-empty message (it falls back to
+      // "Request failed. Please try again."), so the draft notice could never render and a user whose
+      // save failed had no idea their work was preserved.
       const serverMessage = error instanceof Error ? error.message.trim() : "";
       if (serverMessage) {
         showToast(serverMessage, "error");
-      } else if (!isEditMode && authUser?.id && shouldPreserveDraft) {
+      }
+      if (!isEditMode && authUser?.id && shouldPreserveDraft) {
         showToast(CHECKOUT_DRAFT_FALLBACK_MESSAGE, "info");
       }
     }

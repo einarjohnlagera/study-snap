@@ -166,15 +166,19 @@ It is worth stating plainly that this was an *interaction* defect, not a mistake
 **The shadowing predicate — use this, not "the note has join rows."**
 
 ```
-shadowed = (joinRowCount == 1) || (domainContext != null)
+shadowed = (joinRowCount >= 1) && (joinRowCount == 1 || domainContext != null)
 ```
 
-This is the exact condition under which `notes.course_program` cannot be read on any path, derived from the two resolvers rather than inferred:
+This is the exact condition under which `notes.course_program` cannot be read on any path. **The string is shadowed only when BOTH readers ignore it — that conjunction is the whole predicate**, and it is what the first version of this paragraph got wrong:
 
-- **Discovery** ignores the string whenever *any* join row exists — every library and public read is `EXISTS(join rows) OR (NOT EXISTS(join rows) AND legacy string matches)`.
-- **Generation** reads the string only through `effectiveAuthoringDomain`, which returns the Domain Context label when one is set, and otherwise calls `resolveCourseProgram` — which returns the joined catalog name at **exactly one** row and falls through to the string at 0 or 2+.
+- **Discovery** ignores the string whenever *any* join row exists — every library and public read is `EXISTS(join rows) OR (NOT EXISTS(join rows) AND legacy string matches)`. Verified across all five readers: both library filters, both legacy-value lookups, and the facet count. So discovery ignores it iff `joinRowCount >= 1`.
+- **Generation** reads the string only through `effectiveAuthoringDomain`, which returns the Domain Context label when one is set, and otherwise calls `resolveCourseProgram` — which returns the joined catalog name at **exactly one** row and falls through to the string at 0 or 2+. So generation ignores it iff `domainContext != null || joinRowCount == 1`.
 
-So a copy of a curated note is shadowed on both paths, by two independent mechanisms: at 2+ programs the inherited Domain Context wins (curated multi-program notes are *required* to carry one, and `copyNote` inherits it); at exactly one program the joined catalog name wins. **Do not simplify the predicate to "has join rows."** That would rest on the invariant *2+ rows ⟹ Domain Context non-null* holding across every write path, present and future. The predicate above is correct whether or not that invariant holds, and a fix that depends on an invariant nobody enforces is a fix waiting to rot.
+So a copy of a curated note is shadowed on both paths: at 2+ programs the inherited Domain Context wins (curated multi-program notes are *required* to carry one, and `copyNote` inherits it); at exactly one program the joined catalog name wins.
+
+**Corrected 2026-08-11 by the `v0.71.1` pressure test. The original form was `(joinRowCount == 1) || (domainContext != null)`** — it dropped the discovery term entirely, and so returned `true` at **zero** join rows with a Domain Context, which is precisely where the string is *maximally* readable: with no join rows it is the only value discovery can match on. The consequence was a learner whose own Course / Program field was hidden, un-required, and skipped by `update`, while still deciding which shelf their note appeared on — permanently uneditable through the product. It was reachable by copying a curated note whose program the catalog deliberately excludes. **The error came from deriving the predicate from the two resolvers while treating their conditions as alternatives rather than as a conjunction**, then propagating it into four documents and a test that asserted it as correct.
+
+**Do not simplify the predicate to "has join rows"** either. That would rest on the invariant *2+ rows ⟹ Domain Context non-null* holding across every write path, present and future. The predicate above is correct whether or not that invariant holds, and a fix that depends on an invariant nobody enforces is a fix waiting to rot.
 
 **Consequences:**
 

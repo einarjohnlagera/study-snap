@@ -12,6 +12,9 @@ import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
+import com.studysnap.backend.dto.ApplicableProgramResponse;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
+import com.studysnap.backend.util.NoteEffectivePrograms;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +46,7 @@ public class ProgressReportService {
     private final ConceptHealthRepository conceptHealthRepository;
     private final ConceptHealthService conceptHealthService;
     private final NoteRepository noteRepository;
+    private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
 
     @Transactional(readOnly = true)
@@ -446,8 +450,22 @@ public class ProgressReportService {
                 .map(this::normalizeCourseProgramKey)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+        // Join-first, batched. Reading notes.course_program alone excluded EVERY curated note, whose
+        // legacy string is null by definition -- so a learner studying entirely from Official Review
+        // Sets had all of their packs filtered out here. The goal nudge then still rendered (it returns
+        // unconditionally) reporting 0% mastery and 0 due concepts, which is worse than not firing.
+        // Found by the v0.71.1 pressure test: the M3 fix taught PostSessionNextStepService to read the
+        // join, but this filter -- reached through buildGoalNudge -- still disagreed about "in goal".
+        Map<UUID, List<ApplicableProgramResponse>> programsByNoteId =
+                noteCourseProgramRepository.findByNoteIds(noteIds);
         Set<UUID> matchingNoteIds = noteRepository.findByOwnerUserIdAndIdIn(userId, noteIds).stream()
-                .filter(note -> goalCoursePrograms.contains(normalizeCourseProgramKey(note.getCourseProgram())))
+                .filter(note -> NoteEffectivePrograms.resolve(
+                                programsByNoteId.getOrDefault(note.getId(), List.of()).stream()
+                                        .map(ApplicableProgramResponse::name)
+                                        .toList(),
+                                note.getCourseProgram()
+                        ).stream()
+                        .anyMatch(program -> goalCoursePrograms.contains(normalizeCourseProgramKey(program))))
                 .map(NoteEntity::getId)
                 .collect(Collectors.toSet());
 

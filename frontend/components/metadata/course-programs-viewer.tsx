@@ -29,7 +29,7 @@ export function CourseProgramsViewer({ programs }: Readonly<CourseProgramsViewer
           aria-expanded={viewer !== null}
           aria-haspopup="dialog"
         >
-          Applicable to {programs.length} programs
+          Applies to {programs.length} programs
         </button>
         {viewer === "desktop" ? (
           <div role="dialog" aria-label="Applicable programs" className="absolute left-0 top-7 z-30 hidden w-64 rounded-lg border border-border bg-background p-3 shadow-lg sm:block">

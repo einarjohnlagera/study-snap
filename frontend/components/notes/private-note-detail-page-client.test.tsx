@@ -506,12 +506,60 @@ describe("PrivateNoteDetailPageClient", () => {
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    const viewerButton = await screen.findByRole("button", { name: "Applicable to 3 programs" });
+    const viewerButton = await screen.findByRole("button", { name: "Applies to 3 programs" });
     expect(screen.queryByText("Pharmacy")).not.toBeInTheDocument();
     expect(screen.queryByText("Medicine")).not.toBeInTheDocument();
     fireEvent.click(viewerButton);
     expect(await screen.findByText("Pharmacy")).toBeInTheDocument();
     expect(screen.getByText("Medicine")).toBeInTheDocument();
+  });
+
+  it("still gives a learner an editable Course / Program when the note is not shadowed", async () => {
+    // The ordinary learner case, which lost coverage when the default mock started returning
+    // courseProgramShadowed: true for every test. It also proves the #note-course-program-inline
+    // assertions elsewhere are meaningful rather than matching a selector that never exists.
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, courseProgram: "BS Nursing" });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [],
+      courseProgramShadowed: false,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    // Not shadowed: the learner's own program is shown as an ordinary value, with no provenance
+    // sentence claiming someone else set it.
+    expect(await screen.findByText("BS Nursing")).toBeInTheDocument();
+    expect(screen.queryByText(
+      "Set by the note this was copied from. Your own course or program is on your profile.",
+    )).not.toBeInTheDocument();
+  });
+
+  it("does not block a learner when the course program catalog fails to load", async () => {
+    // The catalog is a curator-only dependency. Before the fix it shared a Promise.all with the
+    // shadow flag, so its failure left the flag null forever -- hiding the learner's own field and
+    // skipping its required validation.
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, courseProgram: "BS Nursing" });
+    (getCourseProgramCatalog as jest.Mock).mockRejectedValue(new Error("catalog down"));
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [],
+      courseProgramShadowed: false,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    // The catalog rejection must not swallow the shadow flag: the learner still sees their own
+    // program rather than an empty labelled block.
+    expect(await screen.findByText("BS Nursing")).toBeInTheDocument();
   });
 
   it("shows copied applicable programs as read-only provenance for a learner on refresh", async () => {
@@ -539,7 +587,9 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText(
       "Set by the note this was copied from. Your own course or program is on your profile.",
     )).toBeInTheDocument();
-    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
+    // Assert on the learner input's own id: the previous check used the CURATOR control's aria-label,
+    // which can never render for a STUDENT, so it passed vacuously.
+    expect(document.querySelector("#note-course-program-inline")).toBeNull();
   });
 
   it("does not claim copy provenance for an owner self-copy", async () => {
@@ -589,7 +639,9 @@ describe("PrivateNoteDetailPageClient", () => {
     await screen.findByText("Nursing", { selector: "p" });
     fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
-    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
+    // Assert on the learner input's own id: the previous check used the CURATOR control's aria-label,
+    // which can never render for a STUDENT, so it passed vacuously.
+    expect(document.querySelector("#note-course-program-inline")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
@@ -783,7 +835,9 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
+    // Assert on the learner input's own id: the previous check used the CURATOR control's aria-label,
+    // which can never render for a STUDENT, so it passed vacuously.
+    expect(document.querySelector("#note-course-program-inline")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 

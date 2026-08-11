@@ -950,7 +950,7 @@ Ratified 2026-07-31 (Company Redefinition Phase 4, considered and narrowed 2026-
 - **`notes.courseProgram` is unreadable — "shadowed" — under an exact condition, and any code gating on it must use that condition (`v0.71.1`, ratified in `ADR-001`):**
 
   ```
-  shadowed = (joinRowCount == 1) || (domainContext != null)
+  shadowed = (joinRowCount >= 1) && (joinRowCount == 1 || domainContext != null)
   ```
 
   Discovery ignores the string whenever *any* join row exists (every library and public read is `EXISTS(join) OR (NOT EXISTS(join) AND legacy matches)`), and generation reads it only through `effectiveAuthoringDomain` — which returns the Domain Context label when set, and otherwise calls `resolveCourseProgram`, which returns the joined catalog name at exactly one row and falls through to the string at 0 or 2+. A copy of a curated note is shadowed on both paths by two independent mechanisms: the inherited Domain Context at 2+ programs, the joined name at exactly one. **Do not simplify this to `joinRowCount > 0`.** That form depends on the invariant *2+ rows implies a non-null Domain Context* holding on every write path, present and future; no code enforces it, and the predicate above is correct whether or not it holds.

@@ -16,6 +16,7 @@ import com.studysnap.backend.repository.ConceptHealthRepository;
 import com.studysnap.backend.repository.MemorizationCardRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,6 +51,8 @@ class ProgressReportServiceTest {
 
     @Mock
     private NoteRepository noteRepository;
+    @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
 
     @Mock
     private ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
@@ -64,6 +67,7 @@ class ProgressReportServiceTest {
                 conceptHealthRepository,
                 conceptHealthService,
                 noteRepository,
+                noteCourseProgramRepository,
                 examGoalCourseProgramProvider
         );
         lenient().when(examGoalCourseProgramProvider.getCoursePrograms("ale"))
