@@ -39,6 +39,9 @@ import com.studysnap.backend.repository.QuickReviewSessionSummaryProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.SummaryPreviewUtils;
+import com.studysnap.backend.dto.ApplicableProgramResponse;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
+import com.studysnap.backend.util.NoteEffectivePrograms;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -81,6 +84,7 @@ public class DashboardService {
     private final UserRepository userRepository;
     private final StudyPackRepository studyPackRepository;
     private final NoteRepository noteRepository;
+    private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ActivityEventRepository activityEventRepository;
     private final SubscriptionService subscriptionService;
@@ -965,7 +969,19 @@ public class DashboardService {
                 .map(note -> new ContinueStudyingNoteMetadata(
                         normalizeOptionalText(note.getTitle(), studyPack.getTitle()),
                         normalizeOptionalText(note.getSubject(), studyPack.getSubject()),
-                        normalizeOptionalText(note.getCourseProgram(), null),
+                        // M3: join-first. A curated note carries a null legacy string, so reading it alone
+                        // degraded Continue Studying to no program at all on exactly the curated notes.
+                        // resolveSingle deliberately returns null for a multi-program note rather than
+                        // picking one arbitrarily -- this slot has room for one value.
+                        normalizeOptionalText(
+                                NoteEffectivePrograms.resolveSingle(
+                                        noteCourseProgramRepository.findByNoteId(note.getId()).stream()
+                                                .map(ApplicableProgramResponse::name)
+                                                .toList(),
+                                        note.getCourseProgram()
+                                ),
+                                null
+                        ),
                         note.getDomainContext() == null ? null : note.getDomainContext().name(),
                         note.getLearnerLevel() == null ? null : note.getLearnerLevel().name()
                 ))

@@ -1824,6 +1824,7 @@ export type PublicProfileNoteResponse = {
   noteId: string;
   title: string | null;
   courseProgram: string | null;
+  applicablePrograms: string[];
   subject: string | null;
   tags: string[];
   contentPreview: string;

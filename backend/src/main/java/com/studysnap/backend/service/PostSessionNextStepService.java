@@ -20,6 +20,9 @@ import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.dto.ApplicableProgramResponse;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
+import com.studysnap.backend.util.NoteEffectivePrograms;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -63,6 +66,7 @@ public class PostSessionNextStepService {
     private final StudySnapProperties properties;
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
+    private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final ProgressReportService progressReportService;
     private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     private final StudyPackGenerationContextResolver generationContextResolver;
@@ -411,10 +415,24 @@ public class PostSessionNextStepService {
         try {
             NoteEntity note = noteRepository.findByIdAndOwnerUserId(studyPack.getNoteId(), user.getId())
                     .orElse(null);
-            if (note == null || note.getCourseProgram() == null || note.getCourseProgram().isBlank()) {
+            if (note == null) {
                 return null;
             }
-            if (isCurrentNoteInGoal(studyGoal, note.getCourseProgram())) {
+            // M3: read the join first. Reading notes.course_program alone made every curated note look
+            // programme-less -- ADR-001 defines a curator-authored note's string as null -- so the goal
+            // nudge was skipped entirely for exactly the notes an Official Review Set is built from.
+            List<String> notePrograms = NoteEffectivePrograms.resolve(
+                    noteCourseProgramRepository.findByNoteId(note.getId()).stream()
+                            .map(ApplicableProgramResponse::name)
+                            .toList(),
+                    note.getCourseProgram()
+            );
+            if (notePrograms.isEmpty()) {
+                return null;
+            }
+            // Applicable to several programs means in-goal if ANY of them is: the note genuinely serves
+            // that goal, so nudging the learner elsewhere would be wrong.
+            if (notePrograms.stream().anyMatch(program -> isCurrentNoteInGoal(studyGoal, program))) {
                 return null;
             }
             return progressReportService.buildGoalNudge(user.getId(), studyGoal, OffsetDateTime.now(ZoneOffset.UTC));

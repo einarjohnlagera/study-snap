@@ -19,6 +19,7 @@ import com.studysnap.backend.repository.NoteSubjectCountProjection;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +44,8 @@ class PublicProfileServiceTest {
     @Mock
     private NoteRepository noteRepository;
     @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
+    @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
     private AnalyticsEventRepository analyticsEventRepository;
@@ -51,7 +54,7 @@ class PublicProfileServiceTest {
 
     @BeforeEach
     void setUp() {
-        publicProfileService = new PublicProfileService(userRepository, noteRepository, studyPackRepository, analyticsEventRepository);
+        publicProfileService = new PublicProfileService(userRepository, noteRepository, noteCourseProgramRepository, studyPackRepository, analyticsEventRepository);
     }
 
     @Test

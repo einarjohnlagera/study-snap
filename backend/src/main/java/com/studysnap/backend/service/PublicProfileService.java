@@ -21,6 +21,8 @@ import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.ContentPreviewUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
+import com.studysnap.backend.dto.ApplicableProgramResponse;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.LinkedHashMap;
 
 @Service
 @Transactional(readOnly = true)
@@ -46,6 +49,7 @@ public class PublicProfileService {
 
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
+    private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final StudyPackRepository studyPackRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
 
@@ -74,6 +78,14 @@ public class PublicProfileService {
         }
 
         List<NoteEntity> publicNotes = noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC);
+        // One batched lookup for the whole profile rather than a query per card.
+        Map<UUID, List<String>> programNamesByNoteId = new LinkedHashMap<>();
+        noteCourseProgramRepository
+                .findByNoteIds(publicNotes.stream().map(NoteEntity::getId).toList())
+                .forEach((noteId, programs) -> programNamesByNoteId.put(
+                        noteId,
+                        programs.stream().map(ApplicableProgramResponse::name).toList()
+                ));
         Map<UUID, Long> copyCountsByNoteId = loadCopyCounts(publicNotes);
         Map<UUID, Long> shareCountsByNoteId = loadPublicEventCounts(publicNotes, AnalyticsEventType.PUBLIC_NOTE_SHARED);
         Map<UUID, Long> viewCountsByNoteId = loadPublicEventCounts(publicNotes, AnalyticsEventType.PUBLIC_NOTE_VIEWED);
@@ -111,6 +123,9 @@ public class PublicProfileService {
                                 note.getId().toString(),
                                 note.getTitle(),
                                 normalizeOptionalText(note.getCourseProgram()),
+                                // M3/L3: profile cards rendered no program for curated notes, whose legacy
+                                // string is null by definition. Batched once above rather than per note.
+                                programNamesByNoteId.getOrDefault(note.getId(), List.of()),
                                 note.getDomainContext() == null ? null : note.getDomainContext().name(),
                                 note.getLearnerLevel() == null ? null : note.getLearnerLevel().name(),
                                 note.getSubject(),

@@ -37,6 +37,7 @@ import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
 import com.studysnap.backend.testutil.builders.StudyPackEntityBuilder;
 import com.studysnap.backend.testutil.builders.UserActivityEventEntityBuilder;
 import com.studysnap.backend.testutil.builders.UserEntityBuilder;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -67,6 +68,8 @@ class DashboardServiceTest {
     @Mock
     private NoteRepository noteRepository;
     @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
+    @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
     private ActivityEventRepository activityEventRepository;
@@ -90,6 +93,7 @@ class DashboardServiceTest {
                 userRepository,
                 studyPackRepository,
                 noteRepository,
+                noteCourseProgramRepository,
                 quickReviewSessionRepository,
                 activityEventRepository,
                 subscriptionService,

@@ -58,6 +58,7 @@ class PublicProfileControllerTest {
                         "note-1",
                         "Cell Structure",
                         "Biology",
+                        List.of("Nursing"),
                         null,
                         null,
                         "Biology",

@@ -830,8 +830,17 @@ export function NoteEditorPageClient({
             : `/notes/${saved.id}/edit`,
         };
       }
-    } catch {
-      if (!isEditMode && authUser?.id && shouldPreserveDraft) {
+    } catch (error) {
+      // M10: this catch discarded the exception, so a curator hitting the paywall with several programs
+      // and a blank Domain Context saw "we couldn't save your draft" instead of the instruction that
+      // would actually let them save. Surface the server's message when it has one -- it is a
+      // validation contract (MultiProgramDomainContextRequiredException,
+      // CourseProgramSelectionRequiredException), not an infrastructure failure -- and keep the generic
+      // draft-preservation notice for everything else.
+      const serverMessage = error instanceof Error ? error.message.trim() : "";
+      if (serverMessage) {
+        showToast(serverMessage, "error");
+      } else if (!isEditMode && authUser?.id && shouldPreserveDraft) {
         showToast(CHECKOUT_DRAFT_FALLBACK_MESSAGE, "info");
       }
     }

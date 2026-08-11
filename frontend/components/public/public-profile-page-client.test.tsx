@@ -59,6 +59,7 @@ const baseProfile: PublicProfileResponse = {
       noteId: "note-1",
       title: "Plant Cells",
       courseProgram: "Biology",
+      applicablePrograms: ["Nursing"],
       subject: "Biology",
       tags: ["cells"],
       contentPreview: "Plant cells contain chloroplasts and cell walls.",
