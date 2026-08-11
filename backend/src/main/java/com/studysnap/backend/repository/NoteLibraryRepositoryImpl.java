@@ -182,6 +182,19 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
     }
 
     @Override
+    public List<NoteListItemProjection> findListItemProjectionsByOwnerUserId(UUID ownerUserId, Integer limit) {
+        Query query = createNativeQuery(NOTE_LIST_ITEM_SELECT + NOTE_LIST_ITEMS_FROM + """
+                 where n.owner_user_id = :ownerUserId
+                 order by n.updated_at desc
+                """);
+        query.setParameter(OWNER_USER_ID_ALIAS, ownerUserId);
+        if (limit != null) {
+            query.setMaxResults(limit);
+        }
+        return tuples(query).stream().map(this::toListItemProjection).toList();
+    }
+
+    @Override
     public List<NoteListItemProjection> findLibraryListItemProjectionsByOwnerUserIdAndIdIn(
             UUID ownerUserId,
             Collection<UUID> noteIds

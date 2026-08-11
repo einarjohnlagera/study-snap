@@ -489,9 +489,13 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listMine(UUID ownerUserId, Integer limit) {
-        Pageable pageable = limit == null ? Pageable.unpaged() : PageRequest.of(0, limit);
+        // Native rather than the old JPQL projection: JPQL cannot express the array_agg the join needs,
+        // so that projection never selected applicablePrograms and GET /notes advertised a field it
+        // always returned empty (M2). This shares the select and join with the Library page, so the two
+        // endpoints cannot drift on the same DTO. The aggregate is owner-scoped, so it is empty for
+        // every learner -- no non-admin note carries a join row -- and bounded for a curator.
         List<? extends NoteListItemView> notes = noteRepository
-                .findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId, pageable);
+                .findListItemProjectionsByOwnerUserId(ownerUserId, limit);
         return toListItems(notes, ownerUserId, true);
     }
 
