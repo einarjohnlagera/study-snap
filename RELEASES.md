@@ -1,5 +1,51 @@
 # RELEASES.md - NoteLib
 
+## v0.73.0 - Onboarding Redesign
+
+**Status: In Progress**
+
+Theme: make the first run the thing that explains NoteLib. A learner should reach their first Study Pack understanding what the product does — not having completed a settings wizard that let them in.
+
+**The evidence, and the honest justification.** **132 learners — 35.2% of all signups — verify their email and never finish onboarding.** That is the largest single drop anywhere in the funnel (375 signups → 366 verified → 234 onboarded → 195 activated). **This release is NOT justified as a retention lever and must not be scoped as one:** `v0.72.1` measured activation at 52.2%, which structurally caps activation-volume work below the retention lever regardless of the retention rate, and the volume hypothesis failed against a pre-committed rule. The ground here is **comprehension and first impression** — 132 people meet the product and leave before understanding it. That is a real reason and a different one. Design direction: `docs/claude-plans/onboarding-redesign-ux-review.md`.
+
+**Recorded because it should not pass silently:** this is the third justification offered for overlapping onboarding work — retention (a read killed it), activation volume (the arithmetic killed it), now comprehension. The owner weighed that knowingly at kickoff.
+
+### Planned Scope
+
+1. **Land the learner on their Study Pack (frontend).** Delete the three-CTA completion screen. Onboarding does not auto-start Quick Review today — that concern was never real — but it also does not land the learner on the artifact; the first CTA already resolves to `/study-packs/{id}`. Replace the decision screen with a direct landing plus one dismissible banner carrying a single suggested action. **This removes a screen without removing a step**, and it is the highest-value change in the release.
+2. **Make the generation wait build the Study Pack in view (frontend).** Reveal each part as it completes — summary, key concepts, practice quiz. Turns dead time into anticipation and teaches what a Study Pack is without an explanatory screen.
+3. **Step 1 — outcome cards, tap to advance (frontend).** One first-person outcome line per profile; tapping the card advances, no Continue button. **Deliberately not a master-detail panel:** step 1 is where a learner has invested least, so reading requirements cost most there. One line per card also avoids a per-profile capability list, which would either overstate `PROFESSIONAL` or expose that it is largely relabeled student functionality.
+4. **Step 2 — sentence-form learning context (frontend).** *"I'm studying ⟨program⟩ at ⟨level⟩ level."* Same fields, same pickers, one visual object instead of three stacked field groups. Helper paragraphs become in-control placeholder examples.
+5. **Step 3 — outcome copy with real specifics (frontend).** Lead with what each path gives, and name the actual resolved Review Set and its note count rather than describing it in adjectives.
+6. **The unsupported-program fallback — invitation, not apology (frontend).** Lead with what works today, state the gap as in-progress second, offer a role in the future third.
+7. **C8 and C9, scoped here rather than twice (frontend).** The carried Onboarding Intent Router residuals are the same defects this redesign reaches from a positioning angle — C9 (Step 2 Course / Program copy byte-identical across all four profile types despite `profileType` being known at Step 1) and C8 (a curator with an off-catalog profile program gets a bare *"No course programs selected."*). The Backlog Index row says scope them once, not twice.
+8. **Step-level completion instrumentation (frontend + analytics).** We currently cannot tell *which* step the 132 abandon on — `profile_type` persists only at the final step, and clean step events start 2026-07-28 (n≈5). This release must leave that answerable, both for its own checkpoint and for whatever iterates on it.
+
+**Pre-declared at kickoff so the signoff gate has something to point at:** this release ships on a belief — that better comprehension reduces abandonment — which is falsifiable, so **it will owe a `[CHECKPOINT]`**. The metric is **onboarding completion rate against the 62.4% (234/375) baseline**, and scope item 8 is what makes it readable per step. Do not let signoff close without it.
+
+### Explicitly out of scope
+
+- **Universal onboarding / running onboarding before email verification.** Step 4 calls `/notes/generate` and `/notes/{id}/generate`, and **both call `requireEmailVerified`** (`NoteController.java:147`, `:212`) — so this would 403 at the exact moment onboarding promises the first Study Pack, and would expose paid LLM generation to unverified throwaway accounts. The counter-proposal (move the verification ask to step 4 — from the door to the payoff, no backend change) is a **follow-on**, deliberately not folded in: verification loses 9 learners, onboarding loses 132, and this release should aim at the larger one first.
+- **Auto-starting Quick Review after generation.** Owner decision, reaffirmed: the Study Pack is the learner's first "aha," and dropping them into a quiz downplays it.
+- **Adding onboarding steps.** The flow should feel shorter at the same step count.
+- **Any change to the Applicable Programs model or `ADR-001`.**
+
+Anti-drift — locked:
+
+- **The curator onboarding guard stays.** `NoteService.isTeacherSelectableOwner`, `NoteGenerationService.isCurator` and `NoteBulkGenerationService.isCurator` return `false` while `onboardingCompletedAt` is null. Do not restore the bare role check — that is the B0 activation-blocking regression, and this release works directly on that flow.
+- **Course / Program, Learner Level, Subject and Audience use pickers, never free text.** A sentence-form layout with combobox triggers satisfies this; a text input does not. This rule has been broken repeatedly.
+- **`profileType` must still be captured.** Downstream features hard-depend on it; onboarding cannot end without it.
+- **No "AI" in learner-facing copy.** It names the mechanism; the positioning names the artifact. Internal docs keep the term.
+- **Do not change what counts as activation** — `MIN(created_at)` over `STUDY_PACK_GENERATED`. Changing it breaks reconciliation with every recorded read.
+- **New analytics events go in the `AnalyticsEventType` enum before being fired**, on both sides. Scope item 8 is exactly where that rule gets skipped.
+- **One-time contextual tips go through `pickActiveGuidance()`.**
+- **Upgrade CTAs go through `getUpgradeCtas(currentPlan)`.**
+- **Collection vocabulary stays profile-aware** — copy must not hardcode "Study Plan" or "Review Set".
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.72.1 - Constraint Check
 
 **Status: Released** (signed off 2026-08-11)
