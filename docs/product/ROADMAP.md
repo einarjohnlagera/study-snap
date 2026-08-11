@@ -6,7 +6,7 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.72.0 — Return Loop` (on `releases/v0.72.0`, cut from `main` after `v0.71.2` merged and deployed) is **In Progress** — kicked off 2026-08-11. It goes at the project's oldest and least-moved constraint, **W1→W2 retention at 2.4%**, rather than at another authoring or discovery surface. **It opens on a read, not a build:** an earlier release pre-committed to *"if the signal is positive or ambiguous (not clearly negative), ship H1+H5"*, the window closed **2026-07-29**, and this kickoff's gate scan found the read had gone unrun for 13 days. Scope, the rule, and the recorded fallback if the read is clearly negative are in `RELEASES.md`.
+`v0.72.0 — Return Loop` (on `releases/v0.72.0`, cut from `main` after `v0.71.2` merged and deployed) is **Released** — kicked off and signed off 2026-08-11. **No next version is kicked off.** It went at the project's oldest and least-moved constraint, **W1→W2 retention at 2.4%**, rather than at another authoring or discovery surface. **It opens on a read, not a build:** an earlier release pre-committed to *"if the signal is positive or ambiguous (not clearly negative), ship H1+H5"*, the window closed **2026-07-29**, and this kickoff's gate scan found the read had gone unrun for 13 days. Scope, the rule, and the recorded fallback if the read is clearly negative are in `RELEASES.md`.
 
 Previous: `v0.71.2 — Catalog Management` (on `releases/v0.71.2`, cut from `main` after `v0.71.1` merged and deployed) is **Released** — kicked off and signed off 2026-08-11. **No next version is kicked off.** It added the ability to grow the `course_programs` catalog from inside the product, which is the mechanism `ADR-001` already names and the thing currently blocking one canonical Algebra note from serving every engineering program it applies to. **New capability, not deferred-findings cleanup** — its anti-drift is written fresh in `RELEASES.md` rather than inherited from `v0.71.1`. Scope, audit findings and the two open decisions are in the `v0.71.2` section below.
 
@@ -265,7 +265,7 @@ This section exists so a fresh session doesn't have to re-derive from scratch wh
 
 **Open question, not yet decided:** whether library cards should show program names (owner's instinct: `Civil Engineering • Mechanical Engineering • +2`) or the count (engineering recommendation: names read as a second identity beside the Subject badge, are largely redundant once a learner has filtered by program, and force an arbitrary truncation choice). A GPT consultation prompt covering this and the architecture is at `22-remove-primary-program-gpt-consultation-prompt.md`.
 
-## v0.72.0 — Return Loop (In Progress, base branch `releases/v0.72.0`)
+## v0.72.0 — Return Loop (Released, base branch `releases/v0.72.0`)
 
 Kicked off 2026-08-11, cut from `main` after `v0.71.2` merged and deployed. Targets W1→W2 retention (**2.4%**, unmoved across releases and named in `GPT_CONTEXT.md` as the single biggest constraint).
 

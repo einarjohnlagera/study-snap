@@ -2,7 +2,7 @@
 
 ## v0.72.0 - Return Loop
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-08-11)
 
 Theme: give a learner a reason and a plan to come back. This release goes at the project's oldest and least-moved constraint — **W1→W2 retention at 2.4%** — rather than at another authoring or discovery surface.
 
