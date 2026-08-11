@@ -32,7 +32,7 @@ export function CourseProgramCombobox({
   onChange,
   learnerLevel = null,
   ariaLabel,
-  placeholder = "Choose or type a course/program",
+  placeholder,
   disabled = false,
   context = "profile",
   errorText = null,
@@ -43,6 +43,12 @@ export function CourseProgramCombobox({
   const resolvedHelperText = helperText === undefined
     ? getCourseProgramHelperText(learnerLevel, context)
     : helperText;
+  // L1: a caller's placeholder wins in BOTH modes. The default previously lived on the prop, so
+  // `placeholder` was never undefined and the allowCustom={false} branch overwrote whatever the caller
+  // passed -- silently discarding states like "Loading course programs...", which a caller supplies
+  // precisely because it knows something the component does not.
+  const resolvedPlaceholder = placeholder
+    ?? (allowCustom ? "Choose or type a course/program" : "Choose a course/program");
   return (
     <div className="space-y-2">
       <SuggestionCombobox
@@ -51,7 +57,7 @@ export function CourseProgramCombobox({
         options={suggestions.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
         onChange={(nextValue) => onChange(nextValue.slice(0, 120))}
         ariaLabel={ariaLabel}
-        placeholder={allowCustom ? placeholder : "Choose a course/program"}
+        placeholder={resolvedPlaceholder}
         disabled={disabled}
         helperText={resolvedHelperText ?? undefined}
         allowCustom={allowCustom}

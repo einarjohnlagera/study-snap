@@ -4,10 +4,11 @@ import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.model.NoteListItemProjection;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
@@ -33,34 +34,9 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
 
     Optional<NoteEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
     Optional<NoteEntity> findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(UUID ownerUserId, UUID copiedFromNoteId);
+    Page<NoteEntity> findByOwnerUserId(UUID ownerUserId, Pageable pageable);
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
     long countByOwnerUserId(UUID ownerUserId);
-
-    @Query("""
-            select n.id as id,
-                   n.ownerUserId as ownerUserId,
-                   n.title as title,
-                   n.courseProgram as courseProgram,
-                   n.domainContext as domainContext,
-                   n.learnerLevel as learnerLevel,
-                   n.targetProfileType as targetProfileType,
-                   n.subject as subject,
-                   n.tags as tags,
-                   substring(n.content, 1, 2000) as content,
-                   n.status as status,
-                   n.visibility as visibility,
-                   n.createdAt as createdAt,
-                   n.updatedAt as updatedAt,
-                   n.copiedFromNoteId as copiedFromNoteId,
-                   n.copiedFromPublic as copiedFromPublic
-            from NoteEntity n
-            where n.ownerUserId = :ownerUserId
-            order by n.updatedAt desc
-            """)
-    List<NoteListItemProjection> findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(
-            @Param("ownerUserId") UUID ownerUserId,
-            Pageable pageable
-    );
 
     @Query("""
             select new com.studysnap.backend.repository.NoteStatusProjection(

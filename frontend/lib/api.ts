@@ -1544,10 +1544,14 @@ export type ApplicableProgram = {
   name: string;
 };
 
+export type NoteApplicableProgramsResponse = {
+  programs: ApplicableProgram[];
+  courseProgramShadowed: boolean;
+};
+
 export type AdminNoteApplicableProgramsItem = {
   noteId: string;
   title: string | null;
-  ownerEmail: string | null;
   courseProgram: string | null;
   domainContext: DomainContext | null;
   applicablePrograms: ApplicableProgram[];
@@ -1820,6 +1824,7 @@ export type PublicProfileNoteResponse = {
   noteId: string;
   title: string | null;
   courseProgram: string | null;
+  applicablePrograms: string[];
   subject: string | null;
   tags: string[];
   contentPreview: string;
@@ -4853,7 +4858,7 @@ export async function getCourseProgramCatalog(): Promise<CourseProgramCatalogIte
   return parseApiResponse<CourseProgramCatalogItem[]>(response, "Could not load the course program catalog.");
 }
 
-export async function getNoteApplicablePrograms(noteId: string): Promise<ApplicableProgram[]> {
+export async function getNoteApplicablePrograms(noteId: string): Promise<NoteApplicableProgramsResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/applicable-programs`,
     {
@@ -4862,7 +4867,29 @@ export async function getNoteApplicablePrograms(noteId: string): Promise<Applica
     },
     true,
   );
-  return parseApiResponse<ApplicableProgram[]>(response, "Could not load Course / Program(s).");
+  const payload = await parseApiResponse<unknown>(response, "Could not load Course / Program(s).");
+  if (
+    typeof payload !== "object"
+    || payload === null
+    || !("programs" in payload)
+    || !Array.isArray(payload.programs)
+    || !("courseProgramShadowed" in payload)
+    || typeof payload.courseProgramShadowed !== "boolean"
+  ) {
+    throw new Error("Could not load Course / Program(s).");
+  }
+  const programs = payload.programs.filter((program): program is ApplicableProgram => (
+    typeof program === "object"
+    && program !== null
+    && "id" in program
+    && typeof program.id === "string"
+    && "name" in program
+    && typeof program.name === "string"
+  ));
+  return {
+    programs,
+    courseProgramShadowed: payload.courseProgramShadowed,
+  };
 }
 
 export async function replaceNoteApplicablePrograms(

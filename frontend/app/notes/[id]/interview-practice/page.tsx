@@ -29,6 +29,7 @@ import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
+import { resolveEffectivePrograms, sharesAnyProgram } from "@/lib/note-programs";
 import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type InterviewPhase = "prestart" | "generating" | "running" | "completed" | "forfeited" | "error";
@@ -99,14 +100,33 @@ export default function InterviewPracticePage() {
           listNotes().catch(() => [] as NoteListItemResponse[]),
         ]);
         if (!active) return;
-        const primaryCourseProgram = noteResult.courseProgram?.trim() ?? null;
+        // M4: the current note's programs come from the same listNotes payload rather than a second
+        // request — it contains this note too. Reading noteResult.courseProgram alone left
+        // primaryCourseProgram null for every curated note (their legacy string is null by definition),
+        // so the filter returned true for everything and offered the learner's whole ready library.
+        const currentListItem = notes.find((item) => item.id === noteId);
+        const currentPrograms = resolveEffectivePrograms(
+          currentListItem?.applicablePrograms,
+          currentListItem?.courseProgram ?? noteResult.courseProgram,
+        );
         setNote(noteResult);
         setViewerPlanType(me.planType === "FREE" || me.planType === "PLUS" || me.planType === "PRO" ? me.planType : null);
-        const resolveDefaultAvailableNotes = () => notes.filter((item) => {
-          if (item.id === noteId || item.studyPackStatus !== "STUDY_PACK_READY") return false;
-          if (primaryCourseProgram) return item.courseProgram?.trim() === primaryCourseProgram;
-          return true;
-        });
+        const resolveDefaultAvailableNotes = () => {
+          const ready = notes.filter((item) => (
+            item.id !== noteId && item.studyPackStatus === "STUDY_PACK_READY"
+          ));
+          if (currentPrograms.length === 0) return ready;
+          const programMatched = ready.filter((item) => sharesAnyProgram(
+            currentPrograms,
+            resolveEffectivePrograms(item.applicablePrograms, item.courseProgram),
+          ));
+          // Prefer program-matched sources, but never hand back an empty picker: the whole section is
+          // gated on availableNotes.length > 0, so zero matches makes "Add context from more notes"
+          // vanish with no explanation. Matching now compares catalog names against learner free text,
+          // which legitimately misses (catalog "Nursing" vs a typed "BS Nursing"), so an empty result is
+          // a vocabulary mismatch rather than a real absence of usable notes.
+          return programMatched.length > 0 ? programMatched : ready;
+        };
         if (collectionId) {
           try {
             const collection = await getCollection(collectionId);

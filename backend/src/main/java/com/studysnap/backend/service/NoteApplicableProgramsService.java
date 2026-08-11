@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AdminNoteApplicableProgramsItemResponse;
 import com.studysnap.backend.dto.AdminNoteApplicableProgramsPageResponse;
 import com.studysnap.backend.dto.ApplicableProgramResponse;
+import com.studysnap.backend.dto.NoteApplicableProgramsResponse;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
@@ -17,6 +18,7 @@ import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.UuidParsingUtils;
+import com.studysnap.backend.util.NoteCourseProgramShadowing;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,12 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -44,9 +43,14 @@ public class NoteApplicableProgramsService {
     private final NoteCourseProgramRepository noteCourseProgramRepository;
 
     @Transactional(readOnly = true)
-    public List<ApplicableProgramResponse> get(String noteIdRaw, UUID requesterUserId) {
+    public NoteApplicableProgramsResponse get(String noteIdRaw, UUID requesterUserId) {
         NoteEntity note = findReadableNote(noteIdRaw, requesterUserId);
-        return noteCourseProgramRepository.findByNoteId(note.getId());
+        List<ApplicableProgramResponse> programs = noteCourseProgramRepository.findByNoteId(note.getId());
+        boolean courseProgramShadowed = NoteCourseProgramShadowing.isShadowed(
+                programs.size(),
+                note.getDomainContext()
+        );
+        return new NoteApplicableProgramsResponse(programs, courseProgramShadowed);
     }
 
     @Transactional
@@ -75,8 +79,8 @@ public class NoteApplicableProgramsService {
     }
 
     @Transactional(readOnly = true)
-    public AdminNoteApplicableProgramsPageResponse getAdminPage(int page, int size) {
-        Page<NoteEntity> notes = noteRepository.findAll(PageRequest.of(
+    public AdminNoteApplicableProgramsPageResponse getAdminPage(int page, int size, UUID requesterUserId) {
+        Page<NoteEntity> notes = noteRepository.findByOwnerUserId(requesterUserId, PageRequest.of(
                 page,
                 size,
                 Sort.by(Sort.Direction.DESC, UPDATED_AT_PROPERTY)
@@ -85,17 +89,13 @@ public class NoteApplicableProgramsService {
         Map<UUID, List<ApplicableProgramResponse>> programsByNoteId =
                 noteCourseProgramRepository.findByNoteIds(noteIds);
 
-        Set<UUID> ownerIds = new HashSet<>();
-        notes.getContent().forEach(note -> ownerIds.add(note.getOwnerUserId()));
-        Map<UUID, String> ownerEmailById = new HashMap<>();
-        userRepository.findAllById(ownerIds).forEach(user -> ownerEmailById.put(user.getId(), user.getEmail()));
-
+        // No owner lookup: the page now returns only the requester's own notes, so an owner column
+        // would be the viewer's own address on every row. Dropped with the column it fed (v0.71.1).
         List<AdminNoteApplicableProgramsItemResponse> items = new ArrayList<>();
         for (NoteEntity note : notes.getContent()) {
             items.add(new AdminNoteApplicableProgramsItemResponse(
                     note.getId(),
                     note.getTitle(),
-                    ownerEmailById.get(note.getOwnerUserId()),
                     note.getCourseProgram(),
                     note.getDomainContext() == null ? null : note.getDomainContext().name(),
                     programsByNoteId.getOrDefault(note.getId(), List.of())
@@ -113,12 +113,15 @@ public class NoteApplicableProgramsService {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(noteIdRaw, NoteNotFoundException::new);
         NoteEntity note = noteRepository.findById(noteId).orElseThrow(NoteNotFoundException::new);
         UserEntity requester = userRepository.findById(requesterUserId).orElseThrow(NoteNotFoundException::new);
-        if (requester.getRole() == UserRole.ADMIN) {
-            return note;
-        }
-        boolean isTeacherOwner = note.getOwnerUserId().equals(requesterUserId)
-                && requester.getProfileType() == ProfileType.TEACHER;
-        if (!isTeacherOwner) {
+        boolean isOwner = note.getOwnerUserId().equals(requesterUserId);
+        // Nobody curates during onboarding. This is the FOURTH curator predicate; the pressure test
+        // found it created without the guard in the same release that added the guard to the third and
+        // recorded in CLAUDE.md that all of them carry it. Not UI-reachable mid-onboarding
+        // (requireAuthenticatedOnboardedUser gates both note surfaces), so this is consistency work --
+        // but a rule with a live in-repo exception decays, and the doc claiming otherwise was false.
+        boolean isCurator = requester.getOnboardingCompletedAt() != null
+                && (requester.getRole() == UserRole.ADMIN || requester.getProfileType() == ProfileType.TEACHER);
+        if (!isOwner || !isCurator) {
             throw new NoteNotFoundException();
         }
         return note;

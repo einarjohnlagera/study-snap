@@ -197,6 +197,9 @@ export function NoteEditorPageClient({
   const [applicableProgramCatalog, setApplicableProgramCatalog] = useState<CourseProgramCatalogItem[]>([]);
   const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
   const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
+  const [savedApplicableProgramNames, setSavedApplicableProgramNames] = useState<string[]>([]);
+  const [courseProgramShadowed, setCourseProgramShadowed] = useState<boolean | null>(null);
+  const [copiedFromNoteId, setCopiedFromNoteId] = useState<string | null>(null);
   const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
   const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
   const [applicableProgramsDirty, setApplicableProgramsDirty] = useState(false);
@@ -236,23 +239,26 @@ export function NoteEditorPageClient({
   }, []);
 
   useEffect(() => {
-    if (!showTargetProfileTypeField) {
+    if (!showTargetProfileTypeField && !noteId) {
       return;
     }
     let active = true;
     setApplicableProgramsLoading(true);
     setApplicableProgramsError(null);
+    const catalogRequest = showTargetProfileTypeField ? getCourseProgramCatalog() : Promise.resolve([]);
     const programsRequest = noteId ? getNoteApplicablePrograms(noteId) : Promise.resolve(null);
-    void Promise.all([getCourseProgramCatalog(), programsRequest])
-      .then(([catalog, programs]) => {
+    void Promise.all([catalogRequest, programsRequest])
+      .then(([catalog, response]) => {
         if (!active) {
           return;
         }
         setApplicableProgramCatalog(catalog);
-        if (programs) {
-          const selectedIds = programs.map((program) => program.id);
+        if (response) {
+          const selectedIds = response.programs.map((program) => program.id);
           setApplicableProgramIds(selectedIds);
           setSavedApplicableProgramIds(selectedIds);
+          setSavedApplicableProgramNames(response.programs.map((program) => program.name));
+          setCourseProgramShadowed(response.courseProgramShadowed);
           setApplicableProgramsDirty(false);
         }
         setCatalogLoaded(true);
@@ -568,6 +574,7 @@ export function NoteEditorPageClient({
         }
         setDraft(toDraft(note));
         setCurrentNoteId(note.id);
+        setCopiedFromNoteId(note.copiedFromNoteId);
         setStudyPackStatus(note.studyPackStatus ?? "DRAFT");
       })
       .catch((error) => {
@@ -699,7 +706,9 @@ export function NoteEditorPageClient({
       }
     }
     const missing: string[] = [];
-    if (showTargetProfileTypeField ? applicableProgramIds.length === 0 : !resolvedCourseProgram) {
+    if (showTargetProfileTypeField
+      ? applicableProgramIds.length === 0
+      : (!isEditMode || courseProgramShadowed === false) && !resolvedCourseProgram) {
       missing.push("Course / Program(s)");
     }
     if (missing.length > 0) {
@@ -743,6 +752,7 @@ export function NoteEditorPageClient({
     showToast,
     showTargetProfileTypeField,
     applicableProgramIds,
+    courseProgramShadowed,
   ]);
 
   const upsertNote = useCallback(async (): Promise<NoteResponse | null> => {
@@ -820,7 +830,22 @@ export function NoteEditorPageClient({
             : `/notes/${saved.id}/edit`,
         };
       }
-    } catch {
+    } catch (error) {
+      // M10: this catch discarded the exception, so a curator hitting the paywall with several programs
+      // and a blank Domain Context saw "we couldn't save your draft" instead of the instruction that
+      // would actually let them save. Surface the server's message when it has one -- it is a
+      // validation contract (MultiProgramDomainContextRequiredException,
+      // CourseProgramSelectionRequiredException), not an infrastructure failure -- and keep the generic
+      // draft-preservation notice for everything else.
+      // Both messages matter and they answer different questions: the server's message says what to
+      // FIX, the fallback says the draft is SAFE. The first version of this used `else if`, which was
+      // dead code -- parseApiResponse always throws with a non-empty message (it falls back to
+      // "Request failed. Please try again."), so the draft notice could never render and a user whose
+      // save failed had no idea their work was preserved.
+      const serverMessage = error instanceof Error ? error.message.trim() : "";
+      if (serverMessage) {
+        showToast(serverMessage, "error");
+      }
       if (!isEditMode && authUser?.id && shouldPreserveDraft) {
         showToast(CHECKOUT_DRAFT_FALLBACK_MESSAGE, "info");
       }
@@ -1351,6 +1376,11 @@ export function NoteEditorPageClient({
         applicableProgramsLoading={applicableProgramsLoading}
         applicableProgramsError={applicableProgramsError}
         onRetryApplicablePrograms={() => setApplicableProgramsRetryToken((value) => value + 1)}
+        courseProgramShadowed={courseProgramShadowed ?? (
+          isEditMode && (applicableProgramsLoading || Boolean(applicableProgramsError)) ? true : null
+        )}
+        savedApplicableProgramNames={savedApplicableProgramNames}
+        copiedFromNoteId={copiedFromNoteId}
         targetProfileTypeHelperText={targetProfileTypeHelperText}
         backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}
         backLabel={isEditMode ? "Note" : "Library"}

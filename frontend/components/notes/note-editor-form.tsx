@@ -16,6 +16,7 @@ import {
 import type {CourseProgramCatalogItem, DomainContext, LearnerLevel, NoteTargetProfileType} from "@/lib/api";
 import {CourseProgramCombobox} from "@/components/metadata/course-program-combobox";
 import {ApplicableProgramsCombobox} from "@/components/metadata/applicable-programs-combobox";
+import {ApplicableProgramsProvenance} from "@/components/metadata/applicable-programs-provenance";
 import {SubjectCombobox} from "@/components/notes/subject-combobox";
 import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
@@ -114,6 +115,9 @@ type NoteEditorFormProps = {
     applicableProgramsLoading?: boolean;
     applicableProgramsError?: string | null;
     onRetryApplicablePrograms?: () => void;
+    courseProgramShadowed?: boolean | null;
+    savedApplicableProgramNames?: string[];
+    copiedFromNoteId?: string | null;
     targetProfileTypeHelperText?: string;
     backHref?: string;
     backLabel?: string;
@@ -196,6 +200,9 @@ export function NoteEditorForm({
                                    applicableProgramsLoading = false,
                                    applicableProgramsError = null,
                                    onRetryApplicablePrograms,
+                                   courseProgramShadowed = null,
+                                   savedApplicableProgramNames = [],
+                                   copiedFromNoteId = null,
                                    targetProfileTypeHelperText = "Choose the learner audience for this note.",
                                    backHref,
                                    backLabel,
@@ -402,12 +409,19 @@ export function NoteEditorForm({
                 get a catalog-backed multi-select. */}
             <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2 sm:col-span-2">
-                    <label
-                        htmlFor={showAuthoringMetadataFields ? "note-applicable-programs" : "note-course-program"}
-                        className="text-sm font-medium text-foreground"
-                    >
-                        Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
-                    </label>
+                    {/* A <label> with no `for` and no wrapped control has no target, so when the field
+                        is replaced by read-only provenance this becomes a <p> instead of a dangling
+                        label. */}
+                    {showAuthoringMetadataFields || !courseProgramShadowed ? (
+                        <label
+                            htmlFor={showAuthoringMetadataFields ? "note-applicable-programs" : "note-course-program"}
+                            className="text-sm font-medium text-foreground"
+                        >
+                            Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
+                        </label>
+                    ) : (
+                        <p className="text-sm font-medium text-foreground">Course / Program(s)</p>
+                    )}
                     {showAuthoringMetadataFields ? (
                         <>
                             <p className="text-xs text-foreground/60">
@@ -425,6 +439,14 @@ export function NoteEditorForm({
                                 disabled={isCopying}
                             />
                         </>
+                    ) : courseProgramShadowed ? (
+                        <ApplicableProgramsProvenance
+                            programs={savedApplicableProgramNames}
+                            copiedFromNoteId={copiedFromNoteId}
+                            loading={applicableProgramsLoading}
+                            error={applicableProgramsError}
+                            onRetry={onRetryApplicablePrograms}
+                        />
                     ) : (
                         <CourseProgramCombobox
                             id="note-course-program"
@@ -741,7 +763,9 @@ export function NoteEditorForm({
         ? applicableProgramCatalog
             .filter((program) => applicableProgramIds.includes(program.id))
             .map((program) => program.name)
-        : [note.courseProgram.trim()].filter(Boolean);
+        : courseProgramShadowed
+            ? savedApplicableProgramNames
+            : [note.courseProgram.trim()].filter(Boolean);
     const programSummary = selectedProgramLabels.length > 2
         ? `${selectedProgramLabels.length} programs`
         : selectedProgramLabels.join(" · ");
@@ -753,12 +777,14 @@ export function NoteEditorForm({
     // multi-program note collapsed the bar to the subject alone for the same reason.
     const tailoredProgramLabel = showAuthoringMetadataFields
         ? programSummary || null
-        : resolvedCourseProgram?.trim() || null;
+        : courseProgramShadowed ? programSummary || null : resolvedCourseProgram?.trim() || null;
     const subjectSummary = note.subject.trim();
     const optionalDetailsSummary = programSummary
         ? [programSummary, subjectSummary || "Add a Subject to improve organization and your Study Pack."]
             .join(" · ")
-        : "Course / Program(s) is required. A Subject improves organization and your Study Pack.";
+        : courseProgramShadowed
+            ? "A Subject improves organization and your Study Pack."
+            : "Course / Program(s) is required. A Subject improves organization and your Study Pack.";
 
     const renderOptionalDetailsSection = () => (
         <section ref={optionalDetailsSectionRef} className="rounded-2xl border border-border/80 bg-muted/15">

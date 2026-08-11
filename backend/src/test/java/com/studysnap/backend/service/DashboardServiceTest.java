@@ -37,6 +37,8 @@ import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
 import com.studysnap.backend.testutil.builders.StudyPackEntityBuilder;
 import com.studysnap.backend.testutil.builders.UserActivityEventEntityBuilder;
 import com.studysnap.backend.testutil.builders.UserEntityBuilder;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
+import com.studysnap.backend.dto.ApplicableProgramResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -67,6 +69,8 @@ class DashboardServiceTest {
     @Mock
     private NoteRepository noteRepository;
     @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
+    @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
     private ActivityEventRepository activityEventRepository;
@@ -90,6 +94,7 @@ class DashboardServiceTest {
                 userRepository,
                 studyPackRepository,
                 noteRepository,
+                noteCourseProgramRepository,
                 quickReviewSessionRepository,
                 activityEventRepository,
                 subscriptionService,
@@ -530,11 +535,69 @@ class DashboardServiceTest {
         assertThat(response.resumeType()).isEqualTo(ContinueStudyingResumeType.CHALLENGE);
         assertThat(response.noteTitle()).isEqualTo("Statics Midterm Review");
         assertThat(response.subject()).isEqualTo("Engineering Mechanics");
+        // Legacy-string path: no join rows, so the note's own string is the answer.
         assertThat(response.courseProgram()).isEqualTo("Civil Engineering");
         assertThat(response.domainContext()).isEqualTo(DomainContext.ENGINEERING_SCIENCES.name());
         assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.COLLEGE.name());
         assertThat(response.currentQuestionIndex()).isEqualTo(2);
         assertThat(response.totalQuestions()).isEqualTo(10);
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_resolvesTheCourseProgramFromTheJoinForACuratedNote() {
+        // M3 regression. The repository mock was added unstubbed, so it returned an empty list and every
+        // assertion still passed off the legacy string -- the join-first path was never exercised.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Algebra");
+        studyPack.setNoteId(noteId);
+
+        QuickReviewSessionEntity inProgress = buildInProgressSession(
+                userId, studyPackId, 1, 5, QuickReviewRound.INITIAL, Map.of(), now.minusMinutes(3)
+        );
+        stubLatestQuickReviewInProgressSession(userId, inProgress);
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        // Curated shape: legacy string null by ADR-001 definition, applicability only in the join.
+        NoteEntity curated = buildNote(userId, noteId, "Algebra", "Mathematics", null);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(curated));
+        when(noteCourseProgramRepository.findByNoteId(noteId)).thenReturn(List.of(
+                new ApplicableProgramResponse(UUID.randomUUID(), "Civil Engineering")
+        ));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.courseProgram()).isEqualTo("Civil Engineering");
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_leavesTheCourseProgramNullForAMultiProgramNote() {
+        // resolveSingle deliberately declines to pick one arbitrarily when a note serves several.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Algebra");
+        studyPack.setNoteId(noteId);
+
+        QuickReviewSessionEntity inProgress = buildInProgressSession(
+                userId, studyPackId, 1, 5, QuickReviewRound.INITIAL, Map.of(), now.minusMinutes(3)
+        );
+        stubLatestQuickReviewInProgressSession(userId, inProgress);
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        NoteEntity curated = buildNote(userId, noteId, "Algebra", "Mathematics", null);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(curated));
+        when(noteCourseProgramRepository.findByNoteId(noteId)).thenReturn(List.of(
+                new ApplicableProgramResponse(UUID.randomUUID(), "Civil Engineering"),
+                new ApplicableProgramResponse(UUID.randomUUID(), "Mechanical Engineering")
+        ));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.courseProgram()).isNull();
     }
 
     @Test

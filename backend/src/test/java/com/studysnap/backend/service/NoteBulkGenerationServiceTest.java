@@ -652,6 +652,58 @@ class NoteBulkGenerationServiceTest {
     }
 
     @Test
+    void queueBatch_curatorRoleMidOnboardingTakesTheLearnerBranch() {
+        // The v0.71.0 fix in adfa797f: nobody curates during onboarding. A curator-role account that
+        // reaches an authoring path before completing onboarding must NOT be asked for courseProgramIds,
+        // because no onboarding screen can supply them -- that is what made onboarding uncompletable for
+        // every ADMIN account. It takes the learner branch and its free-text program instead.
+        UUID adminId = UUID.randomUUID();
+        mockMidOnboardingUser(adminId, UserRole.ADMIN, ProfileType.STUDENT);
+        BulkGenerateNotesRequest requestWithoutCatalogIds = new BulkGenerateNotesRequest(
+                SUBJECT, List.of("Topic"), false, List.of(), COURSE_PROGRAM, null, null, null
+        );
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, COURSE_PROGRAM, SUBJECT, List.of(), null, null
+        );
+        when(generationContextResolver.resolveForBulkGeneration(
+                adminId, COURSE_PROGRAM, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(adminId))).thenReturn(noteResponse("note-1"));
+
+        service.queueBatch(requestWithoutCatalogIds, adminId, false);
+
+        ArgumentCaptor<UpsertNoteRequest> captor = ArgumentCaptor.forClass(UpsertNoteRequest.class);
+        verify(noteService).create(captor.capture(), eq(adminId));
+        assertThat(captor.getValue().courseProgramIds()).isEmpty();
+        assertThat(captor.getValue().courseProgramText()).isEqualTo(COURSE_PROGRAM);
+    }
+
+    @Test
+    void queueBatch_onboardedCuratorStillCurates() {
+        // Scope guard: the onboarding check must not demote a genuine curator, mirroring the two
+        // assertions adfa797f added for the paths it corrected.
+        UUID adminId = UUID.randomUUID();
+        mockUser(adminId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(
+                List.of("Topic"), COURSE_PROGRAM, NoteTargetProfileType.STUDENT, false
+        );
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                adminId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(adminId))).thenReturn(noteResponse("note-1"));
+
+        service.queueBatch(request, adminId, false);
+
+        ArgumentCaptor<UpsertNoteRequest> captor = ArgumentCaptor.forClass(UpsertNoteRequest.class);
+        verify(noteService).create(captor.capture(), eq(adminId));
+        assertThat(captor.getValue().courseProgramIds()).containsExactly(CATALOG_PROGRAM_ID);
+        assertThat(captor.getValue().courseProgramText()).isNull();
+    }
+
+    @Test
     void queueBatch_adminAllowsMissingProfileLearnerLevel() {
         UUID userId = UUID.randomUUID();
         mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, null, COURSE_PROGRAM);
@@ -734,6 +786,21 @@ class NoteBulkGenerationServiceTest {
         user.setProfileType(profileType);
         user.setLearnerLevel(learnerLevel);
         user.setCourseProgram(courseProgram);
+        // Onboarded by default: bulk generate is unreachable until onboarding completes
+        // (requireAuthenticatedOnboardedUser), so a null value here would model a state the surface
+        // cannot be in -- and would silently route every curator test down the learner branch.
+        user.setOnboardingCompletedAt(OffsetDateTime.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+    }
+
+    private void mockMidOnboardingUser(UUID userId, UserRole role, ProfileType profileType) {
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setRole(role);
+        user.setProfileType(profileType);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram(COURSE_PROGRAM);
+        user.setOnboardingCompletedAt(null);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
     }
 

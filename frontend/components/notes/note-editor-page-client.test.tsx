@@ -142,9 +142,10 @@ describe("NoteEditorPageClient", () => {
       { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
       { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null },
     ]);
-    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([
-      { id: "program-nursing", name: "Nursing" },
-    ]);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [{ id: "program-nursing", name: "Nursing" }],
+      courseProgramShadowed: false,
+    });
     (replaceNoteApplicablePrograms as jest.Mock).mockImplementation(async (_noteId: string, ids: string[]) => (
       ids.map((id) => ({ id, name: id === "program-pharmacy" ? "Pharmacy" : "Nursing" }))
     ));
@@ -311,7 +312,9 @@ describe("NoteEditorPageClient", () => {
     expect(addDetailsButton).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByLabelText("Title (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Subject (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Course \/ Program/)).not.toBeInTheDocument();
+    // Assert on the input id: querying by label text returned nothing either way once the label
+    // stopped carrying htmlFor, so the old assertion could not fail.
+    expect(document.querySelector("#note-course-program")).toBeNull();
   });
 
   it("shows write, generate, and import start options on the new note page", async () => {
@@ -429,6 +432,86 @@ describe("NoteEditorPageClient", () => {
     });
     expect(updateNote).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("shows copied applicable programs read-only and saves a shadowed learner note without a personal program", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      courseProgram: null,
+      copiedFromNoteId: "source-note",
+    });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [
+        { id: "program-civil", name: "Civil Engineering" },
+        { id: "program-mechanical", name: "Mechanical Engineering" },
+      ],
+      courseProgramShadowed: true,
+    });
+    (updateNote as jest.Mock).mockResolvedValue({ ...baseNote, courseProgram: null });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    expect(await screen.findByText("Civil Engineering · Mechanical Engineering")).toBeInTheDocument();
+    expect(screen.getByText(
+      "Set by the note this was copied from. Your own course or program is on your profile.",
+    )).toBeInTheDocument();
+    // Assert on the input id: querying by label text returned nothing either way once the label
+    // stopped carrying htmlFor, so the old assertion could not fail.
+    expect(document.querySelector("#note-course-program")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        courseProgramText: null,
+      }));
+    });
+  });
+
+  it("renders owner self-copy program names without copied provenance", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      courseProgram: null,
+      sourceNoteId: "owner-source-note",
+      copiedFromNoteId: null,
+    });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [{ id: "program-nursing", name: "Nursing" }],
+      courseProgramShadowed: true,
+    });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    expect(await screen.findByText("Nursing", { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByText(/Set by the note this was copied from/)).not.toBeInTheDocument();
+    // Assert on the input id: querying by label text returned nothing either way once the label
+    // stopped carrying htmlFor, so the old assertion could not fail.
+    expect(document.querySelector("#note-course-program")).toBeNull();
+  });
+
+  it("does not block a learner save when applicable-program provenance fails to load", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, courseProgram: null });
+    (getNoteApplicablePrograms as jest.Mock).mockRejectedValue(new Error("Could not load Course / Program(s)."));
+    (updateNote as jest.Mock).mockResolvedValue({ ...baseNote, courseProgram: null });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    expect(await screen.findByText("Could not load Course / Program(s)." )).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
   });
 
   it("saves an edited note using its own Course/Program, not the editor's profile", async () => {
@@ -987,7 +1070,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
+    expect(document.querySelector("#note-applicable-programs")).toBeNull();
   });
 
   it("keeps target audience hidden for professional note creation", async () => {
@@ -1000,7 +1083,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Add a course or program")).not.toBeInTheDocument();
+    expect(document.querySelector("#note-applicable-programs")).toBeNull();
   });
 
   it("shows target audience inside Add details for admin note creation", async () => {

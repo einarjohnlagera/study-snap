@@ -31,6 +31,15 @@ public interface NoteLibraryRepository {
             Collection<UUID> noteIds
     );
 
+    /**
+     * Owner-scoped list for {@code GET /notes}, newest first. Shares the native select and join with
+     * {@link #findLibraryPage}, which is the point: the JPQL projection this replaced never selected
+     * {@code applicablePrograms}, so the endpoint advertised a field it always returned empty (M2).
+     *
+     * @param limit {@code null} for unbounded — several callers list the whole library.
+     */
+    List<NoteListItemProjection> findListItemProjectionsByOwnerUserId(UUID ownerUserId, Integer limit);
+
     List<NoteLibrarySubjectProjection> findAllLibrarySubjectCandidates(UUID ownerUserId);
 
     List<NoteLibraryValueCountProjection> countLibraryCoursePrograms(UUID ownerUserId);

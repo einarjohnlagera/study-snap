@@ -13,6 +13,7 @@ import { useRouteProgress } from "@/components/navigation/route-progress-provide
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { ApplicableProgramsCombobox } from "@/components/metadata/applicable-programs-combobox";
 import { CourseProgramsViewer } from "@/components/metadata/course-programs-viewer";
+import { ApplicableProgramsProvenance } from "@/components/metadata/applicable-programs-provenance";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
 import { NoteDetailSummaryCard } from "@/components/notes/note-detail-summary-card";
@@ -485,6 +486,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
   const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
   const [savedApplicableProgramNames, setSavedApplicableProgramNames] = useState<string[]>([]);
+  const [courseProgramShadowed, setCourseProgramShadowed] = useState<boolean | null>(null);
   const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
   const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
   const [applicableProgramsDirty, setApplicableProgramsDirty] = useState(false);
@@ -866,16 +868,24 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     let active = true;
     setApplicableProgramsLoading(true);
     setApplicableProgramsError(null);
-    void Promise.all([getCourseProgramCatalog(), getNoteApplicablePrograms(note.id)])
-      .then(([catalog, programs]) => {
+    // The catalog is only ever used by the curator combobox, so a learner must not be blocked by its
+    // failure: rejecting the whole Promise.all left courseProgramShadowed null forever, which hides the
+    // learner's own Course / Program field AND skips its required validation. Guarded the way the Note
+    // Editor already guards it.
+    void Promise.all([
+      canEditAuthoringMetadata ? getCourseProgramCatalog() : Promise.resolve([]),
+      getNoteApplicablePrograms(note.id),
+    ])
+      .then(([catalog, response]) => {
         if (!active) {
           return;
         }
-        const selectedIds = programs.map((program) => program.id);
+        const selectedIds = response.programs.map((program) => program.id);
         setApplicableProgramCatalog(catalog);
         setApplicableProgramIds(selectedIds);
         setSavedApplicableProgramIds(selectedIds);
-        setSavedApplicableProgramNames(programs.map((program) => program.name));
+        setSavedApplicableProgramNames(response.programs.map((program) => program.name));
+        setCourseProgramShadowed(response.courseProgramShadowed);
         setApplicableProgramsDirty(false);
       })
       .catch((error) => {
@@ -893,7 +903,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     return () => {
       active = false;
     };
-  }, [applicableProgramsRetryToken, note?.id]);
+  }, [applicableProgramsRetryToken, canEditAuthoringMetadata, note?.id]);
   const isStudyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const isGeneratingStudyPack = studyPackStatus === "GENERATING";
   const hasGenerationFailed = studyPackStatus === "FAILED";
@@ -930,7 +940,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const selectedProgramNames = savedApplicableProgramNames;
   const noteProgramLine = useMemo(() => {
     if (selectedProgramNames.length === 1) return selectedProgramNames[0];
-    if (selectedProgramNames.length > 1) return `Applicable to ${selectedProgramNames.length} programs`;
+    // "Applies to" matches SharedNoteCard -- one phrasing across surfaces (L12). This branch survives
+    // only as a defensive fallback: it needs 2+ join rows with no Domain Context, which the save paths
+    // reject, and that invariant is exactly the one the shadowing predicate refuses to depend on.
+    if (selectedProgramNames.length > 1) return `Applies to ${selectedProgramNames.length} programs`;
     return courseProgramLabel;
   }, [courseProgramLabel, selectedProgramNames]);
   const visibility = (note?.visibility ?? "PRIVATE");
@@ -1445,7 +1458,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     const missing: string[] = [];
-    if (canEditAuthoringMetadata ? applicableProgramIds.length === 0 : !metadataDraft.courseProgram.trim()) {
+    if (canEditAuthoringMetadata
+      ? applicableProgramIds.length === 0
+      : courseProgramShadowed === false && !metadataDraft.courseProgram.trim()) {
       missing.push("Course / Program(s)");
     }
     if (canEditAuthoringMetadata && applicableProgramIds.length > 1 && !metadataDraft.domainContext) {
@@ -1887,10 +1902,35 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </p>
                 ) : null}
 
-                {!isInlineMetadataEditMode && noteProgramLine ? (
+                {!isInlineMetadataEditMode && canEditAuthoringMetadata && noteProgramLine ? (
                   selectedProgramNames.length > 0
                     ? <CourseProgramsViewer programs={selectedProgramNames} />
                     : <p className="text-sm text-foreground/65">{noteProgramLine}</p>
+                ) : null}
+                {!isInlineMetadataEditMode && !canEditAuthoringMetadata && courseProgramShadowed ? (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Course / Program(s)</p>
+                    <ApplicableProgramsProvenance
+                      programs={selectedProgramNames}
+                      copiedFromNoteId={note.copiedFromNoteId}
+                      loading={applicableProgramsLoading}
+                      error={applicableProgramsError}
+                      onRetry={() => setApplicableProgramsRetryToken((value) => value + 1)}
+                    />
+                  </div>
+                ) : null}
+                {!isInlineMetadataEditMode && !canEditAuthoringMetadata && courseProgramShadowed === false && noteProgramLine ? (
+                  <p className="text-sm text-foreground/65">{noteProgramLine}</p>
+                ) : null}
+                {!isInlineMetadataEditMode && !canEditAuthoringMetadata && courseProgramShadowed === null && applicableProgramsError ? (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Course / Program(s)</p>
+                    <ApplicableProgramsProvenance
+                      programs={[]}
+                      error={applicableProgramsError}
+                      onRetry={() => setApplicableProgramsRetryToken((value) => value + 1)}
+                    />
+                  </div>
                 ) : null}
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -2073,16 +2113,31 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 </div>
                 {!canEditAuthoringMetadata ? <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <label htmlFor="note-course-program-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                      Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
-                    </label>
-                    <CourseProgramCombobox
-                      id="note-course-program-inline"
-                      value={metadataDraft.courseProgram}
-                      suggestions={availableCourseProgramSuggestions}
-                      onChange={(value) => setMetadataDraft((previous) => ({ ...previous, courseProgram: value }))}
-                      context="note"
-                    />
+                    {/* <p> rather than a label with no target when the control is read-only text. */}
+                    {courseProgramShadowed === false ? (
+                      <label htmlFor="note-course-program-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                        Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
+                      </label>
+                    ) : (
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Course / Program(s)</p>
+                    )}
+                    {courseProgramShadowed !== false ? (
+                      <ApplicableProgramsProvenance
+                        programs={selectedProgramNames}
+                        copiedFromNoteId={note.copiedFromNoteId}
+                        loading={applicableProgramsLoading}
+                        error={applicableProgramsError}
+                        onRetry={() => setApplicableProgramsRetryToken((value) => value + 1)}
+                      />
+                    ) : (
+                      <CourseProgramCombobox
+                        id="note-course-program-inline"
+                        value={metadataDraft.courseProgram}
+                        suggestions={availableCourseProgramSuggestions}
+                        onChange={(value) => setMetadataDraft((previous) => ({ ...previous, courseProgram: value }))}
+                        context="note"
+                      />
+                    )}
                   </div>
                 </div> : null}
                 {canEditTargetProfileType ? (

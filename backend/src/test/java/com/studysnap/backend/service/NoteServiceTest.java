@@ -704,6 +704,71 @@ class NoteServiceTest {
     }
 
     @Test
+    void update_shadowedLearnerNoteDoesNotRequireARequestedOrProfileProgram() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity copiedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        copiedNote.setCourseProgram(null);
+        UserEntity owner = buildUser(ownerUserId, "owner@example.com");
+        owner.setCourseProgram(null);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(copiedNote));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+        when(noteCourseProgramRepository.findIdsByNoteId(noteId)).thenReturn(Set.of(UUID.randomUUID()));
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", null, null, null, List.of(), null, "content"
+        );
+
+        NoteResponse updated = noteService.update(noteId.toString(), request, ownerUserId);
+
+        assertThat(updated.courseProgram()).isNull();
+        assertThat(copiedNote.getCourseProgram()).isNull();
+    }
+
+    @Test
+    void update_shadowedLearnerNoteLeavesAnExistingCourseProgramUntouched() {
+        // A pre-slice-4 curated note kept its string while V107 gave it exactly one join row, and
+        // copyNote carries both onto the copy. The string is unreadable while that row exists, but it
+        // must not be silently destroyed by an unrelated edit -- nor replaced by the editor's profile
+        // program, which is what falling through to the resolver would do on a surface with no field.
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity copiedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        copiedNote.setCourseProgram("Civil Engineering");
+        UserEntity owner = buildUser(ownerUserId, "owner@example.com");
+        owner.setCourseProgram("Nursing");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(copiedNote));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+        when(noteCourseProgramRepository.findIdsByNoteId(noteId)).thenReturn(Set.of(UUID.randomUUID()));
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Retitled", "Subject", null, null, null, List.of(), null, "content"
+        );
+
+        noteService.update(noteId.toString(), request, ownerUserId);
+
+        assertThat(copiedNote.getCourseProgram()).isEqualTo("Civil Engineering");
+    }
+
+    @Test
+    void update_nonShadowedLearnerNoteStillRequiresRequestedOrProfileProgram() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        note.setCourseProgram(null);
+        UserEntity owner = buildUser(ownerUserId, "owner@example.com");
+        owner.setCourseProgram(null);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+        when(noteCourseProgramRepository.findIdsByNoteId(noteId)).thenReturn(Set.of());
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", null, null, null, List.of(), null, "content"
+        );
+        String noteIdRaw = noteId.toString();
+
+        assertThatThrownBy(() -> noteService.update(noteIdRaw, request, ownerUserId))
+                .isInstanceOf(CourseProgramSelectionRequiredException.class);
+    }
+
+    @Test
     void update_byLearnerOwner_rejectsClearingDomainContextOnAMultiProgramNote() {
         // C1. A learner's request carries no programs, so validating the request always saw 0 and the
         // invariant was unenforceable on the one author who can reach it: a learner could copy a
@@ -1183,7 +1248,7 @@ class NoteServiceTest {
 
         NoteListItemProjection readyProjection = buildListItemProjection(readyNoteId, ownerUserId, NoteStatus.GENERATED);
         NoteListItemProjection draftProjection = buildListItemProjection(draftNoteId, ownerUserId, NoteStatus.DRAFT);
-        when(noteRepository.findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(eq(ownerUserId), any()))
+        when(noteRepository.findListItemProjectionsByOwnerUserId(eq(ownerUserId), any()))
                 .thenReturn(List.of(readyProjection, draftProjection));
         when(studyPackRepository.findByNoteIdIn(List.of(readyNoteId, draftNoteId))).thenReturn(List.of(studyPack));
 
