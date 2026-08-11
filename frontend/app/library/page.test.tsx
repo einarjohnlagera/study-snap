@@ -1158,7 +1158,7 @@ describe("Library page", () => {
     expect(screen.queryByText("Quiz Ready")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Study Pack Ready" })).toBeInTheDocument();
     expect(screen.getByText(
-      "A note can apply to several programs, so these counts can exceed the note total.",
+      "A note can apply to several programs, so it appears under each one it serves.",
     )).toBeInTheDocument();
   });
 

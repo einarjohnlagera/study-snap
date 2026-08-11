@@ -2144,7 +2144,7 @@ export default function LibraryPage() {
             <div className="space-y-2">
               <p className="text-sm font-medium">Course / Program</p>
               <p className="text-xs leading-relaxed text-foreground/60">
-                A note can apply to several programs, so these counts can exceed the note total.
+                A note can apply to several programs, so it appears under each one it serves.
               </p>
               <div className="relative">
                 <input

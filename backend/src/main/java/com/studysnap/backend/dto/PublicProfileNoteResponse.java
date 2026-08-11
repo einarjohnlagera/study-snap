@@ -6,6 +6,7 @@ public record PublicProfileNoteResponse(
         String noteId,
         String title,
         String courseProgram,
+        List<String> applicablePrograms,
         String domainContext,
         String learnerLevel,
         String subject,

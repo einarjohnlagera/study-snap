@@ -29,6 +29,7 @@ import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
+import { resolveEffectivePrograms, sharesAnyProgram } from "@/lib/note-programs";
 import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type InterviewPhase = "prestart" | "generating" | "running" | "completed" | "forfeited" | "error";
@@ -99,13 +100,26 @@ export default function InterviewPracticePage() {
           listNotes().catch(() => [] as NoteListItemResponse[]),
         ]);
         if (!active) return;
-        const primaryCourseProgram = noteResult.courseProgram?.trim() ?? null;
+        // M4: the current note's programs come from the same listNotes payload rather than a second
+        // request — it contains this note too. Reading noteResult.courseProgram alone left
+        // primaryCourseProgram null for every curated note (their legacy string is null by definition),
+        // so the filter returned true for everything and offered the learner's whole ready library.
+        const currentListItem = notes.find((item) => item.id === noteId);
+        const currentPrograms = resolveEffectivePrograms(
+          currentListItem?.applicablePrograms,
+          currentListItem?.courseProgram ?? noteResult.courseProgram,
+        );
         setNote(noteResult);
         setViewerPlanType(me.planType === "FREE" || me.planType === "PLUS" || me.planType === "PRO" ? me.planType : null);
         const resolveDefaultAvailableNotes = () => notes.filter((item) => {
           if (item.id === noteId || item.studyPackStatus !== "STUDY_PACK_READY") return false;
-          if (primaryCourseProgram) return item.courseProgram?.trim() === primaryCourseProgram;
-          return true;
+          // No resolvable program on the current note keeps the previous behaviour: offer everything,
+          // rather than an empty picker the learner cannot act on.
+          if (currentPrograms.length === 0) return true;
+          return sharesAnyProgram(
+            currentPrograms,
+            resolveEffectivePrograms(item.applicablePrograms, item.courseProgram),
+          );
         });
         if (collectionId) {
           try {

@@ -22,6 +22,7 @@ import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -69,6 +70,8 @@ class PostSessionNextStepServiceTest {
     @Mock
     private NoteRepository noteRepository;
     @Mock
+    private NoteCourseProgramRepository noteCourseProgramRepository;
+    @Mock
     private ProgressReportService progressReportService;
     @Mock
     private ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
@@ -94,6 +97,7 @@ class PostSessionNextStepServiceTest {
                 properties,
                 userRepository,
                 noteRepository,
+                noteCourseProgramRepository,
                 progressReportService,
                 challengeQuizQuestionBankService,
                 generationContextResolver,
@@ -239,6 +243,42 @@ class PostSessionNextStepServiceTest {
         assertThat(response.goalNudge().goalName()).isEqualTo("PNLE");
         assertThat(response.goalNudge().goalLabel()).isEqualTo("Philippine Nurse Licensure Examination");
         assertThat(response.goalNudge().goalType()).isEqualTo("EXAM");
+    }
+
+    @Test
+    void getNextStep_readsTheJoinWhenResolvingWhetherACuratedNoteIsInTheGoal() {
+        // M3: reading notes.course_program alone made every curated note look programme-less -- ADR-001
+        // defines a curator-authored note's string as null -- so the nudge was skipped for exactly the
+        // notes an Official Review Set is built from. Here the note is outside the goal, so it nudges.
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        GoalNudgeResponse nudge = new GoalNudgeResponse(
+                "pnle", "EXAM", "PNLE", "Philippine Nurse Licensure Examination", 42, 8, null
+        );
+        stubOwnedStudyPack(userId, studyPack, "pnle");
+        stubCuratedNote(userId, studyPack.getNoteId(), "Civil Engineering");
+        stubReviewPackPath(userId, studyPack);
+        when(progressReportService.buildGoalNudge(eq(userId), eq("pnle"), any(OffsetDateTime.class))).thenReturn(nudge);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.goalNudge()).isEqualTo(nudge);
+    }
+
+    @Test
+    void getNextStep_suppressesTheNudgeWhenAnyJoinedProgramIsInsideTheGoal() {
+        // Applicable to several programs means in-goal if ANY of them is: the note genuinely serves that
+        // goal, so nudging the learner elsewhere would be wrong.
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack, "pnle");
+        stubCuratedNote(userId, studyPack.getNoteId(), "Civil Engineering", "Nursing");
+        stubReviewPackPath(userId, studyPack);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.goalNudge()).isNull();
+        verify(progressReportService, never()).buildGoalNudge(any(), any(), any());
     }
 
     @Test
@@ -415,6 +455,7 @@ class PostSessionNextStepServiceTest {
                 properties,
                 userRepository,
                 noteRepository,
+                noteCourseProgramRepository,
                 progressReportService,
                 realQuestionBankService,
                 generationContextResolver,
@@ -640,6 +681,21 @@ class PostSessionNextStepServiceTest {
         note.setOwnerUserId(userId);
         note.setCourseProgram(courseProgram);
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        lenient().when(noteCourseProgramRepository.findByNoteId(noteId)).thenReturn(List.of());
+    }
+
+    /** A curated note: null legacy string, applicability carried entirely by the join (M3). */
+    private void stubCuratedNote(UUID userId, UUID noteId, String... joinedProgramNames) {
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setOwnerUserId(userId);
+        note.setCourseProgram(null);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(noteCourseProgramRepository.findByNoteId(noteId)).thenReturn(
+                java.util.Arrays.stream(joinedProgramNames)
+                        .map(name -> new com.studysnap.backend.dto.ApplicableProgramResponse(UUID.randomUUID(), name))
+                        .toList()
+        );
     }
 
     private void stubReviewPackPath(UUID userId, StudyPackEntity studyPack) {

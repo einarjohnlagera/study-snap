@@ -795,7 +795,7 @@ describe("PublicLibraryPageClient", () => {
     const dialog = await screen.findByRole("dialog", { name: "More Filters" });
     const modal = within(dialog);
     expect(modal.getByText(
-      "A note can apply to several programs, so these counts can exceed the note total.",
+      "A note can apply to several programs, so it appears under each one it serves.",
     )).toBeInTheDocument();
     const courseProgramInput = modal.getByLabelText("Course / Program");
     fireEvent.focus(courseProgramInput);
