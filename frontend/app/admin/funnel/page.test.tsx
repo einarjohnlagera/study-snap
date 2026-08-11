@@ -44,12 +44,23 @@ describe("AdminFunnelPage", () => {
         eligibleActivatedUsers: 12,
         returnedWeek2Users: 5,
         ratePercent: 41.7,
+        wideRetention: {
+          eligibleActivatedUsers: 10,
+          returnedAfterDay7Users: 4,
+          afterDay7RatePercent: 40,
+          returnedDays2To30Users: 6,
+          days2To30RatePercent: 60,
+          returnedAfterDay1Users: 7,
+          afterDay1RatePercent: 70,
+        },
         weeklyCohorts: [
           {
             weekStart: "2026-05-04",
             cohortSize: 6,
             returnedCount: 3,
             ratePercent: 50,
+            returnedAfterDay7Count: 4,
+            afterDay7RatePercent: 66.7,
           },
         ],
       },
@@ -80,12 +91,20 @@ describe("AdminFunnelPage", () => {
     expect(screen.getByText("Click to Paid")).toBeInTheDocument();
     expect(screen.getAllByText("10.0%").length).toBeGreaterThan(0);
 
-    expect(screen.getByText("W1→W2 retention")).toBeInTheDocument();
-    expect(screen.getByText("All-time eligible cohorts with completed week-2 windows")).toBeInTheDocument();
-    expect(screen.getByText("Returned in Week 2")).toBeInTheDocument();
-    expect(screen.getByText("5 of 12 eligible activated users")).toBeInTheDocument();
+    expect(screen.getByText("Retention by window")).toBeInTheDocument();
+    expect(screen.getByText("Days 7–14 (strict)")).toBeInTheDocument();
+    expect(screen.getByText("5 of 12 users eligible after 14 days")).toBeInTheDocument();
+    expect(screen.getByText("After day 7 (unbounded)")).toBeInTheDocument();
+    expect(screen.getByText("4 of 10 users eligible after 30 days")).toBeInTheDocument();
+    expect(screen.getByText("Days 2–30")).toBeInTheDocument();
+    expect(screen.getByText("6 of 10 users eligible after 30 days")).toBeInTheDocument();
+    expect(screen.getByText("After day 1 (unbounded)")).toBeInTheDocument();
+    expect(screen.getByText("7 of 10 users eligible after 30 days")).toBeInTheDocument();
+    expect(screen.getByText(/Unbounded windows accumulate with account age/)).toBeInTheDocument();
     expect(screen.getByText("May 4, 2026")).toBeInTheDocument();
-    expect(screen.getByText("50.0%")).toBeInTheDocument();
+    expect(screen.getByText("50.0% (3)")).toBeInTheDocument();
+    expect(screen.getByText("After day 7")).toBeInTheDocument();
+    expect(screen.getByText("66.7% (4)")).toBeInTheDocument();
   });
 
   it("renders the retention empty state with zero metrics", async () => {
@@ -95,6 +114,15 @@ describe("AdminFunnelPage", () => {
         eligibleActivatedUsers: 0,
         returnedWeek2Users: 0,
         ratePercent: 0,
+        wideRetention: {
+          eligibleActivatedUsers: 0,
+          returnedAfterDay7Users: 0,
+          afterDay7RatePercent: 0,
+          returnedDays2To30Users: 0,
+          days2To30RatePercent: 0,
+          returnedAfterDay1Users: 0,
+          afterDay1RatePercent: 0,
+        },
         weeklyCohorts: [],
       },
       checkoutConversion: {
@@ -110,6 +138,10 @@ describe("AdminFunnelPage", () => {
     render(<AdminFunnelPage />);
 
     expect(await screen.findByText("No eligible retention cohorts yet.")).toBeInTheDocument();
+    expect(screen.getByText("Days 7–14")).toBeInTheDocument();
+    expect(screen.getByText("After day 7")).toBeInTheDocument();
+    expect(screen.getByText("0 of 0 users eligible after 14 days")).toBeInTheDocument();
+    expect(screen.getAllByText("0 of 0 users eligible after 30 days")).toHaveLength(3);
     expect(screen.getAllByText("0.0%").length).toBeGreaterThan(0);
   });
 
@@ -120,6 +152,15 @@ describe("AdminFunnelPage", () => {
         eligibleActivatedUsers: 0,
         returnedWeek2Users: 0,
         ratePercent: 0,
+        wideRetention: {
+          eligibleActivatedUsers: 0,
+          returnedAfterDay7Users: 0,
+          afterDay7RatePercent: 0,
+          returnedDays2To30Users: 0,
+          days2To30RatePercent: 0,
+          returnedAfterDay1Users: 0,
+          afterDay1RatePercent: 0,
+        },
         weeklyCohorts: [],
       },
       checkoutConversion: {
@@ -161,11 +202,22 @@ function buildMetricsResponse(overrides: {
     eligibleActivatedUsers: number;
     returnedWeek2Users: number;
     ratePercent: number;
+    wideRetention: {
+      eligibleActivatedUsers: number;
+      returnedAfterDay7Users: number;
+      afterDay7RatePercent: number;
+      returnedDays2To30Users: number;
+      days2To30RatePercent: number;
+      returnedAfterDay1Users: number;
+      afterDay1RatePercent: number;
+    };
     weeklyCohorts: Array<{
       weekStart: string;
       cohortSize: number;
       returnedCount: number;
       ratePercent: number;
+      returnedAfterDay7Count: number;
+      afterDay7RatePercent: number;
     }>;
   };
   checkoutConversion: {

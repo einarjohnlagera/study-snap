@@ -210,6 +210,10 @@ public class AdminFunnelService {
     private AdminFunnelMetricsResponse.RetentionCohortMetrics getRetentionCohortMetrics(OffsetDateTime now) {
         long eligibleActivatedUsers = analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(now);
         long returnedWeek2Users = analyticsEventRepository.countReturnedWeek2Users(now);
+        long wideEligibleActivatedUsers = analyticsEventRepository.countEligibleActivatedUsersForWideRetention(now);
+        long returnedAfterDay7Users = analyticsEventRepository.countReturnedAfterDay7Users(now);
+        long returnedDays2To30Users = analyticsEventRepository.countReturnedDays2To30Users(now);
+        long returnedAfterDay1Users = analyticsEventRepository.countReturnedAfterDay1Users(now);
         List<AdminFunnelMetricsResponse.WeeklyRetentionCohortMetrics> weeklyCohorts = analyticsEventRepository
                 .findWeeklyRetentionCohorts(now)
                 .stream()
@@ -220,6 +224,15 @@ public class AdminFunnelService {
                 eligibleActivatedUsers,
                 returnedWeek2Users,
                 ratePercent(returnedWeek2Users, eligibleActivatedUsers),
+                new AdminFunnelMetricsResponse.WideRetentionMetrics(
+                        wideEligibleActivatedUsers,
+                        returnedAfterDay7Users,
+                        ratePercent(returnedAfterDay7Users, wideEligibleActivatedUsers),
+                        returnedDays2To30Users,
+                        ratePercent(returnedDays2To30Users, wideEligibleActivatedUsers),
+                        returnedAfterDay1Users,
+                        ratePercent(returnedAfterDay1Users, wideEligibleActivatedUsers)
+                ),
                 weeklyCohorts
         );
     }
@@ -229,11 +242,14 @@ public class AdminFunnelService {
     ) {
         long cohortSize = cohort.getCohortSize();
         long returnedCount = cohort.getReturnedCount();
+        long returnedAfterDay7Count = cohort.getReturnedAfterDay7Count();
         return new AdminFunnelMetricsResponse.WeeklyRetentionCohortMetrics(
                 cohort.getWeekStart().toString(),
                 cohortSize,
                 returnedCount,
-                ratePercent(returnedCount, cohortSize)
+                ratePercent(returnedCount, cohortSize),
+                returnedAfterDay7Count,
+                ratePercent(returnedAfterDay7Count, cohortSize)
         );
     }
 

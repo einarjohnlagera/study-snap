@@ -28,6 +28,9 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
     // Eligible users have a first pack at least 14 days before the report time so the week-2 window is complete.
     String RETENTION_WINDOW_START_DAYS = "7";
     String RETENTION_WINDOW_END_DAYS = "14";
+    String WIDE_RETENTION_MATURITY_DAYS = "30";
+    String EARLY_RETENTION_WINDOW_START_DAYS = "1";
+    String WIDE_RETENTION_WINDOW_END_DAYS = "30";
     int RETENTION_COHORT_WEEK_LIMIT = 8;
     String REFERRER_SOURCE_JSON_PATH = "referrerSource";
     String GOOGLE_REFERRER_SOURCE = "google";
@@ -131,15 +134,48 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
             FROM first_packs fp
             WHERE fp.first_pack_at <= CAST(:now AS TIMESTAMP WITH TIME ZONE) - INTERVAL '""" + RETENTION_WINDOW_END_DAYS + "' DAY\n" + """
             """ + "  AND " + RETENTION_RETURNED_EXISTS + "\n";
-    String WEEKLY_RETENTION_COHORTS_QUERY = FIRST_PACK_CTE + """
-            SELECT CAST(DATE_TRUNC('week', fp.first_pack_at) AS DATE) AS weekStart,
-                   COUNT(*) AS cohortSize,
-                   SUM(CASE WHEN """ + " " + RETENTION_RETURNED_EXISTS + " THEN 1 ELSE 0 END) AS returnedCount\n" + """
-            FROM first_packs fp
-            WHERE fp.first_pack_at <= CAST(:now AS TIMESTAMP WITH TIME ZONE) - INTERVAL '""" + RETENTION_WINDOW_END_DAYS + "' DAY\n" + """
-            GROUP BY CAST(DATE_TRUNC('week', fp.first_pack_at) AS DATE)
-            ORDER BY weekStart DESC
-            """ + "LIMIT " + RETENTION_COHORT_WEEK_LIMIT + "\n";
+    String RETENTION_RETURNED_AFTER_PREFIX = """
+            EXISTS (
+                SELECT 1 FROM analytics_events activity
+                WHERE activity.user_id = fp.user_id
+                  AND activity.created_at > fp.first_pack_at + INTERVAL '""";
+    String RETENTION_RETURNED_AFTER_SUFFIX = "' DAY\n)";
+    String RETENTION_RETURNED_BETWEEN_END_PREFIX = """
+            ' DAY
+                  AND activity.created_at <= fp.first_pack_at + INTERVAL '""";
+    String RETENTION_RETURNED_BETWEEN_SUFFIX = RETENTION_RETURNED_AFTER_SUFFIX;
+    String RETENTION_RETURNED_AFTER_DAY_7_EXISTS = RETENTION_RETURNED_AFTER_PREFIX
+            + RETENTION_WINDOW_START_DAYS + RETENTION_RETURNED_AFTER_SUFFIX;
+    String RETENTION_RETURNED_DAYS_2_TO_30_EXISTS = RETENTION_RETURNED_AFTER_PREFIX
+            + EARLY_RETENTION_WINDOW_START_DAYS + RETENTION_RETURNED_BETWEEN_END_PREFIX
+            + WIDE_RETENTION_WINDOW_END_DAYS + RETENTION_RETURNED_BETWEEN_SUFFIX;
+    String RETENTION_RETURNED_AFTER_DAY_1_EXISTS = RETENTION_RETURNED_AFTER_PREFIX
+            + EARLY_RETENTION_WINDOW_START_DAYS + RETENTION_RETURNED_AFTER_SUFFIX;
+    String WIDE_RETENTION_ELIGIBILITY = "fp.first_pack_at <= CAST(:now AS TIMESTAMP WITH TIME ZONE) - INTERVAL '"
+            + WIDE_RETENTION_MATURITY_DAYS + "' DAY";
+    String WIDE_RETENTION_COUNT_QUERY_PREFIX = FIRST_PACK_CTE
+            + "SELECT COUNT(*)\nFROM first_packs fp\nWHERE ";
+    String ELIGIBLE_ACTIVATED_USERS_FOR_WIDE_RETENTION_QUERY = WIDE_RETENTION_COUNT_QUERY_PREFIX
+            + WIDE_RETENTION_ELIGIBILITY + "\n";
+    String RETURNED_AFTER_DAY_7_USERS_QUERY = WIDE_RETENTION_COUNT_QUERY_PREFIX
+            + WIDE_RETENTION_ELIGIBILITY + "\n  AND " + RETENTION_RETURNED_AFTER_DAY_7_EXISTS + "\n";
+    String RETURNED_DAYS_2_TO_30_USERS_QUERY = WIDE_RETENTION_COUNT_QUERY_PREFIX
+            + WIDE_RETENTION_ELIGIBILITY + "\n  AND " + RETENTION_RETURNED_DAYS_2_TO_30_EXISTS + "\n";
+    String RETURNED_AFTER_DAY_1_USERS_QUERY = WIDE_RETENTION_COUNT_QUERY_PREFIX
+            + WIDE_RETENTION_ELIGIBILITY + "\n  AND " + RETENTION_RETURNED_AFTER_DAY_1_EXISTS + "\n";
+    String WEEKLY_RETENTION_COHORTS_QUERY = FIRST_PACK_CTE
+            + "SELECT CAST(DATE_TRUNC('week', fp.first_pack_at) AS DATE) AS weekStart,\n"
+            + "       COUNT(*) AS cohortSize,\n"
+            + "       SUM(CASE WHEN " + RETENTION_RETURNED_EXISTS
+            + " THEN 1 ELSE 0 END) AS returnedCount,\n"
+            + "       SUM(CASE WHEN " + RETENTION_RETURNED_AFTER_DAY_7_EXISTS
+            + " THEN 1 ELSE 0 END) AS returnedAfterDay7Count\n"
+            + "FROM first_packs fp\n"
+            + "WHERE fp.first_pack_at <= CAST(:now AS TIMESTAMP WITH TIME ZONE) - INTERVAL '"
+            + RETENTION_WINDOW_END_DAYS + "' DAY\n"
+            + "GROUP BY CAST(DATE_TRUNC('week', fp.first_pack_at) AS DATE)\n"
+            + "ORDER BY weekStart DESC\n"
+            + "LIMIT " + RETENTION_COHORT_WEEK_LIMIT + "\n";
 
     long countByEventType(AnalyticsEventType eventType);
 
@@ -246,6 +282,18 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
 
     @Query(value = RETURNED_WEEK_2_USERS_QUERY, nativeQuery = true)
     long countReturnedWeek2Users(@Param("now") OffsetDateTime now);
+
+    @Query(value = ELIGIBLE_ACTIVATED_USERS_FOR_WIDE_RETENTION_QUERY, nativeQuery = true)
+    long countEligibleActivatedUsersForWideRetention(@Param("now") OffsetDateTime now);
+
+    @Query(value = RETURNED_AFTER_DAY_7_USERS_QUERY, nativeQuery = true)
+    long countReturnedAfterDay7Users(@Param("now") OffsetDateTime now);
+
+    @Query(value = RETURNED_DAYS_2_TO_30_USERS_QUERY, nativeQuery = true)
+    long countReturnedDays2To30Users(@Param("now") OffsetDateTime now);
+
+    @Query(value = RETURNED_AFTER_DAY_1_USERS_QUERY, nativeQuery = true)
+    long countReturnedAfterDay1Users(@Param("now") OffsetDateTime now);
 
     @Query(value = WEEKLY_RETENTION_COHORTS_QUERY, nativeQuery = true)
     List<WeeklyRetentionCohortProjection> findWeeklyRetentionCohorts(@Param("now") OffsetDateTime now);

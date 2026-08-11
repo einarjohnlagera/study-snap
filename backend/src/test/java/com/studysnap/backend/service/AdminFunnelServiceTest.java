@@ -87,6 +87,10 @@ class AdminFunnelServiceTest {
         assertThat(response.paywallConversion().ratePercent()).isEqualTo(0.0);
         assertThat(response.valueLoop().ratePercent()).isEqualTo(0.0);
         assertThat(response.retentionCohort().ratePercent()).isEqualTo(0.0);
+        assertThat(response.retentionCohort().wideRetention().eligibleActivatedUsers()).isZero();
+        assertThat(response.retentionCohort().wideRetention().afterDay7RatePercent()).isEqualTo(0.0);
+        assertThat(response.retentionCohort().wideRetention().days2To30RatePercent()).isEqualTo(0.0);
+        assertThat(response.retentionCohort().wideRetention().afterDay1RatePercent()).isEqualTo(0.0);
         assertThat(response.retentionCohort().weeklyCohorts()).isEmpty();
         assertThat(response.checkoutConversion().clickToCheckoutRatePercent()).isEqualTo(0.0);
         assertThat(response.checkoutConversion().checkoutToPaidRatePercent()).isEqualTo(0.0);
@@ -205,9 +209,13 @@ class AdminFunnelServiceTest {
                 .thenReturn(List.of());
         when(analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(any())).thenReturn(12L);
         when(analyticsEventRepository.countReturnedWeek2Users(any())).thenReturn(5L);
+        when(analyticsEventRepository.countEligibleActivatedUsersForWideRetention(any())).thenReturn(10L);
+        when(analyticsEventRepository.countReturnedAfterDay7Users(any())).thenReturn(4L);
+        when(analyticsEventRepository.countReturnedDays2To30Users(any())).thenReturn(6L);
+        when(analyticsEventRepository.countReturnedAfterDay1Users(any())).thenReturn(7L);
         when(analyticsEventRepository.findWeeklyRetentionCohorts(any())).thenReturn(List.of(
-                weeklyCohort(LocalDate.parse("2026-05-04"), 6, 3),
-                weeklyCohort(LocalDate.parse("2026-04-27"), 6, 2)
+                weeklyCohort(LocalDate.parse("2026-05-04"), 6, 3, 4),
+                weeklyCohort(LocalDate.parse("2026-04-27"), 6, 2, 3)
         ));
 
         AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
@@ -215,9 +223,18 @@ class AdminFunnelServiceTest {
         assertThat(response.retentionCohort().eligibleActivatedUsers()).isEqualTo(12);
         assertThat(response.retentionCohort().returnedWeek2Users()).isEqualTo(5);
         assertThat(response.retentionCohort().ratePercent()).isEqualTo(41.7);
+        assertThat(response.retentionCohort().wideRetention().eligibleActivatedUsers()).isEqualTo(10);
+        assertThat(response.retentionCohort().wideRetention().returnedAfterDay7Users()).isEqualTo(4);
+        assertThat(response.retentionCohort().wideRetention().afterDay7RatePercent()).isEqualTo(40.0);
+        assertThat(response.retentionCohort().wideRetention().returnedDays2To30Users()).isEqualTo(6);
+        assertThat(response.retentionCohort().wideRetention().days2To30RatePercent()).isEqualTo(60.0);
+        assertThat(response.retentionCohort().wideRetention().returnedAfterDay1Users()).isEqualTo(7);
+        assertThat(response.retentionCohort().wideRetention().afterDay1RatePercent()).isEqualTo(70.0);
         assertThat(response.retentionCohort().weeklyCohorts()).hasSize(2);
         assertThat(response.retentionCohort().weeklyCohorts().getFirst().weekStart()).isEqualTo("2026-05-04");
         assertThat(response.retentionCohort().weeklyCohorts().getFirst().ratePercent()).isEqualTo(50.0);
+        assertThat(response.retentionCohort().weeklyCohorts().getFirst().returnedAfterDay7Count()).isEqualTo(4);
+        assertThat(response.retentionCohort().weeklyCohorts().getFirst().afterDay7RatePercent()).isEqualTo(66.7);
     }
 
     @Test
@@ -354,10 +371,19 @@ class AdminFunnelServiceTest {
         when(noteRepository.countVerifiedUsersWithNotesBeforeAndNoStudyPacks(any())).thenReturn(stuckUsers);
         when(analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(any())).thenReturn(0L);
         when(analyticsEventRepository.countReturnedWeek2Users(any())).thenReturn(0L);
+        when(analyticsEventRepository.countEligibleActivatedUsersForWideRetention(any())).thenReturn(0L);
+        when(analyticsEventRepository.countReturnedAfterDay7Users(any())).thenReturn(0L);
+        when(analyticsEventRepository.countReturnedDays2To30Users(any())).thenReturn(0L);
+        when(analyticsEventRepository.countReturnedAfterDay1Users(any())).thenReturn(0L);
         when(analyticsEventRepository.findWeeklyRetentionCohorts(any())).thenReturn(List.of());
     }
 
-    private WeeklyRetentionCohortProjection weeklyCohort(LocalDate weekStart, long cohortSize, long returnedCount) {
+    private WeeklyRetentionCohortProjection weeklyCohort(
+            LocalDate weekStart,
+            long cohortSize,
+            long returnedCount,
+            long returnedAfterDay7Count
+    ) {
         return new WeeklyRetentionCohortProjection() {
             @Override
             public LocalDate getWeekStart() {
@@ -372,6 +398,11 @@ class AdminFunnelServiceTest {
             @Override
             public long getReturnedCount() {
                 return returnedCount;
+            }
+
+            @Override
+            public long getReturnedAfterDay7Count() {
+                return returnedAfterDay7Count;
             }
         };
     }
