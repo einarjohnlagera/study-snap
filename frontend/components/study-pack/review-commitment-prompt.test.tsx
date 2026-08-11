@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ReviewCommitmentPrompt } from "./review-commitment-prompt";
 import { getMe, trackAnalyticsEvent, updateReviewCommitment } from "@/lib/api";
 
@@ -92,7 +92,27 @@ describe("ReviewCommitmentPrompt", () => {
 
     render(<ReviewCommitmentPrompt isFirstCompletedSessionEver noteId="note-1" />);
 
+    // AGENTS.md "an absence assertion must be able to fail": waiting only for getMe to have been
+    // CALLED is the named wrong-timing antipattern -- it is satisfied during the effect, before the
+    // resolved promise's .then runs, so the DOM could not contain the prompt either way. Flush the
+    // microtask queue so the resolved state has actually rendered before asserting absence. Verified
+    // by mutation: with `shouldShow = true` this now fails, where the previous version passed.
     await waitFor(() => expect(getMe).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText("When will you come back?")).not.toBeInTheDocument();
+  });
+
+  it("does not show before the learner's first completed session", async () => {
+    // The first-session gate was entirely unpinned: mutating it to `if (false)` left every test green.
+    (getMe as jest.Mock).mockResolvedValue(examLearner);
+
+    render(<ReviewCommitmentPrompt isFirstCompletedSessionEver={false} noteId="note-1" />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(screen.queryByText("When will you come back?")).not.toBeInTheDocument();
   });
 

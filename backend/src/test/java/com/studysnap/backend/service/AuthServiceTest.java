@@ -998,6 +998,21 @@ class AuthServiceTest {
     }
 
     @Test
+    void updateReviewCommitment_doesNotClearReviewDaysWhenTheFieldIsOmitted() {
+        // Symmetric with the examDate guard: omitting the field must not unsubscribe a learner from the
+        // days they chose. An explicit empty list still clears them -- that is how a decline is sent.
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        user.setReviewDays(new String[]{"TUESDAY"});
+        stubReviewCommitmentResponse(userId, user);
+
+        authService.updateReviewCommitment(userId, new UpdateReviewCommitmentRequest(null, null));
+
+        assertThat(user.getReviewDays()).containsExactly("TUESDAY");
+        assertThat(user.getReviewCommitmentPromptedAt()).isNotNull();
+    }
+
+    @Test
     void updateReviewCommitment_doesNotClearAnExistingExamDateWhenNoneIsSupplied() {
         // This endpoint does not own examDate -- onboarding does. A learner with no exam-date field
         // sends null on every save, and an unconditional write would silently destroy a date that
