@@ -115,7 +115,7 @@ export function AdminApplicableProgramsSection() {
       <div>
         <h2 className="text-lg font-semibold text-foreground">Note Applicable Programs</h2>
         <p className="text-sm text-foreground/65">
-          Curate where a canonical note can be discovered without changing its generation context.
+          Curate where your canonical notes can be discovered without changing their generation context.
         </p>
       </div>
       <Card className="overflow-hidden">
@@ -135,7 +135,6 @@ export function AdminApplicableProgramsSection() {
                 <thead className="bg-muted/40 text-left text-foreground/60">
                   <tr>
                     <th className="px-4 py-3 font-medium">Note</th>
-                    <th className="px-4 py-3 font-medium">Owner</th>
                     <th className="px-4 py-3 font-medium">Legacy Course / Program</th>
                     <th className="px-4 py-3 font-medium">Applicable Programs</th>
                     <th className="px-4 py-3 font-medium">Action</th>
@@ -145,7 +144,6 @@ export function AdminApplicableProgramsSection() {
                   {data.items.map((item) => (
                     <tr key={item.noteId} className="border-t border-border/60 align-top">
                       <td className="px-4 py-3 text-foreground/80">{item.title ?? "Untitled note"}</td>
-                      <td className="px-4 py-3 text-foreground/70">{item.ownerEmail ?? "Unknown owner"}</td>
                       <td className="px-4 py-3 text-foreground/70">{item.courseProgram ?? "—"}</td>
                       <td className="px-4 py-3 text-foreground/70">
                         {item.applicablePrograms.length > 0
@@ -163,7 +161,7 @@ export function AdminApplicableProgramsSection() {
               </table>
             </div>
             {data.items.length === 0 ? (
-              <p className="border-t border-border/60 p-5 text-sm text-foreground/65">No notes found.</p>
+              <p className="border-t border-border/60 p-5 text-sm text-foreground/65">No owned notes found.</p>
             ) : null}
             <div className="flex items-center justify-between border-t border-border/60 px-4 py-3">
               <p className="text-xs text-foreground/60">

@@ -1552,7 +1552,6 @@ export type NoteApplicableProgramsResponse = {
 export type AdminNoteApplicableProgramsItem = {
   noteId: string;
   title: string | null;
-  ownerEmail: string | null;
   courseProgram: string | null;
   domainContext: DomainContext | null;
   applicablePrograms: ApplicableProgram[];

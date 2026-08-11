@@ -27,12 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -82,8 +79,8 @@ public class NoteApplicableProgramsService {
     }
 
     @Transactional(readOnly = true)
-    public AdminNoteApplicableProgramsPageResponse getAdminPage(int page, int size) {
-        Page<NoteEntity> notes = noteRepository.findAll(PageRequest.of(
+    public AdminNoteApplicableProgramsPageResponse getAdminPage(int page, int size, UUID requesterUserId) {
+        Page<NoteEntity> notes = noteRepository.findByOwnerUserId(requesterUserId, PageRequest.of(
                 page,
                 size,
                 Sort.by(Sort.Direction.DESC, UPDATED_AT_PROPERTY)
@@ -92,17 +89,13 @@ public class NoteApplicableProgramsService {
         Map<UUID, List<ApplicableProgramResponse>> programsByNoteId =
                 noteCourseProgramRepository.findByNoteIds(noteIds);
 
-        Set<UUID> ownerIds = new HashSet<>();
-        notes.getContent().forEach(note -> ownerIds.add(note.getOwnerUserId()));
-        Map<UUID, String> ownerEmailById = new HashMap<>();
-        userRepository.findAllById(ownerIds).forEach(user -> ownerEmailById.put(user.getId(), user.getEmail()));
-
+        // No owner lookup: the page now returns only the requester's own notes, so an owner column
+        // would be the viewer's own address on every row. Dropped with the column it fed (v0.71.1).
         List<AdminNoteApplicableProgramsItemResponse> items = new ArrayList<>();
         for (NoteEntity note : notes.getContent()) {
             items.add(new AdminNoteApplicableProgramsItemResponse(
                     note.getId(),
                     note.getTitle(),
-                    ownerEmailById.get(note.getOwnerUserId()),
                     note.getCourseProgram(),
                     note.getDomainContext() == null ? null : note.getDomainContext().name(),
                     programsByNoteId.getOrDefault(note.getId(), List.of())
@@ -120,12 +113,10 @@ public class NoteApplicableProgramsService {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(noteIdRaw, NoteNotFoundException::new);
         NoteEntity note = noteRepository.findById(noteId).orElseThrow(NoteNotFoundException::new);
         UserEntity requester = userRepository.findById(requesterUserId).orElseThrow(NoteNotFoundException::new);
-        if (requester.getRole() == UserRole.ADMIN) {
-            return note;
-        }
-        boolean isTeacherOwner = note.getOwnerUserId().equals(requesterUserId)
-                && requester.getProfileType() == ProfileType.TEACHER;
-        if (!isTeacherOwner) {
+        boolean isOwner = note.getOwnerUserId().equals(requesterUserId);
+        boolean isCurator = requester.getRole() == UserRole.ADMIN
+                || requester.getProfileType() == ProfileType.TEACHER;
+        if (!isOwner || !isCurator) {
             throw new NoteNotFoundException();
         }
         return note;

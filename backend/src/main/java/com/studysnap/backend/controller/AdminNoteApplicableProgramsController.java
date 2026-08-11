@@ -1,11 +1,13 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AdminNoteApplicableProgramsPageResponse;
+import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.NoteApplicableProgramsService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,8 +28,9 @@ public class AdminNoteApplicableProgramsController {
     @GetMapping
     public AdminNoteApplicableProgramsPageResponse list(
             @RequestParam(defaultValue = DEFAULT_PAGE) @Min(0) int page,
-            @RequestParam(defaultValue = DEFAULT_SIZE) @Min(1) @Max(100) int size
+            @RequestParam(defaultValue = DEFAULT_SIZE) @Min(1) @Max(100) int size,
+            @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return noteApplicableProgramsService.getAdminPage(page, size);
+        return noteApplicableProgramsService.getAdminPage(page, size, user.userId());
     }
 }
