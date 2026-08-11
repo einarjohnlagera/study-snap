@@ -44,6 +44,7 @@ export const ONBOARDING_PROFILE_OPTIONS: OnboardingProfileOption[] = [
 ];
 
 export type OnboardingDraft = {
+  schemaVersion: number;
   startedAtMs: number;
   currentStep: number;
   profileType: OnboardingProfileType | null;
@@ -67,6 +68,9 @@ export type OnboardingDraft = {
 };
 
 const ONBOARDING_DRAFT_PREFIX = "notelib.onboarding-v2";
+export const ONBOARDING_DRAFT_SCHEMA_VERSION = 1;
+export const ONBOARDING_FIRST_STEP = 1;
+export const ONBOARDING_LAST_STEP = 8;
 const ONBOARDING_COMPLETION_DEFERRED_PREFIX = "notelib.onboarding-completion-deferred";
 const LIGHTWEIGHT_PROFILE_COMPLETION_PENDING_PREFIX = "notelib.lightweight-profile-completion-pending";
 
@@ -76,6 +80,7 @@ function resolveKey(prefix: string, userId: string): string {
 
 export function createEmptyOnboardingDraft(): OnboardingDraft {
   return {
+    schemaVersion: ONBOARDING_DRAFT_SCHEMA_VERSION,
     startedAtMs: Date.now(),
     currentStep: 1,
     profileType: null,
@@ -93,6 +98,42 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
   };
 }
 
+function clampOnboardingStep(step: number): number {
+  return Math.max(ONBOARDING_FIRST_STEP, Math.min(Math.trunc(step), ONBOARDING_LAST_STEP));
+}
+
+function resolveEarliestUnansweredStep(draft: OnboardingDraft): number | null {
+  if (!draft.profileType) {
+    return 1;
+  }
+  if (!draft.courseProgram.trim()) {
+    return 2;
+  }
+  if (!draft.learnerLevel) {
+    return 3;
+  }
+  if (!draft.intent) {
+    return 4;
+  }
+  // The ready-made branch is Screen 5 (the plan / unavailable-program screen) and never sets
+  // inputMethod, so it resumes there rather than being sent back to the door it already chose.
+  if (draft.intent === "ready_made") {
+    return 5;
+  }
+  if (!draft.inputMethod) {
+    return 5;
+  }
+  return null;
+}
+
+function resolveMigratedResumeStep(draft: OnboardingDraft): number {
+  const earliestUnansweredStep = resolveEarliestUnansweredStep(draft);
+  if (earliestUnansweredStep !== null) {
+    return earliestUnansweredStep;
+  }
+  return draft.noteId ? 7 : 6;
+}
+
 export function loadOnboardingDraft(userId: string): OnboardingDraft | null {
   if (globalThis.window === undefined) {
     return null;
@@ -103,12 +144,24 @@ export function loadOnboardingDraft(userId: string): OnboardingDraft | null {
   }
   try {
     const parsed = JSON.parse(raw) as Partial<OnboardingDraft>;
-    return {
+    const draft = {
       ...createEmptyOnboardingDraft(),
       ...parsed,
+      schemaVersion: ONBOARDING_DRAFT_SCHEMA_VERSION,
       startedAtMs: typeof parsed.startedAtMs === "number" ? parsed.startedAtMs : Date.now(),
-      currentStep: typeof parsed.currentStep === "number" ? parsed.currentStep : 1,
+      currentStep: ONBOARDING_FIRST_STEP,
     };
+    const isCurrentSchema = parsed.schemaVersion === ONBOARDING_DRAFT_SCHEMA_VERSION;
+    if (isCurrentSchema && typeof parsed.currentStep === "number") {
+      const clampedStep = clampOnboardingStep(parsed.currentStep);
+      const earliestUnansweredStep = resolveEarliestUnansweredStep(draft);
+      draft.currentStep = earliestUnansweredStep !== null && clampedStep > earliestUnansweredStep
+        ? earliestUnansweredStep
+        : clampedStep;
+    } else {
+      draft.currentStep = resolveMigratedResumeStep(draft);
+    }
+    return draft;
   } catch {
     return null;
   }
@@ -118,7 +171,11 @@ export function saveOnboardingDraft(userId: string, draft: OnboardingDraft): voi
   if (globalThis.window === undefined) {
     return;
   }
-  globalThis.localStorage.setItem(resolveKey(ONBOARDING_DRAFT_PREFIX, userId), JSON.stringify(draft));
+  try {
+    globalThis.localStorage.setItem(resolveKey(ONBOARDING_DRAFT_PREFIX, userId), JSON.stringify(draft));
+  } catch {
+    // The in-memory flow remains usable when storage is unavailable.
+  }
 }
 
 export function clearOnboardingDraft(userId: string): void {
