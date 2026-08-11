@@ -14,6 +14,27 @@ Theme: give a learner a reason and a plan to come back. This release goes at the
 
 The rule was set when the evidence was still unavailable, precisely so the outcome could not be rationalised after the fact. The window closed **2026-07-29** and the read was **not run for 13 days** — this kickoff's gate scan is what surfaced it. The query already exists and needs no new work: `docs/claude-prompt/next-priority-new-user-focus-out/02-h1-h5-cohort-recheck-and-cpale-depth.sql`, Query 1, whose own header documents why it only becomes valid after 2026-07-29.
 
+### The read — RUN 2026-08-11. Result: AMBIGUOUS, so the rule fires and H1+H5 ships.
+
+| cohort | eligible | returned W2 | rate |
+|---|---|---|---|
+| **post-`v0.48.0`** (the gated cohort) | **31** | **0** | **0.00%** |
+| pre-`v0.48.0` baseline | 154 | 3 | 1.95% |
+
+**The baseline sanity check passes:** 1.95% against the known ~2.4% Admin figure, so nothing else drifted while this sat unread.
+
+**0% is not a negative signal — it is an underpowered one, and the arithmetic says so.** At the baseline rate, the expected number of returns in a cohort of 31 is **0.60**, and the probability of observing exactly zero *even if nothing changed at all* is **54.3%**. A coin that lands zero-heads more often than not cannot tell you the coin got worse. The cohort is far too small to distinguish no-change from modest-improvement, which is the definition of ambiguous.
+
+**So the pre-committed rule fires: not clearly negative → ship H1+H5.** Recorded plainly: this is a decision on the *rule*, not on a positive result. The read did **not** show `v0.48.0` working. It showed the sample cannot tell, and the rule was written in advance precisely to bind that case.
+
+**An observation that is NOT a reason to re-litigate the rule, but should be known.** Only **185** users have ever generated a first Study Pack and are old enough to measure (154 + 31), and **3** have ever returned in week 2. Moving retention from 2% to 4% against a ~31-user monthly activated cohort is roughly **+0.6 returning users per month**. That is a real question about whether the binding constraint is retention *rate* or activation *volume* — and it is worth asking after this release, on evidence, rather than being used now to avoid a commitment made when the answer was still unknown.
+
+### The CPALE fallback check — also run, and its premise has expired
+
+Query 2 was the fallback gate, only needed if the read came back clearly negative. It did not, so **CPALE is not triggered** — but the data was gathered, so it is recorded rather than discarded.
+
+**31 subjects, 154 public notes, largest single subject 11.** The query's own header assumed *"no `course_program` bucket for Accountancy exists yet"* — **that is now false**: every one of the 154 rows carries `Accountancy` as its course program. Against the stated ~25–30-note bar, one subject does not clear it (max 11), but the hub-level bucket clears it several times over, and even the top three subjects combined reach 32 — which is the shape PNLE already uses by combining two subjects into one hub. **The CPALE gate now looks cleared on depth**; it stays parked because the primary rule fired, not because it failed.
+
 ### Planned Scope
 
 1. **Run the `v0.48.0` cohort re-read (owner action, production, read-only).** Record the result in `RELEASES.md` — a query cited as a mechanism whose result is never written down is how this project has previously lost the reasoning behind a decision.
