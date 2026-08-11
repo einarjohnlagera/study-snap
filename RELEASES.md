@@ -1,5 +1,44 @@
 # RELEASES.md - NoteLib
 
+## v0.72.0 - Return Loop
+
+**Status: In Progress**
+
+Theme: give a learner a reason and a plan to come back. This release goes at the project's oldest and least-moved constraint — **W1→W2 retention at 2.4%** — rather than at another authoring or discovery surface.
+
+**This release opens on a read, not a build, and that is deliberate.** An earlier release pre-committed to a decision rule and the window has now closed; running it is the first scope item, not a preamble to the release.
+
+### The pre-committed decision rule — do not re-litigate it
+
+> Re-check the `v0.48.0` cohort's return-rate data in late July, and **if the signal is positive *or ambiguous* (not clearly negative), ship H1+H5.**
+
+The rule was set when the evidence was still unavailable, precisely so the outcome could not be rationalised after the fact. The window closed **2026-07-29** and the read was **not run for 13 days** — this kickoff's gate scan is what surfaced it. The query already exists and needs no new work: `docs/claude-prompt/next-priority-new-user-focus-out/02-h1-h5-cohort-recheck-and-cpale-depth.sql`, Query 1, whose own header documents why it only becomes valid after 2026-07-29.
+
+### Planned Scope
+
+1. **Run the `v0.48.0` cohort re-read (owner action, production, read-only).** Record the result in `RELEASES.md` — a query cited as a mechanism whose result is never written down is how this project has previously lost the reasoning behind a decision.
+2. **H1 — commitment device (backend + frontend), conditional on the read.** A learner states a return intention at a moment they are already engaged, rather than being asked to remember.
+3. **H5 — pre-decided return action (backend + frontend), conditional on the read.** When they come back, the next step is already chosen, so returning does not start with a decision.
+
+**H1 and H5 ship together or not at all.** The pre-committed rule names them as a pair, and each is weaker alone: a commitment with nothing decided to return *to*, or a decided next step nobody committed to.
+
+### If the read comes back clearly negative
+
+Then the rule says do not ship, and this release rescopes rather than proceeding on sunk reasoning. The recorded fallback is the **CPALE Exam Hub** — smaller, and the fourth instance of a shape already shipped three times — gated on its own depth-count check (~25–30 notes in one clean bucket). `v0.71.0` set the precedent for opening a version whose scope is honestly blocked, so an empty or rescoped release is an acceptable outcome here, not a failure.
+
+Anti-drift — locked:
+
+- **No new quiz mode.** The five-mode contract in `docs/product/EXAM_MODES.md` is closed.
+- **Self-review surfaces stay firewalled from readiness.** Mastery comes only from graded assessment; a return-loop nudge must not become a mastery signal.
+- **Upgrade CTAs go through `getUpgradeCtas(currentPlan)`.** A retention surface is exactly where hardcoded upgrade copy tends to appear.
+- **New analytics events are added to the `AnalyticsEventType` enum before being fired**, on both sides. This release will want measurement, which is where that rule is most often skipped.
+- **No change to the Applicable Programs model.** `ADR-001` is closed for this release; the open amendment proposal on learner free-text stays parked.
+- **One-time contextual tips go through `pickActiveGuidance()`** — do not add a new one-time tip outside the guidance engine.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.71.2 - Catalog Management
 
 **Status: Released** (signed off 2026-08-11)

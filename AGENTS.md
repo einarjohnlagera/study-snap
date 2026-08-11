@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.71.2 - Catalog Management` (In Progress); previous: `v0.71.1 - Applicable Programs Follow-ups` (Released)
+- `v0.72.0 - Return Loop` (In Progress); previous: `v0.71.2 - Catalog Management` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
