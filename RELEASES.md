@@ -1,5 +1,135 @@
 # RELEASES.md - NoteLib
 
+## v0.72.1 - Constraint Check
+
+**Status: Released** (signed off 2026-08-11)
+
+### Checkpoint gate — RUN at signoff, result: nothing owed
+
+The gate added to `/signoff` in this same release (`.claude/commands/signoff.md`) asks whether anything here shipped **ahead of its own evidence**. Nothing did, and the reasoning is recorded rather than left implicit:
+
+- **The four-window metric shipped *because of* Query 5**, which ran in this release, before the build, and is recorded above in full. Its `EVIDENCE` gate was cleared by the release's own read rather than deferred past it — the opposite of the shape this gate exists to catch.
+- **No product hypothesis is being bet on.** The change corrects an instrument; it makes no claim about learner behaviour that a future date could falsify. A checkpoint here would be decorative in the other direction — a dated obligation with nothing to disconfirm.
+- **The recorded fallback was genuine and was actually exercised.** `v0.72.0` recorded the CPALE Exam Hub as a fallback that had already shipped as `v0.54.0`, so its fallback was empty. This release's fallback — the Query 5 metric read — was verified unbuilt by construction and is the thing the release went on to ship (`countReturnedAfterDay7Users` and friends first appear in `db7e6108`, this release).
+
+**Verification owed, deliberately recorded as verification and NOT as a checkpoint:** once deployed, the admin funnel should read approximately **1.97% / 4.61% / 6.58% / 7.24%** across the four windows on a wide eligible set of ~152, matching the Query 5 result above. If it does not, the discrepancy is a defect in the shipped queries, not a finding about learners. This is a deploy sanity check with a known expected answer, which is precisely why it is not dressed up as a dated obligation.
+
+Theme: find out which constraint is real — and then whether the number the whole roadmap defers to is measuring what it claims. A patch on `v0.72.0`'s line because it continues the same question rather than opening a new one.
+
+**Renamed from "Activation" 2026-08-11, after the read.** The original theme named a hypothesis this release went on to *disprove*: that the binding constraint was activation volume. Leaving it would make `RELEASES.md` read as though v0.72.1 shipped activation work, which it did not. The version number is unchanged — it is already bumped across seven files and the branch is pushed, so renumbering would be churn with no reader benefit.
+
+**This release is read-only until Query 5 answers.** Owner ruling 2026-08-11: every candidate build is downstream of whether the retention metric is valid, so the build half is chosen *after* that read rather than before it. This is the third consecutive use of the open-on-a-read shape, deliberately.
+
+**This release opens on a read, not a build — the same shape `v0.72.0` used, deliberately reused because it worked.** `v0.72.0` shipped H1+H5 under a pre-committed rule and recorded its own next question in the same breath: only **185** users have ever generated a first Study Pack and are old enough to measure, and **3** have ever returned in week 2. Moving retention from 2% to 4% against a ~31-user monthly activated cohort is roughly **+0.6 returning users per month**. That number is the reason this release exists — a retention rate improved against a denominator that small may not be the lever at all.
+
+**The corroborating signal, measured by an independent path:** 38.7% of accounts (141/364) never complete onboarding, closely tracking the ~40% recorded 2026-07-28 from a different query. A return-cadence habit cannot be built by users who never finish onboarding in the first place.
+
+### The read — RUN 2026-08-11. Result: the volume hypothesis FAILED. This release rescopes.
+
+**The funnel (Query 1, all-time / trailing 90 days):**
+
+| stage | all time | % of signups | trailing 90d | % |
+|---|---|---|---|---|
+| signups | 375 | — | 360 | — |
+| email verified | 366 | 97.6% | 351 | 97.5% |
+| onboarding completed | 234 | 62.4% | 220 | 61.1% |
+| activated (first Study Pack) | 195 | 52.0% | 188 | 52.2% |
+
+**Furthest-stage attribution (Query 3a), which is where the loss actually is:**
+
+| furthest stage | users | % |
+|---|---|---|
+| signed up, never verified email | 9 | 2.4% |
+| **verified, never completed onboarding** | **132** | **35.2%** |
+| completed onboarding, never created a note | 6 | 1.6% |
+| created a note, never generated a Study Pack | 57 | 15.2% |
+| activated | 171 | 45.6% |
+
+**So the largest drop IS at onboarding — and it still does not make volume the lever.**
+
+| scenario | activated/month | W2 rate | returning users/month |
+|---|---|---|---|
+| A. baseline today | 62.7 | 1.62% | **1.02** |
+| B. RATE lever — W1→W2 doubles | 62.7 | 3.24% | **2.03** |
+| C. VOLUME lever — *every* signup activates (optimistic ceiling) | 120 | 1.62% | **1.95** |
+| D. VOLUME lever — recovered users retain at half the rate | 120 | 1.23% blended | **1.48** |
+
+**The pre-committed rule required D > B for a volume verdict. D (1.48) < B (2.03), and even the optimistic ceiling C (1.95) < B.** The rule's first clause held — the largest drop is at stage 2 — but its second did not, so this lands on the rule's third branch: **the rate branch wins, and the release rescopes.**
+
+**The structural reason, which is cleaner than the numbers and does not depend on them.** Since `returning = activated × rate`, both levers are multiplicative, so the comparison is **rate-independent** — the 1.62% cancels. C beats B only if activation is below **50%**; D beats B only if activation is below **33%**. Activation is **52.2%**. The entire verdict rests on that one fraction, which is why it survives the fact that the underlying rate is built on only 3 return events.
+
+**Disclosed fragility: the margin is 2.2 points.** Query 2's monthly activation runs 65% (June) → 39% (July) → 33% (August). At 39% the volume branch would beat the rate branch and this would land on the rule's *second* branch — "did not settle it" — instead. The trailing-90 figure is 52.2% because the 183-signup June surge dominates it. Note also that the query's `incomplete_window` flag **over-warns for activation**: it was designed for retention windows, but a first Study Pack is produced within hours of onboarding and every July signup is ≥11 days old, so July's 39% is essentially final rather than an artifact. **Recorded rather than acted on** — re-cutting the verdict on recent months only is an owner call, and doing it silently in either direction is what the pre-committed rule exists to prevent.
+
+**Two corrections to the query itself, found on first run and fixed in the file:**
+- `pct_activated_of_onboarded` reported **83.33%**, which is wrong — the numerator counted all 195 activated users against the 234 onboarded, including users absent from the denominator. The true value is **73.1%** (171/234). Completing onboarding is *not* a prerequisite for activating: **at least 18** users generated a Study Pack without it (the exact figure is bounded rather than known, because `study_packs.note_id` is nullable, so a pack with no note lands in stage 4).
+- Query 4 did not output the numerator and denominator its whole scenario table rests on. It now reports `w2_eligible_users` and `w2_returned_users`.
+
+**A question this read could NOT answer, stated rather than glossed.** *Where within onboarding* the 132 drop is unknown. Stage 3 came back empty because `profile_type` and `onboarding_completed_at` are both exactly 234 — profile type is only persisted at the final step, so the `users` table cannot locate a mid-flow drop. Query 3b, which could, has **n=5 stalled** (3 at `STEP_VIEWED`, 2 at `INPUT_METHOD_SELECTED`) because only ~2 weeks of untainted onboarding events exist. Scope item 1 named this as one of three questions; it is unanswered, and the 132 should not be read as more precise than "somewhere in onboarding."
+
+**One caveat that turned out not to bite:** `completed_but_missing_context` is **5 all-time and 0 in the trailing 90 days** — exactly the 5 the 2026-08-06 audit found, all on old accounts. The phantom-completion problem did not distort this read.
+
+### The rescope — Query 5, and why it is the right target
+
+**Is 2.4% a retention fact, or an artifact of the window it is measured over?** The metric this roadmap has deferred to for months is a boolean over *one narrow window*: any event in **days 7–14** after the first Study Pack. A learner who came back on day 3, day 5, or day 20 scores as churned. The first run measured 1.62% — **3 return events**.
+
+`docs/claude-plans/v0.72.1-activation-read.sql` Query 5 varies the window and holds everything else fixed: strict days 7–14, unbounded after day 7, days 2–30, and unbounded after day 1, all on one eligible set. If the wider windows are also near-zero, the constraint is real and has been hardened rather than assumed — a genuinely useful outcome. If they are several times higher, then every decision that deferred to "2.4%" was reading a window artifact, and the **Target-habit definition** row in the Backlog Index (which already retired the blended W1→W2 boolean as the universal yardstick) needs applying before further retention work is scoped.
+
+**`users.last_login_at` was deliberately rejected as a cross-check** — `LOGIN` fires only on explicit login (`AuthService.java:844`), and that same path sets `last_login_at`, so a `keepSignedIn` refresh-token return updates neither. It shares the exact blind spot it would be checking. The variable worth varying is the window, not the event source.
+
+This is **read-only and verified unbuilt by construction**, satisfying the release's own rule that a fallback must be checked in code rather than inferred from roadmap prose.
+
+### Query 5 — RUN 2026-08-11. The window IS a material artifact, AND the constraint is still real.
+
+| window | returned | of 152 eligible | vs. strict |
+|---|---|---|---|
+| **strict, days 7–14** (the shipped metric) | **3** | **1.97%** | — |
+| unbounded after day 7 | 7 | 4.61% | 2.3× |
+| days 2–30 | 10 | 6.58% | 3.3× |
+| unbounded after day 1 | 11 | 7.24% | **3.7×** |
+
+**The decomposition is the part to remember.** The four windows nest, so they resolve into one clean picture: of the **11** users who ever returned after day 1, **4 returned only in days 2–7** (before the window opens), **3 fell inside days 7–14**, and **4 returned only after day 14**. The shipped metric therefore sees **3 of 11 real returners — 27%**.
+
+**Both halves of this are true and must be stated together.** The number the roadmap has deferred to for months undercounts returns by roughly **3.7×** — but the loosest possible reading is still **7.24%**, meaning **141 of 152 activated users never came back at all**. The constraint was **mis-sized, not imagined**. Fixing the metric does not fix the product; it stops us steering by an instrument that reads a quarter of what it measures.
+
+**The small-n objection does not apply to this conclusion, and the reason is worth keeping.** 11 returners makes the exact multiplier noisy — 3.7× could as easily be 2.5× or 5×. It does **not** make the finding noisy, because the window *definitionally* excludes days 2–7 and day 15+. That is arithmetic, not sampling. What is uncertain is the size of the undercount, never its existence.
+
+**Two consequences, stated before anyone has to ask:**
+
+1. **The rate-vs-volume verdict is UNAFFECTED.** That comparison was rate-independent — it rests entirely on activation being 52.2%, and the retention rate cancels out of it. A corrected rate does not reopen it in either direction.
+2. **The H1+H5 distal checkpoint (due 2026-11-09) was specified against this broken instrument** — it reads "the W1→W2 read." Left alone it would fire in November measuring with a window that misses 73% of returns, and would likely report H1+H5 as ineffective regardless of what H1+H5 actually did. **Re-specified in this release while the finding is in hand** (see `ROADMAP.md`). The proximal checkpoint (2026-09-10) is funnel rates and is unaffected.
+
+### The build half — a defect in shipped code, which is what the read was for
+
+**This is not a documentation problem. The days 7–14 window is baked into a live admin metric the owner reads.** `AnalyticsEventRepository.RETENTION_WINDOW_START_DAYS = "7"` / `RETENTION_WINDOW_END_DAYS = "14"` → `countReturnedWeek2Users` / `countEligibleActivatedUsersForWeek2Retention` → `AdminFunnelService.getRetentionCohortMetrics` → `AdminFunnelMetricsResponse.RetentionCohortMetrics`, displayed at `frontend/app/admin/funnel/page.tsx:313`. That is the number that seeded "2.4%" into every roadmap decision that deferred to it.
+
+**Two design constraints for the fix, pinned before it goes to Codex:**
+
+- **Report multiple windows rather than swapping one number for another.** A single replacement rate can be quoted in isolation exactly as the old one was; showing strict-W2 beside a wider window makes the definition visible at the point of reading, which is the actual failure being corrected.
+- **Widening the window also widens the eligibility filter.** `first_pack_at <= now - END_DAYS` and `ratePercent` both key off the same two constants, so a wider window raises the maturity requirement and shrinks the denominator. `RETENTION_COHORT_WEEK_LIMIT = 8` weekly cohorts interacts with this too. That coupling is the easy thing to get wrong.
+
+**Deliberately NOT in this fix: the exam-date segmentation** defined in the Backlog Index's *Target-habit definition* row. That row retired the blended W1→W2 boolean as the universal yardstick, but it also states that for open-ended learners "the existing W1→W2-style windowed read remains a reasonable frame" — so widening is the right fix for that half — while the exam-bound metric it defines is a different measurement whose scored group (users whose exam date has already passed) the row itself flags as likely single-digit today. Widening now, segmentation as its own scoped work.
+
+### Planned Scope
+
+1. **Run the activation read (owner action, production, read-only).** ✅ **DONE 2026-08-11 — results above.** Query: **`docs/claude-plans/v0.72.1-activation-read.sql`** — five queries, syntax-validated against the real schema, with the decision rule written into the file *before* the result is known. How many signups reach a first Study Pack, where the never-completed-onboarding population drops off, and whether the ~31/month activated cohort is capped by onboarding or by something downstream. **Record the result here** — a query cited as a mechanism whose result is never written down is how this project has previously lost the reasoning behind a decision. `v0.72.0` set that rule for itself; it applies here unchanged.
+2. **Onboarding Intent Router residuals (backend + frontend), conditional on the read.** ❌ **NOT TAKEN — the read did not support them as this release's retention lever.** They remain carried on their Backlog Index row, unchanged and undiminished: the read says recovering the onboarding drop-off is not the fastest path to returning users, **not** that C8/C9 are invalid findings. They are still real defects with a live cost — 132 users, 35.2% of all signups, stop there. What changed is only their justification: they can no longer be scoped *as a retention intervention*. The findings already clustered on that row: **C9** — Step 2's Course / Program copy is still byte-identical for all four profile types even though slice 5 moved `profileType` to Step 1, so a teacher is still asked for a free-text program that can never be a note program under the two-mode model; **C8** — a curator whose profile program is off-catalog still gets a bare *"No course programs selected."* with no explanation, asserted by a passing test in `note-editor-page-client.test.tsx`; plus **M13/M15/M16**, the same vocabulary and guard question in three further forms. C9's stated blocker has already expired, so it is re-triageable on effort today.
+
+**If the read says rate, not volume:** the rule is the same one `v0.72.0` wrote — rescope rather than proceed on sunk reasoning. **The fallback must be verified unbuilt before it is recorded.** `v0.72.0` recorded the CPALE Exam Hub as its fallback and the pre-signoff pressure test found it had already shipped as `v0.54.0`; had that read gone the other way, the release would have had no fallback at all and nobody would have noticed until someone tried to build it. Do not repeat that: check the code, not the roadmap prose.
+
+Anti-drift — locked:
+
+- **No new quiz mode.** The five-mode contract in `docs/product/EXAM_MODES.md` is closed.
+- **No change to the Applicable Programs model.** `ADR-001` is closed for this release; the open amendment proposal on learner free-text stays parked, and so does the Overlapping-representations decision.
+- **Onboarding taxonomy fields use the shared combobox, never free text** — Course / Program, learner level, subject and audience. This release touches onboarding copy and controls, which is exactly where that rule has been broken before.
+- **The curator onboarding guard stays.** `isTeacherSelectableOwner`, `NoteGenerationService.isCurator` and `NoteBulkGenerationService.isCurator` return `false` while `onboardingCompletedAt` is null. Do not restore the bare role check — that is the B0 activation-blocking regression, and this release works directly on that flow.
+- **New analytics events are added to the `AnalyticsEventType` enum before being fired**, on both sides.
+- **Upgrade CTAs go through `getUpgradeCtas(currentPlan)`.**
+- **One-time contextual tips go through `pickActiveGuidance()`.**
+
+### Shipped
+
+- **Admin retention is now reported as four side-by-side windows instead of one context-free rate.** The existing strict `(first pack + 7d, first pack + 14d]` count, rate, and 14-day-maturity denominator are unchanged by design so the historically quoted figure remains comparable. A separately labelled 30-day-maturity block adds unbounded after-day-7, days-2–30, and unbounded after-day-1 readings, and the weekly cohort table now places after-day-7 beside strict days 7–14. The UI states why the eligible sets differ and warns that unbounded windows accumulate with account age. This corrects the reporting defect without changing activation, return-event eligibility, or persisted data.
+
 ## v0.72.0 - Return Loop
 
 **Status: Released** (signed off 2026-08-11)
@@ -61,6 +191,7 @@ Anti-drift — locked:
 ### Shipped
 
 - **H1 commitment + H5 one-tap return loop (backend + frontend).** After **any** learner completes their first session — there is deliberately no profile-type gate, since the commitment collected is the review days and gating those behind an exam date would exclude every `STUDENT`, ~27% of profile-typed accounts (16% of all accounts, since 40% still have a null profile type), the shared post-session surface now asks once for an exam date and chosen review weekdays; commit and decline are persisted atomically on the user, failed saves preserve the outstanding prompt, and the schedule remains editable in Email Preferences. The due-concepts digest keeps null/empty schedules on the existing cadence, otherwise filters weekdays in `Asia/Manila`, and links to Quick Review for the owned note with the most due concepts with a dashboard fallback. Analytics cover prompt shown/committed/declined plus digest landing/first answer; no quiz mode or readiness behavior changed. **Recorded deviation from H1 as written:** this release collects weekdays only, not times of day, because there is no per-user timezone — and note the original wording here claimed *"the existing digest scheduler runs daily"*, which was **false**: it ran weekly on Sundays. That false premise came from the implementation prompt and produced the dispatch defect recorded below; the scheduler now genuinely dispatches this digest daily and there is no per-user timezone; the tested mechanism remains a learner-authored schedule.
+- **Digest dispatch defect, found by the pre-signoff pressure test and fixed before signoff (backend).** *This bullet is the referent the H1 entry above points at; it was described there as "recorded below" but never written, and is restored here at the `v0.72.1` kickoff rather than left dangling.* All three fresh-context agents independently found the same blocking defect, and it originated in a false premise in the implementation prompt: `sendDueConceptsDigestEmails()` had exactly one caller, inside `runWeekly()` (`cron "0 0 18 * * SUN"`), not the daily job the prompt asserted. The new weekday filter therefore compared a learner's chosen days against a job firing once a week — **at most one weekday could ever match**, so every learner choosing any other combination would silently stop receiving a default-on digest, making commitment strictly worse than declining and inverting the H5 measurement. Which weekday was live depended on deploy timezone (`ZoneId.systemDefault()` in the cron vs. `Asia/Manila` in the filter); on a Manila host that day is **Sunday**, which the commitment prompt's pre-selected **MON/WED/FRI** default excludes (`DEFAULT_REVIEW_DAYS`, `frontend/components/study-pack/review-commitment-prompt.tsx:21` — a UI pre-selection shown to the learner, *not* a server-side default; an account that never answers the prompt keeps its existing cadence) — so every learner accepting the offered default would have lost the digest entirely. Fixed by moving dispatch to `runDaily()` with `@Scheduled(zone = "Asia/Manila")`. **Frequency is unchanged for everyone:** `dueConceptsDigestCooldownDays` (7) remains the throttle, so the daily sweep only decides *which* day a learner's single weekly digest lands on. The scheduler test now asserts the digest dispatches from `runDaily` and not from `runWeekly` — the test whose absence let this reach signoff.
 
 ## v0.71.2 - Catalog Management
 

@@ -64,7 +64,19 @@ public record AdminFunnelMetricsResponse(
             long eligibleActivatedUsers,
             long returnedWeek2Users,
             double ratePercent,
+            WideRetentionMetrics wideRetention,
             List<WeeklyRetentionCohortMetrics> weeklyCohorts
+    ) {
+    }
+
+    public record WideRetentionMetrics(
+            long eligibleActivatedUsers,
+            long returnedAfterDay7Users,
+            double afterDay7RatePercent,
+            long returnedDays2To30Users,
+            double days2To30RatePercent,
+            long returnedAfterDay1Users,
+            double afterDay1RatePercent
     ) {
     }
 
@@ -72,7 +84,9 @@ public record AdminFunnelMetricsResponse(
             String weekStart,
             long cohortSize,
             long returnedCount,
-            double ratePercent
+            double ratePercent,
+            long returnedAfterDay7Count,
+            double afterDay7RatePercent
     ) {
     }
 
