@@ -1,19 +1,77 @@
 # RELEASES.md - NoteLib
 
-## v0.72.1 - Activation
+## v0.72.1 - Constraint Check
 
 **Status: In Progress**
 
-Theme: find out whether the binding constraint is retention *rate* or activation *volume*, and act on the answer. A patch on `v0.72.0`'s line because it continues the same question rather than opening a new one.
+Theme: find out which constraint is real — and then whether the number the whole roadmap defers to is measuring what it claims. A patch on `v0.72.0`'s line because it continues the same question rather than opening a new one.
+
+**Renamed from "Activation" 2026-08-11, after the read.** The original theme named a hypothesis this release went on to *disprove*: that the binding constraint was activation volume. Leaving it would make `RELEASES.md` read as though v0.72.1 shipped activation work, which it did not. The version number is unchanged — it is already bumped across seven files and the branch is pushed, so renumbering would be churn with no reader benefit.
+
+**This release is read-only until Query 5 answers.** Owner ruling 2026-08-11: every candidate build is downstream of whether the retention metric is valid, so the build half is chosen *after* that read rather than before it. This is the third consecutive use of the open-on-a-read shape, deliberately.
 
 **This release opens on a read, not a build — the same shape `v0.72.0` used, deliberately reused because it worked.** `v0.72.0` shipped H1+H5 under a pre-committed rule and recorded its own next question in the same breath: only **185** users have ever generated a first Study Pack and are old enough to measure, and **3** have ever returned in week 2. Moving retention from 2% to 4% against a ~31-user monthly activated cohort is roughly **+0.6 returning users per month**. That number is the reason this release exists — a retention rate improved against a denominator that small may not be the lever at all.
 
 **The corroborating signal, measured by an independent path:** 38.7% of accounts (141/364) never complete onboarding, closely tracking the ~40% recorded 2026-07-28 from a different query. A return-cadence habit cannot be built by users who never finish onboarding in the first place.
 
+### The read — RUN 2026-08-11. Result: the volume hypothesis FAILED. This release rescopes.
+
+**The funnel (Query 1, all-time / trailing 90 days):**
+
+| stage | all time | % of signups | trailing 90d | % |
+|---|---|---|---|---|
+| signups | 375 | — | 360 | — |
+| email verified | 366 | 97.6% | 351 | 97.5% |
+| onboarding completed | 234 | 62.4% | 220 | 61.1% |
+| activated (first Study Pack) | 195 | 52.0% | 188 | 52.2% |
+
+**Furthest-stage attribution (Query 3a), which is where the loss actually is:**
+
+| furthest stage | users | % |
+|---|---|---|
+| signed up, never verified email | 9 | 2.4% |
+| **verified, never completed onboarding** | **132** | **35.2%** |
+| completed onboarding, never created a note | 6 | 1.6% |
+| created a note, never generated a Study Pack | 57 | 15.2% |
+| activated | 171 | 45.6% |
+
+**So the largest drop IS at onboarding — and it still does not make volume the lever.**
+
+| scenario | activated/month | W2 rate | returning users/month |
+|---|---|---|---|
+| A. baseline today | 62.7 | 1.62% | **1.02** |
+| B. RATE lever — W1→W2 doubles | 62.7 | 3.24% | **2.03** |
+| C. VOLUME lever — *every* signup activates (optimistic ceiling) | 120 | 1.62% | **1.95** |
+| D. VOLUME lever — recovered users retain at half the rate | 120 | 1.23% blended | **1.48** |
+
+**The pre-committed rule required D > B for a volume verdict. D (1.48) < B (2.03), and even the optimistic ceiling C (1.95) < B.** The rule's first clause held — the largest drop is at stage 2 — but its second did not, so this lands on the rule's third branch: **the rate branch wins, and the release rescopes.**
+
+**The structural reason, which is cleaner than the numbers and does not depend on them.** Since `returning = activated × rate`, both levers are multiplicative, so the comparison is **rate-independent** — the 1.62% cancels. C beats B only if activation is below **50%**; D beats B only if activation is below **33%**. Activation is **52.2%**. The entire verdict rests on that one fraction, which is why it survives the fact that the underlying rate is built on only 3 return events.
+
+**Disclosed fragility: the margin is 2.2 points.** Query 2's monthly activation runs 65% (June) → 39% (July) → 33% (August). At 39% the volume branch would beat the rate branch and this would land on the rule's *second* branch — "did not settle it" — instead. The trailing-90 figure is 52.2% because the 183-signup June surge dominates it. Note also that the query's `incomplete_window` flag **over-warns for activation**: it was designed for retention windows, but a first Study Pack is produced within hours of onboarding and every July signup is ≥11 days old, so July's 39% is essentially final rather than an artifact. **Recorded rather than acted on** — re-cutting the verdict on recent months only is an owner call, and doing it silently in either direction is what the pre-committed rule exists to prevent.
+
+**Two corrections to the query itself, found on first run and fixed in the file:**
+- `pct_activated_of_onboarded` reported **83.33%**, which is wrong — the numerator counted all 195 activated users against the 234 onboarded, including users absent from the denominator. The true value is **73.1%** (171/234). Completing onboarding is *not* a prerequisite for activating: **at least 18** users generated a Study Pack without it (the exact figure is bounded rather than known, because `study_packs.note_id` is nullable, so a pack with no note lands in stage 4).
+- Query 4 did not output the numerator and denominator its whole scenario table rests on. It now reports `w2_eligible_users` and `w2_returned_users`.
+
+**A question this read could NOT answer, stated rather than glossed.** *Where within onboarding* the 132 drop is unknown. Stage 3 came back empty because `profile_type` and `onboarding_completed_at` are both exactly 234 — profile type is only persisted at the final step, so the `users` table cannot locate a mid-flow drop. Query 3b, which could, has **n=5 stalled** (3 at `STEP_VIEWED`, 2 at `INPUT_METHOD_SELECTED`) because only ~2 weeks of untainted onboarding events exist. Scope item 1 named this as one of three questions; it is unanswered, and the 132 should not be read as more precise than "somewhere in onboarding."
+
+**One caveat that turned out not to bite:** `completed_but_missing_context` is **5 all-time and 0 in the trailing 90 days** — exactly the 5 the 2026-08-06 audit found, all on old accounts. The phantom-completion problem did not distort this read.
+
+### The rescope — Query 5, and why it is the right target
+
+**Is 2.4% a retention fact, or an artifact of the window it is measured over?** The metric this roadmap has deferred to for months is a boolean over *one narrow window*: any event in **days 7–14** after the first Study Pack. A learner who came back on day 3, day 5, or day 20 scores as churned. The first run measured 1.62% — **3 return events**.
+
+`docs/claude-plans/v0.72.1-activation-read.sql` Query 5 varies the window and holds everything else fixed: strict days 7–14, unbounded after day 7, days 2–30, and unbounded after day 1, all on one eligible set. If the wider windows are also near-zero, the constraint is real and has been hardened rather than assumed — a genuinely useful outcome. If they are several times higher, then every decision that deferred to "2.4%" was reading a window artifact, and the **Target-habit definition** row in the Backlog Index (which already retired the blended W1→W2 boolean as the universal yardstick) needs applying before further retention work is scoped.
+
+**`users.last_login_at` was deliberately rejected as a cross-check** — `LOGIN` fires only on explicit login (`AuthService.java:844`), and that same path sets `last_login_at`, so a `keepSignedIn` refresh-token return updates neither. It shares the exact blind spot it would be checking. The variable worth varying is the window, not the event source.
+
+This is **read-only and verified unbuilt by construction**, satisfying the release's own rule that a fallback must be checked in code rather than inferred from roadmap prose.
+
 ### Planned Scope
 
-1. **Run the activation read (owner action, production, read-only).** How many signups reach a first Study Pack, where the never-completed-onboarding population drops off, and whether the ~31/month activated cohort is capped by onboarding or by something downstream. **Record the result here** — a query cited as a mechanism whose result is never written down is how this project has previously lost the reasoning behind a decision. `v0.72.0` set that rule for itself; it applies here unchanged.
-2. **Onboarding Intent Router residuals (backend + frontend), conditional on the read.** The findings already clustered on one Backlog Index row: **C9** — Step 2's Course / Program copy is still byte-identical for all four profile types even though slice 5 moved `profileType` to Step 1, so a teacher is still asked for a free-text program that can never be a note program under the two-mode model; **C8** — a curator whose profile program is off-catalog still gets a bare *"No course programs selected."* with no explanation, asserted by a passing test in `note-editor-page-client.test.tsx`; plus **M13/M15/M16**, the same vocabulary and guard question in three further forms. C9's stated blocker has already expired, so it is re-triageable on effort today.
+1. **Run the activation read (owner action, production, read-only).** ✅ **DONE 2026-08-11 — results above.** Query: **`docs/claude-plans/v0.72.1-activation-read.sql`** — five queries, syntax-validated against the real schema, with the decision rule written into the file *before* the result is known. How many signups reach a first Study Pack, where the never-completed-onboarding population drops off, and whether the ~31/month activated cohort is capped by onboarding or by something downstream. **Record the result here** — a query cited as a mechanism whose result is never written down is how this project has previously lost the reasoning behind a decision. `v0.72.0` set that rule for itself; it applies here unchanged.
+2. **Onboarding Intent Router residuals (backend + frontend), conditional on the read.** ❌ **NOT TAKEN — the read did not support them as this release's retention lever.** They remain carried on their Backlog Index row, unchanged and undiminished: the read says recovering the onboarding drop-off is not the fastest path to returning users, **not** that C8/C9 are invalid findings. They are still real defects with a live cost — 132 users, 35.2% of all signups, stop there. What changed is only their justification: they can no longer be scoped *as a retention intervention*. The findings already clustered on that row: **C9** — Step 2's Course / Program copy is still byte-identical for all four profile types even though slice 5 moved `profileType` to Step 1, so a teacher is still asked for a free-text program that can never be a note program under the two-mode model; **C8** — a curator whose profile program is off-catalog still gets a bare *"No course programs selected."* with no explanation, asserted by a passing test in `note-editor-page-client.test.tsx`; plus **M13/M15/M16**, the same vocabulary and guard question in three further forms. C9's stated blocker has already expired, so it is re-triageable on effort today.
 
 **If the read says rate, not volume:** the rule is the same one `v0.72.0` wrote — rescope rather than proceed on sunk reasoning. **The fallback must be verified unbuilt before it is recorded.** `v0.72.0` recorded the CPALE Exam Hub as its fallback and the pre-signoff pressure test found it had already shipped as `v0.54.0`; had that read gone the other way, the release would have had no fallback at all and nobody would have noticed until someone tried to build it. Do not repeat that: check the code, not the roadmap prose.
 

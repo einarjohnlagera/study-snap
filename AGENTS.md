@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.72.1 - Activation` (In Progress); previous: `v0.72.0 - Return Loop` (Released)
+- `v0.72.1 - Constraint Check` (In Progress); previous: `v0.72.0 - Return Loop` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
