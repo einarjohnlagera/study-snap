@@ -2,7 +2,7 @@
 
 > Paste the block below as your first message in a new GPT chat session.
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.71.1 (In Progress) - 2026-08-10
+> Last updated: v0.72.1 (Released) - 2026-08-11
 
 ---
 
@@ -10,23 +10,25 @@ Here's the current context for our NoteLib product session. Treat this as a comp
 
 ---
 
-## START HERE — orientation in 13 lines
+## START HERE — orientation in 15 lines
 
 Read this block first. Everything below is detail behind it.
 
 1. **What it is:** NoteLib is a notes-first study workspace. Capture notes → generate Study Packs → practice with quizzes → track readiness → reuse the library.
 2. **What we sell:** the *learning system*, not features. Hero: **"Always know what to learn next."** Features are evidence for that promise, never the promise itself. **Ratified 2026-08-05: NoteLib is a learning system built on top of a knowledge library — the library is the foundation, the learning journey is the product.** Three layers earned strictly in order: **Trust** (comprehensive Official Review Sets) → **Habit** (Study Packs, Companion, Progress, Review Sets) → **Community** (user-created knowledge). **Community content is no longer the primary acquisition strategy** — the community vision is not abandoned, it is being earned in the correct order. Do not propose UGC as top-of-funnel.
-3. **Current state:** `v0.71.0 - Applicable Programs` is **Released** (signed off 2026-08-10, merged and deployed) — **all five slices shipped**, closing Release B of `ADR-001`. `v0.71.1 - Applicable Programs Follow-ups` is **In Progress**: a patch release clearing findings `v0.71.0` deferred, not new scope. **If you are proposing notes or note collections, the note-authoring model changed materially in Release B — read line 10, then `docs/gpt-contexts/NOTES_AND_COLLECTIONS_CONTEXT.md`, which is the structural reference for it.**
-4. **The single biggest constraint:** W1→W2 retention is **2.4%**. It has not moved across multiple releases. Read "Retention Is the Proven Constraint" before proposing anything new.
-5. **Pricing is settled for now** — quota raised, price change deferred pending data. Don't reopen it.
-6. **Positioning copy no longer needs a conversion test** (owner call, 2026-08-01). Pricing/checkout *mechanics* still do.
-7. **Mastery comes only from graded assessment.** Self-review surfaces (Flashcards, Memorization) are firewalled from readiness by design.
-8. **There are exactly 5 quiz modes.** The contract is locked. Do not propose a 6th.
-9. **Biggest recurring failure mode in this repo:** repo-wide copy/terminology changes that under-scope themselves. `v0.68.0` under-counted its own sweep four times; `v0.67.1` scoped three items and shipped seven. Assume one grep is insufficient.
-10. **A note is classified on five independent axes, and one note can serve many programs.** Subject (*what*) · **Domain Context** (*how it is authored* — **the sole LLM domain constraint**, 8 ratified values) · Note Learner Level (*how deep* — a curriculum floor, and yes, a note owns its own depth) · **Applicable Programs** (*where it appears* — one or many catalog programs, **discovery only, never reaches a prompt**) · Target Audience (*who* — discovery only, never depth). **Never propose the same note once per program** — that duplication is what Release B exists to remove. Multi-program notes **require** a Domain Context. Full detail, the 21 catalog programs and the 8 Domain Context values: `NOTES_AND_COLLECTIONS_CONTEXT.md` §0.
-11. **Open questions awaiting your input:** (a) Explore's default tab — still unresolved three releases later; (b) ~~whether an admin curating a learner's own note should be constrained~~ **RESOLVED 2026-08-11 and shipped** — `ADR-001` → *Curation authority*: an Applicable Program row may only be authored onto a note its author owns. Ownership rather than visibility, because a learner can flip a curated public note back to private; no `source` provenance column was needed. **Settled, do not reopen:** the learner-depth question (2026-08-04 — notes own their depth; what remains is evolving authoring toward inference, a direction in `ADR-001`); **R4** (passed 2026-08-04 — it validated the Domain Context *value set*, **not** applicability, and must not be cited as settling anything about which programs a note applies to); and the four Program Family decisions (ratified 2026-08-05, shipped in Slice 3).
-12. **Don't propose:** a 6th quiz mode, price changes, AI-generated per-concept definitions, feeding self-review into readiness, user-facing "Creator"/"Curated Learning" labels, a 9th Domain Context value, or duplicate notes per program.
-13. **The repo is `studysnap` internally.** The product is NoteLib. Database and package names still say `studysnap` — that is intentional, not debt to fix.
+3. **Current state:** `v0.72.1 - Constraint Check` is **Released** (signed off 2026-08-11). **No version is currently open.** The arc since Applicable Programs: `v0.71.1` and `v0.71.2 - Catalog Management` closed that work (admins can now add a Course / Program without a migration); `v0.72.0 - Return Loop` shipped H1+H5 — a post-session commitment prompt asking which weekdays a learner wants reminders on, and a digest that links straight into a review session; `v0.72.1` then ran two production reads and corrected the retention metric itself (see lines 4–6, which supersede anything you may have seen about "2.4%"). **If you are proposing notes or note collections, the note-authoring model changed materially in Release B — read line 10, then `docs/gpt-contexts/NOTES_AND_COLLECTIONS_CONTEXT.md`, which is the structural reference for it.**
+4. **The single biggest constraint — RESIZED 2026-08-11, and the correction matters more than the number.** For months this line read *"W1→W2 retention is 2.4%."* That figure counted only activity in **days 7–14** after a learner's first Study Pack, and a production read found it sees **3 of the 11 learners who actually returned** — it misses everyone coming back in days 2–7 and everyone returning after day 14. Measured over a wider window, retention is **~7.2%**. **Both halves matter:** the number we steered by understated reality ~3.7×, *and* 7.2% is still bad — 141 of 152 activated learners never came back at all. The constraint is real; it was **mis-sized, not imagined**. Do not treat this correction as good news, and do not quote 2.4% as a current figure. Read "Retention Is the Proven Constraint" before proposing anything new.
+5. **The funnel's largest single leak is onboarding, not retention or verification.** Of 375 all-time signups: 366 verify their email (97.6%), **234 complete onboarding (62.4%)**, 195 generate a first Study Pack (52.0%). So **132 people — 35.2% of everyone who ever signed up — verify and then never finish onboarding.** Verification loses 9. This is new information as of 2026-08-11 and is the strongest available evidence for onboarding work.
+6. **Activation is already 52.2%, which structurally caps "get more users activated" as a lever.** Because returning learners = activated × retention rate, both levers are multiplicative, so the comparison is rate-independent: perfect activation would beat doubling retention only if activation were below 50%. It isn't. A read in `v0.72.1` tested exactly this and the volume hypothesis failed. Do not propose activation-volume work on the grounds that it will move returning-user counts — propose it, if at all, on comprehension or product-quality grounds.
+7. **Pricing is settled for now** — quota raised, price change deferred pending data. Don't reopen it.
+8. **Positioning copy no longer needs a conversion test** (owner call, 2026-08-01). Pricing/checkout *mechanics* still do.
+9. **Mastery comes only from graded assessment.** Self-review surfaces (Flashcards, Memorization) are firewalled from readiness by design.
+10. **There are exactly 5 quiz modes.** The contract is locked. Do not propose a 6th.
+11. **Biggest recurring failure mode in this repo:** repo-wide copy/terminology changes that under-scope themselves. `v0.68.0` under-counted its own sweep four times; `v0.67.1` scoped three items and shipped seven. Assume one grep is insufficient.
+12. **A note is classified on five independent axes, and one note can serve many programs.** Subject (*what*) · **Domain Context** (*how it is authored* — **the sole LLM domain constraint**, 8 ratified values) · Note Learner Level (*how deep* — a curriculum floor, and yes, a note owns its own depth) · **Applicable Programs** (*where it appears* — one or many catalog programs, **discovery only, never reaches a prompt**) · Target Audience (*who* — discovery only, never depth). **Never propose the same note once per program** — that duplication is what Release B exists to remove. Multi-program notes **require** a Domain Context. Full detail, the 21 catalog programs and the 8 Domain Context values: `NOTES_AND_COLLECTIONS_CONTEXT.md` §0.
+13. **Open questions awaiting your input:** (a) Explore's default tab — still unresolved three releases later; (b) ~~whether an admin curating a learner's own note should be constrained~~ **RESOLVED 2026-08-11 and shipped** — `ADR-001` → *Curation authority*: an Applicable Program row may only be authored onto a note its author owns. Ownership rather than visibility, because a learner can flip a curated public note back to private; no `source` provenance column was needed. **Settled, do not reopen:** the learner-depth question (2026-08-04 — notes own their depth; what remains is evolving authoring toward inference, a direction in `ADR-001`); **R4** (passed 2026-08-04 — it validated the Domain Context *value set*, **not** applicability, and must not be cited as settling anything about which programs a note applies to); and the four Program Family decisions (ratified 2026-08-05, shipped in Slice 3).
+14. **Don't propose:** a 6th quiz mode, price changes, AI-generated per-concept definitions, feeding self-review into readiness, user-facing "Creator"/"Curated Learning" labels, a 9th Domain Context value, or duplicate notes per program.
+15. **The repo is `studysnap` internally.** The product is NoteLib. Database and package names still say `studysnap` — that is intentional, not debt to fix.
 
 ---
 
@@ -159,11 +161,28 @@ Raised by the owner immediately after `v0.69.0` deployed, and **genuinely open**
 
 ## Retention Is the Proven Constraint (read this before proposing anything)
 
-**The number:** W1→W2 retention is **2.4%** (production read, 2026-07-15; 3 of 127 eligible activated users returned in week 2). This has been the core strategic constraint since v0.32.2 first flagged it (was 5.6% then) — it has **not meaningfully improved** despite three intervening feature releases aimed at it (v0.44.0, v0.46.0, v0.48.0). Free-tier quota was essentially never hit at the old limits (5/25/50/month), which is one reason the owner ratified a large quota increase in v0.61.0 rather than treating quota as the retention lever on its own — see the Current Release note above.
+**⚠️ THE NUMBER WAS RESIZED 2026-08-11 — read this before quoting any retention figure.**
+
+**What we said for months:** W1→W2 retention is **2.4%** (production read 2026-07-15; 3 of 127 eligible activated users returned in week 2), the core strategic constraint since v0.32.2 first flagged it (5.6% then), **not meaningfully improved** despite three feature releases aimed at it (v0.44.0, v0.46.0, v0.48.0).
+
+**What `v0.72.1` found.** That metric asked one narrow question: did the learner do anything in **days 7–14** after their first Study Pack? A learner returning on day 3, or on day 20, scored as churned. Measured across four windows on the same population (152 learners, first pack ≥30 days ago):
+
+| window | returned | rate |
+|---|---|---|
+| strict, days 7–14 *(the figure we quoted)* | 3 | **1.97%** |
+| unbounded after day 7 | 7 | 4.61% |
+| days 2–30 | 10 | 6.58% |
+| unbounded after day 1 | 11 | **7.24%** |
+
+Of the **11** learners who ever came back, the old metric saw **3 — 27%**. Four returned in days 2–7 before the window opened; four only after it closed.
+
+**How to talk about this — both halves, always.** The number we steered by understated reality by roughly **3.7×**, *and* **141 of 152 activated learners never came back at all**. The constraint is **mis-sized, not imagined**. Treating the correction as good news is the failure mode to avoid; so is continuing to quote 2.4%. The small sample makes the exact multiplier uncertain (3.7× could be 2.5× or 5×) but **not** the finding — excluding days 2–7 and day 15+ is definitional arithmetic, not sampling noise. The admin dashboard now reports all four windows side by side, with the strict figure preserved unchanged so historical comparisons still work. Free-tier quota was essentially never hit at the old limits (5/25/50/month), which is one reason the owner ratified a large quota increase in v0.61.0 rather than treating quota as the retention lever on its own — see the Current Release note above.
 
 **Diagnosis (two independent Fable sessions converged):** every content-rich retention trigger the product has shipped **default-OFF**, gated behind the exact engagement it's meant to create. The first study session also ends in a psychologically "complete" feeling (Zeigarnik effect) rather than an open loop that pulls the learner back. `v0.48.0` (merged 2026-07-15) shipped the cheap fixes for both (open-loop first-quiz ending, due-concepts digest default-ON) — **both remain UNPROVEN, mechanism shipped, lift not measured.** Do not describe either as a retention win in external-facing copy.
 
-**H1+H5 (commitment device + pre-decided return action) is the pre-committed next retention move if the v0.48.0 cohort re-read is positive-or-ambiguous — still gated, not abandoned.** The re-read needs a cohort that actually experienced the v0.48.0 changes to clear its 14-day W1→W2 window: that window closes **2026-07-29 (tomorrow, as of this update)**. The query is written and ready (`next-priority-new-user-focus-out/02-h1-h5-cohort-recheck-and-cpale-depth.sql` Query 1) but has not yet been run as of this update.
+**H1+H5 SHIPPED in `v0.72.0` (2026-08-11) — this section previously said it was "still gated" and the query "has not yet been run."** Both are now false. What happened, recorded because the reasoning matters more than the outcome: the re-read ran on 2026-08-11, 13 days after its window closed (a kickoff gate scan caught that it had gone unrun). Result: **0 of 31** in the gated cohort vs. a **1.95%** pre-`v0.48.0` baseline. **That 0% was underpowered, not negative** — expected returns at baseline for n=31 is 0.60, and P(zero | no change) is **54.3%**. Ambiguous, so the pre-committed rule (*"positive **or ambiguous** → ship"*) fired and H1+H5 shipped. **Do not describe H1+H5 as validated by data** — it was a decision on a rule written before the answer was known, precisely so the outcome could not be rationalised afterwards.
+
+**What shipped:** after any learner's first completed session, a prompt asks for their exam date and which weekdays they want to review; the due-concepts digest then respects those weekdays and links straight into a Quick Review session for the note with the most concepts due, rather than dropping them on the dashboard. Two dated checkpoints are open: **2026-09-10** (do learners commit when asked, and act on the digest — this one carries the kill criterion) and **2026-11-09** (the retention read itself, re-specified to the wider window after the finding above, since the original spec would have judged H1+H5 through the broken metric).
 
 **The 2026-07-24 signup surge reversed the "go straight to Phase 2" plan and inserted a Diagnostic Read + a new Reusable Practice Assets initiative ahead of it — full detail in the Company Redefinition section below, which supersedes the old post-v0.48.0 sequencing.** The retained/churned exam-dated user interview script is still written, ready, zero engineering cost, and still hasn't been run — the one open item on this whole track that can't happen from a keyboard.
 
@@ -180,6 +199,31 @@ Two guardrails on reading this:
 Full definition: `docs/product/ROADMAP.md`'s "Target-habit definition" Backlog Index row.
 
 **Full backlog, current status, and exactly what un-parks each item lives in `docs/product/ROADMAP.md`'s Backlog Index table (~55 rows) — check it before proposing or resurfacing anything.** See "Roadmap Candidates: Gated & Ungated" below for a synthesized, status-grouped view of that same table, restricted to items still actually open (shipped/resolved rows are dropped from that view — check `RELEASES.md` for those). Do not propose roadmap items from partial memory of past sessions; the index is the current source of truth.
+
+---
+
+---
+
+## The activation funnel — new as of 2026-08-11, and it relocates the biggest problem
+
+All-time, production:
+
+| stage | users | % of signups | lost here |
+|---|---|---|---|
+| signed up | 375 | — | — |
+| verified email | 366 | 97.6% | 9 |
+| **completed onboarding** | **234** | **62.4%** | **132** |
+| generated a first Study Pack | 195 | 52.0% | 39 |
+
+**132 learners — 35.2% of everyone who ever signed up — verify their email and then never finish onboarding.** That is the largest single drop anywhere in the funnel, and it was not visible before this read.
+
+**Two things this settles, and one it does not.**
+
+**Settled: "get more users activated" is not a lever on returning-user counts.** Returning learners = activated × retention rate, so both levers are multiplicative and the comparison is rate-independent — the retention rate cancels out. Perfect activation (every signup activating) would beat merely doubling retention only if activation were **below 50%**. It is **52.2%**. Scenarios, in returning learners per month: baseline **1.02**, retention doubles **2.03**, *every* signup activates **1.95**, activation recovered at half the retention rate **1.48**. A pre-committed rule required the sensitivity case to clear the retention case; it did not. **Do not propose onboarding or activation work on the grounds that it will move returning-user counts.** It is defensible on comprehension or product-quality grounds — 132 people meet the product and leave — but that is a different argument and should be made as one.
+
+**Settled: verification is not the problem.** 97.6% verify. Any proposal built on "users bounce off the verification wall" is aiming at 9 people.
+
+**NOT settled: which onboarding step they abandon on.** Profile type is only persisted at the *final* step, so the database cannot distinguish a step-1 abandon from a step-4 one, and clean step-level analytics only exist from 2026-07-28 (n≈5 so far). If a recommendation depends on knowing where the drop is, say so — that is an instrumentation question, not an unknowable one.
 
 ---
 
@@ -467,7 +511,7 @@ Synthesized from `docs/product/ROADMAP.md`'s Backlog Index (~55 rows) — the au
 
 ### Gated — condition is close or partially cleared
 - **Onboarding coverage-gap capture (deferred out of `v0.60.3`).** Design done, unchanged, still valid. Gated on the Diagnostic Read closing (~2026-08-06) AND a clean re-run of its gate query (`STUDENT`-profile presence in the surge cohort must read effectively zero — it currently doesn't, 2/29). **Further from clearing as of 2026-07-28's population-mix query:** `STUDENT` is 27.09% of profile-typed accounts product-wide, not a surge-only artifact — this isn't a narrow surge-cohort question anymore.
-- **Retention H1+H5.** Gate: v0.48.0 cohort re-read positive-or-ambiguous. Window closes 2026-07-29 (tomorrow, as of this update) — not yet run.
+- ~~**Retention H1+H5.**~~ **SHIPPED in `v0.72.0`, 2026-08-11.** The re-read ran (13 days late, caught by a kickoff gate scan), came back ambiguous rather than positive, and the pre-committed rule fired. Two dated checkpoints now open — see the Retention section above. Not a candidate any more.
 - **Wave 2 Exam Hubs beyond CPALE** (Civil/Electrical/Mechanical Engineering, Pharmacy, Physical Therapy, Civil Service Exam). Each needs its own production depth check (~25-30 notes); CPALE cleared this, the rest haven't been checked.
 - **Price decrease.** Deferred as of `v0.61.0` — needs paywall conversion / onboarding retention / post-quota-increase usage data before revisiting.
 - **P7 (exam quick-facts block per hub)** — wait for GSC (P1) first. **P8 (off-page community presence)** — non-engineering, needs an owner to do outreach. **L2 (earned-depth pathway for non-exam subjects)** — double-gated on depth + post-GSC organic-impression data.
