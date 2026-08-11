@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provide an internal, mostly read-only Admin Dashboard for monitoring product usage, billing health, upgrades, and Public Library growth. Admin v1 has three narrow operational exceptions: admin-initiated billing refunds for exceptional payment issues, per-note Applicable Programs curation, and add-only Course / Program catalog management.
+Provide an internal, mostly read-only Admin Dashboard for monitoring product usage, billing health, upgrades, and Public Library growth. Admin v1 has three narrow operational exceptions: admin-initiated billing refunds for exceptional payment issues, per-note Applicable Programs curation, and add-only Course / Program catalog management. **The two curation surfaces live on their own page at `/admin/course-programs`, not on the dashboard** — they are authoring tools, and the dashboard is what an admin scans for operational health, so mixing them buried the monitoring the page exists for.
 
 ## Access
 
@@ -78,10 +78,13 @@ Admin v1 tables should include:
 - recent failed payments
 - recent feedback
 - one-click refund actions on Xendit recent premium upgrade rows that have a linked transaction
-- a paginated notes table showing legacy Course / Program and explicit Applicable Programs, with a catalog-backed edit action that changes no other note metadata; its shared control can add every member of a Program Family in one action, after which the admin can trim the explicit set before saving
-- a Course / Program catalog section listing each program and family, plus an add-only form for name, optional existing Program Family, and optional supported exam goal; it warns about near matches and keeps form input after errors
 
 ## Course / Program Catalog Management
+
+**Both surfaces below render on `/admin/course-programs`, reached from a `Course / Programs →` link in the Admin dashboard header alongside Campaigns and Funnel. They are deliberately not on the dashboard itself.**
+
+- a Course / Program catalog section listing each program and family, plus an add-only form for name, optional existing Program Family, and optional supported exam goal; it warns about near matches and keeps form input after errors
+- a paginated notes table showing legacy Course / Program and explicit Applicable Programs, with a catalog-backed edit action that changes no other note metadata; its shared control can add every member of a Program Family in one action, after which the admin can trim the explicit set before saving
 
 - Catalog growth is demand-driven: add a program when a canonical note is legitimately applicable to it. Do not pre-seed a vocabulary.
 - Creation is add-only. Rename, delete, and new Program Family creation remain out of scope.
