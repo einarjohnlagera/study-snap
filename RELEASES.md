@@ -1,5 +1,67 @@
 # RELEASES.md - NoteLib
 
+## v0.72.0 - Return Loop
+
+**Status: Released** (signed off 2026-08-11)
+
+Theme: give a learner a reason and a plan to come back. This release goes at the project's oldest and least-moved constraint — **W1→W2 retention at 2.4%** — rather than at another authoring or discovery surface.
+
+**This release opens on a read, not a build, and that is deliberate.** An earlier release pre-committed to a decision rule and the window has now closed; running it is the first scope item, not a preamble to the release.
+
+### The pre-committed decision rule — do not re-litigate it
+
+> Re-check the `v0.48.0` cohort's return-rate data in late July, and **if the signal is positive *or ambiguous* (not clearly negative), ship H1+H5.**
+
+The rule was set when the evidence was still unavailable, precisely so the outcome could not be rationalised after the fact. The window closed **2026-07-29** and the read was **not run for 13 days** — this kickoff's gate scan is what surfaced it. The query already exists and needs no new work: `docs/claude-prompt/next-priority-new-user-focus-out/02-h1-h5-cohort-recheck-and-cpale-depth.sql`, Query 1, whose own header documents why it only becomes valid after 2026-07-29.
+
+### The read — RUN 2026-08-11. Result: AMBIGUOUS, so the rule fires and H1+H5 ships.
+
+| cohort | eligible | returned W2 | rate |
+|---|---|---|---|
+| **post-`v0.48.0`** (the gated cohort) | **31** | **0** | **0.00%** |
+| pre-`v0.48.0` baseline | 154 | 3 | 1.95% |
+
+**The baseline sanity check passes:** 1.95% against the known ~2.4% Admin figure, so nothing else drifted while this sat unread.
+
+**0% is not a negative signal — it is an underpowered one, and the arithmetic says so.** At the baseline rate, the expected number of returns in a cohort of 31 is **0.60**, and the probability of observing exactly zero *even if nothing changed at all* is **54.3%**. A coin that lands zero-heads more often than not cannot tell you the coin got worse. The cohort is far too small to distinguish no-change from modest-improvement, which is the definition of ambiguous.
+
+**So the pre-committed rule fires: not clearly negative → ship H1+H5.** Recorded plainly: this is a decision on the *rule*, not on a positive result. The read did **not** show `v0.48.0` working. It showed the sample cannot tell, and the rule was written in advance precisely to bind that case.
+
+**An observation that is NOT a reason to re-litigate the rule, but should be known.** Only **185** users have ever generated a first Study Pack and are old enough to measure (154 + 31), and **3** have ever returned in week 2. Moving retention from 2% to 4% against a ~31-user monthly activated cohort is roughly **+0.6 returning users per month**. That is a real question about whether the binding constraint is retention *rate* or activation *volume* — and it is worth asking after this release, on evidence, rather than being used now to avoid a commitment made when the answer was still unknown.
+
+### The CPALE fallback check — CORRECTED 2026-08-11: the hub already shipped
+
+**This section originally recorded CPALE as an unbuilt fallback whose depth gate had just been cleared. That is false, and the pressure test caught it.** `CPALE Exam Hub (Wave 2)` shipped as **`v0.54.0`** (Status: Released, `RELEASES.md` §v0.54.0) and is live in code — `frontend/lib/exam-hub-config.ts:33` and `ExamGoalConfig`, giving `EXAM_HUB_SLUGS` four entries. Query 2 was run against production on 2026-07-21 and cleared **then**; re-running it on 2026-08-11 re-measured a gate that had already been discharged and a hub that already existed.
+
+**Two claims built on that error, both withdrawn:** that CPALE is *"the fourth instance of a shape already shipped three times"* — it **is** the shipped fourth instance; and that the release could *"rescope to the CPALE hub"* if the cohort read came back negative — there was nothing left to build, so the recorded fallback was empty. Had the read gone the other way, this release would have had no fallback at all, and nobody would have noticed until someone tried to build it.
+
+**What the re-run does still tell us, kept because it was measured:** 31 subjects, **154 public notes**, largest single subject 11, and every row now carries `Accountancy` as its course program. Depth has grown since the hub shipped. The claim that this mirrors *"the shape PNLE uses by combining two subjects into one hub"* is also **false** — exam hubs match on `courseProgram`, never subject, and PNLE maps to the single program `Nursing`. That wording came from the SQL file's own stale header comment, which the code never matched.
+
+### Planned Scope
+
+1. **Run the `v0.48.0` cohort re-read (owner action, production, read-only).** Record the result in `RELEASES.md` — a query cited as a mechanism whose result is never written down is how this project has previously lost the reasoning behind a decision.
+2. **H1 — commitment device (backend + frontend), conditional on the read.** A learner states a return intention at a moment they are already engaged, rather than being asked to remember.
+3. **H5 — pre-decided return action (backend + frontend), conditional on the read.** When they come back, the next step is already chosen, so returning does not start with a decision.
+
+**H1 and H5 ship together or not at all.** The pre-committed rule names them as a pair, and each is weaker alone: a commitment with nothing decided to return *to*, or a decided next step nobody committed to.
+
+### If the read comes back clearly negative
+
+Then the rule says do not ship, and this release rescopes rather than proceeding on sunk reasoning. The recorded fallback is the **CPALE Exam Hub** — smaller, and the fourth instance of a shape already shipped three times — gated on its own depth-count check (~25–30 notes in one clean bucket). `v0.71.0` set the precedent for opening a version whose scope is honestly blocked, so an empty or rescoped release is an acceptable outcome here, not a failure.
+
+Anti-drift — locked:
+
+- **No new quiz mode.** The five-mode contract in `docs/product/EXAM_MODES.md` is closed.
+- **Self-review surfaces stay firewalled from readiness.** Mastery comes only from graded assessment; a return-loop nudge must not become a mastery signal.
+- **Upgrade CTAs go through `getUpgradeCtas(currentPlan)`.** A retention surface is exactly where hardcoded upgrade copy tends to appear.
+- **New analytics events are added to the `AnalyticsEventType` enum before being fired**, on both sides. This release will want measurement, which is where that rule is most often skipped.
+- **No change to the Applicable Programs model.** `ADR-001` is closed for this release; the open amendment proposal on learner free-text stays parked.
+- **One-time contextual tips go through `pickActiveGuidance()`** — do not add a new one-time tip outside the guidance engine.
+
+### Shipped
+
+- **H1 commitment + H5 one-tap return loop (backend + frontend).** After **any** learner completes their first session — there is deliberately no profile-type gate, since the commitment collected is the review days and gating those behind an exam date would exclude every `STUDENT`, ~27% of profile-typed accounts (16% of all accounts, since 40% still have a null profile type), the shared post-session surface now asks once for an exam date and chosen review weekdays; commit and decline are persisted atomically on the user, failed saves preserve the outstanding prompt, and the schedule remains editable in Email Preferences. The due-concepts digest keeps null/empty schedules on the existing cadence, otherwise filters weekdays in `Asia/Manila`, and links to Quick Review for the owned note with the most due concepts with a dashboard fallback. Analytics cover prompt shown/committed/declined plus digest landing/first answer; no quiz mode or readiness behavior changed. **Recorded deviation from H1 as written:** this release collects weekdays only, not times of day, because there is no per-user timezone — and note the original wording here claimed *"the existing digest scheduler runs daily"*, which was **false**: it ran weekly on Sundays. That false premise came from the implementation prompt and produced the dispatch defect recorded below; the scheduler now genuinely dispatches this digest daily and there is no per-user timezone; the tested mechanism remains a learner-authored schedule.
+
 ## v0.71.2 - Catalog Management
 
 **Status: Released** (signed off 2026-08-11)

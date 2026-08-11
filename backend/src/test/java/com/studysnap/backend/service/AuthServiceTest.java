@@ -19,6 +19,7 @@ import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateExamDateRequest;
 import com.studysnap.backend.dto.UpdateStudyDaysPerWeekRequest;
 import com.studysnap.backend.dto.UpdateStudyGoalRequest;
+import com.studysnap.backend.dto.UpdateReviewCommitmentRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.AuthProvider;
 import com.studysnap.backend.entity.EngagementMode;
@@ -35,6 +36,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidGoalException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
+import com.studysnap.backend.exception.InvalidReviewDayException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -52,6 +54,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -975,6 +978,114 @@ class AuthServiceTest {
         assertThat(user.getDueConceptsDigestRemindersEnabled()).isTrue();
         assertThat(user.getKnowledgeImpactDigestRemindersEnabled()).isTrue();
         assertThat(user.getMarketingEmailsEnabled()).isTrue();
+    }
+
+    @Test
+    void updateReviewCommitment_failedValidationLeavesPromptOutstandingAndPersistsNothing() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        UpdateReviewCommitmentRequest request = new UpdateReviewCommitmentRequest(
+                LocalDate.of(2026, 11, 8),
+                List.of("MONDAY", "FUNDAY")
+        );
+
+        assertThatThrownBy(() -> authService.updateReviewCommitment(userId, request))
+                .isInstanceOf(InvalidReviewDayException.class)
+                .extracting("status")
+                .isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+        verify(userRepository, never()).findById(userId);
+        assertThat(user.getReviewCommitmentPromptedAt()).isNull();
+    }
+
+    @Test
+    void updateReviewCommitment_doesNotClearReviewDaysWhenTheFieldIsOmitted() {
+        // Symmetric with the examDate guard: omitting the field must not unsubscribe a learner from the
+        // days they chose. An explicit empty list still clears them -- that is how a decline is sent.
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        user.setReviewDays(new String[]{"TUESDAY"});
+        stubReviewCommitmentResponse(userId, user);
+
+        authService.updateReviewCommitment(userId, new UpdateReviewCommitmentRequest(null, null));
+
+        assertThat(user.getReviewDays()).containsExactly("TUESDAY");
+        assertThat(user.getReviewCommitmentPromptedAt()).isNotNull();
+    }
+
+    @Test
+    void updateReviewCommitment_doesNotClearAnExistingExamDateWhenNoneIsSupplied() {
+        // This endpoint does not own examDate -- onboarding does. A learner with no exam-date field
+        // sends null on every save, and an unconditional write would silently destroy a date that
+        // drives the exam pacing plan.
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        LocalDate existingExamDate = user.getExamDate();
+        assertThat(existingExamDate).isNotNull();
+        stubReviewCommitmentResponse(userId, user);
+
+        authService.updateReviewCommitment(
+                userId,
+                new UpdateReviewCommitmentRequest(null, List.of("MONDAY"))
+        );
+
+        assertThat(user.getExamDate()).isEqualTo(existingExamDate);
+        assertThat(user.getReviewDays()).containsExactly("MONDAY");
+    }
+
+    @Test
+    void updateReviewCommitment_declineSetsPromptMarkerWithoutReviewDays() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        stubReviewCommitmentResponse(userId, user);
+
+        MeResponse response = authService.updateReviewCommitment(
+                userId,
+                new UpdateReviewCommitmentRequest(user.getExamDate(), List.of())
+        );
+
+        assertThat(user.getReviewDays()).isEmpty();
+        assertThat(user.getReviewCommitmentPromptedAt()).isNotNull();
+        assertThat(response.reviewCommitmentOutstanding()).isFalse();
+    }
+
+    @Test
+    void updateReviewCommitment_committingTwiceKeepsOneNormalizedSchedule() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = reviewCommitmentUser(userId);
+        stubReviewCommitmentResponse(userId, user);
+        UpdateReviewCommitmentRequest request = new UpdateReviewCommitmentRequest(
+                LocalDate.of(2026, 11, 8),
+                List.of("monday", "WEDNESDAY", "MONDAY")
+        );
+
+        authService.updateReviewCommitment(userId, request);
+        authService.updateReviewCommitment(userId, request);
+
+        assertThat(user.getReviewDays()).containsExactly("MONDAY", "WEDNESDAY");
+        assertThat(user.getExamDate()).isEqualTo(LocalDate.of(2026, 11, 8));
+        assertThat(user.getReviewCommitmentPromptedAt()).isNotNull();
+    }
+
+    private UserEntity reviewCommitmentUser(UUID userId) {
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("review@example.com");
+        user.setFirstName("Review");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(UserStatus.ACTIVE);
+        user.setEngagementMode(EngagementMode.CONSISTENCY);
+        user.setExamDate(LocalDate.of(2026, 11, 8));
+        return user;
+    }
+
+    private void stubReviewCommitmentResponse(UUID userId, UserEntity user) {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId)).thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+        ));
     }
 
     @Test

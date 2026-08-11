@@ -22,8 +22,9 @@ const routerMock = {
   push: pushMock,
   replace: jest.fn(),
 };
+let searchParamsValue = "";
 const searchParamsMock = {
-  toString: () => "",
+  toString: () => searchParamsValue,
 };
 const useBottomViewportClaimMock = jest.fn();
 
@@ -110,6 +111,7 @@ const baseResult = {
 
 describe("QuickReviewPage first-study onboarding", () => {
   beforeEach(() => {
+    searchParamsValue = "";
     pushMock.mockReset();
     routerMock.replace.mockReset();
     window.localStorage.clear();
@@ -206,6 +208,7 @@ describe("QuickReviewPage first-study onboarding", () => {
 
 describe("QuickReviewPage post-quiz UX", () => {
   beforeEach(() => {
+    searchParamsValue = "";
     pushMock.mockReset();
     window.localStorage.clear();
     (getAuthUser as jest.Mock).mockReset();
@@ -249,6 +252,23 @@ describe("QuickReviewPage post-quiz UX", () => {
     (startQuickReviewSession as jest.Mock).mockResolvedValue(baseSession);
     (completeQuickReviewSession as jest.Mock).mockResolvedValue(baseResult);
   }
+
+  it("tracks a due-concepts digest landing and its first submitted answer", async () => {
+    searchParamsValue = "source=due-concepts-digest";
+    setupCompleteState();
+
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: "DUE_CONCEPTS_DIGEST_LANDED",
+      }));
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: "DUE_CONCEPTS_DIGEST_FIRST_ANSWER_SUBMITTED",
+      }));
+    });
+  });
 
   it('result screen does not contain a "Note" button', async () => {
     setupCompleteState();

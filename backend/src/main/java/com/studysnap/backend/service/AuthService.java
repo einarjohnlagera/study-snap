@@ -27,6 +27,7 @@ import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateEmailPreferencesRequest;
 import com.studysnap.backend.dto.UpdateMobileTabBarPreferenceRequest;
+import com.studysnap.backend.dto.UpdateReviewCommitmentRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateStudyDaysPerWeekRequest;
 import com.studysnap.backend.config.ExamGoalConfig;
@@ -48,6 +49,7 @@ import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidCurrentPasswordException;
 import com.studysnap.backend.exception.InvalidGoalException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
+import com.studysnap.backend.exception.InvalidReviewDayException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -63,6 +65,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.DayOfWeek;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -438,12 +441,17 @@ public class AuthService {
     public MeResponse updateEmailPreferences(UUID userId, UpdateEmailPreferencesRequest request) {
         UserEntity user = findUserOrThrow(userId);
 
+        List<String> reviewDays = request.reviewDays() == null
+                ? Arrays.asList(user.getReviewDays() == null ? new String[0] : user.getReviewDays())
+                : normalizeReviewDays(request.reviewDays());
+
         user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
         user.setWeakConceptRemindersEnabled(request.weakConceptRemindersEnabled());
         user.setWeeklySummaryRemindersEnabled(request.weeklySummaryRemindersEnabled());
         user.setDueConceptsDigestRemindersEnabled(request.dueConceptsDigestRemindersEnabled());
         user.setKnowledgeImpactDigestRemindersEnabled(request.knowledgeImpactDigestRemindersEnabled());
         user.setMarketingEmailsEnabled(request.marketingEmailsEnabled());
+        user.setReviewDays(reviewDays.toArray(String[]::new));
         user.setUpdatedAt(OffsetDateTime.now());
 
         return toMeResponse(user);
@@ -548,6 +556,32 @@ public class AuthService {
     }
 
     @Transactional
+    public MeResponse updateReviewCommitment(UUID userId, UpdateReviewCommitmentRequest request) {
+        List<String> reviewDays = normalizeReviewDays(request.reviewDays());
+        UserEntity user = findUserOrThrow(userId);
+        // Symmetric with examDate below: a request that OMITS reviewDays must not wipe an existing
+        // schedule. An explicit empty list still clears it -- that is how a decline is expressed -- but
+        // null means "not supplied". Without this, a client omitting the field silently unsubscribes the
+        // learner from the days they chose, by the same mechanism the examDate guard exists to prevent.
+        boolean reviewDaysSupplied = request.reviewDays() != null;
+        OffsetDateTime now = OffsetDateTime.now();
+
+        // Only write the exam date when one is supplied. This endpoint does NOT own that field --
+        // onboarding does -- and an unconditional set means any request omitting it silently clears a
+        // date that drives the exam pacing plan. Reachable now that the prompt renders for learners who
+        // have no exam-date field at all: their request carries null on every save, including a decline.
+        if (request.examDate() != null) {
+            user.setExamDate(request.examDate());
+        }
+        if (reviewDaysSupplied) {
+            user.setReviewDays(reviewDays.toArray(String[]::new));
+        }
+        user.setReviewCommitmentPromptedAt(now);
+        user.setUpdatedAt(now);
+        return toMeResponse(user);
+    }
+
+    @Transactional
     public MeResponse updateStudyGoal(UUID userId, UpdateStudyGoalRequest request) {
         UserEntity user = findUserOrThrow(userId);
         String normalizedStudyGoal = normalizeStudyGoal(request.studyGoal());
@@ -592,6 +626,8 @@ public class AuthService {
                 user.getCountryCode(),
                 user.getProfileType(),
                 user.getExamDate(),
+                Arrays.asList(user.getReviewDays() == null ? new String[0] : user.getReviewDays()),
+                user.getReviewCommitmentPromptedAt() == null,
                 user.getEngagementMode(),
                 Boolean.TRUE.equals(user.getInactivityRemindersEnabled()),
                 Boolean.TRUE.equals(user.getWeakConceptRemindersEnabled()),
@@ -629,6 +665,22 @@ public class AuthService {
             return normalizedStudyGoal.toLowerCase(Locale.ROOT);
         }
         return normalizedStudyGoal;
+    }
+
+    private List<String> normalizeReviewDays(List<String> reviewDays) {
+        if (reviewDays == null || reviewDays.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashMap<DayOfWeek, String> normalized = new LinkedHashMap<>();
+        for (String reviewDay : reviewDays) {
+            try {
+                DayOfWeek dayOfWeek = DayOfWeek.valueOf(reviewDay == null ? "" : reviewDay.trim().toUpperCase(Locale.ROOT));
+                normalized.put(dayOfWeek, dayOfWeek.name());
+            } catch (IllegalArgumentException exception) {
+                throw new InvalidReviewDayException();
+            }
+        }
+        return List.copyOf(normalized.values());
     }
 
     @Transactional(readOnly = true)

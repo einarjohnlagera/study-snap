@@ -16,6 +16,7 @@ import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import { QuizMatchingGroup } from "@/components/study-pack/quiz-matching-group";
 import { GoalNudgeCard } from "@/components/study-pack/goal-nudge-card";
 import { PostSessionNextStep } from "@/components/study-pack/post-session-next-step";
+import { ReviewCommitmentPrompt } from "@/components/study-pack/review-commitment-prompt";
 import { WeeklyPacingEchoCard } from "@/components/study-pack/weekly-pacing-echo-card";
 import { CompanionResultBridgeCard, hasCompanionResultBridgeExcerpt } from "@/components/study-pack/companion-result-bridge-card";
 import { ResultGuidanceGroup } from "@/components/study-pack/result-guidance-group";
@@ -742,6 +743,10 @@ export default function AdaptivePracticePage() {
               </p>
             </div>
           )}
+          <ReviewCommitmentPrompt
+            isFirstCompletedSessionEver={completionResult?.isFirstCompletedSessionEver}
+            noteId={note?.id ?? null}
+          />
           {hasNextStepGuidance ? (
             <ResultGuidanceGroup label="What to do next" testId="adaptive-next-step-guidance">
               <PostSessionNextStep
