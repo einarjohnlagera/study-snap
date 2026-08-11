@@ -1248,7 +1248,7 @@ class NoteServiceTest {
 
         NoteListItemProjection readyProjection = buildListItemProjection(readyNoteId, ownerUserId, NoteStatus.GENERATED);
         NoteListItemProjection draftProjection = buildListItemProjection(draftNoteId, ownerUserId, NoteStatus.DRAFT);
-        when(noteRepository.findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(eq(ownerUserId), any()))
+        when(noteRepository.findListItemProjectionsByOwnerUserId(eq(ownerUserId), any()))
                 .thenReturn(List.of(readyProjection, draftProjection));
         when(studyPackRepository.findByNoteIdIn(List.of(readyNoteId, draftNoteId))).thenReturn(List.of(studyPack));
 

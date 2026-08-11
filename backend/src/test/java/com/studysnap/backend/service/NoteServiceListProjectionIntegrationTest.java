@@ -211,6 +211,61 @@ class NoteServiceListProjectionIntegrationTest {
     }
 
     @Test
+    void listMineReturnsJoinedApplicableProgramsRatherThanAnEmptyArray() {
+        // M2: GET /notes advertised applicablePrograms on its DTO and always returned []. The JPQL
+        // projection behind listMine never selected the field -- JPQL cannot express the array_agg the
+        // join needs -- while the Library page's native query always did. A mock-based unit test cannot
+        // catch that, because the mapper was never the broken part; only a real query can.
+        UUID ownerUserId = UUID.randomUUID();
+        NoteEntity note = saveNote(
+                ownerUserId,
+                LONG_NOTE_TITLE,
+                "Cardiac assessment content",
+                BASE_TIME.plusHours(2),
+                NoteVisibility.PRIVATE
+        );
+        entityManager.flush();
+        UUID programId = UUID.randomUUID();
+        jdbcTemplate.update("insert into course_programs (id, name) values (?, ?)", programId, "Nursing");
+        UUID secondProgramId = UUID.randomUUID();
+        jdbcTemplate.update("insert into course_programs (id, name) values (?, ?)", secondProgramId, "Pharmacy");
+        jdbcTemplate.update(
+                "insert into note_course_program (id, note_id, course_program_id) values (?, ?, ?)",
+                UUID.randomUUID(), note.getId(), programId
+        );
+        jdbcTemplate.update(
+                "insert into note_course_program (id, note_id, course_program_id) values (?, ?, ?)",
+                UUID.randomUUID(), note.getId(), secondProgramId
+        );
+        entityManager.clear();
+
+        List<NoteListItemResponse> response = noteService.listMine(ownerUserId);
+
+        assertThat(response).singleElement()
+                .satisfies(item -> assertThat(item.applicablePrograms()).containsExactly("Nursing", "Pharmacy"));
+    }
+
+    @Test
+    void listMineReturnsAnEmptyProgramListForANoteWithNoJoinRows() {
+        // The left join must not drop notes that carry no programs -- the shape every learner note has.
+        UUID ownerUserId = UUID.randomUUID();
+        saveNote(
+                ownerUserId,
+                SHORT_NOTE_TITLE,
+                "Medication safety content",
+                BASE_TIME.plusHours(1),
+                NoteVisibility.PRIVATE
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        List<NoteListItemResponse> response = noteService.listMine(ownerUserId);
+
+        assertThat(response).singleElement()
+                .satisfies(item -> assertThat(item.applicablePrograms()).isEmpty());
+    }
+
+    @Test
     void listLibraryPageMapsTheNativeFastPathIntoTheExistingListItemProjection() {
         UUID ownerUserId = UUID.randomUUID();
         NoteEntity newest = saveNote(

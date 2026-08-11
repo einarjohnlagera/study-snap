@@ -39,32 +39,6 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
     long countByOwnerUserId(UUID ownerUserId);
 
     @Query("""
-            select n.id as id,
-                   n.ownerUserId as ownerUserId,
-                   n.title as title,
-                   n.courseProgram as courseProgram,
-                   n.domainContext as domainContext,
-                   n.learnerLevel as learnerLevel,
-                   n.targetProfileType as targetProfileType,
-                   n.subject as subject,
-                   n.tags as tags,
-                   substring(n.content, 1, 2000) as content,
-                   n.status as status,
-                   n.visibility as visibility,
-                   n.createdAt as createdAt,
-                   n.updatedAt as updatedAt,
-                   n.copiedFromNoteId as copiedFromNoteId,
-                   n.copiedFromPublic as copiedFromPublic
-            from NoteEntity n
-            where n.ownerUserId = :ownerUserId
-            order by n.updatedAt desc
-            """)
-    List<NoteListItemProjection> findListItemProjectionsByOwnerUserIdOrderByUpdatedAtDesc(
-            @Param("ownerUserId") UUID ownerUserId,
-            Pageable pageable
-    );
-
-    @Query("""
             select new com.studysnap.backend.repository.NoteStatusProjection(
                 n.id,
                 n.status,
