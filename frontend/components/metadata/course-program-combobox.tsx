@@ -9,6 +9,7 @@ type CourseProgramComboboxProps = {
   value: string;
   suggestions: string[];
   onChange: (value: string) => void;
+  onInputValueChange?: (value: string) => void;
   learnerLevel?: LearnerLevel | "" | null;
   ariaLabel?: string;
   placeholder?: string;
@@ -30,6 +31,7 @@ export function CourseProgramCombobox({
   value,
   suggestions,
   onChange,
+  onInputValueChange,
   learnerLevel = null,
   ariaLabel,
   placeholder,
@@ -56,6 +58,7 @@ export function CourseProgramCombobox({
         value={value}
         options={suggestions.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
         onChange={(nextValue) => onChange(nextValue.slice(0, 120))}
+        onInputValueChange={(nextValue) => onInputValueChange?.(nextValue.slice(0, 120))}
         ariaLabel={ariaLabel}
         placeholder={resolvedPlaceholder}
         disabled={disabled}

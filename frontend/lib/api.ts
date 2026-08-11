@@ -1539,6 +1539,12 @@ export type CourseProgramCatalogItem = {
   programFamilyName: string | null;
 };
 
+export type CreateCourseProgramRequest = {
+  name: string;
+  programFamilyId?: string | null;
+  examGoalSlug?: "ale" | "pnle" | "let" | "cpale" | null;
+};
+
 export type ApplicableProgram = {
   id: string;
   name: string;
@@ -1886,13 +1892,15 @@ type ApiErrorPayload = {
 export class ApiRequestError extends Error {
   readonly code: string | null;
   readonly action: string | null;
+  readonly details: string | null;
   readonly status: number;
 
-  constructor(message: string, options: { code?: string | null; action?: string | null; status: number }) {
+  constructor(message: string, options: { code?: string | null; action?: string | null; details?: string | null; status: number }) {
     super(message);
     this.name = "ApiRequestError";
     this.code = options.code ?? null;
     this.action = options.action ?? null;
+    this.details = options.details ?? null;
     this.status = options.status;
   }
 }
@@ -1941,6 +1949,7 @@ async function parseApiResponse<T>(
   throw new ApiRequestError(message, {
     code: errorPayload?.error?.code ?? null,
     action: errorPayload?.error?.action ?? null,
+    details: errorPayload?.error?.details ?? null,
     status: response.status,
   });
 }
@@ -1960,6 +1969,7 @@ async function throwApiRequestError(
   throw new ApiRequestError(message, {
     code: errorPayload?.error?.code ?? null,
     action: errorPayload?.error?.action ?? null,
+    details: errorPayload?.error?.details ?? null,
     status: response.status,
   });
 }
@@ -4856,6 +4866,56 @@ export async function getCourseProgramCatalog(): Promise<CourseProgramCatalogIte
     true,
   );
   return parseApiResponse<CourseProgramCatalogItem[]>(response, "Could not load the course program catalog.");
+}
+
+function parseCourseProgramCatalogItem(payload: unknown, fallbackMessage: string): CourseProgramCatalogItem {
+  if (
+    typeof payload !== "object"
+    || payload === null
+    || !("id" in payload)
+    || typeof payload.id !== "string"
+    || !("name" in payload)
+    || typeof payload.name !== "string"
+    || !("programFamilyId" in payload)
+    || (payload.programFamilyId !== null && typeof payload.programFamilyId !== "string")
+    || !("programFamilyName" in payload)
+    || (payload.programFamilyName !== null && typeof payload.programFamilyName !== "string")
+  ) {
+    throw new Error(fallbackMessage);
+  }
+  return payload as CourseProgramCatalogItem;
+}
+
+export async function createCourseProgram(request: CreateCourseProgramRequest): Promise<CourseProgramCatalogItem> {
+  const fallbackMessage = "Could not add the Course / Program to the catalog.";
+  const response = await fetchWithAuth(
+    "/course-program-catalog",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  const payload = await parseApiResponse<unknown>(response, fallbackMessage);
+  return parseCourseProgramCatalogItem(payload, fallbackMessage);
+}
+
+export async function findSimilarCoursePrograms(name: string): Promise<CourseProgramCatalogItem[]> {
+  const fallbackMessage = "Could not check for similar Course / Programs.";
+  const response = await fetchWithAuth(
+    `/course-program-catalog/similar?name=${encodeURIComponent(name)}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  const payload = await parseApiResponse<unknown>(response, fallbackMessage);
+  if (!Array.isArray(payload)) {
+    throw new Error(fallbackMessage);
+  }
+  return payload.map((item) => parseCourseProgramCatalogItem(item, fallbackMessage));
 }
 
 export async function getNoteApplicablePrograms(noteId: string): Promise<NoteApplicableProgramsResponse> {
