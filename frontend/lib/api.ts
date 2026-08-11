@@ -788,11 +788,22 @@ export type AdminFunnelMetricsResponse = {
     eligibleActivatedUsers: number;
     returnedWeek2Users: number;
     ratePercent: number;
+    wideRetention: {
+      eligibleActivatedUsers: number;
+      returnedAfterDay7Users: number;
+      afterDay7RatePercent: number;
+      returnedDays2To30Users: number;
+      days2To30RatePercent: number;
+      returnedAfterDay1Users: number;
+      afterDay1RatePercent: number;
+    };
     weeklyCohorts: Array<{
       weekStart: string;
       cohortSize: number;
       returnedCount: number;
       ratePercent: number;
+      returnedAfterDay7Count: number;
+      afterDay7RatePercent: number;
     }>;
   };
   checkoutConversion: {

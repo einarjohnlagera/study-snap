@@ -101,14 +101,18 @@ Current sections:
 - Activation: verified users, activated users, activation rate, median days to first Study Pack, and users stuck before generation.
 - Paywall & Value Loop: Free quota-hit rate, paywall conversion, and first-pack → quiz-start value-loop closure.
 - Checkout conversion: distinct users who clicked upgrade, distinct users who initiated checkout after an upgrade click, distinct users who subscribed after checkout, plus click→checkout, checkout→paid, and click→paid rates.
-- W1→W2 retention: eligible activated users, returned week-2 users, overall return rate, and the last 8 activation-week cohorts.
+- Retention by window: the historical strict days 7–14 reading plus three wider readings (after day 7, days 2–30, and after day 1), with each denominator visible; the last 8 activation-week cohorts compare strict days 7–14 with after day 7.
 
 Retention definitions:
 
 - Activation = a user's first `STUDY_PACK_GENERATED` analytics event.
-- Returned in week 2 = the user has at least one `analytics_events` row in `(firstPack + 7 days, firstPack + 14 days]`.
-- Eligible = the activation timestamp is at least 14 days before the report time, so the week-2 window is complete.
-- Weekly cohorts bucket eligible users by `date_trunc('week', firstPack)`.
+- Strict days 7–14 = the user has at least one `analytics_events` row in `(firstPack + 7 days, firstPack + 14 days]`. Its eligible set remains users activated at least 14 days before the report time, preserving the historical metric and denominator exactly.
+- After day 7 = the user has at least one `analytics_events` row after `firstPack + 7 days`, with no upper bound.
+- Days 2–30 = the user has at least one `analytics_events` row in `(firstPack + 1 day, firstPack + 30 days]`.
+- After day 1 = the user has at least one `analytics_events` row after `firstPack + 1 day`, with no upper bound.
+- All three wide readings use their own shared eligible set: users activated at least 30 days before the report time, so the days 2–30 window is complete. An empty eligible set is reported as a zero denominator and zero rates rather than hidden.
+- Weekly cohorts retain the strict metric's 14-day-maturity membership, bucket users by `date_trunc('week', firstPack)`, and show strict days 7–14 beside after day 7.
+- Unbounded windows accumulate as accounts age and therefore are not comparable across cohorts of different ages; use the weekly cohort table for cohort comparisons.
 
 Checkout funnel definitions:
 

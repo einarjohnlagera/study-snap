@@ -41,34 +41,60 @@ class AnalyticsEventRepositoryTest {
     }
 
     @Test
-    void retentionQueries_countEligibleWeek2ReturnsAndWeeklyCohorts() {
-        OffsetDateTime firstPack = OffsetDateTime.of(2026, 5, 26, 9, 0, 0, 0, ZoneOffset.UTC);
+    void retentionQueries_countStrictAndWideReturnsWithTheirOwnMaturitySets() {
+        OffsetDateTime firstPack = NOW.minusDays(40);
         UUID returnedUser = UUID.randomUUID();
         UUID earlyOnlyUser = UUID.randomUUID();
         UUID lateOnlyUser = UUID.randomUUID();
+        UUID afterWideWindowUser = UUID.randomUUID();
+        UUID dayOneBoundaryUser = UUID.randomUUID();
+        UUID dayThirtyBoundaryUser = UUID.randomUUID();
         UUID recentUser = UUID.randomUUID();
 
         insertEvent(returnedUser, AnalyticsEventType.STUDY_PACK_GENERATED, firstPack);
         insertEvent(returnedUser, AnalyticsEventType.LOGIN, firstPack.plusDays(8));
 
-        insertEvent(earlyOnlyUser, AnalyticsEventType.STUDY_PACK_GENERATED, firstPack.plusDays(1));
-        insertEvent(earlyOnlyUser, AnalyticsEventType.LOGIN, firstPack.plusDays(7));
+        insertEvent(earlyOnlyUser, AnalyticsEventType.STUDY_PACK_GENERATED, firstPack);
+        insertEvent(earlyOnlyUser, AnalyticsEventType.LOGIN, firstPack.plusDays(3));
 
-        insertEvent(lateOnlyUser, AnalyticsEventType.STUDY_PACK_GENERATED, firstPack.plusDays(2));
-        insertEvent(lateOnlyUser, AnalyticsEventType.LOGIN, firstPack.plusDays(17));
+        insertEvent(lateOnlyUser, AnalyticsEventType.STUDY_PACK_GENERATED, firstPack);
+        insertEvent(lateOnlyUser, AnalyticsEventType.LOGIN, firstPack.plusDays(20));
 
-        insertEvent(recentUser, AnalyticsEventType.STUDY_PACK_GENERATED, NOW.minusDays(7));
+        insertEvent(afterWideWindowUser, AnalyticsEventType.STUDY_PACK_GENERATED, firstPack);
+        insertEvent(afterWideWindowUser, AnalyticsEventType.LOGIN, firstPack.plusDays(31));
+
+        insertEvent(dayOneBoundaryUser, AnalyticsEventType.STUDY_PACK_GENERATED, firstPack);
+        insertEvent(dayOneBoundaryUser, AnalyticsEventType.LOGIN, firstPack.plusDays(1));
+
+        insertEvent(dayThirtyBoundaryUser, AnalyticsEventType.STUDY_PACK_GENERATED, firstPack);
+        insertEvent(dayThirtyBoundaryUser, AnalyticsEventType.LOGIN, firstPack.plusDays(30));
+
+        insertEvent(recentUser, AnalyticsEventType.STUDY_PACK_GENERATED, NOW.minusDays(20));
         insertEvent(recentUser, AnalyticsEventType.LOGIN, NOW.minusDays(1));
 
-        assertThat(analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(NOW)).isEqualTo(3);
+        assertThat(analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(NOW)).isEqualTo(7);
         assertThat(analyticsEventRepository.countReturnedWeek2Users(NOW)).isEqualTo(1);
+        assertThat(analyticsEventRepository.countEligibleActivatedUsersForWideRetention(NOW)).isEqualTo(6);
+        assertThat(analyticsEventRepository.countReturnedAfterDay7Users(NOW)).isEqualTo(4);
+        assertThat(analyticsEventRepository.countReturnedDays2To30Users(NOW)).isEqualTo(4);
+        assertThat(analyticsEventRepository.countReturnedAfterDay1Users(NOW)).isEqualTo(5);
 
         List<WeeklyRetentionCohortProjection> cohorts = analyticsEventRepository.findWeeklyRetentionCohorts(NOW);
 
-        assertThat(cohorts).hasSize(1);
-        assertThat(cohorts.getFirst().getWeekStart()).isEqualTo(LocalDate.parse("2026-05-24"));
-        assertThat(cohorts.getFirst().getCohortSize()).isEqualTo(3);
-        assertThat(cohorts.getFirst().getReturnedCount()).isEqualTo(1);
+        assertThat(cohorts).hasSize(2);
+        WeeklyRetentionCohortProjection matureCohort = cohorts.stream()
+                .filter(cohort -> cohort.getWeekStart().equals(LocalDate.parse("2026-05-10")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(matureCohort.getCohortSize()).isEqualTo(6);
+        assertThat(matureCohort.getReturnedCount()).isEqualTo(1);
+        assertThat(matureCohort.getReturnedAfterDay7Count()).isEqualTo(4);
+        WeeklyRetentionCohortProjection twentyDayCohort = cohorts.stream()
+                .filter(cohort -> cohort.getWeekStart().equals(LocalDate.parse("2026-05-31")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(twentyDayCohort.getCohortSize()).isEqualTo(1);
+        assertThat(twentyDayCohort.getReturnedAfterDay7Count()).isEqualTo(1);
     }
 
     @Test

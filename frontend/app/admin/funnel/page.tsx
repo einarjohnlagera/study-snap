@@ -178,6 +178,36 @@ export default function AdminFunnelPage() {
     ] satisfies MetricCardProps[];
   }, [metrics]);
 
+  const retentionCards = useMemo(() => {
+    if (!metrics) {
+      return [] as MetricCardProps[];
+    }
+    const strict = metrics.retentionCohort;
+    const wide = strict.wideRetention;
+    return [
+      {
+        label: "Days 7–14 (strict)",
+        value: formatPercent(strict.ratePercent),
+        detail: `${formatMetric(strict.returnedWeek2Users)} of ${formatMetric(strict.eligibleActivatedUsers)} users eligible after 14 days`,
+      },
+      {
+        label: "After day 7 (unbounded)",
+        value: formatPercent(wide.afterDay7RatePercent),
+        detail: `${formatMetric(wide.returnedAfterDay7Users)} of ${formatMetric(wide.eligibleActivatedUsers)} users eligible after 30 days`,
+      },
+      {
+        label: "Days 2–30",
+        value: formatPercent(wide.days2To30RatePercent),
+        detail: `${formatMetric(wide.returnedDays2To30Users)} of ${formatMetric(wide.eligibleActivatedUsers)} users eligible after 30 days`,
+      },
+      {
+        label: "After day 1 (unbounded)",
+        value: formatPercent(wide.afterDay1RatePercent),
+        detail: `${formatMetric(wide.returnedAfterDay1Users)} of ${formatMetric(wide.eligibleActivatedUsers)} users eligible after 30 days`,
+      },
+    ] satisfies MetricCardProps[];
+  }, [metrics]);
+
   const activeWindowLabel = metrics?.windowDays ? `Last ${metrics.windowDays} days` : "All-time";
 
   return (
@@ -304,44 +334,52 @@ export default function AdminFunnelPage() {
 
           <section className="space-y-3">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">W1→W2 retention</h2>
-              <p className="text-sm text-foreground/60">All-time eligible cohorts with completed week-2 windows</p>
+              <h2 className="text-lg font-semibold text-foreground">Retention by window</h2>
+              <p className="text-sm leading-relaxed text-foreground/60">
+                Strict days 7–14 uses users activated at least 14 days ago; wider readings use users activated at least 30 days ago so the days 2–30 window is complete. Unbounded windows accumulate with account age and are not comparable across cohorts of different ages.
+              </p>
             </div>
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.5fr)]">
-              <MetricCard
-                label="Returned in Week 2"
-                value={formatPercent(metrics.retentionCohort.ratePercent)}
-                detail={`${formatMetric(metrics.retentionCohort.returnedWeek2Users)} of ${formatMetric(metrics.retentionCohort.eligibleActivatedUsers)} eligible activated users`}
-              />
-              <Card className="overflow-hidden">
-                {metrics.retentionCohort.weeklyCohorts.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[520px] text-left text-sm">
-                      <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-foreground/55">
-                        <tr>
-                          <th className="px-4 py-3 font-semibold">Week</th>
-                          <th className="px-4 py-3 font-semibold">Size</th>
-                          <th className="px-4 py-3 font-semibold">Returned</th>
-                          <th className="px-4 py-3 font-semibold">Rate</th>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {retentionCards.map((card) => (
+                <MetricCard key={card.label} label={card.label} value={card.value} detail={card.detail} />
+              ))}
+            </div>
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-foreground/55">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Week</th>
+                      <th className="px-4 py-3 font-semibold">Size</th>
+                      <th className="px-4 py-3 font-semibold">Days 7–14</th>
+                      <th className="px-4 py-3 font-semibold">After day 7</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {metrics.retentionCohort.weeklyCohorts.length > 0 ? (
+                      metrics.retentionCohort.weeklyCohorts.map((cohort) => (
+                        <tr key={cohort.weekStart}>
+                          <td className="px-4 py-3 font-medium text-foreground">{formatWeek(cohort.weekStart)}</td>
+                          <td className="px-4 py-3 text-foreground/75">{formatMetric(cohort.cohortSize)}</td>
+                          <td className="px-4 py-3 text-foreground/75">
+                            {formatPercent(cohort.ratePercent)} ({formatMetric(cohort.returnedCount)})
+                          </td>
+                          <td className="px-4 py-3 text-foreground/75">
+                            {formatPercent(cohort.afterDay7RatePercent)} ({formatMetric(cohort.returnedAfterDay7Count)})
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {metrics.retentionCohort.weeklyCohorts.map((cohort) => (
-                          <tr key={cohort.weekStart}>
-                            <td className="px-4 py-3 font-medium text-foreground">{formatWeek(cohort.weekStart)}</td>
-                            <td className="px-4 py-3 text-foreground/75">{formatMetric(cohort.cohortSize)}</td>
-                            <td className="px-4 py-3 text-foreground/75">{formatMetric(cohort.returnedCount)}</td>
-                            <td className="px-4 py-3 text-foreground/75">{formatPercent(cohort.ratePercent)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="p-5 text-sm text-foreground/65">No eligible retention cohorts yet.</p>
-                )}
-              </Card>
-            </div>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="p-5 text-sm text-foreground/65">
+                          No eligible retention cohorts yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </section>
         </>
       ) : null}

@@ -39,7 +39,13 @@ class AdminFunnelControllerTest {
                 new AdminFunnelMetricsResponse.QuotaHitMetrics(2, 5, 40.0, List.of()),
                 new AdminFunnelMetricsResponse.PaywallConversionMetrics(6, 2, 33.3),
                 new AdminFunnelMetricsResponse.ValueLoopMetrics(4, 3, 75.0),
-                new AdminFunnelMetricsResponse.RetentionCohortMetrics(8, 3, 37.5, List.of()),
+                new AdminFunnelMetricsResponse.RetentionCohortMetrics(
+                        8,
+                        3,
+                        37.5,
+                        new AdminFunnelMetricsResponse.WideRetentionMetrics(6, 3, 50.0, 4, 66.7, 5, 83.3),
+                        List.of()
+                ),
                 new AdminFunnelMetricsResponse.CheckoutConversionMetrics(10, 4, 1, 40.0, 25.0, 10.0)
         );
         when(adminFunnelService.getMetrics(null)).thenReturn(expected);
@@ -61,7 +67,13 @@ class AdminFunnelControllerTest {
                 new AdminFunnelMetricsResponse.QuotaHitMetrics(0, 0, 0.0, List.of()),
                 new AdminFunnelMetricsResponse.PaywallConversionMetrics(0, 0, 0.0),
                 new AdminFunnelMetricsResponse.ValueLoopMetrics(0, 0, 0.0),
-                new AdminFunnelMetricsResponse.RetentionCohortMetrics(0, 0, 0.0, List.of()),
+                new AdminFunnelMetricsResponse.RetentionCohortMetrics(
+                        0,
+                        0,
+                        0.0,
+                        new AdminFunnelMetricsResponse.WideRetentionMetrics(0, 0, 0.0, 0, 0.0, 0, 0.0),
+                        List.of()
+                ),
                 new AdminFunnelMetricsResponse.CheckoutConversionMetrics(0, 0, 0, 0.0, 0.0, 0.0)
         );
         when(adminFunnelService.getMetrics(30)).thenReturn(expected);

@@ -8,4 +8,6 @@ public interface WeeklyRetentionCohortProjection {
     long getCohortSize();
 
     long getReturnedCount();
+
+    long getReturnedAfterDay7Count();
 }

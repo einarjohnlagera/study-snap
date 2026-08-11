@@ -68,6 +68,37 @@ Theme: find out which constraint is real — and then whether the number the who
 
 This is **read-only and verified unbuilt by construction**, satisfying the release's own rule that a fallback must be checked in code rather than inferred from roadmap prose.
 
+### Query 5 — RUN 2026-08-11. The window IS a material artifact, AND the constraint is still real.
+
+| window | returned | of 152 eligible | vs. strict |
+|---|---|---|---|
+| **strict, days 7–14** (the shipped metric) | **3** | **1.97%** | — |
+| unbounded after day 7 | 7 | 4.61% | 2.3× |
+| days 2–30 | 10 | 6.58% | 3.3× |
+| unbounded after day 1 | 11 | 7.24% | **3.7×** |
+
+**The decomposition is the part to remember.** The four windows nest, so they resolve into one clean picture: of the **11** users who ever returned after day 1, **4 returned only in days 2–7** (before the window opens), **3 fell inside days 7–14**, and **4 returned only after day 14**. The shipped metric therefore sees **3 of 11 real returners — 27%**.
+
+**Both halves of this are true and must be stated together.** The number the roadmap has deferred to for months undercounts returns by roughly **3.7×** — but the loosest possible reading is still **7.24%**, meaning **141 of 152 activated users never came back at all**. The constraint was **mis-sized, not imagined**. Fixing the metric does not fix the product; it stops us steering by an instrument that reads a quarter of what it measures.
+
+**The small-n objection does not apply to this conclusion, and the reason is worth keeping.** 11 returners makes the exact multiplier noisy — 3.7× could as easily be 2.5× or 5×. It does **not** make the finding noisy, because the window *definitionally* excludes days 2–7 and day 15+. That is arithmetic, not sampling. What is uncertain is the size of the undercount, never its existence.
+
+**Two consequences, stated before anyone has to ask:**
+
+1. **The rate-vs-volume verdict is UNAFFECTED.** That comparison was rate-independent — it rests entirely on activation being 52.2%, and the retention rate cancels out of it. A corrected rate does not reopen it in either direction.
+2. **The H1+H5 distal checkpoint (due 2026-11-09) was specified against this broken instrument** — it reads "the W1→W2 read." Left alone it would fire in November measuring with a window that misses 73% of returns, and would likely report H1+H5 as ineffective regardless of what H1+H5 actually did. **Re-specified in this release while the finding is in hand** (see `ROADMAP.md`). The proximal checkpoint (2026-09-10) is funnel rates and is unaffected.
+
+### The build half — a defect in shipped code, which is what the read was for
+
+**This is not a documentation problem. The days 7–14 window is baked into a live admin metric the owner reads.** `AnalyticsEventRepository.RETENTION_WINDOW_START_DAYS = "7"` / `RETENTION_WINDOW_END_DAYS = "14"` → `countReturnedWeek2Users` / `countEligibleActivatedUsersForWeek2Retention` → `AdminFunnelService.getRetentionCohortMetrics` → `AdminFunnelMetricsResponse.RetentionCohortMetrics`, displayed at `frontend/app/admin/funnel/page.tsx:313`. That is the number that seeded "2.4%" into every roadmap decision that deferred to it.
+
+**Two design constraints for the fix, pinned before it goes to Codex:**
+
+- **Report multiple windows rather than swapping one number for another.** A single replacement rate can be quoted in isolation exactly as the old one was; showing strict-W2 beside a wider window makes the definition visible at the point of reading, which is the actual failure being corrected.
+- **Widening the window also widens the eligibility filter.** `first_pack_at <= now - END_DAYS` and `ratePercent` both key off the same two constants, so a wider window raises the maturity requirement and shrinks the denominator. `RETENTION_COHORT_WEEK_LIMIT = 8` weekly cohorts interacts with this too. That coupling is the easy thing to get wrong.
+
+**Deliberately NOT in this fix: the exam-date segmentation** defined in the Backlog Index's *Target-habit definition* row. That row retired the blended W1→W2 boolean as the universal yardstick, but it also states that for open-ended learners "the existing W1→W2-style windowed read remains a reasonable frame" — so widening is the right fix for that half — while the exam-bound metric it defines is a different measurement whose scored group (users whose exam date has already passed) the row itself flags as likely single-digit today. Widening now, segmentation as its own scoped work.
+
 ### Planned Scope
 
 1. **Run the activation read (owner action, production, read-only).** ✅ **DONE 2026-08-11 — results above.** Query: **`docs/claude-plans/v0.72.1-activation-read.sql`** — five queries, syntax-validated against the real schema, with the decision rule written into the file *before* the result is known. How many signups reach a first Study Pack, where the never-completed-onboarding population drops off, and whether the ~31/month activated cohort is capped by onboarding or by something downstream. **Record the result here** — a query cited as a mechanism whose result is never written down is how this project has previously lost the reasoning behind a decision. `v0.72.0` set that rule for itself; it applies here unchanged.
@@ -87,7 +118,7 @@ Anti-drift — locked:
 
 ### Shipped
 
-_(nothing yet)_
+- **Admin retention is now reported as four side-by-side windows instead of one context-free rate.** The existing strict `(first pack + 7d, first pack + 14d]` count, rate, and 14-day-maturity denominator are unchanged by design so the historically quoted figure remains comparable. A separately labelled 30-day-maturity block adds unbounded after-day-7, days-2–30, and unbounded after-day-1 readings, and the weekly cohort table now places after-day-7 beside strict days 7–14. The UI states why the eligible sets differ and warns that unbounded windows accumulate with account age. This corrects the reporting defect without changing activation, return-event eligibility, or persisted data.
 
 ## v0.72.0 - Return Loop
 
