@@ -1369,6 +1369,21 @@ When modifying existing behavior:
 - Update existing tests if behavior changes
 - Add new tests for new rules
 
+### An absence assertion must be able to fail
+
+**This has now shipped three times in this repo, twice as "proof" cited in a release record, so it is a rule rather than a review note.** A test asserting that something is *not* rendered is worthless unless it would fail when the thing *is* rendered. Two mechanical ways it goes wrong, both of which pass green forever:
+
+- **Wrong signal.** Asserting the absence of an element that could never render in that scenario anyway. `expect(queryByLabelText("Add a course or program")).not.toBeInTheDocument()` was used to prove a learner sees no programs control — but that aria-label belongs to the *curator* control, which is gated off for a learner regardless. It proved nothing. The same trap catches a selector whose hook you just removed: once a `<label>` loses its `htmlFor`, `queryByLabelText` returns nothing whether or not the input rendered.
+- **Wrong timing.** Asserting absence before the thing could have appeared. `await waitFor(() => expect(getMe).toHaveBeenCalled())` then `queryByText(...)` waits only for the *fetch to start*, not for the state update it causes to flush — so the assertion runs on an empty tree and passes whether or not the gate it tests exists.
+
+**The rules:**
+
+1. **Await the same signal the positive case awaits.** If the presence test uses `await screen.findByText(X)`, the absence test must reach the same settled state before querying — not a weaker proxy like "the API was called".
+2. **Assert on something only the feature under test can produce** — an element id or role the *other* branch cannot also satisfy.
+3. **Prove it can fail.** Temporarily invert the behaviour, run the test, confirm it goes red, restore. A one-minute check that is the only real evidence the assertion has teeth. Do this before citing a test as proof of anything in `RELEASES.md`.
+
+The same standard applies to backend mocks: a repository stub left unstubbed returns an empty collection, so the code path you believe you covered is never entered and every existing assertion still passes. If a test is meant to exercise a join-first read, stub the join with data.
+
 Critical business rules that must always have tests:
 - Note state (Draft vs Study Pack)
 - Copy note behavior and attribution
