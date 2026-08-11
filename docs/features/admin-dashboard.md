@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provide an internal, mostly read-only Admin Dashboard for monitoring product usage, billing health, upgrades, and Public Library growth. Admin v1 has two narrow operational exceptions: admin-initiated billing refunds for exceptional payment issues and per-note Applicable Programs curation.
+Provide an internal, mostly read-only Admin Dashboard for monitoring product usage, billing health, upgrades, and Public Library growth. Admin v1 has three narrow operational exceptions: admin-initiated billing refunds for exceptional payment issues, per-note Applicable Programs curation, and add-only Course / Program catalog management. **The two curation surfaces live on their own page at `/admin/course-programs`, not on the dashboard** — they are authoring tools, and the dashboard is what an admin scans for operational health, so mixing them buried the monitoring the page exists for.
 
 ## Access
 
@@ -14,6 +14,8 @@ Provide an internal, mostly read-only Admin Dashboard for monitoring product usa
   - `POST /api/admin/jobs/subscription-expiry/{subscriptionId}` — expire a specific subscription and downgrade to Free (dev/ops use; subscription `end_at` must already be in the past)
   - `POST /api/admin/billing/refund` — issue a one-off Xendit refund for an eligible paid transaction
   - `GET /api/admin/notes/applicable-programs` — paginated note applicability curation data
+  - `GET /api/course-program-catalog/similar?name=...` — find existing names before catalog creation
+  - `POST /api/course-program-catalog` — add one catalog program with an optional existing family and supported exam goal
 - Access is restricted to users with the `ADMIN` role.
 - Non-admin users must not be able to use admin endpoints.
 - Frontend should redirect authenticated non-admin users away from `/admin`.
@@ -26,7 +28,7 @@ Keep Admin v1 simple and internal:
 - billing summary cards
 - engagement summary cards
 - basic tables
-- no editing actions beyond the narrow Xendit refund operation and the per-note Applicable Programs exception
+- no editing actions beyond the narrow Xendit refund operation, per-note Applicable Programs, and add-only Course / Program catalog exceptions
 - no complex filters or charts
 
 ## Summary Metrics
@@ -76,7 +78,19 @@ Admin v1 tables should include:
 - recent failed payments
 - recent feedback
 - one-click refund actions on Xendit recent premium upgrade rows that have a linked transaction
+
+## Course / Program Catalog Management
+
+**Both surfaces below render on `/admin/course-programs`, reached from a `Course / Programs →` link in the Admin dashboard header alongside Campaigns and Funnel. They are deliberately not on the dashboard itself.**
+
+- a Course / Program catalog section listing each program and family, plus an add-only form for name, optional existing Program Family, and optional supported exam goal; it warns about near matches and keeps form input after errors
 - a paginated notes table showing legacy Course / Program and explicit Applicable Programs, with a catalog-backed edit action that changes no other note metadata; its shared control can add every member of a Program Family in one action, after which the admin can trim the explicit set before saving
+
+- Catalog growth is demand-driven: add a program when a canonical note is legitimately applicable to it. Do not pre-seed a vocabulary.
+- Creation is add-only. Rename, delete, and new Program Family creation remain out of scope.
+- Names are trimmed and compared case- and whitespace-insensitively. Duplicate conflicts identify the existing program instead of surfacing a database error.
+- Family assignment is functional metadata, not decoration: assigning `Engineering` makes the program available to the shared picker’s unconditional Engineering-family expansion.
+- The same create flow is available inline in Applicable Programs pickers to Admins, with near matches and an explicit confirmation. It never enables free-text applicability.
 
 ## Funnel Metrics
 

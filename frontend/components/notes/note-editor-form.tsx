@@ -112,6 +112,8 @@ type NoteEditorFormProps = {
     applicableProgramCatalog?: CourseProgramCatalogItem[];
     applicableProgramIds?: string[];
     onApplicableProgramIdsChange?: (selectedIds: string[]) => void;
+    canCreateCatalogProgram?: boolean;
+    onCatalogProgramCreated?: (program: CourseProgramCatalogItem) => void;
     applicableProgramsLoading?: boolean;
     applicableProgramsError?: string | null;
     onRetryApplicablePrograms?: () => void;
@@ -197,6 +199,8 @@ export function NoteEditorForm({
                                    applicableProgramCatalog = [],
                                    applicableProgramIds = [],
                                    onApplicableProgramIdsChange,
+                                   canCreateCatalogProgram = false,
+                                   onCatalogProgramCreated,
                                    applicableProgramsLoading = false,
                                    applicableProgramsError = null,
                                    onRetryApplicablePrograms,
@@ -433,6 +437,8 @@ export function NoteEditorForm({
                                 catalog={applicableProgramCatalog}
                                 selectedIds={applicableProgramIds}
                                 onChange={(selectedIds) => onApplicableProgramIdsChange?.(selectedIds)}
+                                canCreateCatalogProgram={canCreateCatalogProgram}
+                                onCatalogProgramCreated={onCatalogProgramCreated}
                                 loading={applicableProgramsLoading}
                                 error={applicableProgramsError}
                                 onRetry={onRetryApplicablePrograms}

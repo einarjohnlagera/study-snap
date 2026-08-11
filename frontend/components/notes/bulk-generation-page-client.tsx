@@ -389,6 +389,8 @@ export function BulkGenerationPageClient() {
                   catalog={courseProgramCatalog}
                   selectedIds={courseProgramIds}
                   onChange={setCourseProgramIds}
+                  canCreateCatalogProgram={isAdmin}
+                  onCatalogProgramCreated={(program) => setCourseProgramCatalog((current) => [...current, program])}
                   loading={courseProgramCatalogLoading}
                   error={courseProgramCatalogError}
                   onRetry={() => setCourseProgramCatalogRetry((value) => value + 1)}

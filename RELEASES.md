@@ -1,5 +1,45 @@
 # RELEASES.md - NoteLib
 
+## v0.71.2 - Catalog Management
+
+**Status: Released** (signed off 2026-08-11)
+
+Theme: a curator can add a Course / Program the moment a note needs one. Today the only way to grow the catalog is a migration, which blocks the exact thing Release B was built for — one canonical note serving every program it legitimately applies to.
+
+**This is new capability, not deferred-findings cleanup.** `v0.71.1`'s anti-drift was written for a patch release clearing a known list; do not copy that framing here. The rules below are written for a release that adds a surface.
+
+### The blocker, stated concretely
+
+Civil Engineering notes are being authored in production now, with Algebra as the case — the exact example `ADR-001` was written around. Extending that one note to the other engineering programs is impossible: the catalog holds **3** engineering programs (Civil, Electrical, Mechanical), and `CourseProgramCatalogController` exposes only `list()` while `CourseProgramCatalogRepository` has no write method. **A migration is the only path.** Audit findings are recorded in `ROADMAP.md`'s `v0.71.2` section and were verified in code on 2026-08-11.
+
+### Planned Scope
+
+_(all planned implementation scope shipped; release signoff remains pending)_
+
+Anti-drift — locked:
+
+- **No pre-seeding.** `ADR-001:74` explicitly rejects seeding the PRC engineering programs as premature expansion, and a bundled seed was scoped into this release on 2026-08-10 and **removed on 2026-08-11** when the pressure test found it contradicted that ruling and cited the ADR as if it supported it. Catalog growth is one program at a time, at the moment authoring needs it. Do not reintroduce a seed migration.
+- **No learner-facing catalog authoring.** `ADR-001` → *Representation authority* still forbids a learner's personal free-text program becoming a catalog row, and *Curation authority* still requires ownership to author an Applicable Program row. Neither is reopened here. Learner free-text authoring is unaffected and must stay that way.
+- **Add-only unless explicitly decided otherwise.** Renaming a catalog program changes public shelf URLs; deleting one orphans `note_course_program` rows behind an FK that currently blocks it. Both are separate decisions — see below.
+- **Migrations stay additive.** No edit to `V106`, `V107` or `V108`.
+- **The five `ADR-001` axes are unchanged.** Applicable Programs remains discovery-only and never reaches a prompt; Domain Context remains the sole LLM domain constraint.
+
+### Known limitations
+
+- **A `TEACHER` curator can select catalog programs but cannot add one, and has no in-product path to ask for one.** The create endpoint is `hasRole('ADMIN')` and every call site gates the inline action on `ADMIN` specifically, so the frontend and backend agree — this is a deliberate permission boundary, not a leak. It is recorded because *curator* means ADMIN **or** TEACHER everywhere else in this codebase, and because the unresolved *Request Program* proposal (`docs/claude-plans/course-program-canonical-catalog-proposal.md`) is where that gap would be closed. Zero impact at the current curator headcount of one.
+- **Case-insensitive uniqueness is enforced by the service, not the database, so it is best-effort under concurrency.** `uk_course_programs_name` is an exact-match constraint, so two simultaneous creates of `Civil Engineering` and `civil engineering` would both satisfy it; the `DataIntegrityViolationException` catch only re-checks the exact case. The real fix is a functional unique index on the normalized name, deliberately not added here — it is a migration, and at one curator the race is unreachable.
+- **`SuggestionCombobox.normalize` now collapses internal whitespace for every consumer**, not just Course / Program — subject and tag matching became slightly more lenient as a side effect. Benign and arguably an improvement, but it is a shared-primitive change that was not in the prompt's scope, so it is named rather than discovered later.
+
+### Kickoff decisions
+
+- **Add-only.** Rename and delete remain separate decisions because of public shelf URLs and existing applicability rows.
+- **Inline creation ships as an explicit Admin action.** It is not `allowCustom`, does not run on blur or Enter, shows near matches first, and requires confirmation before writing the catalog.
+- **Deletion has a latent dependency carried from `v0.71.1`.** The shadow flag is fed by two different row counts — `findByNoteId().size()` inner-joins `course_programs`, `findIdsByNoteId().size()` reads the raw table. They can only disagree if a `course_programs` row disappears while its join rows survive, which the FK currently prevents. **If this release adds deletion, that disagreement becomes reachable** and must be closed in the same change.
+
+### Shipped
+
+- **Demand-driven Course / Program catalog creation (backend + frontend).** Added the Admin-only create and near-match APIs with normalized duplicate protection, optional existing-family and exam-goal assignment, named 409/400 errors, and a transactional write path. The Admin dashboard now lists and creates catalog programs, while every shared Applicable Programs authoring surface offers Admins a confirmed inline create-and-select action without enabling `allowCustom`; failed creates preserve typed text and existing selections, learners retain free-text personal authoring unchanged, and no migration or seed was added.
+
 ## v0.71.1 - Applicable Programs Follow-ups
 
 **Status: Released** (signed off 2026-08-11)

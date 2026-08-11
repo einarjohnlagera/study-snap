@@ -2183,6 +2183,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         setApplicableProgramIds(selectedIds);
                         setApplicableProgramsDirty(true);
                       }}
+                      canCreateCatalogProgram={userRole === "ADMIN"}
+                      onCatalogProgramCreated={(program) => setApplicableProgramCatalog((current) => [...current, program])}
                       loading={applicableProgramsLoading}
                       error={applicableProgramsError}
                       onRetry={() => setApplicableProgramsRetryToken((value) => value + 1)}

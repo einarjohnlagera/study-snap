@@ -19,6 +19,7 @@ type SuggestionComboboxProps = {
   options: SuggestionComboboxOption[];
   groupedOptions?: SuggestionComboboxOptionGroup[];
   onChange: (value: string) => void;
+  onInputValueChange?: (value: string) => void;
   ariaLabel?: string;
   placeholder?: string;
   disabled?: boolean;
@@ -30,7 +31,7 @@ type SuggestionComboboxProps = {
 };
 
 function normalize(value: string): string {
-  return value.trim().toLowerCase();
+  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
 }
 
 function matchesOption(option: SuggestionComboboxOption, value: string): boolean {
@@ -48,6 +49,7 @@ export function SuggestionCombobox({
   options,
   groupedOptions,
   onChange,
+  onInputValueChange,
   ariaLabel,
   placeholder,
   disabled = false,
@@ -146,6 +148,7 @@ export function SuggestionCombobox({
 
   const handleInputChange = (nextValue: string) => {
     setInputValue(nextValue);
+    onInputValueChange?.(nextValue);
     setOpen(true);
     setHasTypedSinceOpen(true);
 
@@ -168,6 +171,7 @@ export function SuggestionCombobox({
 
   const handleClear = () => {
     onChange("");
+    onInputValueChange?.("");
     setInputValue("");
     setHasTypedSinceOpen(false);
     inputRef.current?.focus();
