@@ -2,7 +2,7 @@
 
 ## v0.71.2 - Catalog Management
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-08-11)
 
 Theme: a curator can add a Course / Program the moment a note needs one. Today the only way to grow the catalog is a migration, which blocks the exact thing Release B was built for — one canonical note serving every program it legitimately applies to.
 
