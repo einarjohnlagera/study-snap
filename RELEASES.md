@@ -1,5 +1,36 @@
 # RELEASES.md - NoteLib
 
+## v0.72.1 - Activation
+
+**Status: In Progress**
+
+Theme: find out whether the binding constraint is retention *rate* or activation *volume*, and act on the answer. A patch on `v0.72.0`'s line because it continues the same question rather than opening a new one.
+
+**This release opens on a read, not a build — the same shape `v0.72.0` used, deliberately reused because it worked.** `v0.72.0` shipped H1+H5 under a pre-committed rule and recorded its own next question in the same breath: only **185** users have ever generated a first Study Pack and are old enough to measure, and **3** have ever returned in week 2. Moving retention from 2% to 4% against a ~31-user monthly activated cohort is roughly **+0.6 returning users per month**. That number is the reason this release exists — a retention rate improved against a denominator that small may not be the lever at all.
+
+**The corroborating signal, measured by an independent path:** 38.7% of accounts (141/364) never complete onboarding, closely tracking the ~40% recorded 2026-07-28 from a different query. A return-cadence habit cannot be built by users who never finish onboarding in the first place.
+
+### Planned Scope
+
+1. **Run the activation read (owner action, production, read-only).** How many signups reach a first Study Pack, where the never-completed-onboarding population drops off, and whether the ~31/month activated cohort is capped by onboarding or by something downstream. **Record the result here** — a query cited as a mechanism whose result is never written down is how this project has previously lost the reasoning behind a decision. `v0.72.0` set that rule for itself; it applies here unchanged.
+2. **Onboarding Intent Router residuals (backend + frontend), conditional on the read.** The findings already clustered on one Backlog Index row: **C9** — Step 2's Course / Program copy is still byte-identical for all four profile types even though slice 5 moved `profileType` to Step 1, so a teacher is still asked for a free-text program that can never be a note program under the two-mode model; **C8** — a curator whose profile program is off-catalog still gets a bare *"No course programs selected."* with no explanation, asserted by a passing test in `note-editor-page-client.test.tsx`; plus **M13/M15/M16**, the same vocabulary and guard question in three further forms. C9's stated blocker has already expired, so it is re-triageable on effort today.
+
+**If the read says rate, not volume:** the rule is the same one `v0.72.0` wrote — rescope rather than proceed on sunk reasoning. **The fallback must be verified unbuilt before it is recorded.** `v0.72.0` recorded the CPALE Exam Hub as its fallback and the pre-signoff pressure test found it had already shipped as `v0.54.0`; had that read gone the other way, the release would have had no fallback at all and nobody would have noticed until someone tried to build it. Do not repeat that: check the code, not the roadmap prose.
+
+Anti-drift — locked:
+
+- **No new quiz mode.** The five-mode contract in `docs/product/EXAM_MODES.md` is closed.
+- **No change to the Applicable Programs model.** `ADR-001` is closed for this release; the open amendment proposal on learner free-text stays parked, and so does the Overlapping-representations decision.
+- **Onboarding taxonomy fields use the shared combobox, never free text** — Course / Program, learner level, subject and audience. This release touches onboarding copy and controls, which is exactly where that rule has been broken before.
+- **The curator onboarding guard stays.** `isTeacherSelectableOwner`, `NoteGenerationService.isCurator` and `NoteBulkGenerationService.isCurator` return `false` while `onboardingCompletedAt` is null. Do not restore the bare role check — that is the B0 activation-blocking regression, and this release works directly on that flow.
+- **New analytics events are added to the `AnalyticsEventType` enum before being fired**, on both sides.
+- **Upgrade CTAs go through `getUpgradeCtas(currentPlan)`.**
+- **One-time contextual tips go through `pickActiveGuidance()`.**
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.72.0 - Return Loop
 
 **Status: Released** (signed off 2026-08-11)
@@ -61,6 +92,7 @@ Anti-drift — locked:
 ### Shipped
 
 - **H1 commitment + H5 one-tap return loop (backend + frontend).** After **any** learner completes their first session — there is deliberately no profile-type gate, since the commitment collected is the review days and gating those behind an exam date would exclude every `STUDENT`, ~27% of profile-typed accounts (16% of all accounts, since 40% still have a null profile type), the shared post-session surface now asks once for an exam date and chosen review weekdays; commit and decline are persisted atomically on the user, failed saves preserve the outstanding prompt, and the schedule remains editable in Email Preferences. The due-concepts digest keeps null/empty schedules on the existing cadence, otherwise filters weekdays in `Asia/Manila`, and links to Quick Review for the owned note with the most due concepts with a dashboard fallback. Analytics cover prompt shown/committed/declined plus digest landing/first answer; no quiz mode or readiness behavior changed. **Recorded deviation from H1 as written:** this release collects weekdays only, not times of day, because there is no per-user timezone — and note the original wording here claimed *"the existing digest scheduler runs daily"*, which was **false**: it ran weekly on Sundays. That false premise came from the implementation prompt and produced the dispatch defect recorded below; the scheduler now genuinely dispatches this digest daily and there is no per-user timezone; the tested mechanism remains a learner-authored schedule.
+- **Digest dispatch defect, found by the pre-signoff pressure test and fixed before signoff (backend).** *This bullet is the referent the H1 entry above points at; it was described there as "recorded below" but never written, and is restored here at the `v0.72.1` kickoff rather than left dangling.* All three fresh-context agents independently found the same blocking defect, and it originated in a false premise in the implementation prompt: `sendDueConceptsDigestEmails()` had exactly one caller, inside `runWeekly()` (`cron "0 0 18 * * SUN"`), not the daily job the prompt asserted. The new weekday filter therefore compared a learner's chosen days against a job firing once a week — **at most one weekday could ever match**, so every learner choosing any other combination would silently stop receiving a default-on digest, making commitment strictly worse than declining and inverting the H5 measurement. Which weekday was live depended on deploy timezone (`ZoneId.systemDefault()` in the cron vs. `Asia/Manila` in the filter); on a Manila host that day is **Sunday**, which the commitment prompt's pre-selected **MON/WED/FRI** default excludes (`DEFAULT_REVIEW_DAYS`, `frontend/components/study-pack/review-commitment-prompt.tsx:21` — a UI pre-selection shown to the learner, *not* a server-side default; an account that never answers the prompt keeps its existing cadence) — so every learner accepting the offered default would have lost the digest entirely. Fixed by moving dispatch to `runDaily()` with `@Scheduled(zone = "Asia/Manila")`. **Frequency is unchanged for everyone:** `dueConceptsDigestCooldownDays` (7) remains the throttle, so the daily sweep only decides *which* day a learner's single weekly digest lands on. The scheduler test now asserts the digest dispatches from `runDaily` and not from `runWeekly` — the test whose absence let this reach signoff.
 
 ## v0.71.2 - Catalog Management
 
