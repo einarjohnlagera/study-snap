@@ -61,6 +61,13 @@ Screen 5 exactly as the own-notes door does; it is not a sub-state of Screen 4. 
 throughout — including on the adopt screen, where the learner simply finishes onboarding early at Screen 5 of 8.
 An earlier build special-cased the adopt screen to display the last step, which read as a bug.
 
+**Screen 2's copy is profile-aware (C9).** `getCourseProgramScreenCopy` in `lib/onboarding-v2.ts` returns the
+heading, description and placeholder per profile type. Slice 5 moved profile type to Screen 1, so by the time
+this screen renders we know who is being asked — yet the copy stayed byte-identical for all four types, and
+under the two-mode authoring model *"What are you studying?"* describes something a `TEACHER` never does here.
+Teachers are asked what they teach, exam reviewers what they are reviewing for, professionals what field they
+are in. Adding a profile type means adding its copy here, not reusing the student wording.
+
 **Screens carry one idea each (typography pass).** Step headings are `text-xl sm:text-2xl` — `CardTitle` is
 already `font-semibold`, so size, not weight, was what made them read heavy. Field labels and "Required."
 helper paragraphs are gone from Screens 2 and 3: the heading already asks the question, the control carries its

@@ -279,4 +279,38 @@ describe("ApplicableProgramsCombobox", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Select Civil Engineering" }));
     expect(onChange).toHaveBeenCalledWith(["program-b", "program-a"]);
   });
+
+  it("explains an empty selection when the author's profile programme is off-catalog", () => {
+    // C8: a curator whose profile programme is not in the shared catalog got a bare "No course programs
+    // selected." -- terse, and mystifying, because they HAVE a programme and cannot see why it counts
+    // for nothing here. The empty state must say why and what to do instead.
+    render(
+      <ApplicableProgramsCombobox
+        id="off-catalog"
+        catalog={catalog}
+        selectedIds={[]}
+        onChange={jest.fn()}
+        profileCourseProgram="BS Hotel Management"
+      />,
+    );
+
+    expect(screen.getByText(/BS Hotel Management/)).toBeInTheDocument();
+    expect(screen.getByText(/not in the shared catalog/)).toBeInTheDocument();
+  });
+
+  it("keeps the plain empty state when the profile programme IS in the catalog", () => {
+    // Nothing to explain here: the author simply has not picked anything yet.
+    render(
+      <ApplicableProgramsCombobox
+        id="on-catalog"
+        catalog={catalog}
+        selectedIds={[]}
+        onChange={jest.fn()}
+        profileCourseProgram="Civil Engineering"
+      />,
+    );
+
+    expect(screen.getByText("No course programs selected.")).toBeInTheDocument();
+    expect(screen.queryByText(/not in the shared catalog/)).not.toBeInTheDocument();
+  });
 });
