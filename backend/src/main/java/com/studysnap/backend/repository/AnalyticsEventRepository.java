@@ -24,6 +24,7 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
     String EXAM_HUB_VIEWED_EVENT_TYPE = "EXAM_HUB_VIEWED";
     String PUBLISHED_PLANS_VIEWED_EVENT_TYPE = "PUBLISHED_PLANS_VIEWED";
     String EXAM_HUB_CTA_CLICKED_EVENT_TYPE = "EXAM_HUB_CTA_CLICKED";
+    String ONBOARDING_STEP_VIEWED_EVENT_TYPE = "ONBOARDING_V2_STEP_VIEWED";
     // Retention activation = first STUDY_PACK_GENERATED. Week-2 return = any analytics event in (firstPack + 7d, firstPack + 14d].
     // Eligible users have a first pack at least 14 days before the report time so the week-2 window is complete.
     String RETENTION_WINDOW_START_DAYS = "7";
@@ -38,6 +39,17 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
     // PostgreSQL's jsonb_extract_path_text(metadata_json, 'referrerSource') is equivalent to
     // metadata_json ->> 'referrerSource', while remaining executable in the H2 integration suite.
     String REFERRER_SOURCE_EXPRESSION = "jsonb_extract_path_text(ae.metadata_json, '" + REFERRER_SOURCE_JSON_PATH + "')";
+    String ONBOARDING_STEP_NAME_JSON_PATH = "step_name";
+    String ONBOARDING_STEP_NAME_EXPRESSION = "jsonb_extract_path_text(ae.metadata_json, '"
+            + ONBOARDING_STEP_NAME_JSON_PATH + "')";
+    String ONBOARDING_STEP_USER_COUNTS_QUERY = "SELECT " + ONBOARDING_STEP_NAME_EXPRESSION + " AS stepName,\n"
+            + "       COUNT(DISTINCT ae.user_id) AS userCount\n"
+            + "FROM analytics_events ae\n"
+            + "WHERE ae.event_type = '" + ONBOARDING_STEP_VIEWED_EVENT_TYPE + "'\n"
+            + "GROUP BY " + ONBOARDING_STEP_NAME_EXPRESSION;
+    String ONBOARDING_COMPLETION_QUERY = "SELECT COUNT(*) AS totalSignups,\n"
+            + "       COUNT(onboarding_completed_at) AS onboardingCompletedUsers\n"
+            + "FROM users";
     String ORGANIC_LANDINGS_QUERY = "SELECT CAST(DATE_TRUNC('week', ae.created_at) AS DATE) AS weekStart,\n"
             + "       ae.event_type AS eventType,\n"
             + "       COALESCE(" + REFERRER_SOURCE_EXPRESSION + ", '" + DIRECT_REFERRER_SOURCE + "') AS referrerSource,\n"
@@ -303,6 +315,12 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
 
     @Query(value = EXAM_HUB_ORGANIC_CLICK_THROUGH_QUERY, nativeQuery = true)
     ExamHubOrganicClickThroughProjection findExamHubOrganicClickThroughSince(@Param("since") OffsetDateTime since);
+
+    @Query(value = ONBOARDING_STEP_USER_COUNTS_QUERY, nativeQuery = true)
+    List<OnboardingStepUserCountProjection> findOnboardingStepUserCounts();
+
+    @Query(value = ONBOARDING_COMPLETION_QUERY, nativeQuery = true)
+    OnboardingCompletionProjection findOnboardingCompletion();
 
     List<AnalyticsEventEntity> findByEventTypeOrderByCreatedAtDesc(AnalyticsEventType eventType, Pageable pageable);
 

@@ -6,6 +6,7 @@ import java.util.List;
 public record AdminFunnelMetricsResponse(
         Integer windowDays,
         OffsetDateTime windowStartedAt,
+        OnboardingMetrics onboarding,
         ActivationMetrics activation,
         StuckUsersMetrics stuckUsers,
         QuotaHitMetrics quotaHit,
@@ -14,6 +15,23 @@ public record AdminFunnelMetricsResponse(
         RetentionCohortMetrics retentionCohort,
         CheckoutConversionMetrics checkoutConversion
 ) {
+    public record OnboardingMetrics(
+            long totalSignups,
+            long onboardingCompletedUsers,
+            double completionRatePercent,
+            List<OnboardingStepMetrics> steps,
+            OnboardingStepMetrics legacyStep
+    ) {
+    }
+
+    public record OnboardingStepMetrics(
+            String stepName,
+            String label,
+            long userCount,
+            Long dropOffFromPrevious
+    ) {
+    }
+
     public record ActivationMetrics(
             long totalVerifiedUsers,
             long activatedUsers,

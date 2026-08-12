@@ -254,6 +254,58 @@ export default function AdminFunnelPage() {
         <>
           <section className="space-y-3">
             <div>
+              <h2 className="text-lg font-semibold text-foreground">Onboarding</h2>
+              <p className="text-sm text-foreground/60">
+                All-time completion and screen-level diagnostics
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <MetricCard
+                label="Onboarding Completion Rate"
+                value={formatPercent(metrics.onboarding.completionRatePercent)}
+                detail={`${formatMetric(metrics.onboarding.onboardingCompletedUsers)} of ${formatMetric(metrics.onboarding.totalSignups)} signups · users-table figure for baseline comparability`}
+              />
+            </div>
+            <p className="text-sm leading-relaxed text-foreground/60">
+              Step names changed in v0.73.0, so the ordered step figures describe only the current flow; older or unrecognised names are counted separately below.
+            </p>
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-foreground/55">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Screen</th>
+                      <th className="px-4 py-3 font-semibold">Distinct users</th>
+                      <th className="px-4 py-3 font-semibold">Drop-off from previous</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {metrics.onboarding.steps.map((step) => (
+                      <tr key={step.stepName}>
+                        <td className="px-4 py-3 font-medium text-foreground">{step.label}</td>
+                        <td className="px-4 py-3 text-foreground/75">{formatMetric(step.userCount)}</td>
+                        <td className="px-4 py-3 text-foreground/75">
+                          {step.dropOffFromPrevious === null ? "—" : formatMetric(step.dropOffFromPrevious)}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-muted/30">
+                      <td className="px-4 py-3 font-semibold text-foreground">
+                        {metrics.onboarding.legacyStep.label}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-foreground/75">
+                        {formatMetric(metrics.onboarding.legacyStep.userCount)}
+                      </td>
+                      <td className="px-4 py-3 text-foreground/60">Excluded from current-flow ordering</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </section>
+
+          <section className="space-y-3">
+            <div>
               <h2 className="text-lg font-semibold text-foreground">Activation</h2>
               <p className="text-sm text-foreground/60">All-time activation and current stuck-user snapshot</p>
             </div>

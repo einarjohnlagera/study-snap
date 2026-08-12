@@ -751,6 +751,23 @@ export type AdminOrganicLandingsResponse = {
 export type AdminFunnelMetricsResponse = {
   windowDays: number | null;
   windowStartedAt: string | null;
+  onboarding: {
+    totalSignups: number;
+    onboardingCompletedUsers: number;
+    completionRatePercent: number;
+    steps: Array<{
+      stepName: string;
+      label: string;
+      userCount: number;
+      dropOffFromPrevious: number | null;
+    }>;
+    legacyStep: {
+      stepName: string;
+      label: string;
+      userCount: number;
+      dropOffFromPrevious: number | null;
+    };
+  };
   activation: {
     totalVerifiedUsers: number;
     activatedUsers: number;
