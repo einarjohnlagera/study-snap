@@ -14,6 +14,7 @@ describe("onboarding-v2 draft storage", () => {
 
   it("defaults learning context fields on empty drafts", () => {
     expect(createEmptyOnboardingDraft()).toEqual(expect.objectContaining({
+      schemaVersion: 1,
       learnerLevel: null,
       courseProgram: "",
     }));
@@ -41,6 +42,66 @@ describe("onboarding-v2 draft storage", () => {
       currentStep: 2,
       profileType: "STUDENT",
     }));
+  });
+
+  it("migrates a pre-split draft by preserving answers and resuming at the earliest unanswered screen", () => {
+    const legacyDraft = {
+      startedAtMs: 1000,
+      currentStep: 5,
+      profileType: "STUDENT",
+      learnerLevel: null,
+      courseProgram: "Nursing",
+      intent: "own_notes",
+      reviewSetAvailable: false,
+      inputMethod: "own_note",
+      topic: "",
+      noteContent: "A typed note that must survive the screen renumbering.",
+      generatedNoteReady: false,
+      noteId: null,
+      studyPackId: null,
+    };
+
+    window.localStorage.setItem("notelib.onboarding-v2:user-1", JSON.stringify(legacyDraft));
+
+    expect(loadOnboardingDraft("user-1")).toEqual(expect.objectContaining({
+      schemaVersion: 1,
+      currentStep: 3,
+      profileType: "STUDENT",
+      courseProgram: "Nursing",
+      intent: "own_notes",
+      inputMethod: "own_note",
+      noteContent: "A typed note that must survive the screen renumbering.",
+    }));
+  });
+
+  it("clamps a current-schema step beyond the eight-screen range", () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      currentStep: 99,
+      profileType: "STUDENT" as const,
+      courseProgram: "Nursing",
+      learnerLevel: "COLLEGE" as const,
+      intent: "own_notes" as const,
+      inputMethod: "own_note" as const,
+      noteId: "note-1",
+    };
+    window.localStorage.setItem("notelib.onboarding-v2:user-1", JSON.stringify(draft));
+
+    expect(loadOnboardingDraft("user-1")?.currentStep).toBe(8);
+  });
+
+  it("does not let an out-of-order current draft skip an earlier required answer", () => {
+    const draft = {
+      ...createEmptyOnboardingDraft(),
+      currentStep: 6,
+      courseProgram: "Nursing",
+      learnerLevel: "COLLEGE" as const,
+      intent: "own_notes" as const,
+      inputMethod: "own_note" as const,
+    };
+    window.localStorage.setItem("notelib.onboarding-v2:user-1", JSON.stringify(draft));
+
+    expect(loadOnboardingDraft("user-1")?.currentStep).toBe(1);
   });
 
   it("round-trips learning context fields", () => {
@@ -76,6 +137,15 @@ describe("onboarding-v2 draft storage", () => {
     setPendingLightweightProfileCompletion("user-1");
 
     expect(hasPendingLightweightProfileCompletion("user-1")).toBe(false);
+    setItemSpy.mockRestore();
+  });
+
+  it("keeps navigation usable when saving the onboarding draft fails", () => {
+    const setItemSpy = jest.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
+      throw new Error("Storage unavailable");
+    });
+
+    expect(() => saveOnboardingDraft("user-1", createEmptyOnboardingDraft())).not.toThrow();
     setItemSpy.mockRestore();
   });
 });
