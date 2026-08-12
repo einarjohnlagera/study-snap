@@ -1,5 +1,6 @@
 import {
   getCourseProgramScreenCopy,
+  getLearnerLevelScreenCopy,
   clearPendingLightweightProfileCompletion,
   createEmptyOnboardingDraft,
   hasPendingLightweightProfileCompletion,
@@ -170,6 +171,24 @@ describe("onboarding-v2 draft storage", () => {
 
     it("falls back to the student copy when no profile type is known", () => {
       expect(getCourseProgramScreenCopy(null).heading).toBe("What are you studying?");
+    });
+  });
+
+  describe("getLearnerLevelScreenCopy", () => {
+    it("tells every profile type what the level actually does", () => {
+      // The description is not garnish: "what level?" has no obvious consequence, and nothing else on
+      // the screen says it governs how hard quizzes are. A typography pass removed it for everyone
+      // except teachers, leaving the majority path barer than the minority one.
+      const types = ["STUDENT", "BOARD_EXAM", "TEACHER", "PROFESSIONAL"] as const;
+      types.forEach((type) => {
+        expect(getLearnerLevelScreenCopy(type).description.length).toBeGreaterThan(0);
+      });
+      expect(new Set(types.map((type) => getLearnerLevelScreenCopy(type).description)).size).toBe(types.length);
+    });
+
+    it("does not ask a teacher what level they are studying at", () => {
+      expect(getLearnerLevelScreenCopy("TEACHER").heading).toBe("What level do you teach?");
+      expect(getLearnerLevelScreenCopy("STUDENT").heading).toBe("What level are you studying at?");
     });
   });
 });

@@ -279,3 +279,39 @@ export function getCourseProgramScreenCopy(profileType: OnboardingProfileType | 
     placeholder: "e.g. BS Civil Engineering",
   };
 }
+
+/**
+ * Screen 3's copy, by profile type.
+ *
+ * The description is not optional garnish here. "What are you studying?" has an obvious consequence;
+ * "what level?" does not -- nothing else on the screen says it governs how hard quizzes are and how deep
+ * explanations go. A typography pass removed this line and left the screen with a heading and a control,
+ * which is lighter and also less informative than it should be.
+ */
+export function getLearnerLevelScreenCopy(profileType: OnboardingProfileType | null): {
+  heading: string;
+  description: string;
+} {
+  if (profileType === "TEACHER") {
+    return {
+      heading: "What level do you teach?",
+      description: "This sets the default difficulty for quizzes you generate. You can change it per quiz.",
+    };
+  }
+  if (profileType === "BOARD_EXAM") {
+    return {
+      heading: "What level are you reviewing at?",
+      description: "This sets how demanding your practice questions are.",
+    };
+  }
+  if (profileType === "PROFESSIONAL") {
+    return {
+      heading: "What level are you working at?",
+      description: "This sets how advanced your practice material is.",
+    };
+  }
+  return {
+    heading: "What level are you studying at?",
+    description: "This sets how deep your quizzes and explanations go.",
+  };
+}

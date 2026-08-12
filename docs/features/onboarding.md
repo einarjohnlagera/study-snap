@@ -61,6 +61,13 @@ Screen 5 exactly as the own-notes door does; it is not a sub-state of Screen 4. 
 throughout — including on the adopt screen, where the learner simply finishes onboarding early at Screen 5 of 8.
 An earlier build special-cased the adopt screen to display the last step, which read as a bug.
 
+**Screen 3's copy is profile-aware too, and its description is not optional.** `getLearnerLevelScreenCopy`
+returns the heading and description per profile type. *"What are you studying?"* has an obvious consequence;
+*"what level?"* does not — nothing else on that screen says it governs how hard quizzes are and how deep
+explanations go. The typography pass removed this line for everyone **except teachers**, which left the
+majority path barer than the minority one; it is restored for all four types. A teacher is asked what level
+they *teach*, since for them the answer means default quiz difficulty.
+
 **Screen 2's copy is profile-aware (C9).** `getCourseProgramScreenCopy` in `lib/onboarding-v2.ts` returns the
 heading, description and placeholder per profile type. Slice 5 moved profile type to Screen 1, so by the time
 this screen renders we know who is being asked — yet the copy stayed byte-identical for all four types, and

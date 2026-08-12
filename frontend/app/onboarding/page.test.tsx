@@ -211,7 +211,8 @@ describe("OnboardingPage", () => {
       target: { value: courseProgram },
     });
     await clickContinue();
-    expect(await screen.findByText("What level are you studying at?")).toBeInTheDocument();
+    // Profile-agnostic: the heading varies by profile type, so assert the screen by its control.
+    expect(await screen.findByLabelText("Learner Level")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Learner Level"), {
       target: { value: learnerLevel },
     });
@@ -412,7 +413,8 @@ describe("OnboardingPage", () => {
     expect(await screen.findByText("What are you reviewing for?")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Course / Program"), { target: { value: "Nursing" } });
     await clickContinue();
-    expect(await screen.findByText("What level are you studying at?")).toBeInTheDocument();
+    // Profile-agnostic: the heading varies by profile type, so assert the screen by its control.
+    expect(await screen.findByLabelText("Learner Level")).toBeInTheDocument();
     expect((screen.getByLabelText("Learner Level") as HTMLSelectElement).value).toBe("BOARD_EXAM_REVIEW");
     expect(screen.getByRole("button", { name: "Continue" })).not.toBeDisabled();
 
@@ -424,7 +426,8 @@ describe("OnboardingPage", () => {
     fireEvent.click(await screen.findByLabelText("Student"));
     await clickContinue();
     await clickContinue();
-    expect(await screen.findByText("What level are you studying at?")).toBeInTheDocument();
+    // Profile-agnostic: the heading varies by profile type, so assert the screen by its control.
+    expect(await screen.findByLabelText("Learner Level")).toBeInTheDocument();
     expect((screen.getByLabelText("Learner Level") as HTMLSelectElement).value).toBe("COLLEGE");
   });
 
@@ -447,7 +450,8 @@ describe("OnboardingPage", () => {
 
     render(<OnboardingPage />);
 
-    expect(await screen.findByText("What level are you studying at?")).toBeInTheDocument();
+    // Profile-agnostic: the heading varies by profile type, so assert the screen by its control.
+    expect(await screen.findByLabelText("Learner Level")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(await screen.findByLabelText("Course / Program")).toHaveValue("Nursing");
   });
