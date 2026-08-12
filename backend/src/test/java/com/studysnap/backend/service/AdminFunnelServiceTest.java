@@ -10,6 +10,8 @@ import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.OnboardingCompletionProjection;
 import com.studysnap.backend.repository.OnboardingStepUserCountProjection;
+import com.studysnap.backend.repository.OfficialStudyPlanDemandProjection;
+import com.studysnap.backend.repository.OfficialStudyPlanWishlistRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -39,6 +41,8 @@ class AdminFunnelServiceTest {
     private static final String ONBOARDING_STEP_COURSE_PROGRAM = "course-program";
     private static final String ONBOARDING_STEP_LEARNING_CONTEXT = "learning-context";
     private static final String ONBOARDING_STEP_LEGACY = "legacy";
+    private static final String NURSING = "Nursing";
+    private static final String ACCOUNTANCY = "Accountancy";
 
     @Mock
     private UserRepository userRepository;
@@ -52,6 +56,8 @@ class AdminFunnelServiceTest {
     private UserUsageRepository userUsageRepository;
     @Mock
     private SubscriptionRepository subscriptionRepository;
+    @Mock
+    private OfficialStudyPlanWishlistRepository officialStudyPlanWishlistRepository;
 
     private StudySnapProperties properties;
     private AdminFunnelService adminFunnelService;
@@ -67,6 +73,7 @@ class AdminFunnelServiceTest {
                 analyticsEventRepository,
                 userUsageRepository,
                 subscriptionRepository,
+                officialStudyPlanWishlistRepository,
                 properties
         );
     }
@@ -151,6 +158,30 @@ class AdminFunnelServiceTest {
         assertThat(response.onboarding().steps().get(7).userCount()).isEqualTo(11);
         assertThat(response.onboarding().legacyStep().stepName()).isEqualTo(ONBOARDING_STEP_LEGACY);
         assertThat(response.onboarding().legacyStep().userCount()).isEqualTo(10);
+    }
+
+    @Test
+    void getMetrics_onboardingIncludesRequestedProgramsInRepositoryOrder() {
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(
+                eq(List.of(PlanType.PLUS, PlanType.PRO)),
+                eq(SubscriptionStatus.ACTIVE),
+                any()
+        )).thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(officialStudyPlanWishlistRepository.findProgramDemand()).thenReturn(List.of(
+                officialPlanDemand(NURSING, 8, 8),
+                officialPlanDemand(ACCOUNTANCY, 3, 3)
+        ));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.onboarding().requestedPrograms())
+                .extracting(AdminFunnelMetricsResponse.RequestedProgramMetrics::courseProgram)
+                .containsExactly(NURSING, ACCOUNTANCY);
+        assertThat(response.onboarding().requestedPrograms().getFirst().requestCount()).isEqualTo(8);
+        assertThat(response.onboarding().requestedPrograms().getFirst().distinctLearners()).isEqualTo(8);
     }
 
     @Test
@@ -518,6 +549,29 @@ class AdminFunnelServiceTest {
             @Override
             public long getUserCount() {
                 return userCount;
+            }
+        };
+    }
+
+    private OfficialStudyPlanDemandProjection officialPlanDemand(
+            String courseProgram,
+            long requestCount,
+            long distinctLearners
+    ) {
+        return new OfficialStudyPlanDemandProjection() {
+            @Override
+            public String getCourseProgram() {
+                return courseProgram;
+            }
+
+            @Override
+            public long getRequestCount() {
+                return requestCount;
+            }
+
+            @Override
+            public long getDistinctLearners() {
+                return distinctLearners;
             }
         };
     }

@@ -272,6 +272,7 @@ Use these skills before writing prompts, before starting new features, and after
 - **Back button lock during Study Pack generation**: hide the Back button while generation is active (`studyPackGenerating || startingStudyPack`); replace the notice with `Your Study Pack is being created. This step can't be undone.`; restore the Back button on error or completion.
 - **Onboarding-only metadata auto-apply**: onboarding may explicitly opt into backend auto-apply for empty `subject` and `tags` when it starts Study Pack generation from an existing note. Normal note generation must keep AI metadata suggestions transient until the user confirms them in the AI Suggestions modal.
 - **Learner level is required from onboarding onward**: every completed account must keep a user/profile-level learner level. Teachers should see copy that frames it as the default quiz difficulty for material they teach, with per-generation Teacher quiz overrides remaining explicit.
+- The unsupported-program Official Study Plan wishlist records learner demand only. It must remain idempotent per learner and normalized course/program, must not end onboarding or replace fallback routes, and sends no email, scheduler notification, or digest.
 
 ### Profile Rule
 

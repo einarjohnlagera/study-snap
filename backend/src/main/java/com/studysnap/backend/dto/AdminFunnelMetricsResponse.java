@@ -20,7 +20,15 @@ public record AdminFunnelMetricsResponse(
             long onboardingCompletedUsers,
             double completionRatePercent,
             List<OnboardingStepMetrics> steps,
-            OnboardingStepMetrics legacyStep
+            OnboardingStepMetrics legacyStep,
+            List<RequestedProgramMetrics> requestedPrograms
+    ) {
+    }
+
+    public record RequestedProgramMetrics(
+            String courseProgram,
+            long requestCount,
+            long distinctLearners
     ) {
     }
 

@@ -121,6 +121,7 @@ describe("AdminFunnelPage", () => {
           userCount: 0,
           dropOffFromPrevious: null,
         },
+        requestedPrograms: [],
       },
       retentionCohort: {
         eligibleActivatedUsers: 0,
@@ -161,6 +162,7 @@ describe("AdminFunnelPage", () => {
     expect(screen.getByText("Onboarding")).toBeInTheDocument();
     expect(screen.getByText("0 of 0 signups · users-table figure for baseline comparability")).toBeInTheDocument();
     expect(screen.getByText("Legacy / other step names")).toBeInTheDocument();
+    expect(screen.getByText("No Official Study Plan requests yet.")).toBeInTheDocument();
   });
 
   it("renders onboarding completion, ordered steps, and the legacy bucket", async () => {
@@ -177,6 +179,10 @@ describe("AdminFunnelPage", () => {
           userCount: 7,
           dropOffFromPrevious: null,
         },
+        requestedPrograms: [
+          { courseProgram: "Nursing", requestCount: 8, distinctLearners: 8 },
+          { courseProgram: "Accountancy", requestCount: 3, distinctLearners: 3 },
+        ],
       },
       retentionCohort: emptyRetentionMetrics(),
       checkoutConversion: emptyCheckoutMetrics(),
@@ -190,10 +196,17 @@ describe("AdminFunnelPage", () => {
     expect(screen.getByText("234 of 375 signups · users-table figure for baseline comparability")).toBeInTheDocument();
     expect(screen.getByText(/Step names changed in v0.73.0/)).toBeInTheDocument();
     expect(screen.getByText("Profile")).toBeInTheDocument();
-    expect(screen.getByText("Course / Program")).toBeInTheDocument();
+    expect(screen.getAllByText("Course / Program").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Confirm & Practice")).toBeInTheDocument();
     expect(screen.getByText("Legacy / other step names")).toBeInTheDocument();
     expect(screen.getByText("Excluded from current-flow ordering")).toBeInTheDocument();
+    expect(screen.getByText("Requested Official Study Plans")).toBeInTheDocument();
+    expect(screen.getByText("Nursing")).toBeInTheDocument();
+    expect(screen.getByText("Accountancy")).toBeInTheDocument();
+    const requestedProgramRows = screen.getByText("Nursing").closest("tbody")?.querySelectorAll("tr");
+    expect(requestedProgramRows?.[0]).toHaveTextContent("Nursing");
+    expect(requestedProgramRows?.[0]).toHaveTextContent("8");
+    expect(requestedProgramRows?.[1]).toHaveTextContent("Accountancy");
   });
 
   it("renders onboarding when every count is zero", async () => {
@@ -210,6 +223,7 @@ describe("AdminFunnelPage", () => {
           userCount: 0,
           dropOffFromPrevious: null,
         },
+        requestedPrograms: [],
       },
       retentionCohort: emptyRetentionMetrics(),
       checkoutConversion: emptyCheckoutMetrics(),
@@ -220,6 +234,7 @@ describe("AdminFunnelPage", () => {
     expect(await screen.findByText("Onboarding Completion Rate")).toBeInTheDocument();
     expect(screen.getByText("0 of 0 signups · users-table figure for baseline comparability")).toBeInTheDocument();
     expect(screen.getByText("Legacy / other step names")).toBeInTheDocument();
+    expect(screen.getByText("No Official Study Plan requests yet.")).toBeInTheDocument();
   });
 
   it("refetches metrics when the window selector changes and renders quota breakdown", async () => {
@@ -291,6 +306,11 @@ function buildMetricsResponse(overrides: {
       userCount: number;
       dropOffFromPrevious: number | null;
     };
+    requestedPrograms: Array<{
+      courseProgram: string;
+      requestCount: number;
+      distinctLearners: number;
+    }>;
   };
   retentionCohort: {
     eligibleActivatedUsers: number;
@@ -337,6 +357,7 @@ function buildMetricsResponse(overrides: {
         userCount: 3,
         dropOffFromPrevious: null,
       },
+      requestedPrograms: [],
     },
     activation: {
       totalVerifiedUsers: 20,

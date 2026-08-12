@@ -9,6 +9,10 @@ export type OnboardingInputMethod = "generate" | "own_note";
  */
 export type OnboardingIntent = "ready_made" | "own_notes";
 
+export function shouldShowOfficialPlanRequestAction(courseProgram: string): boolean {
+  return courseProgram.trim().length > 0;
+}
+
 export type OnboardingProfileOption = {
   value: OnboardingProfileType;
   icon: string;

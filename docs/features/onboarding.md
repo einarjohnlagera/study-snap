@@ -221,6 +221,17 @@ For the qualifying Board Taker cohort described above, this step does not render
 Practice` replaces the remaining create-first screens, and Screen 8 is not rendered
 after adoption. All other learners see the unchanged input-method choices below.
 
+When the ready-made branch has no qualifying Official Study Plan, Screen 5 keeps the existing three exits and
+adds the promised third beat: the learner may record interest in an Official Study Plan for the course/program
+already stored in the onboarding draft. The action is not another course/program picker and does not render for
+an empty or whitespace-only value. It records the trimmed learner text using the shared normalized lookup key,
+so case and whitespace variants are one request per learner and program.
+
+Asking confirms in place and does not navigate, complete onboarding, or disable the existing own-notes,
+Public Library, or Dashboard choices. A resumed learner who already asked sees the confirmed state instead of
+another invitation. A failed request shows an inline error and makes no success claim; every other fallback
+route remains usable. This wishlist is a demand signal only: it sends no email or other notification.
+
 Users choose one path:
 
 - `Create a note`

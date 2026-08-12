@@ -10,6 +10,7 @@ import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.OnboardingCompletionProjection;
 import com.studysnap.backend.repository.OnboardingStepUserCountProjection;
+import com.studysnap.backend.repository.OfficialStudyPlanWishlistRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -72,6 +73,7 @@ public class AdminFunnelService {
     private final AnalyticsEventRepository analyticsEventRepository;
     private final UserUsageRepository userUsageRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final OfficialStudyPlanWishlistRepository officialStudyPlanWishlistRepository;
     private final StudySnapProperties properties;
 
     public AdminFunnelMetricsResponse getMetrics() {
@@ -148,7 +150,14 @@ public class AdminFunnelService {
                         LEGACY_ONBOARDING_STEP_LABEL,
                         legacyUserCount,
                         null
-                )
+                ),
+                officialStudyPlanWishlistRepository.findProgramDemand().stream()
+                        .map(row -> new AdminFunnelMetricsResponse.RequestedProgramMetrics(
+                                row.getCourseProgram(),
+                                row.getRequestCount(),
+                                row.getDistinctLearners()
+                        ))
+                        .toList()
         );
     }
 
