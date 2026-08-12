@@ -16,6 +16,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AdminFunnelControllerTest {
+    private static final String LEGACY_STEP_NAME = "legacy";
+    private static final String LEGACY_STEP_LABEL = "Legacy";
 
     @Mock
     private AdminFunnelService adminFunnelService;
@@ -34,6 +36,20 @@ class AdminFunnelControllerTest {
         AdminFunnelMetricsResponse expected = new AdminFunnelMetricsResponse(
                 null,
                 null,
+                new AdminFunnelMetricsResponse.OnboardingMetrics(
+                        10,
+                        6,
+                        60.0,
+                        List.of(),
+                        List.of(),
+                        new AdminFunnelMetricsResponse.OnboardingStepMetrics(
+                                LEGACY_STEP_NAME,
+                                LEGACY_STEP_LABEL,
+                                0,
+                                null
+                        ),
+                        List.of()
+                ),
                 new AdminFunnelMetricsResponse.ActivationMetrics(10, 4, 40.0, 2.5),
                 new AdminFunnelMetricsResponse.StuckUsersMetrics(3),
                 new AdminFunnelMetricsResponse.QuotaHitMetrics(2, 5, 40.0, List.of()),
@@ -62,6 +78,20 @@ class AdminFunnelControllerTest {
         AdminFunnelMetricsResponse expected = new AdminFunnelMetricsResponse(
                 30,
                 java.time.OffsetDateTime.now(),
+                new AdminFunnelMetricsResponse.OnboardingMetrics(
+                        0,
+                        0,
+                        0.0,
+                        List.of(),
+                        List.of(),
+                        new AdminFunnelMetricsResponse.OnboardingStepMetrics(
+                                LEGACY_STEP_NAME,
+                                LEGACY_STEP_LABEL,
+                                0,
+                                null
+                        ),
+                        List.of()
+                ),
                 new AdminFunnelMetricsResponse.ActivationMetrics(0, 0, 0.0, null),
                 new AdminFunnelMetricsResponse.StuckUsersMetrics(0),
                 new AdminFunnelMetricsResponse.QuotaHitMetrics(0, 0, 0.0, List.of()),

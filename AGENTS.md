@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.72.1 - Constraint Check` (In Progress); previous: `v0.72.0 - Return Loop` (Released)
+- `v0.73.0 - Onboarding Redesign` (In Progress); previous: `v0.72.1 - Constraint Check` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -252,7 +252,7 @@ Use these skills before writing prompts, before starting new features, and after
   - `Study Pack Generation`
   - `Completion`
 - `Exam Date` is optional and shown inline on the Study Goal step for `BOARD_EXAM`.
-- After `BOARD_EXAM` Step 2 submits, if the collected course/program's top published Official Review Set has `itemCount > 0` and `readyCount > 0`, replace Steps 3–4 with Confirm & Practice: adopt the existing set, persist onboarding completion from `Start this plan`, and land on the adopted Review Set's detail page (not directly inside a quiz — Today's Focus / Continue Studying is one tap away from there). This branch must not author notes, invoke AI generation, launch another quiz mode, or render Step 5. Lookup failures and zero-depth sets fail open to the unchanged create-first flow; `STUDENT`, `TEACHER`, and `PROFESSIONAL` always retain that flow unchanged.
+- After `BOARD_EXAM` Screen 3 selects the learner level, if the collected course/program's top published Official Review Set has `itemCount > 0` and `readyCount > 0`, choosing ready-made materials on Screen 4 opens Confirm & Practice: adopt the existing set, persist onboarding completion from `Start this plan`, and land on the adopted Review Set's detail page (not directly inside a quiz — Today's Focus / Continue Studying is one tap away from there). This branch must not author notes, invoke AI generation, launch another quiz mode, or render Screen 8. Lookup failures and zero-depth sets fail open to the unchanged create-first flow; `STUDENT`, `TEACHER`, and `PROFESSIONAL` always retain that flow unchanged.
 - Onboarding persists `profileType`, optional `examDate`, and `onboardingCompletedAt`.
 - Profile Type is required before creating or generating study content. Client guards are UX only; backend content-creating mutations (note create, note-from-topic, Study Pack generation, note copy, bulk generation, batch import) must enforce this server-side through `ProfileSetupRequiredException` (`ONBOARDING_REQUIRED`) rather than silently defaulting null `profileType`. The guard (`OnboardingGuardService.assertProfileComplete`) fires only for the legacy completed-but-null cohort — `profileType == null && onboardingCompletedAt != null`. Do not narrow it to bare `profileType == null`: users mid-onboarding persist `profileType` only at the final step (after generating), and copy-on-signup runs pre-onboarding, so both are `onboardingCompletedAt`-null and must stay exempt or the activation funnel breaks.
 - Users with `onboardingCompletedAt != null` but `profileType == null` must be re-prompted only for Profile Type. Do not force them through learner level, course/program, exam-date, note creation, or Study Pack generation again.
@@ -268,10 +268,11 @@ Use these skills before writing prompts, before starting new features, and after
 - After the first Study Pack is generated, Note Detail should point users to Challenge Quiz as the next action.
 - After the first Challenge Quiz is completed, surface weak-concept guidance before returning users to normal study flows.
 - Product onboarding completion is tracked separately from activation onboarding and should not reuse `onboardingCompletedAt`.
-- **Onboarding Study Pack generation (Step 4) must be idempotent**: `handleStartStudyPack()` must check `draft.noteId` before creating a note; if a note already exists, navigate to Step 4 instead of creating another. This prevents duplicate notes and study packs from back/forward/refresh behavior.
+- **Onboarding Study Pack generation (Screen 7) must be idempotent**: `handleStartStudyPack()` must check `draft.noteId` before creating a note; if a note already exists, navigate to Screen 7 instead of creating another. This prevents duplicate notes and study packs from back/forward/refresh behavior.
 - **Back button lock during Study Pack generation**: hide the Back button while generation is active (`studyPackGenerating || startingStudyPack`); replace the notice with `Your Study Pack is being created. This step can't be undone.`; restore the Back button on error or completion.
 - **Onboarding-only metadata auto-apply**: onboarding may explicitly opt into backend auto-apply for empty `subject` and `tags` when it starts Study Pack generation from an existing note. Normal note generation must keep AI metadata suggestions transient until the user confirms them in the AI Suggestions modal.
 - **Learner level is required from onboarding onward**: every completed account must keep a user/profile-level learner level. Teachers should see copy that frames it as the default quiz difficulty for material they teach, with per-generation Teacher quiz overrides remaining explicit.
+- The unsupported-program Official Study Plan wishlist records learner demand only. It must remain idempotent per learner and normalized course/program, must not end onboarding or replace fallback routes, and sends no email, scheduler notification, or digest.
 
 ### Profile Rule
 
@@ -395,6 +396,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Backend services should record server-truth events for note, Study Pack, review, auth, public-copy, and subscription flows.
 - Frontend/browser-only funnel events may post through `/api/analytics/events`.
 - Admin reporting should read from analytics events plus core entity counts via `/api/admin/analytics/summary`.
+- Admin onboarding completion rate must remain `users.onboarding_completed_at IS NOT NULL` over all rows in `users`; never derive it from `ONBOARDING_V2_COMPLETED`, because the users-table definition is the checkpoint baseline.
 - **Tracked completion events**: `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, and `ADAPTIVE_PRACTICE_COMPLETED` are fired from the frontend in the `finally`/completion block of each quiz flow and must not block the primary action.
 - **Tracked funnel events**: `FEATURE_LOCKED_CLICKED` and `UPGRADE_CLICKED` are fired from paywall surfaces and the `PostSuccessUpgradeNudge` component respectively.
 - `AnalyticsEventType` in `frontend/lib/api.ts` is the canonical union of all allowed event names — add new event names there before using them.
@@ -1666,9 +1668,14 @@ These rules exist to prevent the most common forms of context drift across AI co
 
 ### Onboarding Anti-Drift
 
-- Onboarding is one-way. Do not add a Back button to Step 4 (Study Pack generation) or Step 5 (Completion).
+- The create-first onboarding flow has eight screens: Profile Type, Course / Program, Learner Level, First Intent, Input Method, Note, Study Pack Generation, and Completion. Closed-set screens 3–5 auto-advance only from a new selection; Course / Program and Note keep explicit actions.
+- Onboarding drafts are schema-versioned. Any screen renumbering or answer-shape change must bump the draft schema version, preserve compatible answer fields, and recompute stale resume position instead of trusting the stored `currentStep`.
+- Onboarding is one-way during terminal work. Do not add a Back button to Step 7 (Study Pack generation) or Step 8 (Completion).
+- **Onboarding auto-advance is allowed ONLY on closed-set choices whose every option keeps the learner inside onboarding** — Screen 4 (First Intent) and Screen 5's Input Method. It is forbidden on: typed input (Course / Program, the note), because only the learner knows when typing is done; **Screen 3's Learner Level `<select>`**, because re-choosing the already-selected value fires no `change` event, which stranded anyone arriving with a value set (via a resumed draft or Back from Screen 4); and **Screen 5's ready-made fallback**, because two of its options leave onboarding and a mis-tap must not eject a learner. Screens that auto-advance render Back only — never a Continue that can never be clicked.
+- **Screen 5 serves both Screen 4 branches** (Input Method for own-notes, Official Study Plan / unavailable-program fallback for ready-made). It is not a sub-state of Screen 4. Anything keyed on the ready-made branch — the plan re-resolution effect, `resolveEarliestUnansweredStep`, the practice-first screen predicate — must key on Screen 5. Keying them on Screen 4 silently sent resumed ready-made drafts back a step and made a reload claim no Official Study Plan existed when one did.
+- **The onboarding step counter must always show the real step.** Do not special-case it to signal a terminal screen: an earlier build displayed the last step on the adopt screen, which produced a counter that jumped from 4 to 8 while the previous screen was still rendered.
 - When Study Pack generation is active, hide the Back button and replace notice copy with `Your Study Pack is being created. This step can't be undone.`
-- When the Study Pack limit is reached during onboarding, bump `currentStep` to 5 with `studyPackLimitReached=true`. Step 5 renders the limit-reached layout. This reuses the existing `completeOnboarding` useEffect — do not add a separate completion trigger.
+- When the Study Pack limit is reached during onboarding, bump `currentStep` to 8 with `studyPackLimitReached=true`. Step 8 renders the limit-reached layout. This reuses the existing `completeOnboarding` useEffect — do not add a separate completion trigger.
 - `handleStartStudyPack()` must check `draft.noteId` before creating a note (idempotency rule).
 
 ### Quiz Generation Anti-Drift

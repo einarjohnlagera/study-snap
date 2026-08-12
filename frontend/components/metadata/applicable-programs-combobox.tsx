@@ -21,6 +21,12 @@ type ApplicableProgramsComboboxProps = {
   onRetry?: () => void;
   disabled?: boolean;
   canCreateCatalogProgram?: boolean;
+  /**
+   * The author's own profile programme, used only to explain an empty selection (C8). When it is set
+   * but absent from the shared catalog, "No course programs selected." is not just terse -- it is
+   * mystifying, because the author has a programme and cannot see why it counts for nothing here.
+   */
+  profileCourseProgram?: string | null;
   onCatalogProgramCreated?: (program: CourseProgramCatalogItem) => void;
 };
 
@@ -42,12 +48,24 @@ export function ApplicableProgramsCombobox({
   disabled = false,
   canCreateCatalogProgram = false,
   onCatalogProgramCreated,
+  profileCourseProgram = null,
 }: Readonly<ApplicableProgramsComboboxProps>) {
   const [selectionDraft, setSelectionDraft] = useState("");
   const [createdPrograms, setCreatedPrograms] = useState<CourseProgramCatalogItem[]>([]);
   const [nearMatches, setNearMatches] = useState<CourseProgramCatalogItem[]>([]);
   const [checkingNearMatches, setCheckingNearMatches] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+
+  // Only names the programme when it is genuinely absent from the catalog. A profile programme that IS
+  // in the catalog needs no explanation -- the author simply has not picked anything yet.
+  const profileOffCatalogName = useMemo(() => {
+    const trimmed = profileCourseProgram?.trim() ?? "";
+    if (!trimmed) {
+      return null;
+    }
+    const inCatalog = catalog.some((item) => item.name.trim().toLowerCase() === trimmed.toLowerCase());
+    return inCatalog ? null : trimmed;
+  }, [catalog, profileCourseProgram]);
   const [programFamilyId, setProgramFamilyId] = useState("");
   const [examGoalSlug, setExamGoalSlug] = useState("");
   const [creating, setCreating] = useState(false);
@@ -293,7 +311,11 @@ export function ApplicableProgramsCombobox({
               </button>
             </span>
           )) : (
-            <span className="text-xs text-foreground/55">No course programs selected.</span>
+            <span className="text-xs text-foreground/55">
+              {profileOffCatalogName
+                ? `No course programs selected. Your profile programme, ${profileOffCatalogName}, is not in the shared catalog, so it cannot be used here — pick the programs this note should appear under.`
+                : "No course programs selected."}
+            </span>
           )}
         </div>
       ) : null}

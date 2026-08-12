@@ -253,3 +253,11 @@ Rules:
 - show tags as chips, not inside long action labels
 - include a live preview of the final metadata before applying changes
 - because generation is asynchronous from the Note Editor, the suggestion modal appears from Note Detail after the queued Study Pack becomes ready.
+
+### Applicable Programs — the empty state explains itself (C8)
+
+When an author has selected no Applicable Programs **and** their own profile programme is absent from the
+shared catalog, the picker names the programme and says it cannot be used here, rather than showing a bare
+*"No course programs selected."* A curator in that position has a programme and no way to see why it counts for
+nothing on this surface. When the profile programme **is** in the catalog, the plain empty state stands — there
+is nothing to explain, the author simply has not picked yet.

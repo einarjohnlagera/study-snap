@@ -1374,6 +1374,7 @@ export function NoteEditorPageClient({
           setApplicableProgramsDirty(true);
         }}
         canCreateCatalogProgram={currentUserRole === "ADMIN"}
+        profileCourseProgram={profileCourseProgram}
         onCatalogProgramCreated={(program) => setApplicableProgramCatalog((current) => [...current, program])}
         applicableProgramsLoading={applicableProgramsLoading}
         applicableProgramsError={applicableProgramsError}

@@ -8,6 +8,10 @@ import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.entity.UserUsageEntity;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.OnboardingCompletionProjection;
+import com.studysnap.backend.repository.OnboardingStepUserCountProjection;
+import com.studysnap.backend.repository.OfficialStudyPlanDemandProjection;
+import com.studysnap.backend.repository.OfficialStudyPlanWishlistRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -33,6 +37,12 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AdminFunnelServiceTest {
+    private static final String ONBOARDING_STEP_PROFILE = "profile";
+    private static final String ONBOARDING_STEP_COURSE_PROGRAM = "course-program";
+    private static final String ONBOARDING_STEP_LEARNING_CONTEXT = "learning-context";
+    private static final String ONBOARDING_STEP_LEGACY = "legacy";
+    private static final String NURSING = "Nursing";
+    private static final String ACCOUNTANCY = "Accountancy";
 
     @Mock
     private UserRepository userRepository;
@@ -46,6 +56,8 @@ class AdminFunnelServiceTest {
     private UserUsageRepository userUsageRepository;
     @Mock
     private SubscriptionRepository subscriptionRepository;
+    @Mock
+    private OfficialStudyPlanWishlistRepository officialStudyPlanWishlistRepository;
 
     private StudySnapProperties properties;
     private AdminFunnelService adminFunnelService;
@@ -61,6 +73,7 @@ class AdminFunnelServiceTest {
                 analyticsEventRepository,
                 userUsageRepository,
                 subscriptionRepository,
+                officialStudyPlanWishlistRepository,
                 properties
         );
     }
@@ -77,6 +90,13 @@ class AdminFunnelServiceTest {
 
         assertThat(response.windowDays()).isNull();
         assertThat(response.windowStartedAt()).isNull();
+        assertThat(response.onboarding().totalSignups()).isZero();
+        assertThat(response.onboarding().onboardingCompletedUsers()).isZero();
+        assertThat(response.onboarding().completionRatePercent()).isEqualTo(0.0);
+        assertThat(response.onboarding().steps()).hasSize(8).allSatisfy(step -> {
+            assertThat(step.userCount()).isZero();
+        });
+        assertThat(response.onboarding().legacyStep().userCount()).isZero();
         assertThat(response.activation().totalVerifiedUsers()).isZero();
         assertThat(response.activation().activatedUsers()).isZero();
         assertThat(response.activation().activationRatePercent()).isEqualTo(0.0);
@@ -95,6 +115,164 @@ class AdminFunnelServiceTest {
         assertThat(response.checkoutConversion().clickToCheckoutRatePercent()).isEqualTo(0.0);
         assertThat(response.checkoutConversion().checkoutToPaidRatePercent()).isEqualTo(0.0);
         assertThat(response.checkoutConversion().clickToPaidRatePercent()).isEqualTo(0.0);
+    }
+
+    @Test
+    void getMetrics_onboardingOrdersCurrentStepsFillsMissingAndBucketsLegacyRows() {
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(analyticsEventRepository.findOnboardingCompletion()).thenReturn(onboardingCompletion(375, 234));
+        when(analyticsEventRepository.findOnboardingStepUserCounts()).thenReturn(List.of(
+                onboardingStep("completion", 11),
+                onboardingStep(ONBOARDING_STEP_LEARNING_CONTEXT, 7),
+                onboardingStep(ONBOARDING_STEP_PROFILE, 20),
+                onboardingStep("future-renamed-step", 3),
+                onboardingStep(ONBOARDING_STEP_COURSE_PROGRAM, 15)
+        ));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.onboarding().totalSignups()).isEqualTo(375);
+        assertThat(response.onboarding().onboardingCompletedUsers()).isEqualTo(234);
+        assertThat(response.onboarding().completionRatePercent()).isEqualTo(62.4);
+        assertThat(response.onboarding().steps())
+                .extracting(AdminFunnelMetricsResponse.OnboardingStepMetrics::stepName)
+                .containsExactly(
+                        ONBOARDING_STEP_PROFILE,
+                        ONBOARDING_STEP_COURSE_PROGRAM,
+                        "learner-level",
+                        "first-intent",
+                        "input-method",
+                        "note",
+                        "generating",
+                        "completion"
+                );
+        assertThat(response.onboarding().steps().get(0).userCount()).isEqualTo(20);
+        assertThat(response.onboarding().steps().get(1).userCount()).isEqualTo(15);
+        assertThat(response.onboarding().steps().get(1).dropOffFromPrevious()).isEqualTo(5);
+        assertThat(response.onboarding().steps().get(2).userCount()).isZero();
+        assertThat(response.onboarding().steps().get(7).userCount()).isEqualTo(11);
+        assertThat(response.onboarding().legacyStep().stepName()).isEqualTo(ONBOARDING_STEP_LEGACY);
+        assertThat(response.onboarding().legacyStep().userCount()).isEqualTo(10);
+    }
+
+    @Test
+    void getMetrics_onboardingIncludesRequestedProgramsInRepositoryOrder() {
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(
+                eq(List.of(PlanType.PLUS, PlanType.PRO)),
+                eq(SubscriptionStatus.ACTIVE),
+                any()
+        )).thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(officialStudyPlanWishlistRepository.findProgramDemand()).thenReturn(List.of(
+                officialPlanDemand(NURSING, 8),
+                officialPlanDemand(ACCOUNTANCY, 3)
+        ));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.onboarding().requestedPrograms())
+                .extracting(AdminFunnelMetricsResponse.RequestedProgramMetrics::courseProgram)
+                .containsExactly(NURSING, ACCOUNTANCY);
+        assertThat(response.onboarding().requestedPrograms().getFirst().requestCount()).isEqualTo(8);
+    }
+
+    @Test
+    void onboardingMetrics_keepsBranchScreensOutOfTheOrderedWalkWithNoDropOff() {
+        // confirm-practice is a BRANCH of Screen 5, not a step after completion: a learner who adopts a
+        // Review Set leaves from Screen 5 and never fires "completion". Ordering it last made its
+        // drop-off completion-minus-confirm-practice -- meaningless, and negative as soon as adoption is
+        // real. There is no ordering that makes these a funnel with the others; they are siblings.
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(analyticsEventRepository.findOnboardingCompletion()).thenReturn(onboardingCompletion(100, 40));
+        when(analyticsEventRepository.findOnboardingStepUserCounts()).thenReturn(List.of(
+                onboardingStep("completion", 10),
+                // more adopters than completers: the shape that produced a negative drop-off
+                onboardingStep("confirm-practice", 37),
+                onboardingStep("plan-unavailable", 12),
+                onboardingStep("resolving-plan", 5)
+        ));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.onboarding().steps())
+                .extracting(AdminFunnelMetricsResponse.OnboardingStepMetrics::stepName)
+                .doesNotContain("confirm-practice", "plan-unavailable", "resolving-plan");
+        assertThat(response.onboarding().branchSteps())
+                .extracting(AdminFunnelMetricsResponse.OnboardingStepMetrics::stepName)
+                .containsExactly("confirm-practice", "resolving-plan", "plan-unavailable");
+        assertThat(response.onboarding().branchSteps())
+                .allSatisfy(step -> assertThat(step.dropOffFromPrevious()).isNull());
+        assertThat(response.onboarding().branchSteps().getFirst().userCount()).isEqualTo(37);
+        // and none of them lands in the legacy bucket, which is for UNRECOGNISED names
+        assertThat(response.onboarding().legacyStep().userCount()).isZero();
+    }
+
+    @Test
+    void onboardingMetrics_treatsAMissingStepNameAsLegacyRatherThanFailing() {
+        // metadata_json defaults to '{}', so jsonb_extract_path_text can legitimately return NULL for a
+        // STEP_VIEWED row. The step-name set is an immutable Set, whose contains(null) throws NPE -- which
+        // would 500 the WHOLE admin funnel endpoint, not just this section, over one missing metadata key.
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(analyticsEventRepository.findOnboardingCompletion()).thenReturn(onboardingCompletion(30, 12));
+        when(analyticsEventRepository.findOnboardingStepUserCounts())
+                .thenReturn(List.of(onboardingStep(null, 4)));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.onboarding().legacyStep().userCount()).isEqualTo(4);
+        assertThat(response.onboarding().steps()).allSatisfy(step -> assertThat(step.userCount()).isZero());
+    }
+
+    @Test
+    void getMetrics_onboardingKnownStepNeverEntersLegacyBucket() {
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(analyticsEventRepository.findOnboardingStepUserCounts()).thenReturn(List.of(
+                onboardingStep(ONBOARDING_STEP_PROFILE, 12)
+        ));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.onboarding().steps().getFirst().userCount()).isEqualTo(12);
+        assertThat(response.onboarding().legacyStep().userCount()).isZero();
+    }
+
+    @Test
+    void getMetrics_onboardingOnlyLegacyRowsKeepsEveryCurrentStepAtZero() {
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(analyticsEventRepository.findOnboardingStepUserCounts()).thenReturn(List.of(
+                onboardingStep(ONBOARDING_STEP_LEARNING_CONTEXT, 9),
+                onboardingStep("input", 8),
+                onboardingStep("study-pack", 6)
+        ));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.onboarding().steps()).hasSize(8).allSatisfy(step -> {
+            assertThat(step.userCount()).isZero();
+        });
+        assertThat(response.onboarding().legacyStep().userCount()).isEqualTo(23);
     }
 
     @Test
@@ -369,6 +547,8 @@ class AdminFunnelServiceTest {
         when(studyPackRepository.countDistinctOwnerUserIds()).thenReturn(activatedUsers);
         when(studyPackRepository.findMedianDaysFromVerifiedSignupToFirstPack()).thenReturn(medianDaysToFirstPack);
         when(noteRepository.countVerifiedUsersWithNotesBeforeAndNoStudyPacks(any())).thenReturn(stuckUsers);
+        when(analyticsEventRepository.findOnboardingCompletion()).thenReturn(onboardingCompletion(0, 0));
+        when(analyticsEventRepository.findOnboardingStepUserCounts()).thenReturn(List.of());
         when(analyticsEventRepository.countEligibleActivatedUsersForWeek2Retention(any())).thenReturn(0L);
         when(analyticsEventRepository.countReturnedWeek2Users(any())).thenReturn(0L);
         when(analyticsEventRepository.countEligibleActivatedUsersForWideRetention(any())).thenReturn(0L);
@@ -376,6 +556,52 @@ class AdminFunnelServiceTest {
         when(analyticsEventRepository.countReturnedDays2To30Users(any())).thenReturn(0L);
         when(analyticsEventRepository.countReturnedAfterDay1Users(any())).thenReturn(0L);
         when(analyticsEventRepository.findWeeklyRetentionCohorts(any())).thenReturn(List.of());
+    }
+
+    private OnboardingCompletionProjection onboardingCompletion(long totalSignups, long completedUsers) {
+        return new OnboardingCompletionProjection() {
+            @Override
+            public long getTotalSignups() {
+                return totalSignups;
+            }
+
+            @Override
+            public long getOnboardingCompletedUsers() {
+                return completedUsers;
+            }
+        };
+    }
+
+    private OnboardingStepUserCountProjection onboardingStep(String stepName, long userCount) {
+        return new OnboardingStepUserCountProjection() {
+            @Override
+            public String getStepName() {
+                return stepName;
+            }
+
+            @Override
+            public long getUserCount() {
+                return userCount;
+            }
+        };
+    }
+
+    private OfficialStudyPlanDemandProjection officialPlanDemand(
+            String courseProgram,
+            long requestCount
+    ) {
+        return new OfficialStudyPlanDemandProjection() {
+            @Override
+            public String getCourseProgram() {
+                return courseProgram;
+            }
+
+            @Override
+            public long getRequestCount() {
+                return requestCount;
+            }
+
+        };
     }
 
     private WeeklyRetentionCohortProjection weeklyCohort(

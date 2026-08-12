@@ -601,6 +601,7 @@ export type AnalyticsEventType =
   // own", a sub-choice inside the create branch. Both are needed; they are not the same signal.
   | "ONBOARDING_V2_INTENT_SELECTED"
   | "ONBOARDING_V2_INTENT_UNSUPPORTED_VIEWED"
+  | "ONBOARDING_V2_OFFICIAL_PLAN_REQUESTED"
   | "ONBOARDING_V2_FALLBACK_SELECTED"
   | "ONBOARDING_V2_INPUT_METHOD_SELECTED"
   | "ONBOARDING_V2_TOPIC_SUBMITTED"
@@ -751,6 +752,33 @@ export type AdminOrganicLandingsResponse = {
 export type AdminFunnelMetricsResponse = {
   windowDays: number | null;
   windowStartedAt: string | null;
+  onboarding: {
+    totalSignups: number;
+    onboardingCompletedUsers: number;
+    completionRatePercent: number;
+    steps: Array<{
+      stepName: string;
+      label: string;
+      userCount: number;
+      dropOffFromPrevious: number | null;
+    }>;
+    branchSteps: Array<{
+      stepName: string;
+      label: string;
+      userCount: number;
+      dropOffFromPrevious: number | null;
+    }>;
+    legacyStep: {
+      stepName: string;
+      label: string;
+      userCount: number;
+      dropOffFromPrevious: number | null;
+    };
+    requestedPrograms: Array<{
+      courseProgram: string;
+      requestCount: number;
+    }>;
+  };
   activation: {
     totalVerifiedUsers: number;
     activatedUsers: number;
@@ -2523,6 +2551,46 @@ export async function getAdminFunnelMetrics(days?: number): Promise<AdminFunnelM
     true,
   );
   return parseApiResponse<AdminFunnelMetricsResponse>(response, "Could not load funnel metrics.");
+}
+
+export type OfficialStudyPlanWishlistStatusResponse = {
+  requested: boolean;
+};
+
+export async function getOfficialStudyPlanWishlistStatus(
+  courseProgram: string,
+): Promise<OfficialStudyPlanWishlistStatusResponse> {
+  const query = new URLSearchParams({ courseProgram }).toString();
+  const response = await fetchWithAuth(
+    `/official-study-plan-wishlist/status?${query}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<OfficialStudyPlanWishlistStatusResponse>(
+    response,
+    "Could not check your Official Study Plan request.",
+  );
+}
+
+export async function requestOfficialStudyPlan(
+  courseProgram: string,
+): Promise<OfficialStudyPlanWishlistStatusResponse> {
+  const response = await fetchWithAuth(
+    "/official-study-plan-wishlist",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ courseProgram }),
+    },
+    true,
+  );
+  return parseApiResponse<OfficialStudyPlanWishlistStatusResponse>(
+    response,
+    "Could not record your request. Please try again.",
+  );
 }
 
 export async function regenerateAdminSummaries(): Promise<AdminRegenerateSummariesResponse> {

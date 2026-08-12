@@ -8,6 +8,9 @@ import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.entity.UserUsageEntity;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.OnboardingCompletionProjection;
+import com.studysnap.backend.repository.OnboardingStepUserCountProjection;
+import com.studysnap.backend.repository.OfficialStudyPlanWishlistRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -18,11 +21,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -43,6 +51,34 @@ public class AdminFunnelService {
     private static final String QUOTA_LABEL_LONG_EXAM = "Long Exam";
     private static final String QUOTA_LABEL_BOARD_EXAM = "Board Exam";
     private static final String QUOTA_LABEL_INTERVIEW_PRACTICE = "Interview Practice";
+    private static final String LEGACY_ONBOARDING_STEP_NAME = "legacy";
+    private static final String LEGACY_ONBOARDING_STEP_LABEL = "Legacy / other step names";
+    private static final List<OnboardingStepDefinition> ONBOARDING_STEPS = List.of(
+            new OnboardingStepDefinition("profile", "Profile"),
+            new OnboardingStepDefinition("course-program", "Course / Program"),
+            new OnboardingStepDefinition("learner-level", "Learner Level"),
+            new OnboardingStepDefinition("first-intent", "First Intent"),
+            new OnboardingStepDefinition("input-method", "Input Method"),
+            new OnboardingStepDefinition("note", "Note"),
+            new OnboardingStepDefinition("generating", "Generating"),
+            new OnboardingStepDefinition("completion", "Completion")
+    );
+    /**
+     * Screens that are BRANCHES of Screen 5, not steps after it. They must not join the ordered walk:
+     * a learner who adopts a Review Set exits from Screen 5 and never reaches `completion`, so ordering
+     * `confirm-practice` after `completion` produced a drop-off of completion-minus-confirm-practice --
+     * arithmetic with no meaning, and negative as soon as adoption is real. There is no ordering that
+     * makes these a funnel with the others; they are siblings of `input-method`, not successors.
+     */
+    private static final List<OnboardingStepDefinition> ONBOARDING_BRANCH_STEPS = List.of(
+            new OnboardingStepDefinition("confirm-practice", "Confirm & Practice (ready-made branch)"),
+            new OnboardingStepDefinition("resolving-plan", "Checking for a plan (ready-made branch)"),
+            new OnboardingStepDefinition("plan-unavailable", "No plan yet (ready-made branch)")
+    );
+    private static final Set<String> ONBOARDING_STEP_NAMES = Stream.concat(
+                    ONBOARDING_STEPS.stream(), ONBOARDING_BRANCH_STEPS.stream())
+            .map(OnboardingStepDefinition::stepName)
+            .collect(Collectors.toUnmodifiableSet());
 
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
@@ -50,6 +86,7 @@ public class AdminFunnelService {
     private final AnalyticsEventRepository analyticsEventRepository;
     private final UserUsageRepository userUsageRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final OfficialStudyPlanWishlistRepository officialStudyPlanWishlistRepository;
     private final StudySnapProperties properties;
 
     public AdminFunnelMetricsResponse getMetrics() {
@@ -61,6 +98,7 @@ public class AdminFunnelService {
         Integer normalizedWindowDays = normalizeWindowDays(windowDays);
         OffsetDateTime since = normalizedWindowDays == null ? null : now.minusDays(normalizedWindowDays);
 
+        AdminFunnelMetricsResponse.OnboardingMetrics onboarding = getOnboardingMetrics();
         AdminFunnelMetricsResponse.ActivationMetrics activation = getActivationMetrics();
         AdminFunnelMetricsResponse.StuckUsersMetrics stuckUsers = getStuckUsersMetrics(now);
         AdminFunnelMetricsResponse.QuotaHitMetrics quotaHit = getQuotaHitMetrics(now);
@@ -72,6 +110,7 @@ public class AdminFunnelService {
         return new AdminFunnelMetricsResponse(
                 normalizedWindowDays,
                 since,
+                onboarding,
                 activation,
                 stuckUsers,
                 quotaHit,
@@ -79,6 +118,69 @@ public class AdminFunnelService {
                 valueLoop,
                 retentionCohort,
                 checkoutConversion
+        );
+    }
+
+    private AdminFunnelMetricsResponse.OnboardingMetrics getOnboardingMetrics() {
+        OnboardingCompletionProjection completion = analyticsEventRepository.findOnboardingCompletion();
+        Map<String, Long> currentStepCounts = new HashMap<>();
+        long legacyUserCount = 0;
+
+        for (OnboardingStepUserCountProjection row : analyticsEventRepository.findOnboardingStepUserCounts()) {
+            String stepName = row.getStepName();
+            // A NULL step name is a real possibility, not a defensive nicety: metadata_json defaults to
+            // '{}', so jsonb_extract_path_text returns NULL for any STEP_VIEWED row missing the key. The
+            // step-name set is immutable, and contains(null) on those throws -- which would 500 the WHOLE
+            // admin funnel endpoint over one absent metadata key. Unrecognised means legacy, including null.
+            if (stepName != null && ONBOARDING_STEP_NAMES.contains(stepName)) {
+                currentStepCounts.merge(stepName, row.getUserCount(), Long::sum);
+            } else {
+                legacyUserCount += row.getUserCount();
+            }
+        }
+
+        List<AdminFunnelMetricsResponse.OnboardingStepMetrics> steps = new ArrayList<>();
+        Long previousUserCount = null;
+        for (OnboardingStepDefinition step : ONBOARDING_STEPS) {
+            long userCount = currentStepCounts.getOrDefault(step.stepName(), 0L);
+            Long dropOff = previousUserCount == null ? null : previousUserCount - userCount;
+            steps.add(new AdminFunnelMetricsResponse.OnboardingStepMetrics(
+                    step.stepName(),
+                    step.label(),
+                    userCount,
+                    dropOff
+            ));
+            previousUserCount = userCount;
+        }
+
+        // Branch rows carry a null drop-off on purpose: there is no previous step to subtract from.
+        List<AdminFunnelMetricsResponse.OnboardingStepMetrics> branchSteps = ONBOARDING_BRANCH_STEPS.stream()
+                .map(step -> new AdminFunnelMetricsResponse.OnboardingStepMetrics(
+                        step.stepName(),
+                        step.label(),
+                        currentStepCounts.getOrDefault(step.stepName(), 0L),
+                        null
+                ))
+                .toList();
+
+        return new AdminFunnelMetricsResponse.OnboardingMetrics(
+                completion.getTotalSignups(),
+                completion.getOnboardingCompletedUsers(),
+                ratePercent(completion.getOnboardingCompletedUsers(), completion.getTotalSignups()),
+                List.copyOf(steps),
+                branchSteps,
+                new AdminFunnelMetricsResponse.OnboardingStepMetrics(
+                        LEGACY_ONBOARDING_STEP_NAME,
+                        LEGACY_ONBOARDING_STEP_LABEL,
+                        legacyUserCount,
+                        null
+                ),
+                officialStudyPlanWishlistRepository.findProgramDemand().stream()
+                        .map(row -> new AdminFunnelMetricsResponse.RequestedProgramMetrics(
+                                row.getCourseProgram(),
+                                row.getRequestCount()
+                        ))
+                        .toList()
         );
     }
 
@@ -358,5 +460,8 @@ public class AdminFunnelService {
                     monthlyLimit > 0
             );
         }
+    }
+
+    private record OnboardingStepDefinition(String stepName, String label) {
     }
 }

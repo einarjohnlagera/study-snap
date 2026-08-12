@@ -19,6 +19,93 @@ This reframes deliverable #6. The question is not *"what celebration should we a
 
 ---
 
+## Second pass, 2026-08-11 — "conversation, not configuration"
+
+**This section supersedes parts of §4–5 below.** The owner read the first pass and pushed back on its framing: it was optimising the existing form rather than redesigning the experience. The governing principle is now:
+
+> **The learner is telling NoteLib their learning story. They are not configuring settings.**
+> Every screen answers one question. No screen presents a list of fields.
+
+**Two open questions from the first pass are now settled by owner decision, and should not be re-asked:**
+- **Step 1 loses the Continue button.** Selecting a profile advances. (The first pass proposed this; the owner arrived at it independently.)
+- **Step 2 is NOT sentence-form.** Rejected for the exact reasons the first pass flagged as its cost — awkward wrapping on mobile, harder validation. It becomes **question-as-heading with placeholder-carried meaning, in a normal stacked mobile layout.** The first pass's "middle option" is the ratified one; its full sentence-form proposal is withdrawn.
+
+### The one change that shortens onboarding on evidence rather than taste
+
+**Remove the exam-date question from onboarding entirely.**
+
+`v0.72.0` shipped a post-session commitment prompt that already asks for the exam date. Verified in `review-commitment-prompt.tsx`: it shows the field when `me.examDate !== null || me.profileType === "BOARD_EXAM"` (`:57`), **prefills** from any existing value (`:58`), and **requires** a date before a review plan can be set (`:86-87`).
+
+So for the population that actually needs an exam date — `BOARD_EXAM` learners — it is already collected, required, at a strictly better moment: after their first completed session, when the date means something, rather than before they have used the product at all.
+
+**This is a field deleted, not restyled.** It is the only proposal here that makes onboarding shorter without trading anything away, and it resolves a duplicate ask that currently exists across two surfaces.
+
+### The contradiction in the brief, and how to resolve it
+
+The brief says **"every screen should ask ONE question"** and then mocks a step 2 asking three (*what are you studying / what level / when's your exam*). Both can't hold.
+
+**The resolution turns on a distinction the brief hasn't drawn: auto-advance only works for _choice_ inputs.**
+
+- **Profile type** and **learner level** are closed sets — tapping an option is an unambiguous "I'm done," so the screen can advance itself. These split cleanly into one-question screens.
+- **Course / Program** is a typed, searchable combobox against a 21-row catalog. The system **cannot know when the learner has finished typing**, so it needs an explicit confirm. It cannot auto-advance.
+- **A date picker** has the same problem.
+
+With the exam date removed, step 2 is exactly **one auto-advanceable choice (level) plus one typed field (program)** — a far cleaner split than it looks today.
+
+**The tradeoff to decide, stated plainly rather than chosen quietly:** true one-question-per-screen means *more screens with fewer decisions each*. Once selection auto-advances, a screen costs roughly one tap, so splitting is nearly free in real time and usually **feels** faster — momentum is visible, and each screen is a single decision instead of a form to audit. But it is more screens, which sits against the brief's "don't make onboarding longer." The honest framing: **actual step count rises, perceived effort falls.** Duolingo and Typeform both make this trade deliberately.
+
+### The split, decided 2026-08-11 — 5 screens becomes 8
+
+Owner ruling: split one question per screen. Concrete target flow, with what each screen can and cannot do:
+
+| # | screen | question | advance |
+|---|---|---|---|
+| 1 | Profile type | *"How will you use NoteLib?"* | **auto** — closed set |
+| 2 | Course / Program | *"What are you studying?"* | **Continue** — typed combobox |
+| 3 | Learner level | *"What level are you studying at?"* | **auto** — closed set |
+| 4 | First intent | *"How would you like to start?"* | **auto** — closed set |
+| 5 | Input method | *"How do you want to begin your first note?"* | **auto** — closed set |
+| 6 | The note | topic, or paste your own | **Continue** — free text |
+| 7 | Generating | *(no question)* | automatic |
+| 8 | Done | *(kept as-is — the three-CTA screen stays)* | learner chooses |
+
+**What this actually changes in code:** today's step 2 carries three questions (level, program, exam date — the third now deleted), and today's step 3 carries two after the intent choice (input method, then the note text on the same screen). Screens 1, 4 and 8 already exist as single-question screens and are being restyled, not split.
+
+**Ordering note.** Program before level follows the owner's mock and reads naturally as conversation. The alternative — level first — would put two auto-advancing screens back to back before the first typed field, building momentum before the first Continue button appears. Recorded as the runner-up, not chosen.
+
+**A migration hazard the split creates.** Onboarding persists `currentStep` in a per-user localStorage draft and reads it on resume. Renumbering 5 screens into 8 means a learner mid-onboarding at deploy time resumes on the wrong screen, or on one that no longer means what their draft assumes. This must be handled explicitly — it is the kind of defect that only appears for users who were mid-flow during a deploy, which is precisely the population this release is trying not to lose.
+
+### Motion — you already have a vocabulary; use it rather than adding a dependency
+
+**Do not add `framer-motion` or any animation library.** `globals.css` already defines a motion system: `--motion-duration-fast` / `-base`, `--motion-ease-standard` / `-emphasized`, `--motion-press-scale`, plus `.motion-pressable`, `.motion-lift`, `.motion-fade-enter` and others. `prefers-reduced-motion` is already handled.
+
+**Onboarding already animates.** `.motion-onboarding-step` exists (a 200ms fade with an 8px rise) and is already applied three times in the flow.
+
+**So the "feels alive" gap is not missing animation — it is that motion exists only on step *entry*, and nothing marks the moment of *choosing*.** That is precisely the beat tap-to-advance makes load-bearing: without feedback, the screen appears to be yanked away the instant a card is touched.
+
+**Recommendation, in existing vocabulary:** on selection, the chosen card confirms (press-scale via `.motion-pressable`, then a brief settle) and the unchosen cards recede, *then* the step transition runs. Roughly 120–160ms of confirmation before the existing 200ms transition. The learner sees their choice register before the screen changes — which is what makes auto-advance feel responsive instead of twitchy.
+
+### Typography, spacing, rhythm
+
+- **Smaller headings.** The current step headings compete with the cards, which are the actual content. A step heading is a question, and questions don't need to be loud — one step down in size, normal weight rather than bold.
+- **Delete helper text; keep placeholders.** Helper paragraphs prevent errors the learner hasn't had a chance to make yet, and they are the single largest contributor to the form-heavy feel.
+- **Give cards internal breathing room before adding gaps between them.** Density reads as cramped from tight padding more than from tight stacking.
+- **One idea per vertical rhythm unit.** Heading → answer → nothing else. No secondary explanation, no reassurance line, no "you can change this later" footnote on every screen.
+
+### Mobile-first specifics
+
+- **Design at 360px, let desktop expand.** The four profile cards are a single-column stack on mobile; they may become a 2×2 grid on wide screens, never the reverse.
+- **Card copy must survive two lines at 360px.** The brief's Step 1 copy (title + benefit + "Best for…") is three lines per card — check it at the narrow width before committing to it.
+- **No fixed CTA needed on auto-advancing screens**, which is a real mobile win: the tap target is the content itself, in the middle of the screen, not a button at the bottom edge.
+- **Never more than one scroll per screen.** Four cards with three lines each will approach that limit — a reason to keep the benefit line to one line.
+
+### Two constraints that still bind
+
+- **Course / Program must stay a picker.** The brief's mock shows `[ BS Civil Engineering ]`, which reads as free text. It is a combobox typed against a catalog. This rule has been broken repeatedly and the visual redesign is exactly where it gets broken again.
+- **Do not grow the Step 1 card copy into a capability list.** The brief's Professional line (*"Keep learning throughout your career"*) is safe. A list of four concrete promises per profile would either overstate `PROFESSIONAL` — largely relabeled student functionality — or expose that it is thin.
+
+---
+
 ## 1. Overall critique
 
 The current onboarding is **a well-built questionnaire attached to a product demo**, in that order. Five screens: four of them take from the learner, one gives. The give happens last, and is then gated behind a menu.

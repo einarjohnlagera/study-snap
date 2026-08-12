@@ -14,8 +14,10 @@ import {
   createStudyPackFromNote,
   generateNoteFromTopic,
   getMe,
+  getOfficialStudyPlanWishlistStatus,
   isNoteGenerationLimitReachedError,
   getNote,
+  requestOfficialStudyPlan,
   trackAnalyticsEvent,
   updateExamDate,
   updateLearningProfileContext,
@@ -33,11 +35,15 @@ import { mapProfileTypeToNoteTargetProfile } from "@/lib/note-target-profile";
 import {
   clearDeferredOnboardingCompletion,
   clearOnboardingDraft,
+  ONBOARDING_LAST_STEP,
   ONBOARDING_PROFILE_OPTIONS,
   createEmptyOnboardingDraft,
+  getCourseProgramScreenCopy,
+  getLearnerLevelScreenCopy,
   loadOnboardingDraft,
   saveOnboardingDraft,
   setDeferredOnboardingCompletion,
+  shouldShowOfficialPlanRequestAction,
   type OnboardingDraft,
   type OnboardingInputMethod,
   type OnboardingIntent,
@@ -64,7 +70,29 @@ import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 
 type GenerationSectionKey = "summary" | "concepts" | "quiz";
-type StepName = "profile" | "learning-context" | "input" | "confirm-practice" | "study-pack" | "completion";
+type StepName =
+  | "profile"
+  | "course-program"
+  | "learner-level"
+  | "first-intent"
+  | "input-method"
+  | "note"
+  | "generating"
+  | "completion"
+  | "confirm-practice"
+  | "resolving-plan"
+  | "plan-unavailable";
+
+const ONBOARDING_STEPS = {
+  PROFILE: 1,
+  COURSE_PROGRAM: 2,
+  LEARNER_LEVEL: 3,
+  FIRST_INTENT: 4,
+  INPUT_METHOD: 5,
+  NOTE: 6,
+  GENERATING: 7,
+  COMPLETION: 8,
+} as const;
 
 const TOPIC_MIN_LENGTH = 3;
 const NOTE_CONTENT_MIN_LENGTH = 50;
@@ -72,21 +100,26 @@ const DESKTOP_BREAKPOINT_PX = 768;
 const STUDY_PACK_GENERATION_POLL_INTERVAL_MS = 2000;
 const NOTE_CONTENT_SCROLL_DELAY_MS = 140;
 const MAX_CONCEPT_PREVIEW_COUNT = 4;
-const STEP_FOUR_ERROR_MESSAGE =
+const STUDY_PACK_GENERATION_ERROR_MESSAGE =
   "Something went wrong generating your Study Pack. Try a shorter topic or check your connection.";
-const STEP_FIVE_SAVE_ERROR_MESSAGE =
+const ONBOARDING_COMPLETION_SAVE_ERROR_MESSAGE =
   "We couldn't save your profile. Your Study Pack is still available.";
-const STEP_FOUR_BACK_NOTICE =
+const GENERATION_BACK_NOTICE =
   "Going back will start a new Study Pack. Your current one will be saved.";
 const PRACTICE_FIRST_COMPLETION_ERROR_MESSAGE =
   "Your plan is ready. We couldn't save your profile yet. Please try again.";
+const OFFICIAL_PLAN_REQUEST_ERROR_MESSAGE =
+  "We couldn't record your request. Please try again — your other options are still available.";
 
 const STEP_NAMES: Record<number, StepName> = {
   1: "profile",
-  2: "learning-context",
-  3: "input",
-  4: "study-pack",
-  5: "completion",
+  2: "course-program",
+  3: "learner-level",
+  4: "first-intent",
+  5: "input-method",
+  6: "note",
+  7: "generating",
+  8: "completion",
 };
 
 const COMPLETION_COPY: Record<OnboardingProfileType, string> = {
@@ -251,18 +284,27 @@ export default function OnboardingPage() {
   const [retryingGeneration, setRetryingGeneration] = useState(false);
   const [completingOnboarding, setCompletingOnboarding] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [stepThreeError, setStepThreeError] = useState<string | null>(null);
+  const [noteError, setNoteError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [studyPackLimitReached, setStudyPackLimitReached] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [profileTypeOnlyMode, setProfileTypeOnlyMode] = useState(false);
+  // The ready-made branch is a real Step 5, not a sub-state of Step 4. An earlier attempt gated the
+  // sub-states behind an `intentConfirmed` flag, which the step COUNTER did not know about -- so
+  // selecting a door moved the chip to "8 of 8" while the doors were still on screen. Making it a
+  // real step deletes that whole class: there is no half-selected state left to disagree about.
+  const [selectedFallback, setSelectedFallback] = useState<"own_notes" | "explore" | null>(null);
   const [savingProfileType, setSavingProfileType] = useState(false);
   const [profileTypeSaveError, setProfileTypeSaveError] = useState<string | null>(null);
   const [showNoteGenerationLimitModal, setShowNoteGenerationLimitModal] = useState(false);
   const [checkingPracticeFirstPlan, setCheckingPracticeFirstPlan] = useState(false);
-  const [stepTwoError, setStepTwoError] = useState<string | null>(null);
+  const [learningContextError, setLearningContextError] = useState<string | null>(null);
   const [practiceFirstPlan, setPracticeFirstPlan] = useState<NoteCollectionSummary | null>(null);
   const [resolvingAvailability, setResolvingAvailability] = useState(false);
+  const [officialPlanRequested, setOfficialPlanRequested] = useState(false);
+  const [checkingOfficialPlanRequest, setCheckingOfficialPlanRequest] = useState(false);
+  const [requestingOfficialPlan, setRequestingOfficialPlan] = useState(false);
+  const [officialPlanRequestError, setOfficialPlanRequestError] = useState<string | null>(null);
   const [isDesktop, setIsDesktop] = useState(true);
   const [previewOpen, setPreviewOpen] = useState<Record<GenerationSectionKey, boolean>>({
     summary: true,
@@ -287,15 +329,31 @@ export default function OnboardingPage() {
   const currentStep = draft.currentStep;
   // Gated on the INTENT now, not just availability: a learner who chose "build from my own notes" must not
   // be shown the adopt screen simply because a qualifying set happens to exist for their program.
-  const isPracticeFirstScreen = currentStep === 3
+  const isPracticeFirstScreen = currentStep === ONBOARDING_STEPS.INPUT_METHOD
     && draft.intent === "ready_made"
     && practiceFirstPlan !== null;
-  const currentStepName = isPracticeFirstScreen ? "confirm-practice" : getStepName(currentStep);
-  // Display-only: this screen replaces Steps 3-4 and is the last thing the learner sees before
+  // Screen 5 is three different screens depending on the ready-made branch's state, and reporting all of
+  // them as "input-method" made the funnel row that names the two input cards also contain every learner
+  // told their program has no plan yet -- the single most likely place to abandon, and the exact
+  // distinction the step funnel exists to draw. Each branch screen reports as itself.
+  const currentStepName: StepName = (() => {
+    if (isPracticeFirstScreen) {
+      return "confirm-practice";
+    }
+    if (currentStep === ONBOARDING_STEPS.INPUT_METHOD && draft.intent === "ready_made") {
+      return resolvingAvailability ? "resolving-plan" : "plan-unavailable";
+    }
+    return getStepName(currentStep);
+  })();
+  // Display-only: this screen replaces the remaining create-first screens and is the last thing the learner sees before
   // onboarding completes on this path, so the header should read as the final step. The underlying
-  // `currentStep` stays 3 so Back/transition logic elsewhere is unaffected.
-  const displayStep = isPracticeFirstScreen ? 5 : currentStep;
+  // `currentStep` stays on the intent screen so Back/transition logic elsewhere is unaffected.
+  // Always the real step. This used to jump to the last step on the adopt screen to signal "terminal",
+  // which read as a bug: adopting a plan simply finishes onboarding early.
+  const displayStep = currentStep;
   const groupedLearnerLevels = getGroupedLearnerLevels(profileType);
+  const courseProgramScreenCopy = getCourseProgramScreenCopy(profileType);
+  const learnerLevelScreenCopy = getLearnerLevelScreenCopy(profileType);
   const selectedInputMethod = draft.inputMethod;
   const generatedNoteReady = draft.generatedNoteReady;
   const topicLength = draft.topic.trim().length;
@@ -330,17 +388,17 @@ export default function OnboardingPage() {
   const quizPreview = note?.quiz[0] ?? null;
 
   const canContinueFromStepOne = profileType !== null;
-  const canContinueFromStepTwo = draft.learnerLevel !== null && draft.courseProgram.trim() !== "";
+  const canContinueFromCourseProgram = draft.courseProgram.trim() !== "";
   const canGenerateNoteDraft = selectedInputMethod === "generate" && topicLength >= TOPIC_MIN_LENGTH;
   const canStartStudyPack = selectedInputMethod === "generate"
     ? generatedNoteReady && noteLength >= NOTE_CONTENT_MIN_LENGTH
     : selectedInputMethod === "own_note" && noteLength >= NOTE_CONTENT_MIN_LENGTH;
   const stepTransitionKey = isPracticeFirstScreen
     ? `practice-first-${practiceFirstPlan.id}`
-    : currentStep === 3
-    ? `step-3-${selectedInputMethod ?? "none"}-${generatedNoteReady ? "generated" : "initial"}`
+    : currentStep === ONBOARDING_STEPS.NOTE
+    ? `step-${ONBOARDING_STEPS.NOTE}-${selectedInputMethod ?? "none"}-${generatedNoteReady ? "generated" : "initial"}`
     : `step-${currentStep}`;
-  const stepUsesScrollableShell = currentStep === 3 && !isPracticeFirstScreen;
+  const stepUsesScrollableShell = currentStep === ONBOARDING_STEPS.NOTE;
 
   const trackOnboardingEvent = (
     eventType: Parameters<typeof trackAnalyticsEvent>[0]["eventType"],
@@ -432,7 +490,7 @@ export default function OnboardingPage() {
           setProfileTypeOnlyMode(true);
           setDraft({
             ...createEmptyOnboardingDraft(),
-            currentStep: 1,
+            currentStep: ONBOARDING_STEPS.PROFILE,
           });
           return;
         }
@@ -451,8 +509,8 @@ export default function OnboardingPage() {
         if (!nextDraft.courseProgram && me.courseProgram) {
           nextDraft.courseProgram = me.courseProgram;
         }
-        if (nextDraft.currentStep > 3 && !nextDraft.noteId) {
-          nextDraft.currentStep = 3;
+        if (nextDraft.currentStep > ONBOARDING_STEPS.NOTE && !nextDraft.noteId) {
+          nextDraft.currentStep = ONBOARDING_STEPS.NOTE;
         }
         if (
           nextDraft.inputMethod === "generate"
@@ -481,12 +539,14 @@ export default function OnboardingPage() {
         }
         setNote(loadedNote);
         if (loadedNote.studyPackStatus === "FAILED") {
-          setGenerationError(STEP_FOUR_ERROR_MESSAGE);
+          setGenerationError(STUDY_PACK_GENERATION_ERROR_MESSAGE);
         }
         setDraft((previous) => ({
           ...previous,
           studyPackId: loadedNote.studyPackId ?? previous.studyPackId,
-          currentStep: previous.currentStep >= 5 ? 5 : 4,
+          currentStep: previous.currentStep >= ONBOARDING_STEPS.COMPLETION
+            ? ONBOARDING_STEPS.COMPLETION
+            : ONBOARDING_STEPS.GENERATING,
         }));
       })
       .catch((error) => {
@@ -584,7 +644,7 @@ export default function OnboardingPage() {
             });
           }
           if (loadedNote.studyPackStatus === "FAILED") {
-            setGenerationError(STEP_FOUR_ERROR_MESSAGE);
+            setGenerationError(STUDY_PACK_GENERATION_ERROR_MESSAGE);
           }
         })
         .catch(() => {
@@ -599,7 +659,7 @@ export default function OnboardingPage() {
   }, [draft.inputMethod, note?.id, studyPackGenerating]);
 
   useEffect(() => {
-    if (currentStep !== 5 || completionAttemptedRef.current || !profileType) {
+    if (currentStep !== ONBOARDING_STEPS.COMPLETION || completionAttemptedRef.current || !profileType) {
       return;
     }
 
@@ -635,7 +695,7 @@ export default function OnboardingPage() {
         if (userId) {
           setDeferredOnboardingCompletion(userId);
         }
-        setCompletionError(STEP_FIVE_SAVE_ERROR_MESSAGE);
+        setCompletionError(ONBOARDING_COMPLETION_SAVE_ERROR_MESSAGE);
       })
       .finally(() => {
         if (!completionTrackedRef.current) {
@@ -667,7 +727,15 @@ export default function OnboardingPage() {
       ...previous,
       profileType: value,
       examDate: value === "BOARD_EXAM" ? previous.examDate : "",
-      learnerLevel: getDefaultLearnerLevel(value),
+      // Pre-fill Screen 3 from the profile rather than leaving it blank. Switching profile type
+      // re-defaults, because the old level was chosen for a different kind of learner.
+      //
+      // This is only safe because Screen 3 kept its Continue button: a pre-filled <select> is exactly
+      // what made that screen a dead end when it auto-advanced, since re-choosing the value already
+      // selected fires no change event. Do not pair this with auto-advance there.
+      learnerLevel: previous.profileType === value
+        ? previous.learnerLevel
+        : getDefaultLearnerLevel(value),
     }));
     trackOnboardingEvent("ONBOARDING_V2_PROFILE_SELECTED", {
       profile_type: value,
@@ -698,7 +766,7 @@ export default function OnboardingPage() {
     void completeOnboardingProfileType({ profileType }).catch(() => {
       // Non-blocking by design -- see above.
     });
-    goToStep(2);
+    goToStep(ONBOARDING_STEPS.COURSE_PROGRAM);
   };
 
   const handleSaveProfileTypeOnly = async () => {
@@ -742,8 +810,16 @@ export default function OnboardingPage() {
 
   const collectionLabels = getCollectionLabels(profileType);
 
+  // Step 4 is tap-to-advance: both doors are safe (neither leaves onboarding), and the screen has no
+  // Continue button. The RISKY choices live on Step 5's fallback, which is deliberately NOT
+  // tap-to-advance -- two of its options exit the flow, so a mis-tap there would eject the learner.
   const selectIntent = (intent: OnboardingIntent) => {
-    setDraft((previous) => ({ ...previous, intent }));
+    setSelectedFallback(null);
+    setDraft((previous) => ({
+      ...previous,
+      intent,
+      currentStep: ONBOARDING_STEPS.INPUT_METHOD,
+    }));
     trackOnboardingEvent("ONBOARDING_V2_INTENT_SELECTED", {
       intent,
       review_set_available: draft.reviewSetAvailable,
@@ -773,7 +849,11 @@ export default function OnboardingPage() {
 
     if (fallback === "own_notes") {
       // Stays inside onboarding and finishes through the create flow, so completion is NOT persisted here.
-      setDraft((previous) => ({ ...previous, intent: "own_notes" }));
+      setDraft((previous) => ({
+        ...previous,
+        intent: "own_notes",
+        currentStep: ONBOARDING_STEPS.INPUT_METHOD,
+      }));
       return;
     }
 
@@ -839,11 +919,13 @@ export default function OnboardingPage() {
     }
   };
 
+  // Tap-to-advance: both options stay inside onboarding, so there is nothing to confirm.
   const selectInputMethod = (value: OnboardingInputMethod) => {
-    setStepThreeError(null);
+    setNoteError(null);
     setDraft((previous) => ({
       ...previous,
       inputMethod: value,
+      currentStep: ONBOARDING_STEPS.NOTE,
     }));
     trackOnboardingEvent("ONBOARDING_V2_INPUT_METHOD_SELECTED", {
       method: value,
@@ -858,7 +940,109 @@ export default function OnboardingPage() {
     }));
   };
 
-  // Re-resolve the qualifying plan when step 3 is reached without one in memory.
+  /**
+   * Continue for the three closed-set choice screens (Learner Level, First Intent, Input Method).
+   *
+   * These screens used to advance on selection. That was wrong for a reason worth keeping: Learner
+   * Level renders a <select>, and re-choosing the value that is already selected fires no `change`
+   * event at all. Combined with the (correct) rule that Back must not immediately re-advance, any
+   * learner who reached Learner Level with a value already set -- by resuming a draft, or simply by
+   * pressing Back from Screen 4 -- had no way forward. The only control on the screen was Back.
+   *
+   * Auto-advance also left every screen with a Back button and no Continue, which reads as broken
+   * rather than fast. Both are fixed by the same change: selection records, Continue advances.
+   */
+  const handleContinueFromChoice = () => {
+    if (currentStep === ONBOARDING_STEPS.LEARNER_LEVEL) {
+      if (!draft.learnerLevel) {
+        return;
+      }
+      // selectLearnerLevel also AWAITS updateLearningProfileContext. Keep that on this path: the
+      // values were once written fire-and-forget and five real accounts lost them silently.
+      void selectLearnerLevel(draft.learnerLevel);
+      return;
+    }
+
+    // Step 5, ready-made branch: the unavailable-program fallback. Its options are selections, and
+    // this footer button is what acts on them -- deliberately, because "Explore" leaves onboarding.
+    if (isIntentFallbackScreen && selectedFallback) {
+      void handleUnsupportedFallback(selectedFallback);
+    }
+  };
+
+  const isIntentFallbackScreen =
+    currentStep === ONBOARDING_STEPS.INPUT_METHOD
+    && draft.intent === "ready_made"
+    && !practiceFirstPlan
+    && !resolvingAvailability;
+
+  useEffect(() => {
+    const courseProgram = draft.courseProgram.trim();
+    if (!isIntentFallbackScreen || !courseProgram) {
+      // Clear the ERROR, never the recorded request. isIntentFallbackScreen goes false for a frame
+      // whenever availability re-resolves, and resetting here made a learner who had already recorded a
+      // request watch their confirmation flip back to the invitation button.
+      setOfficialPlanRequestError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setCheckingOfficialPlanRequest(true);
+    setOfficialPlanRequestError(null);
+    void getOfficialStudyPlanWishlistStatus(courseProgram)
+      .then((status) => {
+        if (!cancelled) {
+          setOfficialPlanRequested(status.requested);
+        }
+      })
+      .catch(() => {
+        // A status-read failure must not block the fallback. The write remains available and idempotent.
+        if (!cancelled) {
+          setOfficialPlanRequested(false);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCheckingOfficialPlanRequest(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.courseProgram, isIntentFallbackScreen]);
+
+  const handleOfficialPlanRequest = async () => {
+    const courseProgram = draft.courseProgram.trim();
+    if (!courseProgram || requestingOfficialPlan || officialPlanRequested) {
+      return;
+    }
+
+    setRequestingOfficialPlan(true);
+    setOfficialPlanRequestError(null);
+    try {
+      const status = await requestOfficialStudyPlan(courseProgram);
+      if (!status.requested) {
+        throw new Error(OFFICIAL_PLAN_REQUEST_ERROR_MESSAGE);
+      }
+      setOfficialPlanRequested(true);
+      trackOnboardingEvent("ONBOARDING_V2_OFFICIAL_PLAN_REQUESTED", {
+        course_program: courseProgram,
+      });
+    } catch {
+      setOfficialPlanRequestError(OFFICIAL_PLAN_REQUEST_ERROR_MESSAGE);
+    } finally {
+      setRequestingOfficialPlan(false);
+    }
+  };
+
+  const canContinueFromChoice = Boolean(draft.learnerLevel) && !checkingPracticeFirstPlan;
+
+  // "Continue" keeps the learner inside onboarding; "Finish" hands them off to the Public Library.
+  // Naming the destination is the point: one of these two options ends onboarding.
+  const fallbackActionLabel = selectedFallback === "explore" ? "Finish" : "Continue";
+
+  // Re-resolve the qualifying plan when the intent screen is reached without one in memory.
   //
   // `draft.intent` and `draft.reviewSetAvailable` persist to localStorage; `practiceFirstPlan` is component
   // state set only by the Step 2 submit. So ANY reload on step 3 -- the doors screen is exactly where users
@@ -868,7 +1052,10 @@ export default function OnboardingPage() {
   // three exits offered there complete onboarding and navigate away, so the learner left on a false basis.
   // It also inflated ONBOARDING_V2_INTENT_UNSUPPORTED_VIEWED with every resumed session.
   useEffect(() => {
-    if (currentStep !== 3 || practiceFirstPlan || resolvingAvailability) {
+    // Screen 5 is where the ready-made branch renders now, so that is where a resumed draft needs its
+    // plan re-resolved. Guarding on Screen 4 meant a reload on the ready-made path always fell through
+    // to "We're still building an Official Study Plan" even when one existed.
+    if (currentStep !== ONBOARDING_STEPS.INPUT_METHOD || practiceFirstPlan || resolvingAvailability) {
       return;
     }
     // `false` is a known answer -- don't re-query it. `null` means unknown (the lookup failed, and it fails
@@ -905,12 +1092,20 @@ export default function OnboardingPage() {
     };
   }, [currentStep, practiceFirstPlan, resolvingAvailability, draft.reviewSetAvailable, draft.courseProgram]);
 
-  const handleContinueFromStepTwo = async () => {
-    if (!canContinueFromStepTwo || checkingPracticeFirstPlan) {
+  const handleContinueFromCourseProgram = () => {
+    if (!canContinueFromCourseProgram) {
       return;
     }
+    goToStep(ONBOARDING_STEPS.LEARNER_LEVEL);
+  };
+
+  const selectLearnerLevel = async (learnerLevel: LearnerLevel) => {
+    if (checkingPracticeFirstPlan) {
+      return;
+    }
+    setDraft((previous) => ({ ...previous, learnerLevel }));
     setPracticeFirstPlan(null);
-    setStepTwoError(null);
+    setLearningContextError(null);
     setCheckingPracticeFirstPlan(true);
 
     // Persist learner level and course / program HERE, awaited, with the failure surfaced.
@@ -922,13 +1117,13 @@ export default function OnboardingPage() {
     // so a retry costs them nothing, and every downstream decision (note authoring domain, Review Set
     // availability, the intent router) reads values that are now actually stored.
     try {
-      await updateLearningProfileContext(draft.learnerLevel, draft.courseProgram.trim() || null);
+      await updateLearningProfileContext(learnerLevel, draft.courseProgram.trim() || null);
       if (profileType === "BOARD_EXAM" && draft.examDate) {
         await updateExamDate(draft.examDate);
       }
     } catch (error) {
       setCheckingPracticeFirstPlan(false);
-      setStepTwoError(
+      setLearningContextError(
         error instanceof Error
           ? error.message
           : "Could not save your learner level and course / program. Please try again.",
@@ -956,7 +1151,7 @@ export default function OnboardingPage() {
       // does not exist when it does is the worse error.
       setDraft((previous) => ({ ...previous, reviewSetAvailable: null }));
     } finally {
-      goToStep(3);
+      goToStep(ONBOARDING_STEPS.FIRST_INTENT);
       setCheckingPracticeFirstPlan(false);
     }
   };
@@ -1045,20 +1240,24 @@ export default function OnboardingPage() {
       from_step: currentStep,
     });
 
-    // Step 3 now has sub-screens (intent doors -> chosen branch). Back from a branch returns to the doors
-    // rather than skipping the user two screens back to the learning profile.
-    if (currentStep === 3 && draft.intent !== null) {
-      setDraft((previous) => ({ ...previous, intent: null }));
+    // Step 5 backs out to the doors and clears the branch, so the learner can pick the other one.
+    if (currentStep === ONBOARDING_STEPS.INPUT_METHOD) {
+      setSelectedFallback(null);
+      setDraft((previous) => ({
+        ...previous,
+        currentStep: ONBOARDING_STEPS.FIRST_INTENT,
+        intent: null,
+      }));
       return;
     }
 
-    if (currentStep === 4) {
+    if (currentStep === ONBOARDING_STEPS.GENERATING) {
       setGenerationError(null);
       setNote(null);
       generationTrackedRef.current = null;
       setDraft((previous) => ({
         ...previous,
-        currentStep: 3,
+        currentStep: ONBOARDING_STEPS.NOTE,
         noteId: null,
         studyPackId: null,
       }));
@@ -1078,7 +1277,7 @@ export default function OnboardingPage() {
     }
 
     setIsGeneratingNote(true);
-    setStepThreeError(null);
+    setNoteError(null);
     setGenerationError(null);
     trackOnboardingEvent("ONBOARDING_V2_TOPIC_SUBMITTED", {
       topic_length: topicLength,
@@ -1101,7 +1300,7 @@ export default function OnboardingPage() {
         await refreshUsageSummary();
         setShowNoteGenerationLimitModal(true);
       } else {
-        setStepThreeError(
+        setNoteError(
           error instanceof Error ? error.message : "We could not create a note right now. Please try again.",
         );
       }
@@ -1115,12 +1314,12 @@ export default function OnboardingPage() {
       return;
     }
     if (draft.noteId) {
-      goToStep(4);
+      goToStep(ONBOARDING_STEPS.GENERATING);
       return;
     }
 
     setStartingStudyPack(true);
-    setStepThreeError(null);
+    setNoteError(null);
     setGenerationError(null);
     setStudyPackLimitReached(false);
 
@@ -1144,7 +1343,7 @@ export default function OnboardingPage() {
       setNote(createdNote);
       setDraft((previous) => ({
         ...previous,
-        currentStep: 4,
+        currentStep: ONBOARDING_STEPS.GENERATING,
         noteId: createdNote.id,
         studyPackId: createdNote.studyPackId ?? null,
       }));
@@ -1153,27 +1352,27 @@ export default function OnboardingPage() {
       setNote(queuedNote);
       setDraft((previous) => ({
         ...previous,
-        currentStep: 4,
+        currentStep: ONBOARDING_STEPS.GENERATING,
         noteId: queuedNote.id,
         studyPackId: queuedNote.studyPackId ?? previous.studyPackId,
       }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : STEP_FOUR_ERROR_MESSAGE;
+      const message = error instanceof Error ? error.message : STUDY_PACK_GENERATION_ERROR_MESSAGE;
       if (!savedNote) {
-        setStepThreeError(message);
+        setNoteError(message);
       } else if (isStudyPackLimitReachedMessage(message)) {
         setStudyPackLimitReached(true);
         setGenerationError(null);
         setDraft((previous) => ({
           ...previous,
-          currentStep: 5,
+          currentStep: ONBOARDING_STEPS.COMPLETION,
         }));
         trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_ERROR", {
           method: selectedInputMethod,
           error_type: "study_pack_limit_reached",
         });
       } else {
-        setGenerationError(STEP_FOUR_ERROR_MESSAGE);
+        setGenerationError(STUDY_PACK_GENERATION_ERROR_MESSAGE);
         trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_ERROR", {
           method: selectedInputMethod,
           error_type: message,
@@ -1198,18 +1397,18 @@ export default function OnboardingPage() {
       setNote(queuedNote);
       setDraft((previous) => ({
         ...previous,
-        currentStep: 4,
+        currentStep: ONBOARDING_STEPS.GENERATING,
         noteId: queuedNote.id,
         studyPackId: queuedNote.studyPackId ?? previous.studyPackId,
       }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : STEP_FOUR_ERROR_MESSAGE;
+      const message = error instanceof Error ? error.message : STUDY_PACK_GENERATION_ERROR_MESSAGE;
       if (isStudyPackLimitReachedMessage(message)) {
         setStudyPackLimitReached(true);
         setGenerationError(null);
         setDraft((previous) => ({
           ...previous,
-          currentStep: 5,
+          currentStep: ONBOARDING_STEPS.COMPLETION,
         }));
         trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_ERROR", {
           method: draft.inputMethod,
@@ -1217,7 +1416,7 @@ export default function OnboardingPage() {
         });
         return;
       }
-      setGenerationError(STEP_FOUR_ERROR_MESSAGE);
+      setGenerationError(STUDY_PACK_GENERATION_ERROR_MESSAGE);
       trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_ERROR", {
         method: draft.inputMethod,
         error_type: message,
@@ -1262,11 +1461,11 @@ export default function OnboardingPage() {
   };
 
   const renderStepContent = () => {
-    if (currentStep === 1) {
+    if (currentStep === ONBOARDING_STEPS.PROFILE) {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               {profileTypeOnlyMode
                 ? "Choose your profile type"
                 : "Welcome to NoteLib. Let's set things up."}
@@ -1278,7 +1477,7 @@ export default function OnboardingPage() {
             </CardDescription>
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2">
+          <div className="grid gap-2.5">
             {ONBOARDING_PROFILE_OPTIONS.map((option) => (
               <button
                 key={option.value}
@@ -1305,86 +1504,87 @@ export default function OnboardingPage() {
       );
     }
 
-    if (currentStep === 2) {
+    if (currentStep === ONBOARDING_STEPS.COURSE_PROGRAM) {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
-              Set up your learning profile
+            {/* Copy is profile-aware (C9). Says what this answer DOES, in one line -- the pre-typography
+                copy ran on this screen and the next saying the same generic thing twice, and spent half
+                its length on reassurance rather than information. */}
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
+              {courseProgramScreenCopy.heading}
             </CardTitle>
             <CardDescription className="text-sm">
-              This helps us tailor quizzes and explanations to your level and field. You can update these anytime in Settings.
+              {courseProgramScreenCopy.description}
             </CardDescription>
           </div>
 
-          <div className="space-y-5">
-            <section className="space-y-2">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">
-                  Learner Level *{profileType === "TEACHER" ? " — default quiz difficulty" : ""}
-                </p>
-                <p className="text-xs text-foreground/60">
-                  {profileType === "TEACHER"
-                    ? "Required. This sets the default difficulty for quizzes you generate. You can change it per quiz."
-                    : "Required. Choose the level that best fits the material you're studying."}
-                </p>
-              </div>
-              <select
-                value={draft.learnerLevel ?? ""}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  setDraft((previous) => ({
-                    ...previous,
-                    learnerLevel: nextValue ? nextValue as LearnerLevel : null,
-                  }));
-                }}
-                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                aria-label="Learner Level"
-              >
-                <option value="">Choose your learner level</option>
-                <optgroup label={groupedLearnerLevels.recommendedGroupLabel}>
-                  {groupedLearnerLevels.recommended.map((option) => (
+          <section className="space-y-2">
+            <CourseProgramCombobox
+              id="onboarding-course-program"
+              value={draft.courseProgram}
+              suggestions={COURSE_PROGRAM_SUGGESTIONS}
+              onChange={updateCourseProgram}
+              learnerLevel={draft.learnerLevel}
+              ariaLabel="Course / Program"
+              placeholder={courseProgramScreenCopy.placeholder}
+              context="onboarding"
+            />
+          </section>
+        </div>
+      );
+    }
+
+    if (currentStep === ONBOARDING_STEPS.LEARNER_LEVEL) {
+      return (
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
+          <div className="space-y-2 text-center sm:text-left">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
+              {learnerLevelScreenCopy.heading}
+            </CardTitle>
+            {/* Every profile type gets this line, not just teachers. "What level?" has no obvious
+                consequence -- nothing else on the screen says it governs how hard quizzes are. An
+                earlier trim removed it for everyone except teachers, which left the majority path
+                barer than the minority one. */}
+            <CardDescription className="text-sm">
+              {learnerLevelScreenCopy.description}
+            </CardDescription>
+          </div>
+
+          <section className="space-y-2">
+            <select
+              value={draft.learnerLevel ?? ""}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setLearningContextError(null);
+                setDraft((previous) => ({
+                  ...previous,
+                  learnerLevel: nextValue ? (nextValue as LearnerLevel) : null,
+                }));
+              }}
+              disabled={checkingPracticeFirstPlan}
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+              aria-label="Learner Level"
+            >
+              <option value="">Choose your learner level</option>
+              <optgroup label={groupedLearnerLevels.recommendedGroupLabel}>
+                {groupedLearnerLevels.recommended.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </optgroup>
+              {groupedLearnerLevels.other.length > 0 ? (
+                <optgroup label="Other options">
+                  {groupedLearnerLevels.other.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
                 </optgroup>
-                {groupedLearnerLevels.other.length > 0 ? (
-                  <optgroup label="Other options">
-                    {groupedLearnerLevels.other.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-              </select>
-              {!draft.learnerLevel ? (
-                <p className="text-xs text-red-600 dark:text-red-400">Please select your learner level.</p>
               ) : null}
-            </section>
-
-            <section className="space-y-2">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">
-                  Course / Program <span className="text-red-500" aria-hidden="true">*</span>
-                </p>
-                <p className="text-xs text-foreground/60">
-                  Required. It sets the academic domain your notes and quizzes are written for.
-                </p>
-              </div>
-              <CourseProgramCombobox
-                id="onboarding-course-program"
-                value={draft.courseProgram}
-                suggestions={COURSE_PROGRAM_SUGGESTIONS}
-                onChange={updateCourseProgram}
-                learnerLevel={draft.learnerLevel}
-                ariaLabel="Course / Program"
-                placeholder="Choose or type your course / program"
-                context="onboarding"
-              />
-            </section>
-          </div>
+            </select>
+          </section>
 
           {profileType === "BOARD_EXAM" ? (
             <label className="block space-y-2">
@@ -1410,6 +1610,22 @@ export default function OnboardingPage() {
             </label>
           ) : null}
 
+          {learningContextError ? (
+            <div className="space-y-2">
+              <p className="text-sm text-red-600 dark:text-red-400" role="alert">{learningContextError}</p>
+              {draft.learnerLevel ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void selectLearnerLevel(draft.learnerLevel as LearnerLevel)}
+                  loading={checkingPracticeFirstPlan}
+                  loadingText="Retrying..."
+                >
+                  Retry
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       );
     }
@@ -1418,7 +1634,7 @@ export default function OnboardingPage() {
     // Two EQUAL-WEIGHT doors. Neither is ever disabled: option 1's next screen offers genuinely useful
     // alternatives even with no Review Set, and disabling it would make an ~18% path read as a dead end
     // before the user has seen what is behind it.
-    if (currentStep === 3 && draft.intent === null) {
+    if (currentStep === ONBOARDING_STEPS.FIRST_INTENT) {
       const isTeacher = profileType === "TEACHER";
       const programLabel = draft.courseProgram.trim();
       // Only render the availability line when we AFFIRMATIVELY know there is no set. `null` means the
@@ -1427,7 +1643,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               What would you like to do first?
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1442,7 +1658,7 @@ export default function OnboardingPage() {
               description={isTeacher
                 ? "Browse Official Review Sets and public notes."
                 : `Start with an Official ${collectionLabels.singular} built for your program.`}
-              selected={false}
+              selected={draft.intent === "ready_made"}
               onClick={() => selectIntent("ready_made")}
               footnote={showUnavailableLine && programLabel
                 ? `No Official ${collectionLabels.singular} yet for ${programLabel}`
@@ -1454,7 +1670,7 @@ export default function OnboardingPage() {
               description={isTeacher
                 ? "Write, paste, or create notes for yourself or your learners."
                 : "Write, paste, or create a note and turn it into a Study Pack."}
-              selected={false}
+              selected={draft.intent === "own_notes"}
               onClick={() => selectIntent("own_notes")}
             />
           </div>
@@ -1464,11 +1680,11 @@ export default function OnboardingPage() {
 
     // While a re-resolution is in flight the learner has already chosen "ready-made", so falling through
     // to the create-flow screen would show them the path they did not pick. Hold the step instead.
-    if (currentStep === 3 && draft.intent === "ready_made" && !practiceFirstPlan && resolvingAvailability) {
+    if (currentStep === ONBOARDING_STEPS.INPUT_METHOD && draft.intent === "ready_made" && !practiceFirstPlan && resolvingAvailability) {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               Finding materials for {draft.courseProgram.trim()}...
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1482,12 +1698,12 @@ export default function OnboardingPage() {
     // ---- Step 3b: the honest unavailable state ------------------------------------------------------
     // A soft, explained re-route rather than a rejection. The primary action is the OTHER intent, which is
     // what lets the door above stay selectable. The user always chooses; nothing auto-redirects.
-    if (currentStep === 3 && draft.intent === "ready_made" && !practiceFirstPlan && !resolvingAvailability) {
+    if (currentStep === ONBOARDING_STEPS.INPUT_METHOD && draft.intent === "ready_made" && !practiceFirstPlan && !resolvingAvailability) {
       const programLabel = draft.courseProgram.trim();
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               We&apos;re still building an Official {collectionLabels.singular} for {programLabel}.
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1501,24 +1717,64 @@ export default function OnboardingPage() {
               icon="✍️"
               label="Build from my own notes"
               description="Write, paste, or create a note and turn it into a Study Pack."
-              selected={false}
-              onClick={() => handleUnsupportedFallback("own_notes")}
+              selected={selectedFallback === "own_notes"}
+              onClick={() => setSelectedFallback("own_notes")}
             />
             <ModeOptionButton
               icon="🔎"
               label="Explore related public notes"
               description="See what other learners have already shared for your program."
-              selected={false}
-              onClick={() => void handleUnsupportedFallback("explore")}
+              selected={selectedFallback === "explore"}
+              onClick={() => setSelectedFallback("explore")}
             />
           </div>
+
+          {shouldShowOfficialPlanRequestAction(programLabel) ? (
+            <Card className="space-y-3 border-dashed p-4">
+              {officialPlanRequested ? (
+                <div className="space-y-1" role="status">
+                  <p className="font-medium text-foreground">Your request is recorded.</p>
+                  <p className="text-sm text-foreground/65">
+                    This helps us prioritize which Official {collectionLabels.plural} to build next. You can
+                    still choose any option below.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">Help shape what we build next.</p>
+                    <p className="text-sm text-foreground/65">
+                      Record your interest in an Official {collectionLabels.singular} for {programLabel}.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleOfficialPlanRequest()}
+                    disabled={checkingOfficialPlanRequest || requestingOfficialPlan}
+                  >
+                    {checkingOfficialPlanRequest
+                      ? "Checking request..."
+                      : requestingOfficialPlan
+                        ? "Recording request..."
+                        : `Request this Official ${collectionLabels.singular}`}
+                  </Button>
+                </div>
+              )}
+              {officialPlanRequestError ? (
+                <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                  {officialPlanRequestError}
+                </p>
+              ) : null}
+            </Card>
+          ) : null}
 
           <button
             type="button"
             onClick={() => void handleUnsupportedFallback("finish_setup")}
             className="self-center text-sm text-foreground/60 underline-offset-4 transition hover:text-foreground hover:underline"
           >
-            Finish setup
+            Go to Dashboard
           </button>
 
           {completionError ? (
@@ -1533,7 +1789,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               You&apos;re preparing for {draft.courseProgram.trim()}.
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1565,19 +1821,19 @@ export default function OnboardingPage() {
       );
     }
 
-    if (currentStep === 3) {
+    if (currentStep === ONBOARDING_STEPS.INPUT_METHOD) {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
-              How do you want to start?
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
+              How do you want to begin your first note?
             </CardTitle>
             <CardDescription className="text-sm">
               Pick one path, then continue from your note into a Study Pack.
             </CardDescription>
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2">
+          <div className="grid gap-2.5">
             <ModeOptionButton
               icon="✨"
               label="Create a note"
@@ -1593,6 +1849,21 @@ export default function OnboardingPage() {
               onClick={() => selectInputMethod("own_note")}
             />
           </div>
+        </div>
+      );
+    }
+
+    if (currentStep === ONBOARDING_STEPS.NOTE) {
+      return (
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
+          <div className="space-y-2 text-center sm:text-left">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
+              {selectedInputMethod === "generate" ? "What should your first note be about?" : "Write or paste your first note"}
+            </CardTitle>
+            <CardDescription className="text-sm">
+              Pick one path, then continue from your note into a Study Pack.
+            </CardDescription>
+          </div>
 
           {selectedInputMethod === "generate" ? (
             <div className="motion-onboarding-step space-y-3.5 rounded-2xl border border-border bg-surface-alt/80 p-4">
@@ -1606,7 +1877,7 @@ export default function OnboardingPage() {
                       ...previous,
                       topic: event.target.value,
                     }));
-                    setStepThreeError(null);
+                    setNoteError(null);
                   }}
                   placeholder="Create a note about Newton’s Laws of Motion..."
                   className="min-h-11 w-full rounded-xl border border-border bg-background px-4 py-2.5 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500"
@@ -1650,7 +1921,7 @@ export default function OnboardingPage() {
                           ...previous,
                           noteContent: event.target.value,
                         }));
-                        setStepThreeError(null);
+                        setNoteError(null);
                       }}
                       rows={8}
                       className="min-h-[180px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[210px]"
@@ -1683,7 +1954,7 @@ export default function OnboardingPage() {
                       ...previous,
                       noteContent: event.target.value,
                     }));
-                    setStepThreeError(null);
+                    setNoteError(null);
                   }}
                   rows={8}
                   className="min-h-[180px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[210px]"
@@ -1694,16 +1965,16 @@ export default function OnboardingPage() {
             </div>
           ) : null}
 
-          {stepThreeError ? <p className="text-sm text-red-600 dark:text-red-400">{stepThreeError}</p> : null}
+          {noteError ? <p className="text-sm text-red-600 dark:text-red-400">{noteError}</p> : null}
         </div>
       );
     }
 
-    if (currentStep === 4) {
+    if (currentStep === ONBOARDING_STEPS.GENERATING) {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-4">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               {studyPackReady ? "Your Study Pack is ready." : "Building your Study Pack..."}
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1719,7 +1990,7 @@ export default function OnboardingPage() {
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
             {studyPackGenerating || startingStudyPack
               ? "Your Study Pack is being created. This step can't be undone."
-              : STEP_FOUR_BACK_NOTICE}
+              : GENERATION_BACK_NOTICE}
           </p>
 
           {generationError ? (
@@ -1824,7 +2095,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               Your note is saved.
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1864,7 +2135,7 @@ export default function OnboardingPage() {
     return (
       <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
         <div className="space-y-2 text-center sm:text-left">
-          <CardTitle className="text-2xl leading-tight sm:text-3xl">
+          <CardTitle className="text-xl leading-tight sm:text-2xl">
             {completionHeadline}
           </CardTitle>
           <CardDescription className="text-sm">
@@ -1894,11 +2165,11 @@ export default function OnboardingPage() {
   };
 
   const renderFooterActions = () => {
-    if (currentStep === 5) {
+    if (currentStep === ONBOARDING_STEPS.COMPLETION) {
       return null;
     }
 
-    if (currentStep === 1) {
+    if (currentStep === ONBOARDING_STEPS.PROFILE) {
       return (
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
           <Button
@@ -1917,55 +2188,79 @@ export default function OnboardingPage() {
       );
     }
 
-    if (currentStep === 2) {
+    if (currentStep === ONBOARDING_STEPS.COURSE_PROGRAM) {
       return (
-        <div className="space-y-3">
-          {/* Surfaced, not swallowed. The whole point of persisting here is that a failure is visible and
-              retryable while the user is still on the screen that collects these values. */}
-          {stepTwoError ? (
-            <p className="text-sm text-red-600 dark:text-red-400" role="alert">{stepTwoError}</p>
-          ) : null}
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-            <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
-              Back
-            </Button>
-            <Button
-              type="button"
-              className="min-h-12 text-base sm:min-w-40"
-              onClick={() => void handleContinueFromStepTwo()}
-              disabled={!canContinueFromStepTwo || checkingPracticeFirstPlan}
-              loading={checkingPracticeFirstPlan}
-              loadingText="Saving..."
-            >
-              Continue
-            </Button>
-          </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="min-h-12 text-base sm:min-w-40"
+            onClick={handleContinueFromCourseProgram}
+            disabled={!canContinueFromCourseProgram}
+          >
+            Continue
+          </Button>
         </div>
       );
     }
 
-    if (currentStep === 3) {
-      if (isPracticeFirstScreen) {
-        return (
-          <div className="flex">
-            <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
-              Back
-            </Button>
-          </div>
-        );
-      }
+    if (currentStep === ONBOARDING_STEPS.LEARNER_LEVEL) {
+      return (
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="min-h-12 text-base sm:min-w-40"
+            onClick={handleContinueFromChoice}
+            disabled={!canContinueFromChoice}
+            loading={checkingPracticeFirstPlan}
+          >
+            Continue
+          </Button>
+        </div>
+      );
+    }
 
-      // The intent doors and the unavailable screen both advance by SELECTION, so they need no Continue --
-      // only a way back. Selecting is the action; a Continue would add a second click to every path.
-      if (draft.intent === null || (draft.intent === "ready_made" && !practiceFirstPlan)) {
-        return (
-          <div className="flex">
-            <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
-              Back
-            </Button>
-          </div>
-        );
-      }
+    // Step 5's unavailable-program fallback: selections plus one contextual action, because two of
+    // its options leave onboarding and must not fire on a stray tap.
+    if (isIntentFallbackScreen) {
+      return (
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="min-h-12 text-base sm:min-w-40"
+            onClick={handleContinueFromChoice}
+            disabled={selectedFallback === null}
+          >
+            {fallbackActionLabel}
+          </Button>
+        </div>
+      );
+    }
+
+    // Step 4 and Step 5's input-method screen are tap-to-advance: every option is safe and stays
+    // inside onboarding, so a Continue button would only ever be a second tap for the same decision.
+    if (
+      currentStep === ONBOARDING_STEPS.FIRST_INTENT
+      || currentStep === ONBOARDING_STEPS.INPUT_METHOD
+    ) {
+      return (
+        <div className="flex">
+          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+            Back
+          </Button>
+        </div>
+      );
+    }
+
+    if (currentStep === ONBOARDING_STEPS.NOTE) {
       if (selectedInputMethod === "generate" && !generatedNoteReady) {
         return (
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
@@ -2035,10 +2330,10 @@ export default function OnboardingPage() {
       );
     }
 
-    if (studyPackReady) {
+    if (currentStep === ONBOARDING_STEPS.GENERATING && studyPackReady) {
       return (
         <div className="flex justify-end">
-          <Button type="button" className="min-h-12 text-base sm:min-w-40" onClick={() => goToStep(5)}>
+          <Button type="button" className="min-h-12 text-base sm:min-w-40" onClick={() => goToStep(ONBOARDING_STEPS.COMPLETION)}>
             Continue
           </Button>
         </div>
@@ -2080,12 +2375,12 @@ export default function OnboardingPage() {
         <div className="border-b border-border px-5 py-4 sm:px-6 sm:py-4">
           <div className="space-y-2.5">
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-foreground/50">
-              {profileTypeOnlyMode ? "Profile setup" : `Step ${displayStep} of 5`}
+              {profileTypeOnlyMode ? "Profile setup" : `Step ${displayStep} of ${ONBOARDING_LAST_STEP}`}
             </p>
             <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
               <div
                 className="motion-progress-bar h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
-                style={{ width: profileTypeOnlyMode ? "100%" : `${(displayStep / 5) * 100}%` }}
+                style={{ width: profileTypeOnlyMode ? "100%" : `${(displayStep / ONBOARDING_LAST_STEP) * 100}%` }}
               />
             </div>
           </div>

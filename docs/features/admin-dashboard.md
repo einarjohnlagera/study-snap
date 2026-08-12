@@ -98,10 +98,20 @@ Admin v1 tables should include:
 
 Current sections:
 
+- Onboarding: all-time completion over all signups plus distinct users per current onboarding screen and the drop-off from the previous screen.
+- Onboarding requested programs: Official Study Plan wishlist demand captured from the unavailable-program fallback, grouped by the normalized course/program, with request count and distinct learners ordered by request count descending. The block renders `No Official Study Plan requests yet.` when empty rather than disappearing.
 - Activation: verified users, activated users, activation rate, median days to first Study Pack, and users stuck before generation.
 - Paywall & Value Loop: Free quota-hit rate, paywall conversion, and first-pack → quiz-start value-loop closure.
 - Checkout conversion: distinct users who clicked upgrade, distinct users who initiated checkout after an upgrade click, distinct users who subscribed after checkout, plus click→checkout, checkout→paid, and click→paid rates.
 - Retention by window: the historical strict days 7–14 reading plus three wider readings (after day 7, days 2–30, and after day 1), with each denominator visible; the last 8 activation-week cohorts compare strict days 7–14 with after day 7.
+
+Onboarding definitions:
+
+- Completion is a core-entity metric: `COUNT(users.onboarding_completed_at) / COUNT(users)`. It is not derived from `ONBOARDING_V2_COMPLETED`, so the result stays directly comparable to the release checkpoint's 62.4% (234/375) baseline. A zero-signup dataset reports `0.0%` with `0 of 0`, rather than hiding the section.
+- Screen rows are a separate event-based diagnostic using distinct `user_id` values for `ONBOARDING_V2_STEP_VIEWED`, grouped by `metadata_json.step_name`. Repeated views by one learner count once for that screen.
+- The nine current screen names are returned in flow order even when repository rows arrive in another order: `profile`, `course-program`, `learner-level`, `first-intent`, `input-method`, `note`, `generating`, `completion`, `confirm-practice`. A current screen with no events remains present with a zero count.
+- Before v0.73.0, onboarding used the separate `profile`, `learning-context`, `input`, `study-pack`, `completion` vocabulary. The unchanged names retain their current meaning, while every non-current or unrecognised name is counted in an explicitly labelled legacy/other bucket and excluded from the ordered current-flow reading. Historic events are not rewritten or silently discarded.
+- Requested-program demand uses the learner's trimmed course/program text for display and `CourseProgramNormalizationUtils.normalizeForLookup` for uniqueness and grouping. One learner may request several programs, but repeat or case/whitespace-equivalent requests for the same program remain one row. This read is all-time and is not changed by the funnel window selector.
 
 Retention definitions:
 

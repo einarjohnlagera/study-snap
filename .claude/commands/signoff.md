@@ -19,6 +19,20 @@ Confirm all feature PRs are merged into the release branch:
 git log --oneline releases/<version> | head -20
 ```
 
+## Scope-completeness gate — run this BEFORE the commit
+
+**Re-read the release's own Planned Scope list and confirm each item is actually built.** Not "was it
+discussed" — find the implementing code.
+
+`v0.73.0` shipped seven PRs and signed off with a planned item that had **never been built**: it received
+neither a Codex prompt nor an inline pass, and nothing in the per-item workflow re-read the scope list, so
+seven PRs went by without anyone noticing. A fresh-context pressure test caught it on signoff eve. Worse, the
+missing item made the release's own headline claim false for the majority profile type.
+
+For each planned item, record one of: shipped (with file evidence), **not shipped** (with the reason and where
+it now lives), or **changed** (with the decision that changed it). An item that was reversed mid-release still
+needs its reversal written down — otherwise the release notes describe a product that does not exist.
+
 ## Checkpoint gate — run this BEFORE the commit
 
 **Ask: did anything in this release ship ahead of its own evidence?** That means an item whose `EVIDENCE` gate was never cleared — it shipped on a pre-committed rule, an owner override, an ambiguous read, or a bootstrap-test argument. If yes, it owes a `[CHECKPOINT — due YYYY-MM-DD]` row in `ROADMAP.md`'s Backlog Index, **added in this same signoff commit** (`ROADMAP.md` is already one of the three files).
