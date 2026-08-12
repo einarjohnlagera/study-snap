@@ -14,8 +14,10 @@ import {
   createStudyPackFromNote,
   generateNoteFromTopic,
   getMe,
+  getOfficialStudyPlanWishlistStatus,
   isNoteGenerationLimitReachedError,
   getNote,
+  requestOfficialStudyPlan,
   trackAnalyticsEvent,
   updateExamDate,
   updateLearningProfileContext,
@@ -41,6 +43,7 @@ import {
   loadOnboardingDraft,
   saveOnboardingDraft,
   setDeferredOnboardingCompletion,
+  shouldShowOfficialPlanRequestAction,
   type OnboardingDraft,
   type OnboardingInputMethod,
   type OnboardingIntent,
@@ -103,6 +106,8 @@ const GENERATION_BACK_NOTICE =
   "Going back will start a new Study Pack. Your current one will be saved.";
 const PRACTICE_FIRST_COMPLETION_ERROR_MESSAGE =
   "Your plan is ready. We couldn't save your profile yet. Please try again.";
+const OFFICIAL_PLAN_REQUEST_ERROR_MESSAGE =
+  "We couldn't record your request. Please try again — your other options are still available.";
 
 const STEP_NAMES: Record<number, StepName> = {
   1: "profile",
@@ -294,6 +299,10 @@ export default function OnboardingPage() {
   const [learningContextError, setLearningContextError] = useState<string | null>(null);
   const [practiceFirstPlan, setPracticeFirstPlan] = useState<NoteCollectionSummary | null>(null);
   const [resolvingAvailability, setResolvingAvailability] = useState(false);
+  const [officialPlanRequested, setOfficialPlanRequested] = useState(false);
+  const [checkingOfficialPlanRequest, setCheckingOfficialPlanRequest] = useState(false);
+  const [requestingOfficialPlan, setRequestingOfficialPlan] = useState(false);
+  const [officialPlanRequestError, setOfficialPlanRequestError] = useState<string | null>(null);
   const [isDesktop, setIsDesktop] = useState(true);
   const [previewOpen, setPreviewOpen] = useState<Record<GenerationSectionKey, boolean>>({
     summary: true,
@@ -952,6 +961,64 @@ export default function OnboardingPage() {
     && draft.intent === "ready_made"
     && !practiceFirstPlan
     && !resolvingAvailability;
+
+  useEffect(() => {
+    const courseProgram = draft.courseProgram.trim();
+    if (!isIntentFallbackScreen || !courseProgram) {
+      setOfficialPlanRequested(false);
+      setOfficialPlanRequestError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setCheckingOfficialPlanRequest(true);
+    setOfficialPlanRequestError(null);
+    void getOfficialStudyPlanWishlistStatus(courseProgram)
+      .then((status) => {
+        if (!cancelled) {
+          setOfficialPlanRequested(status.requested);
+        }
+      })
+      .catch(() => {
+        // A status-read failure must not block the fallback. The write remains available and idempotent.
+        if (!cancelled) {
+          setOfficialPlanRequested(false);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCheckingOfficialPlanRequest(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.courseProgram, isIntentFallbackScreen]);
+
+  const handleOfficialPlanRequest = async () => {
+    const courseProgram = draft.courseProgram.trim();
+    if (!courseProgram || requestingOfficialPlan || officialPlanRequested) {
+      return;
+    }
+
+    setRequestingOfficialPlan(true);
+    setOfficialPlanRequestError(null);
+    try {
+      const status = await requestOfficialStudyPlan(courseProgram);
+      if (!status.requested) {
+        throw new Error(OFFICIAL_PLAN_REQUEST_ERROR_MESSAGE);
+      }
+      setOfficialPlanRequested(true);
+      trackOnboardingEvent("ONBOARDING_V2_OFFICIAL_PLAN_REQUESTED", {
+        course_program: courseProgram,
+      });
+    } catch {
+      setOfficialPlanRequestError(OFFICIAL_PLAN_REQUEST_ERROR_MESSAGE);
+    } finally {
+      setRequestingOfficialPlan(false);
+    }
+  };
 
   const canContinueFromChoice = Boolean(draft.learnerLevel) && !checkingPracticeFirstPlan;
 
@@ -1645,6 +1712,46 @@ export default function OnboardingPage() {
               onClick={() => setSelectedFallback("explore")}
             />
           </div>
+
+          {shouldShowOfficialPlanRequestAction(programLabel) ? (
+            <Card className="space-y-3 border-dashed p-4">
+              {officialPlanRequested ? (
+                <div className="space-y-1" role="status">
+                  <p className="font-medium text-foreground">Your request is recorded.</p>
+                  <p className="text-sm text-foreground/65">
+                    This helps us prioritize which Official {collectionLabels.plural} to build next. You can
+                    still choose any option below.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">Help shape what we build next.</p>
+                    <p className="text-sm text-foreground/65">
+                      Record your interest in an Official {collectionLabels.singular} for {programLabel}.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleOfficialPlanRequest()}
+                    disabled={checkingOfficialPlanRequest || requestingOfficialPlan}
+                  >
+                    {checkingOfficialPlanRequest
+                      ? "Checking request..."
+                      : requestingOfficialPlan
+                        ? "Recording request..."
+                        : `Request this Official ${collectionLabels.singular}`}
+                  </Button>
+                </div>
+              )}
+              {officialPlanRequestError ? (
+                <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                  {officialPlanRequestError}
+                </p>
+              ) : null}
+            </Card>
+          ) : null}
 
           <button
             type="button"

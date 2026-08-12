@@ -46,7 +46,8 @@ class AdminFunnelControllerTest {
                                 LEGACY_STEP_LABEL,
                                 0,
                                 null
-                        )
+                        ),
+                        List.of()
                 ),
                 new AdminFunnelMetricsResponse.ActivationMetrics(10, 4, 40.0, 2.5),
                 new AdminFunnelMetricsResponse.StuckUsersMetrics(3),
@@ -86,7 +87,8 @@ class AdminFunnelControllerTest {
                                 LEGACY_STEP_LABEL,
                                 0,
                                 null
-                        )
+                        ),
+                        List.of()
                 ),
                 new AdminFunnelMetricsResponse.ActivationMetrics(0, 0, 0.0, null),
                 new AdminFunnelMetricsResponse.StuckUsersMetrics(0),

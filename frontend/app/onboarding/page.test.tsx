@@ -11,12 +11,15 @@ import {
   getMe,
   getMyPlan,
   getNote,
+  getOfficialStudyPlanWishlistStatus,
   listCollections,
   listPublicStudyPlans,
+  requestOfficialStudyPlan,
   trackAnalyticsEvent,
   updateLearningProfileContext,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
+import { shouldShowOfficialPlanRequestAction } from "@/lib/onboarding-v2";
 
 const routerMock = {
   push: jest.fn(),
@@ -116,9 +119,11 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
+  getOfficialStudyPlanWishlistStatus: jest.fn(),
   isNoteGenerationLimitReachedError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_LIMIT_REACHED",
   listCollections: jest.fn(),
   listPublicStudyPlans: jest.fn(),
+  requestOfficialStudyPlan: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateLearningProfileContext: jest.fn(),
 }));
@@ -138,6 +143,7 @@ describe("OnboardingPage", () => {
     (createNote as jest.Mock).mockReset();
     (createStudyPackFromNote as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
+    (getOfficialStudyPlanWishlistStatus as jest.Mock).mockReset();
     (completeOnboarding as jest.Mock).mockReset();
     (completeOnboardingProfileType as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
@@ -146,8 +152,11 @@ describe("OnboardingPage", () => {
     (adoptGoal as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
+    (requestOfficialStudyPlan as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockResolvedValue([]);
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    (getOfficialStudyPlanWishlistStatus as jest.Mock).mockResolvedValue({ requested: false });
+    (requestOfficialStudyPlan as jest.Mock).mockResolvedValue({ requested: true });
 
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
@@ -990,6 +999,96 @@ describe("OnboardingPage", () => {
     // Renamed: the exit now names where it goes, and it acts on click rather than selecting.
     expect(screen.getByRole("button", { name: "Go to Dashboard" })).toBeInTheDocument();
     expect(routerMock.push).not.toHaveBeenCalled();
+  });
+
+  it("records Official Study Plan interest and confirms in place without ending onboarding", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    await clickContinue();
+    await completeLearningProfile("COLLEGE", "Nursing");
+    await chooseReadyMadeIntent();
+
+    const requestButton = await screen.findByRole("button", { name: "Request this Official Study Plan" });
+    await waitFor(() => expect(requestButton).not.toBeDisabled());
+    fireEvent.click(requestButton);
+
+    expect(await screen.findByText("Your request is recorded.")).toBeInTheDocument();
+    expect(requestOfficialStudyPlan).toHaveBeenCalledWith("Nursing");
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "ONBOARDING_V2_OFFICIAL_PLAN_REQUESTED",
+    }));
+    expect(completeOnboarding).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Build from my own notes/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Explore related public notes/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to Dashboard" })).toBeInTheDocument();
+  });
+
+  it("shows an existing Official Study Plan request as confirmed", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    (getOfficialStudyPlanWishlistStatus as jest.Mock).mockResolvedValue({ requested: true });
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    await clickContinue();
+    await completeLearningProfile("COLLEGE", "Nursing");
+    await chooseReadyMadeIntent();
+
+    expect(await screen.findByText("Your request is recorded.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Request this Official Study Plan" })).not.toBeInTheDocument();
+    expect(requestOfficialStudyPlan).not.toHaveBeenCalled();
+  });
+
+  it("keeps fallback routes usable when recording Official Study Plan interest fails", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+    (requestOfficialStudyPlan as jest.Mock).mockRejectedValue(new Error("network failed"));
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    await clickContinue();
+    await completeLearningProfile("COLLEGE", "Nursing");
+    await chooseReadyMadeIntent();
+
+    const requestButton = await screen.findByRole("button", { name: "Request this Official Study Plan" });
+    await waitFor(() => expect(requestButton).not.toBeDisabled());
+    fireEvent.click(requestButton);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't record your request");
+    expect(screen.queryByText("Your request is recorded.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Build from my own notes/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Explore related public notes/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to Dashboard" })).toBeInTheDocument();
+    expect(completeOnboarding).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
+  });
+
+  it("does not render an Official Study Plan request action for an empty draft program", async () => {
+    expect(shouldShowOfficialPlanRequestAction("   ")).toBe(false);
+    window.localStorage.setItem("notelib.onboarding-v2:user-1", JSON.stringify({
+      startedAtMs: Date.now(),
+      schemaVersion: 1,
+      currentStep: 5,
+      profileType: "STUDENT",
+      learnerLevel: "COLLEGE",
+      courseProgram: "   ",
+      reviewSetAvailable: false,
+      intent: "ready_made",
+      examDate: "",
+      inputMethod: null,
+      topic: "",
+      noteContent: "",
+      generatedNoteReady: false,
+      noteId: null,
+      studyPackId: null,
+    }));
+
+    render(<OnboardingPage />);
+
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "Request this Official Study Plan" })).not.toBeInTheDocument();
+    expect(requestOfficialStudyPlan).not.toHaveBeenCalled();
   });
 
   it("completes onboarding BEFORE navigating away on a terminal fallback", async () => {

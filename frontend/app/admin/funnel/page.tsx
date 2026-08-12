@@ -302,6 +302,38 @@ export default function AdminFunnelPage() {
                 </table>
               </div>
             </Card>
+            <div className="space-y-2 pt-2">
+              <h3 className="text-base font-semibold text-foreground">Requested Official Study Plans</h3>
+              <p className="text-sm text-foreground/60">
+                Learner demand from the unavailable-program onboarding fallback, ranked by requests.
+              </p>
+            </div>
+            {metrics.onboarding.requestedPrograms.length === 0 ? (
+              <Card className="p-5 text-sm text-foreground/65">No Official Study Plan requests yet.</Card>
+            ) : (
+              <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[480px] text-left text-sm">
+                    <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-foreground/55">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Course / Program</th>
+                        <th className="px-4 py-3 font-semibold">Requests</th>
+                        <th className="px-4 py-3 font-semibold">Distinct learners</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {metrics.onboarding.requestedPrograms.map((program) => (
+                        <tr key={program.courseProgram}>
+                          <td className="px-4 py-3 font-medium text-foreground">{program.courseProgram}</td>
+                          <td className="px-4 py-3 text-foreground/75">{formatMetric(program.requestCount)}</td>
+                          <td className="px-4 py-3 text-foreground/75">{formatMetric(program.distinctLearners)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
           </section>
 
           <section className="space-y-3">

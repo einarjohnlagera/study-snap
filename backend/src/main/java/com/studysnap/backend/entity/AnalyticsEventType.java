@@ -91,6 +91,7 @@ public enum AnalyticsEventType {
     // own", now a sub-choice inside the create branch. Both are needed and they are not the same signal.
     ONBOARDING_V2_INTENT_SELECTED,
     ONBOARDING_V2_INTENT_UNSUPPORTED_VIEWED,
+    ONBOARDING_V2_OFFICIAL_PLAN_REQUESTED,
     ONBOARDING_V2_FALLBACK_SELECTED,
     ONBOARDING_V2_INPUT_METHOD_SELECTED,
     ONBOARDING_V2_TOPIC_SUBMITTED,
