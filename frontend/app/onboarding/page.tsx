@@ -1378,7 +1378,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               {profileTypeOnlyMode
                 ? "Choose your profile type"
                 : "Welcome to NoteLib. Let's set things up."}
@@ -1421,23 +1421,18 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               What are you studying?
             </CardTitle>
+            {/* Says what this answer DOES, in one line. The previous copy ran on both this screen and
+                the next, saying the same generic thing twice, and spent half its length on
+                reassurance ("you can update these anytime") rather than information. */}
             <CardDescription className="text-sm">
-              This helps us tailor quizzes and explanations to your level and field. You can update these anytime in Settings.
+              This sets the subject your notes and quizzes are written for.
             </CardDescription>
           </div>
 
           <section className="space-y-2">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">
-                Course / Program <span className="text-red-500" aria-hidden="true">*</span>
-              </p>
-              <p className="text-xs text-foreground/60">
-                Required. It sets the academic domain your notes and quizzes are written for.
-              </p>
-            </div>
             <CourseProgramCombobox
               id="onboarding-course-program"
               value={draft.courseProgram}
@@ -1445,7 +1440,7 @@ export default function OnboardingPage() {
               onChange={updateCourseProgram}
               learnerLevel={draft.learnerLevel}
               ariaLabel="Course / Program"
-              placeholder="Choose or type your course / program"
+              placeholder="e.g. BS Civil Engineering"
               context="onboarding"
             />
           </section>
@@ -1457,25 +1452,20 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               What level are you studying at?
             </CardTitle>
-            <CardDescription className="text-sm">
-              This helps us tailor quizzes and explanations to your level and field. You can update these anytime in Settings.
-            </CardDescription>
+            {/* One line, and only where it says something the question does not. For a teacher this
+                field means something different from what the heading implies, which is real
+                information; for everyone else the heading already asked it. */}
+            {profileType === "TEACHER" ? (
+              <CardDescription className="text-sm">
+                This sets the default difficulty for quizzes you generate. You can change it per quiz.
+              </CardDescription>
+            ) : null}
           </div>
 
           <section className="space-y-2">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">
-                Learner Level *{profileType === "TEACHER" ? " — default quiz difficulty" : ""}
-              </p>
-              <p className="text-xs text-foreground/60">
-                {profileType === "TEACHER"
-                  ? "Required. This sets the default difficulty for quizzes you generate. You can change it per quiz."
-                  : "Required. Choose the level that best fits the material you're studying."}
-              </p>
-            </div>
             <select
               value={draft.learnerLevel ?? ""}
               onChange={(event) => {
@@ -1567,7 +1557,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               What would you like to do first?
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1608,7 +1598,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               Finding materials for {draft.courseProgram.trim()}...
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1627,7 +1617,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               We&apos;re still building an Official {collectionLabels.singular} for {programLabel}.
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1673,7 +1663,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               You&apos;re preparing for {draft.courseProgram.trim()}.
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1709,7 +1699,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               How do you want to begin your first note?
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1741,7 +1731,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               {selectedInputMethod === "generate" ? "What should your first note be about?" : "Write or paste your first note"}
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1858,7 +1848,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-4">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               {studyPackReady ? "Your Study Pack is ready." : "Building your Study Pack..."}
             </CardTitle>
             <CardDescription className="text-sm">
@@ -1979,7 +1969,7 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+            <CardTitle className="text-xl leading-tight sm:text-2xl">
               Your note is saved.
             </CardTitle>
             <CardDescription className="text-sm">
@@ -2019,7 +2009,7 @@ export default function OnboardingPage() {
     return (
       <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
         <div className="space-y-2 text-center sm:text-left">
-          <CardTitle className="text-2xl leading-tight sm:text-3xl">
+          <CardTitle className="text-xl leading-tight sm:text-2xl">
             {completionHeadline}
           </CardTitle>
           <CardDescription className="text-sm">
