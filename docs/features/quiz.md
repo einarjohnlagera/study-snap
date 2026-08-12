@@ -21,6 +21,15 @@ Regeneration compares historical sessions with the current quiz size. A quiz-siz
 
 The v0.74.0 Quiz-tab lock built on this signal is a **UX affordance, not a security control**. Quick Review scores in the client, and the saved Study Pack quiz—including its answers—is already present in the client payload. Server-derived verification removes accidental divergence between the progression gate and the persisted-selection evaluation used by the completion and `ConceptHealth` path; it does not make the gate tamper-proof, and v0.74.0 does not claim that it does.
 
+## Note Detail Quiz-tab progression lock
+
+- On private Note Detail, the Quiz tab stays visible, clickable, and keyboard reachable before mastery. Selecting or deep-linking to it renders an instructional lock panel instead of mounting the answer-revealing practice quiz.
+- The panel names the actual perfect-score condition using the Study Pack's current question count, falls back to length-agnostic wording when that count is unavailable, and explains that `Redo Mistakes` can still produce the qualifying perfect score.
+- The panel starts the note's existing Quick Review flow and can return the learner to Summary. Challenge Quiz remains available independently and is not gated or reordered.
+- Teachers and admins are curator-exempt and may inspect the saved quiz without mastery. Their bypass does not emit an unlock-open event.
+- For an unlocked non-curator, opening the tab emits `STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK` once for that tab open; locked and empty-quiz views do not emit it.
+- This lock covers **only private Note Detail**. The public share page and Study Pack generation-results view continue to reveal saved answers deliberately. Those accepted exceptions, plus the answers already present in the client payload, are why this remains a UX progression affordance rather than a security boundary.
+
 ## Current quiz modes
 
 ### Quick Review

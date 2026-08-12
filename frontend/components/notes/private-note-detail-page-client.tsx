@@ -4,7 +4,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Eye, MoreHorizontal, RotateCcw, Sparkles, X } from "lucide-react";
+import { ChevronDown, Eye, Lock, MoreHorizontal, RotateCcw, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
@@ -108,6 +108,7 @@ import {
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
 import {
   getNoteTargetProfileLabel,
+  isQuizMasteryLockBypassed,
   isTeacherSelectableNoteTarget,
   SELECTABLE_NOTE_TARGET_PROFILE_TYPES,
 } from "@/lib/note-target-profile";
@@ -414,6 +415,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const autoQuickReviewHandledRef = useRef(false);
   const awaitingGeneratedMetadataSuggestionRef = useRef(false);
   const suggestedStudyPackIdRef = useRef<string | null>(null);
+  const unlockedQuizOpenTrackedRef = useRef(false);
 
   const backHref = useMemo(() => {
     const ref = searchParams.get("ref");
@@ -910,6 +912,33 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const canGenerateStudyPack = studyPackStatus === "DRAFT" || hasGenerationFailed;
   const canTriggerStudyPackGeneration = canGenerateStudyPack || isStudyPackReady;
   const isDraft = !isStudyPackReady;
+  const hasQuizQuestions = (note?.quiz?.length ?? 0) > 0;
+  const quizMasteryLockBypassed = isQuizMasteryLockBypassed(profileType, userRole);
+  const isQuizMasteryLocked = isStudyPackReady
+    && hasQuizQuestions
+    && !quizMasteryLockBypassed
+    && note?.quizMastered !== true;
+
+  useEffect(() => {
+    const shouldTrackUnlockedQuizOpen = activeStudyPackTab === "quiz"
+      && isStudyPackReady
+      && hasQuizQuestions
+      && note?.quizMastered === true
+      && !quizMasteryLockBypassed;
+    if (!shouldTrackUnlockedQuizOpen) {
+      unlockedQuizOpenTrackedRef.current = false;
+      return;
+    }
+    if (unlockedQuizOpenTrackedRef.current) {
+      return;
+    }
+    unlockedQuizOpenTrackedRef.current = true;
+    void trackAnalyticsEvent({
+      eventType: "STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK",
+      entityId: note?.studyPackId ?? note?.id ?? null,
+      metadata: { noteId: note?.id ?? null },
+    }).catch(() => undefined);
+  }, [activeStudyPackTab, hasQuizQuestions, isStudyPackReady, note?.id, note?.quizMastered, note?.studyPackId, quizMasteryLockBypassed]);
   const copiedStudyPackGuidance = useMemo(() => {
     const rules: GuidanceRule[] = [
       {
@@ -2447,6 +2476,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <NoteDetailTabs
                 activeTab={activeStudyPackTab}
                 onChange={handleChangeStudyPackTab}
+                quizLocked={isQuizMasteryLocked}
                 ariaLabel="Private note detail views"
               />
               <p className="text-xs text-foreground/60">
@@ -2586,6 +2616,36 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
                   <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
                   <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
+                </Card>
+              ) : isQuizMasteryLocked ? (
+                <Card id="practice-quiz" className="space-y-5 border-blue-500/30 p-4 sm:p-6">
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                      <Lock className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div className="space-y-2">
+                      <h2 className="text-lg font-semibold sm:text-xl">Quiz locked</h2>
+                      <p className="text-sm font-medium text-foreground">
+                        {typeof note.quizCount === "number" && note.quizCount > 0
+                          ? `Score ${note.quizCount}/${note.quizCount} on Quick Review to unlock the Quiz.`
+                          : "Answer every Quick Review question correctly to unlock the Quiz."}
+                      </p>
+                      <p className="text-sm leading-relaxed text-foreground/75">
+                        These are the same questions Quick Review asks — practise them here once you&apos;ve shown you know them.
+                      </p>
+                      <p className="text-sm leading-relaxed text-foreground/75">
+                        Didn&apos;t get them all? Use <strong className="font-semibold text-foreground">Redo Mistakes</strong> to retry the ones you missed; a perfect score after a retry still unlocks it.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button type="button" onClick={() => void handleStartQuickReview()}>
+                      Start Quick Review
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => handleChangeStudyPackTab("summary")}>
+                      Back to Summary
+                    </Button>
+                  </div>
                 </Card>
               ) : (
                 <div id="practice-quiz" className="space-y-3">

@@ -27,6 +27,7 @@ import {
   listSubjects,
   replaceNoteApplicablePrograms,
   startQuickReviewSession,
+  trackAnalyticsEvent,
   updateNote,
   updateNoteVisibility,
 } from "@/lib/api";
@@ -126,6 +127,8 @@ const baseNote = {
   summary: null,
   keyConcepts: [],
   quiz: [],
+  quizMastered: false,
+  quizMasteredAt: null,
   generatedQuiz: null,
   lastUsedTargetLearnerLevel: null,
   quizCount: 0,
@@ -133,6 +136,15 @@ const baseNote = {
   challengeQuizAvailable: false,
   adaptivePracticeAvailable: false,
 };
+
+function createQuiz(questionCount: number) {
+  return Array.from({ length: questionCount }, (_, index) => ({
+    question: `Question ${index + 1}`,
+    choices: ["Correct", "Incorrect A", "Incorrect B", "Incorrect C"],
+    correctAnswerIndex: 0,
+    explanation: `Explanation ${index + 1}`,
+  }));
+}
 
 describe("PrivateNoteDetailPageClient", () => {
   beforeEach(() => {
@@ -172,6 +184,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (listSubjects as jest.Mock).mockReset();
     (createPremiumCheckoutSession as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset().mockResolvedValue(undefined);
     (updateNote as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry"]);
@@ -2323,6 +2336,9 @@ describe("PrivateNoteDetailPageClient", () => {
       adaptivePracticeAvailable: true,
       summary: "Generated summary",
       keyConcepts: ["Cells"],
+      quizMastered: true,
+      quizMasteredAt: "2026-03-21T10:30:00Z",
+      quizCount: 1,
       quiz: [
         {
           question: "What is a cell?",
@@ -2342,6 +2358,147 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
   });
 
+  it("keeps the locked Quiz tab reachable and renders the mastery panel without mounting answers", async () => {
+    searchParamValues = { tab: "quiz" };
+    (getAuthUser as jest.Mock).mockReturnValue({
+      role: "USER",
+      profileType: "STUDENT",
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      quizMastered: false,
+      quizCount: 3,
+      quiz: createQuiz(3),
+    });
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({ sessionId: "quick-1" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    const quizTab = await screen.findByRole("tab", { name: "Quiz, locked" });
+    expect(quizTab).toHaveAttribute("aria-selected", "true");
+    expect(quizTab).not.toBeDisabled();
+    quizTab.focus();
+    expect(quizTab).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Quiz locked" })).toBeInTheDocument();
+    expect(screen.getByText("Score 3/3 on Quick Review to unlock the Quiz.")).toBeInTheDocument();
+    expect(screen.getByText(/Redo Mistakes/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Practice Quiz" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Question 1")).not.toBeInTheDocument();
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK",
+    }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Start Quick Review" }).at(-1)!);
+    await waitFor(() => expect(startQuickReviewSession).toHaveBeenCalledWith("note-1"));
+  });
+
+  it.each([0, undefined])("uses length-agnostic lock copy when quizCount is %s", async (quizCount) => {
+    searchParamValues = { tab: "quiz" };
+    (getAuthUser as jest.Mock).mockReturnValue({ role: "USER", profileType: "STUDENT" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quizMastered: undefined,
+      quizCount,
+      quiz: createQuiz(1),
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Answer every Quick Review question correctly to unlock the Quiz.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Practice Quiz" })).not.toBeInTheDocument();
+  });
+
+  it("renders an unlocked learner's quiz and tracks the tab open only once across re-renders", async () => {
+    searchParamValues = { tab: "quiz" };
+    (getAuthUser as jest.Mock).mockReturnValue({ role: "USER", profileType: "STUDENT" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quizMastered: true,
+      quizMasteredAt: "2026-03-21T10:30:00Z",
+      quizCount: 1,
+      quiz: createQuiz(1),
+    });
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
+    await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK",
+      entityId: "sp-1",
+      metadata: { noteId: "note-1" },
+    }));
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect((trackAnalyticsEvent as jest.Mock).mock.calls.filter(([event]) => (
+      event.eventType === "STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK"
+    ))).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
+    searchParamValues = { tab: "summary" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+    fireEvent.click(screen.getByRole("tab", { name: "Quiz" }));
+    searchParamValues = { tab: "quiz" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await waitFor(() => expect((trackAnalyticsEvent as jest.Mock).mock.calls.filter(([event]) => (
+      event.eventType === "STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK"
+    ))).toHaveLength(2));
+  });
+
+  it.each([
+    ["teacher", { role: "USER", profileType: "TEACHER" }],
+    ["admin", { role: "ADMIN", profileType: "STUDENT" }],
+  ])("lets an unmastered %s curator view the quiz without unlock analytics", async (_label, authUser) => {
+    searchParamValues = { tab: "quiz" };
+    (getAuthUser as jest.Mock).mockReturnValue(authUser);
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quizMastered: false,
+      quizCount: 1,
+      quiz: createQuiz(1),
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Quiz locked" })).not.toBeInTheDocument();
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK",
+    }));
+  });
+
+  it("keeps the existing empty Quiz state instead of showing the mastery lock", async () => {
+    searchParamValues = { tab: "quiz" };
+    (getAuthUser as jest.Mock).mockReturnValue({ role: "USER", profileType: "STUDENT" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quizMastered: false,
+      quizCount: 0,
+      quiz: [],
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Quiz locked" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Quiz" })).not.toBeDisabled();
+  });
+
   it("nudges toward Full Notes on the Quiz tab until the learner has viewed it", async () => {
     searchParamValues = { tab: "quiz" };
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
@@ -2351,6 +2508,9 @@ describe("PrivateNoteDetailPageClient", () => {
       studyPackId: "sp-1",
       summary: "Generated summary",
       keyConcepts: ["Cells"],
+      quizMastered: true,
+      quizMasteredAt: "2026-03-21T10:30:00Z",
+      quizCount: 1,
       quiz: [
         {
           question: "What is a cell?",
@@ -2543,6 +2703,9 @@ describe("PrivateNoteDetailPageClient", () => {
       adaptivePracticeAvailable: true,
       summary: "Generated summary",
       keyConcepts: ["Cells"],
+      quizMastered: true,
+      quizMasteredAt: "2026-03-21T10:30:00Z",
+      quizCount: 1,
       quiz: [
         {
           question: "What is a cell?",

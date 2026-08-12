@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, FileText, ListChecks, NotebookText } from "lucide-react";
+import { Brain, FileText, ListChecks, Lock, NotebookText } from "lucide-react";
 import { type NoteDetailTab } from "@/lib/note-entry";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ const TABS: Array<{
 type NoteDetailTabsProps = Readonly<{
   activeTab: NoteDetailTab;
   onChange: (tab: NoteDetailTab) => void;
+  quizLocked?: boolean;
   ariaLabel?: string;
   className?: string;
 }>;
@@ -25,6 +26,7 @@ type NoteDetailTabsProps = Readonly<{
 export function NoteDetailTabs({
   activeTab,
   onChange,
+  quizLocked = false,
   ariaLabel = "Note detail views",
   className,
 }: NoteDetailTabsProps) {
@@ -34,13 +36,14 @@ export function NoteDetailTabs({
         {TABS.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.tab;
+          const isLocked = item.tab === "quiz" && quizLocked;
 
           return (
             <button
               key={item.tab}
               type="button"
               role="tab"
-              aria-label={item.label}
+              aria-label={isLocked ? `${item.label}, locked` : item.label}
               aria-selected={isActive}
               onClick={() => onChange(item.tab)}
               className={cn(
@@ -53,6 +56,7 @@ export function NoteDetailTabs({
             >
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{item.label}</span>
+              {isLocked ? <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
             </button>
           );
         })}

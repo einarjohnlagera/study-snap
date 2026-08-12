@@ -9,6 +9,13 @@ export type NoteTargetProfileFilter = NoteTargetProfileType | typeof NOTE_TARGET
 export const SELECTABLE_NOTE_TARGET_PROFILE_TYPES: NoteTargetProfileType[] = ["STUDENT", "BOARD_TAKER", "PROFESSIONAL"];
 export const PUBLIC_NOTE_TARGET_PROFILE_TYPES: NoteTargetProfileType[] = ["STUDENT", "BOARD_TAKER", "PROFESSIONAL"];
 
+function isCurator(
+  profileType: ProfileType | null | undefined,
+  role: UserRole | null | undefined,
+): boolean {
+  return role === "ADMIN" || profileType === "TEACHER";
+}
+
 export function getNoteTargetProfileLabel(value: NoteTargetProfileType): string {
   switch (value) {
     case "BOARD_TAKER":
@@ -50,7 +57,14 @@ export function isTeacherSelectableNoteTarget(
   profileType: ProfileType | null | undefined,
   role: UserRole | null | undefined,
 ): boolean {
-  return role === "ADMIN" || profileType === "TEACHER";
+  return isCurator(profileType, role);
+}
+
+export function isQuizMasteryLockBypassed(
+  profileType: ProfileType | null | undefined,
+  role: UserRole | null | undefined,
+): boolean {
+  return isCurator(profileType, role);
 }
 
 export function toSelectableNoteTargetProfile(
