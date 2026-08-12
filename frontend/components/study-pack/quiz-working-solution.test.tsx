@@ -76,4 +76,35 @@ describe("QuizWorkingSolution", () => {
     expect(container.querySelector(".katex")).not.toBeInTheDocument();
     expect(container).toHaveTextContent("Invalid: $\\notacommand{$");
   });
+
+  // Stored content predates any instruction to emit delimiters, so bare LaTeX reached learners as
+  // literal text with visible backslashes. These assert the repair end-to-end, through the real
+  // renderer rather than the normalizer alone.
+  it("renders bare LaTeX that has no delimiters at all", () => {
+    const { container } = render(
+      <QuizWorkingSolution workingSolution={"d = \\sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}"} planType="PRO" />,
+    );
+
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+    // KaTeX embeds the original TeX in a MathML annotation for accessibility, so assert against the
+    // VISIBLE layer only — otherwise this passes or fails on markup the learner never sees.
+    expect(container.querySelector(".katex-html")?.textContent ?? "").not.toContain("\\sqrt");
+  });
+
+  it("renders bare carets", () => {
+    const { container } = render(
+      <QuizWorkingSolution workingSolution={"x^2 + y^2 = 1"} planType="PRO" />,
+    );
+
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+  });
+
+  it("leaves ordinary prose containing a backslash as plain text", () => {
+    const { container } = render(
+      <QuizWorkingSolution workingSolution={"Save the file to C:\\Users\\notes"} planType="PRO" />,
+    );
+
+    expect(container.querySelector(".katex")).not.toBeInTheDocument();
+    expect(container).toHaveTextContent("Save the file to C:\\Users\\notes");
+  });
 });

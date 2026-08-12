@@ -30,6 +30,23 @@ The v0.74.0 Quiz-tab lock built on this signal is a **UX affordance, not a secur
 - For an unlocked non-curator, opening the tab emits `STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK` once for that tab open; locked and empty-quiz views do not emit it.
 - This lock covers **only private Note Detail**. The public share page and Study Pack generation-results view continue to reveal saved answers deliberately. Those accepted exceptions, plus the answers already present in the client payload, are why this remains a UX progression affordance rather than a security boundary.
 
+## Math notation
+
+Math renders through KaTeX, and **KaTeX only activates inside delimiters** — `$…$`, `\(…\)`, `$$…$$`, `\[…\]` (`quiz-working-solution.tsx`). Anything outside them is printed literally, backslashes and all.
+
+**The generation prompts never stated this rule until `v0.74.0`**, so the model freelanced inconsistently *within a single quiz*: Unicode subscripts (which display fine by accident), bare carets (`x^2`, printed literally), and bare LaTeX (`\frac`, printed literally). Production sizing on 2026-08-12 put the affected population at roughly 23 of 5,472 study packs.
+
+Two defences, and both are needed:
+
+1. **Generation.** Every content-generating developer prompt now carries a `Math notation` rule: wrap all math in `$…$`, never use Unicode sub/superscript characters, keep prose outside the delimiters, and never use `$` as a currency symbol. This fixes new content only.
+2. **Rendering.** `lib/math-normalization.ts` wraps bare LaTeX at display time, which is what repairs content already stored. Its governing rule is **never make things worse**: it only touches an allowlist of constructs, so a lone backslash, a Windows path, a literal `\n` and unknown commands pass through untouched; **a string that already contains any delimiter is skipped entirely**, which also makes it idempotent; and Unicode sub/superscripts are converted to LaTeX *only inside a span being wrapped*, because KaTeX cannot render them raw and would show an error where plain text used to be.
+
+**Subscripts are deliberately stricter than superscripts.** `_` requires a single-character base, because snake_case is ordinary prose — without that rule `user_id` becomes `$user_{id}$`. Real subscripts (`x_1`, `a_{ij}`) are single-character by convention, so nothing is lost. Superscripts need no such guard.
+
+**Bare scripts are brace-wrapped, and that is a correctness fix rather than tidiness:** `x^10` means x¹0 in LaTeX, while `x^{10}` means x¹⁰.
+
+**The admin backfill was considered and dropped** (owner decision, 2026-08-12): a Java normaliser plus this TypeScript one is two implementations of one rule, and at ~23 packs the affected notes are cheaper to regenerate by hand. `docs/claude-plans/v0.74.0-latex-affected-notes.sql` lists them.
+
 ## Current quiz modes
 
 ### Quick Review

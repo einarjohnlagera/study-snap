@@ -1,6 +1,7 @@
 import katex from "katex";
 import type { ReactNode } from "react";
 import type { QuizItem } from "@/lib/api";
+import { normalizeBareMath } from "@/lib/math-normalization";
 
 type QuizWorkingSolutionProps = {
   workingSolution: string | null | undefined;
@@ -185,13 +186,17 @@ export function renderMathText(text: string | null | undefined): ReactNode {
   if (!text) {
     return text ?? null;
   }
-  if (!findMathSpanFrom(text, 0)) {
+  // Stored content predates any instruction to emit delimiters, so bare LaTeX is repaired here at
+  // display time. A no-op for anything already delimited or without math. See math-normalization.ts.
+  const normalized = normalizeBareMath(text);
+  if (!findMathSpanFrom(normalized, 0)) {
     return text;
   }
-  return <>{renderWorkingSolution(text)}</>;
+  return <>{renderWorkingSolution(normalized)}</>;
 }
 
-export function renderWorkingSolution(text: string): ReactNode[] {
+export function renderWorkingSolution(rawText: string): ReactNode[] {
+  const text = normalizeBareMath(rawText);
   if (!findMathSpanFrom(text, 0)) {
     return [renderPlainTextSegment(text, "plain-0")];
   }
