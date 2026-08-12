@@ -97,7 +97,8 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
                 mock(AnalyticsService.class),
                 subscriptionService,
                 featureGateService,
-                mock(ConceptHealthService.class)
+                mock(ConceptHealthService.class),
+                mock(StudyPackQuizMasteryService.class)
         );
         adaptivePracticeService = new QuickReviewAdaptivePracticeService(
                 studyPackRepository,

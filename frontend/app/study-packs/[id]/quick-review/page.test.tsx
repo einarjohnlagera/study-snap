@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import QuickReviewPage from "./page";
 import {
   completeProductOnboarding,
@@ -240,7 +240,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     });
   });
 
-  function setupCompleteState(overrides: { adaptivePracticeAvailable?: boolean } = {}) {
+  function setupCompleteState(overrides: { adaptivePracticeAvailable?: boolean; quizMastered?: boolean } = {}) {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -248,6 +248,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       adaptivePracticeAvailable: overrides.adaptivePracticeAvailable ?? false,
+      quizMastered: overrides.quizMastered ?? false,
     });
     (startQuickReviewSession as jest.Mock).mockResolvedValue(baseSession);
     (completeQuickReviewSession as jest.Mock).mockResolvedValue(baseResult);
@@ -347,7 +348,7 @@ describe("QuickReviewPage post-quiz UX", () => {
   });
 
   it("keeps the standard header for a perfect first quiz", async () => {
-    setupCompleteState();
+    setupCompleteState({ quizMastered: true });
     (completeQuickReviewSession as jest.Mock).mockResolvedValue({
       ...baseResult,
       correctAnswers: 1,
@@ -362,6 +363,10 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByRole("heading", { name: "Your results" })).toBeInTheDocument();
+    const unlockAnnouncement = screen.getByText("🔓 Quiz Unlocked").parentElement;
+    expect(unlockAnnouncement).not.toBeNull();
+    expect(within(unlockAnnouncement as HTMLElement).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(unlockAnnouncement as HTMLElement).queryByRole("button")).not.toBeInTheDocument();
     expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "QUICK_REVIEW_COMPLETED" }));
     expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({ eventType: "QUICK_REVIEW_OPEN_LOOP_SHOWN" }));
   });

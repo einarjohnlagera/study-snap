@@ -28,6 +28,7 @@ import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -101,6 +102,8 @@ class ChallengeQuizServiceTest {
     private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     @Mock
     private ConceptHealthService conceptHealthService;
+    @Mock
+    private StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     private ChallengeQuizService challengeQuizService;
 
@@ -132,7 +135,8 @@ class ChallengeQuizServiceTest {
                 examQuestionPoolService,
                 challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
-                conceptHealthService
+                conceptHealthService,
+                studyPackQuizMasteryService
         );
     }
 
@@ -895,14 +899,16 @@ class ChallengeQuizServiceTest {
 
     @ParameterizedTest
     @CsvSource({
-            "40, easy, 10",
-            "65, medium, 12",
-            "85, hard, 15"
+            "40, easy, 10, false, true",
+            "65, medium, 12, false, false",
+            "85, hard, 15, true, false"
     })
     void startSession_usesScoreBasedAutomaticDifficultyAndQuestionCountForChallengeQuiz(
             int previousScorePercentage,
             String expectedDifficulty,
-            int expectedQuestionCount
+            int expectedQuestionCount,
+            boolean mastered,
+            boolean masteryLookupFails
     ) {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -912,6 +918,14 @@ class ChallengeQuizServiceTest {
         previousQuickReview.setScorePercentage(BigDecimal.valueOf(previousScorePercentage));
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        if (masteryLookupFails) {
+            when(studyPackQuizMasteryService.tryResolve(userId, studyPack))
+                    .thenThrow(new IllegalStateException("mastery unavailable"));
+        } else {
+            when(studyPackQuizMasteryService.tryResolve(userId, studyPack)).thenReturn(Optional.of(
+                    mastered ? StudyPackQuizMastery.masteredAt(OffsetDateTime.now()) : StudyPackQuizMastery.notMastered()
+            ));
+        }
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(userId),
                 eq(studyPackId),
@@ -988,6 +1002,23 @@ class ChallengeQuizServiceTest {
                 eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.BOARD_EXAM_REVIEW), any()
         );
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
+        if (masteryLookupFails) {
+            verify(analyticsService, never()).trackEvent(
+                    eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_LAUNCHED_BEFORE_MASTERY), eq(studyPackId), any()
+            );
+            verify(analyticsService, never()).trackEvent(
+                    eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_LAUNCHED_AFTER_MASTERY), eq(studyPackId), any()
+            );
+        } else {
+            AnalyticsEventType expectedMasteryEvent = mastered
+                    ? AnalyticsEventType.CHALLENGE_QUIZ_LAUNCHED_AFTER_MASTERY
+                    : AnalyticsEventType.CHALLENGE_QUIZ_LAUNCHED_BEFORE_MASTERY;
+            AnalyticsEventType excludedMasteryEvent = mastered
+                    ? AnalyticsEventType.CHALLENGE_QUIZ_LAUNCHED_BEFORE_MASTERY
+                    : AnalyticsEventType.CHALLENGE_QUIZ_LAUNCHED_AFTER_MASTERY;
+            verify(analyticsService).trackEvent(eq(userId), eq(expectedMasteryEvent), eq(studyPackId), any());
+            verify(analyticsService, never()).trackEvent(eq(userId), eq(excludedMasteryEvent), eq(studyPackId), any());
+        }
     }
 
     @Test
@@ -1660,7 +1691,8 @@ class ChallengeQuizServiceTest {
                 examQuestionPoolService,
                 challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
-                conceptHealthService
+                conceptHealthService,
+                studyPackQuizMasteryService
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
