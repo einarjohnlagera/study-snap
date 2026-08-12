@@ -468,8 +468,11 @@ describe("OnboardingPage", () => {
     fireEvent.change(screen.getByLabelText("Course / Program"), { target: { value: "Nursing" } });
     await clickContinue();
 
+    // The "Required." prefix went with the typography pass -- the control's own required state carries
+    // that. What must survive is the REFRAMING: for a teacher this field means quiz difficulty, not
+    // their own study level, and that is information the heading does not give.
     expect(await screen.findByText(
-      "Required. This sets the default difficulty for quizzes you generate. You can change it per quiz.",
+      "This sets the default difficulty for quizzes you generate. You can change it per quiz.",
     )).toBeInTheDocument();
   });
 

@@ -61,6 +61,16 @@ Screen 5 exactly as the own-notes door does; it is not a sub-state of Screen 4. 
 throughout — including on the adopt screen, where the learner simply finishes onboarding early at Screen 5 of 8.
 An earlier build special-cased the adopt screen to display the last step, which read as a bug.
 
+**Screens carry one idea each (typography pass).** Step headings are `text-xl sm:text-2xl` — `CardTitle` is
+already `font-semibold`, so size, not weight, was what made them read heavy. Field labels and "Required."
+helper paragraphs are gone from Screens 2 and 3: the heading already asks the question, the control carries its
+own accessible name, and required-ness is signalled by a disabled Continue rather than an asterisk. Placeholders
+carry an **example** (`e.g. BS Civil Engineering`) rather than restating the control.
+
+**One exception, deliberately kept:** for a `TEACHER`, Screen 3's field means *default quiz difficulty*, not
+their own study level. That is information the heading does not give, so it survives as a one-line description
+for teachers only. Do not delete it as part of a future copy trim.
+
 **Option cards are stacked vertically on every screen** (Screens 1, 4 and 5), so adding a profile type or a
 door does not reflow the layout.
 
