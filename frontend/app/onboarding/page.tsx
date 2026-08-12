@@ -36,6 +36,7 @@ import {
   ONBOARDING_LAST_STEP,
   ONBOARDING_PROFILE_OPTIONS,
   createEmptyOnboardingDraft,
+  getCourseProgramScreenCopy,
   loadOnboardingDraft,
   saveOnboardingDraft,
   setDeferredOnboardingCompletion,
@@ -327,6 +328,7 @@ export default function OnboardingPage() {
   // which read as a bug: adopting a plan simply finishes onboarding early.
   const displayStep = currentStep;
   const groupedLearnerLevels = getGroupedLearnerLevels(profileType);
+  const courseProgramScreenCopy = getCourseProgramScreenCopy(profileType);
   const selectedInputMethod = draft.inputMethod;
   const generatedNoteReady = draft.generatedNoteReady;
   const topicLength = draft.topic.trim().length;
@@ -1421,14 +1423,14 @@ export default function OnboardingPage() {
       return (
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
+            {/* Copy is profile-aware (C9). Says what this answer DOES, in one line -- the pre-typography
+                copy ran on this screen and the next saying the same generic thing twice, and spent half
+                its length on reassurance rather than information. */}
             <CardTitle className="text-xl leading-tight sm:text-2xl">
-              What are you studying?
+              {courseProgramScreenCopy.heading}
             </CardTitle>
-            {/* Says what this answer DOES, in one line. The previous copy ran on both this screen and
-                the next, saying the same generic thing twice, and spent half its length on
-                reassurance ("you can update these anytime") rather than information. */}
             <CardDescription className="text-sm">
-              This sets the subject your notes and quizzes are written for.
+              {courseProgramScreenCopy.description}
             </CardDescription>
           </div>
 
@@ -1440,7 +1442,7 @@ export default function OnboardingPage() {
               onChange={updateCourseProgram}
               learnerLevel={draft.learnerLevel}
               ariaLabel="Course / Program"
-              placeholder="e.g. BS Civil Engineering"
+              placeholder={courseProgramScreenCopy.placeholder}
               context="onboarding"
             />
           </section>

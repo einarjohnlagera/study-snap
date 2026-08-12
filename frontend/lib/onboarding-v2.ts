@@ -238,3 +238,44 @@ export function hasPendingLightweightProfileCompletion(userId: string | null | u
     return false;
   }
 }
+
+/**
+ * Screen 2's copy, by profile type (C9).
+ *
+ * Slice 5 moved profile type to Screen 1, so by the time this screen renders we know who we are talking
+ * to -- yet the copy stayed byte-identical for all four types. That is wrong in more than tone: under the
+ * two-mode authoring model a TEACHER's programme is what they *teach*, and asking "what are you studying?"
+ * describes something they will never do here.
+ */
+export function getCourseProgramScreenCopy(profileType: OnboardingProfileType | null): {
+  heading: string;
+  description: string;
+  placeholder: string;
+} {
+  if (profileType === "TEACHER") {
+    return {
+      heading: "What do you teach?",
+      description: "This sets the programme your teaching materials are written for.",
+      placeholder: "e.g. BS Civil Engineering",
+    };
+  }
+  if (profileType === "BOARD_EXAM") {
+    return {
+      heading: "What are you reviewing for?",
+      description: "This sets the exam your review material is written for.",
+      placeholder: "e.g. Nursing",
+    };
+  }
+  if (profileType === "PROFESSIONAL") {
+    return {
+      heading: "What field are you in?",
+      description: "This sets the field your notes and practice are written for.",
+      placeholder: "e.g. Civil Engineering",
+    };
+  }
+  return {
+    heading: "What are you studying?",
+    description: "This sets the subject your notes and quizzes are written for.",
+    placeholder: "e.g. BS Civil Engineering",
+  };
+}

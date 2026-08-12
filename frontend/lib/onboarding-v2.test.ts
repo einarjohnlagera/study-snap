@@ -1,4 +1,5 @@
 import {
+  getCourseProgramScreenCopy,
   clearPendingLightweightProfileCompletion,
   createEmptyOnboardingDraft,
   hasPendingLightweightProfileCompletion,
@@ -147,5 +148,28 @@ describe("onboarding-v2 draft storage", () => {
 
     expect(() => saveOnboardingDraft("user-1", createEmptyOnboardingDraft())).not.toThrow();
     setItemSpy.mockRestore();
+  });
+
+  describe("getCourseProgramScreenCopy", () => {
+    it("asks each profile type a question that describes what they actually do", () => {
+      // C9: Screen 2's copy was byte-identical for all four types even though Screen 1 already told us
+      // who we are talking to. "What are you studying?" describes something a TEACHER never does here.
+      expect(getCourseProgramScreenCopy("TEACHER").heading).toBe("What do you teach?");
+      expect(getCourseProgramScreenCopy("BOARD_EXAM").heading).toBe("What are you reviewing for?");
+      expect(getCourseProgramScreenCopy("PROFESSIONAL").heading).toBe("What field are you in?");
+      expect(getCourseProgramScreenCopy("STUDENT").heading).toBe("What are you studying?");
+    });
+
+    it("gives every profile type a distinct heading and description", () => {
+      const types = ["STUDENT", "BOARD_EXAM", "TEACHER", "PROFESSIONAL"] as const;
+      const headings = types.map((type) => getCourseProgramScreenCopy(type).heading);
+      const descriptions = types.map((type) => getCourseProgramScreenCopy(type).description);
+      expect(new Set(headings).size).toBe(types.length);
+      expect(new Set(descriptions).size).toBe(types.length);
+    });
+
+    it("falls back to the student copy when no profile type is known", () => {
+      expect(getCourseProgramScreenCopy(null).heading).toBe("What are you studying?");
+    });
   });
 });

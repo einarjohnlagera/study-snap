@@ -1002,7 +1002,10 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
 
     expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
-    expect(screen.getByText("No course programs selected.")).toBeInTheDocument();
+    // C8: the empty state now explains itself when the profile programme is off-catalog, instead of a
+    // bare "No course programs selected." that leaves a curator unable to see why theirs counts for nothing.
+    expect(screen.getByText(/No course programs selected\./)).toBeInTheDocument();
+    expect(screen.getByText(/not in the shared catalog/)).toBeInTheDocument();
   });
 
   it("uses the teacher generate label and helper text for teacher note creation", async () => {

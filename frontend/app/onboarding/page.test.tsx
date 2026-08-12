@@ -408,6 +408,8 @@ describe("OnboardingPage", () => {
     // there is nothing to select before moving on.
     fireEvent.click(await screen.findByLabelText("Exam Reviewer"));
     await clickContinue();
+    // C9: each profile type gets its own question. An exam reviewer is not "studying".
+    expect(await screen.findByText("What are you reviewing for?")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Course / Program"), { target: { value: "Nursing" } });
     await clickContinue();
     expect(await screen.findByText("What level are you studying at?")).toBeInTheDocument();
@@ -416,7 +418,8 @@ describe("OnboardingPage", () => {
 
     // Switching profile type re-defaults: the previous level was chosen for a different kind of learner.
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(await screen.findByText("What are you studying?")).toBeInTheDocument();
+    // Still an Exam Reviewer on the way back, so Screen 2 still asks the reviewer's question.
+    expect(await screen.findByText("What are you reviewing for?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     fireEvent.click(await screen.findByLabelText("Student"));
     await clickContinue();
@@ -1202,7 +1205,8 @@ describe("OnboardingPage", () => {
 
     fireEvent.click(await screen.findByLabelText("Teacher"));
     await clickContinue();
-    expect(await screen.findByText("What are you studying?")).toBeInTheDocument();
+    // C9: a teacher is asked what they TEACH. "What are you studying?" described something they never do.
+    expect(await screen.findByText("What do you teach?")).toBeInTheDocument();
     await completeLearningProfile("GRADE_SCHOOL", "Grade 5 Science");
 
     await chooseOwnNotesIntent();
