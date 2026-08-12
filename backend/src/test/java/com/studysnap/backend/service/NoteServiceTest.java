@@ -107,6 +107,8 @@ class NoteServiceTest {
     private NoteCourseProgramRepository noteCourseProgramRepository;
     @Mock
     private com.studysnap.backend.repository.CourseProgramCatalogRepository courseProgramCatalogRepository;
+    @Mock
+    private StudyPackQuizMasteryService studyPackQuizMasteryService;
     private NoteService noteService;
     private final Map<UUID, NoteEntity> noteFixtures = new HashMap<>();
 
@@ -128,7 +130,8 @@ class NoteServiceTest {
                 onboardingGuardService,
                 officialChallengeQuizTemplateService,
                 noteCourseProgramRepository,
-                courseProgramCatalogRepository
+                courseProgramCatalogRepository,
+                studyPackQuizMasteryService
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
@@ -160,6 +163,8 @@ class NoteServiceTest {
         });
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
         lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.ADAPTIVE_QUIZ))).thenReturn(false);
+        lenient().when(studyPackQuizMasteryService.resolve(any(UUID.class), any()))
+                .thenReturn(com.studysnap.backend.service.model.StudyPackQuizMastery.notMastered());
     }
 
     @Test
@@ -961,6 +966,8 @@ class NoteServiceTest {
         assertThat(copied.copiedAt()).isNotNull();
         assertThat(copied.studyPackStatus()).isEqualTo("STUDY_PACK_READY");
         assertThat(copied.summary()).isEqualTo("Copied summary");
+        assertThat(copied.quizMastered()).isFalse();
+        assertThat(copied.quizMasteredAt()).isNull();
 
         ArgumentCaptor<StudyPackEntity> studyPackCaptor = ArgumentCaptor.forClass(StudyPackEntity.class);
         verify(studyPackRepository).save(studyPackCaptor.capture());
@@ -987,6 +994,8 @@ class NoteServiceTest {
         assertThat(copiedStudyPack.getEstimatedCost()).isNull();
         assertThat(copiedStudyPack.getOcrConfidence()).isNull();
         assertThat(copiedStudyPack.getErrorCode()).isNull();
+        verify(studyPackQuizMasteryService).resolve(ownerUserId, copiedStudyPack);
+        verify(studyPackQuizMasteryService, never()).resolve(sourceOwnerUserId, sourceStudyPack);
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.PUBLIC_NOTE_COPIED), eq(sourceNoteId), any());
     }
 

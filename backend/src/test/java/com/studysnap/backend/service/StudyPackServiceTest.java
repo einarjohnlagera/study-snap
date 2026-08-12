@@ -98,6 +98,8 @@ class StudyPackServiceTest {
     private OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     @Mock
     private OnboardingGuardService onboardingGuardService;
+    @Mock
+    private StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     private StudyPackService studyPackService;
     private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
@@ -130,7 +132,8 @@ class StudyPackServiceTest {
                 contentModerationService,
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
-                onboardingGuardService
+                onboardingGuardService,
+                studyPackQuizMasteryService
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -140,6 +143,8 @@ class StudyPackServiceTest {
         lenient().when(generationContextResolver.resolve(any(UUID.class), any())).thenReturn(
                 new com.studysnap.backend.service.model.StudyPackGenerationContext(null, null, null, List.of())
         );
+        lenient().when(studyPackQuizMasteryService.resolve(any(UUID.class), any(StudyPackEntity.class)))
+                .thenReturn(com.studysnap.backend.service.model.StudyPackQuizMastery.notMastered());
     }
 
     @Test
@@ -526,7 +531,8 @@ class StudyPackServiceTest {
                 contentModerationService,
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
-                onboardingGuardService
+                onboardingGuardService,
+                studyPackQuizMasteryService
         );
         MockMultipartFile image = new MockMultipartFile("image", "note.png", "image/png", "fake-image".getBytes());
 
@@ -569,7 +575,8 @@ class StudyPackServiceTest {
                 contentModerationService,
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
-                onboardingGuardService
+                onboardingGuardService,
+                studyPackQuizMasteryService
         );
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
@@ -647,7 +654,8 @@ class StudyPackServiceTest {
                 contentModerationService,
                 examQuestionPoolService,
                 officialChallengeQuizTemplateService,
-                onboardingGuardService
+                onboardingGuardService,
+                studyPackQuizMasteryService
         );
 
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));

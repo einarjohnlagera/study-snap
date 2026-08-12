@@ -85,6 +85,8 @@ export type StudyPackResponse = {
   keyConcepts: string[];
   tags: string[];
   quiz: QuizItem[];
+  quizMastered: boolean;
+  quizMasteredAt: string | null;
   createdAt: string;
   meta: {
     ocrConfidence: number | null;
@@ -520,6 +522,13 @@ export type AnalyticsEventType =
   | "STUDY_PACK_GENERATED"
   | "QUICK_REVIEW_STARTED"
   | "QUICK_REVIEW_COMPLETED"
+  | "QUICK_REVIEW_MASTERED"
+  | "STUDY_PACK_QUIZ_UNLOCKED"
+  | "STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK"
+  | "CHALLENGE_QUIZ_LAUNCHED_BEFORE_MASTERY"
+  | "CHALLENGE_QUIZ_LAUNCHED_AFTER_MASTERY"
+  | "POST_SESSION_CHALLENGE_CTA_IMPRESSION"
+  | "POST_SESSION_CHALLENGE_CTA_CLICKED"
   | "QUICK_REVIEW_OPEN_LOOP_SHOWN"
   | "REVIEW_COMMITMENT_PROMPT_SHOWN"
   | "REVIEW_COMMITMENT_COMMITTED"
@@ -1585,6 +1594,8 @@ export type NoteResponse = {
   summary: string | null;
   keyConcepts: string[];
   quiz: QuizItem[];
+  quizMastered: boolean;
+  quizMasteredAt: string | null;
   generatedQuiz: GeneratedQuizResponse | null;
   lastUsedTargetLearnerLevel: LearnerLevel | null;
   quizCount: number;

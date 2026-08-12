@@ -47,6 +47,17 @@ Quick Review uses its own session model:
 - completed sessions remain reviewable from Note Detail
 - session history stays note-owned
 
+## Verified score and Study Pack quiz mastery
+
+- Quick Review still stores the client-reported `correctAnswers`, `totalQuestions`, and score percentage for the existing results and history UI.
+- Completion additionally stores a nullable server-derived `verifiedCorrectAnswers`. It reuses the persisted cumulative selection map and the shared per-question breakdown scorer; it does not trust the reported score for mastery.
+- Retry answers overwrite the same persisted question index, so a learner who corrects every miss through `Redo Mistakes` ends with a verified perfect score and qualifies for mastery.
+- A learner has mastered a Study Pack's Quick Review only when one of their own completed `QUICK_REVIEW` sessions has `verifiedCorrectAnswers` equal to the Study Pack's current non-empty quiz size. A reported 4/5 does not qualify, and non-Quick-Review modes never qualify.
+- Mastery is per learner and per Study Pack. Copies and remixes do not inherit the source owner's session history or mastery.
+- Regeneration deliberately re-evaluates old sessions against the regenerated Study Pack's current quiz size. If the question count changes, an earlier perfect session may stop qualifying because it describes a different question set.
+- `quizMastered` and nullable `quizMasteredAt` are server-resolved response fields. A mastery lookup failure fails closed to `false` without hiding the Study Pack.
+- This foundation does not lock or render anything by itself; the Quiz-tab progression UI is separate v0.74.0 work.
+
 ## Result screen
 
 Current Quick Review result behavior is intentionally simplified around one server-resolved next step.
