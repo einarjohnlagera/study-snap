@@ -41,6 +41,7 @@ class AdminFunnelControllerTest {
                         6,
                         60.0,
                         List.of(),
+                        List.of(),
                         new AdminFunnelMetricsResponse.OnboardingStepMetrics(
                                 LEGACY_STEP_NAME,
                                 LEGACY_STEP_LABEL,
@@ -81,6 +82,7 @@ class AdminFunnelControllerTest {
                         0,
                         0,
                         0.0,
+                        List.of(),
                         List.of(),
                         new AdminFunnelMetricsResponse.OnboardingStepMetrics(
                                 LEGACY_STEP_NAME,

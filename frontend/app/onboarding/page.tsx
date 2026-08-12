@@ -79,7 +79,9 @@ type StepName =
   | "note"
   | "generating"
   | "completion"
-  | "confirm-practice";
+  | "confirm-practice"
+  | "resolving-plan"
+  | "plan-unavailable";
 
 const ONBOARDING_STEPS = {
   PROFILE: 1,
@@ -330,7 +332,19 @@ export default function OnboardingPage() {
   const isPracticeFirstScreen = currentStep === ONBOARDING_STEPS.INPUT_METHOD
     && draft.intent === "ready_made"
     && practiceFirstPlan !== null;
-  const currentStepName = isPracticeFirstScreen ? "confirm-practice" : getStepName(currentStep);
+  // Screen 5 is three different screens depending on the ready-made branch's state, and reporting all of
+  // them as "input-method" made the funnel row that names the two input cards also contain every learner
+  // told their program has no plan yet -- the single most likely place to abandon, and the exact
+  // distinction the step funnel exists to draw. Each branch screen reports as itself.
+  const currentStepName: StepName = (() => {
+    if (isPracticeFirstScreen) {
+      return "confirm-practice";
+    }
+    if (currentStep === ONBOARDING_STEPS.INPUT_METHOD && draft.intent === "ready_made") {
+      return resolvingAvailability ? "resolving-plan" : "plan-unavailable";
+    }
+    return getStepName(currentStep);
+  })();
   // Display-only: this screen replaces the remaining create-first screens and is the last thing the learner sees before
   // onboarding completes on this path, so the header should read as the final step. The underlying
   // `currentStep` stays on the intent screen so Back/transition logic elsewhere is unaffected.
@@ -965,7 +979,9 @@ export default function OnboardingPage() {
   useEffect(() => {
     const courseProgram = draft.courseProgram.trim();
     if (!isIntentFallbackScreen || !courseProgram) {
-      setOfficialPlanRequested(false);
+      // Clear the ERROR, never the recorded request. isIntentFallbackScreen goes false for a frame
+      // whenever availability re-resolves, and resetting here made a learner who had already recorded a
+      // request watch their confirmation flip back to the invitation button.
       setOfficialPlanRequestError(null);
       return;
     }

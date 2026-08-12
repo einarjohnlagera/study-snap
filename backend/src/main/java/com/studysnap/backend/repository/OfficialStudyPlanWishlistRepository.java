@@ -32,8 +32,7 @@ public interface OfficialStudyPlanWishlistRepository
 
     @Query(value = """
             select min(w.course_program) as courseProgram,
-                   count(*) as requestCount,
-                   count(distinct w.user_id) as distinctLearners
+                   count(*) as requestCount
             from official_study_plan_wishlist w
             group by w.normalized_course_program
             order by count(*) desc, w.normalized_course_program asc

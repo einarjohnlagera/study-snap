@@ -289,6 +289,13 @@ export default function AdminFunnelPage() {
                         </td>
                       </tr>
                     ))}
+                    {metrics.onboarding.branchSteps.map((step) => (
+                      <tr key={step.stepName} className="bg-muted/20">
+                        <td className="px-4 py-3 font-medium text-foreground">{step.label}</td>
+                        <td className="px-4 py-3 text-foreground/75">{formatMetric(step.userCount)}</td>
+                        <td className="px-4 py-3 text-foreground/60">Branch of Screen 5 — not a step in the sequence</td>
+                      </tr>
+                    ))}
                     <tr className="bg-muted/30">
                       <td className="px-4 py-3 font-semibold text-foreground">
                         {metrics.onboarding.legacyStep.label}
@@ -326,7 +333,6 @@ export default function AdminFunnelPage() {
                         <tr key={program.courseProgram}>
                           <td className="px-4 py-3 font-medium text-foreground">{program.courseProgram}</td>
                           <td className="px-4 py-3 text-foreground/75">{formatMetric(program.requestCount)}</td>
-                          <td className="px-4 py-3 text-foreground/75">{formatMetric(program.distinctLearners)}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -114,7 +114,12 @@ describe("AdminFunnelPage", () => {
         totalSignups: 0,
         onboardingCompletedUsers: 0,
         completionRatePercent: 0,
-        steps: buildOnboardingSteps([0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        steps: buildOnboardingSteps([0, 0, 0, 0, 0, 0, 0, 0]),
+        branchSteps: [
+          { stepName: "confirm-practice", label: "Confirm & Practice (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+          { stepName: "resolving-plan", label: "Checking for a plan (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+          { stepName: "plan-unavailable", label: "No plan yet (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+        ],
         legacyStep: {
           stepName: "legacy",
           label: "Legacy / other step names",
@@ -172,7 +177,12 @@ describe("AdminFunnelPage", () => {
         totalSignups: 375,
         onboardingCompletedUsers: 234,
         completionRatePercent: 62.4,
-        steps: buildOnboardingSteps([20, 18, 16, 15, 13, 10, 9, 8, 4]),
+        steps: buildOnboardingSteps([20, 18, 16, 15, 13, 10, 9, 8]),
+        branchSteps: [
+          { stepName: "confirm-practice", label: "Confirm & Practice (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+          { stepName: "resolving-plan", label: "Checking for a plan (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+          { stepName: "plan-unavailable", label: "No plan yet (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+        ],
         legacyStep: {
           stepName: "legacy",
           label: "Legacy / other step names",
@@ -180,8 +190,8 @@ describe("AdminFunnelPage", () => {
           dropOffFromPrevious: null,
         },
         requestedPrograms: [
-          { courseProgram: "Nursing", requestCount: 8, distinctLearners: 8 },
-          { courseProgram: "Accountancy", requestCount: 3, distinctLearners: 3 },
+          { courseProgram: "Nursing", requestCount: 8 },
+          { courseProgram: "Accountancy", requestCount: 3 },
         ],
       },
       retentionCohort: emptyRetentionMetrics(),
@@ -197,7 +207,7 @@ describe("AdminFunnelPage", () => {
     expect(screen.getByText(/Step names changed in v0.73.0/)).toBeInTheDocument();
     expect(screen.getByText("Profile")).toBeInTheDocument();
     expect(screen.getAllByText("Course / Program").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("Confirm & Practice")).toBeInTheDocument();
+    expect(screen.getByText("Confirm & Practice (ready-made branch)")).toBeInTheDocument();
     expect(screen.getByText("Legacy / other step names")).toBeInTheDocument();
     expect(screen.getByText("Excluded from current-flow ordering")).toBeInTheDocument();
     expect(screen.getByText("Requested Official Study Plans")).toBeInTheDocument();
@@ -216,7 +226,12 @@ describe("AdminFunnelPage", () => {
         totalSignups: 0,
         onboardingCompletedUsers: 0,
         completionRatePercent: 0,
-        steps: buildOnboardingSteps([0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        steps: buildOnboardingSteps([0, 0, 0, 0, 0, 0, 0, 0]),
+        branchSteps: [
+          { stepName: "confirm-practice", label: "Confirm & Practice (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+          { stepName: "resolving-plan", label: "Checking for a plan (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+          { stepName: "plan-unavailable", label: "No plan yet (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+        ],
         legacyStep: {
           stepName: "legacy",
           label: "Legacy / other step names",
@@ -300,6 +315,11 @@ function buildMetricsResponse(overrides: {
       userCount: number;
       dropOffFromPrevious: number | null;
     }>;
+        branchSteps: [
+    { stepName: "confirm-practice", label: "Confirm & Practice (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+    { stepName: "resolving-plan", label: "Checking for a plan (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+    { stepName: "plan-unavailable", label: "No plan yet (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+    ],
     legacyStep: {
       stepName: string;
       label: string;
@@ -309,7 +329,6 @@ function buildMetricsResponse(overrides: {
     requestedPrograms: Array<{
       courseProgram: string;
       requestCount: number;
-      distinctLearners: number;
     }>;
   };
   retentionCohort: {
@@ -351,6 +370,11 @@ function buildMetricsResponse(overrides: {
       onboardingCompletedUsers: 12,
       completionRatePercent: 60,
       steps: buildOnboardingSteps([20, 18, 16, 14, 12, 10, 9, 8, 4]),
+        branchSteps: [
+      { stepName: "confirm-practice", label: "Confirm & Practice (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+      { stepName: "resolving-plan", label: "Checking for a plan (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+      { stepName: "plan-unavailable", label: "No plan yet (ready-made branch)", userCount: 0, dropOffFromPrevious: null },
+      ],
       legacyStep: {
         stepName: "legacy",
         label: "Legacy / other step names",
@@ -454,7 +478,6 @@ function buildOnboardingSteps(counts: number[]) {
     ["note", "Note"],
     ["generating", "Generating"],
     ["completion", "Completion"],
-    ["confirm-practice", "Confirm & Practice"],
   ] as const;
 
   return definitions.map(([stepName, label], index) => ({
