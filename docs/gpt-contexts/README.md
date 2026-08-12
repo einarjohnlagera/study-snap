@@ -8,7 +8,7 @@ snapshots/briefs, not source-of-truth for implementation — for that, always de
 
 | File | Use for |
 |---|---|
-| `GPT_CONTEXT.md` | **Core brief — paste first, every time.** App model, current release, the retention constraint, the activation funnel, product model, profile types, non-negotiable rules, working agreement. Enough on its own for onboarding, activation, retention and positioning conversations. Update on every version ship or roadmap shift. |
+| `GPT_CONTEXT.md` | **Core brief — paste first, every time.** App model, current release, the retention constraint, the activation funnel, the redesigned onboarding flow, the September checkpoint calendar, product model, profile types, non-negotiable rules, working agreement. Enough on its own for onboarding, activation, retention and positioning conversations. Update on every version ship or roadmap shift. |
 | `QUIZ_AND_PRACTICE_CONTEXT.md` | Module: the five-mode quiz contract, exam simulation, practice mechanics, and the mastery-integrity rules. Paste for quiz or exam-mode work. |
 | `SURFACES_AND_FEATURES_CONTEXT.md` | Module: feature surfaces screen by screen, plus the Note Collections and Learning Companion vision/locked rules. Paste when the conversation is about a specific surface. |
 | `STRATEGY_AND_ROADMAP_CONTEXT.md` | Module: Company Redefinition, gated/ungated roadmap candidates, and condensed release history. Paste for "what should we build next" and sequencing questions. |
