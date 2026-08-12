@@ -2,7 +2,7 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **a question that may already have been settled — read before reopening one**.
-> Last updated: v0.72.1 - 2026-08-11
+> Last updated: v0.73.0 - 2026-08-12
 
 ---
 
@@ -92,3 +92,32 @@ Raised by the owner immediately after `v0.69.0` deployed, and **genuinely open**
 **Caveat if you are asked to apply the doctrine:** `v0.68.0`'s pressure test found **four internal inconsistencies in the doctrine's own text**, logged as a Known Limitation. It conflicts with the Page Responsibility Rule table it claims to extend (that table assigns `Companion` a single governing question, while the doctrine argues "Companion" names three structurally different things — admin-authored static content, learner-reactive derived guidance, and the LLM chat); its "one question per surface" bullet points at a table enumerating *pages*, not guidance surfaces, so a new surface has no row to look up; its "docs/copy only" header scope contradicts its own third bullet instructing you to extend a resolver (a code change); and it says nothing about a new surface landing on a page that already has a grandfathered resolver. Reconciling that text belongs with Phase 1, not with a casual application of the doctrine.
 
 ---
+
+## Onboarding exam-date field — proposed for removal, DECIDED AGAINST 2026-08-12
+
+Scoped into `v0.73.0`, never built, then reviewed and closed. **The reasoning is worth keeping because the
+wrong conclusion is the intuitive one.** The ask *is* duplicated by the post-session commitment prompt, which
+prefills and requires the date — so deleting the onboarding field looks like obvious tidying. It is not: that
+prompt renders on session-**completion** screens, so it reaches only learners who finish a session, while
+onboarding reaches everyone who reaches Screen 3. Removing it would leave exam-bound learners who never
+complete a session with no exam date at all, disabling the board-exam countdown and degrading the exam-date
+segmentation the target-habit definition depends on. The field is **optional**, so it was never a second
+required question — which had been the entire basis for calling it a violation of "one question per screen".
+The claim was reworded instead. **Do not re-propose without new evidence about the non-session-completing
+population.**
+
+## Universal onboarding (run it straight after signup) — OUT OF SCOPE, and the stated premise was false
+
+Proposed on the grounds that "onboarding only appeared after email verification because there were LLM costs
+during onboarding — that is no longer true." **It is still true.** The generating screen calls
+`/notes/generate` and `/notes/{id}/generate`; both call `requireEmailVerified`. Running onboarding
+pre-verification would 403 at the exact moment it promises the learner their first Study Pack, and would expose
+paid generation to unverified throwaway accounts.
+
+The funnel independently says it is the wrong target: **97.6% of signups verify — verification loses 9
+learners, while onboarding loses 132.**
+
+**The live counter-proposal is not dead:** run Screens 1–4 before verification and move the verification ask to
+the generating step, so it lands on someone who has chosen a profile, said what they study, picked a path, and
+is one click from the payoff — rather than on a stranger who knows nothing yet. That needs no backend change.
+Unbuilt, unscoped.

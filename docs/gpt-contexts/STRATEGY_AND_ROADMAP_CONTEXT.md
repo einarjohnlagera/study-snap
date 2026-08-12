@@ -2,7 +2,7 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **what to build next, sequencing, or why past releases went the way they did**.
-> Last updated: v0.72.1 - 2026-08-11
+> Last updated: v0.73.0 - 2026-08-12
 
 ---
 
@@ -48,6 +48,20 @@ A literal **daily-reset** quota model was also proposed and **explicitly rejecte
 **Decided firmly, not open for re-litigation:** Adaptive Practice stays **out** of any pooling scope — its entire value is personalized reactivity to one learner's own misses.
 
 ---
+
+## Since this module was written — `v0.73.0`, Released 2026-08-12
+
+**`v0.73.0 - Onboarding Redesign`** rebuilt onboarding into eight single-question screens, added an admin
+onboarding step-funnel, and let learners request an Official Study Plan that does not exist yet (demand is
+recorded; **no email is sent**). Justified on **comprehension, not retention** — the activation-volume argument
+was tested against a pre-committed rule and failed. Carries a `[CHECKPOINT — due 2026-09-11]` on onboarding
+completion vs. a 62.4% baseline, cohort-scoped to post-deploy signups.
+
+**Two roadmap-relevant facts from it:**
+- The **Onboarding Intent Router residuals C8/C9 are now closed** — do not re-surface them as candidates.
+- **Removing the onboarding exam-date field was scoped, never built, and then decided against.** Closed, not
+  carried. The post-session prompt that duplicates it reaches only session-completers, while onboarding reaches
+  everyone.
 
 ## Previous Releases (condensed — see `RELEASES.md` and `docs/releases/*.md` for full detail)
 
