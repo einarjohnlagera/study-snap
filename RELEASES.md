@@ -2,7 +2,7 @@
 
 ## v0.73.0 - Onboarding Redesign
 
-**Status: In Progress**
+**Status: Released** (signed off 2026-08-12)
 
 Theme: make the first run the thing that explains NoteLib. A learner should reach their first Study Pack understanding what the product does — not having completed a settings wizard that let them in.
 
