@@ -103,21 +103,36 @@ kill criterion: if it did not, the underlying *"motivation, not placement"* hypo
 **unconfirmed**. Item 4 moves the promotion back to mastery — the same mechanism — so shipping it first
 destroys the read. **Items 1, 2, 3, 5, 6 and 7 are unblocked.**
 
-**2. "Mastery = perfect score" has two holes that change how hard the gate is.**
-- **Quick Review length varies by pack.** A perfect score on a 20-question pack is far harder than on a
-  5-question one — the same gate, wildly different difficulty.
-- **Retries exist.** A learner can *Redo Mistakes* until everything is right. Whether a perfect score *after
-  three retries* counts as mastery is undecided, and it is the difference between a soft gate and a real one.
+**2. Mastery is a PERFECT SCORE — owner ruling, 2026-08-12. Only perfect counts; 4/5 does not.** Two
+consequences the proposal has not absorbed yet:
 
-**3. Item 5 has a metrics dependency.** The current *Finish Review* action completes the session. If "Review
+- **The lock copy contradicts the gate.** It reads *"Complete Quick Review to unlock the Quiz"*, but completing
+  is not what unlocks it — scoring perfectly is. A learner who finishes with 4/5 has done exactly what the lock
+  told them to do and is still locked out, with no stated way forward. **The copy must name the real
+  condition.**
+- **Whether a perfect score after *Redo Mistakes* counts is still open.** Retries exist and are tracked, and
+  every learner can eventually reach perfect through them, so this is the difference between a gate that means
+  "you knew it" and one that means "you persisted."
+
+**Worth noting when answering the second point:** the *integrity* rationale — don't hand someone the answer key
+to a test they have not sat — is satisfied by any completed Quick Review, because the first attempt at each
+question is the genuine assessment and is what `ConceptHealth` records. Requiring a perfect score is a
+*progression* goal, not an integrity one. Both are legitimate; they are different arguments, and the gate
+should be justified by whichever one is actually intended.
+
+**3. Quick Review length varies by pack.** A perfect score on a 20-question pack is a far harder gate than on a
+5-question one — same rule, wildly different difficulty, and the packs a learner meets first are not
+length-controlled.
+
+**4. Item 5 has a metrics dependency.** The current *Finish Review* action completes the session. If "Review
 the Notes" navigates away instead, someone must decide whether the session **completes, pauses, or is
 discarded** — it changes when `QUICK_REVIEW_COMPLETED` fires, and that event feeds the value-loop metric on the
 admin funnel.
 
-**4. New analytics events must be added to the `AnalyticsEventType` enum before being fired**, on both backend
-and frontend. "Quick Review mastered" cannot be instrumented until constraint 2 is resolved.
+**5. New analytics events must be added to the `AnalyticsEventType` enum before being fired**, on both backend
+and frontend. "Quick Review mastered" now has a definition (perfect score) but its retry treatment is still open — see constraint 2.
 
-**5. An existing curator predicate already exists** (`profileType == TEACHER || role == ADMIN`) for the item 6
+**6. An existing curator predicate already exists** (`profileType == TEACHER || role == ADMIN`) for the item 6
 exemption.
 
 ### What I want your judgement on
@@ -125,8 +140,10 @@ exemption.
 1. **Is the lock the right instrument, given the answer-key finding?** Alternatives exist — hide the *answers*
    in the Quiz tab until the learner has been assessed, or retire the saved-quiz tab now that two real practice
    modes exist. Is locking the tab the best of these, or merely the most conservative?
-2. **How should "mastered" be defined**, given constraint 2? Perfect score first attempt only? Perfect after
-   retries? Something ConceptHealth-based rather than score-based?
+2. **Perfect score is the ruling — does it survive contact with constraint 2?** Specifically: should a perfect
+   score reached *through Redo Mistakes* unlock the tab, and what should the lock say to a learner sitting on
+   4/5 so it is not a dead end? If you think a perfect-score gate is wrong given a 20-question pack, say so
+   plainly — the ruling was made before that asymmetry was on the table.
 3. **Does the locked-Quiz / open-Challenge split read as coherent to a learner**, given the reasoning is
    invisible to them? Or does it need saying out loud somewhere?
 4. **Is a locked tab the most elegant way to express the progression at all**, or is there a better way to
