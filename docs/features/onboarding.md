@@ -113,6 +113,16 @@ picker with the existing custom-entry behavior, not a plain text input, and keep
 
 ### Screen 3 — Learner Level
 
+The level is **pre-filled from the profile type chosen on Screen 1** via `getDefaultLearnerLevel` — the same
+helper the lightweight profile-completion prompt uses, so the two surfaces cannot drift: `BOARD_EXAM` →
+`BOARD_EXAM_REVIEW`, `PROFESSIONAL` → `PROFESSIONAL`, `TEACHER` → `PERSONAL_LEARNING`, everything else →
+`COLLEGE`. Switching profile type re-defaults, because the previous level was chosen for a different kind of
+learner. An existing saved level is never overwritten while the profile type is unchanged.
+
+**This pre-fill is only safe because Screen 3 keeps its Continue button.** A pre-filled `<select>` is exactly
+what made this screen a dead end when it auto-advanced: re-choosing the value already selected fires no
+`change` event, so the learner had no way forward. Do not pair the pre-fill with auto-advance here.
+
 Screen 3 asks for required `Learner Level` through the existing grouped closed-set selector. Selecting a level
 persists the combined learning context and advances automatically. A persistence failure remains visible and
 retryable on this screen. Teacher helper copy frames the field as the default quiz difficulty for quizzes the
