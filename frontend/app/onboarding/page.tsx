@@ -37,6 +37,7 @@ import {
   ONBOARDING_PROFILE_OPTIONS,
   createEmptyOnboardingDraft,
   getCourseProgramScreenCopy,
+  getLearnerLevelScreenCopy,
   loadOnboardingDraft,
   saveOnboardingDraft,
   setDeferredOnboardingCompletion,
@@ -329,6 +330,7 @@ export default function OnboardingPage() {
   const displayStep = currentStep;
   const groupedLearnerLevels = getGroupedLearnerLevels(profileType);
   const courseProgramScreenCopy = getCourseProgramScreenCopy(profileType);
+  const learnerLevelScreenCopy = getLearnerLevelScreenCopy(profileType);
   const selectedInputMethod = draft.inputMethod;
   const generatedNoteReady = draft.generatedNoteReady;
   const topicLength = draft.topic.trim().length;
@@ -1455,16 +1457,15 @@ export default function OnboardingPage() {
         <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
             <CardTitle className="text-xl leading-tight sm:text-2xl">
-              What level are you studying at?
+              {learnerLevelScreenCopy.heading}
             </CardTitle>
-            {/* One line, and only where it says something the question does not. For a teacher this
-                field means something different from what the heading implies, which is real
-                information; for everyone else the heading already asked it. */}
-            {profileType === "TEACHER" ? (
-              <CardDescription className="text-sm">
-                This sets the default difficulty for quizzes you generate. You can change it per quiz.
-              </CardDescription>
-            ) : null}
+            {/* Every profile type gets this line, not just teachers. "What level?" has no obvious
+                consequence -- nothing else on the screen says it governs how hard quizzes are. An
+                earlier trim removed it for everyone except teachers, which left the majority path
+                barer than the minority one. */}
+            <CardDescription className="text-sm">
+              {learnerLevelScreenCopy.description}
+            </CardDescription>
           </div>
 
           <section className="space-y-2">
