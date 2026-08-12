@@ -1,5 +1,65 @@
 # RELEASES.md - NoteLib
 
+## v0.74.0 - Quiz Progression
+
+**Status: In Progress** (kicked off 2026-08-12)
+
+Theme: stop one surface silently invalidating another. A scored assessment should not have its answer key on an adjacent tab.
+
+**The finding this release is built on, verified in code 2026-08-12.** `practice-quiz-card.tsx:25` renders the Study Pack's saved quiz with `revealAnswer` — questions *and* correct answers. Quick Review then administers **those same questions** (`note.quiz`). So a learner can read every answer and then sit the test on the same items. That does not merely dull Quick Review's appeal — **it makes its score meaningless, and Quick Review writes to `ConceptHealth`** (`QuickReviewSessionService.java:219-230`), the one signal this product treats as mastery-integrity-bearing, locked since v0.37.0 to move only from genuine assessment.
+
+**Two rationales run in parallel here and must stay distinguishable, because they have different evidentiary standing:**
+- **Integrity** — don't hand someone the answer key to a test they haven't sat. This is **code-verified, not a belief**: the answer key demonstrably exists. It is satisfied by *any* completed Quick Review, since the first attempt at each question is the genuine assessment `ConceptHealth` records.
+- **Progression** — that a *perfect-score* gate makes the study journey better (Read → Understand → Quick Review → Unlock Quiz → Challenge Quiz). This is the **falsifiable half**, and it is what the checkpoint below measures.
+
+**Why locking the easier artifact while leaving the harder one open is coherent rather than arbitrary** — a reviewer would reasonably challenge this: Challenge Quiz generates its own questions from a per-user bank, so the answer key cannot spoil it. The Quiz tab is specifically the answer key to the test Quick Review administers. Locking exactly that, and nothing else, is the narrowest fix that restores the signal.
+
+**Mastery is a PERFECT score, and *Redo Mistakes* counts** — both owner rulings, 2026-08-12. 4/5 does not qualify; persisting until you know every item does. That second half is what keeps a perfect-score requirement from being a dead end, and it is why the lock copy points a 4/5 learner at Redo Mistakes rather than leaving them to guess.
+
+Brief of record: `docs/claude-plans/next-release-candidates-consultation-prompt.md`. **The product-UX second opinion is IN, not pending** — the owner confirmed the refined proposal *was* that read; do not re-send the brief despite its "consultation-prompt" filename.
+
+### Planned Scope
+
+**All seven items ship. Owner ruling, 2026-08-12: nothing is parked and no item waits on a date.** See "The 2026-09-30 checkpoint" below for what that decision costs and how it is being paid rather than absorbed silently.
+
+1. **Lock only the Quiz tab (frontend).** It stays **visible** and locked — a tab that silently materialises reads as a glitch, and a learner cannot feel they unlocked something they never knew existed. Selecting it explains why, **naming the real condition**: an earlier draft read *"Complete Quick Review to unlock"*, which is not the gate and left a 4/5 learner with no stated way forward. Copy points at Redo Mistakes. **The literal "5/5" wording is gated on the outstanding production check below** — if any stored pack holds a different number of questions, this becomes length-agnostic (*"answer every Quick Review question correctly"*), same gate.
+
+2. **Challenge Quiz stays available from the start (frontend).** Board takers especially may already know the material and want exam-mode practice immediately. Quick Review is the *recommended* first step, never a mandatory gate.
+
+3. **Unlock celebration (frontend).** On a perfect score, announce **🔓 Quiz Unlocked** alongside the score. **Announcement only — no competing CTA** (owner ruling, 2026-08-12): it lands on the same results screen as the post-session next step, and "Take a Challenge" stays the sole primary action. This composes cleanly with item 4, which makes Challenge primary at exactly the mastery moment the celebration fires.
+
+4. **Promote Challenge Quiz after mastery (backend + frontend).** Before: primary **⚡ Start Quick Review**, secondary **🏆 Challenge Quiz**. After: primary **🏆 Challenge Quiz**, secondary **✓ Quick Review Again**. Moves `PostSessionNextStepService.java`'s promotion threshold back from `>= 4/5` (`STRONG_QUICK_REVIEW_MAX_MISSES = 1`) to mastery. Quick Review stays available, just secondary. **This item was proposed for parking until 2026-09-30 and the owner ruled against parking — see below.**
+
+5. **Replace "Finish Review" with "Review the Notes" (frontend).** After incorrect answers a learner can currently *Retry Incorrect Questions* or *Finish Review*. Replace the latter so they return to the Note and study before trying again, instead of ending the loop on a failure. **Session lifecycle — owner-decided 2026-08-12: it COMPLETES the session, then navigates.** The owner's initial reading was that Quick Review no longer has a session; that was checked and does not hold — see the note below, which is why the conditional resolved to "complete."
+
+6. **Admin/teacher exemption (frontend + backend).** Curators are unaffected by the lock — they inspect generated quizzes for authoring, QA, demonstrations and marketing. An existing predicate covers this (`profileType == TEACHER || role == ADMIN`).
+
+7. **Analytics (backend + frontend).** Instrument: Quick Review started · Quick Review mastered · Quiz unlocked · Quiz tab opened after unlock · Challenge Quiz launched before mastery · Challenge Quiz launched after mastery. **New events must be added to the `AnalyticsEventType` enum before being fired**, on both sides. **"Quick Review mastered" must carry first-pass-perfect vs. after-retry-perfect in the payload** — both unlock, but they are different learner states, and separating them is free now and unrecoverable later. **Plus two events folded in from the checkpoint below: a post-session Challenge CTA *impression* and a *click*.**
+
+**Item 5 has a SECOND cost, found at kickoff after the lifecycle ruling and recorded because nobody knew it when that ruling was made.** `ReviewCommitmentPrompt` renders on the Quick Review **results** screen (`quick-review/page.tsx:1147`) and fires `REVIEW_COMMITMENT_PROMPT_SHOWN` only when `isFirstCompletedSessionEver === true` (`review-commitment-prompt.tsx:40-66`). That event is load-bearing instrumentation for `v0.72.0`'s proximal **`[CHECKPOINT — due 2026-09-10]`** on the return loop. A learner whose **first-ever completed session** is a Quick Review with at least one miss, who then takes *Review the Notes*, completes the session but navigates away before the prompt can render — so the commitment device is never offered and the event never fires. Narrow population, but a reachable one: a first-timer missing a question is ordinary. **The zero-cost mitigation for both this and the Challenge-promotion cost is the same** — put *Review the Notes* on the results screen instead of replacing the pre-completion button. **Whoever writes item 5's Codex prompt should raise this once with the owner before implementing**, since the lifecycle ruling was made without it.
+
+**Quick Review sessions are load-bearing — do not remove them.** Raised and checked at kickoff, and recorded because the premise was reasonable and wrong. `completeSession` is what writes `ConceptHealth` (`QuickReviewSessionService.java:219-230`) and records `COMPLETED_QUICK_REVIEW`, which feeds Recent Sessions and `lastSessionCompletedAt`; the frontend fires `QUICK_REVIEW_COMPLETED` in the same block (`quick-review/page.tsx:733`); and progress is persisted mid-review for resume. **Most directly: this release's own gate is a completed-session fact** — "did this learner score 5/5" has no other record, so with no session the Quiz tab could never unlock.
+
+### The 2026-09-30 checkpoint — what shipping item 4 costs, and what is being done about it
+
+Item 4 moves the same threshold that an open `[CHECKPOINT — due 2026-09-30]` exists to measure: whether the 5/5 → 4/5 promotion (shipped `becc70ba`, 2026-06-16) improved Quick Review → Challenge conversion, with a named kill criterion — if it did not, *"motivation, not placement"* reverts to **unconfirmed**. Shipping item 4 closes that after-window. **The owner ruled to ship anyway; this section records the cost being paid rather than letting it pass silently.**
+
+**Reads (a) and (b) are salvageable and must be run BEFORE this release deploys — the query is written and ready at `docs/claude-plans/v0.74.0-challenge-conversion-read.sql`.** The Backlog Index row already states both are **MEASURABLE NOW** and that read (a) *"does not improve by waiting, it only accumulates denominator"* — the before-window is fixed and closed, and a ~2-month after-window (2026-06-16 → deploy) already exists. Running them pre-deploy converts a destroyed read into a closed one. **This is a release blocker for deploy, not for kickoff.**
+
+**Read (c) — the one that would actually falsify the framing — gets unblocked by this release instead of staying dead.** It was recorded as **NOT MEASURABLE**: no impression and no click event exists for the post-session Challenge CTA, and `CHALLENGE_QUIZ_STARTED` cannot separate *seen-and-ignored* from *never-reached*, which is the whole discrimination. Item 7 is already instrumenting that exact screen, so those two events are folded in. **This also stops item 4 repeating the original failure** — the old threshold was shipped blind and its obligation never closed; the new one ships instrumented.
+
+### `[CHECKPOINT — due 2026-09-14]`
+
+Declared at kickoff so the signoff gate has something to point at — the gap `v0.72.0` left, which survived undetected until the following kickoff's scan. **The date is provisional and must be reset to deploy+30 in the signoff commit**, per the deploy-relative dating rule; 2026-09-14 assumes a 2026-08-15 deploy. It is written in the literal `[CHECKPOINT — due YYYY-MM-DD]` form now because kickoff step 9 scans for exactly that pattern — an undated checkpoint is invisible to the scan that exists to catch it.
+
+**Only the progression half is falsifiable.** The integrity half is code-verified and owes nothing.
+
+**Metric:** among learners who start Quick Review on a Study Pack after deploy, the fraction who reach 5/5 (first pass or via Redo Mistakes) — the unlock rate. **Secondary:** Quiz-tab-opened-after-unlock, which tests whether the reward is wanted at all rather than merely reachable. **Kill criterion:** if the unlock rate is low, the perfect-score gate is functioning as a wall rather than a progression — **relax the gate to "any completed Quick Review,"** which this release's own reasoning already establishes is sufficient for integrity. Do not iterate on lock copy instead. **Denominator clause:** if the sample is too small to read at the due date, that is itself the finding and must be recorded as such, not a reason to silently extend the date.
+
+### Outstanding input
+
+**`docs/claude-plans/v0.74.0-quiz-length-check.sql` must be run against PRODUCTION before item 1's learner-facing copy is written.** Newly generated quizzes are always exactly 5 (`schema.json` pins `minItems/maxItems: 5`; `STUDY_PACK_QUIZ_QUESTION_COUNT = 5`, `OpenAiLlmStudyPackService.java:64`; generation rejected at a different count, `:432`). **But Quick Review takes `totalQuestions` straight from the stored row** (`QuickReviewSessionService.java:98`, no slicing), and that validation only landed 2026-03-18 (`c78ee9f1`) — older packs, and remixes/copies descended from them (`ShareService.java:90`, `NoteService.java:401`), were never subject to it. A single row of 5 makes "Score 5/5" exact; anything else forces length-agnostic wording.
+
 ## v0.73.0 - Onboarding Redesign
 
 **Status: Released** (signed off 2026-08-12)
