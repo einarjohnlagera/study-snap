@@ -33,6 +33,8 @@ import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +55,7 @@ import java.util.UUID;
 @Transactional
 @RequiredArgsConstructor
 public class QuickReviewSessionService {
+    private static final Logger log = LoggerFactory.getLogger(QuickReviewSessionService.class);
     private static final String SESSION_NOT_IN_PROGRESS_CODE = "SESSION_NOT_IN_PROGRESS";
     private static final String QUICK_REVIEW_SESSION_NOT_IN_PROGRESS_MESSAGE = "Quick Review session is already completed.";
     private static final String QUICK_REVIEW_SESSION_ALREADY_ENDED_MESSAGE = "Quick Review session has already ended.";
@@ -204,16 +207,38 @@ public class QuickReviewSessionService {
         session.setSessionMetadata(sanitizeSessionMetadataForPlan(request.sessionMetadata(), planType));
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         session.setCompletedAt(now);
+        StudyPackEntity studyPack = null;
+        List<ChallengeQuizConceptStatResponse> conceptBreakdown = List.of();
+        try {
+            studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId)
+                    .orElse(null);
+            if (studyPack != null && studyPack.getQuiz() != null && !studyPack.getQuiz().isEmpty()) {
+                conceptBreakdown = QuizSessionReviewUtils.computeConceptBreakdownForStoredSelections(
+                        studyPack.getQuiz(),
+                        session.getSessionState()
+                );
+            }
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "action=derive_quick_review_concept_breakdown outcome=failed userId={} studyPackId={} sessionId={}",
+                    userId,
+                    session.getStudyPackId(),
+                    session.getId(),
+                    exception
+            );
+        }
+        if (session.getSessionMode() == QuickReviewSessionMode.QUICK_REVIEW
+                && studyPack != null
+                && studyPack.getQuiz() != null
+                && !studyPack.getQuiz().isEmpty()
+                && !conceptBreakdown.isEmpty()) {
+            int verifiedCorrectAnswers = conceptBreakdown.stream()
+                    .mapToInt(ChallengeQuizConceptStatResponse::correctAnswers)
+                    .sum();
+            session.setVerifiedCorrectAnswers(verifiedCorrectAnswers);
+        }
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
 
-        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(saved.getStudyPackId(), userId)
-                .orElse(null);
-        List<ChallengeQuizConceptStatResponse> conceptBreakdown = studyPack == null
-                ? List.of()
-                : QuizSessionReviewUtils.computeConceptBreakdownForStoredSelections(
-                        studyPack.getQuiz(),
-                        saved.getSessionState()
-                );
         List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(conceptBreakdown);
         List<String> missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(conceptBreakdown);
         if (!correctConcepts.isEmpty()) {

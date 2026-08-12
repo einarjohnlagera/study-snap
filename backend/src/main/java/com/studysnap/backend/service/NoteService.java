@@ -46,6 +46,7 @@ import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySource;
 import com.studysnap.backend.model.StudyPackProgressProjection;
+import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
@@ -158,6 +159,7 @@ public class NoteService {
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
+    private final StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
@@ -1547,6 +1549,7 @@ public class NoteService {
         GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findByNoteId(entity.getId()).orElse(null);
         int quizCount = quiz.size();
         boolean hasGeneratedQuiz = !quiz.isEmpty();
+        StudyPackQuizMastery quizMastery = studyPackQuizMasteryService.resolve(entity.getOwnerUserId(), studyPack);
         PlanType planType = subscriptionService.resolvePlan(entity.getOwnerUserId());
         return new NoteResponse(
                 entity.getId().toString(),
@@ -1571,6 +1574,8 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getSummary(),
                 keyConcepts,
                 quiz,
+                quizMastery.mastered(),
+                quizMastery.masteredAt(),
                 generatedQuiz == null ? null : new com.studysnap.backend.dto.GeneratedQuizResponse(
                         generatedQuiz.getId().toString(),
                         entity.getId().toString(),

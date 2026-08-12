@@ -22,6 +22,8 @@ export const DEMO_STUDY_PACK_RESULT: StudyPackResponse = {
     "Oxygen byproduct",
   ],
   tags: ["Biology", "Photosynthesis"],
+  quizMastered: false,
+  quizMasteredAt: null,
   createdAt: "2026-01-01T00:00:00Z",
   quiz: [
     {

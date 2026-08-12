@@ -292,6 +292,94 @@ class QuickReviewSessionServiceTest {
                 eq(userId), eq(studyPackId), eq(List.of("Needs Practice")), any(OffsetDateTime.class)
         );
         assertThat(response.twiceMissedConcepts()).containsExactly("Needs Practice");
+        assertThat(session.getVerifiedCorrectAnswers()).isEqualTo(2);
+    }
+
+    @Test
+    void completeSession_persistsVerifiedPerfectScoreFromFirstPassSelections() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setSessionState(Map.of("selectedChoices", Map.of("0", 0, "1", 0, "2", 0, "3", 0, "4", 0)));
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        studyPack.setQuiz(buildSingleChoiceQuiz(5));
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(5, 5, 0, 90, null)
+        );
+
+        assertThat(session.getVerifiedCorrectAnswers()).isEqualTo(5);
+    }
+
+    @Test
+    void completeSession_retryCorrectionOverwritesTheMissAndPersistsVerifiedPerfectScore() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setSessionState(Map.of("selectedChoices", Map.of("0", 0, "1", 0, "2", 0, "3", 0, "4", 0)));
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        studyPack.setQuiz(buildSingleChoiceQuiz(5));
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(5, 5, 1, 120, null)
+        );
+
+        assertThat(session.getRetryCount()).isEqualTo(1);
+        assertThat(session.getVerifiedCorrectAnswers()).isEqualTo(5);
+    }
+
+    @Test
+    void completeSession_doesNotTrustClientReportedPerfectScoreWhenStoredSelectionsAreImperfect() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setSessionState(Map.of("selectedChoices", Map.of("0", 0, "1", 0, "2", 0, "3", 0, "4", 1)));
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        studyPack.setQuiz(buildSingleChoiceQuiz(5));
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(5, 5, 0, 90, null)
+        );
+
+        assertThat(session.getCorrectAnswers()).isEqualTo(5);
+        assertThat(session.getVerifiedCorrectAnswers()).isEqualTo(4);
+    }
+
+    @Test
+    void completeSession_leavesVerifiedScoreNullWhenBreakdownCannotBeDerived() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+                .thenThrow(new IllegalStateException("unparseable state"));
+
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(5, 5, 0, 90, null)
+        );
+
+        assertThat(response.id()).isEqualTo(sessionId.toString());
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
+        assertThat(session.getVerifiedCorrectAnswers()).isNull();
+        verifyNoInteractions(conceptHealthService);
     }
 
     @Test
@@ -1038,6 +1126,20 @@ class QuickReviewSessionServiceTest {
                 .withCreatedAt(createdAt)
                 .withUpdatedAt(createdAt)
                 .build();
+    }
+
+    private List<QuizItem> buildSingleChoiceQuiz(int questionCount) {
+        List<QuizItem> quiz = new java.util.ArrayList<>();
+        for (int index = 0; index < questionCount; index++) {
+            quiz.add(new QuizItem(
+                    "Question " + index,
+                    List.of("Correct", "Incorrect"),
+                    0,
+                    "Concept " + index,
+                    "Explanation"
+            ));
+        }
+        return quiz;
     }
 
     private QuickReviewSessionEntity buildInProgressSession(UUID sessionId, UUID userId, UUID studyPackId) {

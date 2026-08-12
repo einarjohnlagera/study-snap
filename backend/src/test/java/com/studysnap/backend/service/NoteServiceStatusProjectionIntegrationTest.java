@@ -237,7 +237,8 @@ class NoteServiceStatusProjectionIntegrationTest {
                 mock(OnboardingGuardService.class),
                 mock(OfficialChallengeQuizTemplateService.class),
                 mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class),
-                mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class)
+                mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class),
+                mock(StudyPackQuizMasteryService.class)
         );
     }
 }

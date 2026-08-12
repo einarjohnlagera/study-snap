@@ -11,6 +11,16 @@ Shared ownership rule:
 - generated quiz content belongs to `noteId`
 - Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, and Board Exam sessions are note-scoped
 
+## Shared Quick Review mastery predicate
+
+Study Pack Quick Review mastery has one server-owned definition: for a `(user, Study Pack)`, there must be a completed `QUICK_REVIEW` session whose server-derived `verifiedCorrectAnswers` equals the Study Pack's current quiz size, and that size must be greater than zero. The verified score comes from persisted cumulative selections, so a perfect result reached through `Redo Mistakes` qualifies. Client-reported totals are not part of the predicate, other quiz modes cannot confer it, and a copied Study Pack starts with no mastery for its new owner.
+
+Regeneration compares historical sessions with the current quiz size. A quiz-size change may therefore remove mastery until the learner completes the new question set perfectly.
+
+**`verifiedCorrectAnswers` is not uniformly server-derived, and code must not assume it is.** Sessions completed **after** the `v0.74.0` migration are server-derived. Sessions completed **before** it were **grandfathered from the client-reported `correct_answers`**, because re-scoring in SQL would mean re-implementing answer resolution against raw JSONB and bypassing `QuizItem`'s `@JsonCreator` — where `correctIndex` is actually resolved, including the answer-as-letter case that generated quizzes rely on (`correctIndex` is absent from `schema.json`; `"answer"` is a letter per `developer.txt:15`). Getting that wrong locks existing learners out of a tab they already use, so the pre-deploy population is trusted once instead. **Do not "fix" this by adding a SQL scorer** — any re-derivation must go through `QuizItem`.
+
+The v0.74.0 Quiz-tab lock built on this signal is a **UX affordance, not a security control**. Quick Review scores in the client, and the saved Study Pack quiz—including its answers—is already present in the client payload. Server-derived verification removes accidental divergence between the progression gate and the persisted-selection evaluation used by the completion and `ConceptHealth` path; it does not make the gate tamper-proof, and v0.74.0 does not claim that it does.
+
 ## Current quiz modes
 
 ### Quick Review

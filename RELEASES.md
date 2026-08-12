@@ -18,6 +18,12 @@ Theme: stop one surface silently invalidating another. A scored assessment shoul
 
 Brief of record: `docs/claude-plans/next-release-candidates-consultation-prompt.md`. **The product-UX second opinion is IN, not pending** — the owner confirmed the refined proposal *was* that read; do not re-send the brief despite its "consultation-prompt" filename.
 
+### ✅ Shipped
+
+- **Server-derived Quick Review mastery foundation** — Added a verified completion score derived from persisted cumulative selections, one owner-scoped perfect-score predicate evaluated against the Study Pack's current quiz size, and `quizMastered` / `quizMasteredAt` on Study Pack and note-detail payloads. All seven `v0.74.0` analytics event types are declared on both sides but are not fired yet. **Pre-deploy sessions are grandfathered from their reported score rather than re-scored in SQL** — see the audit note below.
+
+**Audit finding, caught before commit and worth recording because it would have shipped silently.** The delivered backfill re-derived the score in PL/pgSQL against the raw `quiz` JSONB. That bypasses `QuizItem`'s `@JsonCreator`, which is where answer resolution actually happens (`correctIndex` → `answerIndex` → `correctAnswerIndex` → MULTI_SELECT `correctIndices[0]` → sanitized answer text → **answer-as-letter**). The last step is the normal case, not an edge case: **generated quizzes do not store `correctIndex` at all** (absent from `schema.json`) and `"answer"` holds a letter (`developer.txt:15` pins it to `"A" | "B" | "C" | "D"`). Matching that letter against choice *text* resolves nothing, so every question would have scored wrong and **every existing learner would have been backfilled as not-mastered — locked out of a Quiz tab they had been using, on deploy day.** The SQL scorer was removed entirely rather than fixed, because fixing it would have created a fourth copy of answer resolution to keep in sync forever. Grandfathering trusts one legacy row per pre-deploy session, which is bounded, one-time, and strictly better than lockout. **The migration had no test; the repo's existing `com.studysnap.backend.migration` pattern is what should have caught it, and a test pinning the lockout regression was added.**
+
 ### Planned Scope
 
 **All seven items ship. Owner ruling, 2026-08-12: nothing is parked and no item waits on a date.** See "The 2026-09-30 checkpoint" below for what that decision costs and how it is being paid rather than absorbed silently.

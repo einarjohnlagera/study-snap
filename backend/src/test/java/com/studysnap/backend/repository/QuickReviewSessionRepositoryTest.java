@@ -45,6 +45,7 @@ class QuickReviewSessionRepositoryTest {
                     current_round varchar(16) not null,
                     total_questions integer not null,
                     correct_answers integer,
+                    verified_correct_answers integer,
                     score_percentage numeric(5,2),
                     retry_count integer,
                     duration_seconds integer,
@@ -293,6 +294,53 @@ class QuickReviewSessionRepositoryTest {
         assertThat(sessions).hasSize(1);
         assertThat(sessions.getFirst().getId()).isEqualTo(latestLowerScore.getId());
         assertThat(sessions.getFirst().getScorePercentage()).isEqualByComparingTo("60.00");
+    }
+
+    @Test
+    void findQuizMasteredAt_requiresCompletedPerfectQuickReviewForCurrentQuizSize() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        QuickReviewSessionEntity imperfectQuickReview = saveSession(
+                userId,
+                studyPackId,
+                QuickReviewSessionStatus.COMPLETED,
+                now.minusHours(4),
+                now.minusHours(3),
+                100
+        );
+        imperfectQuickReview.setVerifiedCorrectAnswers(4);
+        quickReviewSessionRepository.save(imperfectQuickReview);
+
+        QuickReviewSessionEntity challengeQuiz = saveSession(
+                userId,
+                studyPackId,
+                QuickReviewSessionStatus.COMPLETED,
+                now.minusHours(3),
+                now.minusHours(2),
+                100
+        );
+        challengeQuiz.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        challengeQuiz.setVerifiedCorrectAnswers(5);
+        quickReviewSessionRepository.save(challengeQuiz);
+
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(userId, studyPackId, 5)).isNull();
+
+        QuickReviewSessionEntity masteredQuickReview = saveSession(
+                userId,
+                studyPackId,
+                QuickReviewSessionStatus.COMPLETED,
+                now.minusHours(2),
+                now.minusHours(1),
+                100
+        );
+        masteredQuickReview.setVerifiedCorrectAnswers(5);
+        quickReviewSessionRepository.save(masteredQuickReview);
+
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(userId, studyPackId, 5))
+                .isEqualTo(masteredQuickReview.getCompletedAt());
+        assertThat(quickReviewSessionRepository.findQuizMasteredAt(userId, studyPackId, 6)).isNull();
     }
 
     @Test
