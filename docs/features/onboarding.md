@@ -37,6 +37,16 @@ Eight screens, with one primary question or terminal state per screen:
 7. `Study Pack Generation` — automatic
 8. `Completion` — learner chooses the destination
 
+**Screen 3 carries an optional exam-date field for `BOARD_EXAM`, and it stays.** The flow is "one *required*
+question per screen"; this is a secondary optional control, not a second question. Removing it was scoped in
+`v0.73.0`, never built, and then **decided against on review** — the post-session commitment prompt that
+duplicates the ask lives on session-completion screens, so it reaches only learners who finish a session, while
+onboarding reaches everyone who gets this far. Deleting it here would leave exam-bound learners who never
+complete a session with no exam date at all, which silently disables the board-exam countdown
+(`DashboardService.java:294-297`). The later prompt prefills from whatever is captured here, so the duplication
+costs the learner nothing. **Do not re-propose removing it without new evidence about the
+non-session-completing population.**
+
 **Which screens auto-advance, and why the rule is not uniform.** Tap-to-advance applies only where every option
 is a closed-set choice that keeps the learner inside onboarding — Screens 4 and 5's input method. Three
 categories are deliberately excluded:
