@@ -18,6 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class AnalyticsEventRepositoryTest {
     private static final OffsetDateTime NOW = OffsetDateTime.of(2026, 6, 22, 0, 0, 0, 0, ZoneOffset.UTC);
+    private static final String ONBOARDING_STEP_PROFILE = "profile";
+    private static final String ONBOARDING_STEP_COURSE_PROGRAM = "course-program";
 
     @Autowired
     private AnalyticsEventRepository analyticsEventRepository;
@@ -28,6 +30,13 @@ class AnalyticsEventRepositoryTest {
     void initSchema() {
         jdbcTemplate.execute("drop table if exists analytics_events");
         jdbcTemplate.execute("create alias if not exists jsonb_extract_path_text for \"com.studysnap.backend.testutil.H2JsonFunctions.jsonbExtractPathText\"");
+        jdbcTemplate.execute("drop table if exists users");
+        jdbcTemplate.execute("""
+                create table users (
+                    id uuid primary key,
+                    onboarding_completed_at timestamp with time zone null
+                )
+                """);
         jdbcTemplate.execute("""
                 create table analytics_events (
                     id uuid primary key,
@@ -38,6 +47,41 @@ class AnalyticsEventRepositoryTest {
                     created_at timestamp with time zone not null
                 )
                 """);
+    }
+
+    @Test
+    void onboardingStepUserCounts_countDistinctUsersInsteadOfEvents() {
+        UUID repeatedViewer = UUID.randomUUID();
+        UUID secondViewer = UUID.randomUUID();
+        insertOnboardingStepEvent(repeatedViewer, ONBOARDING_STEP_PROFILE, NOW.minusHours(4));
+        insertOnboardingStepEvent(repeatedViewer, ONBOARDING_STEP_PROFILE, NOW.minusHours(3));
+        insertOnboardingStepEvent(repeatedViewer, ONBOARDING_STEP_PROFILE, NOW.minusHours(2));
+        insertOnboardingStepEvent(secondViewer, ONBOARDING_STEP_PROFILE, NOW.minusHours(1));
+        insertOnboardingStepEvent(secondViewer, ONBOARDING_STEP_COURSE_PROGRAM, NOW);
+
+        List<OnboardingStepUserCountProjection> counts = analyticsEventRepository.findOnboardingStepUserCounts();
+
+        assertThat(counts)
+                .extracting(
+                        OnboardingStepUserCountProjection::getStepName,
+                        OnboardingStepUserCountProjection::getUserCount
+                )
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(ONBOARDING_STEP_PROFILE, 2L),
+                        org.assertj.core.groups.Tuple.tuple(ONBOARDING_STEP_COURSE_PROGRAM, 1L)
+                );
+    }
+
+    @Test
+    void onboardingCompletion_countsAllUsersAndCompletedUsersFromUsersTable() {
+        insertUser(null);
+        insertUser(NOW.minusDays(2));
+        insertUser(NOW.minusDays(1));
+
+        OnboardingCompletionProjection completion = analyticsEventRepository.findOnboardingCompletion();
+
+        assertThat(completion.getTotalSignups()).isEqualTo(3);
+        assertThat(completion.getOnboardingCompletedUsers()).isEqualTo(2);
     }
 
     @Test
@@ -228,6 +272,28 @@ class AnalyticsEventRepositoryTest {
                 eventType.name(),
                 "{\"referrerSource\":\"" + referrerSource + "\"}",
                 createdAt
+        );
+    }
+
+    private void insertOnboardingStepEvent(UUID userId, String stepName, OffsetDateTime createdAt) {
+        jdbcTemplate.update(
+                """
+                        insert into analytics_events (id, user_id, event_type, metadata_json, created_at)
+                        values (?, ?, ?, ?, ?)
+                        """,
+                UUID.randomUUID(),
+                userId,
+                AnalyticsEventType.ONBOARDING_V2_STEP_VIEWED.name(),
+                "{\"step_name\":\"" + stepName + "\"}",
+                createdAt
+        );
+    }
+
+    private void insertUser(OffsetDateTime onboardingCompletedAt) {
+        jdbcTemplate.update(
+                "insert into users (id, onboarding_completed_at) values (?, ?)",
+                UUID.randomUUID(),
+                onboardingCompletedAt
         );
     }
 }

@@ -395,6 +395,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Backend services should record server-truth events for note, Study Pack, review, auth, public-copy, and subscription flows.
 - Frontend/browser-only funnel events may post through `/api/analytics/events`.
 - Admin reporting should read from analytics events plus core entity counts via `/api/admin/analytics/summary`.
+- Admin onboarding completion rate must remain `users.onboarding_completed_at IS NOT NULL` over all rows in `users`; never derive it from `ONBOARDING_V2_COMPLETED`, because the users-table definition is the checkpoint baseline.
 - **Tracked completion events**: `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, and `ADAPTIVE_PRACTICE_COMPLETED` are fired from the frontend in the `finally`/completion block of each quiz flow and must not block the primary action.
 - **Tracked funnel events**: `FEATURE_LOCKED_CLICKED` and `UPGRADE_CLICKED` are fired from paywall surfaces and the `PostSuccessUpgradeNudge` component respectively.
 - `AnalyticsEventType` in `frontend/lib/api.ts` is the canonical union of all allowed event names — add new event names there before using them.

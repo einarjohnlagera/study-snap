@@ -253,3 +253,16 @@ Before committing Codex output, ask Claude to audit:
 This is not optional for Long prompts. Codex is reliable on happy-path implementation and unreliable on the edges. The audit step is cheap; the bug fix after shipping is not.
 
 Run `/code-review` or ask directly — either works. The pattern from v0.16.0 shareable quiz links: a 6-bug audit caught missing `@Transactional`, a wrong idempotency guard, a missing GET endpoint, and two frontend catch blocks that destroyed user state on transient errors.
+
+## Phrase negative constraints as "do not add", never as a bare "no X"
+
+A bare `No @Transactional` / `No new events` reads as a statement about the desired end state, and has twice
+been executed as **remove the existing one**:
+
+- `v0.73.0`'s step-funnel prompt said *"No `@Transactional` — read-only, no writes"*, meaning *do not add one
+  for the new code*. The class-level `@Transactional(readOnly = true)` on `AdminFunnelService` was deleted.
+- `v0.72.0`'s H1+H5 prompt asserted a scheduler ran daily when it ran weekly, and the false premise produced a
+  dispatch defect that would have silently stopped a default-on digest for most learners.
+
+Write the constraint as an instruction about *your change*, and say what must survive:
+`Do not ADD a @Transactional to the new method. The class-level @Transactional(readOnly = true) stays.`
