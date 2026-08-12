@@ -46,6 +46,7 @@ import {
 } from "@/lib/onboarding-v2";
 import {
   COURSE_PROGRAM_SUGGESTIONS,
+  getDefaultLearnerLevel,
   getGroupedLearnerLevels,
 } from "@/lib/learning-profile";
 import {
@@ -699,7 +700,15 @@ export default function OnboardingPage() {
       ...previous,
       profileType: value,
       examDate: value === "BOARD_EXAM" ? previous.examDate : "",
-      learnerLevel: previous.profileType === value ? previous.learnerLevel : null,
+      // Pre-fill Screen 3 from the profile rather than leaving it blank. Switching profile type
+      // re-defaults, because the old level was chosen for a different kind of learner.
+      //
+      // This is only safe because Screen 3 kept its Continue button: a pre-filled <select> is exactly
+      // what made that screen a dead end when it auto-advanced, since re-choosing the value already
+      // selected fires no change event. Do not pair this with auto-advance there.
+      learnerLevel: previous.profileType === value
+        ? previous.learnerLevel
+        : getDefaultLearnerLevel(value),
     }));
     trackOnboardingEvent("ONBOARDING_V2_PROFILE_SELECTED", {
       profile_type: value,

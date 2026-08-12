@@ -401,6 +401,30 @@ describe("OnboardingPage", () => {
     });
   });
 
+  it("pre-fills the learner level from the chosen profile type, and re-defaults on a switch", async () => {
+    render(<OnboardingPage />);
+
+    // Exam Reviewer arrives at Screen 3 with Board Exam Review already chosen, and Continue enabled --
+    // there is nothing to select before moving on.
+    fireEvent.click(await screen.findByLabelText("Exam Reviewer"));
+    await clickContinue();
+    fireEvent.change(screen.getByLabelText("Course / Program"), { target: { value: "Nursing" } });
+    await clickContinue();
+    expect(await screen.findByText("What level are you studying at?")).toBeInTheDocument();
+    expect((screen.getByLabelText("Learner Level") as HTMLSelectElement).value).toBe("BOARD_EXAM_REVIEW");
+    expect(screen.getByRole("button", { name: "Continue" })).not.toBeDisabled();
+
+    // Switching profile type re-defaults: the previous level was chosen for a different kind of learner.
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByText("What are you studying?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(await screen.findByLabelText("Student"));
+    await clickContinue();
+    await clickContinue();
+    expect(await screen.findByText("What level are you studying at?")).toBeInTheDocument();
+    expect((screen.getByLabelText("Learner Level") as HTMLSelectElement).value).toBe("COLLEGE");
+  });
+
   it("renders a migrated pre-split draft at the earliest unanswered screen with answers intact", async () => {
     window.localStorage.setItem("notelib.onboarding-v2:user-1", JSON.stringify({
       startedAtMs: Date.now(),
