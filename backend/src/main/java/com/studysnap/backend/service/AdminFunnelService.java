@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -60,10 +61,22 @@ public class AdminFunnelService {
             new OnboardingStepDefinition("input-method", "Input Method"),
             new OnboardingStepDefinition("note", "Note"),
             new OnboardingStepDefinition("generating", "Generating"),
-            new OnboardingStepDefinition("completion", "Completion"),
-            new OnboardingStepDefinition("confirm-practice", "Confirm & Practice")
+            new OnboardingStepDefinition("completion", "Completion")
     );
-    private static final Set<String> ONBOARDING_STEP_NAMES = ONBOARDING_STEPS.stream()
+    /**
+     * Screens that are BRANCHES of Screen 5, not steps after it. They must not join the ordered walk:
+     * a learner who adopts a Review Set exits from Screen 5 and never reaches `completion`, so ordering
+     * `confirm-practice` after `completion` produced a drop-off of completion-minus-confirm-practice --
+     * arithmetic with no meaning, and negative as soon as adoption is real. There is no ordering that
+     * makes these a funnel with the others; they are siblings of `input-method`, not successors.
+     */
+    private static final List<OnboardingStepDefinition> ONBOARDING_BRANCH_STEPS = List.of(
+            new OnboardingStepDefinition("confirm-practice", "Confirm & Practice (ready-made branch)"),
+            new OnboardingStepDefinition("resolving-plan", "Checking for a plan (ready-made branch)"),
+            new OnboardingStepDefinition("plan-unavailable", "No plan yet (ready-made branch)")
+    );
+    private static final Set<String> ONBOARDING_STEP_NAMES = Stream.concat(
+                    ONBOARDING_STEPS.stream(), ONBOARDING_BRANCH_STEPS.stream())
             .map(OnboardingStepDefinition::stepName)
             .collect(Collectors.toUnmodifiableSet());
 
@@ -140,11 +153,22 @@ public class AdminFunnelService {
             previousUserCount = userCount;
         }
 
+        // Branch rows carry a null drop-off on purpose: there is no previous step to subtract from.
+        List<AdminFunnelMetricsResponse.OnboardingStepMetrics> branchSteps = ONBOARDING_BRANCH_STEPS.stream()
+                .map(step -> new AdminFunnelMetricsResponse.OnboardingStepMetrics(
+                        step.stepName(),
+                        step.label(),
+                        currentStepCounts.getOrDefault(step.stepName(), 0L),
+                        null
+                ))
+                .toList();
+
         return new AdminFunnelMetricsResponse.OnboardingMetrics(
                 completion.getTotalSignups(),
                 completion.getOnboardingCompletedUsers(),
                 ratePercent(completion.getOnboardingCompletedUsers(), completion.getTotalSignups()),
                 List.copyOf(steps),
+                branchSteps,
                 new AdminFunnelMetricsResponse.OnboardingStepMetrics(
                         LEGACY_ONBOARDING_STEP_NAME,
                         LEGACY_ONBOARDING_STEP_LABEL,
@@ -154,8 +178,7 @@ public class AdminFunnelService {
                 officialStudyPlanWishlistRepository.findProgramDemand().stream()
                         .map(row -> new AdminFunnelMetricsResponse.RequestedProgramMetrics(
                                 row.getCourseProgram(),
-                                row.getRequestCount(),
-                                row.getDistinctLearners()
+                                row.getRequestCount()
                         ))
                         .toList()
         );

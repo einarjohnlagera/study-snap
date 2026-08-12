@@ -93,7 +93,7 @@ class AdminFunnelServiceTest {
         assertThat(response.onboarding().totalSignups()).isZero();
         assertThat(response.onboarding().onboardingCompletedUsers()).isZero();
         assertThat(response.onboarding().completionRatePercent()).isEqualTo(0.0);
-        assertThat(response.onboarding().steps()).hasSize(9).allSatisfy(step -> {
+        assertThat(response.onboarding().steps()).hasSize(8).allSatisfy(step -> {
             assertThat(step.userCount()).isZero();
         });
         assertThat(response.onboarding().legacyStep().userCount()).isZero();
@@ -148,8 +148,7 @@ class AdminFunnelServiceTest {
                         "input-method",
                         "note",
                         "generating",
-                        "completion",
-                        "confirm-practice"
+                        "completion"
                 );
         assertThat(response.onboarding().steps().get(0).userCount()).isEqualTo(20);
         assertThat(response.onboarding().steps().get(1).userCount()).isEqualTo(15);
@@ -171,8 +170,8 @@ class AdminFunnelServiceTest {
         when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
                 .thenReturn(List.of());
         when(officialStudyPlanWishlistRepository.findProgramDemand()).thenReturn(List.of(
-                officialPlanDemand(NURSING, 8, 8),
-                officialPlanDemand(ACCOUNTANCY, 3, 3)
+                officialPlanDemand(NURSING, 8),
+                officialPlanDemand(ACCOUNTANCY, 3)
         ));
 
         AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
@@ -181,7 +180,41 @@ class AdminFunnelServiceTest {
                 .extracting(AdminFunnelMetricsResponse.RequestedProgramMetrics::courseProgram)
                 .containsExactly(NURSING, ACCOUNTANCY);
         assertThat(response.onboarding().requestedPrograms().getFirst().requestCount()).isEqualTo(8);
-        assertThat(response.onboarding().requestedPrograms().getFirst().distinctLearners()).isEqualTo(8);
+    }
+
+    @Test
+    void onboardingMetrics_keepsBranchScreensOutOfTheOrderedWalkWithNoDropOff() {
+        // confirm-practice is a BRANCH of Screen 5, not a step after completion: a learner who adopts a
+        // Review Set leaves from Screen 5 and never fires "completion". Ordering it last made its
+        // drop-off completion-minus-confirm-practice -- meaningless, and negative as soon as adoption is
+        // real. There is no ordering that makes these a funnel with the others; they are siblings.
+        stubBaseMetrics(0, 0, null, 0, 0, 0, 0);
+        when(subscriptionRepository.findActiveUserIdsByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
+                .thenReturn(List.of());
+        when(userUsageRepository.findByPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(any(), any()))
+                .thenReturn(List.of());
+        when(analyticsEventRepository.findOnboardingCompletion()).thenReturn(onboardingCompletion(100, 40));
+        when(analyticsEventRepository.findOnboardingStepUserCounts()).thenReturn(List.of(
+                onboardingStep("completion", 10),
+                // more adopters than completers: the shape that produced a negative drop-off
+                onboardingStep("confirm-practice", 37),
+                onboardingStep("plan-unavailable", 12),
+                onboardingStep("resolving-plan", 5)
+        ));
+
+        AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
+
+        assertThat(response.onboarding().steps())
+                .extracting(AdminFunnelMetricsResponse.OnboardingStepMetrics::stepName)
+                .doesNotContain("confirm-practice", "plan-unavailable", "resolving-plan");
+        assertThat(response.onboarding().branchSteps())
+                .extracting(AdminFunnelMetricsResponse.OnboardingStepMetrics::stepName)
+                .containsExactly("confirm-practice", "resolving-plan", "plan-unavailable");
+        assertThat(response.onboarding().branchSteps())
+                .allSatisfy(step -> assertThat(step.dropOffFromPrevious()).isNull());
+        assertThat(response.onboarding().branchSteps().getFirst().userCount()).isEqualTo(37);
+        // and none of them lands in the legacy bucket, which is for UNRECOGNISED names
+        assertThat(response.onboarding().legacyStep().userCount()).isZero();
     }
 
     @Test
@@ -236,7 +269,7 @@ class AdminFunnelServiceTest {
 
         AdminFunnelMetricsResponse response = adminFunnelService.getMetrics();
 
-        assertThat(response.onboarding().steps()).hasSize(9).allSatisfy(step -> {
+        assertThat(response.onboarding().steps()).hasSize(8).allSatisfy(step -> {
             assertThat(step.userCount()).isZero();
         });
         assertThat(response.onboarding().legacyStep().userCount()).isEqualTo(23);
@@ -555,8 +588,7 @@ class AdminFunnelServiceTest {
 
     private OfficialStudyPlanDemandProjection officialPlanDemand(
             String courseProgram,
-            long requestCount,
-            long distinctLearners
+            long requestCount
     ) {
         return new OfficialStudyPlanDemandProjection() {
             @Override
@@ -569,10 +601,6 @@ class AdminFunnelServiceTest {
                 return requestCount;
             }
 
-            @Override
-            public long getDistinctLearners() {
-                return distinctLearners;
-            }
         };
     }
 

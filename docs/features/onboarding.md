@@ -148,7 +148,7 @@ what made this screen a dead end when it auto-advanced: re-choosing the value al
 `change` event, so the learner had no way forward. Do not pair the pre-fill with auto-advance here.
 
 Screen 3 asks for required `Learner Level` through the existing grouped closed-set selector. Selecting a level
-persists the combined learning context and advances automatically. A persistence failure remains visible and
+persists the combined learning context and requires an explicit Continue. A persistence failure remains visible and
 retryable on this screen. Teacher helper copy frames the field as the default quiz difficulty for quizzes the
 teacher generates; non-teacher copy stays focused on the learner's own study material.
 

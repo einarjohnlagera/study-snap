@@ -4,6 +4,4 @@ public interface OfficialStudyPlanDemandProjection {
     String getCourseProgram();
 
     long getRequestCount();
-
-    long getDistinctLearners();
 }

@@ -762,6 +762,12 @@ export type AdminFunnelMetricsResponse = {
       userCount: number;
       dropOffFromPrevious: number | null;
     }>;
+    branchSteps: Array<{
+      stepName: string;
+      label: string;
+      userCount: number;
+      dropOffFromPrevious: number | null;
+    }>;
     legacyStep: {
       stepName: string;
       label: string;
@@ -771,7 +777,6 @@ export type AdminFunnelMetricsResponse = {
     requestedPrograms: Array<{
       courseProgram: string;
       requestCount: number;
-      distinctLearners: number;
     }>;
   };
   activation: {

@@ -33,7 +33,6 @@ class OfficialStudyPlanWishlistRepositoryTest {
         assertThat(demand).hasSize(2);
         assertThat(demand.getFirst().getCourseProgram()).isEqualToIgnoringCase(NORMALIZED_NURSING);
         assertThat(demand.getFirst().getRequestCount()).isEqualTo(3);
-        assertThat(demand.getFirst().getDistinctLearners()).isEqualTo(3);
         assertThat(demand.getLast().getCourseProgram()).isEqualTo(ACCOUNTANCY);
         assertThat(demand.getLast().getRequestCount()).isEqualTo(1);
     }
