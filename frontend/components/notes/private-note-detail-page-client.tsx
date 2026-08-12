@@ -2634,7 +2634,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         These are the same questions Quick Review asks — practise them here once you&apos;ve shown you know them.
                       </p>
                       <p className="text-sm leading-relaxed text-foreground/75">
-                        Didn&apos;t get them all? Use <strong className="font-semibold text-foreground">Redo Mistakes</strong> to retry the ones you missed; a perfect score after a retry still unlocks it.
+                        Didn&apos;t get them all? Use <strong className="font-semibold text-foreground">Retry Incorrect Questions</strong> at the end of Quick Review; a perfect score after a retry still unlocks it.
                       </p>
                     </div>
                   </div>

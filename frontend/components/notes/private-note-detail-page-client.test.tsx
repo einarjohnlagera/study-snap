@@ -2386,7 +2386,9 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(quizTab).toHaveFocus();
     expect(screen.getByRole("heading", { name: "Quiz locked" })).toBeInTheDocument();
     expect(screen.getByText("Score 3/3 on Quick Review to unlock the Quiz.")).toBeInTheDocument();
-    expect(screen.getByText(/Redo Mistakes/)).toBeInTheDocument();
+    // Must name the button that actually exists on the Quick Review results screen
+    // (quick-review/page.tsx). "Redo Mistakes" is not a label anywhere in the product.
+    expect(screen.getByText(/Retry Incorrect Questions/)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Practice Quiz" })).not.toBeInTheDocument();
     expect(screen.queryByText("Question 1")).not.toBeInTheDocument();
     expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({
