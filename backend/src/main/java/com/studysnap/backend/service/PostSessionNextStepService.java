@@ -20,6 +20,7 @@ import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.dto.ApplicableProgramResponse;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.util.NoteEffectivePrograms;
@@ -53,10 +54,6 @@ public class PostSessionNextStepService {
     private static final String PRACTICE_WEAK_CONCEPTS_LABEL = "Practice Weak Concepts";
     private static final String RETRY_INCORRECT_QUESTIONS_LABEL = "Retry Incorrect Questions";
     private static final String REDO_MISSED_QUESTIONS_LABEL = "Redo Missed Questions";
-    // Promote Challenge to the primary next step at a strong-majority Quick Review (>= 4/5):
-    // up to this many missed concepts still counts as "strong, step up" with retry kept available
-    // as a secondary action. Two or more misses keeps retry as the primary action.
-    private static final int STRONG_QUICK_REVIEW_MAX_MISSES = 1;
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
@@ -71,6 +68,7 @@ public class PostSessionNextStepService {
     private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
+    private final StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     @Transactional(readOnly = true)
     public NextStepResponse getNextStep(UUID userId, UUID studyPackId) {
@@ -127,6 +125,7 @@ public class PostSessionNextStepService {
 
         return switch (latestCompletedSession.getSessionMode()) {
             case QUICK_REVIEW -> resolveQuickReviewNextStep(
+                    userId,
                     studyPack,
                     sessionMisses,
                     genuineWeakConcepts,
@@ -182,32 +181,21 @@ public class PostSessionNextStepService {
     }
 
     private NextStepResponse resolveQuickReviewNextStep(
+            UUID userId,
             StudyPackEntity studyPack,
             List<String> sessionMisses,
             List<String> genuineWeakConcepts,
             AdaptivePracticeQuota adaptivePracticeQuota,
             GoalNudgeResponse goalNudge
     ) {
-        if (sessionMisses.size() > STRONG_QUICK_REVIEW_MAX_MISSES) {
+        StudyPackQuizMastery mastery = studyPackQuizMasteryService.resolve(userId, studyPack);
+        if (!mastery.mastered()) {
             return retryReviewResponse(
                     studyPack,
                     sessionMisses,
                     adaptivePracticeQuota,
                     goalNudge,
                     challengeSecondaryAction(studyPack)
-            );
-        }
-
-        if (!sessionMisses.isEmpty()) {
-            // Strong-majority Quick Review with a single miss: promote Challenge, keep the missed
-            // question retrievable as a secondary "retry" action so the miss is not lost.
-            return reviewPackResponse(
-                    studyPack,
-                    adaptivePracticeQuota,
-                    goalNudge,
-                    sessionMisses,
-                    "Strong Quick Review. Step up with a Challenge — the one you missed is ready to retry below.",
-                    retryReviewSecondaryAction(studyPack)
             );
         }
 
@@ -378,14 +366,6 @@ public class PostSessionNextStepService {
         return new NextStepSecondaryActionResponse(
                 TAKE_CHALLENGE_LABEL,
                 pathOrFallback(studyPack.getNoteId(), CHALLENGE_QUIZ_PATH),
-                false
-        );
-    }
-
-    private NextStepSecondaryActionResponse retryReviewSecondaryAction(StudyPackEntity studyPack) {
-        return new NextStepSecondaryActionResponse(
-                RETRY_INCORRECT_QUESTIONS_LABEL,
-                pathOrFallback(studyPack.getNoteId(), QUICK_REVIEW_PATH),
                 false
         );
     }

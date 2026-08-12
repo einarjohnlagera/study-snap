@@ -169,6 +169,7 @@ public class ChallengeQuizService {
     private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final ConceptHealthService conceptHealthService;
+    private final StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     @Transactional
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
@@ -356,6 +357,9 @@ public class ChallengeQuizService {
             } catch (RuntimeException ignored) {
                 // Analytics must never turn a successfully generated quiz into a failed session.
             }
+            if (!MODE_BOARD_EXAM.equals(selectedMode)) {
+                trackChallengeLaunchMasterySplit(userId, studyPack, saved);
+            }
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
                 return toStartResponse(saved, studyPack, boardExamUsedThisMonth + BOARD_EXAM_QUOTA_UNITS_PER_SESSION, planType);
             }
@@ -370,6 +374,32 @@ public class ChallengeQuizService {
                 return toStartResponse(failed, studyPack, boardExamUsedThisMonth, planType);
             }
             return toStartResponse(failed, studyPack, usedThisMonth, planType);
+        }
+    }
+
+    private void trackChallengeLaunchMasterySplit(
+            UUID userId,
+            StudyPackEntity studyPack,
+            QuickReviewSessionEntity session
+    ) {
+        try {
+            studyPackQuizMasteryService.tryResolve(userId, studyPack).ifPresent(mastery -> {
+                AnalyticsEventType eventType = mastery.mastered()
+                        ? AnalyticsEventType.CHALLENGE_QUIZ_LAUNCHED_AFTER_MASTERY
+                        : AnalyticsEventType.CHALLENGE_QUIZ_LAUNCHED_BEFORE_MASTERY;
+                analyticsService.trackEvent(userId, eventType, studyPack.getId(), Map.of(
+                        ANALYTICS_METADATA_SESSION_ID, session.getId().toString(),
+                        ANALYTICS_METADATA_MODE, MODE_CHALLENGE
+                ));
+            });
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "challenge_quiz_mastery_analytics_failed userId={} studyPackId={} sessionId={}",
+                    userId,
+                    studyPack.getId(),
+                    session.getId(),
+                    exception
+            );
         }
     }
 

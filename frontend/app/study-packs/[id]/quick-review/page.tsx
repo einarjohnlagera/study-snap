@@ -191,6 +191,7 @@ export default function QuickReviewPage() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   const [persistedResult, setPersistedResult] = useState<QuickReviewSessionSummaryResponse | null>(null);
+  const [quizMasteredAfterCompletion, setQuizMasteredAfterCompletion] = useState(false);
   const [recentSessions, setRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
   const [studyTip, setStudyTip] = useState<string | null>(null);
   const [completingSession, setCompletingSession] = useState(false);
@@ -291,6 +292,7 @@ export default function QuickReviewPage() {
     setRetryCount(0);
     setCompletionTracked(false);
     setPersistedResult(null);
+    setQuizMasteredAfterCompletion(false);
     setStudyTip(null);
     setCompletingSession(false);
     setConfidenceLevel(null);
@@ -721,6 +723,14 @@ export default function QuickReviewPage() {
         },
       });
       setPersistedResult(result);
+      setQuizMasteredAfterCompletion(false);
+      if (noteId) {
+        void getNote(noteId)
+          .then((detail) => {
+            setQuizMasteredAfterCompletion(detail.quizMastered === true);
+          })
+          .catch(() => setQuizMasteredAfterCompletion(false));
+      }
       void getPostSessionNextStep(result.studyPackId)
         .then(setNextStepResponse)
         .catch(() => setNextStepResponse(null));
@@ -735,7 +745,7 @@ export default function QuickReviewPage() {
         metadata: { scorePercentage: totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0, weakConceptCount: weakConcepts.length },
       });
     }
-  }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
+  }, [completingSession, completionTracked, currentSessionId, noteId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
 
   useEffect(() => {
     if (!shouldShowOpenLoop || !persistedResult || openLoopTrackedSessionIdRef.current === persistedResult.id) {
@@ -1122,6 +1132,14 @@ export default function QuickReviewPage() {
               {performanceBadge.label}
             </div>
             <ScoreProgressBlock score={score} totalQuestions={totalQuestions} scorePercentage={scorePercentage} />
+            {persistedResult && isPerfectScore && quizMasteredAfterCompletion ? (
+              <Card className="motion-fade-enter space-y-1 border-emerald-500/35 bg-emerald-500/10 p-4">
+                <p className="font-semibold text-emerald-800 dark:text-emerald-200">🔓 Quiz Unlocked</p>
+                <p className="text-sm leading-relaxed text-foreground/75">
+                  You earned access to the saved Quiz questions. They are now available to practise with on your note.
+                </p>
+              </Card>
+            ) : null}
             {previousAttempt ? (
               <div className="space-y-1 rounded-md border border-border bg-background p-3">
                 <p>Previous Attempt: {previousAttempt.correctAnswers} / {previousAttempt.totalQuestions}</p>
@@ -1155,6 +1173,7 @@ export default function QuickReviewPage() {
                 currentPlan={currentPlan}
                 noteId={note?.id ?? null}
                 onOpenPaywall={() => openAdaptivePracticePaywall("quick_review_results_next_step")}
+                originatingQuizMode="QUICK_REVIEW"
                 contained
               />
               {nextStepResponse?.goalNudge ? (

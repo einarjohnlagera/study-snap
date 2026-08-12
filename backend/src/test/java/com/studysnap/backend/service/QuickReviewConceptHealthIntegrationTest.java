@@ -93,7 +93,8 @@ class QuickReviewConceptHealthIntegrationTest {
                 analyticsService,
                 subscriptionService,
                 featureGateService,
-                conceptHealthService
+                conceptHealthService,
+                mock(StudyPackQuizMasteryService.class)
         );
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

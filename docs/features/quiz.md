@@ -105,6 +105,10 @@ Current save toast:
 
 Result screens should guide the next action through the shared ConceptHealth-driven post-session handoff instead of each mode computing bespoke CTAs from the current session only.
 
+After Quick Review, Challenge Quiz becomes the primary recommendation only when the shared server mastery predicate succeeds; any non-mastered result, including a single miss, keeps `Retry Incorrect Questions` primary. A perfect result also shows the announcement-only `🔓 Quiz Unlocked` result card without adding a competing Quiz-tab action.
+
+Whenever the shared post-session component actually renders a Challenge action, it emits `POST_SESSION_CHALLENGE_CTA_IMPRESSION` once for that display and `POST_SESSION_CHALLENGE_CTA_CLICKED` on activation, both tagged with the originating quiz mode. These events exist specifically to make the Challenge-adoption exposure-to-click read measurable; fetching a next step without rendering a Challenge action is not an impression.
+
 Shared pattern:
 
 - complete the session first

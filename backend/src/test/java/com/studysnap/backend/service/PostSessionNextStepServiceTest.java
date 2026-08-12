@@ -22,6 +22,7 @@ import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,6 +82,8 @@ class PostSessionNextStepServiceTest {
     private StudyPackGenerationContextResolver generationContextResolver;
     @Mock
     private ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
+    @Mock
+    private StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     private StudySnapProperties properties;
     private PostSessionNextStepService postSessionNextStepService;
@@ -101,10 +104,13 @@ class PostSessionNextStepServiceTest {
                 progressReportService,
                 challengeQuizQuestionBankService,
                 generationContextResolver,
-                examGoalCourseProgramProvider
+                examGoalCourseProgramProvider,
+                studyPackQuizMasteryService
         );
         lenient().when(examGoalCourseProgramProvider.getCoursePrograms("pnle"))
                 .thenReturn(List.of("Nursing"));
+        lenient().when(studyPackQuizMasteryService.resolve(any(), any()))
+                .thenReturn(StudyPackQuizMastery.notMastered());
     }
 
     @Test
@@ -118,6 +124,8 @@ class PostSessionNextStepServiceTest {
                 conceptHealth(FIRST_CONCEPT, null, true),
                 conceptHealth(SECOND_CONCEPT, null, true)
         ));
+        when(studyPackQuizMasteryService.resolve(userId, studyPack))
+                .thenReturn(StudyPackQuizMastery.masteredAt(NOW));
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
@@ -139,6 +147,8 @@ class PostSessionNextStepServiceTest {
                 conceptHealth(FIRST_CONCEPT, NOW.minusDays(5), true),
                 conceptHealth(SECOND_CONCEPT, NOW.minusDays(1), false)
         ));
+        when(studyPackQuizMasteryService.resolve(userId, studyPack))
+                .thenReturn(StudyPackQuizMastery.masteredAt(NOW));
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
@@ -151,21 +161,23 @@ class PostSessionNextStepServiceTest {
     }
 
     @Test
-    void getNextStep_promotesChallengeForSingleMissQuickReviewWithRetrySecondary() {
+    void getNextStep_returnsRetryReviewForSingleMissQuickReviewWithChallengeSecondary() {
         UUID userId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(userId);
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);
         stubLatestSession(userId, studyPack, QuickReviewSessionMode.QUICK_REVIEW, List.of(FIRST_CONCEPT));
         stubConceptHealth(userId, studyPack, List.of());
+        when(studyPackQuizMasteryService.resolve(userId, studyPack))
+                .thenReturn(StudyPackQuizMastery.notMastered());
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
-        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
-        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
+        assertThat(response.actionHref()).endsWith(QUICK_REVIEW_PATH_SUFFIX);
         assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
         assertThat(response.secondaryAction()).isNotNull();
-        assertThat(response.secondaryAction().actionHref()).endsWith(QUICK_REVIEW_PATH_SUFFIX);
+        assertThat(response.secondaryAction().actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
         assertThat(response.secondaryAction().adaptivePractice()).isFalse();
     }
 
@@ -459,7 +471,8 @@ class PostSessionNextStepServiceTest {
                 progressReportService,
                 realQuestionBankService,
                 generationContextResolver,
-                examGoalCourseProgramProvider
+                examGoalCourseProgramProvider,
+                studyPackQuizMasteryService
         );
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);

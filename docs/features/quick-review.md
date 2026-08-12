@@ -56,7 +56,8 @@ Quick Review uses its own session model:
 - Mastery is per learner and per Study Pack. Copies and remixes do not inherit the source owner's session history or mastery.
 - Regeneration deliberately re-evaluates old sessions against the regenerated Study Pack's current quiz size. If the question count changes, an earlier perfect session may stop qualifying because it describes a different question set.
 - `quizMastered` and nullable `quizMasteredAt` are server-resolved response fields. A mastery lookup failure fails closed to `false` without hiding the Study Pack.
-- This foundation does not lock or render anything by itself; the Quiz-tab progression UI is separate v0.74.0 work.
+- A verified-perfect completion announces `🔓 Quiz Unlocked` beside the result. This is an announcement only: it adds no Quiz-tab link or competing action.
+- `QUICK_REVIEW_MASTERED` records whether perfection happened on the first pass or after the retry round. `STUDY_PACK_QUIZ_UNLOCKED` records only the first transition into mastery for that learner and Study Pack.
 
 ## Result screen
 
@@ -66,14 +67,14 @@ For a learner's first-ever completed quiz — Quick Review or Challenge Quiz, de
 
 Primary CTA rules:
 
-> **Why Challenge Quiz is the primary action here at >= 4/5** (rather than only at 5/5, and rather than the entry point being moved or enlarged) is a recorded product decision — see [`docs/product/CHALLENGE_QUIZ_ADOPTION.md`](../product/CHALLENGE_QUIZ_ADOPTION.md). The rules below remain the source of truth for the behavior; that document explains the reasoning and carries the validation reads that were deferred.
+> Challenge Quiz promotion now occurs at the same verified-perfect mastery moment as the Quiz unlock. The earlier >= 4/5 experiment and its validation obligation remain recorded in [`docs/product/CHALLENGE_QUIZ_ADOPTION.md`](../product/CHALLENGE_QUIZ_ADOPTION.md).
 
 - after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
 - the shared `<PostSessionNextStep>` component renders the dominant next action
-- a Quick Review with two or more missed concepts prioritizes `Retry Incorrect Questions` and keeps Challenge Quiz available as a secondary action
-- a strong-majority Quick Review (at most one missed concept, i.e. >= 4/5) advances primarily to `Take a Challenge`; when there is a single miss, `Retry Incorrect Questions` is kept as a secondary action so the missed question is not lost
-- a Quick Review with no misses advances primarily to `Take a Challenge`
-- genuine weak concepts may keep `Practice Weak Concepts` reachable as a secondary action after a strong Quick Review, but never replace Challenge Quiz as the primary action
+- any non-mastered Quick Review, including exactly one miss, prioritizes `Retry Incorrect Questions` and keeps Challenge Quiz available as a secondary action
+- only a Quick Review that satisfies the shared server mastery predicate advances primarily to `Take a Challenge`
+- **the predicate is historical, not per-session, and that is deliberate:** it asks whether *any* completed session for this `(learner, Study Pack)` was verified-perfect at the current quiz size. So a learner who mastered a pack earlier keeps the Challenge promotion even after a weaker session today — mastery is sticky until the quiz itself changes. This replaced a per-session `>= 4/5` rule, so the promotion and the Quiz-tab unlock now read the same signal rather than two that can disagree
+- genuine weak concepts may keep `Practice Weak Concepts` reachable as a secondary action after mastery, but never replace Challenge Quiz as the primary action
 - fallback UI keeps the previous weak-area / challenge / retry guidance when the next-step fetch fails
 
 Secondary actions:
@@ -109,12 +110,12 @@ Meaning:
 
 ## ConceptHealth
 
-- Quick Review does not record to `ConceptHealth`.
-- Completing Quick Review must not update `lastCorrectAt`, `lastIncorrectAt`, mastery, due-state, struggling state, note readiness, plan readiness, or `Overall Readiness`.
-- Quick Review remains a refresh-only mechanic: it keeps immediate right/wrong feedback, one retry round for incorrect questions, result-screen missed-concept copy, and session history from its own session data.
-- `Retry Incorrect Questions` / `Take a Challenge` next-step behavior uses the completed session's stored `weakConcepts` metadata, not a `ConceptHealth` write from that same Quick Review session.
-- Genuine weak-area secondary recommendations may still read shared `ConceptHealth`, but that spine is fed by assessment modes only: Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice.
-- Existing `ConceptHealth` rows influenced by older Quick Review completions are not backfilled or deleted; they naturally decay once no assessment mode refreshes them.
+**Quick Review DOES record to `ConceptHealth`.** Corrected 2026-08-12 — this section had described the opposite for a month and was wrong.
+
+- On completion, `QuickReviewSessionService` calls `conceptHealthService.recordCorrectAnswers(...)` and `recordIncorrectAnswers(...)` with concepts derived from the **persisted selections**, server-side, via `QuizSessionReviewUtils.computeConceptBreakdownForStoredSelections`. `QuickReviewConceptHealthIntegrationTest` pins this.
+- **History, because this axis reversed twice and the doc only tracked the first move.** `01bc89e5` (2026-06-04) fed `ConceptHealth` from Quick Review; `8c7a4821` (2026-07-03) excluded it and rewrote this section; **`6d054bad` (2026-07-11) deliberately restored the write** — *"previously wrote nothing, leaving Free-tier's primary quiz mode with no durable spaced-repetition signal"* — but did not restore this section. The stale text survived until `v0.74.0`.
+- **This is load-bearing for `v0.74.0`, not trivia.** That release locks the Quiz tab precisely because the tab is an answer key to the questions Quick Review administers, and Quick Review's score therefore reaches the one signal the product treats as mastery-integrity-bearing. **Do not "restore" the exclusion on the strength of an old document** — it would silently undo `6d054bad` and remove the justification `v0.74.0` was built on.
+- Genuine weak-area secondary recommendations read shared `ConceptHealth`, which is fed by Quick Review alongside Challenge Quiz, Adaptive Practice, Long Exam, Board Exam, and Interview Practice.
 
 ## Review history
 

@@ -2378,6 +2378,7 @@ export default function ChallengeQuizPage() {
                   currentPlan={currentPlan}
                   noteId={note?.id ?? null}
                   onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "board_exam_results_next_step")}
+                  originatingQuizMode="BOARD_EXAM"
                   contained
                 />
                 {nextStepResponse?.goalNudge ? (
@@ -2600,6 +2601,7 @@ export default function ChallengeQuizPage() {
                   currentPlan={currentPlan}
                   noteId={note?.id ?? null}
                   onOpenPaywall={() => openLockedFeaturePaywall("adaptive-practice", "challenge_quiz_results_next_step")}
+                  originatingQuizMode="CHALLENGE"
                   contained
                 />
                 {nextStepResponse?.goalNudge ? (

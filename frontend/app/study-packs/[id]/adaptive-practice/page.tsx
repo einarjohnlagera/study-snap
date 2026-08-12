@@ -754,6 +754,7 @@ export default function AdaptivePracticePage() {
                 currentPlan={currentPlan}
                 noteId={note?.id ?? null}
                 onOpenPaywall={() => openAdaptivePracticePaywall("adaptive_practice_results_next_step")}
+                originatingQuizMode="ADAPTIVE"
                 contained
               />
               {nextStepResponse?.goalNudge ? (

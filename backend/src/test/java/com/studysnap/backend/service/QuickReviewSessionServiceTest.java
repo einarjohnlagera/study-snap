@@ -22,6 +22,7 @@ import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackLatestCompletionProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
 import com.studysnap.backend.testutil.builders.StudyPackEntityBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +73,8 @@ class QuickReviewSessionServiceTest {
     private SubscriptionService subscriptionService;
     @Mock
     private ConceptHealthService conceptHealthService;
+    @Mock
+    private StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     private QuickReviewSessionService quickReviewSessionService;
 
@@ -86,7 +89,8 @@ class QuickReviewSessionServiceTest {
                 analyticsService,
                 subscriptionService,
                 featureGateService,
-                conceptHealthService
+                conceptHealthService,
+                studyPackQuizMasteryService
         );
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -141,6 +145,7 @@ class QuickReviewSessionServiceTest {
                 any(QuickReviewSessionStatus.class)
         )).thenReturn(false);
         lenient().when(activityEventRepository.existsByUserIdAndActivityTypeIn(any(UUID.class), any())).thenReturn(false);
+        lenient().when(studyPackQuizMasteryService.tryResolve(any(), any())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -306,6 +311,8 @@ class QuickReviewSessionServiceTest {
         studyPack.setQuiz(buildSingleChoiceQuiz(5));
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackQuizMasteryService.tryResolve(userId, studyPack))
+                .thenReturn(Optional.of(StudyPackQuizMastery.notMastered()));
 
         quickReviewSessionService.completeSession(
                 sessionId.toString(),
@@ -314,6 +321,16 @@ class QuickReviewSessionServiceTest {
         );
 
         assertThat(session.getVerifiedCorrectAnswers()).isEqualTo(5);
+        verify(analyticsService).trackEvent(
+                eq(userId),
+                eq(AnalyticsEventType.QUICK_REVIEW_MASTERED),
+                eq(studyPackId),
+                argThat(metadata -> Integer.valueOf(0).equals(metadata.get("retryCount"))
+                        && "FIRST_PASS".equals(metadata.get("masteryPath")))
+        );
+        verify(analyticsService).trackEvent(
+                eq(userId), eq(AnalyticsEventType.STUDY_PACK_QUIZ_UNLOCKED), eq(studyPackId), any()
+        );
     }
 
     @Test
@@ -327,6 +344,8 @@ class QuickReviewSessionServiceTest {
         studyPack.setQuiz(buildSingleChoiceQuiz(5));
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackQuizMasteryService.tryResolve(userId, studyPack))
+                .thenReturn(Optional.of(StudyPackQuizMastery.notMastered()));
 
         quickReviewSessionService.completeSession(
                 sessionId.toString(),
@@ -336,6 +355,41 @@ class QuickReviewSessionServiceTest {
 
         assertThat(session.getRetryCount()).isEqualTo(1);
         assertThat(session.getVerifiedCorrectAnswers()).isEqualTo(5);
+        verify(analyticsService).trackEvent(
+                eq(userId),
+                eq(AnalyticsEventType.QUICK_REVIEW_MASTERED),
+                eq(studyPackId),
+                argThat(metadata -> Integer.valueOf(1).equals(metadata.get("retryCount"))
+                        && "AFTER_RETRY".equals(metadata.get("masteryPath")))
+        );
+    }
+
+    @Test
+    void completeSession_doesNotFireUnlockAgainWhenPackWasAlreadyMastered() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setSessionState(Map.of("selectedChoices", Map.of("0", 0, "1", 0, "2", 0, "3", 0, "4", 0)));
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 0);
+        studyPack.setQuiz(buildSingleChoiceQuiz(5));
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackQuizMasteryService.tryResolve(userId, studyPack))
+                .thenReturn(Optional.of(StudyPackQuizMastery.masteredAt(OffsetDateTime.now())));
+
+        quickReviewSessionService.completeSession(
+                sessionId.toString(),
+                userId,
+                new QuickReviewSessionCompleteRequest(5, 5, 0, 90, null)
+        );
+
+        verify(analyticsService).trackEvent(
+                eq(userId), eq(AnalyticsEventType.QUICK_REVIEW_MASTERED), eq(studyPackId), any()
+        );
+        verify(analyticsService, never()).trackEvent(
+                eq(userId), eq(AnalyticsEventType.STUDY_PACK_QUIZ_UNLOCKED), eq(studyPackId), any()
+        );
     }
 
     @Test
@@ -358,6 +412,12 @@ class QuickReviewSessionServiceTest {
 
         assertThat(session.getCorrectAnswers()).isEqualTo(5);
         assertThat(session.getVerifiedCorrectAnswers()).isEqualTo(4);
+        verify(analyticsService, never()).trackEvent(
+                eq(userId), eq(AnalyticsEventType.QUICK_REVIEW_MASTERED), eq(studyPackId), any()
+        );
+        verify(analyticsService, never()).trackEvent(
+                eq(userId), eq(AnalyticsEventType.STUDY_PACK_QUIZ_UNLOCKED), eq(studyPackId), any()
+        );
     }
 
     @Test

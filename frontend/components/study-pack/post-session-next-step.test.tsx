@@ -1,6 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PostSessionNextStep } from "./post-session-next-step";
-import type { PostSessionNextStepResponse } from "@/lib/api";
+import { trackAnalyticsEvent, type PostSessionNextStepResponse } from "@/lib/api";
+
+jest.mock("@/lib/api", () => ({
+  trackAnalyticsEvent: jest.fn(),
+}));
 
 const baseResponse: PostSessionNextStepResponse = {
   type: "PRACTICE_WEAK_CONCEPT",
@@ -18,13 +22,18 @@ const baseResponse: PostSessionNextStepResponse = {
 };
 
 describe("PostSessionNextStep", () => {
-  it("renders the primary route CTA and focus areas when a response is provided", () => {
+  beforeEach(() => {
+    (trackAnalyticsEvent as jest.Mock).mockReset().mockResolvedValue(undefined);
+  });
+
+  it("renders the primary route CTA and focus areas without a Challenge impression", async () => {
     render(
       <PostSessionNextStep
         response={baseResponse}
         currentPlan="FREE"
         noteId="note-1"
         onOpenPaywall={jest.fn()}
+        originatingQuizMode="QUICK_REVIEW"
       />,
     );
 
@@ -35,6 +44,7 @@ describe("PostSessionNextStep", () => {
       "href",
       "/notes/note-1/adaptive-practice",
     );
+    await waitFor(() => expect(trackAnalyticsEvent).not.toHaveBeenCalled());
   });
 
   it("renders the plan-aware upgrade CTA instead of a route when adaptive quota is exhausted", () => {
@@ -45,6 +55,7 @@ describe("PostSessionNextStep", () => {
         currentPlan="FREE"
         noteId="note-1"
         onOpenPaywall={onOpenPaywall}
+        originatingQuizMode="QUICK_REVIEW"
       />,
     );
 
@@ -71,6 +82,7 @@ describe("PostSessionNextStep", () => {
         currentPlan="FREE"
         noteId="note-1"
         onOpenPaywall={jest.fn()}
+        originatingQuizMode="QUICK_REVIEW"
       />,
     );
 
@@ -103,6 +115,7 @@ describe("PostSessionNextStep", () => {
         currentPlan="FREE"
         noteId="note-1"
         onOpenPaywall={onOpenPaywall}
+        originatingQuizMode="QUICK_REVIEW"
       />,
     );
 
@@ -120,9 +133,79 @@ describe("PostSessionNextStep", () => {
         currentPlan="FREE"
         noteId="note-1"
         onOpenPaywall={jest.fn()}
+        originatingQuizMode="QUICK_REVIEW"
       />,
     );
 
     expect(container).toBeEmptyDOMElement();
+    expect(trackAnalyticsEvent).not.toHaveBeenCalled();
+  });
+
+  it("tracks one impression when a Challenge action is actually rendered", async () => {
+    const response = {
+      ...baseResponse,
+      type: "REVIEW_PACK" as const,
+      actionLabel: "Take a Challenge",
+      actionHref: "/notes/note-1/challenge-quiz",
+    };
+    const { rerender } = render(
+      <PostSessionNextStep
+        response={response}
+        currentPlan="FREE"
+        noteId="note-1"
+        onOpenPaywall={jest.fn()}
+        originatingQuizMode="QUICK_REVIEW"
+      />,
+    );
+
+    await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "POST_SESSION_CHALLENGE_CTA_IMPRESSION",
+      entityId: "pack-1",
+      metadata: { originatingQuizMode: "QUICK_REVIEW" },
+    }));
+    rerender(
+      <PostSessionNextStep
+        response={response}
+        currentPlan="FREE"
+        noteId="note-1"
+        onOpenPaywall={jest.fn()}
+        originatingQuizMode="QUICK_REVIEW"
+      />,
+    );
+
+    expect((trackAnalyticsEvent as jest.Mock).mock.calls.filter(([event]) => (
+      event.eventType === "POST_SESSION_CHALLENGE_CTA_IMPRESSION"
+    ))).toHaveLength(1);
+  });
+
+  it("tracks a secondary Challenge click without preventing navigation", async () => {
+    render(
+      <PostSessionNextStep
+        response={{
+          ...baseResponse,
+          actionLabel: "Retry Incorrect Questions",
+          actionHref: "/notes/note-1/quick-review",
+          secondaryAction: {
+            actionLabel: "Take a Challenge",
+            actionHref: "/notes/note-1/challenge-quiz",
+            adaptivePractice: false,
+          },
+        }}
+        currentPlan="FREE"
+        noteId="note-1"
+        onOpenPaywall={jest.fn()}
+        originatingQuizMode="QUICK_REVIEW"
+      />,
+    );
+
+    const challengeLink = screen.getByRole("link", { name: "Take a Challenge" });
+    expect(challengeLink).toHaveAttribute("href", "/notes/note-1/challenge-quiz");
+    fireEvent.click(challengeLink);
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "POST_SESSION_CHALLENGE_CTA_CLICKED",
+      entityId: "pack-1",
+      metadata: { originatingQuizMode: "QUICK_REVIEW" },
+    });
   });
 });

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -22,9 +23,14 @@ public class StudyPackQuizMasteryService {
 
     @Transactional(readOnly = true, propagation = Propagation.NOT_SUPPORTED)
     public StudyPackQuizMastery resolve(UUID userId, StudyPackEntity studyPack) {
+        return tryResolve(userId, studyPack).orElseGet(StudyPackQuizMastery::notMastered);
+    }
+
+    @Transactional(readOnly = true, propagation = Propagation.NOT_SUPPORTED)
+    public Optional<StudyPackQuizMastery> tryResolve(UUID userId, StudyPackEntity studyPack) {
         if (userId == null || studyPack == null || studyPack.getId() == null
                 || studyPack.getQuiz() == null || studyPack.getQuiz().isEmpty()) {
-            return StudyPackQuizMastery.notMastered();
+            return Optional.of(StudyPackQuizMastery.notMastered());
         }
 
         try {
@@ -34,9 +40,9 @@ public class StudyPackQuizMasteryService {
                     studyPack.getId(),
                     currentQuizSize
             );
-            return masteredAt == null
+            return Optional.of(masteredAt == null
                     ? StudyPackQuizMastery.notMastered()
-                    : StudyPackQuizMastery.masteredAt(masteredAt);
+                    : StudyPackQuizMastery.masteredAt(masteredAt));
         } catch (RuntimeException exception) {
             log.warn(
                     "action=resolve_study_pack_quiz_mastery outcome=failed userId={} studyPackId={}",
@@ -44,7 +50,7 @@ public class StudyPackQuizMasteryService {
                     studyPack.getId(),
                     exception
             );
-            return StudyPackQuizMastery.notMastered();
+            return Optional.empty();
         }
     }
 }
