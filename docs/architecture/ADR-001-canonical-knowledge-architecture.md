@@ -346,7 +346,7 @@ Applies to `exam_question_pool` and `challenge_quiz_question_bank` rows generate
 
 ### Authoring populates by inference, not manual classification (direction, added 2026-08-04)
 
-**Status: agreed direction, NOT yet implemented, and deliberately gated — see the R4 constraint at the end of this section.** The four axes above are unchanged. What changes is how their values get set.
+**Status: agreed direction, UNGATED as of 2026-08-13, in implementation as `v0.75.0` — see "Sequencing" at the end of this section for why both original gates turned out to be already satisfied.** The four axes above are unchanged. What changes is how their values get set. **Scope of `v0.75.0` is depth only; Domain Context is deliberately excluded** under constraints 1 and 2 below.
 
 **The reframing that produced this.** The question "should a Note have a Learner Level?" was the wrong one. The right one is **"what is the canonical source of educational depth?"** — and the answer is *the content itself*. Grade School Algebra, Senior High Algebra, College Engineering Algebra and Board Exam Review Algebra are **different knowledge artifacts**, not one artifact with four quiz settings: the explanation, examples, terminology, Study Pack, flashcards and quizzes all differ. Depth is therefore a property of the note, which is what `notes.learner_level` already encodes. This makes explicit what rule 2 above only implied.
 
@@ -386,9 +386,16 @@ The Civil Engineering example above lists Year 1 through Year 4. `LearnerLevel` 
 
 "Learner Level" is implementation vocabulary and may be relabelled for admins — `Educational Level` and `Authored Depth` are both viable. **`Intended Audience` is not**, because `notes.target_profile_type` already occupies that concept and is already labelled *"Who is this note for?"* in the editor. Reusing it would collide two distinct axes in the one place users actually read. Any rename is copy-only: the column stays `learner_level`.
 
-#### Sequencing — gated on R4
+#### Sequencing — BOTH GATES CLEARED (amended 2026-08-13, `v0.75.0` kickoff)
 
-**No structural change to the depth axis before the R4 generate-and-diff verification runs** (see `RELEASES.md` v0.69.0, checkpoint due 2026-08-18). R4 is the first production evidence that Domain Context works as intended. If it surfaces unexpected authoring or generation behaviour, that evidence should inform this design rather than arrive after it. Note that R4 is itself currently blocked: authoring metadata is not editable once a note reaches `STUDY_PACK_READY`, so **making those fields editable is the true first step**, ahead of any inference work.
+**Status: cleared. This section previously blocked the work on two prerequisites; neither still holds, and both had been satisfied for some time before anyone checked.**
+
+- **R4 — RESOLVED 2026-08-04.** The generate-and-diff verification ran against production once `v0.70.0` deployed and passed on all three steps; zero of five drift checks fired. See *R4 verification* in this ADR. It surfaced no unexpected authoring or generation behaviour, so it informs this design by confirming it rather than by amending it.
+- **Editability — SHIPPED IN `v0.70.0`.** The original text read: *"R4 is itself currently blocked: authoring metadata is not editable once a note reaches `STUDY_PACK_READY`, so making those fields editable is the true first step, ahead of any inference work."* **That is no longer true, and had not been true for four releases when it was found.** On a `STUDY_PACK_READY` note, Edit stays on Note Detail, and Teacher/Admin authors may edit Target Audience, Domain Context, and Note Learner Level — gated by `isTeacherSelectableNoteTarget`, the same gate the Note Editor uses (`AGENTS.md:1081`). `private-note-detail-page-client.tsx:1445-1452` opens that inline metadata editor for any non-draft note. Correcting either authoring axis shapes *future* generation only and never touches the existing Study Pack.
+
+**Why this correction is recorded rather than quietly deleted.** A stale gate in an ADR is more expensive than a stale line in a feature doc, because an ADR outranks a feature doc where they disagree — so anyone checking whether inference work was authorized would read this section, find a prerequisite stated as unmet, and correctly defer. The gate was satisfied in `v0.70.0` and the text describing it was never revisited. **The general lesson, which applies to every gate in this ADR: a prerequisite written as a blocker must be re-read against current code before it is trusted, not carried forward on its own authority.**
+
+**What remains binding in this section: constraints 1–4 above, all four unchanged.** Clearing the sequencing gate authorizes the work; it does not relax a single constraint on how the work is done. In particular, **constraint 1 names an inference chain for depth only** — no source is authorized for Domain Context anywhere in this section, and constraint 2 explains why a pre-fill there would be actively destructive.
 
 ### Alternatives considered
 
