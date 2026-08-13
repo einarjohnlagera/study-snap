@@ -305,16 +305,53 @@ Implements `ADR-001` → *"Authoring populates by inference, not manual classifi
 
 So *"a CE Board Review set is board-depth by construction"* — the ADR's own justification for admitting a curation container as a legitimate depth source — is a human reading of a title today, not a stored fact any code can read.
 
-### The one open design call, deliberately not pre-empted at kickoff
+### Item 3 — RESOLVED at scoping, 2026-08-13
 
-**What triggers leg 1?** Two candidate shapes, both coherent:
+**The decision: add an optional Review Set selector to bulk-generate, so the Review Set is known *before* the notes exist and leg 1 fires as a genuine pre-fill.** The kickoff framed this as "pre-fill at creation vs. align-on-add," and that framing collapsed once the real workflow was traced.
 
-- **Pre-fill at creation** — carry a Review Set into the authoring surface so depth is suggested before the note exists. Matches the ADR's "pre-fill" framing exactly, but needs a new entry path into `/notes/new` and bulk-generate.
-- **Align-on-add** — when a note joins a Review Set carrying a depth, offer to align. Reuses the shipped `Add to Review Set` surface (`v0.64.0`) and needs no new creation path, but it is post-hoc rather than a pre-fill, so it must not write without an explicit human action.
+#### Why the original two options were not symmetric
 
-Resolve during scoping. **Whichever is chosen, `ADR-001` constraint 2 binds: inference is a UI pre-fill and must never become a server-side default write.**
+**Every authoring flow in this product is author-first, add-second. Verified at scoping:**
 
-**Also decide at design time, not after: does depth inherit down `parentCollectionId`?** Review Sets nest — a subject plan sits under a Review Set — and leaving this unanswered turns an omission into a bug the first time someone tags a parent and expects the children to follow.
+- `/notes/new` accepts only `mode` and `source`, and no entry point passes a collection.
+- **Bulk-generate has no collection field and `router.push("/library")` on submit** (`bulk-generation-page-client.tsx:307`) — the notes land in the Library unattached, and the author then adds them to the Review Set by hand.
+- The collection detail page's *"Add notes"* picker (`collection-detail-page-client.tsx:2136`) selects from **existing** notes via `addCollectionItems`.
+- The Study Plan builder assembles existing notes; it authors nothing.
+
+So "pre-fill at creation" was never a wiring choice — **there is no context to read.** It is a missing input, and the fix is to ask for it in the one surface where bulk authoring actually happens.
+
+#### Why align-on-add is rejected, and the reason is not aesthetic
+
+Aligning depth when a note *joins* a Review Set mutates notes that may already be generated — which **makes authoring corrections routine, the exact condition Backlog row 187 names as making the Challenge-bank orphan bug unbounded.** That row is currently sized at 5 of 6,235 rows precisely because corrections are rare today. Confirmed in code at scoping: `uq_challenge_quiz_question_bank_user_pack_key` is `(user_id, study_pack_id, question_key)` and **excludes `learner_level`** (`V96__challenge_quiz_question_bank.sql:12`), while the claim index includes it (`:17`) — so a stranded row is unclaimable but still occupies the unique key, and the LLM can regenerate straight into a constraint violation. **This release must not be the thing that makes that unbounded.**
+
+Option C escapes it cleanly: bulk-generate queues async generation with `learnerLevel` in the request, so **no bank rows exist yet and the orphan risk is structurally zero, not merely small.**
+
+#### Binding consequence for item 1 — create surfaces ONLY
+
+**Item 1's profile pre-fill lands on `/notes/new` and bulk-generate only. It must NOT be added to the inline metadata editor** on `private-note-detail-page-client.tsx`, which edits already-generated notes. Doing so would re-introduce exactly the row-187 exposure align-on-add was rejected for, through a different door. Stated here because the two surfaces are adjacent and a reasonable implementer would otherwise treat them as one.
+
+#### Scoped to bulk-generate, not `/notes/new`
+
+The CE Review Set pain is **bulk** authoring. A single-note author can use `Add to Review Set` immediately after saving, so shipping the selector on both surfaces doubles the trigger surface for the same benefit. **One surface this release**; revisit only if single-note authoring shows the same friction.
+
+#### The inheritance rule
+
+**Depth resolves to the nearest ancestor with a non-null `learner_level`, walking up `parentCollectionId`.**
+
+- **Bound the walk** — `parentCollectionId` is a plain FK with no cycle constraint, so the walk needs a depth cap rather than trusting the data.
+- **No ancestor carrying a level means NO pre-fill — never `COLLEGE`.** Falling through to a hardcoded default is precisely the confidently-wrong-stored-value failure `ADR-001` constraint 2 names, and the profile fallback is leg 2's job, not leg 1's.
+- **This is not a read-time expansion.** `ADR-001:58` forbids resolving a *family into programs* in any filter, facet, badge, or search predicate. Computing a form default at pre-fill time is not that, and the resulting value is stored explicitly on the note because a human saved the form. Recorded so a reviewer does not flag it as a violation.
+
+#### Membership is written at completion, per successfully-generated note
+
+**Not at queue time.** `processBatch` wraps each topic in its own try/catch (`NoteBulkGenerationService.java:199-215`), so **partial failure is the normal case** — some topics succeed, some fail, some are quota-blocked. Writing membership at queue time would create collection rows pointing at notes that never generate.
+
+Two consequences for whoever implements this:
+
+- `processItem` currently returns `void` (`:265`) and must return the created note's id so the successful ones can be added.
+- The collection id must be carried through `BulkGenerateNotesRequest` into the async path, and **the add must be idempotent against the existing `resultId`** — a retry must not double-insert membership rows.
+
+**Authorization:** the selector must offer only Review Sets the author owns, and the membership write must re-check ownership server-side rather than trusting the submitted id.
 
 ## v0.74.0 — Quiz Progression (Released, base branch `releases/v0.74.0`)
 
