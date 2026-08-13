@@ -240,7 +240,11 @@ describe("QuickReviewPage post-quiz UX", () => {
     });
   });
 
-  function setupCompleteState(overrides: { adaptivePracticeAvailable?: boolean; quizMastered?: boolean } = {}) {
+  function setupCompleteState(overrides: {
+    adaptivePracticeAvailable?: boolean;
+    quizMastered?: boolean;
+    quizMasteredAt?: string | null;
+  } = {}) {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -249,6 +253,11 @@ describe("QuickReviewPage post-quiz UX", () => {
       ...baseNote,
       adaptivePracticeAvailable: overrides.adaptivePracticeAvailable ?? false,
       quizMastered: overrides.quizMastered ?? false,
+      // Default to "mastered just now" so the unlock announcement renders. A test that wants the
+      // repeat case passes an older timestamp explicitly.
+      quizMasteredAt: overrides.quizMasteredAt === undefined
+        ? new Date(Date.now() + 1000).toISOString()
+        : overrides.quizMasteredAt,
     });
     (startQuickReviewSession as jest.Mock).mockResolvedValue(baseSession);
     (completeQuickReviewSession as jest.Mock).mockResolvedValue(baseResult);
@@ -345,6 +354,27 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     expect(await screen.findByRole("heading", { name: "Your results" })).toBeInTheDocument();
     expect(screen.queryByText(/concept secured/)).not.toBeInTheDocument();
+  });
+
+  it("does not re-announce the unlock when the pack was mastered in an earlier session", async () => {
+    // `quizMastered` is sticky, so it stays true forever once earned. Announcing off that alone told
+    // a learner they had "earned access" to something they unlocked weeks ago, every repeat perfect
+    // score. The previous fixture could not catch this: it returned quizMastered: true with no
+    // timestamp, so the first-unlock and repeat cases were indistinguishable.
+    setupCompleteState({ quizMastered: true, quizMasteredAt: "2026-01-01T00:00:00Z" });
+    (completeQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseResult,
+      correctAnswers: 1,
+      scorePercentage: 100,
+      weakConcepts: [],
+    });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    await screen.findByRole("heading", { name: "Your results" });
+    expect(screen.queryByText("🔓 Quiz Unlocked")).not.toBeInTheDocument();
   });
 
   it("keeps the standard header for a perfect first quiz", async () => {

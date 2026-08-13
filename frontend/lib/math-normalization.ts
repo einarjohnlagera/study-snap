@@ -67,12 +67,6 @@ function convertUnicodeScripts(text: string): string {
   return result;
 }
 
-export function containsUnicodeScriptCharacters(text: string): boolean {
-  return [...text].some((character) => (
-    UNICODE_SUBSCRIPTS.includes(character) || UNICODE_SUPERSCRIPTS.includes(character)
-  ));
-}
-
 /** Reads a balanced `{...}` or `(...)` group starting at `start`. Returns -1 if unbalanced. */
 function readBalancedGroup(text: string, start: number, open: string, close: string): number {
   if (text[start] !== open) {
@@ -93,38 +87,58 @@ function readBalancedGroup(text: string, start: number, open: string, close: str
 }
 
 /**
- * If an allowlisted command starts at `index`, returns the end of the command plus its trailing
- * brace groups (`\frac{a}{b}` consumes both). Returns -1 when this is not a command we handle.
+ * A construct found in the source, plus the LaTeX it should be wrapped as.
+ * `start` is where the construct begins in the source; `end` is one past its last character.
  */
-function readCommandSpan(text: string, index: number): number {
+type MathSpan = { start: number; end: number; latex: string };
+
+/**
+ * Reads an allowlisted command at `index`, together with its brace groups and any trailing
+ * `^`/`_` script.
+ *
+ * Absorbing the trailing script is what makes `\pi^2`, `\sin^2 x`, `\sqrt{2}^2` and
+ * `\frac{a}{b}^2` come out as one span. Handling the command and the script as two separate
+ * wraps is what produced corrupted output before — see the note on `normalizeBareMath`.
+ *
+ * Returns null — meaning "leave this text completely alone" — when the command is unknown OR
+ * when a brace group is unbalanced. Refusing unbalanced input matters: `\frac{a` was previously
+ * wrapped as `$\frac${a`, which adds delimiters to text that displayed fine.
+ */
+function readCommandSpan(text: string, index: number): MathSpan | null {
   if (text[index] !== "\\") {
-    return -1;
+    return null;
   }
   let cursor = index + 1;
   while (cursor < text.length && /[A-Za-z]/.test(text[cursor])) {
     cursor += 1;
   }
-  const name = text.slice(index + 1, cursor);
-  if (!COMMAND_LOOKUP.has(name)) {
-    return -1;
+  if (!COMMAND_LOOKUP.has(text.slice(index + 1, cursor))) {
+    return null;
   }
-  // Consume any brace groups belonging to the command, plus \sqrt's optional [n] index.
-  for (;;) {
-    if (text[cursor] === "[") {
-      const optionalEnd = readBalancedGroup(text, cursor, "[", "]");
-      if (optionalEnd === -1) {
-        break;
-      }
-      cursor = optionalEnd;
-      continue;
+  if (text[cursor] === "[") {
+    const optionalEnd = readBalancedGroup(text, cursor, "[", "]");
+    if (optionalEnd === -1) {
+      return null;
     }
+    cursor = optionalEnd;
+  }
+  while (text[cursor] === "{") {
     const groupEnd = readBalancedGroup(text, cursor, "{", "}");
     if (groupEnd === -1) {
-      break;
+      return null;
     }
     cursor = groupEnd;
   }
-  return cursor;
+  let latex = text.slice(index, cursor);
+  while (text[cursor] === "^" || text[cursor] === "_") {
+    const script = readScriptValue(text, cursor);
+    if (script === null) {
+      break;
+    }
+    latex += `${text[cursor]}${script.value}`;
+    cursor = script.end;
+  }
+  return { start: index, end: cursor, latex };
 }
 
 /**
@@ -191,14 +205,39 @@ function readScriptValue(text: string, operatorIndex: number): { end: number; va
   if (text[cursor] === "-" || text[cursor] === "+") {
     cursor += 1;
   }
-  const digitsStart = cursor;
+  const valueStart = cursor;
   while (cursor < text.length && /[A-Za-z0-9]/.test(text[cursor])) {
     cursor += 1;
   }
-  if (cursor === digitsStart) {
+  if (cursor === valueStart) {
     return null;
   }
   return { end: cursor, value: `{${text.slice(start, cursor)}}` };
+}
+
+/**
+ * Reads a `base^script` / `base_script` construct whose base has not already been emitted.
+ *
+ * `minimumStart` is the earliest source index still uncommitted. If the base would reach back
+ * before it, the base belongs to a span already written out (a wrapped command, or an earlier
+ * script), so this returns null and the operator is left as literal text. That is what keeps
+ * `a^b^c` — which is a double-superscript error in LaTeX anyway — from being mangled.
+ */
+function readScriptSpan(text: string, operatorIndex: number, minimumStart: number): MathSpan | null {
+  const operator = text[operatorIndex];
+  const baseStart = readScriptBaseStart(text, operatorIndex, operator);
+  if (baseStart === -1 || baseStart < minimumStart) {
+    return null;
+  }
+  const script = readScriptValue(text, operatorIndex);
+  if (script === null) {
+    return null;
+  }
+  return {
+    start: baseStart,
+    end: script.end,
+    latex: `${text.slice(baseStart, operatorIndex)}${operator}${script.value}`,
+  };
 }
 
 function wrap(segment: string): string {
@@ -208,57 +247,49 @@ function wrap(segment: string): string {
 /**
  * Wraps bare LaTeX constructs in `$...$`. Returns the input unchanged when there is nothing safe
  * to do — which is the common case, and deliberately so.
+ *
+ * **This function must never retract characters it has already appended.** An earlier version
+ * emitted the base of a `^`/`_` and then sliced it back off the output so it could be re-emitted
+ * inside `$...$`. That assumed the tail of the output was verbatim source, which stops being true
+ * the moment `wrap()` has inserted a `$`. The slice then ate a delimiter and duplicated the base:
+ * `a^b^c` became `$a^{b}$b^{c}$` — silently duplicated content, no error styling — and `\pi^2`
+ * became `$\p$pi^{2}$`. Instead, source text is committed only once a construct's true start is
+ * known, so no rewriting of prior output is ever required.
  */
 export function normalizeBareMath(text: string): string {
   if (!text || (!text.includes("\\") && !text.includes("^") && !text.includes("_"))) {
     return text;
   }
-  // Rule 2: already delimited (or already normalized) — hands off.
+  // Already delimited (or already normalized) — hands off. This also gives idempotency.
   if (EXISTING_DELIMITER_PATTERN.test(text)) {
     return text;
   }
 
   let result = "";
+  let committed = 0;
   let cursor = 0;
   let changed = false;
 
   while (cursor < text.length) {
     const character = text[cursor];
+    const span = character === "\\"
+      ? readCommandSpan(text, cursor)
+      : (character === "^" || character === "_")
+        ? readScriptSpan(text, cursor, committed)
+        : null;
 
-    if (character === "\\") {
-      const commandEnd = readCommandSpan(text, cursor);
-      if (commandEnd === -1) {
-        // Not an allowlisted command: a lone backslash, a Windows path, a literal \n. Leave it.
-        result += character;
-        cursor += 1;
-        continue;
-      }
-      result += wrap(text.slice(cursor, commandEnd));
-      cursor = commandEnd;
-      changed = true;
+    if (span === null) {
+      cursor += 1;
       continue;
     }
 
-    if (character === "^" || character === "_") {
-      const baseStart = readScriptBaseStart(text, cursor, character);
-      const script = readScriptValue(text, cursor);
-      if (baseStart === -1 || script === null) {
-        result += character;
-        cursor += 1;
-        continue;
-      }
-      // The base was already appended to `result`; take it back so it lands inside the wrapper.
-      const baseLength = cursor - baseStart;
-      result = result.slice(0, result.length - baseLength);
-      result += wrap(`${text.slice(baseStart, cursor)}${character}${script.value}`);
-      cursor = script.end;
-      changed = true;
-      continue;
-    }
-
-    result += character;
-    cursor += 1;
+    result += text.slice(committed, span.start);
+    result += wrap(span.latex);
+    cursor = span.end;
+    committed = span.end;
+    changed = true;
   }
 
+  result += text.slice(committed);
   return changed ? result : text;
 }

@@ -46,7 +46,6 @@ public class PostSessionNextStepService {
     private static final int FIRST_PAGE = 0;
     private static final String SESSION_METADATA_WEAK_CONCEPTS = "weakConcepts";
     private static final String ADAPTIVE_PRACTICE_PATH = "/notes/%s/adaptive-practice";
-    private static final String QUICK_REVIEW_PATH = "/notes/%s/quick-review";
     private static final String CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz";
     private static final String NOTE_DETAIL_PATH = "/notes/%s";
     private static final String REDO_MISSED_CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz?entry=redo-missed";
@@ -198,12 +197,21 @@ public class PostSessionNextStepService {
             );
         }
 
+        // The ACTION keys on mastery (ever), which is deliberate — the promotion and the Quiz-tab
+        // unlock must read one signal. The COPY must key on THIS session, because mastery is sticky:
+        // a learner who mastered the pack in August and scores 1/5 today is still routed to Challenge,
+        // and telling them "Strong Quick Review" would congratulate them on a score the screen shows
+        // as 1/5 directly above. The missed concepts are surfaced too, so a weak repeat session is not
+        // left without remediation.
+        boolean strongThisSession = sessionMisses.isEmpty();
         return reviewPackResponse(
                 studyPack,
                 adaptivePracticeQuota,
                 goalNudge,
-                List.of(),
-                "Strong Quick Review. Step up with a Challenge next.",
+                strongThisSession ? List.of() : sessionMisses,
+                strongThisSession
+                        ? "Strong Quick Review. Step up with a Challenge next."
+                        : "You have already mastered this pack. Revisit the notes on these areas, or step up with a Challenge.",
                 null
         );
     }
@@ -279,7 +287,7 @@ public class PostSessionNextStepService {
      * source note, with Challenge kept available as a secondary action.
      *
      * <p>This replaced a {@code RETRY_REVIEW} primary labelled "Retry Incorrect Questions", which was
-     * wrong twice over. It pointed at {@code QUICK_REVIEW_PATH}, so it restarted the <em>whole</em>
+     * wrong twice over. It pointed at the Quick Review path, so it restarted the <em>whole</em>
      * Quick Review rather than the missed questions — the genuine targeted retry only exists
      * mid-session. And it re-offered an action the learner had already declined one screen earlier,
      * as the primary CTA, while the thing they actually needed (re-reading the material) sat at the
@@ -383,13 +391,6 @@ public class PostSessionNextStepService {
         );
     }
 
-    private NextStepSecondaryActionResponse adaptivePracticeSecondaryAction(StudyPackEntity studyPack) {
-        return new NextStepSecondaryActionResponse(
-                PRACTICE_WEAK_CONCEPTS_LABEL,
-                pathOrFallback(studyPack.getNoteId(), ADAPTIVE_PRACTICE_PATH),
-                true
-        );
-    }
 
     private GoalNudgeResponse resolveGoalNudge(UserEntity user, StudyPackEntity studyPack) {
         String studyGoal = user.getStudyGoal();

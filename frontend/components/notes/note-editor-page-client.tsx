@@ -83,6 +83,7 @@ import {
   isTeacherSelectableNoteTarget,
   mapProfileTypeToNoteTargetProfile,
   toSelectableNoteTargetProfile,
+  isQuizMasteryLockBypassed,
 } from "@/lib/note-target-profile";
 import { OcrDisabledNotice } from "@/components/notes/ocr-disabled-notice";
 
@@ -914,7 +915,10 @@ export function NoteEditorPageClient({
   }, [currentNoteId, noteId, router]);
 
   const finalizeGenerationRedirect = useCallback((noteIdToOpen: string) => {
-    const tab = resolveGeneratedNoteTab(currentProfileType, initialMode, initialSource);
+    // A newly generated pack has no completed Quick Review, so the Quiz tab is locked for everyone
+    // except curators. Landing a learner there would make a lock card the payoff for generating.
+    const canOpenQuizTab = isQuizMasteryLockBypassed(currentProfileType, getAuthUser()?.role ?? "USER");
+    const tab = resolveGeneratedNoteTab(currentProfileType, initialMode, initialSource, canOpenQuizTab);
     router.push(buildGeneratingNoteDetailPath(noteIdToOpen, tab));
   }, [currentProfileType, initialMode, initialSource, router]);
 

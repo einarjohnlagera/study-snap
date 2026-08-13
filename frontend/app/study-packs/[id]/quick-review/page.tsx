@@ -725,7 +725,18 @@ export default function QuickReviewPage() {
       if (noteId) {
         void getNote(noteId)
           .then((detail) => {
-            setQuizMasteredAfterCompletion(detail.quizMastered === true);
+            // `quizMastered` is sticky, so it is true for anyone who mastered this pack at ANY point.
+            // Announcing "you earned access" off that alone congratulates a learner on an unlock they
+            //has already had for weeks, every time they score perfectly again. `quizMasteredAt` is the
+            // FIRST mastery (the query is min(completedAt)), so compare it against this session to
+            // announce only the genuine transition — the same distinction the backend already draws
+            // for STUDY_PACK_QUIZ_UNLOCKED.
+            const masteredAt = detail.quizMasteredAt ? Date.parse(detail.quizMasteredAt) : Number.NaN;
+            const unlockedByThisSession = detail.quizMastered === true
+              && Number.isFinite(masteredAt)
+              && sessionStartedAt !== null
+              && masteredAt >= sessionStartedAt;
+            setQuizMasteredAfterCompletion(unlockedByThisSession);
           })
           .catch(() => setQuizMasteredAfterCompletion(false));
       }
