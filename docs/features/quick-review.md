@@ -81,7 +81,10 @@ Secondary actions:
 
 - `Review Answers`
 - optional Pro upsell when the weak-area action is locked
-- `← Back to Note`
+- **`Review the Notes`** — shown only when the completed session had at least one miss, navigating to the source note so the learner studies before another attempt. Hidden on a perfect score, which has nothing to go back and study.
+- `Note` back link (destination name only, per `docs/ui-standards.md`)
+
+**`Review the Notes` is deliberately on the RESULT screen, not on the incorrect-answers screen, and this placement is load-bearing.** The proposal originally replaced `Finish Review` mid-session. `handleFinishReview` is the **only** route from the incorrect-answers screen to the result screen, and the result screen carries both `PostSessionNextStep` (the Challenge promotion measured by `[CHECKPOINT — due 2026-09-30]`) and `ReviewCommitmentPrompt` (which fires `REVIEW_COMMITMENT_PROMPT_SHOWN` on a learner's first-ever completed session, instrumentation for `[CHECKPOINT — due 2026-09-10]`). Replacing that button would make a learner who missed a question skip both. **`Finish Review` therefore stays exactly as it is and keeps completing the session** — and because the new action renders only after completion, `QUICK_REVIEW_COMPLETED` fires unchanged and there is no session-lifecycle change at all.
 
 ## Confidence and learner level
 

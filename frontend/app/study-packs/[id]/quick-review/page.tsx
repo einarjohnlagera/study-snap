@@ -1279,9 +1279,28 @@ export default function QuickReviewPage() {
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
             </Button>
+            {/*
+              Sends a learner who missed something back to the source material instead of leaving the
+              loop closed on a failure. Deliberately placed HERE, on the results screen, rather than
+              replacing "Finish Review" on the incorrect-answers screen: that button is the only route
+              to this screen, which carries both the Challenge promotion and the first-session
+              commitment prompt, and both feed dated checkpoints.
+            */}
+            {!isPerfectScore ? (
+              <Link href={noteDetailHref} className="block w-full sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                  Review the Notes
+                </Button>
+              </Link>
+            ) : null}
           </div>
+          {!isPerfectScore ? (
+            <p className="text-sm text-foreground/75">
+              Study the notes again, then come back and retry the questions you missed.
+            </p>
+          ) : null}
           <div className="pt-1">
-            <BackLink href={noteDetailHref} label="Back to Note" />
+            <BackLink href={noteDetailHref} label="Note" />
           </div>
 
           {showAnswerReview ? (

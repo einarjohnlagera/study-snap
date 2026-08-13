@@ -547,6 +547,49 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
   });
 
+  it('offers "Review the Notes" on the result screen after a miss', async () => {
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    const reviewNotesLink = screen.getByRole("link", { name: "Review the Notes" });
+    expect(reviewNotesLink).toHaveAttribute("href", "/notes/note-1");
+    expect(screen.getByText(/Study the notes again/)).toBeInTheDocument();
+  });
+
+  it('hides "Review the Notes" on a perfect score, which has nothing to go back and study', async () => {
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(screen.queryByRole("link", { name: "Review the Notes" })).not.toBeInTheDocument();
+  });
+
+  it('keeps "Finish Review" completing the session on the incorrect-answers screen', async () => {
+    // Guards the placement decision: this button is the only route to the result screen, which
+    // carries the Challenge promotion and the first-session commitment prompt. Replacing it here
+    // would make a learner who missed a question skip both, and both feed dated checkpoints.
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    expect(await screen.findByRole("button", { name: "Finish Review" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Review the Notes" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Finish Review" }));
+
+    await waitFor(() => expect(completeQuickReviewSession).toHaveBeenCalled());
+  });
+
   it("uses Note as a text link in empty quiz edge states", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
