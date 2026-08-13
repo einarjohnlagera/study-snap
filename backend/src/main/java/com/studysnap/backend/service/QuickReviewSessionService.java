@@ -67,6 +67,7 @@ public class QuickReviewSessionService {
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
     private static final String ANALYTICS_METADATA_RETRY_COUNT = "retryCount";
     private static final String ANALYTICS_METADATA_MASTERY_PATH = "masteryPath";
+    private static final String ANALYTICS_METADATA_PRIOR_STATE_KNOWN = "priorMasteryStateKnown";
     private static final String MASTERY_PATH_FIRST_PASS = "FIRST_PASS";
     private static final String MASTERY_PATH_AFTER_RETRY = "AFTER_RETRY";
 
@@ -268,12 +269,26 @@ public class QuickReviewSessionService {
                     saved.getStudyPackId(),
                     masteryMetadata
             );
-            if (masteryBeforeCompletion.filter(mastery -> !mastery.mastered()).isPresent()) {
+            // Fire on a KNOWN first transition, and also when the prior state is UNKNOWN because the
+            // lookup failed. The asymmetry is deliberate and differs from the Challenge launch split:
+            // this is a once-per-(user, Study Pack) transition, so a dropped event is unrecoverable,
+            // whereas a duplicate is recoverable at query time by taking the earliest per user+pack.
+            // Treating "unknown" as "already mastered" silently loses the metric this release exists
+            // to produce.
+            boolean alreadyMastered = masteryBeforeCompletion
+                    .map(StudyPackQuizMastery::mastered)
+                    .orElse(false);
+            if (!alreadyMastered) {
+                Map<String, Object> unlockMetadata = new LinkedHashMap<>(masteryMetadata);
+                unlockMetadata.put(
+                        ANALYTICS_METADATA_PRIOR_STATE_KNOWN,
+                        masteryBeforeCompletion.isPresent()
+                );
                 trackAnalyticsSafely(
                         userId,
                         AnalyticsEventType.STUDY_PACK_QUIZ_UNLOCKED,
                         saved.getStudyPackId(),
-                        masteryMetadata
+                        unlockMetadata
                 );
             }
         }

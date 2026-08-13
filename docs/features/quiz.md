@@ -122,7 +122,7 @@ Current save toast:
 
 Result screens should guide the next action through the shared ConceptHealth-driven post-session handoff instead of each mode computing bespoke CTAs from the current session only.
 
-After Quick Review, Challenge Quiz becomes the primary recommendation only when the shared server mastery predicate succeeds; any non-mastered result, including a single miss, keeps `Retry Incorrect Questions` primary. A perfect result also shows the announcement-only `🔓 Quiz Unlocked` result card without adding a competing Quiz-tab action.
+After Quick Review, Challenge Quiz becomes the primary recommendation only when the shared server mastery predicate succeeds; **any non-mastered result, including a single miss, gets `Review the Notes` as the primary action** (pointing at the source note), with Challenge kept as the secondary. `Retry Incorrect Questions` is **not** offered on the result screen — it exists only mid-session, and the learner has already declined it by the time they reach these CTAs. **Adaptive Practice is never offered here** (see the `EXAM_MODES.md` amendment). Because mastery is sticky, a learner who mastered the pack earlier and scores poorly today still routes to Challenge, but the copy keys on **this** session so a weak repeat is not congratulated, and that session's missed concepts are surfaced. A perfect result also shows the announcement-only `🔓 Quiz Unlocked` result card without adding a competing Quiz-tab action.
 
 Whenever the shared post-session component actually renders a Challenge action, it emits `POST_SESSION_CHALLENGE_CTA_IMPRESSION` once for that display and `POST_SESSION_CHALLENGE_CTA_CLICKED` on activation, both tagged with the originating quiz mode. These events exist specifically to make the Challenge-adoption exposure-to-click read measurable; fetching a next step without rendering a Challenge action is not an impression.
 
@@ -141,7 +141,7 @@ Server resolution priority:
 
 1. `PRACTICE_WEAK_CONCEPT` — due concepts from `ConceptHealthService.getDueConcepts(...)` route to Adaptive Practice. After Challenge Quiz, eligible banked misses can appear as the secondary `Redo Missed Questions` action.
 2. `REDO_MISSED_QUESTIONS` — when the latest completed session is Challenge Quiz, no genuine weak concepts remain, and at least three owned bank questions at the note's effective curriculum level have last outcome `INCORRECT`; starts an LLM-free, quota-exempt ordinary Challenge session from those questions. Availability counting and claiming use the same resolver-derived level.
-3. `RETRY_REVIEW` — only when no concepts are due, the latest completed session has weak concepts, and the completed mode is Quick Review. Its `Retry Incorrect Questions` label and plain Quick Review route are unchanged; it is distinct from Challenge Quiz's `Redo Missed Questions`.
+3. ~~`RETRY_REVIEW`~~ — **no longer emitted by `PostSessionNextStepService` as of `v0.74.0`.** The Quick Review branch now returns `REVIEW_PACK` with a `Review the Notes` action instead. The enum value stays live because `DashboardService` still produces it for the Today Focus card; only the post-session path stopped using it.
 4. `REVIEW_PACK` — no due concepts and nothing retryable; route to Challenge Quiz or the source note.
 
 Quota rule:

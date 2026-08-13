@@ -83,8 +83,59 @@ describe("normalizeBareMath", () => {
       expect(normalizeBareMath("^2 alone")).toBe("^2 alone");
     });
 
-    it("leaves an unbalanced brace command as plain text rather than wrapping garbage", () => {
-      expect(normalizeBareMath("\\frac{a")).toBe("$\\frac${a");
+    it("leaves an unbalanced brace command completely alone", () => {
+      // This previously asserted "$\\frac${a" — output strictly worse than the input, in a file
+      // whose Rule 1 is "never make things worse". Refusing unbalanced input is the correct answer.
+      expect(normalizeBareMath("\\frac{a")).toBe("\\frac{a");
+    });
+  });
+
+  // A command or group immediately followed by a script is the most common shape of real math
+  // content — trig identities, pi-r-squared, arctan. An earlier version handled the command and the
+  // script as two separate wraps and retracted already-emitted output to do it, which corrupted the
+  // result: `a^b^c` produced `$a^{b}$b^{c}$`, silently duplicating `b` with no error styling, and
+  // `\pi^2` produced `$\p$pi^{2}$`. These pin the shapes that broke.
+  describe("a script attached to a command or group", () => {
+    it.each([
+      ["\\pi^2", "$\\pi^{2}$"],
+      ["\\sqrt{2}^2", "$\\sqrt{2}^{2}$"],
+      ["\\frac{a}{b}^2", "$\\frac{a}{b}^{2}$"],
+      ["\\tan^{-1}(x)", "$\\tan^{-1}$(x)"],
+      ["\\sin^2 x + \\cos^2 x = 1", "$\\sin^{2}$ x + $\\cos^{2}$ x = 1"],
+      ["\\pi r^2", "$\\pi$ $r^{2}$"],
+    ])("wraps %s as one span", (input, expected) => {
+      expect(normalizeBareMath(input)).toBe(expected);
+    });
+
+    it("does not duplicate the base of a chained script", () => {
+      // `a^b^c` is a double-superscript error in LaTeX, so leaving the second script literal is
+      // correct. What must never happen is the `b` appearing twice.
+      expect(normalizeBareMath("a^b^c")).toBe("$a^{b}$^c");
+    });
+
+    it.each([
+      "a^b^c",
+      "\\pi^2",
+      "\\sin^2 x + \\cos^2 x = 1",
+      "\\sqrt{2}^2",
+      "\\frac{a}{b}^2",
+      "\\frac{a",
+      "\\tan^{-1}(x)",
+      "x^2 + y^2 = 1",
+      "(a + b)^2",
+    ])("emits balanced $ delimiters for %s", (input) => {
+      const output = normalizeBareMath(input);
+      expect((output.match(/\$/g) ?? []).length % 2).toBe(0);
+    });
+
+    it("never drops or duplicates non-math characters", () => {
+      // Strip every delimiter and brace the normaliser is allowed to add; what remains must be the
+      // input. This catches the whole corruption class, not just the shapes listed above.
+      const inputs = ["\\pi^2", "a^b^c", "\\sqrt{2}^2", "\\pi r^2", "x^2 + y^2 = 1"];
+      for (const input of inputs) {
+        const stripped = normalizeBareMath(input).replace(/\$/g, "").replace(/\{|\}/g, "");
+        expect(stripped).toBe(input.replace(/\{|\}/g, ""));
+      }
     });
   });
 
