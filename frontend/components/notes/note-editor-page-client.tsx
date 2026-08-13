@@ -357,15 +357,20 @@ export function NoteEditorPageClient({
           return;
         }
         setProfileCourseProgram(me.courseProgram ?? "");
+        // CREATE ONLY. This guard is load-bearing: pre-filling authoring metadata while
+        // editing an already-generated note would change that note's depth, and a depth
+        // correction on a generated note strands its Challenge-bank rows at the old level
+        // (see the v0.75.0 scoping note — the same reason align-on-add was rejected).
         if (!isEditMode) {
-          setDraft((previous) => (
-            previous.courseProgram.trim().length > 0
-              ? previous
-              : {
-                ...previous,
-                courseProgram: previous.courseProgram.trim().length > 0 ? previous.courseProgram : me.courseProgram ?? "",
-              }
-          ));
+          setDraft((previous) => ({
+            ...previous,
+            courseProgram: previous.courseProgram.trim().length > 0
+              ? previous.courseProgram
+              : me.courseProgram ?? "",
+            // Authored Depth falls back to the author's own profile level (ADR-001's weak
+            // leg). Pre-fill only — it lands in a visible control the author can change.
+            learnerLevel: previous.learnerLevel || me.learnerLevel || "",
+          }));
         }
       })
       .catch(() => {

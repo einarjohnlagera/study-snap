@@ -87,7 +87,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Note Learner Level/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Authored Depth/)).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(screen.getByTestId("bulk-metadata-grid")).toHaveClass("sm:grid-cols-2");
     // ADMIN bypasses the quota gate, so no remaining-cap hint should render. Asserts the
@@ -105,7 +105,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Note Learner Level/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Authored Depth/)).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
 
     unmount();
@@ -117,7 +117,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Domain Context/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Note Learner Level/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Authored Depth/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(await screen.findByText(/Capped by your 7 topic notes left this cycle/i)).toBeInTheDocument();
   });
@@ -131,7 +131,7 @@ describe("BulkGenerationPageClient", () => {
       await waitFor(() => expect(getMe).toHaveBeenCalled());
 
       expect(screen.queryByLabelText(/^Domain Context/)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText(/^Note Learner Level/)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Authored Depth/)).not.toBeInTheDocument();
     },
   );
 
@@ -148,7 +148,7 @@ describe("BulkGenerationPageClient", () => {
     fireEvent.change(screen.getByLabelText(/^Domain Context/), {
       target: { value: "NURSING" },
     });
-    fireEvent.change(screen.getByLabelText(/^Note Learner Level/), {
+    fireEvent.change(screen.getByLabelText(/^Authored Depth/), {
       target: { value: "BOARD_EXAM_REVIEW" },
     });
 
@@ -179,10 +179,10 @@ describe("BulkGenerationPageClient", () => {
     ]);
     render(<BulkGenerationPageClient />);
 
-    const selector = await screen.findByLabelText(/^Review Set/);
+    const selector = await screen.findByLabelText(/^Collection \(optional\)/);
     fireEvent.change(selector, { target: { value: "subject-plan-1" } });
 
-    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("BOARD_EXAM_REVIEW");
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("BOARD_EXAM_REVIEW");
   });
 
   it("does not overwrite an authored depth the curator already selected", async () => {
@@ -194,12 +194,12 @@ describe("BulkGenerationPageClient", () => {
       },
     ]);
     render(<BulkGenerationPageClient />);
-    await screen.findByLabelText(/^Review Set/);
-    fireEvent.change(screen.getByLabelText(/^Note Learner Level/), { target: { value: "COLLEGE" } });
+    await screen.findByLabelText(/^Collection \(optional\)/);
+    fireEvent.change(screen.getByLabelText(/^Authored Depth/), { target: { value: "COLLEGE" } });
 
-    fireEvent.change(screen.getByLabelText(/^Review Set/), { target: { value: "subject-plan-1" } });
+    fireEvent.change(screen.getByLabelText(/^Collection \(optional\)/), { target: { value: "subject-plan-1" } });
 
-    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("COLLEGE");
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("COLLEGE");
   });
 
   it("leaves authored depth empty when the Review Set has no resolved level", async () => {
@@ -212,11 +212,46 @@ describe("BulkGenerationPageClient", () => {
     ]);
     render(<BulkGenerationPageClient />);
 
-    fireEvent.change(await screen.findByLabelText(/^Review Set/), {
+    fireEvent.change(await screen.findByLabelText(/^Collection \(optional\)/), {
       target: { value: "subject-plan-1" },
     });
 
-    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("");
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("");
+  });
+
+  it("prefills authored depth from the author's own profile level", async () => {
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: "", learnerLevel: "COLLEGE" });
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    await waitFor(() => expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("COLLEGE"));
+  });
+
+  it("lets a Review Set outrank a profile prefill but never an explicit choice", async () => {
+    // ADR-001's chain is Review Set -> author profile -> explicit override. The profile
+    // prefill lands on mount, so without provenance tracking it would leave the control
+    // non-empty and the Review Set would be silently ignored — inverting the precedence.
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: "", learnerLevel: "COLLEGE" });
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "subject-plan-1",
+        title: "Civil Engineering Mathematics",
+        resolvedLearnerLevel: "BOARD_EXAM_REVIEW",
+      },
+    ]);
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("COLLEGE"));
+
+    fireEvent.change(await screen.findByLabelText(/^Collection \(optional\)/), {
+      target: { value: "subject-plan-1" },
+    });
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("BOARD_EXAM_REVIEW");
+
+    // An explicit choice is protected from a later Review Set change.
+    fireEvent.change(screen.getByLabelText(/^Authored Depth/), { target: { value: "SENIOR_HIGH" } });
+    fireEvent.change(screen.getByLabelText(/^Collection \(optional\)/), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText(/^Collection \(optional\)/), { target: { value: "subject-plan-1" } });
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("SENIOR_HIGH");
   });
 
   it("includes the selected Review Set when queueing the batch", async () => {
@@ -234,7 +269,7 @@ describe("BulkGenerationPageClient", () => {
       rejectedTopics: 0,
     });
     render(<BulkGenerationPageClient />);
-    fireEvent.change(await screen.findByLabelText(/^Review Set/), {
+    fireEvent.change(await screen.findByLabelText(/^Collection \(optional\)/), {
       target: { value: "subject-plan-1" },
     });
     await fillAdminForm(["Structural Analysis"]);
@@ -250,7 +285,7 @@ describe("BulkGenerationPageClient", () => {
   });
 
   it("keeps generation usable when Review Sets fail to load", async () => {
-    (listCollections as jest.Mock).mockRejectedValue(new Error("Could not load Review Sets."));
+    (listCollections as jest.Mock).mockRejectedValue(new Error("Could not load Collections."));
     (bulkGenerateNotes as jest.Mock).mockResolvedValue({
       resultId: "result-1",
       acceptedTopics: 1,
@@ -258,13 +293,13 @@ describe("BulkGenerationPageClient", () => {
       rejectedTopics: 0,
     });
     render(<BulkGenerationPageClient />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load Review Sets.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load Collections.");
     await fillAdminForm(["Prenatal Care"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
     await waitFor(() => expect(bulkGenerateNotes).toHaveBeenCalled());
-    expect(screen.getByRole("button", { name: "Retry Review Sets" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry Collections" })).toBeInTheDocument();
   });
 
   it("prefills from retry stash and clears it", async () => {
@@ -284,7 +319,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
     expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toHaveValue("NURSING");
-    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("BOARD_EXAM_REVIEW");
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("BOARD_EXAM_REVIEW");
     expect(screen.getByLabelText(/^Target Audience/)).toHaveValue("BOARD_TAKER");
     expect(screen.getByRole("switch", { name: /public/i })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
@@ -320,7 +355,7 @@ describe("BulkGenerationPageClient", () => {
     fireEvent.change(screen.getByLabelText(/^Domain Context/), {
       target: { value: "NURSING" },
     });
-    fireEvent.change(screen.getByLabelText(/^Note Learner Level/), {
+    fireEvent.change(screen.getByLabelText(/^Authored Depth/), {
       target: { value: "BOARD_EXAM_REVIEW" },
     });
 
@@ -330,7 +365,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
     expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
     expect(screen.getByLabelText(/^Domain Context/)).toHaveValue("NURSING");
-    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("BOARD_EXAM_REVIEW");
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("BOARD_EXAM_REVIEW");
   });
 
   it("adds and removes topic rows", async () => {

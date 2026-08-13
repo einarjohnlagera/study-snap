@@ -472,7 +472,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, audience, Domain Context, and Note Learner Level.",
+        "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, audience, Domain Context, and Authored Depth.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
@@ -714,7 +714,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
 
     const domainContextSelect = screen.getByLabelText("Domain Context (optional)");
-    const learnerLevelSelect = screen.getByLabelText("Note Learner Level (optional)");
+    const learnerLevelSelect = screen.getByLabelText("Authored Depth (optional)");
     expect(domainContextSelect).toHaveValue("NURSING");
     expect(learnerLevelSelect).toHaveValue("COLLEGE");
 
@@ -754,7 +754,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
 
     fireEvent.change(screen.getByLabelText("Domain Context (optional)"), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("Note Learner Level (optional)"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Authored Depth (optional)"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
@@ -820,7 +820,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
 
     expect(screen.getByLabelText("Domain Context (optional)")).toHaveValue("ACCOUNTANCY");
-    expect(screen.getByLabelText("Note Learner Level (optional)")).toHaveValue("COLLEGE");
+    expect(screen.getByLabelText("Authored Depth (optional)")).toHaveValue("COLLEGE");
   });
 
   it("preserves the authoring axes when a non-teacher saves note details", async () => {
@@ -847,7 +847,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
 
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authored Depth (optional)")).not.toBeInTheDocument();
     // Assert on the learner input's own id: the previous check used the CURATOR control's aria-label,
     // which can never render for a STUDENT, so it passed vacuously.
     expect(document.querySelector("#note-course-program-inline")).toBeNull();
