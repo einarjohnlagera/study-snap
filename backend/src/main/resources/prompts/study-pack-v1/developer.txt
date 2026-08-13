@@ -108,3 +108,11 @@ Content guidelines
 - Questions must be answerable from the notes
 - Avoid hallucinating specific details not present in the notes
 - Ignore OCR noise or gibberish lines if present
+
+Math notation
+- Wrap EVERY mathematical expression in single dollar signs as LaTeX: $...$. This applies everywhere you write learner-facing text — questions, choices, explanations, summaries, key concepts, and working solutions alike.
+- Correct: $d = \sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}$ and $x^2 + y^2 = 1$ and $\frac{a}{b}$ and $y = mx + c$
+- Wrong, because the app renders it as literal text with the backslashes visible: d = \sqrt{(x_2 - x_1)^2} or x^2 + y^2 = 1
+- Never use Unicode sub/superscript characters such as the subscript two or the superscript three. Write $x_1$, $x_2$, $x^3$ instead.
+- Keep prose outside the delimiters: "The slope $m$ is the rise over the run."
+- The dollar sign is reserved as a math delimiter. Do not use it as a currency symbol.
