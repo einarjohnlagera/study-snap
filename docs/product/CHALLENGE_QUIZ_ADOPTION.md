@@ -20,11 +20,29 @@ Users understand Quick Review immediately. Challenge Quiz's value is unclear. Us
 - creates fresh practice opportunities
 - provides additional exam simulation
 
+## ⚠️ Status of this document's central claim, as of 2026-08-13
+
+**The framing below is UNCONFIRMED. Do not cite it as settled.**
+
+Reads (a) and (b) were run against production on **2026-08-13**, before `v0.74.0` deployed, and the kill criterion recorded in `ROADMAP.md`'s Backlog Index was **met**:
+
+- Conversion per completed Quick Review, before vs after the 5/5 → 4/5 promotion change: **41.2% → 44.7% at 24h (+0.37 SE)** and **58.8% → 47.0% at 7d (−1.25 SE)**. Neither difference is distinguishable from zero.
+- **The population shift makes this a harder negative, not a softer one.** Sessions actually reaching the `>= 4/5` promotion went **68.6% → 92.0%**. Far more learners saw the promotion, and conversion still did not rise.
+- Return rate of converted learners fell (20.0% → 11.0%; 13.3% → 9.6% on the 14-day-observable cut), though on numerators of 2–9 that only corroborates.
+
+**The promotion change has already been reverted** — `v0.74.0` moved it back from `>= 4/5` to verified mastery — so nothing needs building in response. What is owed is a **reopening of the framing**, not another promotion tweak on top of it.
+
+**The read that can actually settle this is now possible for the first time.** Read (c) — Challenge CTA impressions vs clicks — was blocked from June 2026 until `v0.74.0` shipped `POST_SESSION_CHALLENGE_CTA_IMPRESSION` and `_CLICKED`. Only that read separates *seen-and-ignored* (motivation) from *never-reached* (placement). It carries `[CHECKPOINT — due 2026-10-15]`.
+
+**Until (c) reports, treat "motivation, not placement" as an open question.** In particular, the alternative it ruled out — moving or enlarging the entry point — is no longer ruled out on evidence.
+
+---
+
 ## Decided approach (June 2026)
 
 > This is a **value-is-unclear (motivation) problem, not a button-placement problem.**
 
-That framing is the load-bearing part of the decision, and it is what rules out the obvious alternative of moving or enlarging the entry point. Two reinforcing moves follow from it.
+That framing is the load-bearing part of the decision, and it is what rules out the obvious alternative of moving or enlarging the entry point. Two reinforcing moves follow from it. **See the status note above: this framing did not survive its own validation reads and is currently unconfirmed.**
 
 ### 1. Product — auto-promote Challenge at the right moment — **SHIPPED**
 
