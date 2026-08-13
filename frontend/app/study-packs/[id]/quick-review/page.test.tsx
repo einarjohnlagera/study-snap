@@ -558,7 +558,6 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     const reviewNotesLink = screen.getByRole("link", { name: "Review the Notes" });
     expect(reviewNotesLink).toHaveAttribute("href", "/notes/note-1");
-    expect(screen.getByText(/Study the notes again/)).toBeInTheDocument();
   });
 
   it('hides "Review the Notes" on a perfect score, which has nothing to go back and study', async () => {
@@ -730,7 +729,11 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(review).toHaveTextContent("Mitochondria produce ATP.");
   });
 
-  it("uses Retry Quick Review as the primary next step when weak practice is locked", async () => {
+  it("uses Review the Notes as the primary next step after a non-mastered Quick Review", async () => {
+    // Replaced an assertion that Retry Quick Review was primary alongside an Adaptive Practice
+    // upsell. Quick Review no longer routes into Adaptive Practice at all (EXAM_MODES.md), and the
+    // retry CTA was both redundant — already declined one screen earlier — and mislabelled, since
+    // it restarted the whole Quick Review rather than the missed questions.
     setupCompleteState({ adaptivePracticeAvailable: false });
     render(<QuickReviewPage />);
 
@@ -739,8 +742,10 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
     await screen.findByText("Quick Review Complete");
 
-    expect(screen.getByRole("button", { name: "Retry Quick Review" })).toHaveClass("bg-primary");
-    expect(screen.getByRole("button", { name: "Get More Adaptive Practice" })).toHaveClass("border");
+    expect(screen.getByRole("button", { name: "Review the Notes" })).toHaveClass("bg-primary");
+    expect(screen.queryByRole("button", { name: "Retry Quick Review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Get More Adaptive Practice" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Practice Weak Areas" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });
 
