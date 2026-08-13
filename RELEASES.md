@@ -2,7 +2,7 @@
 
 ## v0.74.0 - Quiz Progression
 
-**Status: In Progress** (kicked off 2026-08-12)
+**Status: Released** (kicked off 2026-08-12, signed off 2026-08-13)
 
 Theme: stop one surface silently invalidating another. A scored assessment should not have its answer key on an adjacent tab.
 
@@ -93,11 +93,13 @@ Three fresh-context agents audited this release independently (scope completenes
 
 **Run the `questionFormat` distribution in `docs/claude-plans/v0.74.0-quiz-length-check.sql` against production before deploying.** `QuizSessionReviewUtils` never passes identification or enumeration answers into the scorer, so any `IDENTIFICATION` or `ENUMERATION` item in a stored pack scores as permanently wrong — capping `verifiedCorrectAnswers` below the quiz size and **locking that pack's Quiz tab forever**, with a post-session step reading "Review the notes on these areas" and an empty list. Current generation only emits `MCQ | TRUE_FALSE | MULTI_SELECT | MATCHING`, and the local database has none, but local is not production. A non-zero count means those learners are locked out on deploy.
 
-### `[CHECKPOINT — due 2026-09-14]`
+### `[CHECKPOINT — due 2026-09-12]`
 
-Declared at kickoff so the signoff gate has something to point at — the gap `v0.72.0` left, which survived undetected until the following kickoff's scan. **The date is provisional and must be reset to deploy+30 in the signoff commit**, per the deploy-relative dating rule; 2026-09-14 assumes a 2026-08-15 deploy. It is written in the literal `[CHECKPOINT — due YYYY-MM-DD]` form now because kickoff step 9 scans for exactly that pattern — an undated checkpoint is invisible to the scan that exists to catch it.
+Declared at kickoff so the signoff gate has something to point at — the gap `v0.72.0` left, which survived undetected until the following kickoff's scan. **Date set at signoff to deploy+30** (deploy 2026-08-13), per the deploy-relative dating rule. It is written in the literal `[CHECKPOINT — due YYYY-MM-DD]` form now because kickoff step 9 scans for exactly that pattern — an undated checkpoint is invisible to the scan that exists to catch it.
 
 **Only the progression half is falsifiable.** The integrity half is code-verified and owes nothing.
+
+**An honest limit on the primary metric, discovered after this checkpoint was written.** The pre-deploy Challenge-adoption read (sanity query a3) showed **67.2% of post-June Quick Review sessions already scored perfect**, and 92.0% reached `>= 4/5`. So the unlock rate is very likely to come back high, and the "is the gate a wall?" kill criterion is unlikely to fire — it is close to answered already. **The informative half is therefore the SECONDARY metric:** whether an unlocked learner ever opens the Quiz tab, which tests whether the reward is *wanted* rather than merely reachable. Read both, but do not treat a high unlock rate as confirmation of the progression hypothesis; it mostly confirms that perfect scores are common.
 
 **Metric:** among learners who start Quick Review on a Study Pack after deploy, the fraction who reach 5/5 (first pass or via Redo Mistakes) — the unlock rate. **Secondary:** Quiz-tab-opened-after-unlock, which tests whether the reward is wanted at all rather than merely reachable. **Kill criterion:** if the unlock rate is low, the perfect-score gate is functioning as a wall rather than a progression — **relax the gate to "any completed Quick Review,"** which this release's own reasoning already establishes is sufficient for integrity. Do not iterate on lock copy instead. **Denominator clause:** if the sample is too small to read at the due date, that is itself the finding and must be recorded as such, not a reason to silently extend the date.
 
