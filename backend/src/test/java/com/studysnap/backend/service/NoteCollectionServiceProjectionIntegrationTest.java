@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.GoalCollectionChildResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.InputType;
@@ -37,6 +38,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -72,6 +75,8 @@ class NoteCollectionServiceProjectionIntegrationTest {
     private NoteCollectionItemRepository itemRepository;
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @PersistenceContext
+    private EntityManager entityManager;
     @Autowired
     private StubConceptHealthService conceptHealthService;
 
@@ -148,6 +153,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     description text,
                     visibility varchar(16) not null,
                     course_program varchar(120),
+                    learner_level varchar(50),
                     estimated_study_hours integer,
                     target_completion_date date,
                     companion json,
@@ -159,6 +165,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
                     updated_at timestamp with time zone not null
                 )
                 """);
+        jdbcTemplate.execute("alter table note_collections add column if not exists learner_level varchar(50)");
         jdbcTemplate.execute("""
                 create table if not exists note_collection_items (
                     id uuid primary key,
@@ -276,6 +283,39 @@ class NoteCollectionServiceProjectionIntegrationTest {
 
         assertThat(detail.items().getFirst().dueConceptCount()).isZero();
         assertThat(detail.items().getFirst().dueConcepts()).isEmpty();
+    }
+
+    @Test
+    void collectionLearnerLevelPersistsAcrossReloadAndCanBeClearedToNull() {
+        UUID userId = UUID.randomUUID();
+        NoteCollectionEntity collection = saveCollection(userId, CollectionVisibility.PRIVATE);
+        assertThat(collection.getLearnerLevel()).isNull();
+
+        noteCollectionService.updateMetadata(
+                collection.getId(),
+                userId,
+                new UpdateNoteCollectionRequest(null, null, null, null, null, LearnerLevel.BOARD_EXAM_REVIEW.name())
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(noteCollectionService.get(collection.getId(), userId).learnerLevel())
+                .isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
+
+        noteCollectionService.updateMetadata(
+                collection.getId(),
+                userId,
+                new UpdateNoteCollectionRequest(null, null, null, null, null, "")
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(noteCollectionService.get(collection.getId(), userId).learnerLevel()).isNull();
+        assertThat(jdbcTemplate.queryForObject(
+                "select learner_level from note_collections where id = ?",
+                String.class,
+                collection.getId()
+        )).isNull();
     }
 
     @Test

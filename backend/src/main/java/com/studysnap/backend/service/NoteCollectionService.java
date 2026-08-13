@@ -27,6 +27,7 @@ import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.dto.WeeklyFocusDayEntry;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.CollectionVisibility;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.entity.NoteEntity;
@@ -92,6 +93,7 @@ public class NoteCollectionService {
     private static final int LABEL_MAX_LENGTH = 120;
     private static final int DUE_CONCEPT_DISPLAY_LIMIT = 3;
     private static final int DEFAULT_STUDY_DAYS_PER_WEEK = 7;
+    private static final int MAX_LEARNER_LEVEL_ANCESTOR_DEPTH = 10;
     private static final String TITLE_REQUIRED_MESSAGE = "Collection title is required.";
     private static final String TITLE_TOO_LONG_MESSAGE = "Collection title must be 150 characters or fewer.";
     private static final String LABEL_TOO_LONG_MESSAGE = "Collection item label must be 120 characters or fewer.";
@@ -172,6 +174,31 @@ public class NoteCollectionService {
     }
 
     @Transactional(readOnly = true)
+    public List<NoteCollectionSummaryResponse> listNoteAccepting(UUID userId) {
+        List<NoteCollectionEntity> collections = collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId);
+        if (collections.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Integer> itemCountsByCollectionId = loadItemCounts(collections);
+        Map<UUID, Integer> readyCountsByCollectionId = loadReadyCounts(collections);
+        Map<UUID, Integer> childCountsByCollectionId = loadChildCounts(collections);
+        return collections.stream()
+                .filter(collection -> childCountsByCollectionId.getOrDefault(collection.getId(), 0) == 0)
+                // childCount is genuinely 0 here — goals are filtered out above. practicedCount is
+                // NOT computed: this endpoint exists only to populate the bulk-authoring selector,
+                // which reads id, title and resolvedLearnerLevel. Do not consume practicedCount
+                // from this response without loading it first; it is a placeholder, not a count.
+                .map(collection -> toSummaryResponse(
+                        collection,
+                        itemCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        readyCountsByCollectionId.getOrDefault(collection.getId(), 0),
+                        0,
+                        0
+                ))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<NoteCollectionSummaryResponse> listPublic(String courseProgram) {
         String normalizedCourseProgram = CourseProgramNormalizationUtils.normalizeForStorage(courseProgram);
         List<NoteCollectionEntity> collections = normalizedCourseProgram == null
@@ -215,6 +242,9 @@ public class NoteCollectionService {
         collection.setOwnerUserId(userId);
         collection.setTitle(title);
         collection.setDescription(description);
+        collection.setLearnerLevel(NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(
+                request == null ? null : request.learnerLevel()
+        ));
         collection.setVisibility(CollectionVisibility.PRIVATE);
         collection.setCreatedAt(now);
         collection.setUpdatedAt(now);
@@ -584,6 +614,11 @@ public class NoteCollectionService {
                     cascadeCourseProgramToBlankChildren(collectionId, userId, normalizedCourseProgram);
                 }
             }
+            if (request.learnerLevel() != null) {
+                collection.setLearnerLevel(
+                        NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel())
+                );
+            }
             if (request.estimatedStudyHours() != null) {
                 collection.setEstimatedStudyHours(request.estimatedStudyHours());
             }
@@ -928,6 +963,46 @@ public class NoteCollectionService {
         allItems.addAll(newItems);
         allItems.sort((left, right) -> Integer.compare(left.getPosition(), right.getPosition()));
         return toDetailResponse(saved, allItems);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<LearnerLevel> validateNoteAcceptingCollection(UUID collectionId, UUID userId) {
+        getOwnedCollectionOrThrow(collectionId, userId);
+        if (collectionRepository.countByParentCollectionId(collectionId) > 0) {
+            throw new InvalidCollectionRequestException(GOAL_CANNOT_ACCEPT_NOTES_MESSAGE);
+        }
+        return resolveInheritedLearnerLevel(collectionId);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<LearnerLevel> resolveInheritedLearnerLevel(UUID collectionId) {
+        UUID currentId = collectionId;
+        UUID ownerUserId = null;
+        Set<UUID> visited = new HashSet<>();
+        for (int depth = 0; currentId != null && depth < MAX_LEARNER_LEVEL_ANCESTOR_DEPTH; depth++) {
+            if (!visited.add(currentId)) {
+                return Optional.empty();
+            }
+            Optional<NoteCollectionEntity> current = collectionRepository.findById(currentId);
+            if (current.isEmpty()) {
+                return Optional.empty();
+            }
+            NoteCollectionEntity currentCollection = current.get();
+            if (ownerUserId == null) {
+                ownerUserId = currentCollection.getOwnerUserId();
+            } else if (!ownerUserId.equals(currentCollection.getOwnerUserId())) {
+                return Optional.empty();
+            }
+            // Return the moment a level is found. Continuing the walk after this point can only
+            // discard an answer that is already correct: a cycle, a depth-cap exit, or an
+            // owner mismatch further up would fall through to Optional.empty() and drop the
+            // nearest level — including a collection's OWN explicitly-set level.
+            if (currentCollection.getLearnerLevel() != null) {
+                return Optional.of(currentCollection.getLearnerLevel());
+            }
+            currentId = currentCollection.getParentCollectionId();
+        }
+        return Optional.empty();
     }
 
     @Transactional
@@ -1761,6 +1836,10 @@ public class NoteCollectionService {
         return normalized.isBlank() ? null : normalized;
     }
 
+    private String enumName(Enum<?> value) {
+        return value == null ? null : value.name();
+    }
+
     private void touch(NoteCollectionEntity collection) {
         touch(collection, Instant.now());
     }
@@ -1782,6 +1861,8 @@ public class NoteCollectionService {
                 collection.getDescription(),
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
+                enumName(collection.getLearnerLevel()),
+                resolveInheritedLearnerLevel(collection.getId()).map(Enum::name).orElse(null),
                 collection.getSourcePlanId(),
                 collection.getParentCollectionId(),
                 itemCount,
@@ -1805,6 +1886,8 @@ public class NoteCollectionService {
                 collection.getDescription(),
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
+                enumName(collection.getLearnerLevel()),
+                resolveInheritedLearnerLevel(collection.getId()).map(Enum::name).orElse(null),
                 collection.getEstimatedStudyHours(),
                 collection.getTargetCompletionDate(),
                 collection.getCompanion(),
@@ -1831,6 +1914,8 @@ public class NoteCollectionService {
                 collection.getDescription(),
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
+                enumName(collection.getLearnerLevel()),
+                resolveInheritedLearnerLevel(collection.getId()).map(Enum::name).orElse(null),
                 collection.getEstimatedStudyHours(),
                 collection.getTargetCompletionDate(),
                 collection.getCompanion(),

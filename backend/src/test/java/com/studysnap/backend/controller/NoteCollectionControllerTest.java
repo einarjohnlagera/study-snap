@@ -57,7 +57,7 @@ class NoteCollectionControllerTest {
     @Test
     void endpoints_requireAuthenticatedUserRole() throws NoSuchMethodException {
         assertThat(NoteCollectionController.class
-                .getMethod("list", AuthenticatedUser.class)
+                .getMethod("list", boolean.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
         assertThat(NoteCollectionController.class
                 .getMethod("create", CreateNoteCollectionRequest.class, AuthenticatedUser.class)
@@ -128,10 +128,23 @@ class NoteCollectionControllerTest {
         NoteCollectionSummaryResponse response = summaryResponse();
         when(service.list(user.userId())).thenReturn(List.of(response));
 
-        List<NoteCollectionSummaryResponse> result = controller.list(user);
+        List<NoteCollectionSummaryResponse> result = controller.list(false, user);
 
         assertThat(result).containsExactly(response);
         verify(service).list(user.userId());
+    }
+
+    @Test
+    void list_returnsOnlyNoteAcceptingCollectionsWhenRequested() {
+        NoteCollectionController controller = new NoteCollectionController(service);
+        AuthenticatedUser user = authenticatedUser();
+        NoteCollectionSummaryResponse response = summaryResponse();
+        when(service.listNoteAccepting(user.userId())).thenReturn(List.of(response));
+
+        List<NoteCollectionSummaryResponse> result = controller.list(true, user);
+
+        assertThat(result).containsExactly(response);
+        verify(service).listNoteAccepting(user.userId());
     }
 
     @Test

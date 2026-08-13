@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
+import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.NoteResponse;
@@ -15,6 +16,8 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.BulkNoteGenerationQuotaExceededException;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
+import com.studysnap.backend.exception.CollectionNotFoundException;
+import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
@@ -79,6 +82,8 @@ class NoteBulkGenerationServiceTest {
     private BulkGenerationResultService bulkGenerationResultService;
     @Mock
     private MePlanService mePlanService;
+    @Mock
+    private NoteCollectionService noteCollectionService;
 
     private NoteBulkGenerationService service;
     private StudyPackGenerationTaskDispatcher taskDispatcher;
@@ -99,6 +104,7 @@ class NoteBulkGenerationServiceTest {
                 onboardingGuardService,
                 bulkGenerationResultService,
                 mePlanService,
+                noteCollectionService,
                 50,
                 0
         );
@@ -123,6 +129,95 @@ class NoteBulkGenerationServiceTest {
 
         verify(userRepository, never()).findById(userId);
         verify(noteService, never()).create(any(UpsertNoteRequest.class), any(UUID.class));
+    }
+
+    @Test
+    void queueBatch_rejectsForeignOrMissingCollectionBeforeDispatch() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = requestWithCollection(collectionId, List.of("Topic"));
+        doThrow(new CollectionNotFoundException())
+                .when(noteCollectionService).validateNoteAcceptingCollection(collectionId, userId);
+
+        assertThatThrownBy(() -> service.queueBatch(request, userId, false))
+                .isInstanceOf(CollectionNotFoundException.class);
+        verify(taskDispatcher, never()).execute(any(Runnable.class));
+    }
+
+    @Test
+    void queueBatch_rejectsGoalCollectionBeforeDispatch() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = requestWithCollection(collectionId, List.of("Topic"));
+        doThrow(new InvalidCollectionRequestException("A goal collection cannot contain direct notes."))
+                .when(noteCollectionService).validateNoteAcceptingCollection(collectionId, userId);
+
+        assertThatThrownBy(() -> service.queueBatch(request, userId, false))
+                .isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessageContaining("goal collection");
+        verify(taskDispatcher, never()).execute(any(Runnable.class));
+    }
+
+    @Test
+    void queueBatch_addsOnlySuccessfullyCreatedNotesToSelectedCollectionInOrder() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID thirdNoteId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = requestWithCollection(
+                collectionId,
+                List.of("First Topic", "Failed Topic", "Third Topic")
+        );
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
+                .thenReturn("First content")
+                .thenThrow(new RuntimeException("generation failed"))
+                .thenReturn("Third content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId)))
+                .thenReturn(noteResponse(firstNoteId.toString()), noteResponse(thirdNoteId.toString()));
+
+        service.queueBatch(request, userId, false);
+
+        verify(noteCollectionService).addItems(
+                collectionId,
+                userId,
+                new AddNoteCollectionItemsRequest(List.of(firstNoteId, thirdNoteId))
+        );
+    }
+
+    @Test
+    void queueBatch_membershipFailureDoesNotEscapeOrRetryGeneration() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = requestWithCollection(collectionId, List.of("Topic"));
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse(noteId.toString()));
+        doThrow(new CollectionNotFoundException()).when(noteCollectionService).addItems(
+                collectionId,
+                userId,
+                new AddNoteCollectionItemsRequest(List.of(noteId))
+        );
+
+        BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
+
+        assertThat(response.queuedTopics()).isEqualTo(1);
+        verify(noteService, times(1)).create(any(UpsertNoteRequest.class), eq(userId));
+        verify(noteCollectionService, times(1)).addItems(any(), any(), any());
+        verify(bulkGenerationResultService).recordResult(
+                any(), eq(userId), eq(SUBJECT), any(), any(), any(), any(), eq(false), eq(1), eq(1), any(), any()
+        );
     }
 
     @Test
@@ -770,6 +865,20 @@ class NoteBulkGenerationServiceTest {
                 null,
                 null,
                 targetProfileType
+        );
+    }
+
+    private BulkGenerateNotesRequest requestWithCollection(UUID collectionId, List<String> topics) {
+        return new BulkGenerateNotesRequest(
+                SUBJECT,
+                topics,
+                false,
+                List.of(CATALOG_PROGRAM_ID),
+                null,
+                null,
+                null,
+                NoteTargetProfileType.STUDENT,
+                collectionId
         );
     }
 

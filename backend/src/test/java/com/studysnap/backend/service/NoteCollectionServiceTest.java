@@ -29,6 +29,7 @@ import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.CollectionVisibility;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
@@ -200,6 +201,22 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void create_persistsExplicitLearnerLevel() {
+        UUID userId = UUID.randomUUID();
+        when(collectionRepository.save(any(NoteCollectionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        NoteCollectionDetailResponse result = service.create(userId, new CreateNoteCollectionRequest(
+                COLLECTION_TITLE,
+                null,
+                null,
+                LearnerLevel.BOARD_EXAM_REVIEW.name()
+        ));
+
+        assertThat(result.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
+    }
+
+    @Test
     void create_withValidOwnedNoteIdsPreservesOrder() {
         UUID userId = UUID.randomUUID();
         UUID firstNoteId = UUID.randomUUID();
@@ -318,6 +335,27 @@ class NoteCollectionServiceTest {
         verify(quizSessionHistoryService, times(1))
                 .findLatestSessionCompletedAtByNoteIds(eq(userId), noteIdsCaptor.capture());
         assertThat(noteIdsCaptor.getValue()).containsExactlyInAnyOrder(newerNoteId, olderNoteId);
+    }
+
+    @Test
+    void listNoteAccepting_excludesGoalsAndResolvesParentLearnerLevel() {
+        UUID userId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(UUID.randomUUID(), userId, "Goal", Instant.now());
+        goal.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
+        NoteCollectionEntity leaf = buildCollection(UUID.randomUUID(), userId, "Engineering Math", Instant.now());
+        leaf.setParentCollectionId(goal.getId());
+        when(collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(userId)).thenReturn(List.of(goal, leaf));
+        when(collectionRepository.countChildrenByCollectionIds(List.of(goal.getId(), leaf.getId())))
+                .thenReturn(List.of(childCountProjection(goal.getId(), 1)));
+        when(itemRepository.countItemsByCollectionIds(List.of(goal.getId(), leaf.getId()))).thenReturn(List.of());
+        when(itemRepository.findNoteIdsByCollectionIds(List.of(goal.getId(), leaf.getId()))).thenReturn(List.of());
+        when(collectionRepository.findById(leaf.getId())).thenReturn(Optional.of(leaf));
+        when(collectionRepository.findById(goal.getId())).thenReturn(Optional.of(goal));
+
+        List<NoteCollectionSummaryResponse> result = service.listNoteAccepting(userId);
+
+        assertThat(result).extracting(NoteCollectionSummaryResponse::id).containsExactly(leaf.getId());
+        assertThat(result.getFirst().resolvedLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
     }
 
     @Test
@@ -2225,6 +2263,83 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void updateMetadata_setsAndClearsLearnerLevel() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.findById(collectionId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        NoteCollectionDetailResponse setResult = service.updateMetadata(collectionId, userId,
+                new UpdateNoteCollectionRequest(null, null, null, null, null, LearnerLevel.COLLEGE.name()));
+        NoteCollectionDetailResponse clearResult = service.updateMetadata(collectionId, userId,
+                new UpdateNoteCollectionRequest(null, null, null, null, null, ""));
+
+        assertThat(setResult.learnerLevel()).isEqualTo(LearnerLevel.COLLEGE.name());
+        assertThat(clearResult.learnerLevel()).isNull();
+        assertThat(collection.getLearnerLevel()).isNull();
+    }
+
+    @Test
+    void resolveInheritedLearnerLevel_usesNearestValueAndHasNoDefault() {
+        UUID goalId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        UUID leafId = UUID.randomUUID();
+        NoteCollectionEntity goal = buildCollection(goalId, UUID.randomUUID(), "Goal", Instant.now());
+        goal.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
+        NoteCollectionEntity parent = buildCollection(parentId, goal.getOwnerUserId(), "Parent", Instant.now());
+        parent.setParentCollectionId(goalId);
+        parent.setLearnerLevel(LearnerLevel.COLLEGE);
+        NoteCollectionEntity leaf = buildCollection(leafId, goal.getOwnerUserId(), "Leaf", Instant.now());
+        leaf.setParentCollectionId(parentId);
+        when(collectionRepository.findById(leafId)).thenReturn(Optional.of(leaf));
+        when(collectionRepository.findById(parentId)).thenReturn(Optional.of(parent));
+        when(collectionRepository.findById(goalId)).thenReturn(Optional.of(goal));
+
+        assertThat(service.resolveInheritedLearnerLevel(leafId)).contains(LearnerLevel.COLLEGE);
+
+        parent.setLearnerLevel(null);
+        assertThat(service.resolveInheritedLearnerLevel(leafId)).contains(LearnerLevel.BOARD_EXAM_REVIEW);
+
+        goal.setLearnerLevel(null);
+        assertThat(service.resolveInheritedLearnerLevel(leafId)).isEmpty();
+    }
+
+    @Test
+    void resolveInheritedLearnerLevel_terminatesForCycle() {
+        UUID firstId = UUID.randomUUID();
+        UUID secondId = UUID.randomUUID();
+        NoteCollectionEntity first = buildCollection(firstId, UUID.randomUUID(), "First", Instant.now());
+        NoteCollectionEntity second = buildCollection(secondId, first.getOwnerUserId(), "Second", Instant.now());
+        first.setParentCollectionId(secondId);
+        second.setParentCollectionId(firstId);
+        when(collectionRepository.findById(firstId)).thenReturn(Optional.of(first));
+        when(collectionRepository.findById(secondId)).thenReturn(Optional.of(second));
+
+        assertThat(service.resolveInheritedLearnerLevel(firstId)).isEmpty();
+        verify(collectionRepository, times(1)).findById(firstId);
+        verify(collectionRepository, times(1)).findById(secondId);
+    }
+
+    @Test
+    void resolveInheritedLearnerLevel_returnsOwnLevelEvenWhenAncestorChainIsCyclic() {
+        // A broken chain further up must not discard a level this collection sets itself.
+        // The walk answers as soon as it finds one, so the cycle is never reached.
+        UUID firstId = UUID.randomUUID();
+        UUID secondId = UUID.randomUUID();
+        NoteCollectionEntity first = buildCollection(firstId, UUID.randomUUID(), "First", Instant.now());
+        NoteCollectionEntity second = buildCollection(secondId, first.getOwnerUserId(), "Second", Instant.now());
+        first.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
+        first.setParentCollectionId(secondId);
+        second.setParentCollectionId(firstId);
+        when(collectionRepository.findById(firstId)).thenReturn(Optional.of(first));
+
+        assertThat(service.resolveInheritedLearnerLevel(firstId)).contains(LearnerLevel.BOARD_EXAM_REVIEW);
+    }
+
+    @Test
     void updateMetadata_titleOnlyRequestPreservesDescriptionCourseProgramAndEstimatedHours() {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();
@@ -3524,6 +3639,31 @@ class NoteCollectionServiceTest {
         assertThat(result.items()).extracting(item -> item.noteId()).containsExactly(existingNoteId, newNoteId);
         assertThat(result.items()).extracting(item -> item.position()).containsExactly(0, 1);
         verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.COLLECTION_CREATED), any(), any());
+    }
+
+    @Test
+    void addItems_repeatingTheSameNoteDoesNotCreateDuplicateMembership() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        NoteCollectionItemEntity existingItem = buildItem(collectionId, noteId, 0, null);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
+                .thenReturn(List.of(), List.of(existingItem));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(noteId), List.of(note));
+
+        AddNoteCollectionItemsRequest request = new AddNoteCollectionItemsRequest(List.of(noteId));
+        service.addItems(collectionId, userId, request);
+        service.addItems(collectionId, userId, request);
+
+        ArgumentCaptor<List<NoteCollectionItemEntity>> savedItems = ArgumentCaptor.forClass(List.class);
+        verify(itemRepository, times(2)).saveAll(savedItems.capture());
+        assertThat(savedItems.getAllValues()).extracting(List::size).containsExactly(1, 0);
     }
 
     @Test

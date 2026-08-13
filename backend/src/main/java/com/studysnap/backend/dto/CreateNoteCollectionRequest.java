@@ -6,6 +6,10 @@ import java.util.UUID;
 public record CreateNoteCollectionRequest(
         String title,
         String description,
-        List<UUID> noteIds
+        List<UUID> noteIds,
+        String learnerLevel
 ) {
+    public CreateNoteCollectionRequest(String title, String description, List<UUID> noteIds) {
+        this(title, description, noteIds, null);
+    }
 }

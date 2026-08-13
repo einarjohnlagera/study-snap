@@ -20,12 +20,14 @@ import {
   getCourseProgramCatalog,
   getMyPlan,
   listCoursePrograms,
+  listCollections,
   listSubjects,
   type BulkGenerateNotesRequest,
   type CourseProgramCatalogItem,
   type DomainContext,
   type LearnerLevel,
   type NoteTargetProfileType,
+  type NoteCollectionSummary,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { consumeBulkGenerationRetryStash, setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
@@ -39,6 +41,7 @@ import {
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { DOMAIN_CONTEXT_OPTIONS } from "@/lib/domain-context";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
+import { getCollectionLabels } from "@/lib/collection-labels";
 
 export const MAX_BULK_GENERATION_TOPICS = 50;
 
@@ -58,6 +61,10 @@ export function BulkGenerationPageClient() {
   const authUser = getAuthUser();
   const isTeacherOrAdmin = isTeacherSelectableNoteTarget(authUser?.profileType, authUser?.role);
   const isAdmin = authUser?.role === "ADMIN";
+  // This selector renders only for teachers/admins, and a TEACHER profile calls these
+  // "Lesson Plans" everywhere else in the app — hardcoding "Review Set" here would split
+  // the vocabulary on the one surface that audience uses most.
+  const collectionLabels = getCollectionLabels(authUser?.profileType);
   const nextTopicId = useRef(2);
   const [subject, setSubject] = useState("");
   const [courseProgram, setCourseProgram] = useState("");
@@ -68,6 +75,11 @@ export function BulkGenerationPageClient() {
   const [courseProgramCatalogRetry, setCourseProgramCatalogRetry] = useState(0);
   const [domainContext, setDomainContext] = useState<DomainContext | "">("");
   const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("");
+  const [collectionId, setCollectionId] = useState("");
+  const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
+  const [collectionsLoading, setCollectionsLoading] = useState(false);
+  const [collectionsError, setCollectionsError] = useState<string | null>(null);
+  const [collectionsRetry, setCollectionsRetry] = useState(0);
   const [targetProfileType, setTargetProfileType] = useState<NoteTargetProfileType | "">(
     mapProfileTypeToNoteTargetProfile(authUser?.profileType),
   );
@@ -168,6 +180,40 @@ export function BulkGenerationPageClient() {
       });
     return () => { active = false; };
   }, [courseProgramCatalogRetry, isTeacherOrAdmin]);
+
+  useEffect(() => {
+    if (!isTeacherOrAdmin) {
+      return;
+    }
+    let active = true;
+    setCollectionsLoading(true);
+    setCollectionsError(null);
+    void listCollections({ noteAccepting: true })
+      .then((loadedCollections) => {
+        if (active) setCollections(loadedCollections);
+      })
+      .catch((collectionsLoadError) => {
+        if (active) {
+          setCollectionsError(
+            collectionsLoadError instanceof Error
+              ? collectionsLoadError.message
+              : "Could not load Review Sets.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setCollectionsLoading(false);
+      });
+    return () => { active = false; };
+  }, [collectionsRetry, isTeacherOrAdmin]);
+
+  const handleCollectionChange = (selectedCollectionId: string) => {
+    setCollectionId(selectedCollectionId);
+    const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId);
+    if (selectedCollection?.resolvedLearnerLevel) {
+      setLearnerLevel((current) => current || selectedCollection.resolvedLearnerLevel || "");
+    }
+  };
 
   useEffect(() => {
     if (!isTeacherOrAdmin || courseProgramIds.length > 0 || !courseProgram.trim()) {
@@ -296,6 +342,7 @@ export function BulkGenerationPageClient() {
             domainContext: domainContext || null,
             learnerLevel: learnerLevel || null,
             targetProfileType: targetProfileType as NoteTargetProfileType,
+            ...(collectionId ? { collectionId } : {}),
           }
         : { courseProgramText: courseProgram.trim() }),
     };
@@ -376,6 +423,40 @@ export function BulkGenerationPageClient() {
           </div>
 
           <div data-testid="bulk-metadata-grid" className="grid gap-4 empty:hidden sm:grid-cols-2">
+            {isTeacherOrAdmin ? (
+              <div className="space-y-2">
+                <label htmlFor="bulk-review-set" className="text-sm font-medium text-foreground">
+                  {collectionLabels.singular} (optional)
+                </label>
+                <select
+                  id="bulk-review-set"
+                  value={collectionId}
+                  disabled={collectionsLoading}
+                  onChange={(event) => handleCollectionChange(event.target.value)}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-60"
+                >
+                  <option value="">{collectionsLoading ? `Loading ${collectionLabels.plural}...` : `No ${collectionLabels.singular}`}</option>
+                  {collections.map((collection) => (
+                    <option key={collection.id} value={collection.id}>{collection.title}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-foreground/60">
+                  Generated notes will be added here when the batch finishes. Its authored depth can pre-fill the level below.
+                </p>
+                {collectionsError ? (
+                  <div className="space-y-1" role="alert">
+                    <p className="text-xs text-red-600 dark:text-red-400">{collectionsError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setCollectionsRetry((value) => value + 1)}
+                      className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Retry {collectionLabels.plural}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {isTeacherOrAdmin ? (
               <div className="space-y-2">
                 <label htmlFor="bulk-course-program" className="text-sm font-medium text-foreground">

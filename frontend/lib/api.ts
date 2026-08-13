@@ -143,6 +143,7 @@ export type BulkGenerateNotesRequest = {
   domainContext?: DomainContext | null;
   learnerLevel?: LearnerLevel | null;
   targetProfileType?: NoteTargetProfileType;
+  collectionId?: string | null;
 };
 
 export type BulkGenerateNotesResponse = {
@@ -1776,6 +1777,8 @@ export type NoteCollectionSummary = {
   description: string | null;
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
+  learnerLevel?: LearnerLevel | null;
+  resolvedLearnerLevel?: LearnerLevel | null;
   sourcePlanId: string | null;
   parentCollectionId: string | null;
   itemCount: number;
@@ -1813,6 +1816,8 @@ export type NoteCollectionDetail = {
   description: string | null;
   visibility: "PRIVATE" | "PUBLIC";
   courseProgram: string | null;
+  learnerLevel?: LearnerLevel | null;
+  resolvedLearnerLevel?: LearnerLevel | null;
   estimatedStudyHours: number | null;
   targetCompletionDate: string | null;
   companion: CompanionContent | null;
@@ -4480,9 +4485,10 @@ export async function deleteSavedLibraryFilter(id: string): Promise<void> {
   await parseApiResponse<never>(response, "Could not delete filter.");
 }
 
-export async function listCollections(): Promise<NoteCollectionSummary[]> {
+export async function listCollections(params?: { noteAccepting?: boolean }): Promise<NoteCollectionSummary[]> {
+  const query = params?.noteAccepting ? "?noteAccepting=true" : "";
   const response = await fetchWithAuth(
-    "/collections",
+    `/collections${query}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -4518,6 +4524,7 @@ export async function createCollection(request: {
   title: string;
   description?: string | null;
   noteIds?: string[];
+  learnerLevel?: LearnerLevel | null;
 }): Promise<NoteCollectionDetail> {
   const response = await fetchWithAuth(
     "/collections",
@@ -4737,6 +4744,7 @@ export async function updateCollection(
     courseProgram?: string | null;
     estimatedStudyHours?: number | null;
     targetCompletionDate?: string | null;
+    learnerLevel?: LearnerLevel | "" | null;
   },
 ): Promise<NoteCollectionDetail> {
   const response = await fetchWithAuth(

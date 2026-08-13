@@ -37,6 +37,7 @@ Fields:
 - optional `description`
 - `visibility` (`PRIVATE` by default, `PUBLIC` only for admin-published plans)
 - optional `courseProgram`
+- optional `learnerLevel`, the collection's curator-authored educational depth
 - optional `estimatedStudyHours`, curator-entered study-time guidance shown by journey surfaces and copied on adopt
 - optional `companion`, a JSONB Learning Companion for top-level Official Review Sets only; see `docs/features/companion.md`
 - optional `sourcePlanId` on adopted personal plans
@@ -91,6 +92,14 @@ Hierarchy constraints:
 - child must have no children of its own
 - the first implementation keeps Goals note-free: a collection must be empty before it can become a Goal, and a Goal cannot accept direct note items
 - these rules enforce the maximum two levels and make cycles impossible
+
+### Authored depth inheritance
+
+`note_collections.learner_level` is nullable, has no database default, and was introduced without a backfill. Owners set or clear it from the collection detail editor; an explicit clear persists `NULL`.
+
+For authoring pre-fill only, depth resolves from the selected note-accepting collection first and then walks upward to the nearest ancestor with a non-null value. **The walk returns as soon as it finds a level**, so a broken chain further up cannot discard an answer already found — including a collection's own explicitly-set level. It is cycle-safe and explicitly depth-bounded because `parent_collection_id` has no cycle constraint. If no collection in the bounded chain carries a level, resolution is empty — it never falls back to `COLLEGE`.
+
+This resolved value is a visible client-side pre-fill source for new notes, not a server-side note default. Adding an existing note to a collection never changes that note's learner level. Goal collections remain unable to hold notes directly; bulk-authoring selectors expose leaf collections only.
 
 ### Primary Review Set
 
