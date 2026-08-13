@@ -377,6 +377,40 @@ describe("NoteEditorPageClient", () => {
     ).toBeInTheDocument();
   });
 
+  it("defaults create-note authored depth from the user profile", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "BOARD_EXAM_REVIEW", courseProgram: "Nursing" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Authored Depth (optional)")).toHaveValue("BOARD_EXAM_REVIEW");
+    });
+  });
+
+  it("does not prefill authored depth from the profile when editing an existing note", async () => {
+    // CREATE ONLY, and this guard is the point: a depth change on an already-generated
+    // note strands its Challenge-bank rows at the old level, which is the same reason
+    // v0.75.0 rejected align-on-add. The profile must never reach an existing note.
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "BOARD_EXAM_REVIEW", courseProgram: "Nursing" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      learnerLevel: null,
+      targetProfileType: "STUDENT",
+    });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    // Edit mode renders the detail fields directly — there is no "Add details" step.
+    const depthSelect = await screen.findByLabelText("Authored Depth (optional)");
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    expect(depthSelect).toHaveValue("");
+  });
+
   it("returns to note detail after saving changes in edit mode", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
@@ -588,7 +622,9 @@ describe("NoteEditorPageClient", () => {
         subject: null,
         courseProgramText: "Nursing",
         domainContext: null,
-        learnerLevel: null,
+        // v0.75.0 item 1: a create now carries the author's own profile depth as a
+        // pre-fill. Domain Context stays null — it has no authorized inference source.
+        learnerLevel: "COLLEGE",
         tags: [],
         targetProfileType: "STUDENT",
         content: "Simple note content",
@@ -615,7 +651,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(screen.getByLabelText("Domain Context (optional)"), {
       target: { value: "ENGINEERING_MATHEMATICS" },
     });
-    fireEvent.change(screen.getByLabelText("Note Learner Level (optional)"), {
+    fireEvent.change(screen.getByLabelText("Authored Depth (optional)"), {
       target: { value: "COLLEGE" },
     });
     fireEvent.change(screen.getByLabelText("Content"), {
@@ -631,7 +667,7 @@ describe("NoteEditorPageClient", () => {
       "A long engineering algebra note remains intact.",
     );
     expect(screen.getByLabelText("Domain Context (optional)")).toHaveValue("ENGINEERING_MATHEMATICS");
-    expect(screen.getByLabelText("Note Learner Level (optional)")).toHaveValue("COLLEGE");
+    expect(screen.getByLabelText("Authored Depth (optional)")).toHaveValue("COLLEGE");
   });
 
   it("saves the note, starts generation, and redirects without requiring Add details", async () => {
@@ -1025,7 +1061,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByLabelText("Who is this note for?")).toHaveValue("");
     expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
     expect(screen.getByLabelText("Domain Context (optional)")).toBeInTheDocument();
-    expect(screen.getByLabelText("Note Learner Level (optional)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Authored Depth (optional)")).toBeInTheDocument();
     expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add all 3 Engineering programs" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Who is this note for?")).getByRole("option", { name: "Professional" }))
@@ -1072,7 +1108,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add details" }));
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authored Depth (optional)")).not.toBeInTheDocument();
     expect(document.querySelector("#note-applicable-programs")).toBeNull();
   });
 
@@ -1085,7 +1121,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add details" }));
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authored Depth (optional)")).not.toBeInTheDocument();
     expect(document.querySelector("#note-applicable-programs")).toBeNull();
   });
 
@@ -1099,7 +1135,7 @@ describe("NoteEditorPageClient", () => {
     expect(audienceLabel).toHaveTextContent("Who is this note for? *");
     expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
     expect(screen.getByLabelText("Domain Context (optional)")).toBeInTheDocument();
-    expect(screen.getByLabelText("Note Learner Level (optional)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Authored Depth (optional)")).toBeInTheDocument();
     expect(within(screen.getByLabelText("Who is this note for?")).getByRole("option", { name: "Professional" }))
       .toBeInTheDocument();
   });
@@ -1114,7 +1150,7 @@ describe("NoteEditorPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Add details" }));
     expect(screen.queryByLabelText("Domain Context (optional)")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Note Learner Level (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authored Depth (optional)")).not.toBeInTheDocument();
   });
 
   it("hydrates and saves existing authoring metadata for a teacher", async () => {
@@ -1136,12 +1172,12 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient noteId="note-1" />);
 
     expect(await screen.findByLabelText("Domain Context (optional)")).toHaveValue("NURSING");
-    expect(screen.getByLabelText("Note Learner Level (optional)")).toHaveValue("COLLEGE");
+    expect(screen.getByLabelText("Authored Depth (optional)")).toHaveValue("COLLEGE");
     expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Domain Context (optional)"), {
       target: { value: "ENGINEERING_SCIENCES" },
     });
-    fireEvent.change(screen.getByLabelText("Note Learner Level (optional)"), {
+    fireEvent.change(screen.getByLabelText("Authored Depth (optional)"), {
       target: { value: "BOARD_EXAM_REVIEW" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
@@ -1763,7 +1799,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(screen.getByLabelText("Domain Context (optional)"), {
       target: { value: "ENGINEERING_MATHEMATICS" },
     });
-    fireEvent.change(screen.getByLabelText("Note Learner Level (optional)"), {
+    fireEvent.change(screen.getByLabelText("Authored Depth (optional)"), {
       target: { value: "COLLEGE" },
     });
     const programInput = screen.getByLabelText("Add a course or program");

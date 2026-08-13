@@ -75,6 +75,11 @@ export function BulkGenerationPageClient() {
   const [courseProgramCatalogRetry, setCourseProgramCatalogRetry] = useState(0);
   const [domainContext, setDomainContext] = useState<DomainContext | "">("");
   const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("");
+  // Where the current Authored Depth came from. ADR-001's chain is
+  // Review Set -> author profile -> explicit override, so a Review Set must be able to
+  // replace a value the profile pre-filled, while never touching one the curator chose.
+  // Without this, the profile pre-fill lands first and the Review Set is silently ignored.
+  const [learnerLevelSource, setLearnerLevelSource] = useState<"none" | "profile" | "collection" | "user">("none");
   const [collectionId, setCollectionId] = useState("");
   const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(false);
@@ -119,6 +124,11 @@ export function BulkGenerationPageClient() {
     setCourseProgram(stash.courseProgram ?? "");
     setDomainContext(stash.domainContext ?? "");
     setLearnerLevel(stash.learnerLevel ?? "");
+    if (stash.learnerLevel) {
+      // A retry stash holds what the curator already submitted, so neither the profile
+      // pre-fill nor a Review Set selection may overwrite it.
+      setLearnerLevelSource("user");
+    }
     setTargetProfileType(stash.targetProfileType as NoteTargetProfileType);
     setMakePublic(stash.makePublic);
     setTopics(stash.topics.map((value, index) => ({ id: index + 1, value })));
@@ -142,6 +152,19 @@ export function BulkGenerationPageClient() {
       );
       if (meResult.status === "fulfilled") {
         setCourseProgram((current) => current || meResult.value.courseProgram || "");
+        // Authored Depth falls back to the author's own profile level (ADR-001's weak leg).
+        // Pre-fill only, never a server-side default: it lands in a visible control the
+        // curator can change before submitting.
+        const profileLearnerLevel = meResult.value.learnerLevel ?? "";
+        if (profileLearnerLevel) {
+          setLearnerLevel((current) => {
+            if (current) {
+              return current;
+            }
+            setLearnerLevelSource("profile");
+            return profileLearnerLevel;
+          });
+        }
       }
       if (!isAdmin && planResult.status === "fulfilled" && planResult.value) {
         const noteGenRemaining = planResult.value.remaining.noteGenerationsRemaining;
@@ -197,7 +220,7 @@ export function BulkGenerationPageClient() {
           setCollectionsError(
             collectionsLoadError instanceof Error
               ? collectionsLoadError.message
-              : "Could not load Review Sets.",
+              : `Could not load ${collectionLabels.plural}.`,
           );
         }
       })
@@ -205,13 +228,20 @@ export function BulkGenerationPageClient() {
         if (active) setCollectionsLoading(false);
       });
     return () => { active = false; };
-  }, [collectionsRetry, isTeacherOrAdmin]);
+  }, [collectionLabels.plural, collectionsRetry, isTeacherOrAdmin]);
 
   const handleCollectionChange = (selectedCollectionId: string) => {
     setCollectionId(selectedCollectionId);
     const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId);
     if (selectedCollection?.resolvedLearnerLevel) {
-      setLearnerLevel((current) => current || selectedCollection.resolvedLearnerLevel || "");
+      // Outranks a profile pre-fill (and an empty control), never an explicit choice.
+      setLearnerLevel((current) => {
+        if (current && learnerLevelSource === "user") {
+          return current;
+        }
+        setLearnerLevelSource("collection");
+        return selectedCollection.resolvedLearnerLevel ?? current;
+      });
     }
   };
 
@@ -540,12 +570,15 @@ export function BulkGenerationPageClient() {
             {isTeacherOrAdmin ? (
               <div className="space-y-2">
                 <label htmlFor="bulk-learner-level" className="text-sm font-medium text-foreground">
-                  Note Learner Level (optional)
+                  Authored Depth (optional)
                 </label>
                 <select
                   id="bulk-learner-level"
                   value={learnerLevel}
-                  onChange={(event) => setLearnerLevel(event.target.value as LearnerLevel | "")}
+                  onChange={(event) => {
+                    setLearnerLevel(event.target.value as LearnerLevel | "");
+                    setLearnerLevelSource("user");
+                  }}
                   className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                 >
                   <option value="">Use reader level fallback</option>

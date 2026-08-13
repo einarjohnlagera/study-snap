@@ -2250,7 +2250,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
                     <div className="space-y-2">
                       <label htmlFor="note-learner-level-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                        Note Learner Level (optional)
+                        Authored Depth (optional)
                       </label>
                       <select
                         id="note-learner-level-inline"
@@ -2342,7 +2342,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             {isInlineMetadataEditMode ? (
               <p className="text-xs text-foreground/70">
                 {canEditAuthoringMetadata
-                  ? "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, audience, Domain Context, and Note Learner Level."
+                  ? "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, audience, Domain Context, and Authored Depth."
                   : "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."}
               </p>
             ) : isTeacherMode ? (

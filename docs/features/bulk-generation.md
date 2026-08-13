@@ -20,7 +20,7 @@ Every batch contains:
 - `Course / Program(s)` for every profile: learners enter one free-text personal program, while Teacher and Admin profiles choose one-or-many catalog selections
 - `Target Audience` for Teacher and Admin profiles
 - Domain Context for Teacher and Admin profiles (optional with one program; required above one)
-- optional `Note Learner Level` for Teacher and Admin profiles
+- optional `Authored Depth` for Teacher and Admin profiles (the control label for the `notes.learner_level` axis, still named Note Learner Level in `ADR-001`)
 - an optional note-accepting Review Set for Teacher and Admin profiles (labelled with the profile's own collection vocabulary — see below)
 - a `Public` toggle
 
@@ -36,11 +36,21 @@ Subject is full-width. The remaining visible metadata uses one responsive two-co
 2. Course / Program
 3. Target Audience
 4. Domain Context
-5. Note Learner Level
+5. Authored Depth
 
-The Review Set control is a dropdown over owned collections that can accept notes; Goals are excluded. **Its label is not the literal string "Review Set" — it resolves through `getCollectionLabels(profileType)`**, so a `TEACHER` sees "Lesson Plan", a `STUDENT` "Study Plan", and an account with no profile type "Collection". The control renders only for Teacher and Admin, which is exactly the audience whose vocabulary diverges, so hardcoding a label here would split it on the surface they use most. Selecting one pre-fills an empty Note Learner Level control from the collection's own or nearest inherited authored depth. It never overwrites a level the curator already chose, and no resolved collection level means no pre-fill (specifically, no `COLLEGE` default). The selected level remains visible and editable before submit. Domain Context is never inferred.
+The Review Set control is a dropdown over owned collections that can accept notes; Goals are excluded. **Its label is not the literal string "Review Set" — it resolves through `getCollectionLabels(profileType)`**, so a `TEACHER` sees "Lesson Plan", a `STUDENT` "Study Plan", and an account with no profile type "Collection". The control renders only for Teacher and Admin, which is exactly the audience whose vocabulary diverges, so hardcoding a label here would split it on the surface they use most. Selecting one pre-fills an empty Authored Depth control from the collection's own or nearest inherited authored depth. It never overwrites a level the curator already chose, and no resolved collection level means no pre-fill (specifically, no `COLLEGE` default). The selected level remains visible and editable before submit. Domain Context is never inferred.
 
-The collections request is optional enhancement data. A load failure renders an inline error and retry action while leaving the rest of the form usable and submittable without a Review Set. Domain Context and Note Learner Level both have explicit blank fallback options. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
+**Label vs. axis, stated once so the rest of this file reads unambiguously.** The control is labelled **`Authored Depth`** (`v0.75.0` item 4, `ADR-001` constraint 4). The axis it writes is still `notes.learner_level` and is still called **Note Learner Level** in `ADR-001`, `AGENTS.md`, and the API contract below — **the rename is copy-only and the column did not move.** `Intended Audience` was explicitly unavailable as a label because `notes.target_profile_type` already occupies that concept in the same form.
+
+**Authored Depth pre-fills, in precedence order** (`ADR-001`'s chain is Review Set → author profile → explicit override):
+
+1. **The selected Review Set's** own or nearest inherited depth.
+2. **The author's own profile level**, applied on load — `ADR-001`'s deliberately weak fallback leg.
+3. **Whatever the curator explicitly chooses**, which outranks both.
+
+The form tracks which of these produced the current value, because the profile pre-fill lands on load: without that, the control would already be non-empty by the time a Review Set is chosen and the Review Set would be silently ignored, inverting the documented precedence. A Review Set selection therefore replaces a profile pre-fill but never an explicit choice, and a level restored from a retry stash counts as explicit. Every step is a pre-fill into a visible control — **none of it is a server-side default write**, and Domain Context is never inferred at any step.
+
+The collections request is optional enhancement data. A load failure renders an inline error and retry action while leaving the rest of the form usable and submittable without a Review Set. Domain Context and Authored Depth both have explicit blank fallback options. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
 
 ## Submission
 

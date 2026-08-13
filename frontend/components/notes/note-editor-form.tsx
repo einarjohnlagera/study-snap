@@ -524,7 +524,7 @@ export function NoteEditorForm({
 
                                 <div className="space-y-2">
                                     <label htmlFor="note-learner-level" className="text-sm font-medium text-foreground">
-                                        Note Learner Level (optional)
+                                        Authored Depth (optional)
                                     </label>
                                     <select
                                         id="note-learner-level"
