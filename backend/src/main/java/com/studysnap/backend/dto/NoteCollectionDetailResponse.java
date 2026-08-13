@@ -11,6 +11,8 @@ public record NoteCollectionDetailResponse(
         String description,
         String visibility,
         String courseProgram,
+        String learnerLevel,
+        String resolvedLearnerLevel,
         Integer estimatedStudyHours,
         LocalDate targetCompletionDate,
         CompanionContent companion,
@@ -23,4 +25,26 @@ public record NoteCollectionDetailResponse(
         NoteCollectionProgressResponse progress,
         List<NoteCollectionItemResponse> items
 ) {
+    public NoteCollectionDetailResponse(
+            UUID id,
+            String title,
+            String description,
+            String visibility,
+            String courseProgram,
+            Integer estimatedStudyHours,
+            LocalDate targetCompletionDate,
+            CompanionContent companion,
+            UUID sourcePlanId,
+            UUID parentCollectionId,
+            int childCount,
+            int readyCount,
+            Instant createdAt,
+            Instant updatedAt,
+            NoteCollectionProgressResponse progress,
+            List<NoteCollectionItemResponse> items
+    ) {
+        this(id, title, description, visibility, courseProgram, null, null, estimatedStudyHours,
+                targetCompletionDate, companion, sourcePlanId, parentCollectionId, childCount, readyCount,
+                createdAt, updatedAt, progress, items);
+    }
 }

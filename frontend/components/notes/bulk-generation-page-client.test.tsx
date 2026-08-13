@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BulkGenerationPageClient } from "./bulk-generation-page-client";
-import { bulkGenerateNotes, getCourseProgramCatalog, getMe, getMyPlan, listCoursePrograms, listSubjects } from "@/lib/api";
+import { bulkGenerateNotes, getCourseProgramCatalog, getMe, getMyPlan, listCollections, listCoursePrograms, listSubjects } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import {
   consumeBulkQueuedFlash,
@@ -33,6 +33,7 @@ jest.mock("@/lib/api", () => ({
   },
   bulkGenerateNotes: jest.fn(),
   getCourseProgramCatalog: jest.fn(),
+  listCollections: jest.fn(),
   listSubjects: jest.fn(),
   listCoursePrograms: jest.fn(),
   getMe: jest.fn(),
@@ -67,6 +68,7 @@ describe("BulkGenerationPageClient", () => {
     (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
       { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
     ]);
+    (listCollections as jest.Mock).mockResolvedValue([]);
     (getMe as jest.Mock).mockResolvedValue({ courseProgram: "" });
     (getMyPlan as jest.Mock).mockResolvedValue({
       limits: { noteGenerationsPerMonth: 10, studyPacksPerMonth: 10, ocrPerMonth: 20 },
@@ -165,6 +167,104 @@ describe("BulkGenerationPageClient", () => {
     });
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/library"));
     expect(consumeBulkQueuedFlash()).toEqual({ queuedCount: 2, resultId: "result-1" });
+  });
+
+  it("prefills an empty authored depth from the selected Review Set", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "subject-plan-1",
+        title: "Civil Engineering Mathematics",
+        resolvedLearnerLevel: "BOARD_EXAM_REVIEW",
+      },
+    ]);
+    render(<BulkGenerationPageClient />);
+
+    const selector = await screen.findByLabelText(/^Review Set/);
+    fireEvent.change(selector, { target: { value: "subject-plan-1" } });
+
+    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("BOARD_EXAM_REVIEW");
+  });
+
+  it("does not overwrite an authored depth the curator already selected", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "subject-plan-1",
+        title: "Civil Engineering Mathematics",
+        resolvedLearnerLevel: "BOARD_EXAM_REVIEW",
+      },
+    ]);
+    render(<BulkGenerationPageClient />);
+    await screen.findByLabelText(/^Review Set/);
+    fireEvent.change(screen.getByLabelText(/^Note Learner Level/), { target: { value: "COLLEGE" } });
+
+    fireEvent.change(screen.getByLabelText(/^Review Set/), { target: { value: "subject-plan-1" } });
+
+    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("COLLEGE");
+  });
+
+  it("leaves authored depth empty when the Review Set has no resolved level", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "subject-plan-1",
+        title: "Unclassified Review Set",
+        resolvedLearnerLevel: null,
+      },
+    ]);
+    render(<BulkGenerationPageClient />);
+
+    fireEvent.change(await screen.findByLabelText(/^Review Set/), {
+      target: { value: "subject-plan-1" },
+    });
+
+    expect(screen.getByLabelText(/^Note Learner Level/)).toHaveValue("");
+  });
+
+  it("includes the selected Review Set when queueing the batch", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      {
+        id: "subject-plan-1",
+        title: "Civil Engineering Mathematics",
+        resolvedLearnerLevel: "BOARD_EXAM_REVIEW",
+      },
+    ]);
+    (bulkGenerateNotes as jest.Mock).mockResolvedValue({
+      resultId: "result-1",
+      acceptedTopics: 1,
+      queuedTopics: 1,
+      rejectedTopics: 0,
+    });
+    render(<BulkGenerationPageClient />);
+    fireEvent.change(await screen.findByLabelText(/^Review Set/), {
+      target: { value: "subject-plan-1" },
+    });
+    await fillAdminForm(["Structural Analysis"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => expect(bulkGenerateNotes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collectionId: "subject-plan-1",
+        learnerLevel: "BOARD_EXAM_REVIEW",
+      }),
+    ));
+  });
+
+  it("keeps generation usable when Review Sets fail to load", async () => {
+    (listCollections as jest.Mock).mockRejectedValue(new Error("Could not load Review Sets."));
+    (bulkGenerateNotes as jest.Mock).mockResolvedValue({
+      resultId: "result-1",
+      acceptedTopics: 1,
+      queuedTopics: 1,
+      rejectedTopics: 0,
+    });
+    render(<BulkGenerationPageClient />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load Review Sets.");
+    await fillAdminForm(["Prenatal Care"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => expect(bulkGenerateNotes).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: "Retry Review Sets" })).toBeInTheDocument();
   });
 
   it("prefills from retry stash and clears it", async () => {

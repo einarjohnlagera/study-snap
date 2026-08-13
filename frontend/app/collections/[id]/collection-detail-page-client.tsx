@@ -59,6 +59,7 @@ import {
   type CompanionMentorTipSurfacingConditionType,
   type CompanionSection,
   type GoalCollectionDetailResponse,
+  type LearnerLevel,
   type NoteConceptCountsResponse,
   type NoteCollectionDetail,
   type NoteCollectionItem,
@@ -84,6 +85,7 @@ import {
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 import { AskCompanionPanel } from "@/components/collections/ask-companion-panel";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
+import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
 type ReadinessLoadState = "idle" | "loading" | "ready" | "error";
@@ -1359,6 +1361,7 @@ function EditCollectionModal({
     collection.estimatedStudyHours === null ? "" : String(collection.estimatedStudyHours),
   );
   const [targetCompletionDate, setTargetCompletionDate] = useState<string>(collection.targetCompletionDate ?? "");
+  const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">(collection.learnerLevel ?? "");
   const [studyDaysPerWeek, setStudyDaysPerWeek] = useState<string>("");
   // Tracks the value actually loaded from getMe(), distinct from the field's current (possibly
   // edited, possibly still-unloaded) contents. undefined means "not resolved yet" — either the
@@ -1375,6 +1378,7 @@ function EditCollectionModal({
       setDescription(collection.description ?? "");
       setEstimatedStudyHours(collection.estimatedStudyHours === null ? "" : String(collection.estimatedStudyHours));
       setTargetCompletionDate(collection.targetCompletionDate ?? "");
+      setLearnerLevel(collection.learnerLevel ?? "");
       setError(null);
       setSubmitting(false);
       if (isTopLevelGoal) {
@@ -1397,6 +1401,7 @@ function EditCollectionModal({
     collection.description,
     collection.estimatedStudyHours,
     collection.targetCompletionDate,
+    collection.learnerLevel,
     collection.title,
     isOpen,
     isTopLevelGoal,
@@ -1424,6 +1429,7 @@ function EditCollectionModal({
         // fields omitted (null) from the request and only clears a text field on an explicit "".
         description: description.trim(),
         estimatedStudyHours: estimatedStudyHours ? Number(estimatedStudyHours) : null,
+        ...(learnerLevel !== (collection.learnerLevel ?? "") ? { learnerLevel } : {}),
         // targetCompletionDate uses the same omit-preserves semantics — a null/omitted value here
         // leaves the existing date untouched, it does not clear it. Clearing goes through the
         // dedicated clearCollectionTargetDate call below instead.
@@ -1469,6 +1475,23 @@ function EditCollectionModal({
             onChange={(event) => setTitle(event.target.value)}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-foreground">Authored Depth</span>
+          <select
+            aria-label="Authored Depth"
+            value={learnerLevel}
+            onChange={(event) => setLearnerLevel(event.target.value as LearnerLevel | "")}
+            className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+          >
+            <option value="">No authored depth</option>
+            {LEARNER_LEVEL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <span className="block text-xs text-foreground/60">
+            Optional. Child plans inherit the nearest authored depth for bulk-authoring pre-fill.
+          </span>
         </label>
         <label className="block space-y-1.5">
           <span className="text-sm font-medium text-foreground">Description</span>

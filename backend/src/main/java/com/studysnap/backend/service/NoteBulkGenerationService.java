@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
+import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
@@ -66,6 +67,7 @@ public class NoteBulkGenerationService {
     private final OnboardingGuardService onboardingGuardService;
     private final BulkGenerationResultService bulkGenerationResultService;
     private final MePlanService mePlanService;
+    private final NoteCollectionService noteCollectionService;
     private final int maxTopics;
     private final int throttleDelayMs;
 
@@ -83,6 +85,7 @@ public class NoteBulkGenerationService {
             OnboardingGuardService onboardingGuardService,
             BulkGenerationResultService bulkGenerationResultService,
             MePlanService mePlanService,
+            NoteCollectionService noteCollectionService,
             @Value("${note.bulk-generation.max-topics:50}") int maxTopics,
             @Value("${note.bulk-generation.throttle-delay-ms:500}") int throttleDelayMs
     ) {
@@ -98,8 +101,31 @@ public class NoteBulkGenerationService {
         this.onboardingGuardService = onboardingGuardService;
         this.bulkGenerationResultService = bulkGenerationResultService;
         this.mePlanService = mePlanService;
+        this.noteCollectionService = noteCollectionService;
         this.maxTopics = Math.clamp(maxTopics, MIN_MAX_TOPICS, Integer.MAX_VALUE);
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
+    }
+
+    public NoteBulkGenerationService(
+            NoteGenerationService noteGenerationService,
+            NoteService noteService,
+            StudyPackService studyPackService,
+            LlmStudyPackService llmStudyPackService,
+            ContentModerationService contentModerationService,
+            StudyPackGenerationContextResolver generationContextResolver,
+            StudyPackGenerationTaskDispatcher taskDispatcher,
+            UserRepository userRepository,
+            CourseProgramCatalogRepository courseProgramCatalogRepository,
+            OnboardingGuardService onboardingGuardService,
+            BulkGenerationResultService bulkGenerationResultService,
+            MePlanService mePlanService,
+            int maxTopics,
+            int throttleDelayMs
+    ) {
+        this(noteGenerationService, noteService, studyPackService, llmStudyPackService,
+                contentModerationService, generationContextResolver, taskDispatcher, userRepository,
+                courseProgramCatalogRepository, onboardingGuardService, bulkGenerationResultService,
+                mePlanService, null, maxTopics, throttleDelayMs);
     }
 
     /** Retained for focused unit tests that exercise only personal-note batches. */
@@ -131,6 +157,7 @@ public class NoteBulkGenerationService {
                 onboardingGuardService,
                 bulkGenerationResultService,
                 mePlanService,
+                null,
                 maxTopics,
                 throttleDelayMs
         );
@@ -144,6 +171,9 @@ public class NoteBulkGenerationService {
         onboardingGuardService.assertProfileComplete(ownerUserId);
         UserEntity owner = userRepository.findById(ownerUserId).orElseThrow(UserNotFoundException::new);
         NormalizedBatch batch = normalizeAndValidate(request, owner);
+        if (batch.collectionId() != null) {
+            noteCollectionService.validateNoteAcceptingCollection(batch.collectionId(), ownerUserId);
+        }
         rejectIfNoteGenerationQuotaExceeded(batch, ownerUserId, enforceLimits);
         UUID resultId = UUID.randomUUID();
         taskDispatcher.execute(() -> processBatch(resultId, batch, ownerUserId, enforceLimits));
@@ -174,6 +204,7 @@ public class NoteBulkGenerationService {
         AtomicInteger createdCount = new AtomicInteger();
         List<String> failedTopics = new ArrayList<>();
         List<String> quotaBlockedTopics = new ArrayList<>();
+        List<String> createdNoteIds = new ArrayList<>();
         String resultCourseProgram = null;
 
         try {
@@ -197,7 +228,8 @@ public class NoteBulkGenerationService {
             for (int index = 0; index < batch.items().size(); index++) {
                 BulkGenerationItem item = batch.items().get(index);
                 try {
-                    processItem(batch, item, ownerUserId, enforceLimits, context);
+                    String createdNoteId = processItem(batch, item, ownerUserId, enforceLimits, context);
+                    createdNoteIds.add(createdNoteId);
                     createdCount.incrementAndGet();
                 } catch (RuntimeException exception) {
                     if (exception instanceof MonthlyNoteGenerationLimitReachedException) {
@@ -227,6 +259,7 @@ public class NoteBulkGenerationService {
                     exception
             );
         } finally {
+            addCreatedNotesToCollection(batch.collectionId(), createdNoteIds, ownerUserId);
             try {
                 bulkGenerationResultService.recordResult(
                         resultId,
@@ -262,7 +295,7 @@ public class NoteBulkGenerationService {
         }
     }
 
-    private void processItem(
+    private String processItem(
             NormalizedBatch batch,
             BulkGenerationItem item,
             UUID ownerUserId,
@@ -325,6 +358,28 @@ public class NoteBulkGenerationService {
                     note.id(),
                     item.topic(),
                     batch.subject(),
+                    ownerUserId,
+                    exception
+            );
+        }
+        return note.id();
+    }
+
+    private void addCreatedNotesToCollection(UUID collectionId, List<String> noteIds, UUID ownerUserId) {
+        if (collectionId == null || noteIds.isEmpty()) {
+            return;
+        }
+        try {
+            noteCollectionService.addItems(
+                    collectionId,
+                    ownerUserId,
+                    new AddNoteCollectionItemsRequest(noteIds.stream().map(UUID::fromString).toList())
+            );
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "action=bulk_generate_collection_membership outcome=failed collectionId={} createdNotes={} ownerUserId={}",
+                    collectionId,
+                    noteIds.size(),
                     ownerUserId,
                     exception
             );
@@ -403,7 +458,8 @@ public class NoteBulkGenerationService {
                 targetProfileType,
                 request.makePublic(),
                 List.copyOf(items),
-                rejectedTopics
+                rejectedTopics,
+                request.collectionId()
         );
     }
 
@@ -485,7 +541,8 @@ public class NoteBulkGenerationService {
             NoteTargetProfileType targetProfileType,
             boolean makePublic,
             List<BulkGenerationItem> items,
-            int rejectedTopics
+            int rejectedTopics,
+            UUID collectionId
     ) {
     }
 }

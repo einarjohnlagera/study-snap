@@ -21,6 +21,7 @@ Every batch contains:
 - `Target Audience` for Teacher and Admin profiles
 - Domain Context for Teacher and Admin profiles (optional with one program; required above one)
 - optional `Note Learner Level` for Teacher and Admin profiles
+- an optional note-accepting Review Set for Teacher and Admin profiles (labelled with the profile's own collection vocabulary — see below)
 - a `Public` toggle
 
 Topics are discrete rows with `+ Add topic` and per-row removal. They are not note titles. A topic such as `Newton's Laws of Motion` seeds note-content generation; the Study Pack write-back supplies the AI-refined title and tags. The Topics helper states this expectation inline (title and tags are auto-generated; the subject and other batch details apply to every note) so users are not surprised by AI-named notes in their Library.
@@ -31,12 +32,15 @@ Pasting a multi-line block into a topic row splits it into one topic per line (`
 
 Subject is full-width. The remaining visible metadata uses one responsive two-column grid in this order:
 
-1. Course / Program
-2. Target Audience
-3. Domain Context
-4. Note Learner Level
+1. Review Set
+2. Course / Program
+3. Target Audience
+4. Domain Context
+5. Note Learner Level
 
-For Admin and Teacher, the four fields form two responsive rows. Domain Context and Note Learner Level both have explicit blank fallback options. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
+The Review Set control is a dropdown over owned collections that can accept notes; Goals are excluded. **Its label is not the literal string "Review Set" — it resolves through `getCollectionLabels(profileType)`**, so a `TEACHER` sees "Lesson Plan", a `STUDENT` "Study Plan", and an account with no profile type "Collection". The control renders only for Teacher and Admin, which is exactly the audience whose vocabulary diverges, so hardcoding a label here would split it on the surface they use most. Selecting one pre-fills an empty Note Learner Level control from the collection's own or nearest inherited authored depth. It never overwrites a level the curator already chose, and no resolved collection level means no pre-fill (specifically, no `COLLEGE` default). The selected level remains visible and editable before submit. Domain Context is never inferred.
+
+The collections request is optional enhancement data. A load failure renders an inline error and retry action while leaving the rest of the form usable and submittable without a Review Set. Domain Context and Note Learner Level both have explicit blank fallback options. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
 
 ## Submission
 
@@ -82,6 +86,10 @@ The endpoint validates the request, queues one throttled background batch on the
 4. Create the note through `NoteService.create` with the topic as its initial title, all resolved batch metadata, and generated content.
 5. Apply PUBLIC visibility when requested.
 6. Start the existing async Study Pack generation pipeline.
+
+After all topics have been attempted, the worker adds the successfully created note ids to the selected Review Set, preserving batch order. It uses `NoteCollectionService.addItems`, so membership positioning, ownership validation, goal rejection, and duplicate filtering stay centralized. Queueing validates ownership and leaf status before dispatch; completion rechecks through the same owner-scoped path across the async boundary. The membership write is its own transaction, independent of already-committed note generation.
+
+Partial failure is normal: failed or quota-blocked topics contribute no note id, so only successful notes are added. If the collection was deleted or any membership write fails at completion, the failure is logged and the batch still completes normally; note generation is neither failed nor retried. Repeating membership is idempotent because `addItems` filters ids already present in the collection.
 
 One topic failure is caught and logged without aborting later topics. Notes appear as real Library rows and independently resolve through the existing `GENERATING -> STUDY_PACK_READY` or `FAILED` states.
 

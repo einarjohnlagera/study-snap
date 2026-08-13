@@ -43,6 +43,7 @@ class NoteCollectionRepositoryTest {
                     description text,
                     visibility varchar(16) not null,
                     course_program varchar(120),
+                    learner_level varchar(50),
                     estimated_study_hours integer,
                     target_completion_date date,
                     companion json,
@@ -54,6 +55,7 @@ class NoteCollectionRepositoryTest {
                     updated_at timestamp with time zone not null
                 )
                 """);
+        jdbcTemplate.execute("alter table note_collections add column if not exists learner_level varchar(50)");
         jdbcTemplate.execute("delete from note_collections");
     }
 
