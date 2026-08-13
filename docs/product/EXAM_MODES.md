@@ -59,9 +59,15 @@ If a future requirement does not fit cleanly inside Challenge / Long / Board, pr
 
 - **Identity**: Lightweight concept check. Entry point to active recall.
 - **Audience**: All profile types, all plans.
-- **Boundary**: Re-uses the base Study Pack quiz; not LLM-generated per session. Result screen guides into Challenge Quiz / Adaptive Practice. Quick Review writes `ConceptHealth` on completion (since 2026-07-11, `fix: track ConceptHealth on Quick Review completion` — Free-tier's primary quiz mode previously left no durable spaced-repetition signal) and can move mastery, due-state, and Overall Readiness the same as Challenge Quiz and Adaptive Practice.
+- **Boundary**: Re-uses the base Study Pack quiz; not LLM-generated per session. **Result screen guides into the source note or Challenge Quiz — never into Adaptive Practice** (amended 2026-08-13, see below). Quick Review writes `ConceptHealth` on completion (since 2026-07-11, `fix: track ConceptHealth on Quick Review completion` — Free-tier's primary quiz mode previously left no durable spaced-repetition signal) and can move mastery, due-state, and Overall Readiness the same as Challenge Quiz and Adaptive Practice.
 
-No identity changes from `quick-review.md`; included here for completeness.
+**Amendment, 2026-08-13 (owner decision, `v0.74.0`): Quick Review's result screen no longer routes into Adaptive Practice.** This line previously read *"Result screen guides into Challenge Quiz / Adaptive Practice."*
+
+- **Why.** Adaptive Practice is quota-limited, LLM-generated remediation (Free 3/mo). Routing a learner into it from a 5-question static refresher spends a scarce paid resource on a weak signal. The result screen now offers **Review the Notes** before mastery and **Take a Challenge** after it.
+- **Discovery is unaffected.** Adaptive Practice is still reached from the Dashboard's Today Focus (both the due-concepts and weak-concepts branches) and from the mode-selection screen, so this removes a route, not the mode.
+- **⚠️ This amendment is deliberately narrow, and the boundary matters.** The owner's reasoning — *"Quick Review is just a static quiz, not the real quiz"* — is the same reasoning behind `8c7a4821` (2026-07-03), which excluded Quick Review from `ConceptHealth` writes and **was reverted eight days later** by `6d054bad`. **Only routing changed here. `ConceptHealth` writes stay**, because Quick Review's *first attempt* at each question is still a genuine assessment — and `v0.74.0`'s justification for locking the Quiz tab depends on that write existing. **Do not extend this amendment into a second exclusion of `ConceptHealth`** without reckoning with the reverted attempt and with `v0.74.0`'s rationale.
+
+No other identity changes from `quick-review.md`; included here for completeness.
 
 ### Challenge Quiz (existing — keep flexible)
 

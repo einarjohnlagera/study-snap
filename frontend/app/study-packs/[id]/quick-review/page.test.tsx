@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import QuickReviewPage from "./page";
 import {
   completeProductOnboarding,
@@ -240,7 +240,11 @@ describe("QuickReviewPage post-quiz UX", () => {
     });
   });
 
-  function setupCompleteState(overrides: { adaptivePracticeAvailable?: boolean } = {}) {
+  function setupCompleteState(overrides: {
+    adaptivePracticeAvailable?: boolean;
+    quizMastered?: boolean;
+    quizMasteredAt?: string | null;
+  } = {}) {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -248,6 +252,12 @@ describe("QuickReviewPage post-quiz UX", () => {
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       adaptivePracticeAvailable: overrides.adaptivePracticeAvailable ?? false,
+      quizMastered: overrides.quizMastered ?? false,
+      // Default to "mastered just now" so the unlock announcement renders. A test that wants the
+      // repeat case passes an older timestamp explicitly.
+      quizMasteredAt: overrides.quizMasteredAt === undefined
+        ? new Date(Date.now() + 1000).toISOString()
+        : overrides.quizMasteredAt,
     });
     (startQuickReviewSession as jest.Mock).mockResolvedValue(baseSession);
     (completeQuickReviewSession as jest.Mock).mockResolvedValue(baseResult);
@@ -346,8 +356,29 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(screen.queryByText(/concept secured/)).not.toBeInTheDocument();
   });
 
+  it("does not re-announce the unlock when the pack was mastered in an earlier session", async () => {
+    // `quizMastered` is sticky, so it stays true forever once earned. Announcing off that alone told
+    // a learner they had "earned access" to something they unlocked weeks ago, every repeat perfect
+    // score. The previous fixture could not catch this: it returned quizMastered: true with no
+    // timestamp, so the first-unlock and repeat cases were indistinguishable.
+    setupCompleteState({ quizMastered: true, quizMasteredAt: "2026-01-01T00:00:00Z" });
+    (completeQuickReviewSession as jest.Mock).mockResolvedValue({
+      ...baseResult,
+      correctAnswers: 1,
+      scorePercentage: 100,
+      weakConcepts: [],
+    });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    await screen.findByRole("heading", { name: "Your results" });
+    expect(screen.queryByText("🔓 Quiz Unlocked")).not.toBeInTheDocument();
+  });
+
   it("keeps the standard header for a perfect first quiz", async () => {
-    setupCompleteState();
+    setupCompleteState({ quizMastered: true });
     (completeQuickReviewSession as jest.Mock).mockResolvedValue({
       ...baseResult,
       correctAnswers: 1,
@@ -362,6 +393,10 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByRole("heading", { name: "Your results" })).toBeInTheDocument();
+    const unlockAnnouncement = screen.getByText("🔓 Quiz Unlocked").parentElement;
+    expect(unlockAnnouncement).not.toBeNull();
+    expect(within(unlockAnnouncement as HTMLElement).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(unlockAnnouncement as HTMLElement).queryByRole("button")).not.toBeInTheDocument();
     expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "QUICK_REVIEW_COMPLETED" }));
     expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(expect.objectContaining({ eventType: "QUICK_REVIEW_OPEN_LOOP_SHOWN" }));
   });
@@ -542,6 +577,48 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
   });
 
+  it('offers "Review the Notes" on the result screen after a miss', async () => {
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    const reviewNotesLink = screen.getByRole("link", { name: "Review the Notes" });
+    expect(reviewNotesLink).toHaveAttribute("href", "/notes/note-1");
+  });
+
+  it('hides "Review the Notes" on a perfect score, which has nothing to go back and study', async () => {
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(screen.queryByRole("link", { name: "Review the Notes" })).not.toBeInTheDocument();
+  });
+
+  it('keeps "Finish Review" completing the session on the incorrect-answers screen', async () => {
+    // Guards the placement decision: this button is the only route to the result screen, which
+    // carries the Challenge promotion and the first-session commitment prompt. Replacing it here
+    // would make a learner who missed a question skip both, and both feed dated checkpoints.
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    expect(await screen.findByRole("button", { name: "Finish Review" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Review the Notes" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Finish Review" }));
+
+    await waitFor(() => expect(completeQuickReviewSession).toHaveBeenCalled());
+  });
+
   it("uses Note as a text link in empty quiz edge states", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
@@ -682,7 +759,11 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(review).toHaveTextContent("Mitochondria produce ATP.");
   });
 
-  it("uses Retry Quick Review as the primary next step when weak practice is locked", async () => {
+  it("uses Review the Notes as the primary next step after a non-mastered Quick Review", async () => {
+    // Replaced an assertion that Retry Quick Review was primary alongside an Adaptive Practice
+    // upsell. Quick Review no longer routes into Adaptive Practice at all (EXAM_MODES.md), and the
+    // retry CTA was both redundant — already declined one screen earlier — and mislabelled, since
+    // it restarted the whole Quick Review rather than the missed questions.
     setupCompleteState({ adaptivePracticeAvailable: false });
     render(<QuickReviewPage />);
 
@@ -691,8 +772,10 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
     await screen.findByText("Quick Review Complete");
 
-    expect(screen.getByRole("button", { name: "Retry Quick Review" })).toHaveClass("bg-primary");
-    expect(screen.getByRole("button", { name: "Get More Adaptive Practice" })).toHaveClass("border");
+    expect(screen.getByRole("button", { name: "Review the Notes" })).toHaveClass("bg-primary");
+    expect(screen.queryByRole("button", { name: "Retry Quick Review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Get More Adaptive Practice" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Practice Weak Areas" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });
 

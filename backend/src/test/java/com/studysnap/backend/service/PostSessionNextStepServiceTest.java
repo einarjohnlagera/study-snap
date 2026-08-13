@@ -22,6 +22,7 @@ import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,6 +82,8 @@ class PostSessionNextStepServiceTest {
     private StudyPackGenerationContextResolver generationContextResolver;
     @Mock
     private ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
+    @Mock
+    private StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     private StudySnapProperties properties;
     private PostSessionNextStepService postSessionNextStepService;
@@ -101,10 +104,13 @@ class PostSessionNextStepServiceTest {
                 progressReportService,
                 challengeQuizQuestionBankService,
                 generationContextResolver,
-                examGoalCourseProgramProvider
+                examGoalCourseProgramProvider,
+                studyPackQuizMasteryService
         );
         lenient().when(examGoalCourseProgramProvider.getCoursePrograms("pnle"))
                 .thenReturn(List.of("Nursing"));
+        lenient().when(studyPackQuizMasteryService.resolve(any(), any()))
+                .thenReturn(StudyPackQuizMastery.notMastered());
     }
 
     @Test
@@ -118,6 +124,8 @@ class PostSessionNextStepServiceTest {
                 conceptHealth(FIRST_CONCEPT, null, true),
                 conceptHealth(SECOND_CONCEPT, null, true)
         ));
+        when(studyPackQuizMasteryService.resolve(userId, studyPack))
+                .thenReturn(StudyPackQuizMastery.masteredAt(NOW));
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
@@ -139,33 +147,41 @@ class PostSessionNextStepServiceTest {
                 conceptHealth(FIRST_CONCEPT, NOW.minusDays(5), true),
                 conceptHealth(SECOND_CONCEPT, NOW.minusDays(1), false)
         ));
+        when(studyPackQuizMasteryService.resolve(userId, studyPack))
+                .thenReturn(StudyPackQuizMastery.masteredAt(NOW));
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
+        // Quick Review no longer routes into Adaptive Practice at all (EXAM_MODES.md amendment):
+        // a static 5-question refresher should not spend quota-limited LLM remediation.
         assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
         assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
-        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
-        assertThat(response.secondaryAction()).isNotNull();
-        assertThat(response.secondaryAction().actionHref()).endsWith(ADAPTIVE_PATH_SUFFIX);
-        assertThat(response.secondaryAction().adaptivePractice()).isTrue();
+        assertThat(response.secondaryAction()).isNull();
     }
 
     @Test
-    void getNextStep_promotesChallengeForSingleMissQuickReviewWithRetrySecondary() {
+    void getNextStep_returnsRetryReviewForSingleMissQuickReviewWithChallengeSecondary() {
         UUID userId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(userId);
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);
         stubLatestSession(userId, studyPack, QuickReviewSessionMode.QUICK_REVIEW, List.of(FIRST_CONCEPT));
         stubConceptHealth(userId, studyPack, List.of());
+        when(studyPackQuizMasteryService.resolve(userId, studyPack))
+                .thenReturn(StudyPackQuizMastery.notMastered());
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
+        // A non-mastered Quick Review now sends the learner back to the note. The old primary
+        // ("Retry Incorrect Questions") pointed at the Quick Review path, so it restarted the whole
+        // quiz rather than the missed questions, and re-offered what was already declined one
+        // screen earlier.
         assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
-        assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+        assertThat(response.actionLabel()).isEqualTo("Review the Notes");
+        assertThat(response.actionHref()).doesNotEndWith(QUICK_REVIEW_PATH_SUFFIX);
         assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
         assertThat(response.secondaryAction()).isNotNull();
-        assertThat(response.secondaryAction().actionHref()).endsWith(QUICK_REVIEW_PATH_SUFFIX);
+        assertThat(response.secondaryAction().actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
         assertThat(response.secondaryAction().adaptivePractice()).isFalse();
     }
 
@@ -180,7 +196,8 @@ class PostSessionNextStepServiceTest {
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
-        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionLabel()).isEqualTo("Review the Notes");
         assertThat(response.concepts()).containsExactly(FIRST_CONCEPT, SECOND_CONCEPT);
         assertThat(response.secondaryAction()).isNotNull();
         assertThat(response.secondaryAction().actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
@@ -459,7 +476,8 @@ class PostSessionNextStepServiceTest {
                 progressReportService,
                 realQuestionBankService,
                 generationContextResolver,
-                examGoalCourseProgramProvider
+                examGoalCourseProgramProvider,
+                studyPackQuizMasteryService
         );
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);

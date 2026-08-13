@@ -392,6 +392,7 @@ class NoteServiceListProjectionIntegrationTest {
         AnalyticsService analyticsService = mock(AnalyticsService.class);
         ContentModerationService contentModerationService = mock(ContentModerationService.class);
         OnboardingGuardService onboardingGuardService = mock(OnboardingGuardService.class);
+        StudyPackQuizMasteryService studyPackQuizMasteryService = mock(StudyPackQuizMasteryService.class);
 
         lenient().when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(any(AnalyticsEventType.class), any()))
                 .thenReturn(List.of());
@@ -401,6 +402,8 @@ class NoteServiceListProjectionIntegrationTest {
         lenient().when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(any(), any())).thenReturn(List.of());
         lenient().when(userRepository.findAllById(any())).thenReturn(List.of());
         lenient().when(quizSessionHistoryService.findLatestSessionCompletedAtByNoteIds(any(), any())).thenReturn(Map.of());
+        lenient().when(studyPackQuizMasteryService.resolve(any(), any()))
+                .thenReturn(com.studysnap.backend.service.model.StudyPackQuizMastery.notMastered());
         return new NoteService(
                 noteRepository,
                 analyticsEventRepository,
@@ -416,7 +419,8 @@ class NoteServiceListProjectionIntegrationTest {
                 onboardingGuardService,
                 mock(OfficialChallengeQuizTemplateService.class),
                 mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class),
-                mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class)
+                mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class),
+                studyPackQuizMasteryService
         );
     }
 }

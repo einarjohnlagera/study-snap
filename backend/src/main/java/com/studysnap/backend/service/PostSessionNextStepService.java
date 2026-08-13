@@ -20,6 +20,7 @@ import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.dto.ApplicableProgramResponse;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.util.NoteEffectivePrograms;
@@ -45,18 +46,14 @@ public class PostSessionNextStepService {
     private static final int FIRST_PAGE = 0;
     private static final String SESSION_METADATA_WEAK_CONCEPTS = "weakConcepts";
     private static final String ADAPTIVE_PRACTICE_PATH = "/notes/%s/adaptive-practice";
-    private static final String QUICK_REVIEW_PATH = "/notes/%s/quick-review";
     private static final String CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz";
+    private static final String NOTE_DETAIL_PATH = "/notes/%s";
     private static final String REDO_MISSED_CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz?entry=redo-missed";
     private static final String FALLBACK_PATH = "/library";
     private static final String TAKE_CHALLENGE_LABEL = "Take a Challenge";
     private static final String PRACTICE_WEAK_CONCEPTS_LABEL = "Practice Weak Concepts";
-    private static final String RETRY_INCORRECT_QUESTIONS_LABEL = "Retry Incorrect Questions";
     private static final String REDO_MISSED_QUESTIONS_LABEL = "Redo Missed Questions";
-    // Promote Challenge to the primary next step at a strong-majority Quick Review (>= 4/5):
-    // up to this many missed concepts still counts as "strong, step up" with retry kept available
-    // as a secondary action. Two or more misses keeps retry as the primary action.
-    private static final int STRONG_QUICK_REVIEW_MAX_MISSES = 1;
+    private static final String REVIEW_THE_NOTES_LABEL = "Review the Notes";
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
@@ -71,6 +68,7 @@ public class PostSessionNextStepService {
     private final ChallengeQuizQuestionBankService challengeQuizQuestionBankService;
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
+    private final StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     @Transactional(readOnly = true)
     public NextStepResponse getNextStep(UUID userId, UUID studyPackId) {
@@ -127,9 +125,9 @@ public class PostSessionNextStepService {
 
         return switch (latestCompletedSession.getSessionMode()) {
             case QUICK_REVIEW -> resolveQuickReviewNextStep(
+                    userId,
                     studyPack,
                     sessionMisses,
-                    genuineWeakConcepts,
                     adaptivePracticeQuota,
                     goalNudge
             );
@@ -182,14 +180,15 @@ public class PostSessionNextStepService {
     }
 
     private NextStepResponse resolveQuickReviewNextStep(
+            UUID userId,
             StudyPackEntity studyPack,
             List<String> sessionMisses,
-            List<String> genuineWeakConcepts,
             AdaptivePracticeQuota adaptivePracticeQuota,
             GoalNudgeResponse goalNudge
     ) {
-        if (sessionMisses.size() > STRONG_QUICK_REVIEW_MAX_MISSES) {
-            return retryReviewResponse(
+        StudyPackQuizMastery mastery = studyPackQuizMasteryService.resolve(userId, studyPack);
+        if (!mastery.mastered()) {
+            return reviewNotesResponse(
                     studyPack,
                     sessionMisses,
                     adaptivePracticeQuota,
@@ -198,31 +197,22 @@ public class PostSessionNextStepService {
             );
         }
 
-        if (!sessionMisses.isEmpty()) {
-            // Strong-majority Quick Review with a single miss: promote Challenge, keep the missed
-            // question retrievable as a secondary "retry" action so the miss is not lost.
-            return reviewPackResponse(
-                    studyPack,
-                    adaptivePracticeQuota,
-                    goalNudge,
-                    sessionMisses,
-                    "Strong Quick Review. Step up with a Challenge — the one you missed is ready to retry below.",
-                    retryReviewSecondaryAction(studyPack)
-            );
-        }
-
-        NextStepSecondaryActionResponse secondaryAction = genuineWeakConcepts.isEmpty()
-                ? null
-                : adaptivePracticeSecondaryAction(studyPack);
+        // The ACTION keys on mastery (ever), which is deliberate — the promotion and the Quiz-tab
+        // unlock must read one signal. The COPY must key on THIS session, because mastery is sticky:
+        // a learner who mastered the pack in August and scores 1/5 today is still routed to Challenge,
+        // and telling them "Strong Quick Review" would congratulate them on a score the screen shows
+        // as 1/5 directly above. The missed concepts are surfaced too, so a weak repeat session is not
+        // left without remediation.
+        boolean strongThisSession = sessionMisses.isEmpty();
         return reviewPackResponse(
                 studyPack,
                 adaptivePracticeQuota,
                 goalNudge,
-                genuineWeakConcepts,
-                genuineWeakConcepts.isEmpty()
+                strongThisSession ? List.of() : sessionMisses,
+                strongThisSession
                         ? "Strong Quick Review. Step up with a Challenge next."
-                        : "Strong Quick Review. Step up with a Challenge, with targeted review still available below.",
-                secondaryAction
+                        : "You have already mastered this pack. Revisit the notes on these areas, or step up with a Challenge.",
+                null
         );
     }
 
@@ -292,7 +282,18 @@ public class PostSessionNextStepService {
         );
     }
 
-    private NextStepResponse retryReviewResponse(
+    /**
+     * The next step after a Quick Review the learner has not yet mastered: send them back to the
+     * source note, with Challenge kept available as a secondary action.
+     *
+     * <p>This replaced a {@code RETRY_REVIEW} primary labelled "Retry Incorrect Questions", which was
+     * wrong twice over. It pointed at the Quick Review path, so it restarted the <em>whole</em>
+     * Quick Review rather than the missed questions — the genuine targeted retry only exists
+     * mid-session. And it re-offered an action the learner had already declined one screen earlier,
+     * as the primary CTA, while the thing they actually needed (re-reading the material) sat at the
+     * bottom of the screen.
+     */
+    private NextStepResponse reviewNotesResponse(
             StudyPackEntity studyPack,
             List<String> weakConcepts,
             AdaptivePracticeQuota adaptivePracticeQuota,
@@ -300,13 +301,13 @@ public class PostSessionNextStepService {
             NextStepSecondaryActionResponse secondaryAction
     ) {
         return new NextStepResponse(
-                TodayFocusType.RETRY_REVIEW,
+                TodayFocusType.REVIEW_PACK,
                 studyPack.getId().toString(),
                 stringify(studyPack.getNoteId()),
                 studyPack.getTitle(),
-                "You have missed questions from this Quick Review ready to retry.",
-                RETRY_INCORRECT_QUESTIONS_LABEL,
-                pathOrFallback(studyPack.getNoteId(), QUICK_REVIEW_PATH),
+                "Review the notes on these areas, then come back and try again.",
+                REVIEW_THE_NOTES_LABEL,
+                pathOrFallback(studyPack.getNoteId(), NOTE_DETAIL_PATH),
                 weakConcepts,
                 adaptivePracticeQuota.available(),
                 adaptivePracticeQuota.remaining(),
@@ -382,14 +383,6 @@ public class PostSessionNextStepService {
         );
     }
 
-    private NextStepSecondaryActionResponse retryReviewSecondaryAction(StudyPackEntity studyPack) {
-        return new NextStepSecondaryActionResponse(
-                RETRY_INCORRECT_QUESTIONS_LABEL,
-                pathOrFallback(studyPack.getNoteId(), QUICK_REVIEW_PATH),
-                false
-        );
-    }
-
     private NextStepSecondaryActionResponse redoMissedQuestionsSecondaryAction(StudyPackEntity studyPack) {
         return new NextStepSecondaryActionResponse(
                 REDO_MISSED_QUESTIONS_LABEL,
@@ -398,13 +391,6 @@ public class PostSessionNextStepService {
         );
     }
 
-    private NextStepSecondaryActionResponse adaptivePracticeSecondaryAction(StudyPackEntity studyPack) {
-        return new NextStepSecondaryActionResponse(
-                PRACTICE_WEAK_CONCEPTS_LABEL,
-                pathOrFallback(studyPack.getNoteId(), ADAPTIVE_PRACTICE_PATH),
-                true
-        );
-    }
 
     private GoalNudgeResponse resolveGoalNudge(UserEntity user, StudyPackEntity studyPack) {
         String studyGoal = user.getStudyGoal();

@@ -33,6 +33,25 @@ For each planned item, record one of: shipped (with file evidence), **not shippe
 it now lives), or **changed** (with the decision that changed it). An item that was reversed mid-release still
 needs its reversal written down — otherwise the release notes describe a product that does not exist.
 
+## Feature-doc drift gate — run this BEFORE the commit
+
+**Re-read every feature doc this release touched against the FINAL code state — not against the PR that last
+edited it.** This is a different check from "update `docs/features/<feature>.md` when shipping a behavioral
+change". That rule is per-PR, and per-PR is precisely where it fails: a later PR changes the behaviour again
+and updates some docs but not others. Each PR looks correct in isolation; the contradiction only exists once
+everything has landed.
+
+`v0.74.0` accumulated **seven** such contradictions in one release. The worst: `quick-review.md` stated that
+Quick Review does **not** write `ConceptHealth` — false since a deliberate revert a month earlier, and the
+exact claim the release's own justification depended on. Because feature docs are what Codex reads at the
+start of every prompt, a future prompt could have cited it, "fixed" the code to match, and silently undone
+both the revert and the release's rationale. Two more were found only by a cold-context agent.
+
+Method, cheapest reliable form: for each behavioural claim in a touched feature doc, locate the code that
+implements it and confirm the claim still describes it. **A claim you cannot anchor to code is either stale or
+was never true** — resolve it either way before committing. Pay particular attention to docs a PR touched
+*early* in the release, since those are the ones a later PR is most likely to have invalidated.
+
 ## Checkpoint gate — run this BEFORE the commit
 
 **Ask: did anything in this release ship ahead of its own evidence?** That means an item whose `EVIDENCE` gate was never cleared — it shipped on a pre-committed rule, an owner override, an ambiguous read, or a bootstrap-test argument. If yes, it owes a `[CHECKPOINT — due YYYY-MM-DD]` row in `ROADMAP.md`'s Backlog Index, **added in this same signoff commit** (`ROADMAP.md` is already one of the three files).

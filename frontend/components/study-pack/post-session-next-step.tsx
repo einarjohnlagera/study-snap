@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import type { PostSessionNextStepResponse } from "@/lib/api";
+import {
+  trackAnalyticsEvent,
+  type PostSessionNextStepResponse,
+  type QuizSessionHistoryMode,
+} from "@/lib/api";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type PostSessionNextStepProps = {
@@ -11,8 +16,21 @@ type PostSessionNextStepProps = {
   currentPlan: string;
   noteId: string | null;
   onOpenPaywall: () => void;
+  originatingQuizMode: QuizSessionHistoryMode;
   contained?: boolean;
 };
+
+function isChallengeAction(href: string | null | undefined): boolean {
+  return href?.includes("/challenge-quiz") === true;
+}
+
+function trackAnalyticsSafely(payload: Parameters<typeof trackAnalyticsEvent>[0]): void {
+  try {
+    void Promise.resolve(trackAnalyticsEvent(payload)).catch(() => undefined);
+  } catch {
+    // Analytics must never interrupt result guidance or navigation.
+  }
+}
 
 function normalizePlan(plan: string): AppPlanType {
   return plan === "PLUS" || plan === "PRO" ? plan : "FREE";
@@ -23,8 +41,38 @@ export function PostSessionNextStep({
   currentPlan,
   noteId,
   onOpenPaywall,
+  originatingQuizMode,
   contained = false,
 }: Readonly<PostSessionNextStepProps>) {
+  const challengeActionSignature = useMemo(() => {
+    if (!response) {
+      return null;
+    }
+    const challengeHref = isChallengeAction(response.actionHref)
+      ? response.actionHref
+      : isChallengeAction(response.secondaryAction?.actionHref)
+        ? response.secondaryAction?.actionHref
+        : null;
+    return challengeHref ? `${response.studyPackId}:${originatingQuizMode}:${challengeHref}` : null;
+  }, [originatingQuizMode, response]);
+  const impressedChallengeActionRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!challengeActionSignature) {
+      impressedChallengeActionRef.current = null;
+      return;
+    }
+    if (impressedChallengeActionRef.current === challengeActionSignature) {
+      return;
+    }
+    impressedChallengeActionRef.current = challengeActionSignature;
+    trackAnalyticsSafely({
+      eventType: "POST_SESSION_CHALLENGE_CTA_IMPRESSION",
+      entityId: response?.studyPackId ?? null,
+      metadata: { originatingQuizMode },
+    });
+  }, [challengeActionSignature, originatingQuizMode, response?.studyPackId]);
+
   if (!response) {
     return null;
   }
@@ -39,6 +87,17 @@ export function PostSessionNextStep({
   const shouldShowSecondaryUpgradeCta = response.secondaryAction?.adaptivePractice === true
     && adaptiveQuotaExhausted;
   const actionHref = response.actionHref || (noteId ? `/notes/${noteId}` : "/library");
+  const secondaryAction = response.secondaryAction;
+  const trackChallengeClick = (href: string) => {
+    if (!isChallengeAction(href)) {
+      return;
+    }
+    trackAnalyticsSafely({
+      eventType: "POST_SESSION_CHALLENGE_CTA_CLICKED",
+      entityId: response.studyPackId,
+      metadata: { originatingQuizMode },
+    });
+  };
 
   const content = (
     <>
@@ -70,21 +129,25 @@ export function PostSessionNextStep({
             {upgradeCta?.label}
           </Button>
         ) : (
-          <Link href={actionHref} className="block w-full sm:w-fit">
+          <Link href={actionHref} className="block w-full sm:w-fit" onClick={() => trackChallengeClick(actionHref)}>
             <Button type="button" className="w-full sm:w-auto">
               {response.actionLabel}
             </Button>
           </Link>
         )}
-        {response.secondaryAction ? (
+        {secondaryAction ? (
           shouldShowSecondaryUpgradeCta ? (
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={onOpenPaywall}>
               {upgradeCta?.label}
             </Button>
           ) : (
-            <Link href={response.secondaryAction.actionHref} className="block w-full sm:w-fit">
+            <Link
+              href={secondaryAction.actionHref}
+              className="block w-full sm:w-fit"
+              onClick={() => trackChallengeClick(secondaryAction.actionHref)}
+            >
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                {response.secondaryAction.actionLabel}
+                {secondaryAction.actionLabel}
               </Button>
             </Link>
           )

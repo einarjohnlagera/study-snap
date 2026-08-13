@@ -17,6 +17,18 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewSessionEntity, UUID> {
+
+    @Query("""
+            select min(q.completedAt)
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.studyPackId = :studyPackId
+              and q.sessionMode = com.studysnap.backend.entity.QuickReviewSessionMode.QUICK_REVIEW
+              and q.status = com.studysnap.backend.entity.QuickReviewSessionStatus.COMPLETED
+              and q.completedAt is not null
+              and q.verifiedCorrectAnswers = :quizSize
+            """)
+    OffsetDateTime findQuizMasteredAt(UUID userId, UUID studyPackId, int quizSize);
     String SESSION_SUMMARY_PROJECTION = """
              new com.studysnap.backend.repository.QuickReviewSessionSummaryProjection(
                 q.id,

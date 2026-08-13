@@ -57,6 +57,7 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
                     current_round varchar(16) not null,
                     total_questions integer not null,
                     correct_answers integer,
+                    verified_correct_answers integer,
                     score_percentage numeric(5,2),
                     retry_count integer,
                     duration_seconds integer,
@@ -96,7 +97,8 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
                 mock(AnalyticsService.class),
                 subscriptionService,
                 featureGateService,
-                mock(ConceptHealthService.class)
+                mock(ConceptHealthService.class),
+                mock(StudyPackQuizMasteryService.class)
         );
         adaptivePracticeService = new QuickReviewAdaptivePracticeService(
                 studyPackRepository,

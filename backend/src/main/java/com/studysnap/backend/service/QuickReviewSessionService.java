@@ -27,12 +27,15 @@ import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackLatestCompletionProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +49,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -53,12 +57,19 @@ import java.util.UUID;
 @Transactional
 @RequiredArgsConstructor
 public class QuickReviewSessionService {
+    private static final Logger log = LoggerFactory.getLogger(QuickReviewSessionService.class);
     private static final String SESSION_NOT_IN_PROGRESS_CODE = "SESSION_NOT_IN_PROGRESS";
     private static final String QUICK_REVIEW_SESSION_NOT_IN_PROGRESS_MESSAGE = "Quick Review session is already completed.";
     private static final String QUICK_REVIEW_SESSION_ALREADY_ENDED_MESSAGE = "Quick Review session has already ended.";
     private static final String QUICK_REVIEW_SESSION_FORFEITED_MESSAGE = "Quick Review session forfeited.";
     private static final String SESSION_REVIEW_NOT_AVAILABLE_CODE = "SESSION_REVIEW_NOT_AVAILABLE";
     private static final String QUICK_REVIEW_SESSION_REVIEW_NOT_AVAILABLE_MESSAGE = "Quick Review session review is only available after completion.";
+    private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
+    private static final String ANALYTICS_METADATA_RETRY_COUNT = "retryCount";
+    private static final String ANALYTICS_METADATA_MASTERY_PATH = "masteryPath";
+    private static final String ANALYTICS_METADATA_PRIOR_STATE_KNOWN = "priorMasteryStateKnown";
+    private static final String MASTERY_PATH_FIRST_PASS = "FIRST_PASS";
+    private static final String MASTERY_PATH_AFTER_RETRY = "AFTER_RETRY";
 
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final StudyPackRepository studyPackRepository;
@@ -68,6 +79,7 @@ public class QuickReviewSessionService {
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
     private final ConceptHealthService conceptHealthService;
+    private final StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     public QuickReviewSessionStartResponse startSession(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
@@ -204,16 +216,83 @@ public class QuickReviewSessionService {
         session.setSessionMetadata(sanitizeSessionMetadataForPlan(request.sessionMetadata(), planType));
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         session.setCompletedAt(now);
-        QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-
-        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(saved.getStudyPackId(), userId)
-                .orElse(null);
-        List<ChallengeQuizConceptStatResponse> conceptBreakdown = studyPack == null
-                ? List.of()
-                : QuizSessionReviewUtils.computeConceptBreakdownForStoredSelections(
+        StudyPackEntity studyPack = null;
+        List<ChallengeQuizConceptStatResponse> conceptBreakdown = List.of();
+        Optional<StudyPackQuizMastery> masteryBeforeCompletion = Optional.empty();
+        try {
+            studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId)
+                    .orElse(null);
+            if (studyPack != null && studyPack.getQuiz() != null && !studyPack.getQuiz().isEmpty()) {
+                masteryBeforeCompletion = studyPackQuizMasteryService.tryResolve(userId, studyPack);
+                conceptBreakdown = QuizSessionReviewUtils.computeConceptBreakdownForStoredSelections(
                         studyPack.getQuiz(),
-                        saved.getSessionState()
+                        session.getSessionState()
                 );
+            }
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "action=derive_quick_review_concept_breakdown outcome=failed userId={} studyPackId={} sessionId={}",
+                    userId,
+                    session.getStudyPackId(),
+                    session.getId(),
+                    exception
+            );
+        }
+        if (session.getSessionMode() == QuickReviewSessionMode.QUICK_REVIEW
+                && studyPack != null
+                && studyPack.getQuiz() != null
+                && !studyPack.getQuiz().isEmpty()
+                && !conceptBreakdown.isEmpty()) {
+            int verifiedCorrectAnswers = conceptBreakdown.stream()
+                    .mapToInt(ChallengeQuizConceptStatResponse::correctAnswers)
+                    .sum();
+            session.setVerifiedCorrectAnswers(verifiedCorrectAnswers);
+        }
+        QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        boolean verifiedPerfect = studyPack != null
+                && studyPack.getQuiz() != null
+                && !studyPack.getQuiz().isEmpty()
+                && saved.getVerifiedCorrectAnswers() != null
+                && saved.getVerifiedCorrectAnswers() == studyPack.getQuiz().size();
+        if (verifiedPerfect) {
+            Map<String, Object> masteryMetadata = Map.of(
+                    ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
+                    ANALYTICS_METADATA_RETRY_COUNT, saved.getRetryCount() == null ? 0 : saved.getRetryCount(),
+                    ANALYTICS_METADATA_MASTERY_PATH,
+                    saved.getRetryCount() == null || saved.getRetryCount() == 0
+                            ? MASTERY_PATH_FIRST_PASS
+                            : MASTERY_PATH_AFTER_RETRY
+            );
+            trackAnalyticsSafely(
+                    userId,
+                    AnalyticsEventType.QUICK_REVIEW_MASTERED,
+                    saved.getStudyPackId(),
+                    masteryMetadata
+            );
+            // Fire on a KNOWN first transition, and also when the prior state is UNKNOWN because the
+            // lookup failed. The asymmetry is deliberate and differs from the Challenge launch split:
+            // this is a once-per-(user, Study Pack) transition, so a dropped event is unrecoverable,
+            // whereas a duplicate is recoverable at query time by taking the earliest per user+pack.
+            // Treating "unknown" as "already mastered" silently loses the metric this release exists
+            // to produce.
+            boolean alreadyMastered = masteryBeforeCompletion
+                    .map(StudyPackQuizMastery::mastered)
+                    .orElse(false);
+            if (!alreadyMastered) {
+                Map<String, Object> unlockMetadata = new LinkedHashMap<>(masteryMetadata);
+                unlockMetadata.put(
+                        ANALYTICS_METADATA_PRIOR_STATE_KNOWN,
+                        masteryBeforeCompletion.isPresent()
+                );
+                trackAnalyticsSafely(
+                        userId,
+                        AnalyticsEventType.STUDY_PACK_QUIZ_UNLOCKED,
+                        saved.getStudyPackId(),
+                        unlockMetadata
+                );
+            }
+        }
+
         List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(conceptBreakdown);
         List<String> missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(conceptBreakdown);
         if (!correctConcepts.isEmpty()) {
@@ -243,6 +322,25 @@ public class QuickReviewSessionService {
                 isSecondCompletedSessionEver,
                 twiceMissedConcepts
         );
+    }
+
+    private void trackAnalyticsSafely(
+            UUID userId,
+            AnalyticsEventType eventType,
+            UUID studyPackId,
+            Map<String, Object> metadata
+    ) {
+        try {
+            analyticsService.trackEvent(userId, eventType, studyPackId, metadata);
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "action=track_quick_review_analytics outcome=failed userId={} studyPackId={} eventType={}",
+                    userId,
+                    studyPackId,
+                    eventType,
+                    exception
+            );
+        }
     }
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {

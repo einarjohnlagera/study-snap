@@ -33,6 +33,7 @@ import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.OcrResult;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import com.studysnap.backend.util.CreatedAtIdCursorUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
@@ -105,6 +106,7 @@ public class StudyPackService {
     private final ExamQuestionPoolService examQuestionPoolService;
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final OnboardingGuardService onboardingGuardService;
+    private final StudyPackQuizMasteryService studyPackQuizMasteryService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
@@ -146,7 +148,7 @@ public class StudyPackService {
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
-        return mapToResponse(saved, null, latency);
+        return mapToResponse(saved, ownerUserId, null, latency);
     }
 
     public void startAsyncGenerationFromNote(String noteIdRaw, UUID ownerUserId) {
@@ -283,7 +285,7 @@ public class StudyPackService {
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
-        return mapToResponse(saved, extractedText, latency);
+        return mapToResponse(saved, ownerUserId, extractedText, latency);
     }
 
     public StudyPackResponse confirmExtractedText(ConfirmTextRequest request, UUID ownerUserId) {
@@ -336,7 +338,7 @@ public class StudyPackService {
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=confirm_text latencyMs={}", requestId, latency);
-        return mapToResponse(saved, normalizedText, latency);
+        return mapToResponse(saved, ownerUserId, normalizedText, latency);
     }
 
     @Transactional(readOnly = true)
@@ -345,7 +347,7 @@ public class StudyPackService {
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(StudyPackNotFoundException::new);
         activityTrackingService.recordActivity(ownerUserId, ActivityType.OPENED_STUDY_PACK, studyPack.getId());
-        return mapToResponse(studyPack, null, null);
+        return mapToResponse(studyPack, ownerUserId, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -416,7 +418,7 @@ public class StudyPackService {
             syncNoteTags(targetEntity.getNoteId(), ownerUserId, nextTags);
         }
 
-        return mapToResponse(targetEntity, null, null);
+        return mapToResponse(targetEntity, ownerUserId, null, null);
     }
 
     public StudyPackResponse updateMetadata(String id, UUID ownerUserId, String title, String subject) {
@@ -437,7 +439,7 @@ public class StudyPackService {
             syncNoteMetadata(targetEntity.getNoteId(), ownerUserId, normalizedTitle, normalizedSubject);
         }
 
-        return mapToResponse(targetEntity, null, null);
+        return mapToResponse(targetEntity, ownerUserId, null, null);
     }
 
     public void recordQuickReviewActivity(String id, UUID ownerUserId, ActivityType activityType) {
@@ -754,7 +756,13 @@ public class StudyPackService {
         return noteRepository.save(note);
     }
 
-    private StudyPackResponse mapToResponse(StudyPackEntity entity, String extractedText, Long latencyMs) {
+    private StudyPackResponse mapToResponse(
+            StudyPackEntity entity,
+            UUID ownerUserId,
+            String extractedText,
+            Long latencyMs
+    ) {
+        StudyPackQuizMastery quizMastery = studyPackQuizMasteryService.resolve(ownerUserId, entity);
         return new StudyPackResponse(
                 entity.getId().toString(),
                 entity.getNoteId() == null ? null : entity.getNoteId().toString(),
@@ -767,6 +775,8 @@ public class StudyPackService {
                 entity.getKeyConcepts(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getQuiz(),
+                quizMastery.mastered(),
+                quizMastery.masteredAt(),
                 entity.getCreatedAt(),
                 new StudyPackMeta(entity.getOcrConfidence(), latencyMs)
         );

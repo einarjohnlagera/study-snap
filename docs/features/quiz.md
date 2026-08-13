@@ -11,6 +11,42 @@ Shared ownership rule:
 - generated quiz content belongs to `noteId`
 - Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, and Board Exam sessions are note-scoped
 
+## Shared Quick Review mastery predicate
+
+Study Pack Quick Review mastery has one server-owned definition: for a `(user, Study Pack)`, there must be a completed `QUICK_REVIEW` session whose server-derived `verifiedCorrectAnswers` equals the Study Pack's current quiz size, and that size must be greater than zero. The verified score comes from persisted cumulative selections, so a perfect result reached through `Redo Mistakes` qualifies. Client-reported totals are not part of the predicate, other quiz modes cannot confer it, and a copied Study Pack starts with no mastery for its new owner.
+
+Regeneration compares historical sessions with the current quiz size. A quiz-size change may therefore remove mastery until the learner completes the new question set perfectly.
+
+**`verifiedCorrectAnswers` is not uniformly server-derived, and code must not assume it is.** Sessions completed **after** the `v0.74.0` migration are server-derived. Sessions completed **before** it were **grandfathered from the client-reported `correct_answers`**, because re-scoring in SQL would mean re-implementing answer resolution against raw JSONB and bypassing `QuizItem`'s `@JsonCreator` — where `correctIndex` is actually resolved, including the answer-as-letter case that generated quizzes rely on (`correctIndex` is absent from `schema.json`; `"answer"` is a letter per `developer.txt:15`). Getting that wrong locks existing learners out of a tab they already use, so the pre-deploy population is trusted once instead. **Do not "fix" this by adding a SQL scorer** — any re-derivation must go through `QuizItem`.
+
+The v0.74.0 Quiz-tab lock built on this signal is a **UX affordance, not a security control**. Quick Review scores in the client, and the saved Study Pack quiz—including its answers—is already present in the client payload. Server-derived verification removes accidental divergence between the progression gate and the persisted-selection evaluation used by the completion and `ConceptHealth` path; it does not make the gate tamper-proof, and v0.74.0 does not claim that it does.
+
+## Note Detail Quiz-tab progression lock
+
+- On private Note Detail, the Quiz tab stays visible, clickable, and keyboard reachable before mastery. Selecting or deep-linking to it renders an instructional lock panel instead of mounting the answer-revealing practice quiz.
+- The panel names the actual perfect-score condition using the Study Pack's current question count, falls back to length-agnostic wording when that count is unavailable, and explains that retrying can still produce the qualifying perfect score. **It must name the real button, `Retry Incorrect Questions`** — "Redo Mistakes" is planning-document vocabulary that exists nowhere in the UI, and pointing a learner at it strands them exactly as the pre-rewrite copy did.
+- The panel starts the note's existing Quick Review flow and can return the learner to Summary. Challenge Quiz remains available independently and is not gated or reordered.
+- Teachers and admins are curator-exempt and may inspect the saved quiz without mastery. Their bypass does not emit an unlock-open event.
+- For an unlocked non-curator, opening the tab emits `STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK` once for that tab open; locked and empty-quiz views do not emit it.
+- This lock covers **only private Note Detail**. The public share page and Study Pack generation-results view continue to reveal saved answers deliberately. Those accepted exceptions, plus the answers already present in the client payload, are why this remains a UX progression affordance rather than a security boundary.
+
+## Math notation
+
+Math renders through KaTeX, and **KaTeX only activates inside delimiters** — `$…$`, `\(…\)`, `$$…$$`, `\[…\]` (`quiz-working-solution.tsx`). Anything outside them is printed literally, backslashes and all.
+
+**The generation prompts never stated this rule until `v0.74.0`**, so the model freelanced inconsistently *within a single quiz*: Unicode subscripts (which display fine by accident), bare carets (`x^2`, printed literally), and bare LaTeX (`\frac`, printed literally). Production sizing on 2026-08-12 put the affected population at roughly 23 of 5,472 study packs.
+
+Two defences, and both are needed:
+
+1. **Generation.** Every content-generating developer prompt now carries a `Math notation` rule: wrap all math in `$…$`, never use Unicode sub/superscript characters, keep prose outside the delimiters, and never use `$` as a currency symbol. This fixes new content only.
+2. **Rendering.** `lib/math-normalization.ts` wraps bare LaTeX at display time, which is what repairs content already stored. Its governing rule is **never make things worse**: it only touches an allowlist of constructs, so a lone backslash, a Windows path, a literal `\n` and unknown commands pass through untouched; **a string that already contains any delimiter is skipped entirely**, which also makes it idempotent; and Unicode sub/superscripts are converted to LaTeX *only inside a span being wrapped*, because KaTeX cannot render them raw and would show an error where plain text used to be.
+
+**Subscripts are deliberately stricter than superscripts.** `_` requires a single-character base, because snake_case is ordinary prose — without that rule `user_id` becomes `$user_{id}$`. Real subscripts (`x_1`, `a_{ij}`) are single-character by convention, so nothing is lost. Superscripts need no such guard.
+
+**Bare scripts are brace-wrapped, and that is a correctness fix rather than tidiness:** `x^10` means x¹0 in LaTeX, while `x^{10}` means x¹⁰.
+
+**The admin backfill was considered and dropped** (owner decision, 2026-08-12): a Java normaliser plus this TypeScript one is two implementations of one rule, and at ~23 packs the affected notes are cheaper to regenerate by hand. `docs/claude-plans/v0.74.0-latex-affected-notes.sql` lists them.
+
 ## Current quiz modes
 
 ### Quick Review
@@ -86,6 +122,10 @@ Current save toast:
 
 Result screens should guide the next action through the shared ConceptHealth-driven post-session handoff instead of each mode computing bespoke CTAs from the current session only.
 
+After Quick Review, Challenge Quiz becomes the primary recommendation only when the shared server mastery predicate succeeds; **any non-mastered result, including a single miss, gets `Review the Notes` as the primary action** (pointing at the source note), with Challenge kept as the secondary. `Retry Incorrect Questions` is **not** offered on the result screen — it exists only mid-session, and the learner has already declined it by the time they reach these CTAs. **Adaptive Practice is never offered here** (see the `EXAM_MODES.md` amendment). Because mastery is sticky, a learner who mastered the pack earlier and scores poorly today still routes to Challenge, but the copy keys on **this** session so a weak repeat is not congratulated, and that session's missed concepts are surfaced. The **first** perfect result also shows the announcement-only `🔓 Quiz Unlocked` result card, without adding a competing Quiz-tab action; later perfect scores do not re-announce it.
+
+Whenever the shared post-session component actually renders a Challenge action, it emits `POST_SESSION_CHALLENGE_CTA_IMPRESSION` once for that display and `POST_SESSION_CHALLENGE_CTA_CLICKED` on activation, both tagged with the originating quiz mode. These events exist specifically to make the Challenge-adoption exposure-to-click read measurable; fetching a next step without rendering a Challenge action is not an impression.
+
 Shared pattern:
 
 - complete the session first
@@ -101,7 +141,7 @@ Server resolution priority:
 
 1. `PRACTICE_WEAK_CONCEPT` — due concepts from `ConceptHealthService.getDueConcepts(...)` route to Adaptive Practice. After Challenge Quiz, eligible banked misses can appear as the secondary `Redo Missed Questions` action.
 2. `REDO_MISSED_QUESTIONS` — when the latest completed session is Challenge Quiz, no genuine weak concepts remain, and at least three owned bank questions at the note's effective curriculum level have last outcome `INCORRECT`; starts an LLM-free, quota-exempt ordinary Challenge session from those questions. Availability counting and claiming use the same resolver-derived level.
-3. `RETRY_REVIEW` — only when no concepts are due, the latest completed session has weak concepts, and the completed mode is Quick Review. Its `Retry Incorrect Questions` label and plain Quick Review route are unchanged; it is distinct from Challenge Quiz's `Redo Missed Questions`.
+3. ~~`RETRY_REVIEW`~~ — **no longer emitted by `PostSessionNextStepService` as of `v0.74.0`.** The Quick Review branch now returns `REVIEW_PACK` with a `Review the Notes` action instead. The enum value stays live because `DashboardService` still produces it for the Today Focus card; only the post-session path stopped using it.
 4. `REVIEW_PACK` — no due concepts and nothing retryable; route to Challenge Quiz or the source note.
 
 Quota rule:

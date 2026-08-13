@@ -56,6 +56,9 @@ public class QuickReviewSessionEntity {
     @Column(name = "correct_answers")
     private Integer correctAnswers;
 
+    @Column(name = "verified_correct_answers")
+    private Integer verifiedCorrectAnswers;
+
     @Column(name = "score_percentage", precision = 5, scale = 2)
     private BigDecimal scorePercentage;
 

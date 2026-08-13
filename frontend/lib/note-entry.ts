@@ -37,18 +37,26 @@ export function normalizeNoteEntrySource(value: string | string[] | null | undef
   return null;
 }
 
+/**
+ * Which tab to open after a Study Pack finishes generating.
+ *
+ * `canOpenQuizTab` exists because of the `v0.74.0` Quiz-tab lock: a freshly generated pack has no
+ * completed Quick Review, so it is never mastered, so the Quiz tab is locked for every non-curator.
+ * Without this guard a BOARD_EXAM learner — the majority of profile-typed accounts — lands on a
+ * lock card as the payoff for generating their Study Pack. Curators bypass the lock and still get
+ * the quiz. Pass `true` only when the viewer can actually open the tab.
+ */
 export function resolveGeneratedNoteTab(
   profileType: ProfileType | null | undefined,
   entryMode: NoteEntryMode,
   entrySource: NoteEntrySource,
+  canOpenQuizTab: boolean = false,
 ): NoteDetailTab {
-  if (entryMode === "quiz") {
-    return "quiz";
-  }
-  if (entrySource === "paste" || entrySource === "upload") {
-    return "quiz";
-  }
-  if (profileType === "BOARD_EXAM") {
+  const quizPreferred = entryMode === "quiz"
+    || entrySource === "paste"
+    || entrySource === "upload"
+    || profileType === "BOARD_EXAM";
+  if (quizPreferred && canOpenQuizTab) {
     return "quiz";
   }
   return "summary";

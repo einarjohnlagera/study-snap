@@ -27,7 +27,7 @@ import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/componen
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
-import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
+import { type AppPlanType } from "@/src/config/plans";
 import {
   completeProductOnboarding,
   completeQuickReviewSession,
@@ -49,7 +49,6 @@ import {
   type PostSessionNextStepResponse,
   type ProfileType,
   type QuickReviewConfidenceLevel,
-  type QuickReviewSessionStartResponse,
   type QuickReviewSessionSummaryResponse,
   type QuickReviewStudyTipRequest,
 } from "@/lib/api";
@@ -191,6 +190,7 @@ export default function QuickReviewPage() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   const [persistedResult, setPersistedResult] = useState<QuickReviewSessionSummaryResponse | null>(null);
+  const [quizMasteredAfterCompletion, setQuizMasteredAfterCompletion] = useState(false);
   const [recentSessions, setRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
   const [studyTip, setStudyTip] = useState<string | null>(null);
   const [completingSession, setCompletingSession] = useState(false);
@@ -291,6 +291,7 @@ export default function QuickReviewPage() {
     setRetryCount(0);
     setCompletionTracked(false);
     setPersistedResult(null);
+    setQuizMasteredAfterCompletion(false);
     setStudyTip(null);
     setCompletingSession(false);
     setConfidenceLevel(null);
@@ -475,7 +476,6 @@ export default function QuickReviewPage() {
     [],
   );
   const isStruggling = !isPerfectScore && (displayedWeakConcepts.length > 0 || scorePercentage < 80);
-  const showAdaptiveGuidedCta = isStruggling;
   const showChallengeGuidedCta = !isStruggling;
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
   const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
@@ -721,6 +721,25 @@ export default function QuickReviewPage() {
         },
       });
       setPersistedResult(result);
+      setQuizMasteredAfterCompletion(false);
+      if (noteId) {
+        void getNote(noteId)
+          .then((detail) => {
+            // `quizMastered` is sticky, so it is true for anyone who mastered this pack at ANY point.
+            // Announcing "you earned access" off that alone congratulates a learner on an unlock they
+            //has already had for weeks, every time they score perfectly again. `quizMasteredAt` is the
+            // FIRST mastery (the query is min(completedAt)), so compare it against this session to
+            // announce only the genuine transition — the same distinction the backend already draws
+            // for STUDY_PACK_QUIZ_UNLOCKED.
+            const masteredAt = detail.quizMasteredAt ? Date.parse(detail.quizMasteredAt) : Number.NaN;
+            const unlockedByThisSession = detail.quizMastered === true
+              && Number.isFinite(masteredAt)
+              && sessionStartedAt !== null
+              && masteredAt >= sessionStartedAt;
+            setQuizMasteredAfterCompletion(unlockedByThisSession);
+          })
+          .catch(() => setQuizMasteredAfterCompletion(false));
+      }
       void getPostSessionNextStep(result.studyPackId)
         .then(setNextStepResponse)
         .catch(() => setNextStepResponse(null));
@@ -735,7 +754,7 @@ export default function QuickReviewPage() {
         metadata: { scorePercentage: totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0, weakConceptCount: weakConcepts.length },
       });
     }
-  }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
+  }, [completingSession, completionTracked, currentSessionId, noteId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
 
   useEffect(() => {
     if (!shouldShowOpenLoop || !persistedResult || openLoopTrackedSessionIdRef.current === persistedResult.id) {
@@ -958,23 +977,6 @@ export default function QuickReviewPage() {
     void completeSessionIfNeeded(0);
   };
 
-  const handleRetry = useCallback(() => {
-    const allIndexes = quiz.map((_, index) => index);
-    resetQuickReviewState(allIndexes);
-    setSessionStartedAt(Date.now());
-    if (note) {
-      startQuickReviewSession(note.id)
-        .then((result: QuickReviewSessionStartResponse) => {
-          if (!result.sessionId) {
-            setCurrentSessionId(null);
-            return;
-          }
-          setCurrentSessionId(result.sessionId);
-        })
-        .catch(() => setCurrentSessionId(null));
-    }
-  }, [note, quiz, resetQuickReviewState]);
-
   const handleSelectConfidence = useCallback(async (level: QuickReviewConfidenceLevel) => {
     if (!currentSessionId || savingConfidence || completingSession || !completionTracked) {
       return;
@@ -1122,6 +1124,14 @@ export default function QuickReviewPage() {
               {performanceBadge.label}
             </div>
             <ScoreProgressBlock score={score} totalQuestions={totalQuestions} scorePercentage={scorePercentage} />
+            {persistedResult && isPerfectScore && quizMasteredAfterCompletion ? (
+              <Card className="motion-fade-enter space-y-1 border-emerald-500/35 bg-emerald-500/10 p-4">
+                <p className="font-semibold text-emerald-800 dark:text-emerald-200">🔓 Quiz Unlocked</p>
+                <p className="text-sm leading-relaxed text-foreground/75">
+                  You earned access to the saved Quiz questions. They are now available to practise with on your note.
+                </p>
+              </Card>
+            ) : null}
             {previousAttempt ? (
               <div className="space-y-1 rounded-md border border-border bg-background p-3">
                 <p>Previous Attempt: {previousAttempt.correctAnswers} / {previousAttempt.totalQuestions}</p>
@@ -1155,6 +1165,7 @@ export default function QuickReviewPage() {
                 currentPlan={currentPlan}
                 noteId={note?.id ?? null}
                 onOpenPaywall={() => openAdaptivePracticePaywall("quick_review_results_next_step")}
+                originatingQuizMode="QUICK_REVIEW"
                 contained
               />
               {nextStepResponse?.goalNudge ? (
@@ -1222,47 +1233,35 @@ export default function QuickReviewPage() {
                 <p className="text-sm text-foreground/75">{scoreFeedback}</p>
               )}
 
-              {showAdaptiveGuidedCta && note?.adaptivePracticeAvailable ? (
-                <Link href={`/notes/${note.id}/adaptive-practice`} className="block">
-                  <Button type="button" className="w-full">
-                    Practice Weak Areas
-                  </Button>
-                </Link>
-              ) : showChallengeGuidedCta ? (
+              {/*
+                Fallback for when the next-step fetch fails. Mirrors the server contract: Challenge
+                once the learner is doing well, otherwise back to the notes. Adaptive Practice is
+                deliberately absent — Quick Review no longer routes into it (EXAM_MODES.md).
+              */}
+              {showChallengeGuidedCta ? (
                 <Link href={`/notes/${note.id}/challenge-quiz`} className="block">
                   <Button type="button" className="w-full">
                     Take Another Challenge
                   </Button>
                 </Link>
               ) : (
-                <Button type="button" className="w-full" onClick={handleRetry}>
-                  Retry Quick Review
-                </Button>
+                <Link href={`/notes/${note.id}`} className="block">
+                  <Button type="button" className="w-full">
+                    Review the Notes
+                  </Button>
+                </Link>
               )}
             </>
           ) : null}
 
           {/* Section 4: Secondary actions */}
           <div className="flex flex-col gap-2 sm:flex-row">
-            {nextStepResponse === null && showAdaptiveGuidedCta && !note?.adaptivePracticeAvailable ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => openAdaptivePracticePaywall("quick_review_results_practice_weak_concepts")}
-              >
-                {getUpgradeCtas(
-                  (currentPlan === "PLUS" || currentPlan === "PRO" ? currentPlan : "FREE") as AppPlanType,
-                  "adaptive-practice",
-                ).primary?.label ?? "Get More Adaptive Practice"}
-              </Button>
-            ) : null}
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
             </Button>
           </div>
           <div className="pt-1">
-            <BackLink href={noteDetailHref} label="Back to Note" />
+            <BackLink href={noteDetailHref} label="Note" />
           </div>
 
           {showAnswerReview ? (
