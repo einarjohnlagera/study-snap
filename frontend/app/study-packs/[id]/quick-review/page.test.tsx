@@ -547,6 +547,48 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
   });
 
+  it('offers "Review the Notes" on the result screen after a miss', async () => {
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    const reviewNotesLink = screen.getByRole("link", { name: "Review the Notes" });
+    expect(reviewNotesLink).toHaveAttribute("href", "/notes/note-1");
+  });
+
+  it('hides "Review the Notes" on a perfect score, which has nothing to go back and study', async () => {
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(screen.queryByRole("link", { name: "Review the Notes" })).not.toBeInTheDocument();
+  });
+
+  it('keeps "Finish Review" completing the session on the incorrect-answers screen', async () => {
+    // Guards the placement decision: this button is the only route to the result screen, which
+    // carries the Challenge promotion and the first-session commitment prompt. Replacing it here
+    // would make a learner who missed a question skip both, and both feed dated checkpoints.
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+
+    expect(await screen.findByRole("button", { name: "Finish Review" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Review the Notes" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Finish Review" }));
+
+    await waitFor(() => expect(completeQuickReviewSession).toHaveBeenCalled());
+  });
+
   it("uses Note as a text link in empty quiz edge states", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
@@ -687,7 +729,11 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(review).toHaveTextContent("Mitochondria produce ATP.");
   });
 
-  it("uses Retry Quick Review as the primary next step when weak practice is locked", async () => {
+  it("uses Review the Notes as the primary next step after a non-mastered Quick Review", async () => {
+    // Replaced an assertion that Retry Quick Review was primary alongside an Adaptive Practice
+    // upsell. Quick Review no longer routes into Adaptive Practice at all (EXAM_MODES.md), and the
+    // retry CTA was both redundant — already declined one screen earlier — and mislabelled, since
+    // it restarted the whole Quick Review rather than the missed questions.
     setupCompleteState({ adaptivePracticeAvailable: false });
     render(<QuickReviewPage />);
 
@@ -696,8 +742,10 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
     await screen.findByText("Quick Review Complete");
 
-    expect(screen.getByRole("button", { name: "Retry Quick Review" })).toHaveClass("bg-primary");
-    expect(screen.getByRole("button", { name: "Get More Adaptive Practice" })).toHaveClass("border");
+    expect(screen.getByRole("button", { name: "Review the Notes" })).toHaveClass("bg-primary");
+    expect(screen.queryByRole("button", { name: "Retry Quick Review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Get More Adaptive Practice" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Practice Weak Areas" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });
 

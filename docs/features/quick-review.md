@@ -71,17 +71,21 @@ Primary CTA rules:
 
 - after completion, the page fetches `GET /study-packs/{studyPackId}/next-step`
 - the shared `<PostSessionNextStep>` component renders the dominant next action
-- any non-mastered Quick Review, including exactly one miss, prioritizes `Retry Incorrect Questions` and keeps Challenge Quiz available as a secondary action
-- only a Quick Review that satisfies the shared server mastery predicate advances primarily to `Take a Challenge`
+- **any non-mastered Quick Review — including exactly one miss — advances primarily to `Review the Notes`**, pointing at the source note, with Challenge Quiz kept as a secondary action
+- only a Quick Review that satisfies the shared server mastery predicate advances primarily to `Take a Challenge`, and it carries **no secondary action**
+- **Adaptive Practice is never offered from a Quick Review result screen** (owner decision 2026-08-13; `EXAM_MODES.md` amended). It is quota-limited LLM remediation, and a 5-question static refresher is too weak a signal to spend it on. It remains reachable from the Dashboard's Today Focus and the mode-selection screen
+- **`Retry Incorrect Questions` was removed from this screen**, and it was wrong twice over: it pointed at the Quick Review path, so it restarted the *whole* quiz rather than the missed questions — the genuine targeted retry exists only mid-session — and it re-offered as the primary CTA an action the learner had already declined one screen earlier
 - **the predicate is historical, not per-session, and that is deliberate:** it asks whether *any* completed session for this `(learner, Study Pack)` was verified-perfect at the current quiz size. So a learner who mastered a pack earlier keeps the Challenge promotion even after a weaker session today — mastery is sticky until the quiz itself changes. This replaced a per-session `>= 4/5` rule, so the promotion and the Quiz-tab unlock now read the same signal rather than two that can disagree
-- genuine weak concepts may keep `Practice Weak Concepts` reachable as a secondary action after mastery, but never replace Challenge Quiz as the primary action
-- fallback UI keeps the previous weak-area / challenge / retry guidance when the next-step fetch fails
+- fallback UI, used when the next-step fetch fails, mirrors the same contract: Challenge once the learner is doing well, otherwise `Review the Notes`. It no longer offers a weak-area or retry option
 
 Secondary actions:
 
 - `Review Answers`
-- optional Pro upsell when the weak-area action is locked
-- `← Back to Note`
+- `Note` back link (destination name only, per `docs/ui-standards.md`)
+
+There is no Adaptive Practice upsell on this screen. It was removed with the routing itself — an upgrade prompt for a mode the screen no longer recommends is an ask with nothing behind it.
+
+**`Review the Notes` is the primary next-step action on the RESULT screen, and is deliberately not on the incorrect-answers screen. This placement is load-bearing.** The proposal originally replaced `Finish Review` mid-session. `handleFinishReview` is the **only** route from the incorrect-answers screen to the result screen, and the result screen carries both `PostSessionNextStep` (the Challenge promotion measured by `[CHECKPOINT — due 2026-09-30]`) and `ReviewCommitmentPrompt` (which fires `REVIEW_COMMITMENT_PROMPT_SHOWN` on a learner's first-ever completed session, instrumentation for `[CHECKPOINT — due 2026-09-10]`). Replacing that button would make a learner who missed a question skip both. **`Finish Review` therefore stays exactly as it is and keeps completing the session** — and because the new action renders only after completion, `QUICK_REVIEW_COMPLETED` fires unchanged and there is no session-lifecycle change at all.
 
 ## Confidence and learner level
 
@@ -106,7 +110,7 @@ Meaning:
 - never-reviewed concepts are `not started`, not genuine weakness, and do not trigger a weak-area recommendation
 - Adaptive Practice is available to Free users up to 3 sessions / month, then opens the shared upgrade flow for more sessions
 - when the shared next-step response recommends Adaptive Practice but quota is exhausted, the component shows a plan-aware upgrade CTA instead of routing into the limit wall
-- this remains inside the locked `EXAM_MODES.md` hierarchy: Quick Review still guides into Challenge Quiz or Adaptive Practice; weak-area practice is demoted after a strong result, not removed
+- **Quick Review no longer guides into Adaptive Practice at all** (owner decision 2026-08-13; `EXAM_MODES.md` amended in the same change). Its result screen offers `Review the Notes` before mastery and `Take a Challenge` after it. Adaptive Practice keeps its own quota and tiers, and stays reachable from the Dashboard's Today Focus and the mode-selection screen — this removed a route, not the mode
 
 ## ConceptHealth
 

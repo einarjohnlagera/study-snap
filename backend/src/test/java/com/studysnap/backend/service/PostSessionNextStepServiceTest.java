@@ -152,12 +152,11 @@ class PostSessionNextStepServiceTest {
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
+        // Quick Review no longer routes into Adaptive Practice at all (EXAM_MODES.md amendment):
+        // a static 5-question refresher should not spend quota-limited LLM remediation.
         assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
         assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
-        assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
-        assertThat(response.secondaryAction()).isNotNull();
-        assertThat(response.secondaryAction().actionHref()).endsWith(ADAPTIVE_PATH_SUFFIX);
-        assertThat(response.secondaryAction().adaptivePractice()).isTrue();
+        assertThat(response.secondaryAction()).isNull();
     }
 
     @Test
@@ -173,8 +172,13 @@ class PostSessionNextStepServiceTest {
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
-        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
-        assertThat(response.actionHref()).endsWith(QUICK_REVIEW_PATH_SUFFIX);
+        // A non-mastered Quick Review now sends the learner back to the note. The old primary
+        // ("Retry Incorrect Questions") pointed at the Quick Review path, so it restarted the whole
+        // quiz rather than the missed questions, and re-offered what was already declined one
+        // screen earlier.
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionLabel()).isEqualTo("Review the Notes");
+        assertThat(response.actionHref()).doesNotEndWith(QUICK_REVIEW_PATH_SUFFIX);
         assertThat(response.concepts()).containsExactly(FIRST_CONCEPT);
         assertThat(response.secondaryAction()).isNotNull();
         assertThat(response.secondaryAction().actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
@@ -192,7 +196,8 @@ class PostSessionNextStepServiceTest {
 
         NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
 
-        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionLabel()).isEqualTo("Review the Notes");
         assertThat(response.concepts()).containsExactly(FIRST_CONCEPT, SECOND_CONCEPT);
         assertThat(response.secondaryAction()).isNotNull();
         assertThat(response.secondaryAction().actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);

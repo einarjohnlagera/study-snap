@@ -27,7 +27,7 @@ import { hasComputationalWorkingSolution, QuizWorkingSolution } from "@/componen
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
-import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
+import { type AppPlanType } from "@/src/config/plans";
 import {
   completeProductOnboarding,
   completeQuickReviewSession,
@@ -49,7 +49,6 @@ import {
   type PostSessionNextStepResponse,
   type ProfileType,
   type QuickReviewConfidenceLevel,
-  type QuickReviewSessionStartResponse,
   type QuickReviewSessionSummaryResponse,
   type QuickReviewStudyTipRequest,
 } from "@/lib/api";
@@ -477,7 +476,6 @@ export default function QuickReviewPage() {
     [],
   );
   const isStruggling = !isPerfectScore && (displayedWeakConcepts.length > 0 || scorePercentage < 80);
-  const showAdaptiveGuidedCta = isStruggling;
   const showChallengeGuidedCta = !isStruggling;
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
   const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
@@ -968,23 +966,6 @@ export default function QuickReviewPage() {
     void completeSessionIfNeeded(0);
   };
 
-  const handleRetry = useCallback(() => {
-    const allIndexes = quiz.map((_, index) => index);
-    resetQuickReviewState(allIndexes);
-    setSessionStartedAt(Date.now());
-    if (note) {
-      startQuickReviewSession(note.id)
-        .then((result: QuickReviewSessionStartResponse) => {
-          if (!result.sessionId) {
-            setCurrentSessionId(null);
-            return;
-          }
-          setCurrentSessionId(result.sessionId);
-        })
-        .catch(() => setCurrentSessionId(null));
-    }
-  }, [note, quiz, resetQuickReviewState]);
-
   const handleSelectConfidence = useCallback(async (level: QuickReviewConfidenceLevel) => {
     if (!currentSessionId || savingConfidence || completingSession || !completionTracked) {
       return;
@@ -1241,47 +1222,35 @@ export default function QuickReviewPage() {
                 <p className="text-sm text-foreground/75">{scoreFeedback}</p>
               )}
 
-              {showAdaptiveGuidedCta && note?.adaptivePracticeAvailable ? (
-                <Link href={`/notes/${note.id}/adaptive-practice`} className="block">
-                  <Button type="button" className="w-full">
-                    Practice Weak Areas
-                  </Button>
-                </Link>
-              ) : showChallengeGuidedCta ? (
+              {/*
+                Fallback for when the next-step fetch fails. Mirrors the server contract: Challenge
+                once the learner is doing well, otherwise back to the notes. Adaptive Practice is
+                deliberately absent — Quick Review no longer routes into it (EXAM_MODES.md).
+              */}
+              {showChallengeGuidedCta ? (
                 <Link href={`/notes/${note.id}/challenge-quiz`} className="block">
                   <Button type="button" className="w-full">
                     Take Another Challenge
                   </Button>
                 </Link>
               ) : (
-                <Button type="button" className="w-full" onClick={handleRetry}>
-                  Retry Quick Review
-                </Button>
+                <Link href={`/notes/${note.id}`} className="block">
+                  <Button type="button" className="w-full">
+                    Review the Notes
+                  </Button>
+                </Link>
               )}
             </>
           ) : null}
 
           {/* Section 4: Secondary actions */}
           <div className="flex flex-col gap-2 sm:flex-row">
-            {nextStepResponse === null && showAdaptiveGuidedCta && !note?.adaptivePracticeAvailable ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => openAdaptivePracticePaywall("quick_review_results_practice_weak_concepts")}
-              >
-                {getUpgradeCtas(
-                  (currentPlan === "PLUS" || currentPlan === "PRO" ? currentPlan : "FREE") as AppPlanType,
-                  "adaptive-practice",
-                ).primary?.label ?? "Get More Adaptive Practice"}
-              </Button>
-            ) : null}
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
             </Button>
           </div>
           <div className="pt-1">
-            <BackLink href={noteDetailHref} label="Back to Note" />
+            <BackLink href={noteDetailHref} label="Note" />
           </div>
 
           {showAnswerReview ? (
