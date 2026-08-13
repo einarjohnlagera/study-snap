@@ -89,9 +89,11 @@ Three fresh-context agents audited this release independently (scope completenes
 - **The curator exemption is frontend-only.** Scope item 6 said "frontend + backend"; the lock bypass is render-side, so a teacher who has not scored perfect still gets `Review the Notes` rather than `Take a Challenge` from the server. The shipped claim ("teachers and admins bypass the lock") is true as written; the promotion is what is unexempted.
 - **Minor:** `conceptHealth` is computed on every next-step call and discarded on the Quick Review branch; `findQuizMasteredAt` is the only query in its repository omitting `@Param`; the normaliser scans each string twice per render and has cosmetic prose false positives (`a_b@c.com`, `f(x)^2`).
 
-### ⚠️ Outstanding pre-deploy check
+### Pre-deploy check — RUN 2026-08-13, CLEAR
 
-**Run the `questionFormat` distribution in `docs/claude-plans/v0.74.0-quiz-length-check.sql` against production before deploying.** `QuizSessionReviewUtils` never passes identification or enumeration answers into the scorer, so any `IDENTIFICATION` or `ENUMERATION` item in a stored pack scores as permanently wrong — capping `verifiedCorrectAnswers` below the quiz size and **locking that pack's Quiz tab forever**, with a post-session step reading "Review the notes on these areas" and an empty list. Current generation only emits `MCQ | TRUE_FALSE | MULTI_SELECT | MATCHING`, and the local database has none, but local is not production. A non-zero count means those learners are locked out on deploy.
+**Result: no `IDENTIFICATION` or `ENUMERATION` items exist in production. Nothing is locked out; deploy is clear.** Distribution across **27,375 stored questions**: `MCQ` 24,811 (5,153 packs), untyped/`null` 1,610 (322 packs), `MULTI_SELECT` 635, `TRUE_FALSE` 319. The untyped rows are safe — a null `questionFormat` falls through to the single-choice branch and `QuizItem`'s `@JsonCreator` resolves `correctIndex` from the answer letter, so they score normally.
+
+**Why this was checked (kept for the record, and re-check it if the generation contract ever widens):** `QuizSessionReviewUtils` never passes identification or enumeration answers into the scorer, so any `IDENTIFICATION` or `ENUMERATION` item in a stored pack scores as permanently wrong — capping `verifiedCorrectAnswers` below the quiz size and **locking that pack's Quiz tab forever**, with a post-session step reading "Review the notes on these areas" and an empty list. Current generation only emits `MCQ | TRUE_FALSE | MULTI_SELECT | MATCHING`, and the local database has none, but local is not production. A non-zero count means those learners are locked out on deploy.
 
 ### `[CHECKPOINT — due 2026-09-12]`
 
