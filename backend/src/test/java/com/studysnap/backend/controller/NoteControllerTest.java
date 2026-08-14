@@ -82,6 +82,7 @@ class NoteControllerTest {
     private static final String MULTIPART_FIELD_NAME = "files";
     private static final String TEXT_PLAIN_CONTENT_TYPE = "text/plain";
     private static final String STUDY_PACK_STATUS_GENERATING = "GENERATING";
+    private static final String ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_FOCUS_AREAS = "dashboard-focus-areas";
 
     @Mock
     private AuthService authService;
@@ -156,6 +157,24 @@ class NoteControllerTest {
         verify(authService).requireEmailVerified(userId);
         verify(noteBulkGenerationService).queueBatch(request, userId, false);
         assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void startAdaptivePractice_forwardsEntryToService() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        String noteId = UUID.randomUUID().toString();
+        String studyPackId = UUID.randomUUID().toString();
+        when(noteService.getOwnedStudyPackIdOrThrow(noteId, userId)).thenReturn(studyPackId);
+
+        noteController.startAdaptivePractice(noteId, ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_FOCUS_AREAS, user);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(quickReviewAdaptivePracticeService).generateAdaptiveQuiz(
+                studyPackId,
+                userId,
+                ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_FOCUS_AREAS
+        );
     }
 
     @Test

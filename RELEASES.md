@@ -1,5 +1,70 @@
 # RELEASES.md - NoteLib
 
+## v0.76.1 - Adaptive Practice Entry Attribution
+
+**Status: Released** (kicked off and signed off 2026-08-14)
+
+### Scope completeness
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | Entry-point attribution on `ADAPTIVE_PRACTICE_STARTED` | **Shipped, and GREW during audit** — see below |
+| 2 | Carries the two ratified direction docs | Shipped |
+
+**Item 1 grew from four entry values to seven, and the growth was the point of auditing.** The delivered change tagged the launch sites named in the prompt; a grep for the complete set found **four more untagged sites** — Note Detail's mode launch (two branches of one handler), Note Detail's due-concepts prompt, and **Dashboard Continue**. That last one would have biased the very metric this release exists to enable: it is normally a *resume* path, but when the resumed session has expired the page starts a fresh one, and an untagged link would have recorded that as `direct` — **understating Dashboard-originated discovery, which is exactly the figure the `2026-09-12` read is for.**
+
+### The checkpoint gate — no checkpoint is owed, and the reason is unusual
+
+Recorded explicitly rather than left silent.
+
+**This release is not a bet that owes a checkpoint; it is the instrumentation that lets an existing checkpoint answer its own secondary question.** Nothing shipped ahead of evidence, no `EVIDENCE` gate was overridden, and there is no hypothesis here to falsify — the change is additive analytics metadata with no user-visible behaviour.
+
+**What it does discharge:** the `[CHECKPOINT — due 2026-09-12]` row previously carried its secondary question as **NOT MEASURABLE**. That prerequisite is now shipped, and the row is updated to say so. **The primary metric is untouched** — a total count of starts per active learner — so the before/after comparison is unaffected by this release landing inside its own measurement window.
+
+### Feature-doc drift gate
+
+`docs/features/adaptive-practice.md` was corrected twice: once by the delivered change to document the new values, and again at audit, because it stated that **mode selection records `direct`** — untrue the moment Note Detail was tagged. `analytics.md` lists the event name only and makes no metadata claim; `dashboard.md` and `note-detail.md` describe the CTAs without claiming anything about their URLs. No other doc asserts anything about entry attribution.
+
+Theme: make one open checkpoint answer the question that actually matters, by recording **where** an Adaptive Practice session was started from.
+
+**Why this is a patch and why it is time-boxed.** An open **`[CHECKPOINT — due 2026-09-12]`** asks whether removing the Quick Review → Adaptive Practice route cost adoption. It can measure **whether** starts fell, but not **where the surviving ones come from** — `ADAPTIVE_PRACTICE_STARTED` (`QuickReviewAdaptivePracticeService.java:201`) carries only `sessionId` and `weakConceptCount`, with **no entry-point attribution**. The *Adaptive Practice as the recommendation engine* direction ratified 2026-08-14 rests on learners discovering remediation **from the Dashboard**, and today that premise cannot be tested. **If Dashboard-originated starts turn out to be near zero, that direction is in trouble before anything is built on it.**
+
+**This is the same failure shape this project has already paid for once.** The Challenge Quiz adoption read (c) sat **NOT MEASURABLE for months** because `CHALLENGE_QUIZ_STARTED` could not separate *seen-and-ignored* from *never-reached*, and only closed once impression and click events shipped in `v0.74.0`. Shipping the field now, rather than discovering the gap on 2026-09-12, is the whole point of doing this as a patch instead of folding it into a feature release.
+
+**It cannot contaminate the read it serves.** The checkpoint's primary metric is a **total count** of starts per active learner. This release adds a metadata field to an existing event and changes no user-visible behaviour, so the before/after comparison is unaffected.
+
+### Planned Scope
+
+1. **Entry-point attribution on `ADAPTIVE_PRACTICE_STARTED` (backend + frontend).** Every launch is a route link (`/notes/{id}/adaptive-practice`), not a direct API call, so the marker travels as a query param, is read by the page, and is sent when the session starts. **Reuses the existing `entry` convention** established by `frontend/lib/challenge-quiz-entry.ts` rather than inventing a second one — and deliberately does **not** refactor the two into a shared abstraction, since two callers do not earn one.
+
+   Four values, matching the groups the checkpoint must distinguish: **Dashboard** (Today's Focus and Focus Areas), **Challenge Quiz result**, **Interview Practice gap**, and **direct**. Direct navigation records an explicit value rather than omitting the key — *"no marker"* and *"genuinely direct"* are different facts and the read needs to tell them apart.
+
+2. **Carries the two product-direction documents ratified 2026-08-14** — *Support Another Learner* and *Adaptive Practice as the recommendation engine* — plus the re-specified `2026-09-12` checkpoint remedy and their Backlog Index rows. **These were originally opened as a separate PR to `main` and were retargeted into this release deliberately:** merging to `main` triggers an auto-deploy to production, so two merges would mean two deploys and two interruptions for learners using the app. One release, one deploy.
+
+### Anti-drift — locked rules this release does NOT change
+
+- **No new `AnalyticsEventType`.** This adds metadata to an existing event; the enum is untouched.
+- **The checkpoint's primary metric is untouched** — total starts per active learner. Additive metadata only.
+- **No user-visible behaviour change.** No copy, no layout, no routing change a learner can perceive.
+- **Analytics failure must still never fail a session.** The existing fire site is wrapped in a `catch (RuntimeException ignored)` guard carrying the comment *"Activity/analytics failures must not turn a generated quiz into a failed session."* That guard is preserved exactly.
+- **Unknown entry values are normalised server-side, never persisted verbatim** — the value is caller-controllable input flowing into analytics.
+- **No transaction-boundary changes**, and no change to any session-start failure path.
+
+### Explicitly out of scope
+
+- **Removing the Challenge Quiz entry point.** Ratified direction, but **it must not ship before 2026-09-12** — `v0.74.0` already removed the Quick Review route and a second removal inside the same window confounds the read instead of answering it.
+- Any recommendation-engine work, evidence-bar changes, or concept-identity work.
+
+### Shipped
+
+- **Adaptive Practice entry-point attribution.** `ADAPTIVE_PRACTICE_STARTED` now records **where** a newly generated session was launched from, across **every** route link that can start one: Dashboard Today's Focus, Dashboard Focus Areas, Dashboard Continue, the Challenge Quiz result screen, an Interview Practice gap, Note Detail's mode launch, Note Detail's due-concepts prompt, or an explicit `direct` for genuine direct navigation. Route links use the established `entry` query-param convention from `challenge-quiz-entry.ts`; the server allowlists known values independently and normalises absent or caller-controlled input to `direct`, never persisting it verbatim. **No user-visible behaviour change, and the checkpoint's primary metric — a total count — is untouched.**
+
+  **The audit found four untagged launch sites, and one of them would have biased the exact metric this release exists to enable.** The delivered change tagged the sites named in the prompt; a grep for remaining links found four more — Note Detail's mode launch (two branches of one handler), Note Detail's due-concepts prompt, and **Dashboard Continue**. That last one is the serious one: it is normally a *resume* path, but when the resumed session has expired the page starts a fresh one, and an untagged link would have recorded that as `direct` — **understating Dashboard-originated discovery, which is precisely the figure the `2026-09-12` read is for.** Three entry values were added and the docs corrected; `docs/features/adaptive-practice.md` had also stated that mode selection records `direct`, which stopped being true once Note Detail was tagged.
+
+  **`note-detail` and `note-detail-due-concepts` are deliberately separate values.** Both live on Note Detail, but the second is an *evidence-driven* prompt ("you have N concepts due") rather than a mode choice — and telling those apart is the whole point of the instrument.
+
+- **Two ratified product directions, carried into this release rather than deployed on their own.** *Support Another Learner* (helping someone else learn as a capability, explicitly **not** a new Profile Type) and *Adaptive Practice as the recommendation engine*, plus the re-specified `[CHECKPOINT — due 2026-09-12]` remedy and their Backlog Index rows. They were opened as a separate PR to `main` and retargeted here **because merging to `main` auto-deploys to production** — shipping them separately would have meant a second deploy, and a second interruption for learners mid-session, purely for documentation.
+
 ## v0.76.0 - Messaging Architecture: The Money Surfaces
 
 **Status: Released** (kicked off 2026-08-14, signed off 2026-08-14)

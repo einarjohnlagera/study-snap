@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.76.0 - Messaging Architecture` (Released); previous: `v0.75.0 - Authoring by Inference` (Released)
+- `v0.76.1 - Adaptive Practice Entry Attribution` (Released); previous: `v0.76.0 - Messaging Architecture` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -400,6 +400,7 @@ Use these skills before writing prompts, before starting new features, and after
 - **Tracked completion events**: `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, and `ADAPTIVE_PRACTICE_COMPLETED` are fired from the frontend in the `finally`/completion block of each quiz flow and must not block the primary action.
 - **Tracked funnel events**: `FEATURE_LOCKED_CLICKED` and `UPGRADE_CLICKED` are fired from paywall surfaces and the `PostSuccessUpgradeNudge` component respectively.
 - `AnalyticsEventType` in `frontend/lib/api.ts` is the canonical union of all allowed event names — add new event names there before using them.
+- Entry-point attribution for route-launched sessions uses the `entry` query parameter convention. Backend event producers must validate entry values against a known set and normalize absent or unknown caller-controlled values to a stable fallback; never persist arbitrary query input in analytics metadata.
 
 ### Retention Email Rule
 

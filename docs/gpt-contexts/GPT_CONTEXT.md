@@ -3,7 +3,7 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.76.0 (Released) - 2026-08-14
+> Last updated: v0.76.1 (Released) - 2026-08-14
 
 ---
 
@@ -68,7 +68,9 @@ Two things a new session usually gets wrong here:
 
 **Rebrand note:** The product is NoteLib. Code, package names, and database/schema names still use `studysnap` in many places unless explicitly changed.
 
-**Current baseline: `v0.76.0 - Messaging Architecture: The Money Surfaces`, Released 2026-08-14.** Copy only. `FREE.title` is now *"Start with ready-made study material"* — the Messaging Architecture item that had been explicitly owed since `v0.68.0` is closed. **Three copy rules were established and are binding:** upgrade *button* labels stay feature-named (a button says what the click does); paywall headlines are narrative for capability paywalls and factual for quota ones; `PLAN_CARD_SUBTEXT` describes the tier, never a feature, because it renders on every paywall.
+**Current baseline: `v0.76.1 - Adaptive Practice Entry Attribution`, Released 2026-08-14.** Instrumentation only, no user-visible change: `ADAPTIVE_PRACTICE_STARTED` now records **where** a session was launched from (seven values plus `direct`), so the open `[CHECKPOINT — due 2026-09-12]` can test whether learners actually discover remediation from the Dashboard. **⚠️ Standing constraint: do NOT propose removing the Challenge Quiz Adaptive Practice entry point before 2026-09-12** — `v0.74.0` already removed the Quick Review route, and a second removal inside the same window confounds that read.
+
+**Previous: `v0.76.0 - Messaging Architecture: The Money Surfaces`, Released 2026-08-14.** Copy only. `FREE.title` is now *"Start with ready-made study material"* — the Messaging Architecture item that had been explicitly owed since `v0.68.0` is closed. **Three copy rules were established and are binding:** upgrade *button* labels stay feature-named (a button says what the click does); paywall headlines are narrative for capability paywalls and factual for quota ones; `PLAN_CARD_SUBTEXT` describes the tier, never a feature, because it renders on every paywall.
 
 **Previous: `v0.75.0 - Authoring by Inference`, Released and deployed 2026-08-14.** Curator authoring now infers a note's depth instead of asking for it: Review Sets carry an authored depth that child plans inherit, bulk-generate can author straight into a Review Set (pre-filling depth from it and adding the finished notes to it), and the depth control is renamed **Authored Depth**. **Two things worth carrying:** (a) the `ADR-001` section gating this work had been **stale for four releases** — it named two prerequisites that were both already satisfied, so unblocked work looked blocked; an ADR outranks a feature doc, so a stale gate inside one is expensive. (b) Its pre-signoff pressure test found **ten** issues, the blocker being that the depth pre-fill fired for *every* profile while the control renders only for curators — so learners silently persisted an invisible, unclearable value that acts as a curriculum floor. **Four findings were in code the authoring session had written, and two were protected by tests that session wrote or edited**, which is the second consecutive release where cold-context review was the deciding factor.
 

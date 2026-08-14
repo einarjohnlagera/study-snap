@@ -1,5 +1,6 @@
 "use client";
 
+import { ADAPTIVE_PRACTICE_DASHBOARD_CONTINUE_ENTRY, buildAdaptivePracticeHref } from "@/lib/adaptive-practice-entry";
 import { useEffect } from "react";
 import { CheckCircle2, Sparkles, TrendingUp, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -163,7 +164,13 @@ export function ContinueSpotlight({ recommendation, profileType }: Readonly<Cont
     : resumePresentation.label;
   const noteTitle = recommendation.noteTitle?.trim() || "Untitled note";
   const metadataLine = formatMetadataLine(recommendation.subject, recommendation.courseProgram);
-  const resumeHref = `/notes/${recommendation.noteId}/${resumePresentation.hrefSuffix}`;
+  // Adaptive Practice carries an entry marker so a resume that lands on an expired session,
+  // and therefore starts a fresh one, still attributes to the Dashboard. Without it those
+  // starts record as "direct" and UNDERSTATE dashboard-originated discovery — the exact
+  // metric the 2026-09-12 checkpoint exists to read.
+  const resumeHref = resumePresentation.hrefSuffix === "adaptive-practice"
+    ? buildAdaptivePracticeHref(recommendation.noteId, { entry: ADAPTIVE_PRACTICE_DASHBOARD_CONTINUE_ENTRY })
+    : `/notes/${recommendation.noteId}/${resumePresentation.hrefSuffix}`;
 
   return (
     <Card className="space-y-4 p-4 sm:p-6">

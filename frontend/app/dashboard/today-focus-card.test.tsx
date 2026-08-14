@@ -29,7 +29,7 @@ describe("TodayFocusCard", () => {
     expect(screen.getByRole("link", { name: "Pharmacology Review" })).toHaveAttribute("href", "/notes/note-1");
     expect(screen.getByRole("link", { name: "Practice Due Concepts" })).toHaveAttribute(
       "href",
-      "/notes/note-1/adaptive-practice",
+      "/notes/note-1/adaptive-practice?entry=dashboard-today-focus",
     );
   });
 

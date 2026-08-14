@@ -2033,7 +2033,10 @@ describe("ChallengeQuizPage", () => {
     expect(review).toHaveTextContent("Correct Answer");
     expect(screen.getByRole("button", { name: "Collapse Explanation" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Expand All" })).toBeInTheDocument();
-    expect(within(review).getByRole("link", { name: "Practice Weak Concepts" })).toHaveAttribute("href", "/notes/note-1/adaptive-practice");
+    expect(within(review).getByRole("link", { name: "Practice Weak Concepts" })).toHaveAttribute(
+      "href",
+      "/notes/note-1/adaptive-practice?entry=challenge-quiz-result",
+    );
     expect(within(review).getByRole("link", { name: "Review Study Pack" })).toHaveAttribute("href", "/notes/note-1");
     expect(review).toHaveTextContent("Mitochondria produce ATP for the cell.");
     expect(screen.getByText("Found a confusing question or explanation while reviewing answers? Tell us what felt off.")).toBeInTheDocument();

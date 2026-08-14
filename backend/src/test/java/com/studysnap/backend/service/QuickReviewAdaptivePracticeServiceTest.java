@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.AdaptivePracticeCompleteResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
@@ -39,12 +40,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class QuickReviewAdaptivePracticeServiceTest {
+
+    private static final String ANALYTICS_METADATA_ENTRY = "entry";
+    private static final String DASHBOARD_TODAY_FOCUS_ENTRY = "dashboard-today-focus";
+    private static final String UNKNOWN_ENTRY = "caller-controlled-value";
+    private static final String DIRECT_ENTRY = "direct";
 
     @Mock
     private StudyPackRepository studyPackRepository;
@@ -295,6 +302,62 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(5),
                 any()
         );
+    }
+
+    @Test
+    void generateAdaptiveQuiz_recordsKnownEntryInStartedAnalytics() {
+        Map<String, Object> metadata = generateAndCaptureAnalyticsMetadata(DASHBOARD_TODAY_FOCUS_ENTRY);
+
+        assertThat(metadata).containsEntry(ANALYTICS_METADATA_ENTRY, DASHBOARD_TODAY_FOCUS_ENTRY);
+    }
+
+    @Test
+    void generateAdaptiveQuiz_normalizesUnknownEntryToDirect() {
+        Map<String, Object> metadata = generateAndCaptureAnalyticsMetadata(UNKNOWN_ENTRY);
+
+        assertThat(metadata)
+                .containsEntry(ANALYTICS_METADATA_ENTRY, DIRECT_ENTRY)
+                .doesNotContainValue(UNKNOWN_ENTRY);
+    }
+
+    @Test
+    void generateAdaptiveQuiz_recordsAbsentEntryAsDirect() {
+        Map<String, Object> metadata = generateAndCaptureAnalyticsMetadata(null);
+
+        assertThat(metadata).containsEntry(ANALYTICS_METADATA_ENTRY, DIRECT_ENTRY);
+    }
+
+    @Test
+    void generateAdaptiveQuiz_succeedsWhenAnalyticsTrackingFails() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity sourceSession = buildCompletedSourceSession(
+                userId,
+                studyPackId,
+                noteId,
+                List.of("Weak Concept")
+        );
+        stubAdaptiveGeneration(
+                userId,
+                studyPackId,
+                studyPack,
+                sourceSession,
+                buildGeneratedQuiz("Weak Concept", 5)
+        );
+        doThrow(new RuntimeException("analytics unavailable"))
+                .when(analyticsService)
+                .trackEvent(any(), any(), any(), any());
+
+        QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(
+                studyPackId.toString(),
+                userId,
+                "challenge-quiz-result"
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.quiz()).hasSize(5);
     }
 
     @Test
@@ -670,6 +733,38 @@ class QuickReviewAdaptivePracticeServiceTest {
                 "Explanation"
         )));
         return studyPack;
+    }
+
+    private Map<String, Object> generateAndCaptureAnalyticsMetadata(String entry) {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity sourceSession = buildCompletedSourceSession(
+                userId,
+                studyPackId,
+                noteId,
+                List.of("Weak Concept")
+        );
+        stubAdaptiveGeneration(
+                userId,
+                studyPackId,
+                studyPack,
+                sourceSession,
+                buildGeneratedQuiz("Weak Concept", 5)
+        );
+
+        adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId, entry);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> metadataCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(analyticsService).trackEvent(
+                eq(userId),
+                eq(AnalyticsEventType.ADAPTIVE_PRACTICE_STARTED),
+                eq(studyPackId),
+                metadataCaptor.capture()
+        );
+        return metadataCaptor.getValue();
     }
 
     private void stubAdaptiveGeneration(
