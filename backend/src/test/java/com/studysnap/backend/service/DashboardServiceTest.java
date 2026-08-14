@@ -1121,7 +1121,33 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getTodayFocus_recommendsWeakConceptPracticeWhenLatestCompletedHasWeakConcepts() {
+    void getTodayFocus_recommendsWeakConceptPracticeOnPersistentWeaknessNotOneSession() {
+        // The recommendation follows repeated evidence (ConceptHealth incorrect_streak), NOT the
+        // latest completed session. A single bad quiz must not produce one.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "World History");
+
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of());
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(conceptHealthService.getPersistentlyWeakConceptsByStudyPackIds(userId, List.of(studyPackId)))
+                .thenReturn(Map.of(studyPackId, List.of("Alliances", "Militarism")));
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
+        assertThat(response.studyPackId()).isEqualTo(studyPackId.toString());
+        assertThat(response.actionLabel()).isEqualTo("Practice Weak Areas");
+        // Copy names the persistence, not a single session.
+        assertThat(response.message()).contains("keep tripping you up");
+        assertThat(response.message()).doesNotContain("latest Quick Review");
+    }
+
+    @Test
+    void getTodayFocus_doesNotRecommendWeakConceptPracticeFromASingleBadSession() {
+        // Regression for the behaviour this release removed: a completed session carrying weak
+        // concepts must NOT trigger a recommendation when ConceptHealth shows no persistent streak.
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now();
@@ -1136,13 +1162,13 @@ class DashboardServiceTest {
 
         stubNoQuickReviewInProgressSession(userId);
         stubRecentQuickReviewSessions(userId, List.of(latestCompleted));
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(studyPack));
+        when(conceptHealthService.getPersistentlyWeakConceptsByStudyPackIds(userId, List.of(studyPackId)))
+                .thenReturn(Map.of());
 
         TodayFocusResponse response = dashboardService.getTodayFocus(userId);
 
-        assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
-        assertThat(response.studyPackId()).isEqualTo(studyPackId.toString());
-        assertThat(response.actionLabel()).isEqualTo("Practice Weak Areas");
+        assertThat(response.type()).isNotEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
     }
 
     @Test
@@ -1220,7 +1246,9 @@ class DashboardServiceTest {
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         stubNoQuickReviewInProgressSession(userId);
         stubRecentQuickReviewSessions(userId, List.of(reviewedSession), List.of(reviewedSession));
-        when(studyPackRepository.findByIdAndOwnerUserId(reviewedPackId, userId)).thenReturn(Optional.of(reviewedPack));
+        when(studyPackRepository.findByOwnerUserId(userId)).thenReturn(List.of(reviewedPack));
+        when(conceptHealthService.getPersistentlyWeakConceptsByStudyPackIds(userId, List.of(reviewedPackId)))
+                .thenReturn(Map.of(reviewedPackId, List.of("Alliances", "Militarism")));
 
         TodayFocusResponse response = dashboardService.getTodayFocus(userId);
 

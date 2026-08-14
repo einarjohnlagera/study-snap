@@ -435,41 +435,56 @@ public class DashboardService {
             return Optional.empty();
         }
 
-        QuickReviewSessionMetadataProjection latestCompletedSession = quickReviewSessionRepository
-                .findCompletedSessionMetadataByUserIdAndSessionModeOrderByCompletedAtDesc(
-                        userId,
-                        QuickReviewSessionMode.QUICK_REVIEW,
-                        PageRequest.of(0, 1)
-                )
-                .stream()
-                .findFirst()
-                .orElse(null);
-        if (latestCompletedSession == null) {
+        // Resolves from PERSISTENT weakness rather than the latest completed session. Reading one
+        // session meant a single bad quiz produced a recommendation, which taught the wrong mental
+        // model ("the system wants me to take another quiz") and spent quota-limited remediation on
+        // weak evidence. ConceptHealth's incorrect_streak is the repeated-evidence signal, and it
+        // already exists — nothing new is recorded to support this.
+        List<StudyPackEntity> studyPacks = studyPackRepository.findByOwnerUserId(userId);
+        if (studyPacks.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<UUID, StudyPackEntity> studyPacksById = new LinkedHashMap<>();
+        for (StudyPackEntity studyPack : studyPacks) {
+            if (studyPack.getId() != null) {
+                studyPacksById.put(studyPack.getId(), studyPack);
+            }
+        }
+        if (studyPacksById.isEmpty()) {
             return Optional.empty();
         }
 
-        List<String> weakConcepts = extractWeakConcepts(latestCompletedSession);
-        if (weakConcepts.isEmpty()) {
+        Map<UUID, List<String>> weakByStudyPackId = conceptHealthService
+                .getPersistentlyWeakConceptsByStudyPackIds(userId, List.copyOf(studyPacksById.keySet()));
+
+        // Within-pack only. `concept` is free text keyed per Study Pack with no canonical identity,
+        // so the same idea in two packs cannot be related — counts must never be summed across packs.
+        // Cross-pack recommendation needs concept identity first and is deliberately out of scope.
+        StudyPackEntity focusStudyPack = null;
+        List<String> focusConcepts = List.of();
+        for (Map.Entry<UUID, List<String>> entry : weakByStudyPackId.entrySet()) {
+            if (entry.getValue().size() > focusConcepts.size()) {
+                StudyPackEntity candidate = studyPacksById.get(entry.getKey());
+                if (candidate != null) {
+                    focusStudyPack = candidate;
+                    focusConcepts = entry.getValue();
+                }
+            }
+        }
+        if (focusStudyPack == null || focusConcepts.isEmpty()) {
             return Optional.empty();
         }
 
-        Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(
-                latestCompletedSession.studyPackId(),
-                userId
-        );
-        if (studyPack.isEmpty()) {
-            return Optional.empty();
-        }
-
-        int weakConceptCount = weakConcepts.size();
+        int weakConceptCount = focusConcepts.size();
         String conceptLabel = weakConceptCount == 1 ? "concept" : "concepts";
+        String verb = weakConceptCount == 1 ? "keeps" : "keep";
         return Optional.of(new TodayFocusResponse(
                 TodayFocusType.PRACTICE_WEAK_CONCEPT,
-                studyPack.get().getId().toString(),
-                studyPack.get().getNoteId() == null ? null : studyPack.get().getNoteId().toString(),
+                focusStudyPack.getId().toString(),
+                focusStudyPack.getNoteId() == null ? null : focusStudyPack.getNoteId().toString(),
                 "Practice Weak Concepts",
-                "Your latest Quick Review in \"" + studyPack.get().getTitle() + "\" showed " + weakConceptCount + " weak "
-                        + conceptLabel + ". Practice them now.",
+                weakConceptCount + " " + conceptLabel + " in \"" + focusStudyPack.getTitle() + "\" " + verb
+                        + " tripping you up. Practice them now.",
                 "Practice Weak Areas",
                 List.of(),
                 false

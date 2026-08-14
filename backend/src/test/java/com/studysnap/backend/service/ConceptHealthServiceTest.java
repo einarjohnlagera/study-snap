@@ -663,4 +663,36 @@ class ConceptHealthServiceTest {
         studyPack.setKeyConcepts(keyConcepts);
         return studyPack;
     }
+    @Test
+    void getPersistentlyWeakConceptsByStudyPackIds_returnsOnlyConceptsAtOrAboveTheStreakThreshold() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+
+        ConceptHealthEntity persistent = new ConceptHealthEntity();
+        persistent.setStudyPackId(studyPackId);
+        persistent.setConcept(OHMS_LAW_CONCEPT);
+        persistent.setIncorrectStreak(2);
+
+        ConceptHealthEntity oneOff = new ConceptHealthEntity();
+        oneOff.setStudyPackId(studyPackId);
+        oneOff.setConcept(RECURSION_CONCEPT);
+        oneOff.setIncorrectStreak(1);
+
+        when(conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, List.of(studyPackId)))
+                .thenReturn(List.of(persistent, oneOff));
+
+        Map<UUID, List<String>> result =
+                conceptHealthService.getPersistentlyWeakConceptsByStudyPackIds(userId, List.of(studyPackId));
+
+        // A single miss is not persistent weakness — that is the whole point of the threshold.
+        assertThat(result).containsOnlyKeys(studyPackId);
+        assertThat(result.get(studyPackId)).containsExactly(OHMS_LAW_CONCEPT);
+    }
+
+    @Test
+    void getPersistentlyWeakConceptsByStudyPackIds_returnsEmptyForNoStudyPacks() {
+        assertThat(conceptHealthService.getPersistentlyWeakConceptsByStudyPackIds(UUID.randomUUID(), List.of()))
+                .isEmpty();
+    }
+
 }
