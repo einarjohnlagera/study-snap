@@ -11,6 +11,8 @@ import {
 } from "./auth";
 import type { MePlanResponse } from "./me-plan";
 import type { ThemePreference } from "./theme-preferences";
+import type { AdaptivePracticeEntry } from "./adaptive-practice-entry";
+import { ADAPTIVE_PRACTICE_ENTRY_QUERY_PARAM } from "./adaptive-practice-entry";
 
 export type { MePlanResponse } from "./me-plan";
 
@@ -3579,9 +3581,14 @@ export async function generateQuickReviewStudyTip(
 
 export async function generateAdaptiveQuickReviewQuiz(
   noteId: string,
+  entry?: AdaptivePracticeEntry | null,
 ): Promise<QuickReviewAdaptiveQuizResponse> {
+  const path = `/notes/${noteId}/adaptive-practice/start`;
+  const requestPath = entry
+    ? `${path}?${new URLSearchParams({ [ADAPTIVE_PRACTICE_ENTRY_QUERY_PARAM]: entry }).toString()}`
+    : path;
   const response = await fetchWithAuth(
-    `/notes/${noteId}/adaptive-practice/start`,
+    requestPath,
     {
       method: "POST",
       headers: buildAuthHeaders(),

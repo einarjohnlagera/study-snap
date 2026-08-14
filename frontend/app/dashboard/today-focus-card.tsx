@@ -3,6 +3,10 @@ import { Compass } from "lucide-react";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { Card } from "@/components/ui/card";
 import type { TodayFocusResponse } from "@/lib/api";
+import {
+  ADAPTIVE_PRACTICE_DASHBOARD_TODAY_FOCUS_ENTRY,
+  buildAdaptivePracticeHref,
+} from "@/lib/adaptive-practice-entry";
 
 type TodayFocusCardProps = {
   focus: TodayFocusResponse;
@@ -17,7 +21,9 @@ function resolveActionHref(focus: TodayFocusResponse) {
     return `/notes/${focus.noteId}/quick-review`;
   }
   if (focus.type === "PRACTICE_WEAK_CONCEPT" && focus.noteId) {
-    return `/notes/${focus.noteId}/adaptive-practice`;
+    return buildAdaptivePracticeHref(focus.noteId, {
+      entry: ADAPTIVE_PRACTICE_DASHBOARD_TODAY_FOCUS_ENTRY,
+    });
   }
   if (focus.type === "STUDY_SUGGESTION") {
     return "/study";
@@ -66,7 +72,9 @@ export function TodayFocusCard({ focus, onUnlockAdaptivePractice }: Readonly<Tod
       {isDueConceptFocus ? (
         focus.adaptivePracticeAvailable && focus.noteId ? (
           <ResponsiveActionLink
-            href={`/notes/${focus.noteId}/adaptive-practice`}
+            href={buildAdaptivePracticeHref(focus.noteId, {
+              entry: ADAPTIVE_PRACTICE_DASHBOARD_TODAY_FOCUS_ENTRY,
+            })}
             action="adaptivePractice"
             label={focus.actionLabel}
             className="w-full sm:w-auto"

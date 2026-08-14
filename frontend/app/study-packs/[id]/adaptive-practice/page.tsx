@@ -52,6 +52,10 @@ import { isQuizSelectionCorrect, resolveQuizCorrectIndex, resolveQuizItemGroupAt
 import { mapPerformanceLevel } from "@/lib/challenge-quiz-results";
 import type { AppPlanType } from "@/src/config/plans";
 import { renderMathText } from "@/components/study-pack/quiz-working-solution";
+import {
+  ADAPTIVE_PRACTICE_ENTRY_QUERY_PARAM,
+  normalizeAdaptivePracticeEntry,
+} from "@/lib/adaptive-practice-entry";
 
 function AdaptivePracticeLoading() {
   return (
@@ -131,6 +135,10 @@ export default function AdaptivePracticePage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const adaptivePracticeEntry = useMemo(
+    () => normalizeAdaptivePracticeEntry(searchParams.get(ADAPTIVE_PRACTICE_ENTRY_QUERY_PARAM)),
+    [searchParams],
+  );
   const currentPlan = usageSummary?.plan ?? getAuthUser()?.planType ?? "FREE";
   const hasNextStepGuidance = nextStepResponse !== null || weeklyPacingWeeksRemaining !== null;
   const hasCompanionExcerpt = hasCompanionResultBridgeExcerpt(primaryCollectionCompanion);
@@ -439,7 +447,7 @@ export default function AdaptivePracticePage() {
     setStartingAdaptive(true);
     setError(null);
     try {
-      const response = await generateAdaptiveQuickReviewQuiz(note.id);
+      const response = await generateAdaptiveQuickReviewQuiz(note.id, adaptivePracticeEntry);
       applyAdaptiveSession(response);
     } catch (err) {
       const message = isEmailNotVerifiedError(err)
@@ -463,7 +471,7 @@ export default function AdaptivePracticePage() {
       requestInFlightRef.current = false;
       setStartingAdaptive(false);
     }
-  }, [applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, shouldUpgradeForAdaptivePracticeLimit]);
+  }, [adaptivePracticeEntry, applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, shouldUpgradeForAdaptivePracticeLimit]);
 
   const adaptiveGenerationLocked = startingAdaptive || adaptiveQuiz?.status === "GENERATING";
   const adaptiveQuizActive = Boolean(

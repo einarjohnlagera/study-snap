@@ -109,6 +109,7 @@ public class NoteController {
     private static final String SOURCE_REQUEST_PARAM = "source";
     private static final String AUDIENCE_REQUEST_PARAM = "audience";
     private static final String TARGET_PROFILE_TYPE_REQUEST_PARAM = "targetProfileType";
+    private static final String ENTRY_REQUEST_PARAM = "entry";
     private static final int PUBLIC_LIBRARY_DEFAULT_PAGE = 0;
     private static final int PUBLIC_LIBRARY_DEFAULT_PAGE_SIZE = 20;
 
@@ -463,12 +464,13 @@ public class NoteController {
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public QuickReviewAdaptiveQuizResponse startAdaptivePractice(
             @PathVariable String id,
+            @RequestParam(value = ENTRY_REQUEST_PARAM, required = false) String entry,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
         authService.requireEmailVerified(userId);
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
-        return quickReviewAdaptivePracticeService.generateAdaptiveQuiz(studyPackId, userId);
+        return quickReviewAdaptivePracticeService.generateAdaptiveQuiz(studyPackId, userId, entry);
     }
 
     @GetMapping("/{id}/adaptive-practice/in-progress")

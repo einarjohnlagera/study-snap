@@ -31,6 +31,10 @@ import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
 import { resolveEffectivePrograms, sharesAnyProgram } from "@/lib/note-programs";
 import { renderMathText } from "@/components/study-pack/quiz-working-solution";
+import {
+  ADAPTIVE_PRACTICE_INTERVIEW_PRACTICE_GAP_ENTRY,
+  buildAdaptivePracticeHref,
+} from "@/lib/adaptive-practice-entry";
 
 type InterviewPhase = "prestart" | "generating" | "running" | "completed" | "forfeited" | "error";
 type ChoiceLetter = "A" | "B" | "C" | "D";
@@ -601,7 +605,9 @@ export default function InterviewPracticePage() {
                   <button
                     key={`${gap.noteId}-${gap.concept}`}
                     type="button"
-                    onClick={() => router.push(`/notes/${gap.noteId}/adaptive-practice`)}
+                    onClick={() => router.push(buildAdaptivePracticeHref(gap.noteId, {
+                      entry: ADAPTIVE_PRACTICE_INTERVIEW_PRACTICE_GAP_ENTRY,
+                    }))}
                     className="block text-left text-sm text-primary hover:underline"
                   >
                     {gap.concept}

@@ -37,6 +37,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import lombok.RequiredArgsConstructor;
@@ -74,6 +75,24 @@ public class QuickReviewAdaptivePracticeService {
     private static final String SESSION_METADATA_WEAK_CONCEPTS = "weakConcepts";
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
     private static final String ANALYTICS_METADATA_WEAK_CONCEPT_COUNT = "weakConceptCount";
+    private static final String ANALYTICS_METADATA_ENTRY = "entry";
+    private static final String ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_TODAY_FOCUS = "dashboard-today-focus";
+    private static final String ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_FOCUS_AREAS = "dashboard-focus-areas";
+    private static final String ADAPTIVE_PRACTICE_ENTRY_CHALLENGE_QUIZ_RESULT = "challenge-quiz-result";
+    private static final String ADAPTIVE_PRACTICE_ENTRY_INTERVIEW_PRACTICE_GAP = "interview-practice-gap";
+    private static final String ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_CONTINUE = "dashboard-continue";
+    private static final String ADAPTIVE_PRACTICE_ENTRY_NOTE_DETAIL = "note-detail";
+    private static final String ADAPTIVE_PRACTICE_ENTRY_NOTE_DETAIL_DUE_CONCEPTS = "note-detail-due-concepts";
+    private static final String ADAPTIVE_PRACTICE_ENTRY_DIRECT = "direct";
+    private static final Set<String> KNOWN_ADAPTIVE_PRACTICE_ENTRIES = Set.of(
+        ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_TODAY_FOCUS,
+        ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_FOCUS_AREAS,
+        ADAPTIVE_PRACTICE_ENTRY_CHALLENGE_QUIZ_RESULT,
+        ADAPTIVE_PRACTICE_ENTRY_INTERVIEW_PRACTICE_GAP,
+        ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_CONTINUE,
+        ADAPTIVE_PRACTICE_ENTRY_NOTE_DETAIL,
+        ADAPTIVE_PRACTICE_ENTRY_NOTE_DETAIL_DUE_CONCEPTS
+    );
     private static final List<QuickReviewSessionStatus> ACTIVE_GENERATION_STATUSES = List.of(
         QuickReviewSessionStatus.GENERATING,
         QuickReviewSessionStatus.IN_PROGRESS
@@ -99,6 +118,10 @@ public class QuickReviewAdaptivePracticeService {
     private final ConceptHealthService conceptHealthService;
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
+        return generateAdaptiveQuiz(studyPackIdRaw, userId, null);
+    }
+
+    public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId, String entry) {
         authService.requireEmailVerified(userId);
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
@@ -200,7 +223,8 @@ public class QuickReviewAdaptivePracticeService {
                 activityTrackingService.recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, studyPackId);
                 analyticsService.trackEvent(userId, AnalyticsEventType.ADAPTIVE_PRACTICE_STARTED, studyPackId, Map.of(
                     ANALYTICS_METADATA_SESSION_ID, savedSession.getId().toString(),
-                    ANALYTICS_METADATA_WEAK_CONCEPT_COUNT, focusConcepts.size()
+                    ANALYTICS_METADATA_WEAK_CONCEPT_COUNT, focusConcepts.size(),
+                    ANALYTICS_METADATA_ENTRY, normalizeAdaptivePracticeEntry(entry)
                 ));
             } catch (RuntimeException ignored) {
                 // Activity/analytics failures must not turn a generated quiz into a failed session.
@@ -212,6 +236,12 @@ public class QuickReviewAdaptivePracticeService {
             QuickReviewSessionEntity failedSession = quickReviewSessionRepository.save(session);
             return toAdaptiveResponse(failedSession, studyPack);
         }
+    }
+
+    private String normalizeAdaptivePracticeEntry(String entry) {
+        return entry != null && KNOWN_ADAPTIVE_PRACTICE_ENTRIES.contains(entry)
+            ? entry
+            : ADAPTIVE_PRACTICE_ENTRY_DIRECT;
     }
 
     @Transactional(readOnly = true)

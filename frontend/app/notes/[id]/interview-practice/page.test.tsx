@@ -1,6 +1,14 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import InterviewPracticePage from "./page";
-import { getCollection, getMe, getNote, listNotes, startInterviewPractice } from "@/lib/api";
+import {
+  answerInterviewPracticeQuestion,
+  completeInterviewPracticeSession,
+  getCollection,
+  getMe,
+  getNote,
+  listNotes,
+  startInterviewPractice,
+} from "@/lib/api";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -42,6 +50,8 @@ describe("InterviewPracticePage", () => {
     searchParamsMock = new URLSearchParams();
     (getCollection as jest.Mock).mockReset();
     (startInterviewPractice as jest.Mock).mockReset();
+    (answerInterviewPracticeQuestion as jest.Mock).mockReset();
+    (completeInterviewPracticeSession as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue({
       profileType: "PROFESSIONAL",
@@ -142,5 +152,53 @@ describe("InterviewPracticePage", () => {
     expect(await screen.findByRole("button", { name: /Fallback Course Note/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Other Course Note/ })).not.toBeInTheDocument();
     expect(screen.getByText("1 note · 5 questions")).toBeInTheDocument();
+  });
+
+  it("attributes readiness-gap launches to Interview Practice", async () => {
+    const question = {
+      question: "Which answer is strongest?",
+      choices: ["Option A", "Option B", "Option C", "Option D"],
+      correctIndex: 0,
+      concept: "System design",
+      explanation: "Explanation",
+    };
+    (startInterviewPractice as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      question,
+      questionCount: 5,
+      currentQuestionIndex: 0,
+    });
+    (answerInterviewPracticeQuestion as jest.Mock).mockResolvedValue({
+      verdict: "STRONG",
+      rationale: "Clear reasoning.",
+      followUp: "Keep it concise.",
+      nextQuestion: question,
+    });
+    (completeInterviewPracticeSession as jest.Mock).mockResolvedValue({
+      band: "ALMOST_READY",
+      scorePercentage: 80,
+      correctAnswers: 4,
+      totalQuestions: 5,
+      strengths: [],
+      gaps: [{ noteId: "note-gap", concept: "Caching strategy" }],
+      talkingPoints: [],
+      pacingNotes: [],
+    });
+
+    render(<InterviewPracticePage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start Interview Practice" }));
+
+    for (let index = 0; index < 5; index += 1) {
+      fireEvent.click(await screen.findByRole("button", { name: "A. Option A" }));
+      fireEvent.click(screen.getByRole("button", { name: "Submit Answer" }));
+      const advanceLabel = index === 4 ? "Complete" : "Next Question";
+      fireEvent.click(await screen.findByRole("button", { name: advanceLabel }));
+    }
+
+    fireEvent.click(await screen.findByRole("button", { name: "Caching strategy" }));
+    expect(pushMock).toHaveBeenCalledWith(
+      "/notes/note-gap/adaptive-practice?entry=interview-practice-gap",
+    );
   });
 });
