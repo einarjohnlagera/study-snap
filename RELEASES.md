@@ -2,7 +2,28 @@
 
 ## v0.76.1 - Adaptive Practice Entry Attribution
 
-**Status: In Progress** (kicked off 2026-08-14)
+**Status: Released** (kicked off and signed off 2026-08-14)
+
+### Scope completeness
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | Entry-point attribution on `ADAPTIVE_PRACTICE_STARTED` | **Shipped, and GREW during audit** — see below |
+| 2 | Carries the two ratified direction docs | Shipped |
+
+**Item 1 grew from four entry values to seven, and the growth was the point of auditing.** The delivered change tagged the launch sites named in the prompt; a grep for the complete set found **four more untagged sites** — Note Detail's mode launch (two branches of one handler), Note Detail's due-concepts prompt, and **Dashboard Continue**. That last one would have biased the very metric this release exists to enable: it is normally a *resume* path, but when the resumed session has expired the page starts a fresh one, and an untagged link would have recorded that as `direct` — **understating Dashboard-originated discovery, which is exactly the figure the `2026-09-12` read is for.**
+
+### The checkpoint gate — no checkpoint is owed, and the reason is unusual
+
+Recorded explicitly rather than left silent.
+
+**This release is not a bet that owes a checkpoint; it is the instrumentation that lets an existing checkpoint answer its own secondary question.** Nothing shipped ahead of evidence, no `EVIDENCE` gate was overridden, and there is no hypothesis here to falsify — the change is additive analytics metadata with no user-visible behaviour.
+
+**What it does discharge:** the `[CHECKPOINT — due 2026-09-12]` row previously carried its secondary question as **NOT MEASURABLE**. That prerequisite is now shipped, and the row is updated to say so. **The primary metric is untouched** — a total count of starts per active learner — so the before/after comparison is unaffected by this release landing inside its own measurement window.
+
+### Feature-doc drift gate
+
+`docs/features/adaptive-practice.md` was corrected twice: once by the delivered change to document the new values, and again at audit, because it stated that **mode selection records `direct`** — untrue the moment Note Detail was tagged. `analytics.md` lists the event name only and makes no metadata claim; `dashboard.md` and `note-detail.md` describe the CTAs without claiming anything about their URLs. No other doc asserts anything about entry attribution.
 
 Theme: make one open checkpoint answer the question that actually matters, by recording **where** an Adaptive Practice session was started from.
 

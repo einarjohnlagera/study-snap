@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.76.1 - Adaptive Practice Entry Attribution` (In Progress); previous: `v0.76.0 - Messaging Architecture` (Released)
+- `v0.76.1 - Adaptive Practice Entry Attribution` (Released); previous: `v0.76.0 - Messaging Architecture` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
