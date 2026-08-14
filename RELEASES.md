@@ -28,7 +28,13 @@ Theme: the Dashboard should recommend practice because a learner **keeps** getti
 
 ### Shipped
 
-_(nothing yet)_
+- **The Dashboard now recommends practice on persistent weakness, not one bad quiz.** `DashboardService.resolveTodayFocusWeakConcepts` previously read `weakConcepts` from the **single latest completed Quick Review** — the copy said so out loud (*"Your latest Quick Review in X showed N weak concepts"*) — so one poor session produced a recommendation and spent quota-limited remediation on weak evidence. It now resolves from `ConceptHealth` where `incorrect_streak` meets **`TWICE_MISSED_STREAK_THRESHOLD`**, the bar this codebase already uses for the twice-missed Ask Companion prompt. **No new signal is recorded and no second evidence bar was invented** — `incorrect_streak` already existed.
+
+  **Within-pack only, and enforced rather than assumed.** `concept` is free text keyed per Study Pack with no canonical identity, so the branch picks the single pack with the most persistently-weak concepts and **never sums across packs**. Cross-pack recommendation needs concept identity first — ADR-sized, deliberately out of scope.
+
+  **Two tests pin the behaviour change**, including a regression asserting that a completed session carrying weak concepts does **not** trigger a recommendation when no persistent streak exists — the exact behaviour this release removed. The old test was named `…WhenLatestCompletedHasWeakConcepts`, encoding the defect in its own name.
+
+  **No entry point was removed**, so the standing 2026-09-12 constraint holds and nothing was deferred to respect it.
 
 ## v0.76.1 - Adaptive Practice Entry Attribution
 
