@@ -1,5 +1,39 @@
 # RELEASES.md - NoteLib
 
+## v0.78.0 - Post-Mastery Next Step
+
+**Status: In Progress** (kicked off 2026-08-14)
+
+Theme: a learner who has just mastered a pack should be told **what to study next**, not left on a screen whose secondary slot is empty.
+
+**Leg (a) of the "Post-mastery next step" backlog row, and only leg (a).** That row hides two features inside one sentence, and they are not the same size. **(a) "next item in this Study Plan"** is unblocked and needs only a scoping pass. **(b) "a similar note"** needs subject/tag/program overlap or embeddings — that is the **Discovery System** initiative, deliberately deferred until `[CHECKPOINT — due 2026-09-13]` (Explore engagement) reports, and it must be folded into that initiative rather than built beside it. **Building (b) now would fragment two recommenders.** Leg (b) is therefore out of scope and stays out.
+
+**The empty slot is real, verified in code at kickoff, not assumed.** `PostSessionNextStepService.resolveQuickReviewNextStep` passes `null` as `secondaryAction` on the mastered branch (`PostSessionNextStepService.java:215`). `v0.74.0` removed Adaptive Practice from that screen in the same release that introduced the mastered branch, so the slot has been empty by construction since then. This feature lands **in that existing slot** — it does not add a surface.
+
+**Why the query is cheap, also verified at kickoff.** `NoteCollectionItemEntity.position` already gives Study Plans an explicit ordering, and `NoteCollectionService.toProgressResponse` already defines "practiced" as `lastSessionCompletedAt != null`. **"Next" reuses both**: the lowest-`position` item in the plan the learner has not practiced. Reusing the progress definition is the point — a suggestion derived from a *different* notion of "done" than the plan's own progress counter could contradict the bar rendered directly beside it.
+
+**What did NOT exist and must be built:** there is no next-note query anywhere in the repo (`NoteCollectionItemRepository` has `findByCollectionIdOrderByPositionAsc` and nothing resembling "next"), and `TodayFocusType.STUDY_SUGGESTION` exists but is used at exactly one call site — `DashboardService.java:188`, the generic empty-state fallback ("Create your first Study Pack"). **Reusing that enum value here is deliberate and it is a widening**, so its Dashboard behaviour must not change.
+
+### Planned Scope
+
+1. **Next-plan-item resolution (backend).** A repository query returning the lowest-`position` item of a Study Plan whose note the learner has not practiced (`lastSessionCompletedAt IS NULL`), plus a new branch in `PostSessionNextStepService`'s mastered path that fills the currently-`null` `secondaryAction`.
+2. **Plan selection when a note belongs to several (backend).** Resolution order: the user's **Primary Review Set** (`users.primary_collection_id`) when it contains the note, otherwise the most recently updated collection that contains it. Deterministic, never arbitrary.
+3. **No frontend change — verified at kickoff, and this shrinks the release to backend-only.** `post-session-next-step.tsx:137` already renders `response.secondaryAction` generically: label plus outline-button link, shown whenever the field is non-null. A new secondary action therefore appears with **zero frontend work**, and **absence is already silent** — the existing `secondaryAction ? … : null` renders nothing, so "no next item" needs no empty state and must not gain one. **It also cannot contaminate Challenge analytics:** `trackChallengeClick` gates on `href?.includes("/challenge-quiz")` (line 24), so a plan-item href fires no Challenge event.
+4. **~23 Study Packs still rendering raw LaTeX — owner-executed, not engineering.** Re-run `docs/claude-plans/v0.74.0-latex-affected-notes.sql` against production **first**: `v0.74.0`'s display-time normaliser may already have shrunk or emptied the `NEEDS_FIX` list, and regenerating a pack that now reads correctly is wasted curator time. Hand-regenerate only the survivors.
+
+### Anti-drift — locked for this release
+
+- **Leg (b) ("a similar note") is out of scope.** No similarity, no embeddings, no subject/tag overlap scoring. It is gated behind `[CHECKPOINT — due 2026-09-13]` and belongs to the Discovery System.
+- **Do not change `TodayFocusType.STUDY_SUGGESTION`'s Dashboard behaviour.** `DashboardService.java:188` is its only existing call site and it must keep rendering the empty-state fallback exactly as it does today. This release adds a second producer of the type; it does not repurpose the first.
+- **No new "what's next" resolver.** The Companion Guidance Doctrine pressure test already counted **8 independent** ones. This branch goes inside `PostSessionNextStepService`, which is one of them — it does not become the 9th.
+- **Do not touch the Adaptive Practice entry points.** The standing constraint holds until **2026-09-12**: the Challenge Quiz Adaptive Practice entry point must not be removed, and `v0.74.0`'s removal of the Quick Review route must not be reverted. This release adds a *secondary* action beside the existing `Take a Challenge` primary; the primary does not move or change.
+- **No admin LaTeX backfill.** `v0.74.0` dropped it deliberately — a Java normaliser beside the TypeScript `lib/math-normalization.ts` would be two implementations of one rule. Do not re-propose it without a materially larger affected population.
+- **"Practiced" means `lastSessionCompletedAt != null`**, matching `toProgressResponse`. Do not invent a second definition of done.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.77.0 - Evidence-Gated Weak Concept Recommendation
 
 **Status: Released** (kicked off and signed off 2026-08-14)
