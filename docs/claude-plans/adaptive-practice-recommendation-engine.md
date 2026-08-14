@@ -60,12 +60,22 @@ This is the first mechanism that would make *"Always know what to learn next"* l
 
 **That remedy directly contradicts the direction ratified here.** If adoption drops in September, the standing instruction says put an entry point back; this direction says the answer is a better evidence-based recommendation instead.
 
-**Both problems need one explicit decision, taken now rather than in September:**
+**Both were actioned on 2026-08-14, before the read — and the timing is the point.** Changing a kill criterion *after* seeing data would be rationalisation; changing it beforehand with the reason recorded is a decision.
 
 1. **Hold the Challenge Quiz removal until after 2026-09-12**, so the existing read stays clean and attributable.
-2. **Re-specify the checkpoint's remedy** to match this direction: if adoption falls, the response is to *accelerate the dashboard recommendation*, not to restore a demoted entry point.
+2. **The checkpoint's remedy is re-specified** in the Backlog Index row. **The result now changes sequencing rather than placement:**
+   - **If starts fall materially** — the Quick Review route *was* carrying discovery, so the dashboard recommendation **must be built and proven before any further entry point is removed.** It becomes a *prerequisite* for the Challenge Quiz removal, not an independent improvement.
+   - **If starts hold** — the existing dashboard surfaces already suffice and the Challenge Quiz removal is low-risk.
 
-Without (2), the checkpoint fires in September and someone correctly follows an instruction that undoes a ratified direction.
+### The read that would actually falsify this direction is not yet measurable
+
+The whole direction rests on learners discovering remediation **from the dashboard**. Testing that requires knowing **where** a start originated — and `ADAPTIVE_PRACTICE_STARTED` (`QuickReviewAdaptivePracticeService.java:201`) carries only `session_id` and `weak_concept_count`, **with no entry-point attribution.**
+
+So the September read can tell us *whether* starts fell, but not *where the surviving ones come from*. **If dashboard-originated starts are near zero, the dashboard-first premise is in trouble before anything is built on it** — and today we could not tell.
+
+This is the same shape as this project's own Challenge-adoption read (c), which sat NOT MEASURABLE for months because `CHALLENGE_QUIZ_STARTED` could not separate *seen-and-ignored* from *never-reached*, and was only closed once impression and click events shipped.
+
+**The prerequisite is small: a source/entry field on that one event.** Adding it does not disturb the primary before/after comparison, which is a total count. **Recommend shipping it before 2026-09-12** so the September read answers the question that matters, rather than only the one that is currently askable.
 
 ---
 
