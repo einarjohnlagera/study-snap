@@ -128,6 +128,11 @@ import {
 import { PUBLIC_NOTE_COPY_QUERY_PARAMS } from "@/lib/public-note-copy";
 import { resolvePaywallContextTypeFromVariant } from "@/lib/paywall-content";
 import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
+import {
+  ADAPTIVE_PRACTICE_NOTE_DETAIL_DUE_CONCEPTS_ENTRY,
+  ADAPTIVE_PRACTICE_NOTE_DETAIL_ENTRY,
+  buildAdaptivePracticeHref,
+} from "@/lib/adaptive-practice-entry";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 import Link from "next/link";
 
@@ -1661,14 +1666,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         openPaywallModal("adaptive-practice", "private_note_detail_adaptive_practice_limit");
         return;
       }
-      navigateTo(`/notes/${note.id}/adaptive-practice`);
+      navigateTo(buildAdaptivePracticeHref(note.id, { entry: ADAPTIVE_PRACTICE_NOTE_DETAIL_ENTRY }));
       return;
     }
     if (!note.adaptivePracticeAvailable) {
       openPaywallModal("adaptive-practice", "private_note_detail_adaptive_practice");
       return;
     }
-    navigateTo(`/notes/${note.id}/adaptive-practice`);
+    navigateTo(buildAdaptivePracticeHref(note.id, { entry: ADAPTIVE_PRACTICE_NOTE_DETAIL_ENTRY }));
   };
 
   const openGenerateQuizModal = useCallback(() => {
@@ -2577,7 +2582,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-foreground/80">
                         <span>You have {dueConceptCount} concept(s) due for review.</span>{" "}
                         <Link
-                          href={`/notes/${note.id}/adaptive-practice`}
+                          href={buildAdaptivePracticeHref(note.id, { entry: ADAPTIVE_PRACTICE_NOTE_DETAIL_DUE_CONCEPTS_ENTRY })}
                           className="font-medium text-amber-700 underline underline-offset-4 dark:text-amber-300"
                         >
                           Start Adaptive Practice

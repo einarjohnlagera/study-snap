@@ -68,6 +68,10 @@ import {
   hasDismissedDashboardPersonalizationPrompt,
 } from "@/lib/dashboard-personalization-prompt";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
+import {
+  ADAPTIVE_PRACTICE_DASHBOARD_FOCUS_AREAS_ENTRY,
+  buildAdaptivePracticeHref,
+} from "@/lib/adaptive-practice-entry";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { pickActiveGuidance, type GuidanceRule } from "@/lib/guidance-engine";
 import {
@@ -913,7 +917,9 @@ export default function DashboardPage() {
                 {overview?.focusAreas?.practiceNoteId ? (
                   overview.focusAreas.adaptivePracticeAvailable ? (
                     <ResponsiveActionLink
-                      href={`/notes/${overview.focusAreas.practiceNoteId}/adaptive-practice`}
+                      href={buildAdaptivePracticeHref(overview.focusAreas.practiceNoteId, {
+                        entry: ADAPTIVE_PRACTICE_DASHBOARD_FOCUS_AREAS_ENTRY,
+                      })}
                       action="adaptivePractice"
                       label="Practice Weak Areas"
                     />

@@ -97,6 +97,10 @@ import {
   isModeSelectionChallengeQuizEntry,
   isRedoMissedChallengeQuizEntry,
 } from "@/lib/challenge-quiz-entry";
+import {
+  ADAPTIVE_PRACTICE_CHALLENGE_QUIZ_RESULT_ENTRY,
+  buildAdaptivePracticeHref,
+} from "@/lib/adaptive-practice-entry";
 import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
 import { getAvailableExamModes } from "@/lib/exam-mode-visibility";
 import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
@@ -2440,7 +2444,12 @@ export default function ChallengeQuizPage() {
 
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {result.weakConcepts.length > 0 ? (
-                    <Link href={note ? `/notes/${note.id}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
+                    <Link
+                      href={note ? buildAdaptivePracticeHref(note.id, {
+                        entry: ADAPTIVE_PRACTICE_CHALLENGE_QUIZ_RESULT_ENTRY,
+                      }) : "/dashboard"}
+                      className="w-full sm:w-auto"
+                    >
                       <Button type="button" className="w-full sm:w-auto">
                         Practice Weak Concepts
                       </Button>
@@ -2479,7 +2488,12 @@ export default function ChallengeQuizPage() {
               footer={(
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {result.weakConcepts.length > 0 && note?.adaptivePracticeAvailable ? (
-                    <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
+                    <Link
+                      href={buildAdaptivePracticeHref(note.id, {
+                        entry: ADAPTIVE_PRACTICE_CHALLENGE_QUIZ_RESULT_ENTRY,
+                      })}
+                      className="w-full sm:w-auto"
+                    >
                       <Button type="button" className="w-full sm:w-auto">
                         Practice Weak Concepts
                       </Button>
@@ -2661,7 +2675,12 @@ export default function ChallengeQuizPage() {
                 </Card>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {result.weakConcepts.length > 0 ? (
-                    <Link href={note ? `/notes/${note.id}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
+                    <Link
+                      href={note ? buildAdaptivePracticeHref(note.id, {
+                        entry: ADAPTIVE_PRACTICE_CHALLENGE_QUIZ_RESULT_ENTRY,
+                      }) : "/dashboard"}
+                      className="w-full sm:w-auto"
+                    >
                       <Button type="button" className="w-full sm:w-auto">
                         Practice Weak Concepts
                       </Button>
@@ -2699,7 +2718,12 @@ export default function ChallengeQuizPage() {
               footer={(
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {result.weakConcepts.length > 0 && note?.adaptivePracticeAvailable ? (
-                    <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
+                    <Link
+                      href={buildAdaptivePracticeHref(note.id, {
+                        entry: ADAPTIVE_PRACTICE_CHALLENGE_QUIZ_RESULT_ENTRY,
+                      })}
+                      className="w-full sm:w-auto"
+                    >
                       <Button type="button" className="w-full sm:w-auto">
                         Practice Weak Concepts
                       </Button>

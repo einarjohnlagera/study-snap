@@ -33,6 +33,29 @@ If the user cannot access it:
 - page load must not automatically trigger a new generation request
 - new generation starts only from the visible CTA
 
+## Entry-point attribution
+
+`ADAPTIVE_PRACTICE_STARTED` records where a newly generated session was launched from. This is attribution-only metadata: it does not change routing, generation, quota enforcement, session behavior, or what the learner sees.
+
+Attributed route links use the existing `entry` query parameter convention with these values:
+
+| value | surface |
+|---|---|
+| `dashboard-today-focus` | Dashboard — Today's Focus |
+| `dashboard-focus-areas` | Dashboard — Focus Areas |
+| `dashboard-continue` | Dashboard — Continue/Resume spotlight |
+| `challenge-quiz-result` | Challenge Quiz result screen |
+| `interview-practice-gap` | Interview Practice readiness gap |
+| `note-detail` | Note Detail — the Adaptive Practice mode launch |
+| `note-detail-due-concepts` | Note Detail — the "N concepts due for review" prompt |
+| `direct` | everything else (see below) |
+
+**Every route link that can start a session is tagged.** `dashboard-continue` is included even though it is normally a *resume* path: if the session it resumes has expired, the page starts a fresh one, and an untagged link would record that as `direct` — **understating Dashboard-originated discovery, which is the exact figure the `2026-09-12` checkpoint reads.**
+
+**`note-detail` and `note-detail-due-concepts` are deliberately separate.** Both live on Note Detail, but the second is an *evidence-driven* prompt ("you have N concepts due") rather than a mode choice, and telling those apart is the point of the instrument.
+
+The Adaptive Practice page forwards a recognized marker only when the learner actually starts a new session. The backend validates the value independently against its own allowlist. **An absent marker records `direct`** — that means genuine direct navigation, such as a typed URL or a bookmark. An unknown or malformed marker **also** records `direct` and is never persisted verbatim. Resuming an existing session does not emit a new start event.
+
 ## Active-question rationale
 
 Each targeted question may show a compact `Reviewing: {concept} — {reason}` tag above the question:

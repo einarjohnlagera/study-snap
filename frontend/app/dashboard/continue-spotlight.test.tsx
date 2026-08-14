@@ -73,7 +73,7 @@ describe("ContinueSpotlight", () => {
 
     expect(screen.getByRole("link", { name: "Resume Adaptive Practice" })).toHaveAttribute(
       "href",
-      "/notes/note-2/adaptive-practice",
+      "/notes/note-2/adaptive-practice?entry=dashboard-continue",
     );
   });
 

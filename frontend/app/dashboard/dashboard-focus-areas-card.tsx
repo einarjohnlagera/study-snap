@@ -2,6 +2,10 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import type { DashboardFocusAreasResponse } from "@/lib/api";
+import {
+  ADAPTIVE_PRACTICE_DASHBOARD_FOCUS_AREAS_ENTRY,
+  buildAdaptivePracticeHref,
+} from "@/lib/adaptive-practice-entry";
 
 type DashboardFocusAreasCardProps = {
   focusAreas: DashboardFocusAreasResponse | null;
@@ -80,7 +84,9 @@ export function DashboardFocusAreasCard({
         {hasConcepts && showAction ? (
           focusAreas?.adaptivePracticeAvailable && focusAreas.practiceNoteId ? (
             <ResponsiveActionLink
-              href={`/notes/${focusAreas.practiceNoteId}/adaptive-practice`}
+              href={buildAdaptivePracticeHref(focusAreas.practiceNoteId, {
+                entry: ADAPTIVE_PRACTICE_DASHBOARD_FOCUS_AREAS_ENTRY,
+              })}
               action="adaptivePractice"
               label={primaryActionLabel}
               className="w-full sm:w-auto"

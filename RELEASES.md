@@ -36,7 +36,13 @@ Theme: make one open checkpoint answer the question that actually matters, by re
 
 ### Shipped
 
-_(nothing yet)_
+- **Adaptive Practice entry-point attribution.** `ADAPTIVE_PRACTICE_STARTED` now records **where** a newly generated session was launched from, across **every** route link that can start one: Dashboard Today's Focus, Dashboard Focus Areas, Dashboard Continue, the Challenge Quiz result screen, an Interview Practice gap, Note Detail's mode launch, Note Detail's due-concepts prompt, or an explicit `direct` for genuine direct navigation. Route links use the established `entry` query-param convention from `challenge-quiz-entry.ts`; the server allowlists known values independently and normalises absent or caller-controlled input to `direct`, never persisting it verbatim. **No user-visible behaviour change, and the checkpoint's primary metric — a total count — is untouched.**
+
+  **The audit found four untagged launch sites, and one of them would have biased the exact metric this release exists to enable.** The delivered change tagged the sites named in the prompt; a grep for remaining links found four more — Note Detail's mode launch (two branches of one handler), Note Detail's due-concepts prompt, and **Dashboard Continue**. That last one is the serious one: it is normally a *resume* path, but when the resumed session has expired the page starts a fresh one, and an untagged link would have recorded that as `direct` — **understating Dashboard-originated discovery, which is precisely the figure the `2026-09-12` read is for.** Three entry values were added and the docs corrected; `docs/features/adaptive-practice.md` had also stated that mode selection records `direct`, which stopped being true once Note Detail was tagged.
+
+  **`note-detail` and `note-detail-due-concepts` are deliberately separate values.** Both live on Note Detail, but the second is an *evidence-driven* prompt ("you have N concepts due") rather than a mode choice — and telling those apart is the whole point of the instrument.
+
+- **Two ratified product directions, carried into this release rather than deployed on their own.** *Support Another Learner* (helping someone else learn as a capability, explicitly **not** a new Profile Type) and *Adaptive Practice as the recommendation engine*, plus the re-specified `[CHECKPOINT — due 2026-09-12]` remedy and their Backlog Index rows. They were opened as a separate PR to `main` and retargeted here **because merging to `main` auto-deploys to production** — shipping them separately would have meant a second deploy, and a second interruption for learners mid-session, purely for documentation.
 
 ## v0.76.0 - Messaging Architecture: The Money Surfaces
 

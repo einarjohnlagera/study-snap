@@ -17,9 +17,7 @@ const routerMock = {
   push: jest.fn(),
   replace: jest.fn(),
 };
-const searchParamsMock = {
-  toString: () => "",
-};
+let searchParamsMock = new URLSearchParams();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
@@ -57,6 +55,7 @@ jest.mock("@/lib/api", () => ({
 describe("AdaptivePracticePage", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    searchParamsMock = new URLSearchParams();
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
@@ -346,6 +345,27 @@ describe("AdaptivePracticePage", () => {
     expect(screen.getByText("Creating personalized questions from your notes")).toBeInTheDocument();
     expect(screen.getByText("Please keep this page open")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
+  });
+
+  it("reads a known entry from the page URL and forwards it when starting", async () => {
+    searchParamsMock = new URLSearchParams("entry=dashboard-today-focus");
+    setupGeneratedAdaptiveQuiz();
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      status: null,
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Trigonometric derivatives"],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [],
+    });
+
+    render(<AdaptivePracticePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    await waitFor(() => {
+      expect(generateAdaptiveQuickReviewQuiz).toHaveBeenCalledWith("note-1", "dashboard-today-focus");
+    });
   });
 
   it("shows the monthly limit state for premium users who exhausted Adaptive Practice usage", async () => {

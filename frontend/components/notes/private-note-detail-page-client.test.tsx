@@ -1263,7 +1263,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/adaptive-practice");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/adaptive-practice?entry=note-detail");
     expect(screen.queryByText("Adaptive Practice is a Pro feature")).not.toBeInTheDocument();
   });
 
