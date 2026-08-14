@@ -368,8 +368,20 @@ export function NoteEditorPageClient({
               ? previous.courseProgram
               : me.courseProgram ?? "",
             // Authored Depth falls back to the author's own profile level (ADR-001's weak
-            // leg). Pre-fill only — it lands in a visible control the author can change.
-            learnerLevel: previous.learnerLevel || me.learnerLevel || "",
+            // leg) — but ONLY for curators, because the control renders only for them
+            // (note-editor-form.tsx, showAuthoringMetadataFields). Pre-filling a field the
+            // author cannot see would persist a depth nobody chose, which is a client-side
+            // default write in all but name and exactly what ADR-001 constraint 2 forbids;
+            // its safety argument is that a human saw the value and saved it.
+            //
+            // The gate belongs HERE and not on the request payload: PUT /notes/{id} is a
+            // full replace, so gating the payload would null a stored level whenever a
+            // learner edits a note that already carries one (docs/features/notes.md —
+            // "hiding a field must never null it"). Gating the pre-fill leaves the draft
+            // seeded from the note in edit mode, so the stored value round-trips intact.
+            learnerLevel: showTargetProfileTypeField
+              ? previous.learnerLevel || me.learnerLevel || ""
+              : previous.learnerLevel,
           }));
         }
       })
@@ -383,7 +395,7 @@ export function NoteEditorPageClient({
     return () => {
       active = false;
     };
-  }, [isEditMode]);
+  }, [isEditMode, showTargetProfileTypeField]);
 
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" | "warning" = "info") => {
     setToastTone(tone);

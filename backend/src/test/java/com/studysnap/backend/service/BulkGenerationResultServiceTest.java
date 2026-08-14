@@ -46,6 +46,7 @@ class BulkGenerationResultServiceTest {
                 DomainContext.NURSING,
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 TARGET_PROFILE_TYPE,
+                null,
                 true,
                 2,
                 1,

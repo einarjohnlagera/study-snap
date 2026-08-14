@@ -353,6 +353,10 @@ Base path: `/collections`
 
 Returns lightweight summaries ordered by `updatedAt desc`. The owned list returns top-level collections only (`parentCollectionId == null`); nested Subject plans are reached from their Goal detail page.
 
+**`?noteAccepting=true` changes both the population and the semantics of two fields**, and is used only by the bulk-authoring Review Set selector. It returns every owned collection that can actually hold notes — **including child Subject plans**, filtered on `childCount == 0` — so the top-level-only rule above does **not** apply in this mode. In that mode `childCount` is always `0` (Goals are excluded by construction), `notesPracticed` is **not computed** and is returned as `0` rather than derived, and `itemCount` is the collection's direct count rather than a rollup. Do not consume `notesPracticed` from this mode without loading it first.
+
+Summaries also carry `learnerLevel` (the collection's own authored depth, nullable) and `resolvedLearnerLevel` (own-or-nearest-ancestor, nullable) — see *Authored depth inheritance* above.
+
 Response item:
 
 - `id`
@@ -613,7 +617,8 @@ Setting a target date reuses the general metadata PATCH rather than a dedicated 
 
 Behavior:
 
-- accepts an optional `targetCompletionDate` field alongside `title`/`description`/`courseProgram`/`estimatedStudyHours`
+- accepts an optional `targetCompletionDate` field alongside `title`/`description`/`courseProgram`/`estimatedStudyHours`/`learnerLevel`
+- `learnerLevel` follows the same convention as the other optional fields: omitting it preserves the stored value, and an explicit `""` clears it to `NULL`
 - omitting the field preserves the existing value (same omit-preserves semantics as the other optional fields on this endpoint)
 - rejects with `InvalidCollectionRequestException` / `400` if the target collection is a child Subject plan (`parentCollectionId != null`)
 

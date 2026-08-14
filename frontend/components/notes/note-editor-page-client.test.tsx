@@ -390,6 +390,50 @@ describe("NoteEditorPageClient", () => {
     });
   });
 
+  it("does not submit any authored depth when a learner creates a note", async () => {
+    // The Authored Depth control renders for curators only. Pre-filling it for a learner
+    // would persist a depth they never saw — a client-side default write, which ADR-001
+    // constraint 2 forbids. The learner path is the one that was previously untested.
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", courseProgram: "Nursing" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.change(await screen.findByLabelText("Content"), { target: { value: "Learner note" } });
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    expect(screen.queryByLabelText("Authored Depth (optional)")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => {
+      expect(createNote).toHaveBeenCalledWith(expect.objectContaining({ learnerLevel: null }));
+    });
+  });
+
+  it("round-trips a stored authored depth when a learner edits a note that has one", async () => {
+    // Regression guard for the WRONG fix to the above: gating the request payload instead
+    // of the pre-fill would null this note's stored depth on save, because PUT /notes/{id}
+    // is a full replace. docs/features/notes.md — "hiding a field must never null it."
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMe as jest.Mock).mockResolvedValue({ learnerLevel: "COLLEGE", courseProgram: "Nursing" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      learnerLevel: "BOARD_EXAM_REVIEW",
+    });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    await screen.findByLabelText("Content");
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith(
+        "note-1",
+        expect.objectContaining({ learnerLevel: "BOARD_EXAM_REVIEW" }),
+      );
+    });
+  });
+
   it("does not prefill authored depth from the profile when editing an existing note", async () => {
     // CREATE ONLY, and this guard is the point: a depth change on an already-generated
     // note strands its Challenge-bank rows at the old level, which is the same reason
@@ -622,9 +666,11 @@ describe("NoteEditorPageClient", () => {
         subject: null,
         courseProgramText: "Nursing",
         domainContext: null,
-        // v0.75.0 item 1: a create now carries the author's own profile depth as a
-        // pre-fill. Domain Context stays null — it has no authorized inference source.
-        learnerLevel: "COLLEGE",
+        // This fixture is a LEARNER (no profileType), and the Authored Depth control
+        // renders for curators only. A learner must therefore submit no depth at all —
+        // pre-filling a field they cannot see would persist a value nobody chose.
+        // See the named learner/curator pair of tests below, which assert this directly.
+        learnerLevel: null,
         tags: [],
         targetProfileType: "STUDENT",
         content: "Simple note content",

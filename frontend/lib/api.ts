@@ -160,6 +160,7 @@ export type BulkGenerationResultResponse = {
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
   targetProfileType: NoteTargetProfileType;
+  collectionId: string | null;
   makePublic: boolean;
   requestedCount: number;
   createdCount: number;

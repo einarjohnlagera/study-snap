@@ -45,6 +45,14 @@ public class BulkGenerationResultEntity {
     @Column(name = "target_profile_type", nullable = false)
     private String targetProfileType;
 
+    /**
+     * The Review Set the batch was queued into, if any. Recorded so a retry can reproduce
+     * the batch faithfully; without it the retry silently dropped the Review Set and the
+     * retried notes landed outside the collection.
+     */
+    @Column(name = "collection_id")
+    private UUID collectionId;
+
     @Column(name = "make_public", nullable = false)
     private Boolean makePublic;
 

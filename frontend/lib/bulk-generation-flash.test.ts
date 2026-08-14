@@ -47,6 +47,9 @@ describe("bulk-generation-flash", () => {
       targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],
+      // Absent from the written stash, so it reads back as an explicit null rather than
+      // being dropped — which is what a pre-v0.75.0 stash looks like.
+      collectionId: null,
     });
     expect(consumeBulkGenerationRetryStash()).toBeNull();
   });
