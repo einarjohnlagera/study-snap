@@ -122,7 +122,7 @@ describe("PaywallModal", () => {
     );
 
     expect(await screen.findByText("You've used your free Adaptive Practice sessions")).toBeInTheDocument();
-    expect(screen.getByText("Free includes a small monthly taste of targeted weak-area practice. Upgrade for more sessions and keep closing your learning loop.")).toBeInTheDocument();
+    expect(screen.getByText("Free includes a monthly taste of targeted practice. More sessions means your weak areas close now instead of waiting for next month.")).toBeInTheDocument();
     expect(screen.getByText("Plus")).toBeInTheDocument();
     expect(screen.getByText("Pro")).toBeInTheDocument();
     expect(screen.getByText("Most popular")).toBeInTheDocument();
@@ -239,7 +239,7 @@ describe("PaywallModal", () => {
       />,
     );
 
-    expect(await screen.findByRole("heading", { name: "See your review timing" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Know what is slipping before you forget it" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "See review timing — get Plus" })).toBeInTheDocument();
     expect(screen.getByText("Plus").closest("[role='button']")).toBeInTheDocument();
     expect(screen.getByText("Pro").closest("[role='button']")).toBeInTheDocument();

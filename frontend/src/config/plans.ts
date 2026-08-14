@@ -39,7 +39,7 @@ export const PLANS: Record<AppPlanType, {
 }> = {
   FREE: {
     name: "Free",
-    title: "For getting started",
+    title: "Start with ready-made study material",
     description: "Create notes, generate Study Packs, review Key Concepts, and practice with Quick Review.",
     ctaLabel: "Get Started Free",
     adaptivePracticeMessage: `Taste Adaptive Practice — ${pricingConfig.free.adaptivePracticePerMonth} sessions / month`,
@@ -98,9 +98,9 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
   {
     label: "Best for",
     values: {
-      FREE: "Light review and trying the core study loop",
-      PLUS: "Regular study with more room to keep going",
-      PRO: "Focused exam preparation and mastery practice",
+      FREE: "Getting started without building your own",
+      PLUS: "Building your own study plan from your notes",
+      PRO: "Preparing with a real exam in sight",
     },
   },
   {

@@ -135,11 +135,11 @@ describe("LongExamPage", () => {
     expect(await screen.findByRole("heading", { name: "Long Exam" })).toBeInTheDocument();
     expect(screen.getByText("What to expect")).toBeInTheDocument();
     expect(getActiveLongExamSession).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog", { name: "Long Exam Mode" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Find out how ready you actually are" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Unlock Long Exam - Pro" }));
 
-    expect(await screen.findByRole("dialog", { name: "Long Exam Mode" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Find out how ready you actually are" })).toBeInTheDocument();
     expect(startLongExam).not.toHaveBeenCalled();
   });
 

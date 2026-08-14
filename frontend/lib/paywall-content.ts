@@ -114,8 +114,8 @@ export function resolvePaywallPresentation(
       return {
         headline: "You've reached your Study Pack limit",
         body: currentPlan === "PLUS"
-          ? "Keep generating Study Packs and continue your review without interruptions by moving up to Pro."
-          : "Generate more Study Packs and continue your review without interruptions.",
+          ? "Pro keeps your study system growing — more of your notes turned into material you can review and practise from."
+          : "Upgrading keeps your study system growing — more of your notes turned into material you can review and practise from.",
         feature: "study_pack_limit",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
@@ -127,8 +127,8 @@ export function resolvePaywallPresentation(
       return {
         headline: "You've reached your topic note limit",
         body: currentPlan === "PLUS"
-          ? "Keep creating topic notes and move faster through your study flow with Pro."
-          : "Create more topic notes and keep building your study library faster.",
+          ? "Pro keeps your library growing, so there is always something ready when you sit down to study."
+          : "More topic notes means more of your library is ready when you sit down to study.",
         feature: "note_generation_limit",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
@@ -140,10 +140,10 @@ export function resolvePaywallPresentation(
       return {
         headline: "You've reached your quiz limit",
         body: isBoardExamProfile(profileType)
-          ? "Keep practicing and unlock Board Exam Mode for stricter review sessions with Pro."
+          ? "Keep practising, and step up to exam-day conditions when you are ready for them."
           : isTeacherProfile(profileType)
             ? "Generate and practice with more quizzes so you can keep preparing review materials without breaking your flow."
-            : "Keep practicing with more quizzes and continue testing what you know.",
+            : "Keep practising so your progress stays current and your plan knows what to show you next.",
         feature: isTeacherProfile(profileType) ? "quiz_generation_limit" : "quiz_limit",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
@@ -157,8 +157,8 @@ export function resolvePaywallPresentation(
           ? "You've used your free Adaptive Practice sessions"
           : "You've used your Adaptive Practice sessions",
         body: currentPlan === "FREE"
-          ? "Free includes a small monthly taste of targeted weak-area practice. Upgrade for more sessions and keep closing your learning loop."
-          : "Upgrade for more targeted weak-area practice sessions and keep improving without waiting for next month.",
+          ? "Free includes a monthly taste of targeted practice. More sessions means your weak areas close now instead of waiting for next month."
+          : "More sessions means your weak areas close now instead of waiting for next month.",
         feature: "adaptive",
         primaryPlanType: currentPlan === "FREE" ? "PLUS" : "PRO",
         secondaryPlanType: "PLUS",
@@ -168,8 +168,8 @@ export function resolvePaywallPresentation(
       };
     case "INTERVIEW_PRACTICE_LOCKED":
       return {
-        headline: "Unlock Interview Practice",
-        body: "Practice senior-style scenario questions, get AI critique after every answer, and finish with an Interview Readiness Report.",
+        headline: "Prepare for the part that isn't a quiz",
+        body: "Interview Practice adds scenario questions with feedback after every answer, and a readiness report that feeds back into what you study next.",
         feature: "interview_practice",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
@@ -192,8 +192,8 @@ export function resolvePaywallPresentation(
       };
     case "BOARD_EXAM_MODE_LOCKED":
       return {
-        headline: "Unlock Board Exam Mode",
-        body: "Simulate exam-day pressure with stricter timed practice designed for serious review.",
+        headline: "Take your review all the way to exam day",
+        body: "Board Exam Mode runs your own material under exam-day conditions, so by the time you sit the real thing, nothing about it is unfamiliar.",
         feature: "board_exam",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
@@ -203,8 +203,8 @@ export function resolvePaywallPresentation(
       };
     case "LONG_EXAM_MODE_LOCKED":
       return {
-        headline: "Long Exam Mode",
-        body: "Test your mastery with a comprehensive, full-length exam tailored to your notes. Pro unlocks fixed long exams, pause and resume, and mastery reports with domain breakdowns.",
+        headline: "Find out how ready you actually are",
+        body: "The Long Exam tests everything you have studied in one full-length sitting and returns a mastery breakdown, so your next sessions go where they are needed.",
         feature: "long_exam",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
@@ -214,8 +214,8 @@ export function resolvePaywallPresentation(
       };
     case "CONCEPT_REVIEW_TIMING_LOCKED":
       return {
-        headline: "See your review timing",
-        body: "Unlock per-concept last-correct and last-incorrect dates, struggling flags, and days-since-review details.",
+        headline: "Know what is slipping before you forget it",
+        body: "See when you last got each concept right or wrong and which ones you keep missing, so every session starts where it matters most.",
         feature: "concept_review_timing",
         primaryPlanType: "PLUS",
         secondaryPlanType: "PLUS",
@@ -271,8 +271,8 @@ export function resolvePaywallPresentation(
       };
     default:
       return {
-        headline: "Unlock more of NoteLib",
-        body: "Choose the plan that gives you more room to study, practice, and review without interruptions.",
+        headline: "Keep your study system growing",
+        body: "Choose the plan that gives you more room to study, practise, and review without interruptions.",
         feature: "paywall",
         primaryPlanType: "PRO",
         secondaryPlanType: "PLUS",
