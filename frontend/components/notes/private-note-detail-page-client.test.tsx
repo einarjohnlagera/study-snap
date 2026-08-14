@@ -1528,7 +1528,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText(/Due — \d+d ago/)).not.toBeInTheDocument();
     expect(screen.getByText("Review timing for 1 due concept is available on Plus and Pro.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "See review timing — get Plus" }));
-    expect(await screen.findByRole("heading", { name: "See your review timing" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Know what is slipping before you forget it" })).toBeInTheDocument();
     expect(screen.getByText("Note readiness")).toBeInTheDocument();
   });
 

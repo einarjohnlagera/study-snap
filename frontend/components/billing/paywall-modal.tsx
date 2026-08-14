@@ -42,9 +42,16 @@ type PaywallModalProps = {
 };
 
 const PLAN_CARD_ORDER: Array<"PLUS" | "PRO"> = ["PLUS", "PRO"];
+// Ladders the ratified tier placement — Free = adopt, Plus = assemble, Pro = adaptive
+// planning — rather than describing a feature. The previous strings ("Train on weak areas…")
+// were Adaptive Practice copy, and this map is keyed on plan type ALONE: it renders on every
+// paywall, so a learner blocked on Interview Practice or Board Exam Mode was reading about a
+// feature they had not asked for. Keep this context-free copy describing the TIER, never a
+// feature — the promise is the learning system; features are evidence for it.
 const PLAN_CARD_SUBTEXT = {
-  PLUS: "Train on weak areas (limited sessions)",
-  PRO: "Train on weak areas until you master them",
+  FREE: "Start from ready-made material",
+  PLUS: "Build your own plan from your notes",
+  PRO: "A plan that adapts as you go",
 } as const;
 const PAYWALL_REASSURANCE = "Access activates immediately after payment";
 const PRO_ONLY_PAYWALL_CONTEXT_TYPES = new Set<PaywallContext["type"]>([
@@ -415,7 +422,17 @@ export function PaywallModal({
               <p>You&apos;re already on Pro — the top plan. For billing or account questions, visit <strong>Settings → Plans</strong>.</p>
             </div>
           ) : (
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="space-y-3">
+              {/* The modal renders upgrade targets only (Plus and Pro), so a Plus user sees
+                  their current plan marked while a Free user previously saw no acknowledgement
+                  of theirs at all. This one line represents Free consistently without adding a
+                  third card the learner cannot select. */}
+              {currentPlan === "FREE" ? (
+                <p className="text-xs text-foreground/55">
+                  You&apos;re on <span className="font-medium text-foreground/75">Free</span> — {PLAN_CARD_SUBTEXT.FREE.toLowerCase()}.
+                </p>
+              ) : null}
+              <div className="grid gap-3 lg:grid-cols-2">
               {PLAN_CARD_ORDER.map((planType) => {
                 const blocksProOnlyFeature = isProOnlyContext && planType === "PLUS";
                 return (
@@ -429,6 +446,7 @@ export function PaywallModal({
                   />
                 );
               })}
+              </div>
             </div>
           )}
           {checkoutError ? (

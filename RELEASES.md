@@ -38,7 +38,21 @@ Theme: the places where NoteLib asks for money should sell the learning system, 
 
 ### Shipped
 
-_(nothing yet)_
+- **The money surfaces now sell the learning system.** Ratified with the owner and a product-UX pass, 2026-08-14 (brief: `docs/claude-plans/v0.76.0-messaging-money-surfaces-product-ux-consultation-prompt.md`).
+
+  **`FREE.title` is now *"Start with ready-made study material"***, replacing *"For getting started"*. The draft taken into review was *"A complete review, ready to study"* and the owner rejected **"complete"** as over-promising — **and the measurement backs that**: four published Official Review Sets cover 179 of 218 program-holding accounts, so **~18% of learners have no Official Review Set for their program**, which is why onboarding carries a "no plan yet" branch. "Material" is deliberately broader than "a Review Set" and stays true for that 18%. It passes the standing test — derived from `FREE = adopt`, true of Free alone, not symmetry with Plus/Pro.
+
+  **The "Best for" row now describes learner situations** rather than feature volume: *Getting started without building your own* · *Building your own study plan from your notes* · *Preparing with a real exam in sight*. **Free's cell deliberately differs from its tagline** — the first draft repeated it almost verbatim, and both render on `/pricing`, so Free's row would have added nothing while Plus's and Pro's did. Its contrast with Plus's line is what makes the ladder legible.
+
+  **`FREE.description` is deliberately UNCHANGED**, and this is a decision, not an omission. It stays a factual feature list because that is what makes it honest: an outcome-framed rewrite implies Free is adopt-*only*, which is false — Free users create notes and generate Study Packs within quota. The tagline carries positioning; the description answers *"what do I actually get?"*.
+
+  **Upgrade prompts: buttons stay feature-named, the promise moves to the framing around them.** `getUpgradeCtas` is **untouched** — a button fired at the moment a learner clicked Board Exam Mode must say *"Unlock Board Exam Mode"*, because a button's job is to say what the click does. Instead the paywall **headline** carries the narrative on **capability** paywalls (nothing was used up): *"Take your review all the way to exam day"*, *"Find out how ready you actually are"*, *"Prepare for the part that isn't a quiz"*, *"Know what is slipping before you forget it"*. **Quota** paywalls keep their factual headline — a learner who just hit a wall needs to know that is why the modal appeared — and the narrative moves into the body.
+
+  **A shipped bug found while drafting: `PLAN_CARD_SUBTEXT` was Adaptive Practice copy rendering on every paywall.** It is keyed on plan type **alone**, so *"Train on weak areas (limited sessions)"* appeared on the Study Pack limit, Interview Practice and Board Exam Mode modals alike — describing a feature the learner had not asked about. Replaced with subtext that ladders the ratified tier placement (adopt → assemble → adaptive planning), with a comment pinning the rule so it cannot drift back to feature copy.
+
+  **Free is now represented in the modal.** The paywall renders upgrade targets only (`PlanCard` is typed `"PLUS" | "PRO"`), so a Plus user saw their current plan marked while a Free user saw no acknowledgement of theirs. A single line now names it, rather than adding a third card a learner cannot select.
+
+  **Deliberately not touched:** the two `TEACHER_*` paywalls. The messaging architecture ratifies a separate teacher promise, and applying it is its own scoping pass — improvising one inside a learner-focused slice would have invented positioning for an audience nobody decided on. The landing page and Exam Hub upsell remain out of scope per kickoff.
 
 ## v0.75.0 - Authoring by Inference
 
