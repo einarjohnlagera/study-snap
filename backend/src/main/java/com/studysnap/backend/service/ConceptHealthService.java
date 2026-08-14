@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -184,6 +185,39 @@ public class ConceptHealthService {
             );
         }
         return Map.copyOf(dueConceptsByStudyPackId);
+    }
+
+    /**
+     * Concepts the learner has missed repeatedly, keyed by Study Pack.
+     *
+     * <p>"Repeatedly" is {@link #TWICE_MISSED_STREAK_THRESHOLD} consecutive incorrect answers — the
+     * same bar the twice-missed Ask Companion prompt already uses. Reusing it is deliberate: a second
+     * evidence bar for the same idea would drift from this one the first time either moved.
+     *
+     * <p>This is the signal behind a recommendation that a learner <em>keeps</em> getting something
+     * wrong, as opposed to one bad session. Scoped per Study Pack because {@code concept} is free text
+     * keyed per pack — there is no canonical concept identity, so the same idea in two packs cannot be
+     * related and must not be summed.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, List<String>> getPersistentlyWeakConceptsByStudyPackIds(UUID userId, List<UUID> studyPackIds) {
+        if (studyPackIds == null || studyPackIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<String>> weakByStudyPackId = new LinkedHashMap<>();
+        for (ConceptHealthEntity entity : conceptHealthRepository.findByUserIdAndStudyPackIdIn(userId, studyPackIds)) {
+            if (entity.getIncorrectStreak() < TWICE_MISSED_STREAK_THRESHOLD) {
+                continue;
+            }
+            String concept = normalizeConcept(entity.getConcept());
+            if (concept == null) {
+                continue;
+            }
+            weakByStudyPackId
+                .computeIfAbsent(entity.getStudyPackId(), ignored -> new ArrayList<>())
+                .add(concept);
+        }
+        return Map.copyOf(weakByStudyPackId);
     }
 
     private List<String> getDueConcepts(

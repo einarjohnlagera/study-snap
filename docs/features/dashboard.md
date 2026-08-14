@@ -155,6 +155,10 @@ Backend priority order (`DashboardService.getTodayFocus()`):
 
 **The Dashboard only renders the `TodayFocusCard` component for the `DUE_CONCEPTS_REVIEW` type.** The other four types exist in the resolver (some predate this card's Dashboard integration) but are intentionally not surfaced here — `RESUME_REVIEW`/`RETRY_REVIEW` would duplicate the existing Continue Studying section (`getContinueStudyingRecommendation()`, a separate, independently-computed resolver over the same in-progress-session signal), and `PRACTICE_WEAK_CONCEPT` would duplicate Focus Areas. Do not widen the render condition without first reconciling those two independent "resume" implementations and the two "weak concepts" sources — see the dead-code note below.
 
+**The weak-concepts branch resolves from PERSISTENT weakness, not the latest session (`v0.77.0`).** It reads `ConceptHealth` for concepts whose `incorrect_streak` meets `TWICE_MISSED_STREAK_THRESHOLD` — the same bar the twice-missed Ask Companion prompt uses — rather than extracting `weakConcepts` from the most recent completed Quick Review. **A single bad quiz must not produce a recommendation:** that taught the wrong mental model ("the system wants me to take another quiz") and spent quota-limited remediation on weak evidence. The copy names the persistence accordingly.
+
+**Within-pack only.** `concept` is free text keyed per Study Pack with no canonical identity, so the same idea in two packs cannot be related and counts are **never summed across packs** — the branch picks the single pack with the most persistently-weak concepts. Cross-pack recommendation requires concept identity and is deliberately out of scope.
+
 The due-concepts branch uses the existing deterministic `concept_health` threshold across the learner's owned Study Packs. It returns the real due-concept count and each concept's source-note reference. It is available to every plan, including Free; it is a retention signal, not an Adaptive Practice entitlement.
 
 Due-concepts actions reuse the Focus Areas three-way behavior:
