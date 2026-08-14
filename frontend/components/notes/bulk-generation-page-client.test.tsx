@@ -254,6 +254,94 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("SENIOR_HIGH");
   });
 
+  it("clears a Review Set's depth when switching to a set that has none", async () => {
+    // Regression: handleCollectionChange only acted when the NEW set carried a level, so
+    // switching or clearing left the PREVIOUS set's depth displayed and submitted. The
+    // shipped test that looked like it covered this started from an empty control and
+    // never exercised a switch, so it asserted strictly less than its name claimed.
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: "" });
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "with-depth", title: "CE Board Review", resolvedLearnerLevel: "BOARD_EXAM_REVIEW" },
+      { id: "no-depth", title: "Unclassified Set", resolvedLearnerLevel: null },
+    ]);
+    render(<BulkGenerationPageClient />);
+
+    const selector = await screen.findByLabelText(/^Collection \(optional\)/);
+    fireEvent.change(selector, { target: { value: "with-depth" } });
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("BOARD_EXAM_REVIEW");
+
+    fireEvent.change(selector, { target: { value: "no-depth" } });
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("");
+
+    fireEvent.change(selector, { target: { value: "with-depth" } });
+    fireEvent.change(selector, { target: { value: "" } });
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("");
+  });
+
+  it("falls back to the profile level when the selected Review Set has no depth", async () => {
+    // ADR-001's chain is Review Set -> author profile -> explicit override, so deselecting
+    // a set drops to the profile leg rather than clearing to nothing.
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: "", learnerLevel: "COLLEGE" });
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "with-depth", title: "CE Board Review", resolvedLearnerLevel: "BOARD_EXAM_REVIEW" },
+      { id: "no-depth", title: "Unclassified Set", resolvedLearnerLevel: null },
+    ]);
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("COLLEGE"));
+
+    const selector = await screen.findByLabelText(/^Collection \(optional\)/);
+    fireEvent.change(selector, { target: { value: "with-depth" } });
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("BOARD_EXAM_REVIEW");
+
+    fireEvent.change(selector, { target: { value: "no-depth" } });
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("COLLEGE");
+  });
+
+  it("keeps a retried batch's blank depth instead of injecting the profile level", async () => {
+    // Regression: the stash marked provenance only for a NON-EMPTY level, so a deliberate
+    // "no depth" read as untouched and the profile pre-fill overwrote it — meaning the
+    // retried notes were authored at a different depth than the batch they replaced.
+    // The stash effect is synchronous on mount and getMe is async, so this ordering is the
+    // load-bearing assumption; asserting it here rather than relying on it.
+    (getMe as jest.Mock).mockResolvedValue({ courseProgram: "", learnerLevel: "SENIOR_HIGH" });
+    setBulkGenerationRetryStash({
+      subject: "Maternal Health",
+      courseProgram: "Nursing",
+      domainContext: "NURSING",
+      learnerLevel: null,
+      targetProfileType: "BOARD_TAKER",
+      makePublic: false,
+      topics: ["Prenatal Care"],
+    });
+
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("");
+  });
+
+  it("restores the Review Set from a retry stash", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    setBulkGenerationRetryStash({
+      subject: "Algebra",
+      courseProgram: "Civil Engineering",
+      domainContext: null,
+      learnerLevel: null,
+      targetProfileType: "STUDENT",
+      makePublic: false,
+      topics: ["Quadratic Equations"],
+      collectionId: "subject-plan-1",
+    });
+
+    render(<BulkGenerationPageClient />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Collection \(optional\)/)).toHaveValue("subject-plan-1");
+    });
+  });
+
   it("includes the selected Review Set when queueing the batch", async () => {
     (listCollections as jest.Mock).mockResolvedValue([
       {

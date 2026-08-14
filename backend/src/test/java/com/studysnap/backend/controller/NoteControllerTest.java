@@ -327,6 +327,7 @@ class NoteControllerTest {
                 null,
                 null,
                 NoteTargetProfileType.BOARD_TAKER.name(),
+                null,
                 true,
                 2,
                 1,

@@ -145,6 +145,7 @@ type BulkGenerationFailureBanner = Pick<
   | "domainContext"
   | "learnerLevel"
   | "targetProfileType"
+  | "collectionId"
   | "makePublic"
   | "requestedCount"
   | "createdCount"
@@ -1371,6 +1372,9 @@ export default function LibraryPage() {
       targetProfileType: bulkFailureBanner.targetProfileType,
       makePublic: bulkFailureBanner.makePublic,
       topics: bulkFailureBanner.failedTopics,
+      // Carried so a retry reproduces the batch: without it the Review Set silently reset
+      // to none and the retried notes landed outside the collection.
+      collectionId: bulkFailureBanner.collectionId,
     });
     setBulkFailureBanner(null);
     router.push("/library/bulk-generate");

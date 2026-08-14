@@ -75,11 +75,33 @@ export function BulkGenerationPageClient() {
   const [courseProgramCatalogRetry, setCourseProgramCatalogRetry] = useState(0);
   const [domainContext, setDomainContext] = useState<DomainContext | "">("");
   const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("");
-  // Where the current Authored Depth came from. ADR-001's chain is
-  // Review Set -> author profile -> explicit override, so a Review Set must be able to
-  // replace a value the profile pre-filled, while never touching one the curator chose.
-  // Without this, the profile pre-fill lands first and the Review Set is silently ignored.
-  const [learnerLevelSource, setLearnerLevelSource] = useState<"none" | "profile" | "collection" | "user">("none");
+  // Authored Depth precedence, ADR-001's chain: Review Set -> author profile -> explicit
+  // override. These are REFS, not state, for two reasons. (1) Nothing renders from them.
+  // (2) The profile load is async, so a state closure would capture provenance as it was
+  // when its effect ran — and the retry stash resolves SYNCHRONOUSLY on mount, before
+  // getMe settles. Reading a stale "none" there is exactly how a stashed level got
+  // overwritten by the profile.
+  //
+  // The rule these encode, stated once so it is testable:
+  //   - "user"       an explicit curator choice, INCLUDING an explicit blank. Never overwritten.
+  //   - "collection" came from the selected Review Set.
+  //   - "profile"    came from the author's own level.
+  //   - "none"       nothing has set it.
+  // A Review Set selection replaces anything that is not "user" — including clearing to
+  // the profile level when the newly selected set carries no depth of its own.
+  const learnerLevelSourceRef = useRef<"none" | "profile" | "collection" | "user">("none");
+  const profileLearnerLevelRef = useRef<LearnerLevel | "">("");
+
+  // Single writer for the depth control: sets value and provenance together, as plain
+  // values. Never call a setter inside another setter's updater — React requires updaters
+  // to be pure, and this logic carries the whole precedence guarantee.
+  const applyLearnerLevel = useCallback(
+    (next: LearnerLevel | "", source: "none" | "profile" | "collection" | "user") => {
+      learnerLevelSourceRef.current = source;
+      setLearnerLevel(next);
+    },
+    [],
+  );
   const [collectionId, setCollectionId] = useState("");
   const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(false);
@@ -123,12 +145,13 @@ export function BulkGenerationPageClient() {
     setSubject(stash.subject);
     setCourseProgram(stash.courseProgram ?? "");
     setDomainContext(stash.domainContext ?? "");
-    setLearnerLevel(stash.learnerLevel ?? "");
-    if (stash.learnerLevel) {
-      // A retry stash holds what the curator already submitted, so neither the profile
-      // pre-fill nor a Review Set selection may overwrite it.
-      setLearnerLevelSource("user");
-    }
+    // A retry stash holds what the curator already submitted, so it counts as explicit —
+    // UNCONDITIONALLY, including a stashed blank. Marking provenance only for a non-empty
+    // value made a deliberate "no depth" indistinguishable from untouched, so the profile
+    // pre-fill overwrote it and the retried notes were authored at a different depth than
+    // the batch they replaced.
+    applyLearnerLevel((stash.learnerLevel ?? "") as LearnerLevel | "", "user");
+    setCollectionId(stash.collectionId ?? "");
     setTargetProfileType(stash.targetProfileType as NoteTargetProfileType);
     setMakePublic(stash.makePublic);
     setTopics(stash.topics.map((value, index) => ({ id: index + 1, value })));
@@ -154,16 +177,14 @@ export function BulkGenerationPageClient() {
         setCourseProgram((current) => current || meResult.value.courseProgram || "");
         // Authored Depth falls back to the author's own profile level (ADR-001's weak leg).
         // Pre-fill only, never a server-side default: it lands in a visible control the
-        // curator can change before submitting.
-        const profileLearnerLevel = meResult.value.learnerLevel ?? "";
-        if (profileLearnerLevel) {
-          setLearnerLevel((current) => {
-            if (current) {
-              return current;
-            }
-            setLearnerLevelSource("profile");
-            return profileLearnerLevel;
-          });
+        // curator can change before submitting. Remembered so that deselecting a Review
+        // Set falls back down the chain rather than clearing to nothing.
+        const profileLearnerLevel = (meResult.value.learnerLevel ?? "") as LearnerLevel | "";
+        profileLearnerLevelRef.current = profileLearnerLevel;
+        // Gate on PROVENANCE, not on the control being non-empty: an explicit blank is a
+        // real choice and must not read as "untouched".
+        if (profileLearnerLevel && learnerLevelSourceRef.current === "none") {
+          applyLearnerLevel(profileLearnerLevel, "profile");
         }
       }
       if (!isAdmin && planResult.status === "fulfilled" && planResult.value) {
@@ -232,17 +253,22 @@ export function BulkGenerationPageClient() {
 
   const handleCollectionChange = (selectedCollectionId: string) => {
     setCollectionId(selectedCollectionId);
-    const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId);
-    if (selectedCollection?.resolvedLearnerLevel) {
-      // Outranks a profile pre-fill (and an empty control), never an explicit choice.
-      setLearnerLevel((current) => {
-        if (current && learnerLevelSource === "user") {
-          return current;
-        }
-        setLearnerLevelSource("collection");
-        return selectedCollection.resolvedLearnerLevel ?? current;
-      });
+    // An explicit curator choice outranks every inference, so leave it alone entirely.
+    if (learnerLevelSourceRef.current === "user") {
+      return;
     }
+    // Otherwise re-resolve the whole chain rather than only filling an empty control.
+    // Only acting when the NEW set has a level left the PREVIOUS set's depth displayed
+    // and submitted after a switch or a clear — the batch would be authored at a depth
+    // belonging to a Review Set it was no longer going into.
+    const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId);
+    const fromCollection = selectedCollection?.resolvedLearnerLevel ?? "";
+    if (fromCollection) {
+      applyLearnerLevel(fromCollection, "collection");
+      return;
+    }
+    const fromProfile = profileLearnerLevelRef.current;
+    applyLearnerLevel(fromProfile, fromProfile ? "profile" : "none");
   };
 
   useEffect(() => {
@@ -554,7 +580,7 @@ export function BulkGenerationPageClient() {
                   onChange={(event) => setDomainContext(event.target.value as DomainContext | "")}
                   className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                 >
-                  <option value="">Use Course / Program fallback</option>
+                  <option value="">Automatic — based on the program</option>
                   {DOMAIN_CONTEXT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
@@ -575,13 +601,10 @@ export function BulkGenerationPageClient() {
                 <select
                   id="bulk-learner-level"
                   value={learnerLevel}
-                  onChange={(event) => {
-                    setLearnerLevel(event.target.value as LearnerLevel | "");
-                    setLearnerLevelSource("user");
-                  }}
+                  onChange={(event) => applyLearnerLevel(event.target.value as LearnerLevel | "", "user")}
                   className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                 >
-                  <option value="">Use reader level fallback</option>
+                  <option value="">Automatic — based on the reader</option>
                   {LEARNER_LEVEL_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}

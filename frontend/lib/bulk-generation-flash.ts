@@ -20,6 +20,10 @@ export type BulkGenerationRetryStash = {
   targetProfileType: NoteTargetProfileType;
   makePublic: boolean;
   topics: string[];
+  // Optional so a stash written before v0.75.0 still parses. Without it, retrying a failed
+  // batch silently dropped the Review Set and the retried notes landed outside it, which
+  // defeats the retry flow's premise that it reproduces the batch.
+  collectionId?: string | null;
 };
 
 export function setBulkQueuedFlash(count: number, resultId: string | null = null): void {
@@ -103,6 +107,9 @@ export function consumeBulkGenerationRetryStash(): BulkGenerationRetryStash | nu
       targetProfileType: stash.targetProfileType as NoteTargetProfileType,
       makePublic: stash.makePublic,
       topics,
+      // This reader whitelists fields, so a new stash field is dropped on read unless it
+      // is listed here — adding it to the type alone is not enough.
+      collectionId: typeof stash.collectionId === "string" ? stash.collectionId : null,
     };
   } catch {
     return null;

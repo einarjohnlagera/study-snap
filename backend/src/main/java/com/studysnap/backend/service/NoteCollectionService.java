@@ -965,13 +965,45 @@ public class NoteCollectionService {
         return toDetailResponse(saved, allItems);
     }
 
+    /**
+     * Bulk-authoring variant of {@link #addItems}: skips ids that no longer resolve to a note
+     * this user owns, rather than failing the entire write.
+     *
+     * <p>{@code addItems} throws {@link com.studysnap.backend.exception.NoteNotFoundException} on
+     * the first unresolvable id, which is correct for the interactive API — asking to add a note
+     * you do not own should 404. It is wrong for a bulk batch, which runs for minutes while its
+     * notes are already visible in the Library: deleting a single unwanted note made the whole
+     * membership write throw, so none of the other notes were added and the only signal was a
+     * server log. Input order is preserved so batch order still determines position.
+     */
+    @Transactional
+    public int addGeneratedItems(UUID collectionId, UUID userId, List<UUID> noteIds) {
+        List<UUID> requested = dedupeNoteIds(noteIds);
+        if (requested.isEmpty()) {
+            return 0;
+        }
+        Set<UUID> stillOwned = noteRepository.findByOwnerUserIdAndIdIn(userId, requested).stream()
+                .map(NoteEntity::getId)
+                .collect(Collectors.toSet());
+        List<UUID> resolvable = requested.stream().filter(stillOwned::contains).toList();
+        if (resolvable.isEmpty()) {
+            return 0;
+        }
+        addItems(collectionId, userId, new AddNoteCollectionItemsRequest(resolvable));
+        return resolvable.size();
+    }
+
+    /**
+     * Queue-time guard for a bulk batch's target Review Set: the caller must own it and it must be
+     * able to hold notes. Returns nothing — the depth is resolved client-side for the form pre-fill,
+     * and resolving it here as well was a wasted ancestor walk whose result every caller discarded.
+     */
     @Transactional(readOnly = true)
-    public Optional<LearnerLevel> validateNoteAcceptingCollection(UUID collectionId, UUID userId) {
+    public void validateNoteAcceptingCollection(UUID collectionId, UUID userId) {
         getOwnedCollectionOrThrow(collectionId, userId);
         if (collectionRepository.countByParentCollectionId(collectionId) > 0) {
             throw new InvalidCollectionRequestException(GOAL_CANNOT_ACCEPT_NOTES_MESSAGE);
         }
-        return resolveInheritedLearnerLevel(collectionId);
     }
 
     @Transactional(readOnly = true)
@@ -1378,6 +1410,10 @@ public class NoteCollectionService {
             collection.setDescription(source.getDescription());
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
+            // Authored depth travels with the adopted plan. Without it the adopted copy loses the
+            // curator's depth, so the bulk-authoring pre-fill resolves to nothing for exactly the
+            // population that adopts Official Review Sets.
+            collection.setLearnerLevel(source.getLearnerLevel());
             collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
             if (shouldCopyCompanion(source, userId)) {
                 collection.setCompanion(source.getCompanion());
@@ -1419,6 +1455,10 @@ public class NoteCollectionService {
             collection.setDescription(source.getDescription());
             collection.setVisibility(CollectionVisibility.PRIVATE);
             collection.setCourseProgram(source.getCourseProgram());
+            // Authored depth travels with the adopted plan. Without it the adopted copy loses the
+            // curator's depth, so the bulk-authoring pre-fill resolves to nothing for exactly the
+            // population that adopts Official Review Sets.
+            collection.setLearnerLevel(source.getLearnerLevel());
             collection.setEstimatedStudyHours(source.getEstimatedStudyHours());
             if (shouldCopyCompanion(source, userId)) {
                 collection.setCompanion(source.getCompanion());
@@ -1836,7 +1876,7 @@ public class NoteCollectionService {
         return normalized.isBlank() ? null : normalized;
     }
 
-    private String enumName(Enum<?> value) {
+    private static String enumName(Enum<?> value) {
         return value == null ? null : value.name();
     }
 
@@ -1915,7 +1955,13 @@ public class NoteCollectionService {
                 collection.getVisibility().name(),
                 collection.getCourseProgram(),
                 enumName(collection.getLearnerLevel()),
-                resolveInheritedLearnerLevel(collection.getId()).map(Enum::name).orElse(null),
+                // resolvedLearnerLevel is deliberately NULL on the public mapper. This endpoint is
+                // unauthenticated, and a PUBLIC collection may have a non-null parentCollectionId
+                // (validatePublishable does not require top-level), so resolving here would read a
+                // PRIVATE parent's level and emit it to anonymous callers — the only field on this
+                // response derived from a row the caller cannot see. It is consumed solely by the
+                // owner-scoped bulk-authoring selector, so omitting it costs nothing.
+                null,
                 collection.getEstimatedStudyHours(),
                 collection.getTargetCompletionDate(),
                 collection.getCompanion(),

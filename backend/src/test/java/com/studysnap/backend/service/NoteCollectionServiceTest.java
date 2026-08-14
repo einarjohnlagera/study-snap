@@ -3642,6 +3642,39 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void addGeneratedItems_skipsNotesDeletedMidBatchInsteadOfDroppingAllOfThem() {
+        // A bulk batch runs for minutes while its notes are already visible in the Library.
+        // Deleting one made addItems throw on the first unresolvable id, so NONE of the
+        // others were added and the only signal was a server log.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID survivingNoteId = UUID.randomUUID();
+        UUID deletedNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteEntity surviving = buildNote(survivingNoteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
+        // The filter pass sees both ids and resolves only the surviving one.
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(survivingNoteId, deletedNoteId)))
+                .thenReturn(List.of(surviving));
+        // addItems then re-resolves the already-filtered list.
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(survivingNoteId)))
+                .thenReturn(List.of(surviving));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(survivingNoteId), List.of(surviving));
+
+        int added = service.addGeneratedItems(collectionId, userId, List.of(survivingNoteId, deletedNoteId));
+
+        assertThat(added).isEqualTo(1);
+        ArgumentCaptor<List<NoteCollectionItemEntity>> captor = ArgumentCaptor.forClass(List.class);
+        verify(itemRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).extracting(NoteCollectionItemEntity::getNoteId)
+                .containsExactly(survivingNoteId);
+    }
+
+    @Test
     void addItems_repeatingTheSameNoteDoesNotCreateDuplicateMembership() {
         UUID userId = UUID.randomUUID();
         UUID collectionId = UUID.randomUUID();

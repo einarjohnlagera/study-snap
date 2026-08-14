@@ -106,28 +106,6 @@ public class NoteBulkGenerationService {
         this.throttleDelayMs = Math.clamp(throttleDelayMs, MIN_THROTTLE_DELAY_MS, MAX_THROTTLE_DELAY_MS);
     }
 
-    public NoteBulkGenerationService(
-            NoteGenerationService noteGenerationService,
-            NoteService noteService,
-            StudyPackService studyPackService,
-            LlmStudyPackService llmStudyPackService,
-            ContentModerationService contentModerationService,
-            StudyPackGenerationContextResolver generationContextResolver,
-            StudyPackGenerationTaskDispatcher taskDispatcher,
-            UserRepository userRepository,
-            CourseProgramCatalogRepository courseProgramCatalogRepository,
-            OnboardingGuardService onboardingGuardService,
-            BulkGenerationResultService bulkGenerationResultService,
-            MePlanService mePlanService,
-            int maxTopics,
-            int throttleDelayMs
-    ) {
-        this(noteGenerationService, noteService, studyPackService, llmStudyPackService,
-                contentModerationService, generationContextResolver, taskDispatcher, userRepository,
-                courseProgramCatalogRepository, onboardingGuardService, bulkGenerationResultService,
-                mePlanService, null, maxTopics, throttleDelayMs);
-    }
-
     /** Retained for focused unit tests that exercise only personal-note batches. */
     public NoteBulkGenerationService(
             NoteGenerationService noteGenerationService,
@@ -269,6 +247,7 @@ public class NoteBulkGenerationService {
                         batch.domainContext(),
                         batch.learnerLevel(),
                         batch.targetProfileType().name(),
+                        batch.collectionId(),
                         batch.makePublic(),
                         batch.items().size(),
                         createdCount.get(),
@@ -370,10 +349,12 @@ public class NoteBulkGenerationService {
             return;
         }
         try {
-            noteCollectionService.addItems(
+            // Lenient variant: a note deleted from the Library mid-batch must not stop the
+            // rest of the batch from joining the Review Set.
+            noteCollectionService.addGeneratedItems(
                     collectionId,
                     ownerUserId,
-                    new AddNoteCollectionItemsRequest(noteIds.stream().map(UUID::fromString).toList())
+                    noteIds.stream().map(UUID::fromString).toList()
             );
         } catch (RuntimeException exception) {
             log.warn(

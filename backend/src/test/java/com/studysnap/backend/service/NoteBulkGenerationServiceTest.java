@@ -184,10 +184,10 @@ class NoteBulkGenerationServiceTest {
 
         service.queueBatch(request, userId, false);
 
-        verify(noteCollectionService).addItems(
+        verify(noteCollectionService).addGeneratedItems(
                 collectionId,
                 userId,
-                new AddNoteCollectionItemsRequest(List.of(firstNoteId, thirdNoteId))
+                List.of(firstNoteId, thirdNoteId)
         );
     }
 
@@ -204,19 +204,19 @@ class NoteBulkGenerationServiceTest {
         )).thenReturn(context);
         when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
         when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse(noteId.toString()));
-        doThrow(new CollectionNotFoundException()).when(noteCollectionService).addItems(
+        doThrow(new CollectionNotFoundException()).when(noteCollectionService).addGeneratedItems(
                 collectionId,
                 userId,
-                new AddNoteCollectionItemsRequest(List.of(noteId))
+                List.of(noteId)
         );
 
         BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
 
         assertThat(response.queuedTopics()).isEqualTo(1);
         verify(noteService, times(1)).create(any(UpsertNoteRequest.class), eq(userId));
-        verify(noteCollectionService, times(1)).addItems(any(), any(), any());
+        verify(noteCollectionService, times(1)).addGeneratedItems(any(), any(), any());
         verify(bulkGenerationResultService).recordResult(
-                any(), eq(userId), eq(SUBJECT), any(), any(), any(), any(), eq(false), eq(1), eq(1), any(), any()
+                any(), eq(userId), eq(SUBJECT), any(), any(), any(), any(), any(), eq(false), eq(1), eq(1), any(), any()
         );
     }
 
@@ -291,6 +291,7 @@ class NoteBulkGenerationServiceTest {
                 eq(DomainContext.NURSING),
                 eq(LearnerLevel.BOARD_EXAM_REVIEW),
                 eq(NoteTargetProfileType.BOARD_TAKER.name()),
+                any(),
                 eq(true),
                 eq(2),
                 eq(2),
@@ -332,6 +333,7 @@ class NoteBulkGenerationServiceTest {
                 any(DomainContext.class),
                 any(LearnerLevel.class),
                 anyString(),
+                any(),
                 anyBoolean(),
                 anyInt(),
                 anyInt(),
@@ -376,6 +378,7 @@ class NoteBulkGenerationServiceTest {
                 eq(null),
                 eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
+                any(),
                 eq(false),
                 eq(2),
                 eq(2),
@@ -574,6 +577,7 @@ class NoteBulkGenerationServiceTest {
                 eq(null),
                 eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
+                any(),
                 eq(false),
                 eq(2),
                 eq(1),
@@ -622,6 +626,7 @@ class NoteBulkGenerationServiceTest {
                 eq(null),
                 eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
+                any(),
                 eq(false),
                 eq(3),
                 eq(1),
@@ -659,6 +664,7 @@ class NoteBulkGenerationServiceTest {
                 eq(null),
                 eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
+                any(),
                 eq(false),
                 eq(1),
                 eq(1),
@@ -691,6 +697,7 @@ class NoteBulkGenerationServiceTest {
                 eq(null),
                 eq(null),
                 eq(NoteTargetProfileType.STUDENT.name()),
+                any(),
                 eq(false),
                 eq(2),
                 eq(0),
