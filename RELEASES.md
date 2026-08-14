@@ -2,7 +2,36 @@
 
 ## v0.76.0 - Messaging Architecture: The Money Surfaces
 
-**Status: In Progress** (kicked off 2026-08-14)
+**Status: Released** (kicked off 2026-08-14, signed off 2026-08-14)
+
+### Scope completeness — every planned item accounted for
+
+Verified against the final code state.
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | `FREE.title` written against the hierarchy | Shipped — *"Start with ready-made study material"* |
+| 2 | `PLAN_COMPARISON_ROWS` "Best for" row | Shipped — all three cells reframed to learner situations |
+| 3 | Per-plan `description` re-checked | **Deliberately UNCHANGED** — see below |
+| 4 | In-app upgrade CTA copy adopts the hierarchy | **CHANGED in shape** — see below |
+
+**Item 3 is a decision, not an omission.** `FREE.description` stays a factual feature list because that is what keeps it honest: every outcome-framed rewrite implied Free is adopt-*only*, which is false — Free users create notes and generate Study Packs within quota. The tagline carries positioning; the description answers *"what do I actually get?"*. Owner-ratified 2026-08-14.
+
+**Item 4 delivered something narrower than kickoff described, and the narrowing is the point.** Kickoff said *"in-app upgrade CTA copy adopts the hierarchy."* What shipped leaves **`getUpgradeCtas` completely untouched**: a button fired at the moment a learner clicked Board Exam Mode must say *"Unlock Board Exam Mode"*, because a button states what the click does, not why to care. Rewriting it as a system-level promise would have made it less honest and less clear. The promise moved to the **headline and body** around the button instead — narrative on capability paywalls, factual on quota paywalls where the learner has just hit a wall and needs to know why the modal appeared. **Ratified by the owner after this was raised as a possible convenient scope reduction and checked by an outside product-UX pass.**
+
+**Scope grew in one place, for a defect.** `PLAN_CARD_SUBTEXT` was not in the kickoff scope; it was found while drafting and shipped because it was a live bug — Adaptive Practice copy rendering on every paywall.
+
+### The checkpoint gate — no checkpoint is owed
+
+Recorded explicitly rather than left silent, per the same reasoning as `v0.75.0`.
+
+- **Nothing shipped ahead of its evidence.** The Messaging Architecture was ratified 2026-08-01, and the owner **explicitly lifted** the "no positioning-copy change without a conversion test" bar in the same ruling: narrative consistency with the product vision is a design decision, not an optimization experiment. Pricing and checkout *mechanics* still need evidence; positioning copy does not.
+- **No `EVIDENCE` gate was overridden**, so there is nothing a dated read would discharge.
+- **Conversion is still watched post-launch** and this copy is iterated if it regresses — but that is monitoring, not a falsifiable checkpoint with a pre-committed kill criterion, and dressing it as one would be decorative.
+
+### Feature-doc drift gate — two stale docs caught, neither touched by any PR
+
+Exactly the failure this gate exists for. **`docs/product/PLANS.md`** still titled Free *"For getting started"*, and **`docs/features/pricing.md`** still described the "Best for" row as *"light review (Free), regular study (Plus), focused exam preparation (Pro)"* — all four strings replaced in this release. Both corrected in the signoff commit, and `pricing.md` now carries the **Paywall copy contract** the release established, with the three governing rules mirrored into `AGENTS.md` so future copy work inherits them.
 
 Theme: the places where NoteLib asks for money should sell the learning system, not enumerate features. `/pricing` finishes the hierarchy `v0.68.0` started, and the in-app upgrade prompts adopt the same voice.
 

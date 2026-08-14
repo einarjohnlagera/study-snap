@@ -1644,6 +1644,9 @@ These rules exist to prevent the most common forms of context drift across AI co
 - Always use `getUpgradeCtas(currentPlan)` from `frontend/src/config/plans.ts` to resolve plan-aware CTAs.
 - Upgrade CTAs that drive in-app plan selection navigate to `/settings?section=plans`, not `/pricing`.
 - `/pricing` is the public marketing surface only — linked from navbar and landing page, not from in-app paywalls.
+- **Upgrade button LABELS stay feature-named** (`v0.76.0`). A button fired when a learner clicked Board Exam Mode must say `Unlock Board Exam Mode` — a button states what the click does, not why to care. The learning-system promise belongs in the paywall headline and body, never in the button.
+- **Paywall headlines split by type** (`v0.76.0`): **capability** paywalls (nothing was used up) carry the narrative headline; **quota** paywalls keep a factual one (`You've reached your Study Pack limit`), because a learner who just hit a wall needs to know that is why the modal appeared. The narrative moves to the body there.
+- **`PLAN_CARD_SUBTEXT` must describe the tier, never a feature.** It is keyed on plan type **alone**, so it renders on *every* paywall — a feature name placed there appears on paywalls about other features. This shipped as a real bug before `v0.76.0`: Adaptive Practice copy rendered on the Interview Practice and Board Exam Mode modals. Full contract: `docs/features/pricing.md` → *Paywall copy contract*.
 
 ### Analytics Event Anti-Drift
 

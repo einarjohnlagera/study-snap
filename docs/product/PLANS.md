@@ -4,7 +4,7 @@ This document is the canonical reference for NoteLib's Free / Plus / Pro plans, 
 
 ## Plans
 
-### Free — *For getting started*
+### Free — *Start with ready-made study material*
 
 Create notes, generate Study Packs, review Key Concepts, and practice with Quick Review.
 
