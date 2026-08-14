@@ -1,5 +1,45 @@
 # RELEASES.md - NoteLib
 
+## v0.76.0 - Messaging Architecture: The Money Surfaces
+
+**Status: In Progress** (kicked off 2026-08-14)
+
+Theme: the places where NoteLib asks for money should sell the learning system, not enumerate features. `/pricing` finishes the hierarchy `v0.68.0` started, and the in-app upgrade prompts adopt the same voice.
+
+**This is the second slice of a ratified, deliberately incremental initiative** — see the Backlog Index's *Messaging Architecture* row (ratified 2026-08-01). The core principle is *"We sell the learning system. Features simply support that promise."* The **locked hierarchy** is: Hero (universal emotional outcome, profile-agnostic) → Supporting paragraph → Profile-specific bullets → Features as evidence. **No feature becomes the hero anywhere.**
+
+**What `v0.68.0` already shipped, so this release does not redo it:** the `/pricing` hero and supporting paragraph in the ratified wording, the `<meta description>`, the second-section heading, and the `PLUS` / `PRO` taglines (*"Guided learning built around your notes"* / *"Your complete learning system"*).
+
+**The one item the roadmap names as explicitly still owed is `FREE.title`**, currently `"For getting started"`. An outcome-framed candidate was written during `v0.68.0` and **reverted**, and the reason is binding on this release: it had been derived from consistency with `PLUS`/`PRO`, which **contradicts the ratified `FREE=adopt` tier placement**. It must be written against the locked hierarchy, not against its siblings.
+
+### Planned Scope
+
+1. **`FREE.title` written against the hierarchy (frontend, copy).** Outcome-framed like its siblings, but derived from what FREE actually *is* under the ratified ladder — adopt an Official Review Set and study it — not from tagline symmetry. **The `v0.68.0` revert is the specification here: if the new candidate only reads well beside `PLUS`/`PRO`, it is wrong again.**
+
+2. **`PLAN_COMPARISON_ROWS`' "Best for" row (frontend, copy).** Currently feature-flavoured (*"Light review and trying the core study loop"*). It sits directly beneath the hero that promises a learning system, so it is the sharpest remaining contradiction on the page.
+
+3. **Per-plan `description` re-checked against the hierarchy (frontend, copy).** `FREE.description` was rebalanced at `v0.68.0` signoff **for card-alignment reasons, not positioning**, and deliberately left as a factual feature list. That decision is revisited here on purpose — but **length parity across the three cards is a real constraint**, since a prior release had a layout regression caused by `description` length drift across four card renderers.
+
+4. **In-app upgrade CTA copy adopts the hierarchy (frontend, copy).** `getUpgradeCtas` resolves per plan and context. The upgrade moment is where the promise is most testable: a learner hits a limit and is told what they get. **All upgrade copy must continue to route through `getUpgradeCtas(currentPlan)` — never hardcoded at a call site** (`AGENTS.md`).
+
+### Anti-drift — locked rules this release does NOT change
+
+- **Product names stay unchanged everywhere.** `name: "Plus"` / `name: "Pro"` are untouched in checkout, Settings, badges, receipts, and support. Only taglines and framing move. This avoids the bifurcated-vocabulary risk the project already identified and avoided once, when Creator / Curated Learning were deliberately kept internal-frame-only.
+- **No feature becomes the hero.** Board Exam Mode, Companion, Adaptive Practice, Review Sets, Progress and Knowledge Impact are evidence supporting the promise, never the promise itself.
+- **`PROFESSIONAL` profile copy stays unwired.** The illustrative bullets are **flagged aspirational** — `PROFESSIONAL` is enum-only with no feature set behind it, so wiring it live would describe an experience that does not exist.
+- **Profile-specific copy reuses the existing `ProfileType`-keyed resolution pattern** (`getCollectionLabels`, per-plan `adaptivePracticeMessage`) — not a new mechanism.
+- **No pricing or quota changes.** This is positioning only. Numbers live in `pricing-config.ts` and are out of scope.
+- **Not gated on a conversion experiment** — an explicit owner call recorded at ratification, distinguishing narrative consistency from pricing/checkout *mechanics*. Conversion is measured post-launch and iterated if it regresses; it does not block rollout.
+
+### Explicitly out of scope — deferred to a later slice
+
+- **The landing page** and the **Exam Hub upsell.** Both are real remaining surfaces, but they answer a different question than "should I pay" and each needs its own scoping pass per the ratified row.
+- **Per-plan feature bullets** beyond the `description` line.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.75.0 - Authoring by Inference
 
 **Status: Released** (kicked off 2026-08-13, signed off 2026-08-14)
