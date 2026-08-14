@@ -1,5 +1,43 @@
 # RELEASES.md - NoteLib
 
+## v0.76.1 - Adaptive Practice Entry Attribution
+
+**Status: In Progress** (kicked off 2026-08-14)
+
+Theme: make one open checkpoint answer the question that actually matters, by recording **where** an Adaptive Practice session was started from.
+
+**Why this is a patch and why it is time-boxed.** An open **`[CHECKPOINT — due 2026-09-12]`** asks whether removing the Quick Review → Adaptive Practice route cost adoption. It can measure **whether** starts fell, but not **where the surviving ones come from** — `ADAPTIVE_PRACTICE_STARTED` (`QuickReviewAdaptivePracticeService.java:201`) carries only `sessionId` and `weakConceptCount`, with **no entry-point attribution**. The *Adaptive Practice as the recommendation engine* direction ratified 2026-08-14 rests on learners discovering remediation **from the Dashboard**, and today that premise cannot be tested. **If Dashboard-originated starts turn out to be near zero, that direction is in trouble before anything is built on it.**
+
+**This is the same failure shape this project has already paid for once.** The Challenge Quiz adoption read (c) sat **NOT MEASURABLE for months** because `CHALLENGE_QUIZ_STARTED` could not separate *seen-and-ignored* from *never-reached*, and only closed once impression and click events shipped in `v0.74.0`. Shipping the field now, rather than discovering the gap on 2026-09-12, is the whole point of doing this as a patch instead of folding it into a feature release.
+
+**It cannot contaminate the read it serves.** The checkpoint's primary metric is a **total count** of starts per active learner. This release adds a metadata field to an existing event and changes no user-visible behaviour, so the before/after comparison is unaffected.
+
+### Planned Scope
+
+1. **Entry-point attribution on `ADAPTIVE_PRACTICE_STARTED` (backend + frontend).** Every launch is a route link (`/notes/{id}/adaptive-practice`), not a direct API call, so the marker travels as a query param, is read by the page, and is sent when the session starts. **Reuses the existing `entry` convention** established by `frontend/lib/challenge-quiz-entry.ts` rather than inventing a second one — and deliberately does **not** refactor the two into a shared abstraction, since two callers do not earn one.
+
+   Four values, matching the groups the checkpoint must distinguish: **Dashboard** (Today's Focus and Focus Areas), **Challenge Quiz result**, **Interview Practice gap**, and **direct**. Direct navigation records an explicit value rather than omitting the key — *"no marker"* and *"genuinely direct"* are different facts and the read needs to tell them apart.
+
+2. **Carries the two product-direction documents ratified 2026-08-14** — *Support Another Learner* and *Adaptive Practice as the recommendation engine* — plus the re-specified `2026-09-12` checkpoint remedy and their Backlog Index rows. **These were originally opened as a separate PR to `main` and were retargeted into this release deliberately:** merging to `main` triggers an auto-deploy to production, so two merges would mean two deploys and two interruptions for learners using the app. One release, one deploy.
+
+### Anti-drift — locked rules this release does NOT change
+
+- **No new `AnalyticsEventType`.** This adds metadata to an existing event; the enum is untouched.
+- **The checkpoint's primary metric is untouched** — total starts per active learner. Additive metadata only.
+- **No user-visible behaviour change.** No copy, no layout, no routing change a learner can perceive.
+- **Analytics failure must still never fail a session.** The existing fire site is wrapped in a `catch (RuntimeException ignored)` guard carrying the comment *"Activity/analytics failures must not turn a generated quiz into a failed session."* That guard is preserved exactly.
+- **Unknown entry values are normalised server-side, never persisted verbatim** — the value is caller-controllable input flowing into analytics.
+- **No transaction-boundary changes**, and no change to any session-start failure path.
+
+### Explicitly out of scope
+
+- **Removing the Challenge Quiz entry point.** Ratified direction, but **it must not ship before 2026-09-12** — `v0.74.0` already removed the Quick Review route and a second removal inside the same window confounds the read instead of answering it.
+- Any recommendation-engine work, evidence-bar changes, or concept-identity work.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.76.0 - Messaging Architecture: The Money Surfaces
 
 **Status: Released** (kicked off 2026-08-14, signed off 2026-08-14)
