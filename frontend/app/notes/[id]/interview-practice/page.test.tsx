@@ -90,11 +90,11 @@ describe("InterviewPracticePage", () => {
 
     expect(await screen.findByRole("heading", { name: "Interview Practice" })).toBeInTheDocument();
     expect(screen.getByText("Session length")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "Unlock Interview Practice" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Prepare for the part that isn't a quiz" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Unlock Interview Practice - Pro" }));
 
-    expect(await screen.findByRole("dialog", { name: "Unlock Interview Practice" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Prepare for the part that isn't a quiz" })).toBeInTheDocument();
     expect(startInterviewPractice).not.toHaveBeenCalled();
     expect(replaceMock).not.toHaveBeenCalled();
   });

@@ -1,5 +1,88 @@
 # RELEASES.md - NoteLib
 
+## v0.76.0 - Messaging Architecture: The Money Surfaces
+
+**Status: Released** (kicked off 2026-08-14, signed off 2026-08-14)
+
+### Scope completeness — every planned item accounted for
+
+Verified against the final code state.
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | `FREE.title` written against the hierarchy | Shipped — *"Start with ready-made study material"* |
+| 2 | `PLAN_COMPARISON_ROWS` "Best for" row | Shipped — all three cells reframed to learner situations |
+| 3 | Per-plan `description` re-checked | **Deliberately UNCHANGED** — see below |
+| 4 | In-app upgrade CTA copy adopts the hierarchy | **CHANGED in shape** — see below |
+
+**Item 3 is a decision, not an omission.** `FREE.description` stays a factual feature list because that is what keeps it honest: every outcome-framed rewrite implied Free is adopt-*only*, which is false — Free users create notes and generate Study Packs within quota. The tagline carries positioning; the description answers *"what do I actually get?"*. Owner-ratified 2026-08-14.
+
+**Item 4 delivered something narrower than kickoff described, and the narrowing is the point.** Kickoff said *"in-app upgrade CTA copy adopts the hierarchy."* What shipped leaves **`getUpgradeCtas` completely untouched**: a button fired at the moment a learner clicked Board Exam Mode must say *"Unlock Board Exam Mode"*, because a button states what the click does, not why to care. Rewriting it as a system-level promise would have made it less honest and less clear. The promise moved to the **headline and body** around the button instead — narrative on capability paywalls, factual on quota paywalls where the learner has just hit a wall and needs to know why the modal appeared. **Ratified by the owner after this was raised as a possible convenient scope reduction and checked by an outside product-UX pass.**
+
+**Scope grew in one place, for a defect.** `PLAN_CARD_SUBTEXT` was not in the kickoff scope; it was found while drafting and shipped because it was a live bug — Adaptive Practice copy rendering on every paywall.
+
+### The checkpoint gate — no checkpoint is owed
+
+Recorded explicitly rather than left silent, per the same reasoning as `v0.75.0`.
+
+- **Nothing shipped ahead of its evidence.** The Messaging Architecture was ratified 2026-08-01, and the owner **explicitly lifted** the "no positioning-copy change without a conversion test" bar in the same ruling: narrative consistency with the product vision is a design decision, not an optimization experiment. Pricing and checkout *mechanics* still need evidence; positioning copy does not.
+- **No `EVIDENCE` gate was overridden**, so there is nothing a dated read would discharge.
+- **Conversion is still watched post-launch** and this copy is iterated if it regresses — but that is monitoring, not a falsifiable checkpoint with a pre-committed kill criterion, and dressing it as one would be decorative.
+
+### Feature-doc drift gate — two stale docs caught, neither touched by any PR
+
+Exactly the failure this gate exists for. **`docs/product/PLANS.md`** still titled Free *"For getting started"*, and **`docs/features/pricing.md`** still described the "Best for" row as *"light review (Free), regular study (Plus), focused exam preparation (Pro)"* — all four strings replaced in this release. Both corrected in the signoff commit, and `pricing.md` now carries the **Paywall copy contract** the release established, with the three governing rules mirrored into `AGENTS.md` so future copy work inherits them.
+
+Theme: the places where NoteLib asks for money should sell the learning system, not enumerate features. `/pricing` finishes the hierarchy `v0.68.0` started, and the in-app upgrade prompts adopt the same voice.
+
+**This is the second slice of a ratified, deliberately incremental initiative** — see the Backlog Index's *Messaging Architecture* row (ratified 2026-08-01). The core principle is *"We sell the learning system. Features simply support that promise."* The **locked hierarchy** is: Hero (universal emotional outcome, profile-agnostic) → Supporting paragraph → Profile-specific bullets → Features as evidence. **No feature becomes the hero anywhere.**
+
+**What `v0.68.0` already shipped, so this release does not redo it:** the `/pricing` hero and supporting paragraph in the ratified wording, the `<meta description>`, the second-section heading, and the `PLUS` / `PRO` taglines (*"Guided learning built around your notes"* / *"Your complete learning system"*).
+
+**The one item the roadmap names as explicitly still owed is `FREE.title`**, currently `"For getting started"`. An outcome-framed candidate was written during `v0.68.0` and **reverted**, and the reason is binding on this release: it had been derived from consistency with `PLUS`/`PRO`, which **contradicts the ratified `FREE=adopt` tier placement**. It must be written against the locked hierarchy, not against its siblings.
+
+### Planned Scope
+
+1. **`FREE.title` written against the hierarchy (frontend, copy).** Outcome-framed like its siblings, but derived from what FREE actually *is* under the ratified ladder — adopt an Official Review Set and study it — not from tagline symmetry. **The `v0.68.0` revert is the specification here: if the new candidate only reads well beside `PLUS`/`PRO`, it is wrong again.**
+
+2. **`PLAN_COMPARISON_ROWS`' "Best for" row (frontend, copy).** Currently feature-flavoured (*"Light review and trying the core study loop"*). It sits directly beneath the hero that promises a learning system, so it is the sharpest remaining contradiction on the page.
+
+3. **Per-plan `description` re-checked against the hierarchy (frontend, copy).** `FREE.description` was rebalanced at `v0.68.0` signoff **for card-alignment reasons, not positioning**, and deliberately left as a factual feature list. That decision is revisited here on purpose — but **length parity across the three cards is a real constraint**, since a prior release had a layout regression caused by `description` length drift across four card renderers.
+
+4. **In-app upgrade CTA copy adopts the hierarchy (frontend, copy).** `getUpgradeCtas` resolves per plan and context. The upgrade moment is where the promise is most testable: a learner hits a limit and is told what they get. **All upgrade copy must continue to route through `getUpgradeCtas(currentPlan)` — never hardcoded at a call site** (`AGENTS.md`).
+
+### Anti-drift — locked rules this release does NOT change
+
+- **Product names stay unchanged everywhere.** `name: "Plus"` / `name: "Pro"` are untouched in checkout, Settings, badges, receipts, and support. Only taglines and framing move. This avoids the bifurcated-vocabulary risk the project already identified and avoided once, when Creator / Curated Learning were deliberately kept internal-frame-only.
+- **No feature becomes the hero.** Board Exam Mode, Companion, Adaptive Practice, Review Sets, Progress and Knowledge Impact are evidence supporting the promise, never the promise itself.
+- **`PROFESSIONAL` profile copy stays unwired.** The illustrative bullets are **flagged aspirational** — `PROFESSIONAL` is enum-only with no feature set behind it, so wiring it live would describe an experience that does not exist.
+- **Profile-specific copy reuses the existing `ProfileType`-keyed resolution pattern** (`getCollectionLabels`, per-plan `adaptivePracticeMessage`) — not a new mechanism.
+- **No pricing or quota changes.** This is positioning only. Numbers live in `pricing-config.ts` and are out of scope.
+- **Not gated on a conversion experiment** — an explicit owner call recorded at ratification, distinguishing narrative consistency from pricing/checkout *mechanics*. Conversion is measured post-launch and iterated if it regresses; it does not block rollout.
+
+### Explicitly out of scope — deferred to a later slice
+
+- **The landing page** and the **Exam Hub upsell.** Both are real remaining surfaces, but they answer a different question than "should I pay" and each needs its own scoping pass per the ratified row.
+- **Per-plan feature bullets** beyond the `description` line.
+
+### Shipped
+
+- **The money surfaces now sell the learning system.** Ratified with the owner and a product-UX pass, 2026-08-14 (brief: `docs/claude-plans/v0.76.0-messaging-money-surfaces-product-ux-consultation-prompt.md`).
+
+  **`FREE.title` is now *"Start with ready-made study material"***, replacing *"For getting started"*. The draft taken into review was *"A complete review, ready to study"* and the owner rejected **"complete"** as over-promising — **and the measurement backs that**: four published Official Review Sets cover 179 of 218 program-holding accounts, so **~18% of learners have no Official Review Set for their program**, which is why onboarding carries a "no plan yet" branch. "Material" is deliberately broader than "a Review Set" and stays true for that 18%. It passes the standing test — derived from `FREE = adopt`, true of Free alone, not symmetry with Plus/Pro.
+
+  **The "Best for" row now describes learner situations** rather than feature volume: *Getting started without building your own* · *Building your own study plan from your notes* · *Preparing with a real exam in sight*. **Free's cell deliberately differs from its tagline** — the first draft repeated it almost verbatim, and both render on `/pricing`, so Free's row would have added nothing while Plus's and Pro's did. Its contrast with Plus's line is what makes the ladder legible.
+
+  **`FREE.description` is deliberately UNCHANGED**, and this is a decision, not an omission. It stays a factual feature list because that is what makes it honest: an outcome-framed rewrite implies Free is adopt-*only*, which is false — Free users create notes and generate Study Packs within quota. The tagline carries positioning; the description answers *"what do I actually get?"*.
+
+  **Upgrade prompts: buttons stay feature-named, the promise moves to the framing around them.** `getUpgradeCtas` is **untouched** — a button fired at the moment a learner clicked Board Exam Mode must say *"Unlock Board Exam Mode"*, because a button's job is to say what the click does. Instead the paywall **headline** carries the narrative on **capability** paywalls (nothing was used up): *"Take your review all the way to exam day"*, *"Find out how ready you actually are"*, *"Prepare for the part that isn't a quiz"*, *"Know what is slipping before you forget it"*. **Quota** paywalls keep their factual headline — a learner who just hit a wall needs to know that is why the modal appeared — and the narrative moves into the body.
+
+  **A shipped bug found while drafting: `PLAN_CARD_SUBTEXT` was Adaptive Practice copy rendering on every paywall.** It is keyed on plan type **alone**, so *"Train on weak areas (limited sessions)"* appeared on the Study Pack limit, Interview Practice and Board Exam Mode modals alike — describing a feature the learner had not asked about. Replaced with subtext that ladders the ratified tier placement (adopt → assemble → adaptive planning), with a comment pinning the rule so it cannot drift back to feature copy.
+
+  **Free is now represented in the modal.** The paywall renders upgrade targets only (`PlanCard` is typed `"PLUS" | "PRO"`), so a Plus user saw their current plan marked while a Free user saw no acknowledgement of theirs. A single line now names it, rather than adding a third card a learner cannot select.
+
+  **Deliberately not touched:** the two `TEACHER_*` paywalls. The messaging architecture ratifies a separate teacher promise, and applying it is its own scoping pass — improvising one inside a learner-focused slice would have invented positioning for an audience nobody decided on. The landing page and Exam Hub upsell remain out of scope per kickoff.
+
 ## v0.75.0 - Authoring by Inference
 
 **Status: Released** (kicked off 2026-08-13, signed off 2026-08-14)

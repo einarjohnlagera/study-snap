@@ -2,7 +2,7 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **quiz modes, exam simulation, or practice mechanics**.
-> Last updated: v0.72.1 - 2026-08-11
+> Last updated: v0.76.0 - 2026-08-14
 
 ---
 
@@ -10,7 +10,7 @@
 
 The product has a locked hierarchy of five top-level modes:
 
-1. **Quick Review** - all plans, saved questions, lightweight practice — writes `ConceptHealth` on completion (since 2026-07-11) same as the other assessment modes below.
+1. **Quick Review** - all plans, saved questions, lightweight practice — writes `ConceptHealth` on completion (since 2026-07-11) same as the other assessment modes below. **Since `v0.74.0` it also gates the Study Pack's Quiz tab:** that tab renders the saved quiz *with answers revealed*, and Quick Review administers those same questions — so it was the answer key to its own test. The tab is now **locked (visible, not hidden)** until the learner scores a **perfect** Quick Review; a perfect score reached via the retry round counts. Challenge Quiz stays open from the start because it generates its own questions and cannot be spoiled. **Adaptive Practice is no longer offered from the Quick Review result screen at all** — it remains reachable from the Dashboard and the mode-selection screen.
 2. **Challenge Quiz** - all plans with quota, progressive generation up to 20 questions per session.
 3. **Adaptive Practice** - Plus/Pro practice targeting weak concepts.
 4. **Long Exam** - Pro exam mode, fixed long-form practice, supports multi-note sources.

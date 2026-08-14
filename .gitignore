@@ -5,3 +5,9 @@ node_modules
 target
 .idea
 .DS_Store
+
+# Codex prompts are local planning material handed to Codex, never a shipped artifact.
+# They were tracked once and had to be untracked in two separate cleanup commits
+# ("stop tracking Codex prompt files", "untrack remaining Codex prompt files"), but
+# were never ignored — so nothing stopped the next `git add -A` from re-committing them.
+docs/codex-prompts/

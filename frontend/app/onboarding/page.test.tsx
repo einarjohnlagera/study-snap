@@ -1214,7 +1214,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Get Plus" }));
 
     expect(await screen.findByText("You've reached your topic note limit")).toBeInTheDocument();
-    expect(screen.getByText("Create more topic notes and keep building your study library faster.")).toBeInTheDocument();
+    expect(screen.getByText("More topic notes means more of your library is ready when you sit down to study.")).toBeInTheDocument();
   });
 
   it("allows board takers to finish without an exam date", async () => {

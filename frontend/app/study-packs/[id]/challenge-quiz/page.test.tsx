@@ -489,7 +489,7 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(interviewPracticeCard);
 
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/interview-practice");
-    expect(screen.queryByRole("dialog", { name: "Unlock Interview Practice" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Prepare for the part that isn't a quiz" })).not.toBeInTheDocument();
   });
 
   it("offers Resume or Start Fresh for a live session from the mode-selection entry", async () => {
@@ -905,10 +905,10 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(await getModeCard("Board Exam Mode"));
 
     expect(await screen.findByRole("heading", { name: "Board Exam" })).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "Unlock Board Exam Mode" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Take your review all the way to exam day" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Unlock Board Exam - Pro" }));
 
-    expect(await screen.findByRole("dialog", { name: "Unlock Board Exam Mode" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Take your review all the way to exam day" })).toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
 

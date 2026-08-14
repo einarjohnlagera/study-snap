@@ -43,7 +43,23 @@ Current structure:
 4. regional pricing block
 5. FAQ
 
-The comparison table begins with a `Best for` row to help a learner choose among light review (Free), regular study (Plus), and focused exam preparation (Pro). Paid-plan card bullets are outcome-framed: they describe the study result enabled by each allowance or feature rather than presenting an isolated feature-name list.
+The comparison table begins with a `Best for` row that describes the learner's **situation**, not what each plan contains — *getting started without building your own* (Free), *building your own study plan from your notes* (Plus), *preparing with a real exam in sight* (Pro). **Free's cell deliberately differs from Free's tagline**: both render on this page, so repeating the tagline would make Free's row the only one that adds nothing. Paid-plan card bullets are outcome-framed: they describe the study result enabled by each allowance or feature rather than presenting an isolated feature-name list.
+
+## Paywall copy contract (v0.76.0)
+
+Three rules, all ratified 2026-08-14. They exist because the promise is the learning system and features are only evidence for it.
+
+**1. Upgrade BUTTON labels stay feature-named.** `getUpgradeCtas` returns things like `Unlock Board Exam Mode` because the button fires at the moment a learner clicked that feature. A button says *what the click does*, not *why to care*. Do not replace these with system-level promises — it makes the button less honest and less clear. All upgrade copy still routes through `getUpgradeCtas(currentPlan)`; never hardcode it at a call site.
+
+**2. The paywall HEADLINE splits by paywall type.**
+- **Capability** paywalls (the feature is not on your plan; nothing was used up) carry the narrative: *"Take your review all the way to exam day"*, *"Find out how ready you actually are"*.
+- **Quota** paywalls (you used something up) keep a **factual** headline — *"You've reached your Study Pack limit"* — because a learner who just hit a wall needs to know that is why the modal appeared. The narrative moves into the body.
+
+**3. `PLAN_CARD_SUBTEXT` describes the TIER, never a feature.** It is keyed on plan type **alone**, so whatever it says renders on *every* paywall. Before `v0.76.0` it held Adaptive Practice copy (*"Train on weak areas"*), which meant a learner blocked on Interview Practice read about a feature they had not asked about. It now ladders the ratified tier placement: adopt → assemble → adaptive planning. **If you put a feature name here, it will appear on paywalls about other features.**
+
+**Free is represented in the modal by a single line, not a card.** `PlanCard` is typed `"PLUS" | "PRO"` — the modal renders upgrade *targets* only — so a Plus user saw their current plan marked while a Free user saw nothing. A card for Free would be selectable-looking and lead nowhere.
+
+**Not covered by any of this: the two `TEACHER_*` paywalls.** The messaging architecture ratifies a separate teacher promise; applying it needs its own scoping pass and has not had one.
 
 Current CTA labels on the pricing page:
 

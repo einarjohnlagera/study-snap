@@ -6,7 +6,7 @@
 > subject pages). This is a structural snapshot, not a proposal — it describes what exists now so a
 > design conversation starts from real constraints instead of assumptions.
 > Update this file when the Note schema, taxonomy model, or collection model changes.
-> Last updated: v0.71.1 (In Progress) — 2026-08-10. **Rewritten for `ADR-001`'s five-axis model**; the
+> Last updated: v0.76.0 — 2026-08-14. **Rewritten for `ADR-001`'s five-axis model**; the
 > previous stamp was `v0.50.3` (2026-07-17) and predated Domain Context, note-level learner depth,
 > the `course_programs` catalog, and many-to-many applicability. If you are working from a cached
 > copy of this file that says a Note has no learner level, or that Course / Program is free text with
@@ -26,7 +26,7 @@ Every note carries five independent metadata axes. They are not interchangeable,
 |---|---|---|
 | **Subject** | *what* is this about — the library shelf (`Algebra`, `Pharmacology`) | Yes |
 | **Domain Context** | *how* it is authored — **the sole LLM domain constraint** | **Yes — this is the one that shapes voice and framing** |
-| **Note Learner Level** | *how deep* — the curriculum floor | Yes |
+| **Note Learner Level** — labelled **“Authored Depth”** in the UI since `v0.75.0` (copy-only; the column is still `notes.learner_level`) | *how deep* — the curriculum floor | Yes |
 | **Applicable Programs** | *where* it appears — one or many catalog programs | **Never.** Discovery only |
 | **Target Audience** | *who* it is for | **Never.** Discovery only, and never depth |
 
@@ -85,6 +85,8 @@ Backend: `NoteEntity` (`backend/src/main/java/com/studysnap/backend/entity/NoteE
 | `sourceNoteId` | FK | set when a note was generated from another note |
 | `copiedFromNoteId` / `copiedFromUserId` / `copiedFromTitle` / `copiedFromPublic` / `copiedAt` | | provenance when this note is a copy of a public note |
 | `createdAt` / `updatedAt` | | |
+
+**Since `v0.75.0`, depth is PRE-FILLED for curators rather than asked for.** The chain is **Review Set → author profile → explicit override**. A Note Collection now carries its own optional `learnerLevel`, inherited down one level from a Goal to its child plans, and bulk-generate can author straight into a Review Set — pre-filling depth from it and adding the finished notes to it on completion. **Three constraints bind:** it is a **UI pre-fill only, never a server-side default write**; it applies to **curators only**, because the control is not shown to learners, so nothing is written on their behalf; and it **never touches an existing note**, because a depth change on a generated note strands its Challenge-bank rows at the old level. **Domain Context is never inferred** — no source is authorized for it, and `domain_context IS NULL` is the promotion-backlog marker a default would destroy.
 
 **CORRECTED — a Note now DOES own its depth.** This file previously said *"There is no `learnerLevel` field on a Note… learner level is a property of the user's profile, not the note."* That was true until `v0.69.0` and is now false. `notes.learner_level` exists and is authored per note.
 

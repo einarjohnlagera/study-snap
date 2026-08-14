@@ -70,7 +70,7 @@ describe("PricingPage", () => {
     expect(await screen.findAllByText(/Intro offer:/i)).not.toHaveLength(0);
     expect(screen.getByRole("heading", { name: "Free for everyday study. Plus for regular review. Pro for your complete learning system." })).toBeInTheDocument();
     expect(screen.getByText("Free covers the core note-to-study-pack workflow. Plus expands your monthly limits. Pro adds the highest limits and advanced practice tools.")).toBeInTheDocument();
-    expect(screen.getByText("For getting started")).toBeInTheDocument();
+    expect(screen.getByText("Start with ready-made study material")).toBeInTheDocument();
     expect(screen.getByText("Guided learning built around your notes")).toBeInTheDocument();
     expect(screen.getByText("Your complete learning system")).toBeInTheDocument();
     expect(screen.getByText("Most popular")).toBeInTheDocument();
@@ -107,7 +107,7 @@ describe("PricingPage", () => {
     expect(screen.getByText("Prices are shown for Philippines (PHP) and international (USD) using backend pricing data when available.")).toBeInTheDocument();
     expect(screen.getByText("Plan comparison")).toBeInTheDocument();
     expect(screen.getByText("Best for")).toBeInTheDocument();
-    expect(screen.getByText("Focused exam preparation and mastery practice")).toBeInTheDocument();
+    expect(screen.getByText("Preparing with a real exam in sight")).toBeInTheDocument();
     expect(screen.getByText("How do I renew a pass?")).toBeInTheDocument();
     expect(screen.getByText("Can I get a refund?")).toBeInTheDocument();
     expect(
