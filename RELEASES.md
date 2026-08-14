@@ -2,7 +2,37 @@
 
 ## v0.75.0 - Authoring by Inference
 
-**Status: In Progress** (kicked off 2026-08-13)
+**Status: Released** (kicked off 2026-08-13, signed off 2026-08-14)
+
+### Scope completeness — every planned item accounted for at signoff
+
+Verified against the **final** code state, not against the PR that last touched each one.
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | Author profile pre-fills Note Learner Level | **Shipped, then CHANGED** — see below |
+| 2 | `note_collections.learner_level` + inheritance | Shipped (`V112`) |
+| 3 | Review Set selector on bulk-generate | Shipped (+ `V113` so retry reproduces the batch) |
+| 4 | Rename the admin label | Shipped — `Authored Depth` on all three authoring surfaces |
+| 5 | Domain Context explicitly **not** pre-filled | Held — `setDomainContext` is written only from the retry stash and the curator's own selection; nothing infers it |
+| 6 | `ADR-001` amendment | Shipped in the kickoff commit |
+| 7 | Backlog Index row correction | Shipped in the kickoff commit |
+
+**Item 1 changed after the pressure test, and the change is material enough to state plainly: the pre-fill applies to CURATORS ONLY, not to every author.** As originally built it fired for every profile, but the depth control renders only for Teacher/Admin — so learners silently persisted an invisible, unclearable value. It is now gated on `showTargetProfileTypeField`. **This narrows what item 1 delivers**: learners get no depth pre-fill at all, and their notes keep resolving through the profile fallback exactly as before this release. That is the intended end state, not a regression — `ADR-001` constraint 2's safety argument is that a human *saw* the value and saved it, which cannot hold for a hidden field.
+
+### The checkpoint gate — no checkpoint is owed, and here is why
+
+**Recorded explicitly rather than left silent**, because a future kickoff scan cannot distinguish "decided against" from "forgotten", and this project has already been bitten by a signoff that closed with neither.
+
+- **Nothing shipped ahead of its evidence.** Both gates this work carried were **genuinely cleared and verified in code**, not overridden: R4 resolved 2026-08-04, and the editability prerequisite shipped in `v0.70.0`. There was no pre-committed rule, no ambiguous read, and no bootstrap-test argument in play.
+- **This implements a ratified ADR direction, not a bet.** `ADR-001`'s *"Authoring populates by inference"* was ratified 2026-08-04 with four binding constraints, all of which this release honours.
+- **A dated row would be decorative, which the gate's own fifth property forbids.** The value claim worth testing is *"curators keep the inferred depth rather than overriding it"* — and **no event exists that would measure it.** This release shipped no instrumentation, so a checkpoint would have no working metric. Under this repo's rules that is worse than no checkpoint: it is the `v0.48.0` digest-lift failure repeated.
+
+**If that claim is ever worth testing, the prerequisite is an event recording whether a curator changed the pre-filled depth before submitting — ship that first, then date the read.** That is a deliberate future option, not an outstanding debt.
+
+### Pre-signoff pressure test
+
+Full three-agent cold-context review; ten findings, **all fixed, none documented-and-dropped**. Report and dispositions: `docs/claude-findings/v0.75.0-pre-signoff-pressure-test.md`. The feature-doc drift gate ran as part of it, against the final code state.
 
 Theme: stop asking a curator to compose three orthogonal metadata axes by hand. A teacher thinks *"I'm writing Engineering Algebra for first-year engineering students"* — the authoring surface should infer what it can and ask them to confirm, not compose.
 
