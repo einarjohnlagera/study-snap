@@ -1,5 +1,35 @@
 # RELEASES.md - NoteLib
 
+## v0.77.0 - Evidence-Gated Weak Concept Recommendation
+
+**Status: In Progress** (kicked off 2026-08-14)
+
+Theme: the Dashboard should recommend practice because a learner **keeps** getting something wrong — not because one quiz went badly.
+
+**First slice of the ratified *Adaptive Practice as the recommendation engine* direction** (`docs/claude-plans/adaptive-practice-recommendation-engine.md`, ratified 2026-08-14).
+
+**The defect, verified in code at kickoff.** `DashboardService.resolveTodayFocusWeakConcepts` reads weak concepts from **the single latest completed Quick Review session**, and the copy says so out loud: *"Your latest Quick Review in X showed N weak concepts."* One bad quiz produces a recommendation, which is exactly the mental model the direction rejects — *"the system wants me to take another quiz"* rather than *"the system noticed something I keep struggling with."* It also spends quota-limited remediation on weak evidence.
+
+**Why this is buildable now and cheap.** `ConceptHealthEntity` already stores **`incorrect_streak`**, and `ConceptHealthService` already defines **`TWICE_MISSED_STREAK_THRESHOLD = 2`** — an evidence bar this codebase already uses for the twice-missed → Ask Companion feature. So the persistent-weakness signal exists today; nothing needs to be recorded that isn't already being recorded.
+
+### Planned Scope
+
+1. **Recommend on persistent weakness, not one session (backend).** `resolveTodayFocusWeakConcepts` resolves from `ConceptHealth` where `incorrectStreak` meets the existing threshold, instead of extracting from the latest session's metadata. Reuses `findByUserIdAndStudyPackIdIn` and the existing threshold constant rather than inventing a second evidence bar.
+
+2. **Copy that says why it appeared (backend copy).** Replace *"Your latest Quick Review… showed N weak concepts"* with wording that names the persistence — the learner should feel the system noticed a pattern, not that it is reacting to one result.
+
+### Anti-drift — locked rules this release does NOT change
+
+- **WITHIN-PACK ONLY.** Cross-pack recommendation (*"this keeps coming back everywhere"*) requires **canonical concept identity** — `concept` is free text keyed per Study Pack — which is ADR-sized and roughly an order of magnitude more work. Out of scope, deliberately.
+- **⚠️ Do NOT remove the Challenge Quiz Adaptive Practice entry point.** Standing constraint until **2026-09-12**: `v0.74.0` already removed the Quick Review route and a second removal inside that window confounds the read instead of answering it. **This release builds the recommendation without touching any entry point, so nothing is deferred and no gate is overridden.**
+- **`ConceptHealth` integrity is untouched** — read-only here; it still moves only from genuine assessment.
+- **No new evidence bar.** Reuse `TWICE_MISSED_STREAK_THRESHOLD`.
+- **`WEAK_CONCEPT_DETECTION` feature gating is unchanged**, as are quotas and the five-mode contract.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.76.1 - Adaptive Practice Entry Attribution
 
 **Status: Released** (kicked off and signed off 2026-08-14)
