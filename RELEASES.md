@@ -2,7 +2,9 @@
 
 ## v0.77.0 - Evidence-Gated Weak Concept Recommendation
 
-**Status: In Progress** (kicked off 2026-08-14)
+**Status: Released** (kicked off and signed off 2026-08-14)
+
+**Scope: both planned items shipped**, nothing changed shape, nothing deferred. **No checkpoint is owed** — this implements a ratified direction rather than a bet, it removes no entry point, and it invents no new signal whose value would need measuring. **It also does not disturb the open `[CHECKPOINT — due 2026-09-12]`:** that read counts `ADAPTIVE_PRACTICE_STARTED` per active learner, and this changes *when the Dashboard recommends* rather than removing any route — the standing constraint against removing the Challenge Quiz entry point before that date is untouched and still binding.
 
 Theme: the Dashboard should recommend practice because a learner **keeps** getting something wrong — not because one quiz went badly.
 
