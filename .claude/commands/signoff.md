@@ -1,6 +1,6 @@
 ---
 name: signoff
-description: Close a release version and mark it Released. Makes a 3-file atomic commit directly on the releases/vX.Y.Z branch, writes the release notes file, then opens a PR to main. Use when all planned scope has shipped and the release is ready to close.
+description: Close a release version and mark it Released. Makes a 6-file atomic commit directly on the releases/vX.Y.Z branch, writes the release notes file, then opens a PR to main. Use when all planned scope has shipped and the release is ready to close.
 argument-hint: <version>
 ---
 
@@ -70,13 +70,18 @@ A checkpoint needs all five, per the gate-type rules in the Backlog Index intro:
 
 Also state the fallback honestly: **if the release recorded a fallback scope, verify it is genuinely unbuilt in code** before signing off with it on record. `v0.72.0` named the CPALE Exam Hub as its fallback; it had already shipped as `v0.54.0`, so that release's fallback was empty and nobody would have found out until someone tried to build it.
 
-## The 3-File Checklist
+## The 6-File Checklist
 
 Make ALL changes before committing — this is one atomic commit.
 
 - [ ] **`RELEASES.md`** — Change `Status: In Progress` → `Status: Released` for the closing version.
 - [ ] **`ROADMAP.md`** — Mark the version Released. Update "Current Release Baseline" to the next planned version if known. **Add any checkpoint row the gate above requires, and update the Backlog Index row of every item this release shipped** — a row still reading "next up" for something that shipped is how a shipped item silently keeps looking like a candidate.
 - [ ] **`docs/releases/vX.Y.Z.md`** — Write the release notes file using the template below. Use the Write tool; do not paste notes as conversation text.
+- [ ] **`README.md`, `AGENTS.md`, `CLAUDE.md`** — flip the version's status flag from `(In Progress)` to `(Released)`.
+
+**Why those last three are here (added 2026-08-14).** This checklist used to be three files, and the status flags in `README`/`AGENTS`/`CLAUDE` are only rewritten at the *next* `/kickoff`. So after **every** release, `main` stated the current version was still In Progress — for however long it took to open the next one. It is stale by construction, not by oversight, and `/version-check` does not catch it because the version *numbers* agree; only the status words disagree. `v0.76.0` found it on `main` for the third release running.
+
+**Also re-stamp `docs/gpt-contexts/GPT_CONTEXT.md` and any module the release invalidated.** That file carries its own `Last updated: vX.Y.Z (status)` line plus a Current-state paragraph, and its modules (`MONETIZATION_CONTEXT.md`, `QUIZ_AND_PRACTICE_CONTEXT.md`, `NOTES_AND_COLLECTIONS_CONTEXT.md`, …) each carry one too. They are pasted into GPT sessions as fact, so a stale module contradicts the core brief it ships beside — `v0.76.0` closed `FREE.title` while `MONETIZATION_CONTEXT.md` still said it was "still owed", on the exact topic that module exists to cover. Check the modules the release touched, not all of them.
 
 ## Release Notes Template
 

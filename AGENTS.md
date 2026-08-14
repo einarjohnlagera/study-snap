@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.76.0 - Messaging Architecture` (In Progress); previous: `v0.75.0 - Authoring by Inference` (Released)
+- `v0.76.0 - Messaging Architecture` (Released); previous: `v0.75.0 - Authoring by Inference` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
