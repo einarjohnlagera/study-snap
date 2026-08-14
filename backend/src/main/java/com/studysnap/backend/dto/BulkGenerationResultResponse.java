@@ -11,6 +11,7 @@ public record BulkGenerationResultResponse(
         String domainContext,
         String learnerLevel,
         String targetProfileType,
+        UUID collectionId,
         boolean makePublic,
         int requestedCount,
         int createdCount,

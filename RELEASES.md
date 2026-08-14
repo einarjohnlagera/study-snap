@@ -1,5 +1,105 @@
 # RELEASES.md - NoteLib
 
+## v0.75.0 - Authoring by Inference
+
+**Status: Released** (kicked off 2026-08-13, signed off 2026-08-14)
+
+### Scope completeness — every planned item accounted for at signoff
+
+Verified against the **final** code state, not against the PR that last touched each one.
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | Author profile pre-fills Note Learner Level | **Shipped, then CHANGED** — see below |
+| 2 | `note_collections.learner_level` + inheritance | Shipped (`V112`) |
+| 3 | Review Set selector on bulk-generate | Shipped (+ `V113` so retry reproduces the batch) |
+| 4 | Rename the admin label | Shipped — `Authored Depth` on all three authoring surfaces |
+| 5 | Domain Context explicitly **not** pre-filled | Held — `setDomainContext` is written only from the retry stash and the curator's own selection; nothing infers it |
+| 6 | `ADR-001` amendment | Shipped in the kickoff commit |
+| 7 | Backlog Index row correction | Shipped in the kickoff commit |
+
+**Item 1 changed after the pressure test, and the change is material enough to state plainly: the pre-fill applies to CURATORS ONLY, not to every author.** As originally built it fired for every profile, but the depth control renders only for Teacher/Admin — so learners silently persisted an invisible, unclearable value. It is now gated on `showTargetProfileTypeField`. **This narrows what item 1 delivers**: learners get no depth pre-fill at all, and their notes keep resolving through the profile fallback exactly as before this release. That is the intended end state, not a regression — `ADR-001` constraint 2's safety argument is that a human *saw* the value and saved it, which cannot hold for a hidden field.
+
+### The checkpoint gate — no checkpoint is owed, and here is why
+
+**Recorded explicitly rather than left silent**, because a future kickoff scan cannot distinguish "decided against" from "forgotten", and this project has already been bitten by a signoff that closed with neither.
+
+- **Nothing shipped ahead of its evidence.** Both gates this work carried were **genuinely cleared and verified in code**, not overridden: R4 resolved 2026-08-04, and the editability prerequisite shipped in `v0.70.0`. There was no pre-committed rule, no ambiguous read, and no bootstrap-test argument in play.
+- **This implements a ratified ADR direction, not a bet.** `ADR-001`'s *"Authoring populates by inference"* was ratified 2026-08-04 with four binding constraints, all of which this release honours.
+- **A dated row would be decorative, which the gate's own fifth property forbids.** The value claim worth testing is *"curators keep the inferred depth rather than overriding it"* — and **no event exists that would measure it.** This release shipped no instrumentation, so a checkpoint would have no working metric. Under this repo's rules that is worse than no checkpoint: it is the `v0.48.0` digest-lift failure repeated.
+
+**If that claim is ever worth testing, the prerequisite is an event recording whether a curator changed the pre-filled depth before submitting — ship that first, then date the read.** That is a deliberate future option, not an outstanding debt.
+
+### Pre-signoff pressure test
+
+Full three-agent cold-context review; ten findings, **all fixed, none documented-and-dropped**. Report and dispositions: `docs/claude-findings/v0.75.0-pre-signoff-pressure-test.md`. The feature-doc drift gate ran as part of it, against the final code state.
+
+Theme: stop asking a curator to compose three orthogonal metadata axes by hand. A teacher thinks *"I'm writing Engineering Algebra for first-year engineering students"* — the authoring surface should infer what it can and ask them to confirm, not compose.
+
+**This is `ADR-001` → "Authoring populates by inference, not manual classification" (direction, added 2026-08-04), and both of its sequenced gates are now clear.** That section gates the work on R4 and states *"authoring metadata is not editable once a note reaches `STUDY_PACK_READY`, so making those fields editable is the true first step."* Both premises are stale: **R4 resolved 2026-08-04** (passed on all three steps, `ADR-001` → *R4 verification*), and **editability shipped in `v0.70.0`** — `AGENTS.md:1081` records that Teacher/Admin authors may already edit Target Audience, Domain Context, and Note Learner Level on a `STUDY_PACK_READY` note, and `private-note-detail-page-client.tsx:1445-1452` opens that inline editor for any non-draft note. The ADR text has been stale for four releases; item 6 corrects it rather than leaving the next reader to re-derive this.
+
+**The scope is DEPTH ONLY. Domain Context is deliberately excluded, and this is binding.** `ADR-001`'s constraint 1 is titled *"Only a curation container may infer **depth**"* and names an inference chain for `learner_level` alone — **no inference source is authorized for Domain Context anywhere in that section.** It is also the field where a pre-fill does the most damage: constraint 2 makes `domain_context IS NULL` *the* promotion-backlog marker, and the promotion backlog is a one-line query over null-context notes. A curator tabbing past a pre-filled select silently converts an observable backlog row into a decided one, which is the exact mechanism constraint 2 exists to protect. **A confidently-wrong stored value is worse than NULL, because NULL is visible and a wrong value is not.**
+
+**The verified starting position, checked in code at kickoff 2026-08-13 — do not re-derive.**
+
+- **Leg 2 (author profile → depth) is implementable today, and the gap is asymmetric.** `bulk-generation-page-client.tsx:132` **already** pre-fills `courseProgram` from the author's profile (`setCourseProgram((current) => current || meResult.value.courseProgram || "")`). `learnerLevel` (`:109`) is restored only from a saved stash — there is no profile fallback. `/notes/new` is the same shape: `note-editor-page-client.tsx:163` initialises `learnerLevel: ""` with no pre-fill anywhere. **Depth is the one axis left out of a pattern already established beside it**, so item 1 completes an existing convention rather than introducing one. Every account is guaranteed a non-null `learnerLevel` after onboarding, so the fallback always resolves.
+- **Leg 1 (Review Set → depth) has NO SOURCE — this is what makes the release more than a patch.** `NoteCollectionEntity.java:45` carries `courseProgram` and **no** `learnerLevel`. No plan-template entity carries one either: `sourcePlanId`'s only level-adjacent sibling, `OfficialStudyPlanWishlistEntity:27`, has `courseProgram` and no depth. So *"a CE Board Review set is board-depth by construction"* is a human reading of a title, not a stored fact any code can read.
+- **No authoring surface knows its target Review Set.** `/notes/new` accepts only `mode` and `source` (`app/notes/new/page.tsx`), every entry point into it passes neither, and bulk-generate has no collection field at all. Leg 1 therefore needs a *trigger*, not just a column.
+
+### Planned Scope
+
+1. **Author profile pre-fills Note Learner Level (frontend).** On `/notes/new` and bulk-generate, mirroring the `courseProgram` pre-fill already at `bulk-generation-page-client.tsx:132`. **UI pre-fill only — never a server-side default write** (`ADR-001` constraint 2). The value is persisted only because a human saved the form, so a stored value continues to mean "a person decided this." **CREATE SURFACES ONLY — this must NOT be added to the inline metadata editor on `private-note-detail-page-client.tsx`**, which edits already-generated notes and would re-introduce the Challenge-bank orphan exposure item 3 rejects align-on-add for. See item 3's scoping note.
+
+2. **`note_collections.learner_level` — the missing leg-1 source (backend + frontend).** Additive migration plus admin editing. Nullable, so an untagged Review Set simply contributes nothing to the chain. **Inheritance resolved at scoping: nearest ancestor with a non-null `learner_level`, walking up `parentCollectionId` with a bounded depth** (the FK has no cycle constraint). **No ancestor carrying a level means NO pre-fill — never `COLLEGE`;** a hardcoded default is the confidently-wrong-stored-value failure constraint 2 names, and the profile fallback is leg 2's job. This is a form default computed at pre-fill time, **not** the read-time family expansion `ADR-001:58` forbids — recorded so a reviewer does not flag it.
+
+   **Ships as one Codex prompt with item 3** — same migration, same read path; splitting them would hand Codex a column nothing reads.
+
+3. **An optional Review Set selector on bulk-generate (backend + frontend).** Without this, item 2 is a column nothing reads. **RESOLVED at scoping 2026-08-13 — full reasoning in `ROADMAP.md`'s `v0.75.0` section.** The kickoff framed this as *pre-fill at creation vs. align-on-add*; tracing the real workflow collapsed that, because **every authoring flow is author-first, add-second** — bulk-generate has no collection field and pushes to `/library` on submit, and both the collection "Add notes" picker and the Study Plan builder select from *existing* notes. There is no context to read, so this is a missing input rather than a wiring choice. **Align-on-add is rejected on a concrete cost:** it mutates already-generated notes, making authoring corrections routine, which is exactly the condition the Backlog Index's *Challenge bank orphans* row names as making that bug unbounded (`uq_challenge_quiz_question_bank_user_pack_key` excludes `learner_level`, `V96:12`). Asking up front makes that risk structurally zero. **Membership is written at completion, per successfully-generated note** — `processBatch` gives each topic its own try/catch, so partial failure is normal and queue-time writes would point at notes that never generate. Scoped to **bulk-generate only**, not `/notes/new`.
+
+4. **Rename the admin-facing label (frontend, copy-only).** `Learner Level` → `Educational Level` or `Authored Depth`, both named viable by `ADR-001` constraint 4. **`Intended Audience` is NOT available** — `notes.target_profile_type` already occupies that concept and is already labelled *"Who is this note for?"* in the same editor; reusing it would collide two distinct axes in the one place users actually read. The column stays `learner_level`.
+
+5. **Domain Context is explicitly NOT pre-filled.** Recorded as scope, not omission — see the binding note above.
+
+6. **`ADR-001` amendment (docs).** Correct the "Sequencing — gated on R4" subsection: R4 is resolved and editability shipped in `v0.70.0`. **This is an ADR edit, not a doc typo** — an ADR outranks a feature doc, so a stale gate in it blocks work that is actually unblocked. The Backlog Index's *Authoring by inference* row carries the same staleness and is corrected in the same pass.
+
+### Anti-drift — locked rules this release does NOT change
+
+- **The four-axis knowledge model is unchanged.** Subject (*what*), Domain Context (*how it is authored*), Note Learner Level (*how deep*), Applicable Programs (*where it appears*). This release changes how one axis gets *populated*, not what the axes are.
+- **No inference may ever become a server-side default write.** `ADR-001` constraint 2.
+- **Subject and Domain Context are not valid depth sources.** `Algebra` spans every depth; inferring depth from Domain Context re-couples exactly what the four-axis split separated. `ADR-001` constraint 1.
+- **Depth granularity stays capped at the existing `LearnerLevel` values.** Year 1–4 is explicitly out of scope — a quiet enum expansion is not authorized. `ADR-001` constraint 3.
+- **The level resolution chain is untouched.** Note `learnerLevel` → profile `learnerLevel` → `COLLEGE`, and the level chain never reads `courseProgram` (`AGENTS.md:953`).
+- **Persisted quiz reuse must not key on the reader's level.** Pools and the Challenge bank resolve `effectiveCurriculumLevel` (`AGENTS.md:1633`); nothing here may pass `context.learnerLevel()` into a pool or bank call.
+- **No checkpoint collision.** This release is entirely curator-side and touches no learner result screen, no onboarding step, and no Quick Review surface — so it contaminates none of the reads due 2026-09-10 through 2026-09-13.
+
+### Shipped
+
+- **Review Set authored depth and bulk-authoring handoff.** Added nullable `note_collections.learner_level` with owner editing and bounded nearest-ancestor resolution; bulk generation now offers only owned note-accepting Review Sets, visibly pre-fills an empty Authored Depth control, and adds successfully created notes to the chosen set in order after batch completion. Queue-time validation fails fast, completion rechecks ownership, and collection deletion or membership failure remains observable without failing or retrying generated notes. No collection depth is written onto notes server-side, no existing note is aligned on add, and Domain Context remains uninferred.
+
+  **Three audit fixes applied before commit, recorded rather than absorbed silently.** (1) **The ancestor walk discarded an answer it had already found** — it kept walking after locating the nearest level and only returned at the root, so a cycle, a depth-cap exit, or an owner mismatch further up returned empty *including for a collection carrying its own explicitly-set level*. It now returns the moment a level is found, with a regression test pinning the own-level-under-a-cyclic-chain case. Low reachability (the FK is `ON DELETE SET NULL` and the hierarchy is two levels by design), but the walk is now correct by construction rather than by luck. (2) **The selector hardcoded "Review Set"** while rendering only for Teacher/Admin — and `getCollectionLabels` returns **"Lesson Plan"** for a `TEACHER` profile, so the one audience that sees this control would have met split vocabulary on the surface they use most. It now reads through `getCollectionLabels`. (3) **`AGENTS.md` still carried *"must not be renamed before the R4 checkpoint runs"***, which R4's resolution on 2026-08-04 expired and which **contradicted the `ADR-001` amendment this release committed at kickoff — while blocking this release's own item 4.** Corrected to point at `ADR-001` constraint 4. A `docs/features/collections.md` section had also been inserted mid-list, orphaning three hierarchy bullets; the list is restored.
+
+- **Authored Depth pre-fills from the author's profile, and the label is renamed (items 1 and 4).** On note create and bulk-generate, the depth control now pre-fills from the author's own profile level — `ADR-001`'s deliberately weak fallback leg — completing a pattern `courseProgram` already had beside it. The user-facing label becomes **`Authored Depth`** across the Note Editor, Note Detail's inline panel, and bulk-generate. **The rename is copy-only: the column stays `notes.learner_level`** and the axis is still called Note Learner Level in `ADR-001` and the API contract. `Intended Audience` was unavailable because `notes.target_profile_type` already owns that concept in the same form. **The reader-level control in onboarding and Profile is deliberately untouched** — that is `users.learner_level`, a different axis, and renaming it would also have changed onboarding copy inside `[CHECKPOINT — due 2026-09-11]`'s measurement window.
+
+  **The pre-fill is CREATE-ONLY**, gated inside the Note Editor's existing `!isEditMode` branch: a depth change on an already-generated note strands its Challenge-bank rows at the old level, which is precisely the hazard that made this release reject align-on-add. A regression test pins the edit-mode case.
+
+  **Item 1 would have silently broken item 3, and the fix is the interesting part.** `ADR-001`'s chain is *Review Set → author profile → explicit override*, so a Review Set outranks the profile. But the profile pre-fill lands on load, and item 3's selector only filled an **empty** control — so by the time a curator picked a Review Set the control was already non-empty and the Review Set's depth was **silently ignored, inverting the documented precedence**. The form now tracks which source produced the current value: a Review Set replaces a profile pre-fill but never an explicit choice, and a level restored from a retry stash counts as explicit. Every step remains a pre-fill into a visible control; none of it is a server-side default write, and Domain Context is never inferred at any step.
+
+- **Pre-signoff pressure test — ten findings, all fixed, none documented-and-dropped.** Three cold-context agents (backend, frontend, docs-vs-code), triggered by `bulk-generation-page-client.tsx` being touched by two PRs. Full report: `docs/claude-findings/v0.75.0-pre-signoff-pressure-test.md`.
+
+  **The blocker, found independently by all three agents: learner note-creates silently wrote an invisible, unclearable `notes.learner_level`.** The depth control renders for Teacher/Admin only, but the pre-fill was gated on `!isEditMode` alone. Every learner create therefore persisted their profile level into a field with no control on any surface — and Note Detail sends the value back untouched for non-teachers, so nothing in the product could ever clear it. It converted a resolve-time fallback into a frozen **curriculum floor**: a learner who later changed their profile level stayed pinned forever. **Never deployed**, so no production data was affected.
+
+  **The fix is deliberately NOT the one the audit proposed.** Two agents suggested gating the request *payload*; that would have introduced a fresh bug, since `PUT /notes/{id}` is a full replace and a learner editing a note that already carried a depth would have had it **nulled on save** — the exact failure `notes.md` warns about. Gating the **pre-fill** is correct in all four create/edit × learner/curator cases, and a regression test now pins the round-trip so the payload-gating "fix" cannot be reintroduced. Gating the pre-fill also makes this release's own "entirely curator-side" claim true again — the doc was right and the code had drifted.
+
+  **Two shipped tests asserted less than their names claimed**, and both are replaced with tests that fail against the old code: the vacuous *"leaves authored depth empty when the Review Set has no resolved level"* (it never exercised a **switch**, which is exactly where the bug was), and a learner-path assertion edited earlier in this release to ratify the invisible write. The original `learnerLevel: null` was correct only *by accident* — it predated profile-type awareness — so it was replaced with named learner/curator tests rather than reverted.
+
+  **Also fixed:** the depth pre-fill overwrote an *explicitly blank* choice (so a retried batch was authored at a different depth than the batch it replaced); switching Review Sets stranded the previous set's depth; Review Set membership was all-or-nothing, so deleting one note mid-batch dropped **every** note from the set; the retry stash dropped the Review Set entirely; `adopt` lost `learnerLevel`, silently disabling the pre-fill for adopters; `resolvedLearnerLevel` could cross a visibility boundary on the unauthenticated public endpoint via a published child under a private parent; seven doc-drift sites; and a dead constructor injecting a null dependency. **The precedence logic was restructured once rather than patched three times**, and now uses refs — a state closure could not see the retry stash, which resolves synchronously before the async profile load.
+
+  **One fix uncovered a second latent defect:** adding `collectionId` to the retry-stash type was not enough, because the stash reader **whitelists fields**, so it was silently dropped on read.
+
+  **A rule was added rather than only repairing the symptom:** Backlog Index rows are now cited **by title, never line number** — three citations pointed at the wrong rows because the kickoff commit inserted two lines above the table, which recurs by construction every release, and one broken pointer was the stated evidence for a design decision.
+
+  **Also fixed here: five frontend tests that `v0.75.0`'s first PR merged red.** The `getCollectionLabels` vocabulary fix in that PR changed the selector's rendered label, and five assertions still looked for the literal `Review Set`. **They were reported as passing on a masked exit code** — `npx jest` piped into `tail` returns `tail`'s status, so the failures were in the output but never surfaced. The assertions now target the label that actually renders (`Collection` for an admin with no profile type, consistent with that account's own nav), and the hardcoded `"Could not load Review Sets."` fallback likewise reads through `getCollectionLabels`. **Verification for this item was run unpiped: full frontend suite 175 suites / 1857 tests green, `tsc --noEmit` clean.**
+
 ## v0.74.0 - Quiz Progression
 
 **Status: Released** (kicked off 2026-08-12, signed off 2026-08-13)

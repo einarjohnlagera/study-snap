@@ -893,6 +893,8 @@ describe("Library page", () => {
       targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],
+      // Carried through so the retry reproduces the batch's Review Set.
+      collectionId: null,
     });
     expect(pushMock).toHaveBeenCalledWith("/library/bulk-generate");
   });

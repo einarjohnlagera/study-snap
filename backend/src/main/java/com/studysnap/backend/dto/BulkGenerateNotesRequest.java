@@ -20,7 +20,8 @@ public record BulkGenerateNotesRequest(
         String courseProgramText,
         String domainContext,
         String learnerLevel,
-        NoteTargetProfileType targetProfileType
+        NoteTargetProfileType targetProfileType,
+        UUID collectionId
 ) {
     public BulkGenerateNotesRequest(
             String subject,
@@ -31,6 +32,20 @@ public record BulkGenerateNotesRequest(
             String learnerLevel,
             NoteTargetProfileType targetProfileType
     ) {
-        this(subject, topics, makePublic, List.of(), courseProgramText, domainContext, learnerLevel, targetProfileType);
+        this(subject, topics, makePublic, List.of(), courseProgramText, domainContext, learnerLevel, targetProfileType, null);
+    }
+
+    public BulkGenerateNotesRequest(
+            String subject,
+            List<String> topics,
+            boolean makePublic,
+            List<UUID> courseProgramIds,
+            String courseProgramText,
+            String domainContext,
+            String learnerLevel,
+            NoteTargetProfileType targetProfileType
+    ) {
+        this(subject, topics, makePublic, courseProgramIds, courseProgramText, domainContext,
+                learnerLevel, targetProfileType, null);
     }
 }

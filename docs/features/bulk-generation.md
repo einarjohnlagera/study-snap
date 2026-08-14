@@ -20,7 +20,8 @@ Every batch contains:
 - `Course / Program(s)` for every profile: learners enter one free-text personal program, while Teacher and Admin profiles choose one-or-many catalog selections
 - `Target Audience` for Teacher and Admin profiles
 - Domain Context for Teacher and Admin profiles (optional with one program; required above one)
-- optional `Note Learner Level` for Teacher and Admin profiles
+- optional `Authored Depth` for Teacher and Admin profiles (the control label for the `notes.learner_level` axis, still named Note Learner Level in `ADR-001`)
+- an optional note-accepting Review Set for Teacher and Admin profiles (labelled with the profile's own collection vocabulary — see below)
 - a `Public` toggle
 
 Topics are discrete rows with `+ Add topic` and per-row removal. They are not note titles. A topic such as `Newton's Laws of Motion` seeds note-content generation; the Study Pack write-back supplies the AI-refined title and tags. The Topics helper states this expectation inline (title and tags are auto-generated; the subject and other batch details apply to every note) so users are not surprised by AI-named notes in their Library.
@@ -31,12 +32,25 @@ Pasting a multi-line block into a topic row splits it into one topic per line (`
 
 Subject is full-width. The remaining visible metadata uses one responsive two-column grid in this order:
 
-1. Course / Program
-2. Target Audience
-3. Domain Context
-4. Note Learner Level
+1. Review Set
+2. Course / Program
+3. Target Audience
+4. Domain Context
+5. Authored Depth
 
-For Admin and Teacher, the four fields form two responsive rows. Domain Context and Note Learner Level both have explicit blank fallback options. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
+The Review Set control is a dropdown over owned collections that can accept notes; Goals are excluded. **Its label is not the literal string "Review Set" — it resolves through `getCollectionLabels(profileType)`**, so a `TEACHER` sees "Lesson Plan", a `STUDENT` "Study Plan", and an account with no profile type "Collection". The control renders only for Teacher and Admin, which is exactly the audience whose vocabulary diverges, so hardcoding a label here would split it on the surface they use most. Selecting one pre-fills an empty Authored Depth control from the collection's own or nearest inherited authored depth. It never overwrites a level the curator already chose, and no resolved collection level means no pre-fill (specifically, no `COLLEGE` default). The selected level remains visible and editable before submit. Domain Context is never inferred.
+
+**Label vs. axis, stated once so the rest of this file reads unambiguously.** The control is labelled **`Authored Depth`** (`v0.75.0` item 4, `ADR-001` constraint 4). The axis it writes is still `notes.learner_level` and is still called **Note Learner Level** in `ADR-001`, `AGENTS.md`, and the API contract below — **the rename is copy-only and the column did not move.** `Intended Audience` was explicitly unavailable as a label because `notes.target_profile_type` already occupies that concept in the same form.
+
+**Authored Depth pre-fills, in precedence order** (`ADR-001`'s chain is Review Set → author profile → explicit override):
+
+1. **The selected Review Set's** own or nearest inherited depth.
+2. **The author's own profile level**, applied on load — `ADR-001`'s deliberately weak fallback leg.
+3. **Whatever the curator explicitly chooses**, which outranks both.
+
+The form tracks which of these produced the current value, because the profile pre-fill lands on load: without that, the control would already be non-empty by the time a Review Set is chosen and the Review Set would be silently ignored, inverting the documented precedence. A Review Set selection therefore replaces a profile pre-fill but never an explicit choice, and a level restored from a retry stash counts as explicit. Every step is a pre-fill into a visible control — **none of it is a server-side default write**, and Domain Context is never inferred at any step.
+
+The collections request is optional enhancement data. A load failure renders an inline error and retry action while leaving the rest of the form usable and submittable without a Review Set. Domain Context and Authored Depth both have explicit blank fallback options. The grid collapses (`empty:hidden`) when no metadata fields are visible for non-teachers, so Subject sits directly above Public. `Public` is a full-width row below the grid with its label and toggle adjacent (not stretched across the card). The Topics list remains full-width below Public.
 
 ## Submission
 
@@ -50,7 +64,7 @@ The Library auto-refreshes so the queued notes appear without a manual refresh. 
 
 After the poller settles, the Library makes a best-effort read of the terminal result receipt via `GET /notes/bulk-generate/results/{id}`. If the receipt is not ready yet, the Library retries a bounded number of times; if it is still missing, already read, owned by someone else, or a transient request fails, no banner is shown and the Library continues normally. A receipt with no `failedTopics` and no `quotaBlockedTopics` is silent.
 
-When `failedTopics` is non-empty, the dismissible banner lists the full topic strings with `X of Y notes generated. These couldn't be generated — try again:` and offers `Retry these`. That action stores the failed topics plus subject, course/program, Domain Context, Note Learner Level, target audience, and public toggle in `sessionStorage`, then navigates to `/library/bulk-generate`; the bulk form consumes that stash once, pre-fills the form, and clears it.
+When `failedTopics` is non-empty, the dismissible banner lists the full topic strings with `X of Y notes generated. These couldn't be generated — try again:` and offers `Retry these`. That action stores the failed topics plus subject, course/program, Domain Context, Authored Depth, target audience, public toggle, **and the selected Review Set** in `sessionStorage`, then navigates to `/library/bulk-generate`; the bulk form consumes that stash once, pre-fills the form, and clears it.
 
 When `quotaBlockedTopics` is non-empty, the banner lists those topics separately as monthly note-generation quota blocks and shows the plan-aware upgrade action from `getUpgradeCtas(currentPlan)`. It does not offer `Retry these` for quota-blocked topics because retrying immediately would hit the same limit. Mixed receipts show both groups with their distinct actions.
 
@@ -82,6 +96,10 @@ The endpoint validates the request, queues one throttled background batch on the
 4. Create the note through `NoteService.create` with the topic as its initial title, all resolved batch metadata, and generated content.
 5. Apply PUBLIC visibility when requested.
 6. Start the existing async Study Pack generation pipeline.
+
+After all topics have been attempted, the worker adds the successfully created note ids to the selected Review Set, preserving batch order. It uses `NoteCollectionService.addItems`, so membership positioning, ownership validation, goal rejection, and duplicate filtering stay centralized. Queueing validates ownership and leaf status before dispatch; completion rechecks through the same owner-scoped path across the async boundary. The membership write is its own transaction, independent of already-committed note generation.
+
+Partial failure is normal: failed or quota-blocked topics contribute no note id, so only successful notes are added. If the collection was deleted or any membership write fails at completion, the failure is logged and the batch still completes normally; note generation is neither failed nor retried. Repeating membership is idempotent because `addItems` filters ids already present in the collection.
 
 One topic failure is caught and logged without aborting later topics. Notes appear as real Library rows and independently resolve through the existing `GENERATING -> STUDY_PACK_READY` or `FAILED` states.
 

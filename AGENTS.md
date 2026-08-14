@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.74.0 - Quiz Progression` (In Progress); previous: `v0.73.0 - Onboarding Redesign` (Released)
+- `v0.75.0 - Authoring by Inference` (In Progress); previous: `v0.74.0 - Quiz Progression` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -1634,7 +1634,8 @@ These rules exist to prevent the most common forms of context drift across AI co
 - Quiz/exam prompts receive learner level and course/program separately through `buildLearnerContextBlock()`; content prompts use `buildContentContextBlock()`, which omits the **reader's** level but does read the note's authored level.
 - The note's authored level is the **curriculum floor** for quizzes and exams. A lower reader level may soften scaffolding and wording; it must never lower curriculum, terminology, or difficulty, and a higher reader level must never raise them above the note's level.
 - Study Pack, Challenge Quiz, Board Exam, and Adaptive Practice generation must resolve both axes through `StudyPackGenerationContextResolver` — `effectiveAuthoringDomain()` (Domain Context wins; note `courseProgram` then profile `courseProgram` are fallbacks) and `effectiveCurriculumLevel()` (note level → reader level → `COLLEGE`). Never reconstruct either chain inside a generation service.
-- Learner Level is required at the user/profile level for completed accounts, but generation context remains nullable for legacy/best-effort paths. `notes.learner_level` is the authored depth axis and outranks the profile level; it must not be removed, narrowed, or renamed before the R4 checkpoint runs (owner constraint, 2026-08-04). Teacher quiz modal's `targetLearnerLevel` is the only per-generation override, and only an explicitly chosen value is persisted — never the resolved level.
+- Learner Level is required at the user/profile level for completed accounts, but generation context remains nullable for legacy/best-effort paths. `notes.learner_level` is the authored depth axis and outranks the profile level; it must not be removed or narrowed. **The "not renamed before the R4 checkpoint runs" half of this constraint has EXPIRED — R4 resolved 2026-08-04** (`ADR-001` → *R4 verification*), and `ADR-001` constraint 4 now governs renaming: the user-facing label may become `Educational Level` or `Authored Depth`, `Intended Audience` is unavailable (`notes.target_profile_type` already owns that concept), and any rename is **copy-only — the column stays `learner_level`**. Teacher quiz modal's `targetLearnerLevel` is the only per-generation override, and only an explicitly chosen value is persisted — never the resolved level.
+- A collection's `learnerLevel` may pre-fill a visible new-note authoring control from the collection or nearest ancestor, but it is never a server-side default write and never changes an existing note when membership is added. No resolved collection level means no pre-fill, not `COLLEGE`.
 - See `docs/features/profile-learning-context.md` for the full rule set.
 
 ### Upgrade CTA Anti-Drift

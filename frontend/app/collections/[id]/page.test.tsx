@@ -2744,6 +2744,44 @@ describe("CollectionDetailPageClient", () => {
     });
   });
 
+  it("persists authored depth and re-renders it when the editor is reopened", async () => {
+    (updateCollection as jest.Mock).mockResolvedValue(collection({ learnerLevel: "BOARD_EXAM_REVIEW" }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    fireEvent.change(await screen.findByLabelText("Authored Depth"), {
+      target: { value: "BOARD_EXAM_REVIEW" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(updateCollection).toHaveBeenCalledWith(
+      "collection-1",
+      expect.objectContaining({ learnerLevel: "BOARD_EXAM_REVIEW" }),
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    expect(await screen.findByLabelText("Authored Depth")).toHaveValue("BOARD_EXAM_REVIEW");
+  });
+
+  it("submits an empty authored depth to clear the stored value", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collection({ learnerLevel: "COLLEGE" }));
+    (updateCollection as jest.Mock).mockResolvedValue(collection({ learnerLevel: null }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+    await screen.findByRole("heading", { name: "Midterm Study Plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Open study plan actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    fireEvent.change(await screen.findByLabelText("Authored Depth"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(updateCollection).toHaveBeenCalledWith(
+      "collection-1",
+      expect.objectContaining({ learnerLevel: "" }),
+    ));
+  });
+
   // An empty estimate field sends null. Server-side, updateMetadata now treats null as "unchanged"
   // (PATCH semantics), so clearing a previously-set estimate via this modal is deferred to a later
   // release; the modal still sends null, which the backend preserves. This asserts the payload only.

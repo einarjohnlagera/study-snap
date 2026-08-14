@@ -20,12 +20,14 @@ import {
   getCourseProgramCatalog,
   getMyPlan,
   listCoursePrograms,
+  listCollections,
   listSubjects,
   type BulkGenerateNotesRequest,
   type CourseProgramCatalogItem,
   type DomainContext,
   type LearnerLevel,
   type NoteTargetProfileType,
+  type NoteCollectionSummary,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { consumeBulkGenerationRetryStash, setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
@@ -39,6 +41,7 @@ import {
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { DOMAIN_CONTEXT_OPTIONS } from "@/lib/domain-context";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
+import { getCollectionLabels } from "@/lib/collection-labels";
 
 export const MAX_BULK_GENERATION_TOPICS = 50;
 
@@ -58,6 +61,10 @@ export function BulkGenerationPageClient() {
   const authUser = getAuthUser();
   const isTeacherOrAdmin = isTeacherSelectableNoteTarget(authUser?.profileType, authUser?.role);
   const isAdmin = authUser?.role === "ADMIN";
+  // This selector renders only for teachers/admins, and a TEACHER profile calls these
+  // "Lesson Plans" everywhere else in the app — hardcoding "Review Set" here would split
+  // the vocabulary on the one surface that audience uses most.
+  const collectionLabels = getCollectionLabels(authUser?.profileType);
   const nextTopicId = useRef(2);
   const [subject, setSubject] = useState("");
   const [courseProgram, setCourseProgram] = useState("");
@@ -68,6 +75,38 @@ export function BulkGenerationPageClient() {
   const [courseProgramCatalogRetry, setCourseProgramCatalogRetry] = useState(0);
   const [domainContext, setDomainContext] = useState<DomainContext | "">("");
   const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("");
+  // Authored Depth precedence, ADR-001's chain: Review Set -> author profile -> explicit
+  // override. These are REFS, not state, for two reasons. (1) Nothing renders from them.
+  // (2) The profile load is async, so a state closure would capture provenance as it was
+  // when its effect ran — and the retry stash resolves SYNCHRONOUSLY on mount, before
+  // getMe settles. Reading a stale "none" there is exactly how a stashed level got
+  // overwritten by the profile.
+  //
+  // The rule these encode, stated once so it is testable:
+  //   - "user"       an explicit curator choice, INCLUDING an explicit blank. Never overwritten.
+  //   - "collection" came from the selected Review Set.
+  //   - "profile"    came from the author's own level.
+  //   - "none"       nothing has set it.
+  // A Review Set selection replaces anything that is not "user" — including clearing to
+  // the profile level when the newly selected set carries no depth of its own.
+  const learnerLevelSourceRef = useRef<"none" | "profile" | "collection" | "user">("none");
+  const profileLearnerLevelRef = useRef<LearnerLevel | "">("");
+
+  // Single writer for the depth control: sets value and provenance together, as plain
+  // values. Never call a setter inside another setter's updater — React requires updaters
+  // to be pure, and this logic carries the whole precedence guarantee.
+  const applyLearnerLevel = useCallback(
+    (next: LearnerLevel | "", source: "none" | "profile" | "collection" | "user") => {
+      learnerLevelSourceRef.current = source;
+      setLearnerLevel(next);
+    },
+    [],
+  );
+  const [collectionId, setCollectionId] = useState("");
+  const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
+  const [collectionsLoading, setCollectionsLoading] = useState(false);
+  const [collectionsError, setCollectionsError] = useState<string | null>(null);
+  const [collectionsRetry, setCollectionsRetry] = useState(0);
   const [targetProfileType, setTargetProfileType] = useState<NoteTargetProfileType | "">(
     mapProfileTypeToNoteTargetProfile(authUser?.profileType),
   );
@@ -106,7 +145,13 @@ export function BulkGenerationPageClient() {
     setSubject(stash.subject);
     setCourseProgram(stash.courseProgram ?? "");
     setDomainContext(stash.domainContext ?? "");
-    setLearnerLevel(stash.learnerLevel ?? "");
+    // A retry stash holds what the curator already submitted, so it counts as explicit —
+    // UNCONDITIONALLY, including a stashed blank. Marking provenance only for a non-empty
+    // value made a deliberate "no depth" indistinguishable from untouched, so the profile
+    // pre-fill overwrote it and the retried notes were authored at a different depth than
+    // the batch they replaced.
+    applyLearnerLevel((stash.learnerLevel ?? "") as LearnerLevel | "", "user");
+    setCollectionId(stash.collectionId ?? "");
     setTargetProfileType(stash.targetProfileType as NoteTargetProfileType);
     setMakePublic(stash.makePublic);
     setTopics(stash.topics.map((value, index) => ({ id: index + 1, value })));
@@ -130,6 +175,17 @@ export function BulkGenerationPageClient() {
       );
       if (meResult.status === "fulfilled") {
         setCourseProgram((current) => current || meResult.value.courseProgram || "");
+        // Authored Depth falls back to the author's own profile level (ADR-001's weak leg).
+        // Pre-fill only, never a server-side default: it lands in a visible control the
+        // curator can change before submitting. Remembered so that deselecting a Review
+        // Set falls back down the chain rather than clearing to nothing.
+        const profileLearnerLevel = (meResult.value.learnerLevel ?? "") as LearnerLevel | "";
+        profileLearnerLevelRef.current = profileLearnerLevel;
+        // Gate on PROVENANCE, not on the control being non-empty: an explicit blank is a
+        // real choice and must not read as "untouched".
+        if (profileLearnerLevel && learnerLevelSourceRef.current === "none") {
+          applyLearnerLevel(profileLearnerLevel, "profile");
+        }
       }
       if (!isAdmin && planResult.status === "fulfilled" && planResult.value) {
         const noteGenRemaining = planResult.value.remaining.noteGenerationsRemaining;
@@ -168,6 +224,52 @@ export function BulkGenerationPageClient() {
       });
     return () => { active = false; };
   }, [courseProgramCatalogRetry, isTeacherOrAdmin]);
+
+  useEffect(() => {
+    if (!isTeacherOrAdmin) {
+      return;
+    }
+    let active = true;
+    setCollectionsLoading(true);
+    setCollectionsError(null);
+    void listCollections({ noteAccepting: true })
+      .then((loadedCollections) => {
+        if (active) setCollections(loadedCollections);
+      })
+      .catch((collectionsLoadError) => {
+        if (active) {
+          setCollectionsError(
+            collectionsLoadError instanceof Error
+              ? collectionsLoadError.message
+              : `Could not load ${collectionLabels.plural}.`,
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setCollectionsLoading(false);
+      });
+    return () => { active = false; };
+  }, [collectionLabels.plural, collectionsRetry, isTeacherOrAdmin]);
+
+  const handleCollectionChange = (selectedCollectionId: string) => {
+    setCollectionId(selectedCollectionId);
+    // An explicit curator choice outranks every inference, so leave it alone entirely.
+    if (learnerLevelSourceRef.current === "user") {
+      return;
+    }
+    // Otherwise re-resolve the whole chain rather than only filling an empty control.
+    // Only acting when the NEW set has a level left the PREVIOUS set's depth displayed
+    // and submitted after a switch or a clear — the batch would be authored at a depth
+    // belonging to a Review Set it was no longer going into.
+    const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId);
+    const fromCollection = selectedCollection?.resolvedLearnerLevel ?? "";
+    if (fromCollection) {
+      applyLearnerLevel(fromCollection, "collection");
+      return;
+    }
+    const fromProfile = profileLearnerLevelRef.current;
+    applyLearnerLevel(fromProfile, fromProfile ? "profile" : "none");
+  };
 
   useEffect(() => {
     if (!isTeacherOrAdmin || courseProgramIds.length > 0 || !courseProgram.trim()) {
@@ -296,6 +398,7 @@ export function BulkGenerationPageClient() {
             domainContext: domainContext || null,
             learnerLevel: learnerLevel || null,
             targetProfileType: targetProfileType as NoteTargetProfileType,
+            ...(collectionId ? { collectionId } : {}),
           }
         : { courseProgramText: courseProgram.trim() }),
     };
@@ -378,6 +481,40 @@ export function BulkGenerationPageClient() {
           <div data-testid="bulk-metadata-grid" className="grid gap-4 empty:hidden sm:grid-cols-2">
             {isTeacherOrAdmin ? (
               <div className="space-y-2">
+                <label htmlFor="bulk-review-set" className="text-sm font-medium text-foreground">
+                  {collectionLabels.singular} (optional)
+                </label>
+                <select
+                  id="bulk-review-set"
+                  value={collectionId}
+                  disabled={collectionsLoading}
+                  onChange={(event) => handleCollectionChange(event.target.value)}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-60"
+                >
+                  <option value="">{collectionsLoading ? `Loading ${collectionLabels.plural}...` : `No ${collectionLabels.singular}`}</option>
+                  {collections.map((collection) => (
+                    <option key={collection.id} value={collection.id}>{collection.title}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-foreground/60">
+                  Generated notes will be added here when the batch finishes. Its authored depth can pre-fill the level below.
+                </p>
+                {collectionsError ? (
+                  <div className="space-y-1" role="alert">
+                    <p className="text-xs text-red-600 dark:text-red-400">{collectionsError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setCollectionsRetry((value) => value + 1)}
+                      className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Retry {collectionLabels.plural}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {isTeacherOrAdmin ? (
+              <div className="space-y-2">
                 <label htmlFor="bulk-course-program" className="text-sm font-medium text-foreground">
                   Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
                 </label>
@@ -443,7 +580,7 @@ export function BulkGenerationPageClient() {
                   onChange={(event) => setDomainContext(event.target.value as DomainContext | "")}
                   className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                 >
-                  <option value="">Use Course / Program fallback</option>
+                  <option value="">Automatic — based on the program</option>
                   {DOMAIN_CONTEXT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
@@ -459,15 +596,15 @@ export function BulkGenerationPageClient() {
             {isTeacherOrAdmin ? (
               <div className="space-y-2">
                 <label htmlFor="bulk-learner-level" className="text-sm font-medium text-foreground">
-                  Note Learner Level (optional)
+                  Authored Depth (optional)
                 </label>
                 <select
                   id="bulk-learner-level"
                   value={learnerLevel}
-                  onChange={(event) => setLearnerLevel(event.target.value as LearnerLevel | "")}
+                  onChange={(event) => applyLearnerLevel(event.target.value as LearnerLevel | "", "user")}
                   className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                 >
-                  <option value="">Use reader level fallback</option>
+                  <option value="">Automatic — based on the reader</option>
                   {LEARNER_LEVEL_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}

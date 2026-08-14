@@ -30,6 +30,7 @@ public class BulkGenerationResultService {
             DomainContext domainContext,
             LearnerLevel learnerLevel,
             String targetProfileType,
+            UUID collectionId,
             boolean makePublic,
             int requestedCount,
             int createdCount,
@@ -44,6 +45,7 @@ public class BulkGenerationResultService {
         entity.setDomainContext(domainContext);
         entity.setLearnerLevel(learnerLevel);
         entity.setTargetProfileType(targetProfileType);
+        entity.setCollectionId(collectionId);
         entity.setMakePublic(makePublic);
         entity.setRequestedCount(requestedCount);
         entity.setCreatedCount(createdCount);
@@ -75,6 +77,7 @@ public class BulkGenerationResultService {
                 entity.getDomainContext() == null ? null : entity.getDomainContext().name(),
                 entity.getLearnerLevel() == null ? null : entity.getLearnerLevel().name(),
                 entity.getTargetProfileType(),
+                entity.getCollectionId(),
                 Boolean.TRUE.equals(entity.getMakePublic()),
                 entity.getRequestedCount(),
                 entity.getCreatedCount(),

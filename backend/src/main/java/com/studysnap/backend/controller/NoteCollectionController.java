@@ -52,9 +52,10 @@ public class NoteCollectionController {
     @GetMapping
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public List<NoteCollectionSummaryResponse> list(
+            @RequestParam(value = "noteAccepting", defaultValue = "false") boolean noteAccepting,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return service.list(user.userId());
+        return noteAccepting ? service.listNoteAccepting(user.userId()) : service.list(user.userId());
     }
 
     @PostMapping
