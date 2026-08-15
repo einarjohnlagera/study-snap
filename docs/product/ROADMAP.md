@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.80.0 — Instrumentation Integrity` (on `releases/v0.80.0`, cut from `main` after `v0.79.0` merged and deployed) is **In Progress** — kicked off 2026-08-15. **`trackAnalyticsEvent` posts with a raw `fetch` while every product call goes through `fetchWithAuth`'s refresh-and-retry**, so a 401 on a 15-minute access token silently discards the event while the learner's action succeeds. **The loss is biased, not random:** impressions fire right after a data load with a fresh token; clicks on an idle page do not — so **impression→click rates read systematically low**, which is the exact metric behind both `[CHECKPOINT — due 2026-09-14]` rows. **Ships now precisely because a window is live:** `v0.78.0`'s opened 2026-08-15, so fixing immediately leaves ~29 of 30 days clean where deferring leaves none. Also normalizes catalog names on create (`v0.79.0` made the catalog the sole public chip source, taking that exposure from partial to total) and closes four weak tests recorded as `v0.79.0` limitations. Full scope and anti-drift rules in `RELEASES.md`.
+
 `v0.79.0 — Catalog-First Vocabulary` (on `releases/v0.79.0`, cut from `main` after `v0.78.0` merged and deployed) is **Released** — kicked off and signed off 2026-08-15. **The counter-proposal from `course-program-canonical-catalog-proposal.md`, NOT the `ADR-001` amendment** — that amendment stays PROPOSED and unratified, and the proposal's own recommendation is to try the softer fix first. **The defect is two sources of truth that drifted:** a hardcoded 31-value `COURSE_PROGRAM_SUGGESTIONS` list against a 21-row canonical catalog, **only 16 overlapping**, so a learner picking a non-overlapping value gets a `course_program` that matches no published plan and `v0.78.0`'s recommendation can never fire for them. **Production sizes it: 60 of the 189 planless learners are blocked by vocabulary, not content or features.** Fix is catalog-first suggestions (free text still allowed, no migration) plus stopping off-catalog values from minting public filter chips, **instrumented** so the off-catalog rate for newly authored values is observable — with a pre-deploy baseline captured before merge, which is the step `v0.78.0` learned the hard way. **Onboarding is deliberately excluded** to protect `[CHECKPOINT — due 2026-09-11]`, and the pre-deploy baseline shows that is where the value is — learner notes are already 0.6% off-catalog while learner profiles are 13.9%, so **this release is the machinery and the measurement, and the onboarding follow-up is the intervention** (its own Backlog Index row). Owes `[CHECKPOINT — due 2026-09-14]` proximal / `2026-10-15` distal. **No next version is kicked off.** Full scope and anti-drift rules in `RELEASES.md`.
 
 `v0.78.0 — Post-Mastery Next Step` (on `releases/v0.78.0`, cut from `main` after `v0.77.0` merged and deployed) is **Released** — kicked off 2026-08-14, signed off 2026-08-15. **It opened as leg (a) of the "Post-mastery next step" backlog row and grew mid-flight on production evidence:** once a learner masters a pack, the result screen advances to `Take a Challenge` and its **secondary slot is empty** — verified in code at kickoff, `PostSessionNextStepService.java:215` passes `null`. This fills it with the learner's **next Study Plan item**. **"Next" = lowest `NoteCollectionItemEntity.position` the learner has not practiced**, reusing `toProgressResponse`'s existing `lastSessionCompletedAt != null` definition so the suggestion cannot contradict the progress bar beside it. **Leg (b) ("a similar note") is explicitly OUT** — similarity is the Discovery System, gated behind `[CHECKPOINT — due 2026-09-13]`, and building a second recommender beside it would fragment both. **No entry point moves**, so the standing 2026-09-12 Challenge Quiz constraint is untouched. **The LaTeX chore did NOT ship** — owner-executed curator work that was not performed, carried forward with its Backlog Index row intact rather than counted as done. **The release also owes `[CHECKPOINT — due 2026-09-14]`** on whether a named recommendation converts where a generic pointer did not. **No next version is kicked off.** Full scope and anti-drift rules in `RELEASES.md`.
@@ -301,6 +303,29 @@ This section exists so a fresh session doesn't have to re-derive from scratch wh
 **Migration risks already identified** — none is a blocker, all need handling: live public shareable slug URLs for catalog-excluded values; public search matching `course_program` text; `users.course_program` as the last link in the domain fallback chain; and the irreversibility of dropping any column, which is why none is dropped here.
 
 **Open question, not yet decided:** whether library cards should show program names (owner's instinct: `Civil Engineering • Mechanical Engineering • +2`) or the count (engineering recommendation: names read as a second identity beside the Subject badge, are largely redundant once a learner has filtered by program, and force an arbitrary truncation choice). A GPT consultation prompt covering this and the architecture is at `22-remove-primary-program-gpt-consultation-prompt.md`.
+
+## v0.80.0 — Instrumentation Integrity (In Progress, base branch `releases/v0.80.0`)
+
+Kicked off 2026-08-15. Theme: the events four September decisions rest on should actually arrive.
+
+### Why this, and why it cannot wait
+
+**Verified in code at kickoff, not inferred:** `trackAnalyticsEvent` (`frontend/lib/api.ts:2844`) uses a raw `fetch` with `buildAuthHeaders()`; `fetchWithAuth` (`:2164`) refreshes and retries on 401; analytics does neither and swallows the failure at `:2854`. Access tokens live **15 minutes** (`application.yaml:428`).
+
+**The bias is the point.** A uniformly lossy pipeline adds noise. This one drops the *click* half of a ratio more often than the *impression* half, because impressions fire immediately after a data load while clicks can follow an idle page. Both `[CHECKPOINT — due 2026-09-14]` rows read an impression→click rate, so the defect does not blur those answers — it tilts them.
+
+**Timing inverts the usual caution.** The standing rule against touching instrumentation inside a live window assumes the change alters what gets counted. This alters only whether a counted thing arrives. `v0.78.0`'s window opened 2026-08-15; shipping now leaves ~29 of its 30 days clean, and deferring leaves none. **Waiting is the option that damages the read.**
+
+### Explicitly out of scope
+
+- Any change to what an event means, when it fires, or what metadata it carries. New events, removed events, changed firing conditions — all out.
+- Rewriting existing catalog rows. The normalization fix applies to creates going forward; rewriting live rows would change filter chips users already see.
+- Migrations.
+- The onboarding catalog-first follow-up, still gated on `[CHECKPOINT — due 2026-09-11]`.
+
+### Carried caveat, to be annotated before its read
+
+`v0.74.0`'s `[CHECKPOINT — due 2026-09-12]` secondary metric (`STUDY_PACK_QUIZ_TAB_OPENED_AFTER_UNLOCK`) is frontend-fired and its window opened 2026-08-13, so roughly 3 of 30 days will sit on the old delivery behaviour. Its **primary** metric is backend-fired and unaffected. Record this on that row before the read rather than discovering it in September.
 
 ## v0.79.0 — Catalog-First Vocabulary (Released, base branch `releases/v0.79.0`)
 

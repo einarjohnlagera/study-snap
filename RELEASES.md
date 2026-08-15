@@ -1,5 +1,36 @@
 # RELEASES.md - NoteLib
 
+## v0.80.0 - Instrumentation Integrity
+
+**Status: In Progress** (kicked off 2026-08-15)
+
+Theme: the events four September decisions rest on should actually arrive.
+
+**The defect, verified in code at kickoff.** `trackAnalyticsEvent` (`frontend/lib/api.ts:2844`) posts with a raw `fetch` and `buildAuthHeaders()`. Every product call goes through `fetchWithAuth` (`:2164`), which handles a 401 by refreshing the access token and retrying. Analytics does neither — a 401 falls into the `catch` at `:2854` and is discarded silently. **Access tokens live 15 minutes** (`application.yaml:428`).
+
+**The loss is biased, which is worse than lossy.** Impressions fire immediately after a data load, so their token is fresh. A click on a page left idle past the TTL does not have that guarantee — and the product action still succeeds, because it refreshes. So **impression→click rates read systematically low**, and that is exactly the metric behind `[CHECKPOINT — due 2026-09-14]` for both `v0.78.0` (does a named recommendation convert) and `v0.79.0` (does catalog-first ordering change what learners pick). A pipeline that drops the click half of a ratio does not add noise; it manufactures a wrong answer.
+
+**Why this ships now rather than after the reads, which is the whole argument.** Four checkpoints mature 2026-09-10 → 09-14 on frontend-fired events, and `v0.78.0`'s window opened 2026-08-15. Shipping immediately means roughly 29 of its 30 days measure cleanly; deferring means none of them do. **This is the unusual case where shipping into a live measurement window improves the read instead of confounding it** — the standing caution against touching instrumentation mid-window assumes the change alters *what* is counted, and this alters only whether the count arrives.
+
+### Planned Scope
+
+1. **Analytics survives token expiry (frontend).** Route `trackAnalyticsEvent` through the refresh-aware path so a 401 refreshes and retries instead of silently dropping. **Implementation subtlety, not optional:** `keepalive: true` is on the current call for unload-time delivery, and a refresh-and-retry cannot run during page unload. Preserve fire-and-forget for that case; add refresh for the rest. A blanket swap to `fetchWithAuth` would trade one silent loss for another.
+2. **Catalog names are normalized on create (backend).** `CourseProgramCatalogService.create` does not apply `normalizeForStorage`, while the Public Library filter matches catalog names exactly. `v0.79.0` made the catalog the **sole** source of public filter chips, taking this from partial to total exposure — an admin adding `K-12` would mint a chip matching zero notes.
+3. **Close the weak tests recorded as `v0.79.0` known limitations.** Two in `lightweight-profile-completion-prompt.test.tsx` pass for the wrong reason (one asserts the combobox's internal buffer rather than a committed value; the other never awaits its rejection, so both halves pass for the initial-`null` reason). Add the discriminating `matchedCatalog` case — a value in the hardcoded fallback but **absent from the catalog**, which is the exact population `v0.79.0` exists to detect — and a Note Editor edit-mode test for unchanged-value suppression.
+
+### Anti-drift — locked for this release
+
+- **No change to what any event means, when it fires, or what metadata it carries.** This release changes only whether a fired event arrives. Altering firing conditions mid-window is the thing the standing caution actually forbids.
+- **No new events, and no removal of existing ones.**
+- **Analytics must still never block or interrupt a product flow.** The existing swallow-everything behaviour stays; it gains a retry, not a throw.
+- **No catalog rows are seeded, renamed, or retired**, and no existing catalog name is rewritten by the normalization fix — it applies to creates from this point forward. Rewriting existing rows would change live filter chips.
+- **No migration.**
+- **Do not "fix" the two weak tests by deleting them.** Each names a real behaviour; the assertions are what is wrong.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.79.0 - Catalog-First Vocabulary
 
 **Status: Released** (kicked off and signed off 2026-08-15)

@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.79.0 - Catalog-First Vocabulary` (Released); previous: `v0.78.0 - Post-Mastery Next Step` (Released)
+- `v0.80.0 - Instrumentation Integrity` (In Progress); previous: `v0.79.0 - Catalog-First Vocabulary` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
