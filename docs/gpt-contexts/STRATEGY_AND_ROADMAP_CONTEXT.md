@@ -2,7 +2,15 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **what to build next, sequencing, or why past releases went the way they did**.
-> Last updated: v0.73.0 - 2026-08-12
+> Last updated: v0.80.0 - 2026-08-15. **Stamp had gone seven releases stale (v0.73.0); restamped at the
+> `v0.80.0` signoff.** Roadmap structure changed materially in that span: **eleven dated checkpoints are
+> now live** (earliest 2026-09-10), and the Backlog Index gained rows for the **onboarding catalog-first
+> follow-up** (gated on 2026-09-11 and, by `v0.79.0`'s own baseline, the load-bearing half of that work),
+> **Study Pack generation resumability** (a deploy strands notes in `GENERATING`; draining is the wrong
+> fix there), and the **September 2026 checkpoint reads** (runnable queries written before their due
+> dates). **The sequencing consequence is unchanged and now denser: nearly every substantial candidate is
+> checkpoint-gated between 2026-09-10 and 09-14**, so proposals that change what a checkpoint measures
+> destroy the read rather than advancing it.
 
 ---
 

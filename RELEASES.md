@@ -2,7 +2,9 @@
 
 ## v0.80.0 - Instrumentation Integrity
 
-**Status: In Progress** (kicked off 2026-08-15)
+**Status: Released** (kicked off and signed off 2026-08-15)
+
+**Scope: three PRs, and the release grew by folding rather than by discovery.** It opened as one frontend delivery fix and closed with the backend twin, the carried test debt from two releases, and the September read queries. **It owes `[CHECKPOINT — due 2026-09-14]` for a reason worth stating plainly: the loss this release fixes was never measured.** It was inferred from a 15-minute token TTL and a code path — sound reasoning, not evidence — so the checkpoint's kill criterion says that if delivery volume is unchanged post-deploy, the premise was wrong and the delivery caveats now written into the 09-12 and 09-14 rows should be struck rather than reasoned around.
 
 Theme: the events four September decisions rest on should actually arrive.
 
