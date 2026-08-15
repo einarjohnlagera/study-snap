@@ -9,6 +9,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.studysnap.backend.security.SecurityProperties;
@@ -19,6 +20,7 @@ import java.time.Clock;
 @EnableConfigurationProperties({StudySnapProperties.class, SecurityProperties.class})
 public class AppConfig {
     private static final int ANALYTICS_QUEUE_CAPACITY = 500;
+    private static final int QUESTION_BANK_WRITE_TIMEOUT_SECONDS = 5;
     private static final int ANALYTICS_SHUTDOWN_AWAIT_SECONDS = 20;
 
     @Bean
@@ -82,6 +84,31 @@ public class AppConfig {
             PlatformTransactionManager transactionManager
     ) {
         return new TransactionTemplate(transactionManager);
+    }
+
+    /**
+     * Challenge question-bank writes run in their own transaction, separate from the learner's session.
+     *
+     * <p>The bank is best-effort by contract: a write failure must never fail the Challenge session.
+     * That cannot be achieved by catching the exception in the session's own transaction — a failed
+     * flush marks it rollback-only (JPA-mandated) and PostgreSQL aborts it (SQLSTATE 25P02), so the
+     * commit fails regardless of any catch. <b>A {@code @Transactional(REQUIRES_NEW)} annotation does
+     * not solve it either</b>: the inner commit runs in the proxy after the method body returns, so a
+     * catch inside the body is equally dead. A {@link TransactionTemplate} commits inside
+     * {@code execute(...)}, which is what makes a catch at the call site actually catch.
+     *
+     * <p>The timeout bounds a rare but real hang: a concurrent uncommitted insert of the same bank row
+     * blocks this insert, and PostgreSQL's deadlock detector cannot see it because the outer
+     * transaction is waiting on the application thread rather than on the database.
+     */
+    @Bean
+    public TransactionOperations questionBankTransactionOperations(
+            PlatformTransactionManager transactionManager
+    ) {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        template.setTimeout(QUESTION_BANK_WRITE_TIMEOUT_SECONDS);
+        return template;
     }
 
     @Bean
