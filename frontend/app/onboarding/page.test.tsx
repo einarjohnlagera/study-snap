@@ -20,6 +20,8 @@ import {
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { shouldShowOfficialPlanRequestAction } from "@/lib/onboarding-v2";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const routerMock = {
   push: jest.fn(),
@@ -129,6 +131,14 @@ jest.mock("@/lib/api", () => ({
 }));
 
 describe("OnboardingPage", () => {
+  it("deliberately keeps the hardcoded Course / Program suggestions until the checkpoint", () => {
+    const source = readFileSync(join(process.cwd(), "app/onboarding/page.tsx"), "utf8");
+
+    expect(source).toContain("COURSE_PROGRAM_SUGGESTIONS");
+    expect(source).toContain("suggestions={COURSE_PROGRAM_SUGGESTIONS}");
+    expect(source).not.toContain("useCourseProgramCatalogNames");
+  });
+
   beforeEach(() => {
     routerMock.push.mockReset();
     routerMock.replace.mockReset();

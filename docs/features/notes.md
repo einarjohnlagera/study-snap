@@ -128,7 +128,9 @@ Rules:
 
 - `courseProgram` belongs to the note once saved and can differ from the profile default.
 - `courseProgram` remains the legacy program label and fallback authoring context; Domain Context, Note Learner Level, subject, and tags remain independent axes.
-- `courseProgram` uses autocomplete from curated defaults plus normalized saved values from the user's notes/profile.
+- On `/profile`, the Note Editor, private Note Detail, and the Dashboard lightweight profile-completion prompt, `courseProgram` autocomplete suggests names from the live Course Program catalog first, followed by the retained hardcoded fallback and normalized saved/current values. A slow, failed, or empty catalog response falls back immediately to the hardcoded list; the current value remains selectable even when off-catalog.
+- Free text remains accepted on those surfaces. Catalog-first ordering is convergence by default, not validation or a catalog lock.
+- Onboarding deliberately continues using the hardcoded `COURSE_PROGRAM_SUGGESTIONS` list until after the 2026-09-11 completion checkpoint.
 - typing in `courseProgram` filters suggestions in real time instead of keeping the full list visible
 - course/program matching is case-insensitive, trims outer spaces before matching, allows partial matches, and ranks prefix matches ahead of contains matches
 - existing matching suggestions stay above the custom `Use "..."` action so reuse is easier than creating a variant

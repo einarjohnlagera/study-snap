@@ -106,6 +106,51 @@ export function mergeCourseProgramSuggestions(...sources: Array<Array<string | n
   });
 }
 
+export function mergeCourseProgramSuggestionsInOrder(
+  ...sources: Array<Array<string | null | undefined> | null | undefined>
+): string[] {
+  const normalized = new Map<string, string>();
+
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+    for (const value of source) {
+      const normalizedValue = normalizeCourseProgram(value);
+      if (!normalizedValue) {
+        continue;
+      }
+      const lookup = normalizedValue.toLocaleLowerCase("en");
+      if (!normalized.has(lookup)) {
+        normalized.set(lookup, normalizedValue);
+      }
+    }
+  }
+
+  return Array.from(normalized.values());
+}
+
+export function buildCatalogFirstCourseProgramSuggestions(
+  catalogNames: string[] | null,
+  ...additionalSources: Array<Array<string | null | undefined> | null | undefined>
+): string[] {
+  return mergeCourseProgramSuggestionsInOrder(
+    catalogNames && catalogNames.length > 0 ? catalogNames : COURSE_PROGRAM_SUGGESTIONS,
+    catalogNames && catalogNames.length > 0 ? COURSE_PROGRAM_SUGGESTIONS : null,
+    ...additionalSources,
+  );
+}
+
+export function isCatalogCourseProgram(value: string, catalogNames: string[]): boolean {
+  const normalizedValue = normalizeCourseProgram(value)?.toLocaleLowerCase("en");
+  if (!normalizedValue) {
+    return false;
+  }
+  return catalogNames.some(
+    (catalogName) => normalizeCourseProgram(catalogName)?.toLocaleLowerCase("en") === normalizedValue,
+  );
+}
+
 export function formatLearnerLevel(learnerLevel: LearnerLevel | string | null | undefined): string | null {
   if (!learnerLevel) {
     return null;

@@ -31,10 +31,13 @@ import {
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import {
-  COURSE_PROGRAM_SUGGESTIONS,
+  trackCourseProgramValueSelected,
+  useCourseProgramCatalogNames,
+} from "@/hooks/use-course-program-catalog";
+import {
+  buildCatalogFirstCourseProgramSuggestions,
   LEARNER_LEVEL_OPTIONS,
   getGroupedLearnerLevels,
-  mergeCourseProgramSuggestions,
 } from "@/lib/learning-profile";
 import {
   DISABLED_PROFILE_TYPES,
@@ -243,6 +246,7 @@ export default function ProfilePage() {
   const [studyGoalMessage, setStudyGoalMessage] = useState<string | null>(null);
   const [showAllStudyFocusSubjects, setShowAllStudyFocusSubjects] = useState(false);
   const [selectedFocusSubjects, setSelectedFocusSubjects] = useState<string[]>([]);
+  const catalogCourseProgramNames = useCourseProgramCatalogNames();
 
   const scrollToRequestedSection = useCallback(() => {
     if (globalThis.window === undefined) {
@@ -398,13 +402,13 @@ export default function ProfilePage() {
   );
 
   const availableCourseProgramSuggestions = useMemo(
-    () => mergeCourseProgramSuggestions(
-      COURSE_PROGRAM_SUGGESTIONS,
+    () => buildCatalogFirstCourseProgramSuggestions(
+      catalogCourseProgramNames,
       courseProgramSuggestions,
       [learningProfileForm.courseProgram],
       [profile?.courseProgram],
     ),
-    [courseProgramSuggestions, learningProfileForm.courseProgram, profile?.courseProgram],
+    [catalogCourseProgramNames, courseProgramSuggestions, learningProfileForm.courseProgram, profile?.courseProgram],
   );
 
   const examCountdown = useMemo(
@@ -566,6 +570,12 @@ export default function ProfilePage() {
       setSelectedProfileType(updatedProfile.profileType ?? selectedProfileType);
       setLearningProfileErrors({});
       setLearningProfileMessage("Learning profile updated successfully.");
+      trackCourseProgramValueSelected(
+        "profile",
+        updatedProfile.courseProgram ?? learningProfileForm.courseProgram,
+        profile?.courseProgram,
+        catalogCourseProgramNames,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update learning profile.";
       setLearningProfileMessage(message);
