@@ -284,7 +284,8 @@ public class PostSessionNextStepService {
                 false,
                 true,
                 matchedPlan.getCourseProgram(),
-                matchedPlan.getId().toString()
+                matchedPlan.getId().toString(),
+                false
         );
     }
 
@@ -321,7 +322,11 @@ public class PostSessionNextStepService {
                 .map(nextNoteId -> new NextStepSecondaryActionResponse(
                         NEXT_IN_YOUR_PLAN_LABEL,
                         pathOrFallback(nextNoteId, NOTE_DETAIL_PATH),
-                        false
+                        false,
+                        false,
+                        null,
+                        null,
+                        true
                 ))
                 .orElse(null);
     }

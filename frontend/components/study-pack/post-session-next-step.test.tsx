@@ -209,6 +209,48 @@ describe("PostSessionNextStep", () => {
     });
   });
 
+  it("instruments the next-plan-item secondary action on impression and click", async () => {
+    const response: PostSessionNextStepResponse = {
+      ...baseResponse,
+      type: "REVIEW_PACK",
+      actionLabel: "Take a Challenge",
+      actionHref: "/notes/note-1/challenge-quiz",
+      secondaryAction: {
+        actionLabel: "Next in your plan",
+        actionHref: "/notes/note-2",
+        adaptivePractice: false,
+        nextPlanItem: true,
+      },
+    };
+    render(
+      <PostSessionNextStep
+        response={response}
+        currentPlan="FREE"
+        noteId="note-1"
+        onOpenPaywall={jest.fn()}
+        originatingQuizMode="QUICK_REVIEW"
+      />,
+    );
+
+    await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "POST_SESSION_NEXT_PLAN_ITEM_IMPRESSION",
+      entityId: "pack-1",
+      metadata: { surface: "post-mastery" },
+    }));
+
+    fireEvent.click(screen.getByRole("link", { name: "Next in your plan" }));
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "POST_SESSION_NEXT_PLAN_ITEM_CLICKED",
+      entityId: "pack-1",
+      metadata: { surface: "post-mastery" },
+    });
+    // The plan-item href is not a challenge href, so it must not contaminate Challenge analytics.
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "POST_SESSION_CHALLENGE_CTA_CLICKED" }),
+    );
+  });
+
   it("renders and instruments a named post-mastery plan recommendation once", async () => {
     const response: PostSessionNextStepResponse = {
       ...baseResponse,

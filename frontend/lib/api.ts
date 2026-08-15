@@ -258,6 +258,7 @@ export type PostSessionNextStepResponse = {
     studyPlanRecommendation?: boolean;
     courseProgram?: string | null;
     recommendedPlanId?: string | null;
+    nextPlanItem?: boolean;
   } | null;
 };
 
@@ -538,6 +539,8 @@ export type AnalyticsEventType =
   | "POST_SESSION_CHALLENGE_CTA_CLICKED"
   | "STUDY_PLAN_RECOMMENDATION_IMPRESSION"
   | "STUDY_PLAN_RECOMMENDATION_CLICKED"
+  | "POST_SESSION_NEXT_PLAN_ITEM_IMPRESSION"
+  | "POST_SESSION_NEXT_PLAN_ITEM_CLICKED"
   | "QUICK_REVIEW_OPEN_LOOP_SHOWN"
   | "REVIEW_COMMITMENT_PROMPT_SHOWN"
   | "REVIEW_COMMITMENT_COMMITTED"

@@ -64,6 +64,14 @@ export function PostSessionNextStep({
     return `${response?.studyPackId ?? "none"}:post-mastery:${recommendation.courseProgram ?? "none"}:${recommendation.recommendedPlanId ?? "none"}`;
   }, [response]);
   const impressedPlanRecommendationRef = useRef<string | null>(null);
+  const nextPlanItemSignature = useMemo(() => {
+    const planItem = response?.secondaryAction;
+    if (!planItem?.nextPlanItem) {
+      return null;
+    }
+    return `${response?.studyPackId ?? "none"}:post-mastery:${planItem.actionHref}`;
+  }, [response]);
+  const impressedNextPlanItemRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!challengeActionSignature) {
@@ -102,6 +110,22 @@ export function PostSessionNextStep({
     });
   }, [planRecommendationSignature, response?.secondaryAction]);
 
+  useEffect(() => {
+    if (!nextPlanItemSignature) {
+      impressedNextPlanItemRef.current = null;
+      return;
+    }
+    if (impressedNextPlanItemRef.current === nextPlanItemSignature) {
+      return;
+    }
+    impressedNextPlanItemRef.current = nextPlanItemSignature;
+    trackAnalyticsSafely({
+      eventType: "POST_SESSION_NEXT_PLAN_ITEM_IMPRESSION",
+      entityId: response?.studyPackId ?? null,
+      metadata: { surface: "post-mastery" },
+    });
+  }, [nextPlanItemSignature, response?.studyPackId]);
+
   if (!response) {
     return null;
   }
@@ -139,6 +163,17 @@ export function PostSessionNextStep({
         recommendationType: "named-plan",
         courseProgram: secondaryAction.courseProgram ?? null,
       },
+    });
+  };
+
+  const trackNextPlanItemClick = () => {
+    if (!secondaryAction?.nextPlanItem) {
+      return;
+    }
+    trackAnalyticsSafely({
+      eventType: "POST_SESSION_NEXT_PLAN_ITEM_CLICKED",
+      entityId: response.studyPackId ?? null,
+      metadata: { surface: "post-mastery" },
     });
   };
 
@@ -190,6 +225,7 @@ export function PostSessionNextStep({
               onClick={() => {
                 trackChallengeClick(secondaryAction.actionHref);
                 trackPlanRecommendationClick();
+                trackNextPlanItemClick();
               }}
             >
               <Button type="button" variant="outline" className="w-full sm:w-auto">
