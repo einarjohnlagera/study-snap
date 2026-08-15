@@ -1,5 +1,67 @@
 # RELEASES.md - NoteLib
 
+## v0.80.0 - Instrumentation Integrity
+
+**Status: Released** (kicked off and signed off 2026-08-15)
+
+**Scope: three PRs, and the release grew by folding rather than by discovery.** It opened as one frontend delivery fix and closed with the backend twin, the carried test debt from two releases, and the September read queries. **It owes `[CHECKPOINT — due 2026-09-14]` for a reason worth stating plainly: the loss this release fixes was never measured.** It was inferred from a 15-minute token TTL and a code path — sound reasoning, not evidence — so the checkpoint's kill criterion says that if delivery volume is unchanged post-deploy, the premise was wrong and the delivery caveats now written into the 09-12 and 09-14 rows should be struck rather than reasoned around.
+
+Theme: the events four September decisions rest on should actually arrive.
+
+**The defect, verified in code at kickoff.** `trackAnalyticsEvent` (`frontend/lib/api.ts:2844`) posts with a raw `fetch` and `buildAuthHeaders()`. Every product call goes through `fetchWithAuth` (`:2164`), which handles a 401 by refreshing the access token and retrying. Analytics does neither — a 401 falls into the `catch` at `:2854` and is discarded silently. **Access tokens live 15 minutes** (`application.yaml:428`).
+
+**The loss is biased, which is worse than lossy.** Impressions fire immediately after a data load, so their token is fresh. A click on a page left idle past the TTL does not have that guarantee — and the product action still succeeds, because it refreshes. So **impression→click rates read systematically low**, and that is exactly the metric behind `[CHECKPOINT — due 2026-09-14]` for both `v0.78.0` (does a named recommendation convert) and `v0.79.0` (does catalog-first ordering change what learners pick). A pipeline that drops the click half of a ratio does not add noise; it manufactures a wrong answer.
+
+**Why this ships now rather than after the reads, which is the whole argument.** Four checkpoints mature 2026-09-10 → 09-14 on frontend-fired events, and `v0.78.0`'s window opened 2026-08-15. Shipping immediately means roughly 29 of its 30 days measure cleanly; deferring means none of them do. **This is the unusual case where shipping into a live measurement window improves the read instead of confounding it** — the standing caution against touching instrumentation mid-window assumes the change alters *what* is counted, and this alters only whether the count arrives.
+
+### Planned Scope
+
+1. **Analytics survives token expiry (frontend).** Route `trackAnalyticsEvent` through the refresh-aware path so a 401 refreshes and retries instead of silently dropping. **Implementation subtlety, not optional:** `keepalive: true` is on the current call for unload-time delivery, and a refresh-and-retry cannot run during page unload. Preserve fire-and-forget for that case; add refresh for the rest. A blanket swap to `fetchWithAuth` would trade one silent loss for another.
+2. **Catalog names are normalized on create (backend).** `CourseProgramCatalogService.create` does not apply `normalizeForStorage`, while the Public Library filter matches catalog names exactly. `v0.79.0` made the catalog the **sole** source of public filter chips, taking this from partial to total exposure — an admin adding `K-12` would mint a chip matching zero notes.
+3. **Close the weak tests recorded as `v0.79.0` known limitations.** Two in `lightweight-profile-completion-prompt.test.tsx` pass for the wrong reason (one asserts the combobox's internal buffer rather than a committed value; the other never awaits its rejection, so both halves pass for the initial-`null` reason). Add the discriminating `matchedCatalog` case — a value in the hardcoded fallback but **absent from the catalog**, which is the exact population `v0.79.0` exists to detect — and a Note Editor edit-mode test for unchanged-value suppression.
+
+### Anti-drift — locked for this release
+
+- **No change to what any event means, when it fires, or what metadata it carries.** This release changes only whether a fired event arrives. Altering firing conditions mid-window is the thing the standing caution actually forbids.
+- **No new events, and no removal of existing ones.**
+- **Analytics must still never block or interrupt a product flow.** The existing swallow-everything behaviour stays; it gains a retry, not a throw.
+- **No catalog rows are seeded, renamed, or retired**, and no existing catalog name is rewritten by the normalization fix — it applies to creates from this point forward. Rewriting existing rows would change live filter chips.
+- **No migration.**
+- **Do not "fix" the two weak tests by deleting them.** Each names a real behaviour; the assertions are what is wrong.
+
+### Shipped
+
+- **Expiry-safe analytics delivery** — frontend analytics keeps its best-effort `keepalive` POST, refreshes through the shared in-flight refresh guard after a visible-page 401, and retries once. Analytics-only refresh failure, retry failure, and network failure remain silent and never clear auth state, invoke session-expiry handling, redirect, throw, or block the product flow; hidden/unloading documents skip refresh.
+- **Catalog create normalization** — new Course / Program catalog names now use the same whitespace and dash normalization as Public Library chips and exact-match filtering before duplicate detection and persistence. Existing rows remain untouched, and length validation, family resolution, and conflict behavior are unchanged.
+- **Instrumentation regression coverage** — analytics tests now cover successful refresh delivery, failed-refresh session safety, rejected fetches, and unload delivery. Dashboard tests assert committed closed-catalog values, await catalog rejection, and discriminate hardcoded fallback selections absent from the live catalog; Note Editor edit mode now locks unchanged-value event suppression.
+
+### Folded in 2026-08-15 — the other end of the same pipe, plus the carried test debt
+
+- **Analytics events survive a deploy (backend).** `analyticsTaskExecutor` had a 500-item queue and **no graceful-shutdown configuration anywhere**, so every restart silently discarded whatever was queued. **`main` auto-deploys on merge**, which means each of this week's releases dropped events *inside two live measurement windows*. This is the server-side twin of the token-expiry bug: same silent loss, opposite end of the pipe. Draining is bounded at 20s so analytics can never hold a release hostage. **Tested behaviourally, not by asserting properties** — `waitForTasksToCompleteOnShutdown` and `awaitTerminationSeconds` expose no getters, and a property assertion would not prove the queue actually flushes; the test submits a queued task, shuts down, and requires it to have run. Verified to fail with the setting removed.
+- **The four weak tests carried from `v0.78.0` are closed.** The post-mastery impression-dedupe test now re-renders with a structurally-equal **new** object rather than the same reference — the previous version never re-ran the effect, which is why it passed with the guard deleted; verified to fail now when the guard is removed. `PostSessionNextStepServiceTest`'s error-path test now asserts `response.message()`, the one signal that distinguishes the outer catch from the healthy mastered response (type, label and a null secondary are true of both). And the untested half of the `suppressPointerWhenNoPrimary` contract — that a **genuine named match still renders** at the zero-note call site — now has coverage.
+
+**One of the four could not be meaningfully strengthened, and that is recorded rather than papered over.** The Dashboard `RecommendationImpression` guard keys on primitive deps (`courseProgram`, `planId`), so its effect only re-runs when those change — and when they change, a fresh impression is *correct*. The ref there defends against StrictMode double-invocation and remounts, neither of which a re-render test can exercise. Writing a test that passes either way would have added coverage theatre.
+
+### Folded in 2026-08-15 (second fold) — the September reads, written before their due dates
+
+**`docs/claude-plans/september-2026-checkpoint-reads.sql`** now holds a runnable query for every live checkpoint metric, written against the real `analytics_events` schema and the real emitted metadata keys.
+
+**It exists because twice in one week a metric turned out to be unanswerable only after the release depending on it had shipped.** `v0.78.0`'s checkpoint asked whether a named recommendation converts *better than the generic pointer* — impossible, because the pointer had emitted nothing before it was replaced. `v0.79.0`'s first baseline query counted curator notes and would have read ~0.1% regardless of what learners did. Both were caught by review rather than by design, and only just in time.
+
+**Writing the reads now confirms every September metric is computable — no holes found.** Had one not been expressible, there would still be 26 days to fix the instrumentation; discovering it on the due date would mean the window was wasted. **Query 0 is delivery health and must be read first**, because every other number is conditioned on whether this release's fixes actually recovered events.
+
+Each query carries its caveats inline rather than in someone's memory: the recommendation arms are disjoint populations and not a control, `CLICKED` counts clicks rather than conversions, the 09-12 secondary has a ~3-day tail on the old delivery behaviour, and `v0.79.0`'s denominator is expected to be small. The rejected unscoped off-catalog query is recorded in the file so nobody re-derives it.
+
+### Pre-commit audit — 2026-08-15
+
+**No blockers. Three things recorded because they are non-obvious and a later reader could undo them.**
+
+1. **⚠️ The hidden-page guard exists to prevent a silent logout, not to save a request — do not "simplify" it away.** `AuthService.refresh:318` **revokes the presented refresh token** and issues a new one. If analytics started a refresh while the document was unloading, the server could rotate the token while the client never received the replacement — leaving a dead refresh token and logging the learner out on their **next visit**. Skipping refresh on a hidden document avoids that. **The audit's first instinct was to remove this guard as unnecessary; checking the rotation behaviour reversed it.** The cost is a narrow gap: a 401 arriving after the document goes hidden skips recovery. That gap is worth it.
+2. **`clearAuthUser()` moved from `doRefreshAccessToken` into `fetchWithAuth`, and that is behaviour-preserving — verified by caller count, not by assumption.** The refresh has exactly two callers (`api.ts:2172` product, `:2863` analytics). Product keeps the identical clear-then-expire path; analytics is the only caller that must not expire a working session. If a third caller is ever added, it must state its own failure policy — the shared helper no longer has one.
+3. **The repaired catalog-failure test still cannot detect removal of the hook's `.catch`, and that is a property of the code rather than a weak assertion.** The handler sets `catalogNames` to `null` when the initial state is *already* `null`, so removing it changes nothing observable — it only prevents an unhandled rejection. The repair is real (the test now awaits the rejection and asserts post-rejection state instead of pre-resolution state), but **it is not a guard on the `.catch`**, and claiming otherwise would overstate the coverage.
+
+**Existing catalog rows are deliberately not normalized, and that was checked rather than assumed:** all 21 rows seeded by `V106` are already idempotent under `normalizeForStorage` (the four en-dash names — `Senior High – ABM/STEM/HUMSS`, `Special Needs Education – Generalist` — already carry the spaced form), so no pre-existing row mints a dead chip and no backfill is owed.
+
 ## v0.79.0 - Catalog-First Vocabulary
 
 **Status: Released** (kicked off and signed off 2026-08-15)

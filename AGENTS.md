@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.79.0 - Catalog-First Vocabulary` (Released); previous: `v0.78.0 - Post-Mastery Next Step` (Released)
+- `v0.80.0 - Instrumentation Integrity` (Released); previous: `v0.79.0 - Catalog-First Vocabulary` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -401,6 +401,7 @@ Use these skills before writing prompts, before starting new features, and after
 
 - Track product, growth, and upgrade events through the shared analytics event model.
 - Analytics must be non-blocking and must never break the primary user action if persistence fails.
+- Frontend analytics delivery may refresh the access token and retry once after a 401 only while the page is still live. Analytics refresh or retry failure must give up silently: never clear auth state, invoke `handleUnauthorizedSession`, redirect, throw, or block a product flow. Hidden/unloading documents keep the original best-effort `keepalive` request and must not start refresh work — **and the reason is load-bearing: `AuthService.refresh` revokes the presented refresh token and issues a new one, so a refresh whose response is lost to an unloading page leaves the client holding a dead token and logs the learner out on their next visit.** Do not remove this guard as a simplification.
 - Backend analytics must publish after the surrounding transaction commits (`AFTER_COMMIT`) and persist off-request through `analyticsTaskExecutor`; never write analytics mid-transaction.
 - Backend services should record server-truth events for note, Study Pack, review, auth, public-copy, and subscription flows.
 - Frontend/browser-only funnel events may post through `/api/analytics/events`.
@@ -635,6 +636,7 @@ Use these skills before writing prompts, before starting new features, and after
   - exact case-insensitive matches should reuse the existing saved display label instead of creating a casing variant
   - saved course/program values should normalize whitespace and dash formatting so equivalent values reuse the same suggestion/filter label when possible
   - course/program reuse checks should be case-insensitive while keeping a readable display label
+  - new `course_programs` catalog names must be normalized for whitespace and dash formatting before duplicate detection and persistence so the stored name exactly matches the Public Library chip and exact-match filter predicate; do not rewrite existing catalog rows as part of create-time normalization
 - Public Library canonical browsing route is `/public/library` for both signed-in and signed-out users.
 - Do not introduce duplicate Public Library browse routes or wrappers such as `/library/public`; keep legacy paths as redirects only when compatibility is required.
 - Public subject listing pages must not become second canonical list pages for query-filtered browsing; use `/public/library?subject={subjectSlug}` for shareable subject filtering. `/public/library/{subject}` is a separate, server-rendered canonical subject landing page (shipped v0.14.0 — see `docs/features/public-library.md`), not a redirect, and must not be merged with the query-filter view without a dedicated future refactor.

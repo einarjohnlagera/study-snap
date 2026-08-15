@@ -475,6 +475,22 @@ describe("DashboardStudyPlanSection", () => {
     expect(pushMock).toHaveBeenCalledWith("/collections/primary-goal-1");
   });
 
+  it("still renders a genuine named match when suppressPointerWhenNoPrimary is set", async () => {
+    // The flag suppresses the POINTER fallback only. The zero-note call site passes it, and this is
+    // the half of that contract nothing covered: a real match must still render there.
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="BOARD_EXAM"
+        discoveryPresentation="recommendation"
+        suppressPointerWhenNoPrimary
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: /Recommended/ })).toBeInTheDocument();
+    expect(screen.queryByText("Explore official Review Sets")).not.toBeInTheDocument();
+  });
+
   it("fetches public plans exactly once for a learner with no primary", async () => {
     // Regression guard: `primaryLoaded` flips false -> true even with no primary configured, so
     // depending on it directly cancelled and re-ran this fetch. Every no-primary learner paid two

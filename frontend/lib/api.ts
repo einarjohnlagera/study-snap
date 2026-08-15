@@ -2137,9 +2137,10 @@ async function tryRefreshAccessToken(): Promise<boolean> {
 }
 
 async function doRefreshAccessToken(): Promise<boolean> {
+  // Refresh is shared by product and analytics calls. The caller owns its failure policy: product
+  // requests may expire the session, while analytics must leave a working learner session alone.
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
-    clearAuthUser();
     return false;
   }
 
@@ -2152,7 +2153,6 @@ async function doRefreshAccessToken(): Promise<boolean> {
   });
 
   if (!response.ok) {
-    clearAuthUser();
     return false;
   }
 
@@ -2171,6 +2171,7 @@ async function fetchWithAuth(path: string, init: RequestInit, retry = true): Pro
   }
   const refreshed = await tryRefreshAccessToken();
   if (!refreshed) {
+    clearAuthUser();
     handleUnauthorizedSession();
     return response;
   }
@@ -2841,7 +2842,8 @@ export async function verifyEmailToken(token: string): Promise<SimpleMessageResp
 
 export async function trackAnalyticsEvent(request: AnalyticsEventRequest): Promise<void> {
   try {
-    await fetch(buildUrl("/analytics/events"), {
+    const path = "/analytics/events";
+    const init: RequestInit = {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
       body: JSON.stringify({
@@ -2850,6 +2852,27 @@ export async function trackAnalyticsEvent(request: AnalyticsEventRequest): Promi
         metadata: request.metadata ?? {},
       }),
       keepalive: true,
+    };
+    const response = await fetch(buildUrl(path), init);
+    // A hidden document may already be unloading. Keep the original keepalive request best-effort;
+    // starting a refresh here cannot reliably finish before the page is gone.
+    if (response.status !== 401 || globalThis.document?.visibilityState === "hidden") {
+      return;
+    }
+
+    const refreshed = await tryRefreshAccessToken();
+    if (!refreshed) {
+      return;
+    }
+
+    const updatedHeaders = new Headers(init.headers ?? {});
+    const token = getAccessToken();
+    if (token) {
+      updatedHeaders.set("Authorization", `Bearer ${token}`);
+    }
+    await fetch(buildUrl(path), {
+      ...init,
+      headers: updatedHeaders,
     });
   } catch {
     // Analytics must never interrupt the main product flow.

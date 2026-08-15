@@ -486,6 +486,22 @@ describe("NoteEditorPageClient", () => {
     });
   });
 
+  it("does not track an unchanged Course / Program when saving in edit mode", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+    (updateNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    await screen.findByDisplayValue("Draft Note");
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
+    expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "COURSE_PROGRAM_VALUE_SELECTED" }),
+    );
+  });
+
   it("does not submit the profile Course/Program when editing a note that has none", async () => {
     // Regression: profileCourseProgram was populated unconditionally while the isEditMode guard
     // gated only the draft prefill, so editing a null-program note rendered an empty field and

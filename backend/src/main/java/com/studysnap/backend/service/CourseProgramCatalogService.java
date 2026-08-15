@@ -8,6 +8,7 @@ import com.studysnap.backend.exception.InvalidCourseProgramCatalogNameException;
 import com.studysnap.backend.exception.CourseProgramCatalogWriteConflictException;
 import com.studysnap.backend.exception.UnknownProgramFamilyException;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
+import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,6 @@ import java.util.Set;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class CourseProgramCatalogService {
-    private static final String WHITESPACE_RUN_PATTERN = "\\s+";
     private static final Set<String> ALLOWED_EXAM_GOAL_SLUGS = Set.of("ale", "pnle", "let", "cpale");
 
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
@@ -40,7 +40,7 @@ public class CourseProgramCatalogService {
 
     @Transactional
     public CourseProgramCatalogItemResponse create(CreateCourseProgramCatalogRequest request) {
-        String name = request.name().trim().replaceAll(WHITESPACE_RUN_PATTERN, " ");
+        String name = CourseProgramNormalizationUtils.normalizeForStorage(request.name());
         if (name.length() > 120) {
             throw new InvalidCourseProgramCatalogNameException();
         }
@@ -70,7 +70,7 @@ public class CourseProgramCatalogService {
     }
 
     private String normalizeName(String name) {
-        return name == null ? "" : name.trim().replaceAll(WHITESPACE_RUN_PATTERN, " ").toLowerCase(Locale.ROOT);
+        return CourseProgramNormalizationUtils.normalizeForLookup(name);
     }
 
     private String normalizeExamGoalSlug(String examGoalSlug) {

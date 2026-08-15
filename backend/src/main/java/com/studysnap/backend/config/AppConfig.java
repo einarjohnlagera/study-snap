@@ -18,18 +18,32 @@ import java.time.Clock;
 @Configuration
 @EnableConfigurationProperties({StudySnapProperties.class, SecurityProperties.class})
 public class AppConfig {
+    private static final int ANALYTICS_QUEUE_CAPACITY = 500;
+    private static final int ANALYTICS_SHUTDOWN_AWAIT_SECONDS = 20;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Analytics writes are queued off-request, so anything still queued at shutdown is lost unless the
+     * executor is told to drain. `main` auto-deploys on merge, which means every release silently
+     * discarded up to {@link #ANALYTICS_QUEUE_CAPACITY} events — the server-side twin of the frontend
+     * bug where an expired token dropped the event while the learner's action succeeded.
+     *
+     * <p>The await is bounded: draining is best-effort, and a deploy is never blocked longer than
+     * {@link #ANALYTICS_SHUTDOWN_AWAIT_SECONDS}. Analytics must not hold a release hostage.
+     */
     @Bean
     public TaskExecutor analyticsTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setThreadNamePrefix("analytics-");
         executor.setCorePoolSize(1);
         executor.setMaxPoolSize(2);
-        executor.setQueueCapacity(500);
+        executor.setQueueCapacity(ANALYTICS_QUEUE_CAPACITY);
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(ANALYTICS_SHUTDOWN_AWAIT_SECONDS);
         executor.initialize();
         return executor;
     }
