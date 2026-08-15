@@ -683,10 +683,12 @@ describe("NoteEditorPageClient", () => {
         content: "Simple note content",
       }));
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created");
-      expect(trackAnalyticsEvent).toHaveBeenCalledWith({
-        eventType: "COURSE_PROGRAM_VALUE_SELECTED",
-        metadata: { surface: "note-editor", matchedCatalog: true },
-      });
+      // The learner never opened "Add details", so the program is the profile pre-fill the create
+      // path seeded — a replay, not a selection. Emitting here would swamp the metric: learner notes
+      // run ~5x the entire learner-profile population per month.
+      expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "COURSE_PROGRAM_VALUE_SELECTED" }),
+      );
     });
   });
 

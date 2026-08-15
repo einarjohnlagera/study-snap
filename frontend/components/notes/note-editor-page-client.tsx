@@ -211,9 +211,13 @@ export function NoteEditorPageClient({
   const [profileCourseProgram, setProfileCourseProgram] = useState("");
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   const catalogCourseProgramNames = useCourseProgramCatalogNames();
-  // The PERSISTED program, not the draft. `draft` is the value being saved, so comparing against it
-  // would suppress every event; a new note must compare against "no previous value" rather than
-  // against the profile pre-fill it was seeded with.
+  // The value this save is a CHANGE FROM — the persisted program when editing, and the profile
+  // pre-fill when creating. Not the draft: `draft` is the value being saved, so comparing against it
+  // suppresses every event. And not null on create: the create path seeds the program from the
+  // profile and requires a non-null value, while the Course / Program field sits inside the
+  // collapsed "Add details" panel — so a null baseline made every note creation emit a selection
+  // event for a field the learner never opened, at ~5x the volume of the profile surfaces this
+  // metric actually targets.
   const persistedCourseProgramRef = useRef<string | null>(null);
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
   const generatedContentSectionRef = useRef<HTMLElement | null>(null);
@@ -369,6 +373,9 @@ export function NoteEditorPageClient({
         // editing an already-generated note would change that note's depth, and a depth
         // correction on a generated note strands its Challenge-bank rows at the old level
         // (see the v0.75.0 scoping note — the same reason align-on-add was rejected).
+        if (!isEditMode && persistedCourseProgramRef.current === null) {
+          persistedCourseProgramRef.current = me.courseProgram ?? null;
+        }
         if (!isEditMode) {
           setDraft((previous) => ({
             ...previous,
@@ -720,6 +727,9 @@ export function NoteEditorPageClient({
         const me = await getMe();
         resolvedCourseProgram = resolvedCourseProgram ?? normalizeOptional(me.courseProgram ?? "");
         setProfileCourseProgram(me.courseProgram ?? "");
+        if (persistedCourseProgramRef.current === null) {
+          persistedCourseProgramRef.current = me.courseProgram ?? null;
+        }
         setDraft((previous) => (
           previous.courseProgram.trim().length > 0
             ? previous

@@ -509,6 +509,16 @@ export default function ProfilePage() {
     try {
       const updatedIdentity = await updateUserProfile(buildProfileUpdateRequest());
 
+      // buildProfileUpdateRequest() carries courseProgram, so the Identity card persists an edited
+      // program too. Without this the change is committed untracked, and the later Learning Profile
+      // save is then correctly suppressed as unchanged — making a genuine selection permanently
+      // invisible to the metric.
+      trackCourseProgramValueSelected(
+        "profile",
+        updatedIdentity.courseProgram ?? learningProfileForm.courseProgram,
+        profile?.courseProgram,
+        catalogCourseProgramNames,
+      );
       setProfile(updatedIdentity);
       setIdentityForm({
         firstName: updatedIdentity.firstName ?? "",

@@ -6,7 +6,14 @@
 > subject pages). This is a structural snapshot, not a proposal — it describes what exists now so a
 > design conversation starts from real constraints instead of assumptions.
 > Update this file when the Note schema, taxonomy model, or collection model changes.
-> Last updated: v0.78.0 — 2026-08-15. **`v0.78.0` gave `NoteCollectionItemEntity.position` a second
+> Last updated: v0.79.0 — 2026-08-15. **`v0.79.0` made the 21-row `course_programs` catalog the first
+> suggestion source** for learner Course / Program fields on `/profile`, the Note Editor, private Note
+> Detail and the Dashboard profile-completion prompt — free text still allowed, nothing migrated, and
+> **onboarding deliberately excluded** until after 2026-09-11. The public program filter now lists
+> catalog names only. **Vocabulary sizing worth carrying into any notes/taxonomy conversation: learner
+> notes are ~0.6% off-catalog, learner profiles 13.9% (32 of 231)** — the field is set mostly at
+> onboarding, so the note surfaces had little to fix. The `ADR-001` amendment locking the field
+> remains unratified. **`v0.78.0` gave `NoteCollectionItemEntity.position` a second
 > consumer:** it now orders the post-mastery "next in your plan" suggestion, alongside the collection
 > progress definition of practiced (`lastSessionCompletedAt != null`), so a change to item ordering or the
 > practice-timestamp contract affects that surface too. The Dashboard also recommends ONE named
