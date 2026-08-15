@@ -26,37 +26,30 @@ Theme: the course/program a learner picks should be one the product can actually
 - **The event exists for the surface SQL cannot reach.** `users.course_program` has no history — a profile change overwrites in place — so the `/profile` and Dashboard-prompt surfaces are unmeasurable retrospectively. That is what the event is for; it is not duplicating the SQL.
 - **⚠️ The pre-deploy baseline must be captured BEFORE this release merges to `main`.** The lesson is `v0.78.0`'s: the Explore pointer had emitted nothing before it was replaced, so no before-state existed and the comparison it was supposed to enable was impossible. Run the baseline query against production and record the result in this section before merging.
 
-### Baseline query — run BEFORE merge, record the result here
+### Baseline, captured 2026-08-15 BEFORE merge to `main` — and it resized the release
 
-```sql
--- Off-catalog rate for learner-authored notes, by month. Establishes the pre-deploy trend.
-SELECT date_trunc('month', n.created_at)::date AS month,
-       count(*) AS notes_with_program,
-       count(*) FILTER (
-         WHERE NOT EXISTS (SELECT 1 FROM course_programs cp
-                           WHERE lower(cp.name) = lower(trim(n.course_program)))
-       ) AS off_catalog,
-       round(100.0 * count(*) FILTER (
-         WHERE NOT EXISTS (SELECT 1 FROM course_programs cp
-                           WHERE lower(cp.name) = lower(trim(n.course_program)))
-       ) / nullif(count(*), 0), 1) AS off_catalog_pct
-FROM notes n
-WHERE n.course_program IS NOT NULL AND trim(n.course_program) <> ''
-GROUP BY 1 ORDER BY 1 DESC LIMIT 6;
-```
+**Learner-authored notes (`role = USER`, non-TEACHER), off-catalog `course_program` by month:**
 
-**Result (fill in before merge):** _(not yet run)_
+| Month | Learner notes | Off-catalog | Rate |
+|---|---|---|---|
+| 2026-08 | 1,111 | 7 | **0.6%** |
+| 2026-07 | 3,137 | 3 | **0.1%** |
+| 2026-06 | 200 | 2 | 1.0% |
+| 2026-05 | 2 | 2 | 100% |
+| 2026-04 | 3 | 1 | 33.3% |
 
-### Anti-drift — locked for this release
+**Learner profiles (`users.course_program`, point-in-time): 32 of 231 off-catalog — 13.9%.**
 
-- **The `ADR-001` amendment is NOT ratified by this release.** No locking the field, no Request Program queue, no decision on whether blank is a valid learner program.
-- **Free text stays allowed on every surface.** The counter-argument in the proposal is explicit that free text is currently the demand mechanism that built the 21-row catalog in the first place; removing it at a curator headcount of one makes note creation depend on the owner's response time.
-- **No migration.** The 4,480 existing free-text learner notes are untouched, and no existing value is rewritten or invalidated — including the 15 accounts on `Professional / Board Exam Review`.
-- **Onboarding's copy of the field is OUT OF SCOPE**, and this is a deliberate deferral rather than an oversight. `[CHECKPOINT — due 2026-09-11]` measures whether `v0.73.0`'s redesign moved onboarding completion against a 62.4% baseline — the funnel's largest single leak. **The value asymmetry decides it:** reordering a dropdown's suggestions loses almost nothing by waiting 27 days, while the completion read cannot be re-run. Onboarding gets the same change in a follow-up after 2026-09-11.
-- **The catalog is read-only here.** No new programs are seeded, renamed, or retired — `Professional / Board Exam Review` keeps working for the accounts that already chose it; catalog-first ordering demotes it without breaking anyone.
-- **Taxonomy fields stay combobox-backed, never plain free-text inputs** (standing rule) — this changes where the options come from, not the control.
-- **The event records what was picked, never why.** `COURSE_PROGRAM_VALUE_SELECTED` carries `surface` and a `matchedCatalog` boolean only — no raw learner-typed value, which would turn an analytics table into an uncurated vocabulary dump.
-- **Do not read the off-catalog rate as a measure of the 60 already-blocked learners.** This release deliberately migrates nobody, so their count will not move. The signal is the rate for *newly authored* values.
+**The first query written for this was unscoped and would have been recorded as a misleading baseline.** It counted curator notes, which carry catalog values by construction, so the aggregate collapsed from ~20% to 0.1% exactly when bulk Official Library authoring multiplied the denominator 6.6× in July. Any post-deploy read would have shown ~0.1% and looked like success no matter what learners did. **Do not re-derive the unscoped version; it measures library expansion, not vocabulary.**
+
+**What the corrected numbers mean, stated plainly because it narrows this release's reach:**
+
+1. **The note surfaces address a problem that barely exists.** Learner-authored notes are 0.6% off-catalog. The Note Editor and Note Detail changes are correct and cheap, but there is almost nothing there to fix. **Do not read a flat note-level rate as failure — it is already a floor.**
+2. **The profile field is the real one, at 13.9%**, and it matches the blocked-learner population found while scoping `v0.78.0`.
+3. **⚠️ But `users.course_program` is set overwhelmingly during ONBOARDING, which this release deliberately excludes.** `/profile` and the Dashboard prompt are where an *existing* value gets edited — a rare event. **So this release should be expected to move very little on its own.** The load-bearing half is the onboarding follow-up after `[CHECKPOINT — due 2026-09-11]`, and this release is best understood as putting the machinery and the measurement in place ahead of it.
+4. **Nothing here changes the 32 existing off-catalog profiles** — no migration, by design. They stay until their owners edit them.
+
+**This is a bet on the follow-up, and it is named as one rather than discovered at the next signoff.** If the 09-11 checkpoint clears and the onboarding change ships, the 13.9% is the number to watch; `COURSE_PROGRAM_VALUE_SELECTED` is the only way to see movement in it, because `users.course_program` has no history.
 
 ### Shipped
 
