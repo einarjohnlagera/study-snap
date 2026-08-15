@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { LightweightProfileCompletionPrompt } from "./lightweight-profile-completion-prompt";
 import {
@@ -100,7 +100,7 @@ describe("LightweightProfileCompletionPrompt", () => {
     });
   });
 
-  it("lists catalog names first, retains an off-catalog value, and allows custom text", async () => {
+  it("lists catalog names first, retains an off-catalog value, and rejects custom text on commit", async () => {
     renderPrompt({ initialCourseProgram: "Professional / Board Exam Review" });
 
     await waitFor(() => expect(getCourseProgramCatalog).toHaveBeenCalled());
@@ -115,12 +115,29 @@ describe("LightweightProfileCompletionPrompt", () => {
     expect(input).toHaveValue("Professional / Board Exam Review");
     fireEvent.change(input, { target: { value: "Marine Biology" } });
     expect(input).toHaveValue("Marine Biology");
+    fireEvent.click(screen.getByRole("button", { name: "Save Study Profile" }));
+
+    await waitFor(() => {
+      expect(updateLearningProfileContext).toHaveBeenCalledWith(
+        "COLLEGE",
+        "Professional / Board Exam Review",
+      );
+      expect(completeOnboarding).toHaveBeenCalled();
+    });
   });
 
   it("falls back without blocking and omits analytics when the catalog fetch fails", async () => {
-    (getCourseProgramCatalog as jest.Mock).mockRejectedValue(new Error("offline"));
+    let rejectCatalogFetch: (reason: Error) => void = () => undefined;
+    (getCourseProgramCatalog as jest.Mock).mockReturnValue(new Promise((_resolve, reject) => {
+      rejectCatalogFetch = reject;
+    }));
     renderPrompt();
 
+    await waitFor(() => expect(getCourseProgramCatalog).toHaveBeenCalled());
+    await act(async () => {
+      rejectCatalogFetch(new Error("offline"));
+      await Promise.resolve();
+    });
     fireEvent.click(screen.getByRole("button", { name: "Toggle course program suggestions" }));
     expect(screen.getByRole("option", { name: "Software Engineering" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save Study Profile" }));
@@ -158,6 +175,23 @@ describe("LightweightProfileCompletionPrompt", () => {
       expect(trackAnalyticsEvent).toHaveBeenCalledWith({
         eventType: "COURSE_PROGRAM_VALUE_SELECTED",
         metadata: { surface: "dashboard-prompt", matchedCatalog: true },
+      });
+      expect(completeOnboarding).toHaveBeenCalled();
+    });
+  });
+
+  it("records a hardcoded fallback selection absent from the catalog as unmatched", async () => {
+    renderPrompt();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle course program suggestions" }));
+    const option = await within(screen.getByRole("listbox")).findByRole("option", { name: "Software Engineering" });
+    fireEvent.click(option);
+    fireEvent.click(screen.getByRole("button", { name: "Save Study Profile" }));
+
+    await waitFor(() => {
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+        eventType: "COURSE_PROGRAM_VALUE_SELECTED",
+        metadata: { surface: "dashboard-prompt", matchedCatalog: false },
       });
       expect(completeOnboarding).toHaveBeenCalled();
     });
