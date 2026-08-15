@@ -24,11 +24,6 @@ function isChallengeAction(href: string | null | undefined): boolean {
   return href?.includes("/challenge-quiz") === true;
 }
 
-function recommendedPlanId(href: string): string | null {
-  const match = /^\/collections\/([^/?#]+)$/.exec(href);
-  return match?.[1] ?? null;
-}
-
 function trackAnalyticsSafely(payload: Parameters<typeof trackAnalyticsEvent>[0]): void {
   try {
     void Promise.resolve(trackAnalyticsEvent(payload)).catch(() => undefined);
@@ -66,7 +61,7 @@ export function PostSessionNextStep({
     if (!recommendation?.studyPlanRecommendation) {
       return null;
     }
-    return `${response?.studyPackId ?? "none"}:post-mastery:${recommendation.courseProgram ?? "none"}:${recommendation.actionHref}`;
+    return `${response?.studyPackId ?? "none"}:post-mastery:${recommendation.courseProgram ?? "none"}:${recommendation.recommendedPlanId ?? "none"}`;
   }, [response]);
   const impressedPlanRecommendationRef = useRef<string | null>(null);
 
@@ -98,7 +93,7 @@ export function PostSessionNextStep({
     const recommendation = response?.secondaryAction;
     trackAnalyticsSafely({
       eventType: "STUDY_PLAN_RECOMMENDATION_IMPRESSION",
-      entityId: recommendation ? recommendedPlanId(recommendation.actionHref) : null,
+      entityId: recommendation?.recommendedPlanId ?? null,
       metadata: {
         surface: "post-mastery",
         recommendationType: "named-plan",
@@ -138,7 +133,7 @@ export function PostSessionNextStep({
     }
     trackAnalyticsSafely({
       eventType: "STUDY_PLAN_RECOMMENDATION_CLICKED",
-      entityId: recommendedPlanId(secondaryAction.actionHref),
+      entityId: secondaryAction.recommendedPlanId ?? null,
       metadata: {
         surface: "post-mastery",
         recommendationType: "named-plan",

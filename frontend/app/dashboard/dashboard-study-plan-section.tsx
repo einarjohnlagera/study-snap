@@ -213,6 +213,15 @@ export function DashboardStudyPlanSection({
     };
   }, [primaryCollectionId]);
 
+  // Deliberately NOT `primaryLoaded` / `primaryMatch` as separate effect deps. `setPrimaryLoaded(true)`
+  // fires even when no primary is configured, so those deps flip false -> true after the fetch below
+  // has already started, cancelling and re-running it — every no-primary learner paid two
+  // `listPublicStudyPlans` + two `listCollections` calls, and because this effect is shared, so did
+  // onboarding's `full` mode. This value is constant whenever `primaryCollectionId` is null, so the
+  // common paths resolve in a single fetch; only the genuinely stale primary flips it, and that case
+  // has to fetch anyway.
+  const primaryResolvedToNothing = Boolean(primaryCollectionId) && primaryLoaded && primaryMatch === null;
+
   useEffect(() => {
     // Caller already resolved and qualified the plan -- trust it and do not re-fetch.
     if (resolvedPlan !== undefined) {
@@ -233,7 +242,7 @@ export function DashboardStudyPlanSection({
     // recommendation, so fetching public plans for them is two network calls with no reachable
     // output. This is the call that `v0.67.0` removed from the Dashboard; it comes back only for
     // the learners the recommendation can actually reach.
-    if (discoveryPresentation === "recommendation" && primaryCollectionId && (!primaryLoaded || primaryMatch !== null)) {
+    if (discoveryPresentation === "recommendation" && primaryCollectionId && !primaryResolvedToNothing) {
       setPlan(null);
       setAdoptedPlan(null);
       setLoadedCourseProgram(null);
@@ -279,7 +288,7 @@ export function DashboardStudyPlanSection({
     return () => {
       cancelled = true;
     };
-  }, [discoveryPresentation, normalizedCourseProgram, resolvedPlan, primaryCollectionId, primaryLoaded, primaryMatch]);
+  }, [discoveryPresentation, normalizedCourseProgram, resolvedPlan, primaryCollectionId, primaryResolvedToNothing]);
 
   const primaryPending = Boolean(primaryCollectionId) && !primaryLoaded;
   const usingPrimary = Boolean(primaryCollectionId) && primaryLoaded && primaryMatch !== null;
@@ -333,8 +342,14 @@ export function DashboardStudyPlanSection({
     return null;
   }
 
+  // Already adopted: there is nothing to recommend, but returning null would blank the slot for a
+  // learner who HAS engaged with plans — before this presentation existed they saw the Explore
+  // pointer here. Fall through to it rather than removing their only discovery entry point.
   if (discoveryPresentation === "recommendation" && !usingPrimary && adoptedPlan) {
-    return null;
+    if (suppressPointerWhenNoPrimary) {
+      return null;
+    }
+    return <ExplorePointerCard courseProgram={normalizedCourseProgram} singular={labels.singular} plural={labels.plural} />;
   }
 
   const continuePlan = usingPrimary ? primaryMatch : (adoptedPlan ?? null);
@@ -346,7 +361,10 @@ export function DashboardStudyPlanSection({
   const subjectPlanLabel = `${displayPlan.childCount} ${labels.subjectSingular}${displayPlan.childCount === 1 ? "" : "s"}`;
   const noteLabel = `${displayPlan.itemCount} ${displayPlan.itemCount === 1 ? "note" : "notes"}`;
   const descriptionFallback = isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} in saved order.`;
-  const detailLine = (context === "practice-first" || discoveryPresentation === "recommendation")
+  // `!usingPrimary` matters: the Primary Review Set continue card is documented as rendering
+  // byte-for-byte unchanged, and readyCount is non-null on every owned summary, so omitting this
+  // silently rewrote that card's detail line for every learner who has a primary.
+  const detailLine = (context === "practice-first" || (discoveryPresentation === "recommendation" && !usingPrimary))
     && typeof displayPlan.readyCount === "number"
     ? `${displayPlan.readyCount} of ${displayPlan.itemCount} notes practice-ready`
     : (isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} curated for this track.`);

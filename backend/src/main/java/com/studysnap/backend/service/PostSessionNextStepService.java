@@ -54,7 +54,7 @@ public class PostSessionNextStepService {
     private static final String ADAPTIVE_PRACTICE_PATH = "/notes/%s/adaptive-practice";
     private static final String CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz";
     private static final String NOTE_DETAIL_PATH = "/notes/%s";
-    private static final String COLLECTION_DETAIL_PATH = "/collections/%s";
+    private static final String EXPLORE_POST_MASTERY_PATH = "/explore?source=post-mastery";
     private static final String REDO_MISSED_CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz?entry=redo-missed";
     private static final String FALLBACK_PATH = "/library";
     private static final String TAKE_CHALLENGE_LABEL = "Take a Challenge";
@@ -248,7 +248,9 @@ public class PostSessionNextStepService {
      * / {@code list}. Those build full summaries — item, ready, child and practiced counts across every
      * collection — and this path needs a title, an id and one adoption boolean. {@code list} in particular
      * resolves practiced counts through the multi-note session scan, which the merged plan-item branch
-     * was specifically restructured to keep off this request. The ordering matches {@code listPublic}
+     * was restructured to run once per plan instead of once per page. That scan is still on this
+     * request whenever the note is in a plan — it is the single definition of practiced — so the point
+     * here is not to add a SECOND one for a title and an adoption boolean. The ordering matches {@code listPublic}
      * exactly (same repository method, same {@code updatedAt DESC}), so both surfaces pick the same plan.
      */
     private NextStepSecondaryActionResponse resolveRecommendedPlan(UUID userId, String courseProgram) {
@@ -271,12 +273,18 @@ public class PostSessionNextStepService {
         if (alreadyAdopted) {
             return null;
         }
+        // NOT /collections/{id}: that route is owner-scoped (NoteCollectionService.get ->
+        // getOwnedCollectionOrThrow), so it 404s for exactly the learners this recommendation targets
+        // — the adoption guard above guarantees we only reach here when they do NOT own the plan.
+        // Explore's default tab is review-sets, which renders the published plans already filtered to
+        // the learner's own course/program, so the named plan is the first thing they see, adoptable.
         return new NextStepSecondaryActionResponse(
                 START_RECOMMENDED_PLAN_LABEL.formatted(matchedPlan.getTitle()),
-                COLLECTION_DETAIL_PATH.formatted(matchedPlan.getId()),
+                EXPLORE_POST_MASTERY_PATH,
                 false,
                 true,
-                matchedPlan.getCourseProgram()
+                matchedPlan.getCourseProgram(),
+                matchedPlan.getId().toString()
         );
     }
 

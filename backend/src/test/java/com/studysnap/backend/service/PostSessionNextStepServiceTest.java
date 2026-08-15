@@ -171,7 +171,10 @@ class PostSessionNextStepServiceTest {
 
         assertThat(response.secondaryAction()).isNotNull();
         assertThat(response.secondaryAction().actionLabel()).isEqualTo("Start Nursing Board Review");
-        assertThat(response.secondaryAction().actionHref()).isEqualTo("/collections/" + planId);
+        // NOT /collections/{id}: that route is owner-scoped and 404s for an unadopted plan, which is
+        // the only case this recommendation fires in. Explore renders it program-filtered and adoptable.
+        assertThat(response.secondaryAction().actionHref()).isEqualTo("/explore?source=post-mastery");
+        assertThat(response.secondaryAction().recommendedPlanId()).isEqualTo(planId.toString());
         assertThat(response.secondaryAction().studyPlanRecommendation()).isTrue();
         assertThat(response.secondaryAction().courseProgram()).isEqualTo("Nursing");
     }
