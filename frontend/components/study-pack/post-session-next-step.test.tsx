@@ -217,7 +217,8 @@ describe("PostSessionNextStep", () => {
       actionHref: "/notes/note-1/challenge-quiz",
       secondaryAction: {
         actionLabel: "Start Nursing Board Review",
-        actionHref: "/collections/plan-1",
+        actionHref: "/explore?source=post-mastery",
+        recommendedPlanId: "plan-1",
         adaptivePractice: false,
         studyPlanRecommendation: true,
         courseProgram: "Nursing",
@@ -234,7 +235,7 @@ describe("PostSessionNextStep", () => {
     );
 
     const recommendation = screen.getByRole("link", { name: "Start Nursing Board Review" });
-    expect(recommendation).toHaveAttribute("href", "/collections/plan-1");
+    expect(recommendation).toHaveAttribute("href", "/explore?source=post-mastery");
     await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith({
       eventType: "STUDY_PLAN_RECOMMENDATION_IMPRESSION",
       entityId: "plan-1",

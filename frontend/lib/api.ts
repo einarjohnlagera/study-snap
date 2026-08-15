@@ -257,6 +257,7 @@ export type PostSessionNextStepResponse = {
     adaptivePractice: boolean;
     studyPlanRecommendation?: boolean;
     courseProgram?: string | null;
+    recommendedPlanId?: string | null;
   } | null;
 };
 

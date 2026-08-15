@@ -5,9 +5,10 @@ public record NextStepSecondaryActionResponse(
         String actionHref,
         boolean adaptivePractice,
         boolean studyPlanRecommendation,
-        String courseProgram
+        String courseProgram,
+        String recommendedPlanId
 ) {
     public NextStepSecondaryActionResponse(String actionLabel, String actionHref, boolean adaptivePractice) {
-        this(actionLabel, actionHref, adaptivePractice, false, null);
+        this(actionLabel, actionHref, adaptivePractice, false, null, null);
     }
 }

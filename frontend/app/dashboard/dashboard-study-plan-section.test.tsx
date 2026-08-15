@@ -475,6 +475,40 @@ describe("DashboardStudyPlanSection", () => {
     expect(pushMock).toHaveBeenCalledWith("/collections/primary-goal-1");
   });
 
+  it("fetches public plans exactly once for a learner with no primary", async () => {
+    // Regression guard: `primaryLoaded` flips false -> true even with no primary configured, so
+    // depending on it directly cancelled and re-ran this fetch. Every no-primary learner paid two
+    // round trips, and onboarding's `full` mode paid them too.
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="BOARD_EXAM"
+        discoveryPresentation="recommendation"
+      />,
+    );
+
+    await waitFor(() => expect(listPublicStudyPlans).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("heading", { name: /Recommended/ })).toBeInTheDocument());
+    expect(listPublicStudyPlans).toHaveBeenCalledTimes(1);
+    expect(listCollections).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the Explore pointer instead of blanking the slot when the match is already adopted", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { ...publicPlan, id: "adopted-1", visibility: "PRIVATE", sourcePlanId: publicPlan.id },
+    ]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="BOARD_EXAM"
+        discoveryPresentation="recommendation"
+      />,
+    );
+
+    expect(await screen.findByText("Explore official Review Sets")).toBeInTheDocument();
+  });
+
   it("does not fetch public plans in recommendation mode when a primary already resolves", async () => {
     // v0.67.0 removed the per-load public-plan call from the Dashboard. Recommendation mode brings
     // it back only for learners who can actually see a recommendation — a learner with a primary
