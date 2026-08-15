@@ -6,6 +6,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
+`v0.79.0 — Catalog-First Vocabulary` (on `releases/v0.79.0`, cut from `main` after `v0.78.0` merged and deployed) is **In Progress** — kicked off 2026-08-15. **The counter-proposal from `course-program-canonical-catalog-proposal.md`, NOT the `ADR-001` amendment** — that amendment stays PROPOSED and unratified, and the proposal's own recommendation is to try the softer fix first. **The defect is two sources of truth that drifted:** a hardcoded 31-value `COURSE_PROGRAM_SUGGESTIONS` list against a 21-row canonical catalog, **only 16 overlapping**, so a learner picking a non-overlapping value gets a `course_program` that matches no published plan and `v0.78.0`'s recommendation can never fire for them. **Production sizes it: 60 of the 189 planless learners are blocked by vocabulary, not content or features.** Fix is catalog-first suggestions (free text still allowed, no migration) plus stopping off-catalog values from minting public filter chips. **Onboarding is deliberately excluded** to protect `[CHECKPOINT — due 2026-09-11]`. Full scope and anti-drift rules in `RELEASES.md`.
+
 `v0.78.0 — Post-Mastery Next Step` (on `releases/v0.78.0`, cut from `main` after `v0.77.0` merged and deployed) is **Released** — kicked off 2026-08-14, signed off 2026-08-15. **It opened as leg (a) of the "Post-mastery next step" backlog row and grew mid-flight on production evidence:** once a learner masters a pack, the result screen advances to `Take a Challenge` and its **secondary slot is empty** — verified in code at kickoff, `PostSessionNextStepService.java:215` passes `null`. This fills it with the learner's **next Study Plan item**. **"Next" = lowest `NoteCollectionItemEntity.position` the learner has not practiced**, reusing `toProgressResponse`'s existing `lastSessionCompletedAt != null` definition so the suggestion cannot contradict the progress bar beside it. **Leg (b) ("a similar note") is explicitly OUT** — similarity is the Discovery System, gated behind `[CHECKPOINT — due 2026-09-13]`, and building a second recommender beside it would fragment both. **No entry point moves**, so the standing 2026-09-12 Challenge Quiz constraint is untouched. **The LaTeX chore did NOT ship** — owner-executed curator work that was not performed, carried forward with its Backlog Index row intact rather than counted as done. **The release also owes `[CHECKPOINT — due 2026-09-14]`** on whether a named recommendation converts where a generic pointer did not. **No next version is kicked off.** Full scope and anti-drift rules in `RELEASES.md`.
 
 `v0.77.0 — Evidence-Gated Weak Concept Recommendation` (on `releases/v0.77.0`, cut from `main` after `v0.76.1` merged and deployed) is the previous released version — kicked off and signed off 2026-08-14. **No next version is kicked off.** **First slice of the ratified *Adaptive Practice as the recommendation engine* direction.** The Dashboard's weak-concept focus currently resolves from **the single latest completed Quick Review** — the copy says *"Your latest Quick Review… showed N weak concepts"* — so one bad quiz produces a recommendation. This resolves it from `ConceptHealth`'s existing **`incorrect_streak`** against the existing **`TWICE_MISSED_STREAK_THRESHOLD`**, so the recommendation follows persistent weakness instead. **Buildable now because the signal already exists** — nothing new is recorded, and no second evidence bar is invented. **WITHIN-PACK ONLY:** cross-pack (*"this keeps coming back everywhere"*) needs canonical concept identity, which is ADR-sized and out of scope. **No entry point is removed**, so the standing 2026-09-12 constraint is respected without deferring anything. Full scope in `RELEASES.md`.
@@ -297,6 +299,31 @@ This section exists so a fresh session doesn't have to re-derive from scratch wh
 **Migration risks already identified** — none is a blocker, all need handling: live public shareable slug URLs for catalog-excluded values; public search matching `course_program` text; `users.course_program` as the last link in the domain fallback chain; and the irreversibility of dropping any column, which is why none is dropped here.
 
 **Open question, not yet decided:** whether library cards should show program names (owner's instinct: `Civil Engineering • Mechanical Engineering • +2`) or the count (engineering recommendation: names read as a second identity beside the Subject badge, are largely redundant once a learner has filtered by program, and force an arbitrary truncation choice). A GPT consultation prompt covering this and the architecture is at `22-remove-primary-program-gpt-consultation-prompt.md`.
+
+## v0.79.0 — Catalog-First Vocabulary (In Progress, base branch `releases/v0.79.0`)
+
+Kicked off 2026-08-15. Theme: the course/program a learner picks should be one the product can actually act on.
+
+### Why this, and why now
+
+`v0.78.0` built the machinery to recommend a program-matched Study Plan, then its own production reads showed **60 of the 189 planless learners cannot be matched at all — because of vocabulary, not content or features.** 15 sit on `Professional / Board Exam Review` (a study *context*, deliberately absent from the catalog), 3 on `Computer Science`, 2 on `Software Engineering`, plus free-typed values like `High School` (7). `v0.78.0`'s checkpoint kill criterion names this population by hand; this release is the first move against it.
+
+**Every other substantial candidate is checkpoint-gated until 2026-09-11 through 09-14.** This one is not, provided onboarding is left alone.
+
+### The defect, verified in code at kickoff — do not re-derive
+
+Two independent sources of truth that drifted: `COURSE_PROGRAM_SUGGESTIONS` (`frontend/lib/learning-profile.ts`) offers **31** hardcoded values; `V106__course_program_catalog.sql` seeds **21** canonical rows; **16 overlap.** The proposal's audit logged this as C8/C9 on 2026-08-11; it was re-verified against the code at this kickoff rather than taken on trust. `GET /course-program-catalog` is already `USER`-readable (`CourseProgramCatalogController:28`), so no new endpoint is required.
+
+### This is the counter-proposal, not the amendment
+
+`docs/claude-plans/course-program-canonical-catalog-proposal.md` records an owner proposal to lock the field to the catalog with a *"Request Program"* queue, **and** a counter-argument that free text is currently the demand mechanism which built the 21-row catalog in the first place. The doc's recommendation is to ship the softer fix first — catalog-first suggestions plus constraining public discovery — and lock down later only *"with evidence the softer fix failed, and with the 4,480-note migration designed rather than discovered."* **Shipping this release does not ratify the amendment.** It is the evidence-gathering step before that decision.
+
+### Explicitly out of scope
+
+- The `ADR-001` amendment: locking the field, the request queue, and whether blank is a valid learner program.
+- Any migration or rewrite of the 4,480 existing free-text learner notes, including the 15 on `Professional / Board Exam Review`.
+- Seeding, renaming, or retiring any catalog row — the catalog is read-only here.
+- **Onboarding's copy of the course/program field**, deferred on value asymmetry rather than blanket caution: reordering a dropdown's suggestions loses almost nothing by waiting 27 days, whereas `[CHECKPOINT — due 2026-09-11]`'s onboarding-completion read against a 62.4% baseline cannot be re-run. A follow-up applies the same change after that date.
 
 ## v0.78.0 — Post-Mastery Next Step (Released, base branch `releases/v0.78.0`)
 

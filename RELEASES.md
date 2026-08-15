@@ -1,5 +1,37 @@
 # RELEASES.md - NoteLib
 
+## v0.79.0 - Catalog-First Vocabulary
+
+**Status: In Progress** (kicked off 2026-08-15)
+
+Theme: the course/program a learner picks should be one the product can actually act on.
+
+**This is the counter-proposal from `docs/claude-plans/course-program-canonical-catalog-proposal.md`, NOT the `ADR-001` amendment.** That amendment — lock the field to the catalog, add a *"Request Program"* queue — remains **PROPOSED and unratified**. The proposal's own recommendation is to try the softer fix first and lock down later only if vocabulary does not get clean enough, *"with evidence the softer fix failed, and with the 4,480-note migration designed rather than discovered."* This release is that softer fix and the evidence-gathering step before that decision. **Do not treat shipping it as ratifying the amendment.**
+
+**The defect is two sources of truth that drifted, not one bad option.** `COURSE_PROGRAM_SUGGESTIONS` in `frontend/lib/learning-profile.ts` is a hardcoded list of 31 values; the canonical `course_programs` catalog seeded by `V106` holds 21 rows; **only 16 overlap** (logged as C8/C9 in the proposal's audit, re-verified in code at kickoff). Every non-overlapping value a learner picks yields a `course_program` that matches no published plan, so `v0.78.0`'s named recommendation **can never fire for them**.
+
+**Production confirms it, and this is what makes the release worth taking now.** Of the 189 learners with a Study Pack and no Study Plan, **60 are blocked by vocabulary rather than by content or features**: 15 on `Professional / Board Exam Review` (a study *context*, not a program, and absent from the catalog by design), 3 on `Computer Science`, 2 on `Software Engineering`, plus free-typed values like `High School` (7) and `Bsed`. `v0.78.0`'s checkpoint kill criterion names this population explicitly.
+
+**No new endpoint is needed** — `GET /course-program-catalog` is already `USER`-readable (`CourseProgramCatalogController:28`), shipped for the admin catalog UI in `v0.71.2`.
+
+### Planned Scope
+
+1. **Catalog-first suggestions (frontend).** Replace the hardcoded `COURSE_PROGRAM_SUGGESTIONS` constant with the live catalog from `GET /course-program-catalog`, ordered first. **Free text stays allowed** — nobody is blocked, no migration, no request queue. The hardcoded list survives only as an offline/failed-fetch fallback. Surfaces: `/profile`, the note editor, private note detail, and the Dashboard's lightweight profile-completion prompt.
+2. **Off-catalog values stop minting public shelves (backend).** `NoteService.listPublicCoursePrograms` returns catalog names only. One method. The audit called this leak *"better evidence than the original argument"*: a learner's personal free-text string currently becomes a public filter chip.
+
+### Anti-drift — locked for this release
+
+- **The `ADR-001` amendment is NOT ratified by this release.** No locking the field, no Request Program queue, no decision on whether blank is a valid learner program.
+- **Free text stays allowed on every surface.** The counter-argument in the proposal is explicit that free text is currently the demand mechanism that built the 21-row catalog in the first place; removing it at a curator headcount of one makes note creation depend on the owner's response time.
+- **No migration.** The 4,480 existing free-text learner notes are untouched, and no existing value is rewritten or invalidated — including the 15 accounts on `Professional / Board Exam Review`.
+- **Onboarding's copy of the field is OUT OF SCOPE**, and this is a deliberate deferral rather than an oversight. `[CHECKPOINT — due 2026-09-11]` measures whether `v0.73.0`'s redesign moved onboarding completion against a 62.4% baseline — the funnel's largest single leak. **The value asymmetry decides it:** reordering a dropdown's suggestions loses almost nothing by waiting 27 days, while the completion read cannot be re-run. Onboarding gets the same change in a follow-up after 2026-09-11.
+- **The catalog is read-only here.** No new programs are seeded, renamed, or retired — `Professional / Board Exam Review` keeps working for the accounts that already chose it; catalog-first ordering demotes it without breaking anyone.
+- **Taxonomy fields stay combobox-backed, never plain free-text inputs** (standing rule) — this changes where the options come from, not the control.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.78.0 - Post-Mastery Next Step
 
 **Status: Released** (kicked off 2026-08-14, signed off 2026-08-15)
