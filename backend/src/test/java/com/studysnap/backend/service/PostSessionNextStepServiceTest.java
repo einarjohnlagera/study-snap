@@ -177,6 +177,7 @@ class PostSessionNextStepServiceTest {
         assertThat(response.secondaryAction().recommendedPlanId()).isEqualTo(planId.toString());
         assertThat(response.secondaryAction().studyPlanRecommendation()).isTrue();
         assertThat(response.secondaryAction().courseProgram()).isEqualTo("Nursing");
+        assertThat(response.secondaryAction().nextPlanItem()).isFalse();
     }
 
     @Test
@@ -271,6 +272,9 @@ class PostSessionNextStepServiceTest {
         assertThat(response.secondaryAction().actionLabel()).isEqualTo(NEXT_IN_YOUR_PLAN_LABEL);
         assertThat(response.secondaryAction().actionHref()).isEqualTo(NOTE_DETAIL_PATH_PREFIX + nextNoteId);
         assertThat(response.secondaryAction().adaptivePractice()).isFalse();
+        // Drives POST_SESSION_NEXT_PLAN_ITEM_* — without it this action emits no analytics at all.
+        assertThat(response.secondaryAction().nextPlanItem()).isTrue();
+        assertThat(response.secondaryAction().studyPlanRecommendation()).isFalse();
     }
 
     @Test
