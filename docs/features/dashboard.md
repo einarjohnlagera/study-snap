@@ -210,18 +210,23 @@ Applies to STUDENT, BOARD_EXAM, TEACHER, and PROFESSIONAL profile types.
 
 v0.31.0 adds a learner-facing plan surface for STUDENT, BOARD_EXAM, and PROFESSIONAL dashboards.
 
-`DashboardStudyPlanSection` now has `discoveryPresentation?: "full" | "pointer"`, defaulting to `"full"`.
+`DashboardStudyPlanSection` has `discoveryPresentation?: "full" | "pointer" | "recommendation"`, defaulting to `"full"`.
 
-- Both persistent Dashboard call sites (STUDENT/PROFESSIONAL and BOARD_EXAM) pass `"pointer"`.
+- Both persistent Dashboard call sites (STUDENT/PROFESSIONAL and BOARD_EXAM) pass `"recommendation"`.
 - Onboarding passes no presentation prop, so it retains the full course/program-matched recommendation and adoption flow unchanged.
 - `viewAllHref` and `browseWhenEmpty` were removed. Dashboard no longer renders a matching-plan catalog, a `See all N` link, or the cold-start no-match browse card.
 
-Dashboard pointer behavior:
+Dashboard recommendation behavior:
 
 - A configured primary lookup is still pending → render nothing, preventing a flash of the Explore pointer.
-- A valid owned primary resolves → render the existing Primary continue card byte-for-byte, with no adoption call.
-- No primary, a failed primary lookup, or a stale primary reference → render one dashed pointer card to `/explore?source=dashboard`.
-- Pointer mode never calls `listPublicStudyPlans` and does not show the former course/program nudge or no-match browse fallback. It is independent of course/program fetch state, so it cannot be blocked by the full presentation's pending gate.
+- A valid owned primary resolves → render the existing Primary continue card byte-for-byte, with no adoption call. The `readyCount of itemCount` detail line is scoped to `!usingPrimary`, so recommendation mode does not rewrite the primary card's copy.
+- With no primary, resolve the first exact course/program-matched public plan plus owned collections. Both reads are skipped while a configured primary is still resolving or has resolved to a real plan, and the effect is keyed so that a learner with no primary configured fetches exactly once. An unadopted match renders one named recommendation with its title and `readyCount of itemCount notes practice-ready`, reusing the existing Start/adopt path.
+- No course/program, no matching public plan, or either read failing → render the existing dashed pointer card to `/explore?source=dashboard`; never link to an empty filtered result.
+- An already adopted match is not recommended again; the slot falls through to the Explore pointer rather than rendering empty, so a learner who has engaged with plans keeps a discovery entry point. `suppressPointerWhenNoPrimary` still applies to that fallback, so the zero-note call site renders nothing there — it is the pointer branch, and that flag governs every pointer branch. The valid Primary continue path remains the owned-plan route.
+- `suppressPointerWhenNoPrimary` still suppresses the pointer fallback at the STUDENT/PROFESSIONAL zero-note call site; it does not suppress a genuine named match.
+- Recommendation and pointer impressions/clicks use `STUDY_PLAN_RECOMMENDATION_IMPRESSION` / `_CLICKED` with `surface=dashboard`, `recommendationType=named-plan|generic-pointer`, and course/program metadata. Impressions fire once per resolved rendered state and analytics failures never affect the card.
+
+Legacy `"pointer"` presentation remains available for bounded callers: it never calls `listPublicStudyPlans` and renders the Explore pointer directly when no primary resolves.
 
 Full presentation behavior remains available to onboarding: it calls `GET /collections/public?courseProgram=<value>` plus the user's `GET /collections`, shows the first matching public plan, detects an already adopted `sourcePlanId`, and preserves its Start/Continue flow, practice-ready metadata, retryable adoption error, and skipped-item destination notice. No matching plan still self-hides, and no configured course/program still shows the existing learner-profile nudge.
 

@@ -56,6 +56,22 @@ export function PostSessionNextStep({
     return challengeHref ? `${response.studyPackId}:${originatingQuizMode}:${challengeHref}` : null;
   }, [originatingQuizMode, response]);
   const impressedChallengeActionRef = useRef<string | null>(null);
+  const planRecommendationSignature = useMemo(() => {
+    const recommendation = response?.secondaryAction;
+    if (!recommendation?.studyPlanRecommendation) {
+      return null;
+    }
+    return `${response?.studyPackId ?? "none"}:post-mastery:${recommendation.courseProgram ?? "none"}:${recommendation.recommendedPlanId ?? "none"}`;
+  }, [response]);
+  const impressedPlanRecommendationRef = useRef<string | null>(null);
+  const nextPlanItemSignature = useMemo(() => {
+    const planItem = response?.secondaryAction;
+    if (!planItem?.nextPlanItem) {
+      return null;
+    }
+    return `${response?.studyPackId ?? "none"}:post-mastery:${planItem.actionHref}`;
+  }, [response]);
+  const impressedNextPlanItemRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!challengeActionSignature) {
@@ -72,6 +88,43 @@ export function PostSessionNextStep({
       metadata: { originatingQuizMode },
     });
   }, [challengeActionSignature, originatingQuizMode, response?.studyPackId]);
+
+  useEffect(() => {
+    if (!planRecommendationSignature) {
+      impressedPlanRecommendationRef.current = null;
+      return;
+    }
+    if (impressedPlanRecommendationRef.current === planRecommendationSignature) {
+      return;
+    }
+    impressedPlanRecommendationRef.current = planRecommendationSignature;
+    const recommendation = response?.secondaryAction;
+    trackAnalyticsSafely({
+      eventType: "STUDY_PLAN_RECOMMENDATION_IMPRESSION",
+      entityId: recommendation?.recommendedPlanId ?? null,
+      metadata: {
+        surface: "post-mastery",
+        recommendationType: "named-plan",
+        courseProgram: recommendation?.courseProgram ?? null,
+      },
+    });
+  }, [planRecommendationSignature, response?.secondaryAction]);
+
+  useEffect(() => {
+    if (!nextPlanItemSignature) {
+      impressedNextPlanItemRef.current = null;
+      return;
+    }
+    if (impressedNextPlanItemRef.current === nextPlanItemSignature) {
+      return;
+    }
+    impressedNextPlanItemRef.current = nextPlanItemSignature;
+    trackAnalyticsSafely({
+      eventType: "POST_SESSION_NEXT_PLAN_ITEM_IMPRESSION",
+      entityId: response?.studyPackId ?? null,
+      metadata: { surface: "post-mastery" },
+    });
+  }, [nextPlanItemSignature, response?.studyPackId]);
 
   if (!response) {
     return null;
@@ -96,6 +149,31 @@ export function PostSessionNextStep({
       eventType: "POST_SESSION_CHALLENGE_CTA_CLICKED",
       entityId: response.studyPackId,
       metadata: { originatingQuizMode },
+    });
+  };
+  const trackPlanRecommendationClick = () => {
+    if (!secondaryAction?.studyPlanRecommendation) {
+      return;
+    }
+    trackAnalyticsSafely({
+      eventType: "STUDY_PLAN_RECOMMENDATION_CLICKED",
+      entityId: secondaryAction.recommendedPlanId ?? null,
+      metadata: {
+        surface: "post-mastery",
+        recommendationType: "named-plan",
+        courseProgram: secondaryAction.courseProgram ?? null,
+      },
+    });
+  };
+
+  const trackNextPlanItemClick = () => {
+    if (!secondaryAction?.nextPlanItem) {
+      return;
+    }
+    trackAnalyticsSafely({
+      eventType: "POST_SESSION_NEXT_PLAN_ITEM_CLICKED",
+      entityId: response.studyPackId ?? null,
+      metadata: { surface: "post-mastery" },
     });
   };
 
@@ -144,7 +222,11 @@ export function PostSessionNextStep({
             <Link
               href={secondaryAction.actionHref}
               className="block w-full sm:w-fit"
-              onClick={() => trackChallengeClick(secondaryAction.actionHref)}
+              onClick={() => {
+                trackChallengeClick(secondaryAction.actionHref);
+                trackPlanRecommendationClick();
+                trackNextPlanItemClick();
+              }}
             >
               <Button type="button" variant="outline" className="w-full sm:w-auto">
                 {secondaryAction.actionLabel}

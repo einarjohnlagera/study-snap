@@ -2,13 +2,16 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.ApplicableProgramResponse;
 import com.studysnap.backend.dto.ConceptHealthEntryResponse;
 import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.NextStepSecondaryActionResponse;
 import com.studysnap.backend.dto.TodayFocusType;
-import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.NoteCollectionEntity;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -16,13 +19,15 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.exception.UserNotFoundException;
+import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackQuizMastery;
-import com.studysnap.backend.dto.ApplicableProgramResponse;
-import com.studysnap.backend.repository.NoteCourseProgramRepository;
+import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import com.studysnap.backend.util.NoteEffectivePrograms;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +40,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -48,12 +54,15 @@ public class PostSessionNextStepService {
     private static final String ADAPTIVE_PRACTICE_PATH = "/notes/%s/adaptive-practice";
     private static final String CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz";
     private static final String NOTE_DETAIL_PATH = "/notes/%s";
+    private static final String EXPLORE_POST_MASTERY_PATH = "/explore?source=post-mastery";
     private static final String REDO_MISSED_CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz?entry=redo-missed";
     private static final String FALLBACK_PATH = "/library";
     private static final String TAKE_CHALLENGE_LABEL = "Take a Challenge";
     private static final String PRACTICE_WEAK_CONCEPTS_LABEL = "Practice Weak Concepts";
     private static final String REDO_MISSED_QUESTIONS_LABEL = "Redo Missed Questions";
     private static final String REVIEW_THE_NOTES_LABEL = "Review the Notes";
+    private static final String NEXT_IN_YOUR_PLAN_LABEL = "Next in your plan";
+    private static final String START_RECOMMENDED_PLAN_LABEL = "Start %s";
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
@@ -69,6 +78,9 @@ public class PostSessionNextStepService {
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final ExamGoalCourseProgramProvider examGoalCourseProgramProvider;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
+    private final NoteCollectionItemRepository noteCollectionItemRepository;
+    private final QuizSessionHistoryService quizSessionHistoryService;
+    private final NoteCollectionRepository noteCollectionRepository;
 
     @Transactional(readOnly = true)
     public NextStepResponse getNextStep(UUID userId, UUID studyPackId) {
@@ -86,6 +98,8 @@ public class PostSessionNextStepService {
             );
             return resolveNextStep(
                     userId,
+                    user.getPrimaryCollectionId(),
+                    user.getCourseProgram(),
                     effectiveCurriculumLevel,
                     studyPack,
                     adaptivePracticeQuota,
@@ -104,6 +118,8 @@ public class PostSessionNextStepService {
 
     private NextStepResponse resolveNextStep(
             UUID userId,
+            UUID primaryCollectionId,
+            String courseProgram,
             LearnerLevel effectiveCurriculumLevel,
             StudyPackEntity studyPack,
             AdaptivePracticeQuota adaptivePracticeQuota,
@@ -126,6 +142,8 @@ public class PostSessionNextStepService {
         return switch (latestCompletedSession.getSessionMode()) {
             case QUICK_REVIEW -> resolveQuickReviewNextStep(
                     userId,
+                    primaryCollectionId,
+                    courseProgram,
                     studyPack,
                     sessionMisses,
                     adaptivePracticeQuota,
@@ -181,6 +199,8 @@ public class PostSessionNextStepService {
 
     private NextStepResponse resolveQuickReviewNextStep(
             UUID userId,
+            UUID primaryCollectionId,
+            String courseProgram,
             StudyPackEntity studyPack,
             List<String> sessionMisses,
             AdaptivePracticeQuota adaptivePracticeQuota,
@@ -204,6 +224,11 @@ public class PostSessionNextStepService {
         // as 1/5 directly above. The missed concepts are surfaced too, so a weak repeat session is not
         // left without remediation.
         boolean strongThisSession = sessionMisses.isEmpty();
+        NextStepSecondaryActionResponse nextPlanItem = resolveNextPlanItem(
+                userId,
+                studyPack.getNoteId(),
+                primaryCollectionId
+        );
         return reviewPackResponse(
                 studyPack,
                 adaptivePracticeQuota,
@@ -212,8 +237,98 @@ public class PostSessionNextStepService {
                 strongThisSession
                         ? "Strong Quick Review. Step up with a Challenge next."
                         : "You have already mastered this pack. Revisit the notes on these areas, or step up with a Challenge.",
-                null
+                nextPlanItem != null ? nextPlanItem : resolveRecommendedPlan(userId, courseProgram)
         );
+    }
+
+    /**
+     * The program-matched published plan for a learner whose mastered note is in no plan, or null.
+     *
+     * <p>Deliberately reads the repository directly rather than {@code NoteCollectionService.listPublic}
+     * / {@code list}. Those build full summaries — item, ready, child and practiced counts across every
+     * collection — and this path needs a title, an id and one adoption boolean. {@code list} in particular
+     * resolves practiced counts through the multi-note session scan, which the merged plan-item branch
+     * was restructured to run once per plan instead of once per page. That scan is still on this
+     * request whenever the note is in a plan — it is the single definition of practiced — so the point
+     * here is not to add a SECOND one for a title and an adoption boolean. The ordering matches {@code listPublic}
+     * exactly (same repository method, same {@code updatedAt DESC}), so both surfaces pick the same plan.
+     */
+    private NextStepSecondaryActionResponse resolveRecommendedPlan(UUID userId, String courseProgram) {
+        String normalizedCourseProgram = CourseProgramNormalizationUtils.normalizeForStorage(courseProgram);
+        if (normalizedCourseProgram == null) {
+            return null;
+        }
+        List<NoteCollectionEntity> publicPlans = noteCollectionRepository
+                .findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
+                        CollectionVisibility.PUBLIC,
+                        normalizedCourseProgram
+                );
+        if (publicPlans.isEmpty()) {
+            return null;
+        }
+        NoteCollectionEntity matchedPlan = publicPlans.getFirst();
+        boolean alreadyAdopted = noteCollectionRepository
+                .findByOwnerUserIdAndSourcePlanId(userId, matchedPlan.getId()).isPresent()
+                || noteCollectionRepository.findByIdAndOwnerUserId(matchedPlan.getId(), userId).isPresent();
+        if (alreadyAdopted) {
+            return null;
+        }
+        // NOT /collections/{id}: that route is owner-scoped (NoteCollectionService.get ->
+        // getOwnedCollectionOrThrow), so it 404s for exactly the learners this recommendation targets
+        // — the adoption guard above guarantees we only reach here when they do NOT own the plan.
+        // Explore's default tab is review-sets, which renders the published plans already filtered to
+        // the learner's own course/program, so the named plan is the first thing they see, adoptable.
+        return new NextStepSecondaryActionResponse(
+                START_RECOMMENDED_PLAN_LABEL.formatted(matchedPlan.getTitle()),
+                EXPLORE_POST_MASTERY_PATH,
+                false,
+                true,
+                matchedPlan.getCourseProgram(),
+                matchedPlan.getId().toString(),
+                false
+        );
+    }
+
+    private NextStepSecondaryActionResponse resolveNextPlanItem(
+            UUID userId,
+            UUID completedNoteId,
+            UUID primaryCollectionId
+    ) {
+        if (completedNoteId == null) {
+            return null;
+        }
+        List<UUID> containingCollectionIds = noteCollectionItemRepository
+                .findContainingCollectionIdsByNoteIdAndOwnerUserIdOrderByUpdatedAtDesc(completedNoteId, userId);
+        if (containingCollectionIds.isEmpty()) {
+            return null;
+        }
+        UUID collectionId = primaryCollectionId != null && containingCollectionIds.contains(primaryCollectionId)
+                ? primaryCollectionId
+                : containingCollectionIds.getFirst();
+
+        List<UUID> candidateNoteIds = noteCollectionItemRepository
+                .findReadableNoteIdsByCollectionIdOrderByPositionAsc(collectionId, userId, completedNoteId);
+        if (candidateNoteIds.isEmpty()) {
+            return null;
+        }
+        // One practiced lookup for the whole plan, matching how NoteCollectionService already resolves
+        // collection progress. It is deliberately the single authority on "practiced" — it counts
+        // multi-note sessions, which a per-note session predicate cannot see.
+        Map<UUID, OffsetDateTime> practicedAtByNoteId = quizSessionHistoryService
+                .findLatestSessionCompletedAtByNoteIds(userId, candidateNoteIds);
+        return candidateNoteIds.stream()
+                .filter(noteId -> practicedAtByNoteId.get(noteId) == null)
+                .findFirst()
+                .map(nextNoteId -> new NextStepSecondaryActionResponse(
+                        NEXT_IN_YOUR_PLAN_LABEL,
+                        pathOrFallback(nextNoteId, NOTE_DETAIL_PATH),
+                        false,
+                        false,
+                        null,
+                        null,
+                        true
+                ))
+                .orElse(null);
     }
 
     private QuickReviewSessionEntity findLatestCompletedSession(UUID userId, UUID studyPackId) {

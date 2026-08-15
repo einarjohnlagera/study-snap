@@ -2,7 +2,14 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **quiz modes, exam simulation, or practice mechanics**.
-> Last updated: v0.76.0 - 2026-08-14
+> Last updated: v0.78.0 - 2026-08-15. **`v0.78.0` changed what a mastered Quick Review result screen offers:**
+> `Take a Challenge` remains the primary action, and the previously-empty secondary slot now carries either
+> the next unpracticed note in the learner's Study Plan (lowest plan `position`, excluding the note just
+> completed) or, when the note is in no plan, a named program-matched published Review Set linking to
+> Explore. Absence stays silent — no placeholder. "Practiced" has exactly one definition, shared with the
+> plan's own progress counter, and it credits Board and Long Exam sessions. **Adaptive Practice is still
+> never offered from a Quick Review result screen** (`v0.74.0`), and the Challenge Quiz Adaptive Practice
+> entry point must not be removed before 2026-09-12.
 
 ---
 

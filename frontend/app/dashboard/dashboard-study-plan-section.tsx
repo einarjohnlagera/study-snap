@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   adoptStudyPlan,
   listCollections,
   listPublicStudyPlans,
+  trackAnalyticsEvent,
   type NoteCollectionSummary,
   type ProfileType,
 } from "@/lib/api";
@@ -40,7 +41,7 @@ type DashboardStudyPlanSectionProps = {
   profileType: ProfileType | null;
   context?: "default" | "onboarding" | "practice-first";
   primaryCollectionId?: string | null;
-  discoveryPresentation?: "full" | "pointer";
+  discoveryPresentation?: "full" | "pointer" | "recommendation";
   // The no-primary pointer card duplicates DashboardEmpty's own "ready-made {plan} instead"
   // link on the zero-note Dashboard — set true there so this section only renders when a
   // Primary Review Set actually exists to continue.
@@ -59,12 +60,36 @@ type DashboardStudyPlanSectionProps = {
 };
 
 function ExplorePointerCard({
+  courseProgram,
   singular,
   plural,
 }: Readonly<{
+  courseProgram: string | null;
   singular: string;
   plural: string;
 }>) {
+  const analyticsMetadata = useMemo(() => ({
+    surface: "dashboard",
+    recommendationType: "generic-pointer",
+    courseProgram,
+  }), [courseProgram]);
+  const impressionSignature = useMemo(
+    () => `dashboard:generic-pointer:${courseProgram ?? "none"}`,
+    [courseProgram],
+  );
+  const impressedSignatureRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (impressedSignatureRef.current === impressionSignature) {
+      return;
+    }
+    impressedSignatureRef.current = impressionSignature;
+    trackAnalyticsSafely({
+      eventType: "STUDY_PLAN_RECOMMENDATION_IMPRESSION",
+      metadata: analyticsMetadata,
+    });
+  }, [analyticsMetadata, impressionSignature]);
+
   return (
     <section className="space-y-3 sm:space-y-4">
       <h2 className="text-lg font-semibold sm:text-xl">Find your next {singular}</h2>
@@ -75,6 +100,10 @@ function ExplorePointerCard({
         </CardDescription>
         <Link
           href={buildExploreUrl({ source: "dashboard" })}
+          onClick={() => trackAnalyticsSafely({
+            eventType: "STUDY_PLAN_RECOMMENDATION_CLICKED",
+            metadata: analyticsMetadata,
+          })}
           className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
         >
           Browse in Explore
@@ -82,6 +111,49 @@ function ExplorePointerCard({
       </Card>
     </section>
   );
+}
+
+function trackAnalyticsSafely(payload: Parameters<typeof trackAnalyticsEvent>[0]): void {
+  try {
+    void Promise.resolve(trackAnalyticsEvent(payload)).catch(() => undefined);
+  } catch {
+    // Analytics must never interrupt recommendation rendering or navigation.
+  }
+}
+
+function RecommendationImpression({
+  courseProgram,
+  planId,
+  children,
+}: Readonly<{
+  courseProgram: string;
+  planId: string;
+  children: ReactNode;
+}>) {
+  const analyticsMetadata = useMemo(() => ({
+    surface: "dashboard",
+    recommendationType: "named-plan",
+    courseProgram,
+  }), [courseProgram]);
+  const impressionSignature = useMemo(
+    () => `dashboard:named-plan:${courseProgram}:${planId}`,
+    [courseProgram, planId],
+  );
+  const impressedSignatureRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (impressedSignatureRef.current === impressionSignature) {
+      return;
+    }
+    impressedSignatureRef.current = impressionSignature;
+    trackAnalyticsSafely({
+      eventType: "STUDY_PLAN_RECOMMENDATION_IMPRESSION",
+      entityId: planId,
+      metadata: analyticsMetadata,
+    });
+  }, [analyticsMetadata, impressionSignature, planId]);
+
+  return children;
 }
 
 export function DashboardStudyPlanSection({
@@ -141,6 +213,15 @@ export function DashboardStudyPlanSection({
     };
   }, [primaryCollectionId]);
 
+  // Deliberately NOT `primaryLoaded` / `primaryMatch` as separate effect deps. `setPrimaryLoaded(true)`
+  // fires even when no primary is configured, so those deps flip false -> true after the fetch below
+  // has already started, cancelling and re-running it — every no-primary learner paid two
+  // `listPublicStudyPlans` + two `listCollections` calls, and because this effect is shared, so did
+  // onboarding's `full` mode. This value is constant whenever `primaryCollectionId` is null, so the
+  // common paths resolve in a single fetch; only the genuinely stale primary flips it, and that case
+  // has to fetch anyway.
+  const primaryResolvedToNothing = Boolean(primaryCollectionId) && primaryLoaded && primaryMatch === null;
+
   useEffect(() => {
     // Caller already resolved and qualified the plan -- trust it and do not re-fetch.
     if (resolvedPlan !== undefined) {
@@ -151,6 +232,17 @@ export function DashboardStudyPlanSection({
     }
 
     if (discoveryPresentation === "pointer") {
+      setPlan(null);
+      setAdoptedPlan(null);
+      setLoadedCourseProgram(null);
+      return;
+    }
+
+    // A learner who already has a Primary Review Set renders the continue card and never sees a
+    // recommendation, so fetching public plans for them is two network calls with no reachable
+    // output. This is the call that `v0.67.0` removed from the Dashboard; it comes back only for
+    // the learners the recommendation can actually reach.
+    if (discoveryPresentation === "recommendation" && primaryCollectionId && !primaryResolvedToNothing) {
       setPlan(null);
       setAdoptedPlan(null);
       setLoadedCourseProgram(null);
@@ -196,7 +288,7 @@ export function DashboardStudyPlanSection({
     return () => {
       cancelled = true;
     };
-  }, [discoveryPresentation, normalizedCourseProgram, resolvedPlan]);
+  }, [discoveryPresentation, normalizedCourseProgram, resolvedPlan, primaryCollectionId, primaryResolvedToNothing]);
 
   const primaryPending = Boolean(primaryCollectionId) && !primaryLoaded;
   const usingPrimary = Boolean(primaryCollectionId) && primaryLoaded && primaryMatch !== null;
@@ -209,7 +301,7 @@ export function DashboardStudyPlanSection({
     if (suppressPointerWhenNoPrimary) {
       return null;
     }
-    return <ExplorePointerCard singular={labels.singular} plural={labels.plural} />;
+    return <ExplorePointerCard courseProgram={normalizedCourseProgram} singular={labels.singular} plural={labels.plural} />;
   }
 
   const courseProgramPending = !usingPrimary && (!normalizedCourseProgram || loadedCourseProgram !== normalizedCourseProgram);
@@ -219,6 +311,12 @@ export function DashboardStudyPlanSection({
   }
 
   if (!usingPrimary && normalizedCourseProgram === null) {
+    if (discoveryPresentation === "recommendation") {
+      if (suppressPointerWhenNoPrimary) {
+        return null;
+      }
+      return <ExplorePointerCard courseProgram={null} singular={labels.singular} plural={labels.plural} />;
+    }
     return (
       <section className="space-y-3 sm:space-y-4">
         <h2 className="text-lg font-semibold sm:text-xl">Recommended {labels.singular}</h2>
@@ -238,7 +336,20 @@ export function DashboardStudyPlanSection({
   const displayPlan = usingPrimary ? primaryMatch : plan;
 
   if (!displayPlan) {
+    if (discoveryPresentation === "recommendation" && !suppressPointerWhenNoPrimary) {
+      return <ExplorePointerCard courseProgram={normalizedCourseProgram} singular={labels.singular} plural={labels.plural} />;
+    }
     return null;
+  }
+
+  // Already adopted: there is nothing to recommend, but returning null would blank the slot for a
+  // learner who HAS engaged with plans — before this presentation existed they saw the Explore
+  // pointer here. Fall through to it rather than removing their only discovery entry point.
+  if (discoveryPresentation === "recommendation" && !usingPrimary && adoptedPlan) {
+    if (suppressPointerWhenNoPrimary) {
+      return null;
+    }
+    return <ExplorePointerCard courseProgram={normalizedCourseProgram} singular={labels.singular} plural={labels.plural} />;
   }
 
   const continuePlan = usingPrimary ? primaryMatch : (adoptedPlan ?? null);
@@ -250,7 +361,11 @@ export function DashboardStudyPlanSection({
   const subjectPlanLabel = `${displayPlan.childCount} ${labels.subjectSingular}${displayPlan.childCount === 1 ? "" : "s"}`;
   const noteLabel = `${displayPlan.itemCount} ${displayPlan.itemCount === 1 ? "note" : "notes"}`;
   const descriptionFallback = isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} in saved order.`;
-  const detailLine = context === "practice-first" && typeof displayPlan.readyCount === "number"
+  // `!usingPrimary` matters: the Primary Review Set continue card is documented as rendering
+  // byte-for-byte unchanged, and readyCount is non-null on every owned summary, so omitting this
+  // silently rewrote that card's detail line for every learner who has a primary.
+  const detailLine = (context === "practice-first" || (discoveryPresentation === "recommendation" && !usingPrimary))
+    && typeof displayPlan.readyCount === "number"
     ? `${displayPlan.readyCount} of ${displayPlan.itemCount} notes practice-ready`
     : (isGoal ? `${subjectPlanLabel} · ${noteLabel}` : `${noteLabel} curated for this track.`);
 
@@ -268,6 +383,17 @@ export function DashboardStudyPlanSection({
     }
     setAdopting(true);
     setError(null);
+    if (discoveryPresentation === "recommendation" && !usingPrimary) {
+      trackAnalyticsSafely({
+        eventType: "STUDY_PLAN_RECOMMENDATION_CLICKED",
+        entityId: displayPlan.id,
+        metadata: {
+          surface: "dashboard",
+          recommendationType: "named-plan",
+          courseProgram: normalizedCourseProgram,
+        },
+      });
+    }
     try {
       if (startedPlan) {
         await finishStart(startedPlan);
@@ -320,7 +446,7 @@ export function DashboardStudyPlanSection({
     }
   };
 
-  return (
+  const section = (
     <section className="space-y-3 sm:space-y-4">
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold sm:text-xl">
@@ -359,4 +485,13 @@ export function DashboardStudyPlanSection({
       </Card>
     </section>
   );
+
+  if (discoveryPresentation === "recommendation" && !usingPrimary && normalizedCourseProgram) {
+    return (
+      <RecommendationImpression courseProgram={normalizedCourseProgram} planId={displayPlan.id}>
+        {section}
+      </RecommendationImpression>
+    );
+  }
+  return section;
 }

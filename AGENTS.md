@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.77.0 - Evidence-Gated Weak Concept Recommendation` (Released); previous: `v0.76.1 - Adaptive Practice Entry Attribution` (Released)
+- `v0.78.0 - Post-Mastery Next Step` (Released); previous: `v0.77.0 - Evidence-Gated Weak Concept Recommendation` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -151,6 +151,15 @@ Use these skills before writing prompts, before starting new features, and after
 - Set/clear parent must be owner-scoped and enforce: parent exists and is owned by the caller, parent is top-level, child is not self, and child has no children.
 - Goal readiness is derived from child readiness counts only: `round(100 × Σ child.masteredConcepts / Σ child.totalConcepts)`, or `0` when total is `0`. Do not re-run concept classification over merged Goal notes, persist readiness, add thresholds, or call AI.
 - Deeper nesting, recursive Goal adoption, direct note items on Goals, and per-module readiness remain out of scope unless explicitly introduced by a future release rule.
+
+### Post-Mastery Next-Item Rule
+
+- The mastered Quick Review branch keeps `Take a Challenge` as its primary action and may offer `Next in your plan` as a secondary action.
+- The suggestion must reuse `NoteCollectionService.toProgressResponse`'s definition of practiced: `lastSessionCompletedAt != null`, resolved through `QuizSessionHistoryService.findLatestSessionCompletedAtByNoteIds`. Do not introduce a second definition of done.
+- **Concretely: do not add a `not exists (… session.noteId = …)` practice filter to the candidate query.** It looks equivalent and is not — `findLatestSessionCompletedAtByNoteIds` also credits **multi-note sessions** (Board/Long Exam) by reading each session's participating note ids, which no per-note session predicate can see. A SQL-side filter is therefore a second, narrower definition; it shipped once in `v0.78.0` review and was removed before commit. The candidate query orders and excludes only; practice state is resolved in one service-side lookup per plan, which also keeps that multi-note scan off a per-page loop.
+- Within the resolved directly containing collection, select the lowest-`position` readable item with no completed practice, explicitly excluding the note just completed.
+- Prefer `users.primary_collection_id` only when it directly contains the completed note; otherwise use the most recently updated directly containing collection. Do not traverse collection parents or children.
+- No containing collection or no remaining candidate yields a null secondary action with silent frontend absence; do not add a placeholder, completion state, persisted recommendation, or analytics event for this branch.
 
 ### Note Readiness Signal Rule
 
@@ -852,6 +861,8 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 
 - `/explore` is the single owner of content discovery. No other authenticated page may render an inline discovery catalog, adopt-picker, or public-note browse grid.
 - Other pages may point at Explore with a link or a single pointer card; they may not do Explore's job.
+- **v0.67.0 amendment (ratified 2026-08-15):** Dashboard may render one named, exact course/program-matched public-plan recommendation with coverage and the existing adoption action. It must never render a plan grid, list, filters, paging, or a second browse surface; Explore still owns browse.
+- A matched-plan recommendation must resolve to an actual, unadopted published plan before linking. No course/program, no exact match, prior adoption, or lookup failure must produce a link to an empty result; Dashboard may use its existing Explore pointer fallback, while post-mastery remains silent.
 - A bounded teaser is not discovery when it has a fixed small item count, no filters/paging/sort, no adopt/copy action, and one see-all link.
 - `/public/library` and `/collections/published` remain canonical, separately-addressable routes for deep links, SEO, and anonymous access. This is a navigation-level claim, not a route deletion.
 - `/onboarding` is exempt because it is a temporally scoped first-run wizard, not a persistent navigation page.
