@@ -63,7 +63,7 @@ class ChallengeQuizQuestionBankServiceTest {
                 userId, studyPackId, LearnerLevel.COLLEGE.name(), sessionId
         )).thenReturn(List.of(first, second));
 
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository, TransactionOperations.withoutTransaction());
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
         List<QuizItem> claimed = service.claimEligibleQuestions(
                 userId, studyPackId, LearnerLevel.COLLEGE, sessionId, Set.of(first.getQuestionKey()), 2
         );
@@ -90,7 +90,7 @@ class ChallengeQuizQuestionBankServiceTest {
         when(questionBankRepository.findClaimableForUpdate(
                 userId, studyPackId, LearnerLevel.SENIOR_HIGH.name(), sessionId
         )).thenReturn(List.of(banked));
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository, TransactionOperations.withoutTransaction());
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
 
         List<QuizItem> claimed = service.claimEligibleQuestions(
                 userId, studyPackId, effectiveCurriculumLevel, sessionId, Set.of(), 1
@@ -113,7 +113,7 @@ class ChallengeQuizQuestionBankServiceTest {
         incorrect.setClaimedSessionId(sessionId);
         when(questionBankRepository.findByUserIdAndStudyPackIdAndClaimedSessionId(userId, studyPackId, sessionId))
                 .thenReturn(List.of(correct, incorrect));
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository, TransactionOperations.withoutTransaction());
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
 
         service.updateOutcomesAndReleaseClaims(
                 userId,
@@ -144,7 +144,7 @@ class ChallengeQuizQuestionBankServiceTest {
         when(questionBankRepository.findIncorrectClaimableForUpdate(
                 userId, studyPackId, LearnerLevel.COLLEGE.name(), "INCORRECT"
         )).thenReturn(missedQuestions);
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository, TransactionOperations.withoutTransaction());
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
 
         List<QuizItem> claimed = service.claimIncorrectQuestions(
                 userId, studyPackId, LearnerLevel.COLLEGE, sessionId, 5, 3
@@ -164,7 +164,7 @@ class ChallengeQuizQuestionBankServiceTest {
         when(questionBankRepository.findIncorrectClaimableForUpdate(
                 userId, studyPackId, LearnerLevel.COLLEGE.name(), "INCORRECT"
         )).thenReturn(missedQuestions);
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository, TransactionOperations.withoutTransaction());
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
 
         assertThatThrownBy(() -> service.claimIncorrectQuestions(
                 userId, studyPackId, LearnerLevel.COLLEGE, sessionId, 5, 3
@@ -181,7 +181,7 @@ class ChallengeQuizQuestionBankServiceTest {
         when(questionBankRepository.findClaimableForUpdate(
                 eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE.name()), eq(sessionId)
         )).thenThrow(new RuntimeException("connection reset"));
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository, TransactionOperations.withoutTransaction());
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
 
         List<QuizItem> claimed = service.claimEligibleQuestions(
                 userId, studyPackId, LearnerLevel.COLLEGE, sessionId, Set.of(), 5
@@ -196,7 +196,7 @@ class ChallengeQuizQuestionBankServiceTest {
         UUID studyPackId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         doThrow(new RuntimeException("connection reset")).when(questionBankRepository).saveAll(any());
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository, TransactionOperations.withoutTransaction());
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
 
         service.persistGeneratedQuestions(
                 userId, studyPackId, sessionId, LearnerLevel.COLLEGE, List.of(
@@ -210,66 +210,11 @@ class ChallengeQuizQuestionBankServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void persistGeneratedQuestions_writesThroughAnIsolatedTransactionSoASessionCannotBeRolledBack() {
-        UUID userId = UUID.randomUUID();
-        UUID studyPackId = UUID.randomUUID();
-        UUID sessionId = UUID.randomUUID();
-        // The invariant this protects: the bank write must NOT run on the caller's transaction.
-        // A constraint violation there marks it rollback-only (JPA-mandated) and aborts it on
-        // PostgreSQL (25P02), so the learner's Challenge session commit fails regardless of any catch.
-        // Delegating to the isolated TransactionOperations is what makes the failure survivable.
-        TransactionOperations isolatedTransaction = mock(TransactionOperations.class);
-        ChallengeQuizQuestionBankService service =
-                new ChallengeQuizQuestionBankService(questionBankRepository, isolatedTransaction);
-
-        service.persistGeneratedQuestions(
-                userId, studyPackId, sessionId, LearnerLevel.COLLEGE, List.of(quizItem("Banked question"))
-        );
-
-        verify(isolatedTransaction).execute(any());
-        // Nothing may be written outside that transaction.
-        verify(questionBankRepository, never()).saveAll(any());
-    }
-
-    @Test
-    void persistGeneratedQuestions_absorbsAFailureRaisedWhenTheIsolatedTransactionCommits() {
-        UUID userId = UUID.randomUUID();
-        UUID studyPackId = UUID.randomUUID();
-        UUID sessionId = UUID.randomUUID();
-        TransactionOperations isolatedTransaction = mock(TransactionOperations.class);
-        when(isolatedTransaction.execute(any()))
-                .thenThrow(new DataIntegrityViolationException("concurrent same-level duplicate"));
-        ChallengeQuizQuestionBankService service =
-                new ChallengeQuizQuestionBankService(questionBankRepository, isolatedTransaction);
-        Logger logger = (Logger) LoggerFactory.getLogger(ChallengeQuizQuestionBankService.class);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-
-        try {
-            // Must not throw — this is the "never blocks a Challenge session" contract.
-            service.persistGeneratedQuestions(
-                    userId, studyPackId, sessionId, LearnerLevel.COLLEGE, List.of(quizItem("Duplicate"))
-            );
-        } finally {
-            logger.detachAppender(appender);
-            appender.stop();
-        }
-
-        assertThat(appender.list)
-                .anySatisfy(event -> {
-                    assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                    assertThat(event.getFormattedMessage()).contains("Challenge Quiz question-bank write failed");
-                });
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
     void persistGeneratedQuestions_allowsTheSameQuestionKeyAtDifferentLearnerLevels() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository, TransactionOperations.withoutTransaction());
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
         QuizItem repeatedQuestion = quizItem("Same generated question");
 
         service.persistGeneratedQuestions(

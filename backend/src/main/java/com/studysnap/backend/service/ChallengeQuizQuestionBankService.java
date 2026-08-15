@@ -19,7 +19,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +32,6 @@ public class ChallengeQuizQuestionBankService {
     private static final String OUTCOME_INCORRECT = "INCORRECT";
 
     private final ChallengeQuizQuestionBankRepository challengeQuizQuestionBankRepository;
-    private final TransactionOperations questionBankTransactionOperations;
 
     /**
      * Claims questions under the same transaction as the Challenge session change. A claimed item
@@ -118,17 +116,14 @@ public class ChallengeQuizQuestionBankService {
         if (entries.isEmpty()) {
             return;
         }
-        // Runs in its OWN transaction. Catching a constraint violation inside the learner's session
-        // transaction cannot work: the failed flush marks it rollback-only (JPA-mandated) and
-        // PostgreSQL aborts it (25P02), so the session's commit fails no matter what this catch does.
-        // A @Transactional(REQUIRES_NEW) annotation would not help either — its commit happens in the
-        // proxy after the method returns, leaving an internal catch just as dead. TransactionTemplate
-        // commits inside execute(...), which is what makes this catch real.
+        // Deliberately joins the CALLER's transaction. Isolating this write in a REQUIRES_NEW
+        // transaction was tried in v0.81.0 and reverted: origin_session_id and claimed_session_id are
+        // FKs to quick_review_sessions, and startSession inserts that session row in its own
+        // uncommitted transaction — so a second connection cannot see the parent row and every insert
+        // failed the FK check, deterministically and silently. Isolation is still the right long-term
+        // shape, but it requires the session row to be visible first. See the Backlog Index row.
         try {
-            questionBankTransactionOperations.execute(status -> {
-                challengeQuizQuestionBankRepository.saveAll(entries);
-                return null;
-            });
+            challengeQuizQuestionBankRepository.saveAll(entries);
         } catch (RuntimeException exception) {
             log.warn("Challenge Quiz question-bank write failed for userId={}, studyPackId={}",
                     userId, studyPackId, exception);
