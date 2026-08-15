@@ -34,6 +34,10 @@ import {
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
+  trackCourseProgramValueSelected,
+  useCourseProgramCatalogNames,
+} from "@/hooks/use-course-program-catalog";
+import {
   formatStudyPackResetDate,
   isStudyPackLimitReached,
   isStudyPackLimitReachedMessage,
@@ -65,8 +69,7 @@ import {
   type NoteEntrySource,
 } from "@/lib/note-entry";
 import {
-  COURSE_PROGRAM_SUGGESTIONS,
-  mergeCourseProgramSuggestions,
+  buildCatalogFirstCourseProgramSuggestions,
 } from "@/lib/learning-profile";
 import {
   clearNoteUpgradeDraft,
@@ -207,6 +210,15 @@ export function NoteEditorPageClient({
   const [applicableProgramsRetryToken, setApplicableProgramsRetryToken] = useState(0);
   const [profileCourseProgram, setProfileCourseProgram] = useState("");
   const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const catalogCourseProgramNames = useCourseProgramCatalogNames();
+  // The value this save is a CHANGE FROM — the persisted program when editing, and the profile
+  // pre-fill when creating. Not the draft: `draft` is the value being saved, so comparing against it
+  // suppresses every event. And not null on create: the create path seeds the program from the
+  // profile and requires a non-null value, while the Course / Program field sits inside the
+  // collapsed "Add details" panel — so a null baseline made every note creation emit a selection
+  // event for a field the learner never opened, at ~5x the volume of the profile surfaces this
+  // metric actually targets.
+  const persistedCourseProgramRef = useRef<string | null>(null);
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
   const generatedContentSectionRef = useRef<HTMLElement | null>(null);
   const [generatedContentRefreshToken, setGeneratedContentRefreshToken] = useState(0);
@@ -361,6 +373,9 @@ export function NoteEditorPageClient({
         // editing an already-generated note would change that note's depth, and a depth
         // correction on a generated note strands its Challenge-bank rows at the old level
         // (see the v0.75.0 scoping note — the same reason align-on-add was rejected).
+        if (!isEditMode && persistedCourseProgramRef.current === null) {
+          persistedCourseProgramRef.current = me.courseProgram ?? null;
+        }
         if (!isEditMode) {
           setDraft((previous) => ({
             ...previous,
@@ -438,12 +453,12 @@ export function NoteEditorPageClient({
   const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
   const hasGeneratedStudyPack = studyPackStatus === "STUDY_PACK_READY";
   const availableCourseProgramSuggestions = useMemo(
-    () => mergeCourseProgramSuggestions(
-      COURSE_PROGRAM_SUGGESTIONS,
+    () => buildCatalogFirstCourseProgramSuggestions(
+      catalogCourseProgramNames,
       courseProgramSuggestions,
       [draft.courseProgram],
     ),
-    [courseProgramSuggestions, draft.courseProgram],
+    [catalogCourseProgramNames, courseProgramSuggestions, draft.courseProgram],
   );
   const openLockedFeaturePaywall = useCallback((
     variant: "study-pack-limit" | "ocr-limit" | "note-generation-limit",
@@ -591,6 +606,7 @@ export function NoteEditorPageClient({
           return;
         }
         setDraft(toDraft(note));
+        persistedCourseProgramRef.current = note.courseProgram ?? null;
         setCurrentNoteId(note.id);
         setCopiedFromNoteId(note.copiedFromNoteId);
         setStudyPackStatus(note.studyPackStatus ?? "DRAFT");
@@ -711,6 +727,9 @@ export function NoteEditorPageClient({
         const me = await getMe();
         resolvedCourseProgram = resolvedCourseProgram ?? normalizeOptional(me.courseProgram ?? "");
         setProfileCourseProgram(me.courseProgram ?? "");
+        if (persistedCourseProgramRef.current === null) {
+          persistedCourseProgramRef.current = me.courseProgram ?? null;
+        }
         setDraft((previous) => (
           previous.courseProgram.trim().length > 0
             ? previous
@@ -793,8 +812,18 @@ export function NoteEditorPageClient({
     }
 
     setCurrentNoteId(saved.id);
+    const previousPersistedCourseProgram = persistedCourseProgramRef.current;
     setDraft(toDraft(saved));
+    persistedCourseProgramRef.current = saved.courseProgram ?? null;
     setStudyPackStatus(saved.studyPackStatus ?? "DRAFT");
+    if (!showTargetProfileTypeField) {
+      trackCourseProgramValueSelected(
+        "note-editor",
+        saved.courseProgram ?? payload.courseProgramText ?? "",
+        previousPersistedCourseProgram,
+        catalogCourseProgramNames,
+      );
+    }
     return saved;
   }, [
     applicableProgramIds,
@@ -803,6 +832,7 @@ export function NoteEditorPageClient({
     buildRequest,
     contentEmpty,
     currentNoteId,
+    catalogCourseProgramNames,
     showTargetProfileTypeField,
     showToast,
   ]);
@@ -1032,6 +1062,7 @@ export function NoteEditorPageClient({
         content: draft.content,
       });
       setDraft(toDraft(updated));
+      persistedCourseProgramRef.current = updated.courseProgram ?? null;
       setCurrentNoteId(updated.id);
       setPendingSuggestion(null);
       finalizeGenerationRedirect(pendingSuggestion.noteId);

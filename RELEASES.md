@@ -1,5 +1,96 @@
 # RELEASES.md - NoteLib
 
+## v0.79.0 - Catalog-First Vocabulary
+
+**Status: Released** (kicked off and signed off 2026-08-15)
+
+**Scope: one PR, everything planned shipped — but the baseline captured before merge narrowed what it can be expected to achieve, and that is recorded rather than smoothed over.** Learner *notes* were already only 0.6% off-catalog; the real 13.9% sits in learner *profiles*, which are set overwhelmingly during onboarding — the surface this release deliberately excluded to protect `[CHECKPOINT — due 2026-09-11]`. **This release is the machinery and the measurement; the onboarding follow-up is the intervention**, and it now carries its own Backlog Index row.
+
+Theme: the course/program a learner picks should be one the product can actually act on.
+
+**This is the counter-proposal from `docs/claude-plans/course-program-canonical-catalog-proposal.md`, NOT the `ADR-001` amendment.** That amendment — lock the field to the catalog, add a *"Request Program"* queue — remains **PROPOSED and unratified**. The proposal's own recommendation is to try the softer fix first and lock down later only if vocabulary does not get clean enough, *"with evidence the softer fix failed, and with the 4,480-note migration designed rather than discovered."* This release is that softer fix and the evidence-gathering step before that decision. **Do not treat shipping it as ratifying the amendment.**
+
+**The defect is two sources of truth that drifted, not one bad option.** `COURSE_PROGRAM_SUGGESTIONS` in `frontend/lib/learning-profile.ts` is a hardcoded list of 31 values; the canonical `course_programs` catalog seeded by `V106` holds 21 rows; **only 16 overlap** (logged as C8/C9 in the proposal's audit, re-verified in code at kickoff). Every non-overlapping value a learner picks yields a `course_program` that matches no published plan, so `v0.78.0`'s named recommendation **can never fire for them**.
+
+**Production confirms it, and this is what makes the release worth taking now.** Of the 189 learners with a Study Pack and no Study Plan, **60 are blocked by vocabulary rather than by content or features**: 15 on `Professional / Board Exam Review` (a study *context*, not a program, and absent from the catalog by design), 3 on `Computer Science`, 2 on `Software Engineering`, plus free-typed values like `High School` (7) and `Bsed`. `v0.78.0`'s checkpoint kill criterion names this population explicitly.
+
+**No new endpoint is needed** — `GET /course-program-catalog` is already `USER`-readable (`CourseProgramCatalogController:28`), shipped for the admin catalog UI in `v0.71.2`.
+
+### Planned Scope
+
+1. **Catalog-first suggestions (frontend).** Replace the hardcoded `COURSE_PROGRAM_SUGGESTIONS` constant with the live catalog from `GET /course-program-catalog`, ordered first. **Free text stays allowed** — nobody is blocked, no migration, no request queue. The hardcoded list survives only as an offline/failed-fetch fallback. Surfaces: `/profile`, the note editor, private note detail, and the Dashboard's lightweight profile-completion prompt.
+2. **Off-catalog values stop minting public shelves (backend).** `NoteService.listPublicCoursePrograms` returns catalog names only. One method. The audit called this leak *"better evidence than the original argument"*: a learner's personal free-text string currently becomes a public filter chip.
+3. **Measure whether catalog-first actually changes what learners pick (frontend).** `COURSE_PROGRAM_VALUE_SELECTED`, fired when a value is committed on any of the four changed surfaces, with `{ surface, matchedCatalog }` metadata. **Without it the release's only success signal is unobservable**, which is precisely how `v0.78.0` shipped leg (a) with no events and no way to evaluate it.
+
+**The measurement design, stated so it is not re-derived at signoff:**
+
+- **Primary signal is retrospective SQL and needs no code at all.** `notes.course_program` carries `created_at`, so the off-catalog rate for notes authored after deploy is computable directly against the 21-row catalog. This covers the note editor and note detail surfaces.
+- **The event exists for the surface SQL cannot reach.** `users.course_program` has no history — a profile change overwrites in place — so the `/profile` and Dashboard-prompt surfaces are unmeasurable retrospectively. That is what the event is for; it is not duplicating the SQL.
+- **⚠️ The pre-deploy baseline must be captured BEFORE this release merges to `main`.** The lesson is `v0.78.0`'s: the Explore pointer had emitted nothing before it was replaced, so no before-state existed and the comparison it was supposed to enable was impossible. Run the baseline query against production and record the result in this section before merging.
+
+### Baseline, captured 2026-08-15 BEFORE merge to `main` — and it resized the release
+
+**Learner-authored notes (`role = USER`, non-TEACHER), off-catalog `course_program` by month:**
+
+| Month | Learner notes | Off-catalog | Rate |
+|---|---|---|---|
+| 2026-08 | 1,111 | 7 | **0.6%** |
+| 2026-07 | 3,137 | 3 | **0.1%** |
+| 2026-06 | 200 | 2 | 1.0% |
+| 2026-05 | 2 | 2 | 100% |
+| 2026-04 | 3 | 1 | 33.3% |
+
+**Learner profiles (`users.course_program`, point-in-time): 32 of 231 off-catalog — 13.9%.**
+
+**The first query written for this was unscoped and would have been recorded as a misleading baseline.** It counted curator notes, which carry catalog values by construction, so the aggregate collapsed from ~20% to 0.1% exactly when bulk Official Library authoring multiplied the denominator 6.6× in July. Any post-deploy read would have shown ~0.1% and looked like success no matter what learners did. **Do not re-derive the unscoped version; it measures library expansion, not vocabulary.**
+
+**What the corrected numbers mean, stated plainly because it narrows this release's reach:**
+
+1. **The note surfaces address a problem that barely exists.** Learner-authored notes are 0.6% off-catalog. The Note Editor and Note Detail changes are correct and cheap, but there is almost nothing there to fix. **Do not read a flat note-level rate as failure — it is already a floor.**
+2. **The profile field is the real one, at 13.9%**, and it matches the blocked-learner population found while scoping `v0.78.0`.
+3. **⚠️ But `users.course_program` is set overwhelmingly during ONBOARDING, which this release deliberately excludes.** `/profile` and the Dashboard prompt are where an *existing* value gets edited — a rare event. **So this release should be expected to move very little on its own.** The load-bearing half is the onboarding follow-up after `[CHECKPOINT — due 2026-09-11]`, and this release is best understood as putting the machinery and the measurement in place ahead of it.
+4. **Nothing here changes the 32 existing off-catalog profiles** — no migration, by design. They stay until their owners edit them.
+
+**This is a bet on the follow-up, and it is named as one rather than discovered at the next signoff.** If the 09-11 checkpoint clears and the onboarding change ships, the 13.9% is the number to watch; `COURSE_PROGRAM_VALUE_SELECTED` is the only way to see movement in it, because `users.course_program` has no history.
+
+### Shipped
+
+- **Catalog-first learner Course / Program suggestions (frontend).** `/profile`, the Note Editor, private Note Detail, and the Dashboard lightweight profile-completion prompt now load the existing authenticated Course Program catalog and place its names before the retained hardcoded fallback and saved/custom values. Slow, failed, or empty catalog loads keep the hardcoded suggestions immediately usable, and off-catalog saved values remain selected. **Free text remains accepted on `/profile`, the Note Editor and Note Detail; the Dashboard prompt passes `allowCustom={false}` and always has** — no surface's `allowCustom` setting changed in this release. Onboarding deliberately continues using `COURSE_PROGRAM_SUGGESTIONS` unchanged until after the 2026-09-11 checkpoint.
+- **Course / Program selection measurement (frontend/backend contract).** Added `COURSE_PROGRAM_VALUE_SELECTED` to both analytics event type contracts and fire it once after a commit **that actually changed the value** on the four changed surfaces — a save is not a selection, since each of those handlers persists other fields beside the program. Metadata is limited to `{ surface, matchedCatalog }`, matching catalog names case-insensitively after normalization; the raw learner value is never recorded, catalog-unavailable saves emit no event, and analytics failure never blocks a save.
+- **Catalog-only Public Library program facets (backend).** `NoteService.listPublicCoursePrograms` now returns only catalog-joined names used by public notes, retaining the existing normalization, case-insensitive de-duplication, and ordering. Personal off-catalog free text still works on notes and in direct discovery matching, but no longer mints a public Course / Program filter chip. **⚠️ The justification was overstated and is corrected here: dead chips did not exist.** `NoteCourseProgramRepository.FIND_LEGACY_VALUES_BY_VISIBILITY` already carried a `NOT EXISTS` guard (added as the C2 fix) and the filter predicate matched join names *or* guarded legacy text, so every chip already resolved to at least one note. **The real, user-visible effect is the removal of valid chips** — public notes whose program exists only as free text are no longer reachable from the filter dropdown. The change stands on vocabulary hygiene (a personal string should not mint a public shelf), not on fixing a defect, and its footprint is small: production holds ~4 non-admin public notes.
+
+### Pre-signoff pressure test — 2026-08-15
+
+A cold-context agent read the final code with no inherited context. **Four findings fixed, five documented.** Two of the four were introduced by this session's own audit fixes — the same pattern as `v0.78.0`, and the reason the gate exists.
+
+1. **The Note Editor emitted a selection event on every note creation, for a field the learner never opened.** The create path seeds `courseProgram` from the profile and requires a non-null value, while the field sits inside the collapsed *"Add details"* panel — and the persisted-value ref (added by this session's earlier fix) was `null` on create, so every save read as a change. **Scale makes it fatal to the metric:** ~1,111 learner notes/month against 231 learner profiles total, so the aggregate `matchedCatalog` rate would have been dominated ~5:1 by replays of whatever onboarding set — the one surface this release deliberately excluded. **The release's own test ratified it**, asserting the event fired; that test now asserts suppression. Fixed by seeding the baseline from the profile pre-fill, so accepting the pre-fill is silent and a genuine edit still fires.
+2. **The `/profile` Identity card persisted an edited program untracked.** `buildProfileUpdateRequest()` carries `courseProgram`, so saving the Identity card commits the change — and the later Learning Profile save is then correctly suppressed as unchanged, making a genuine selection permanently invisible. Now tracked.
+3. **`RELEASES.md` and `notes.md` both claimed free text is accepted on all four surfaces.** It is not: the Dashboard prompt passes `allowCustom={false}` and always has. Corrected in both.
+4. **The public-shelf change was justified by a defect that did not exist.** `FIND_LEGACY_VALUES_BY_VISIBILITY` already carried a `NOT EXISTS` guard (the C2 fix), so no dead chips existed. The real effect is removing *valid* chips for public notes whose program is free-text only. The change stands on vocabulary hygiene, not defect-fixing, and the docs now say so.
+
+### Known limitations — carried, not silently dropped
+
+- **Two tests in `lightweight-profile-completion-prompt.test.tsx` are weaker than their names.** *"allows custom text"* asserts the combobox's internal buffer, not a committed value — with `allowCustom={false}` the typed value never reaches `onChange`, so it is green while the value would not save. *"falls back without blocking and omits analytics when the catalog fetch fails"* never awaits the rejection, so both halves pass for the initial-`null` reason; deleting the `.catch` leaves it green.
+- **No integration test distinguishes true-catalog from merged-list `matchedCatalog`.** The code is correct — the tracker receives catalog names only — but every call-site assertion uses a value that is either in both lists or neither. The discriminating case (in the hardcoded fallback, absent from the catalog) is the exact population this release targets and is covered only in the hook's unit test.
+- **The Note Editor's unchanged-value suppression has no edit-mode test**, and the ref's initialisation on note load is untested.
+- **`CourseProgramCatalogService.create` does not apply `normalizeForStorage`**, while the Public Library filter matches catalog names exactly. Pre-existing, but this release makes the catalog the sole chip source, so an admin adding e.g. `K-12` would mint a chip matching zero notes. Exposure is now total where it used to be partial.
+- **`trackAnalyticsEvent` uses raw `fetch`, not `fetchWithAuth`**, so an expired access token drops the event silently while the save succeeds through refresh. Pre-existing for every event, but this one is the sole basis for a product decision.
+- **`mergeCourseProgramSuggestionsInOrder` drops the `.sort()` and the `preferReadableCourseProgram` collision handling** its predecessor had. Harmless while the catalog block leads, but it is a silent semantic change in a helper four surfaces depend on.
+- **`findLegacyCourseProgramValuesByVisibility` now has no production caller** — retained deliberately rather than deleted, since the amendment decision may want it back.
+
+### Side effect on a fifth surface, verified at signoff
+
+Narrowing `GET /course-programs?scope=public` also narrows the **collection publish** combobox (`collection-detail-page-client.tsx:2277`), which is the only other authoring consumer of that scope. **The three learner surfaces are unaffected** — `/profile`, the Note Editor and Note Detail all call `scope="mine"`, so their saved-value suggestions are untouched; the doc line claiming the widened list "remains available to authoring surfaces" was removed because it was already wrong for them.
+
+**No lockout results, and that was checked rather than assumed:** `courseProgramOptions` (`:2261-2264`) prepends the collection's existing value whenever it is absent from suggestions, so a curator editing a collection with a legacy off-catalog program can still keep it despite `allowCustom={false}`. The effect is that publishing now offers catalog names first and legacy strings no longer appear as options — consistent with this release's direction, but recorded because it was not in the stated scope.
+
+### Pre-commit audit — 2026-08-15
+
+Two findings, both fixed before commit.
+
+1. **The event fired on every save, not on every change** — and each of the four handlers persists other fields beside the program (the profile form saves learner level; both note surfaces save the whole note). The metric would have filled with re-saves of pre-existing values, which are overwhelmingly the legacy off-catalog strings this release exists to reduce, so the off-catalog rate would have looked flat and high whether or not catalog-first worked. **Codex's own test demonstrated the failure**: it rendered with `initialCourseProgram="Nursing"`, opened and closed the suggestion list without selecting anything, saved, and asserted an event. The event now requires a changed value, compared against the **persisted** prior value — the first attempt at this fix compared against the Note Editor's `draft`, which *is* the value being saved, and suppressed every event until a pre-existing test caught it.
+2. **`allowCustom={false}` was silently dropped from the Dashboard profile-completion prompt**, so a surface that had been locked to suggestions began accepting free text. That loosens vocabulary control in the release whose purpose is to tighten it. Restored. The prompt's anti-drift rule said *"free text stays allowed on every surface"*, meaning **do not add restrictions**; it was reasonably read as *ensure* free text everywhere, so the wording — not the implementation — was the root cause.
+
 ## v0.78.0 - Post-Mastery Next Step
 
 **Status: Released** (kicked off 2026-08-14, signed off 2026-08-15)

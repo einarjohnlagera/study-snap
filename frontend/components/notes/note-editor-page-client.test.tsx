@@ -371,6 +371,13 @@ describe("NoteEditorPageClient", () => {
     await waitFor(() => {
       expect(courseProgramInput).toHaveValue("Nursing");
     });
+    fireEvent.click(screen.getByRole("button", { name: "Toggle course program suggestions" }));
+    const courseProgramListbox = screen.getByRole("listbox");
+    await within(courseProgramListbox).findByRole("option", { name: "Pharmacy" });
+    expect(within(courseProgramListbox).getAllByRole("option").slice(0, 2).map((option) => option.textContent)).toEqual([
+      "Nursing",
+      "Pharmacy",
+    ]);
     expect(getMe).toHaveBeenCalled();
     expect(
       screen.getByText("Choose or type the course, strand, field, or topic that fits best. This note can use a different value from your profile."),
@@ -676,6 +683,12 @@ describe("NoteEditorPageClient", () => {
         content: "Simple note content",
       }));
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created");
+      // The learner never opened "Add details", so the program is the profile pre-fill the create
+      // path seeded — a replay, not a selection. Emitting here would swamp the metric: learner notes
+      // run ~5x the entire learner-profile population per month.
+      expect(trackAnalyticsEvent).not.toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "COURSE_PROGRAM_VALUE_SELECTED" }),
+      );
     });
   });
 

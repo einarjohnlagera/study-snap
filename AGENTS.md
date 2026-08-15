@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.78.0 - Post-Mastery Next Step` (Released); previous: `v0.77.0 - Evidence-Gated Weak Concept Recommendation` (Released)
+- `v0.79.0 - Catalog-First Vocabulary` (Released); previous: `v0.78.0 - Post-Mastery Next Step` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -623,9 +623,12 @@ Use these skills before writing prompts, before starting new features, and after
   - **Do not "restore" either retired rule.** `courseProgram` as a single free-text field carrying five incompatible responsibilities is the defect the ADR exists to fix, not a constraint to preserve.
   - `users.courseProgram` and `notes.courseProgram` remain persisted string fields. `notes.courseProgram` is the permanent free-text **personal-notes** program field, not legacy: learners write exactly one value there. Teacher/Admin curation uses catalog-only, one-or-many `note_course_program` rows. This single mode gate controls both vocabulary and cardinality. Discovery stays join-first with the string used whenever there are no join rows; Domain Context is required whenever curation selects more than one program, and a program list must never reach an LLM prompt.
   - note editor, onboarding, profile, and note-detail metadata course/program inputs should use one shared autocomplete behavior backed by saved-value suggestions plus curated defaults
-  - authenticated course/program suggestions come from `GET /api/course-programs?scope=mine`
-  - public/discovery course/program values may come from public note payloads or `GET /api/course-programs?scope=public`
+  - `/profile`, the learner Note Editor, private learner Note Detail, and the Dashboard lightweight profile-completion prompt must suggest live `GET /api/course-program-catalog` names first, then the retained hardcoded `COURSE_PROGRAM_SUGGESTIONS` fallback and saved/current values; failed, slow, or empty catalog loads must keep the hardcoded list immediately usable
+  - onboarding is deliberately excluded from catalog-first suggestions until after the 2026-09-11 completion checkpoint and must continue using `COURSE_PROGRAM_SUGGESTIONS` directly
+  - authenticated saved-value course/program suggestions may still come from `GET /api/course-programs?scope=mine`; public/discovery filter values come from catalog-joined public-note names through `GET /api/course-programs?scope=public`
   - course/program inputs must still allow custom typed values
+  - `COURSE_PROGRAM_VALUE_SELECTED` fires only after a committed save **that actually changed the value** on `profile`, `note-editor`, `note-detail`, or `dashboard-prompt`. **Every one of those handlers persists other fields alongside the program**, so firing on unchanged values fills the metric with re-saves of pre-existing (overwhelmingly off-catalog) strings and makes the rate uninterpretable. The comparison is against the **persisted** prior value, never the draft — on the Note Editor the draft *is* the value being saved, so comparing against it suppresses every event; metadata is exactly `{ surface, matchedCatalog }`, catalog matching is trimmed and case-insensitive using course/program normalization, and the raw learner-typed value must never be recorded
+  - when the live catalog is unavailable, omit `COURSE_PROGRAM_VALUE_SELECTED` rather than deriving `matchedCatalog` from fallback suggestions; analytics failure must never block the save
   - typing should filter suggestions in real time, case-insensitively, with prefix matches ahead of contains matches
   - typing must not keep the full unfiltered list visible
   - existing matching suggestions should appear before the custom `Use "..."` action

@@ -536,10 +536,21 @@ describe("PrivateNoteDetailPageClient", () => {
       emailVerifiedAt: "2026-03-21T09:00:00Z",
       profileType: "STUDENT",
     });
-    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, courseProgram: "BS Nursing" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      courseProgram: "BS Nursing",
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+    });
     (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
       programs: [],
       courseProgramShadowed: false,
+    });
+    (updateNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      courseProgram: "Marine Biology",
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
     });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
@@ -550,6 +561,27 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText(
       "Set by the note this was copied from. Your own course or program is on your profile.",
     )).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    const courseProgramInput = await screen.findByLabelText(/Course \/ Program\(s\)/);
+    expect(courseProgramInput).toHaveValue("BS Nursing");
+    fireEvent.click(screen.getByLabelText("Toggle course program suggestions"));
+    expect(screen.getAllByRole("option").slice(0, 2).map((option) => option.textContent)).toEqual([
+      "Nursing",
+      "Pharmacy",
+    ]);
+    fireEvent.change(courseProgramInput, { target: { value: "Marine Biology" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        courseProgramText: "Marine Biology",
+      }));
+      expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+        eventType: "COURSE_PROGRAM_VALUE_SELECTED",
+        metadata: { surface: "note-detail", matchedCatalog: false },
+      });
+    });
   });
 
   it("does not block a learner when the course program catalog fails to load", async () => {
