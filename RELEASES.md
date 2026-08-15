@@ -2,7 +2,9 @@
 
 ## v0.78.0 - Post-Mastery Next Step
 
-**Status: In Progress** (kicked off 2026-08-14)
+**Status: Released** (kicked off 2026-08-14, signed off 2026-08-15)
+
+**Scope: four PRs, and the release grew mid-flight on production evidence.** It opened as one backend-only change and closed as a four-surface release, because sizing the shipped feature against production showed it could never fire for 69% of learners. **Scope item 4 (the ~23 raw-LaTeX packs) did NOT ship** — it is owner-executed curator work, it was not done, and it is carried forward with its Backlog Index row intact rather than counted as complete.
 
 Theme: a learner who has just mastered a pack should be told **what to study next**, not left on a screen whose secondary slot is empty.
 

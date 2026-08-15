@@ -6,7 +6,14 @@
 > subject pages). This is a structural snapshot, not a proposal — it describes what exists now so a
 > design conversation starts from real constraints instead of assumptions.
 > Update this file when the Note schema, taxonomy model, or collection model changes.
-> Last updated: v0.76.0 — 2026-08-14. **Rewritten for `ADR-001`'s five-axis model**; the
+> Last updated: v0.78.0 — 2026-08-15. **`v0.78.0` gave `NoteCollectionItemEntity.position` a second
+> consumer:** it now orders the post-mastery "next in your plan" suggestion, alongside the collection
+> progress definition of practiced (`lastSessionCompletedAt != null`), so a change to item ordering or the
+> practice-timestamp contract affects that surface too. The Dashboard also recommends ONE named
+> program-matched published plan again (never a grid — Explore still owns browse), amending `v0.67.0`.
+> **Production sizing worth carrying into any collections conversation: 69% of learners with a Study Pack
+> have nothing in a plan at all**, and plan membership is heavily concentrated in ~85 accounts. Previously
+> stamped v0.76.0 — 2026-08-14. **Rewritten for `ADR-001`'s five-axis model**; the
 > previous stamp was `v0.50.3` (2026-07-17) and predated Domain Context, note-level learner depth,
 > the `course_programs` catalog, and many-to-many applicability. If you are working from a cached
 > copy of this file that says a Note has no learner level, or that Course / Program is free text with
