@@ -11,6 +11,15 @@
 > dates). **The sequencing consequence is unchanged and now denser: nearly every substantial candidate is
 > checkpoint-gated between 2026-09-10 and 09-14**, so proposals that change what a checkpoint measures
 > destroy the read rather than advancing it.
+>
+> **Two unratified architecture proposals are also open and should not be mistaken for decided:**
+> **(a) removing Target Audience**, reducing `ADR-001`'s five note metadata axes to four
+> (`target-audience-removal-proposal.md` — audit done, evidence supports it, but it amends an Accepted
+> ADR and its Phase 2 touches Public Library discovery inside the 2026-09-13 Explore window); and
+> **(b) the canonical Course / Program catalog amendment** (`course-program-canonical-catalog-proposal.md`
+> — `v0.79.0` shipped the *softer* counter-proposal, catalog-first suggestions, and shipping it did **not**
+> ratify locking the field). A related unscoped finding: **academic levels are being used as Course /
+> Program values** on ~47 public notes, which interacts with both.
 
 ---
 

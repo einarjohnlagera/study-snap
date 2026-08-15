@@ -1,5 +1,37 @@
 # RELEASES.md - NoteLib
 
+## v0.81.0 - Challenge Bank Integrity
+
+**Status: In Progress** (kicked off 2026-08-15)
+
+Theme: a learner's banked Challenge questions should survive an authoring correction, and a bank write should never be able to break the session it belongs to.
+
+**Two defects, both recorded as `v0.70.0` Known Limitations on 2026-08-04 and both still open.** They are independent of any roadmap direction and worth fixing on their own merits — and they are *also* the blocking prerequisite for the Target Audience retirement direction, which is why they surface now.
+
+**Defect 1 — stranded bank rows are silently regenerable.** `challenge_quiz_question_bank` stores `learner_level`, but `uq_challenge_quiz_question_bank_user_pack_key` is `unique (user_id, study_pack_id, question_key)` (`V96:12`) — **`learner_level` is excluded from the key.** When a note's authored depth changes, `ExamQuestionPoolService.sameLearnerLevel` gating makes the old rows unreachable, but their keys are absent from `disallowedQuestionKeys`, so **the LLM can regenerate the same question the learner has already seen.** Measured at 5 of 6,235 rows today, but explicitly *"unbounded once authoring corrections become routine."*
+
+**Defect 2 — the documented best-effort guarantee is already false.** `docs/features/challenge-quiz.md` states bank persistence *"is best-effort and never blocks a Challenge session."* `persistGeneratedQuestions:118`'s `saveAll` INSERT flushes **at commit, outside its own `catch`**, so a constraint violation escapes the handler and can fail the session. The fix shape already exists in this codebase: `copyTemplateQuestions` does per-row saves with a `DataIntegrityViolationException` catch — which is itself evidence the collision class was known at one of the two write sites and not the other.
+
+**Why now, beyond the defects themselves.** The revised Target Audience direction (see below) requires backfilling Authored Depth onto ~905 curator-owned notes. That backfill is precisely "an authoring correction, at scale" — the condition Defect 1's own record names as making it unbounded. **Fixing this is Step 0 of that sequence**, and the sequence cannot start without it.
+
+### Planned Scope
+
+1. **Bank writes become genuinely best-effort (backend).** Per-row saves with a `DataIntegrityViolationException` catch at `persistGeneratedQuestions`, matching `copyTemplateQuestions`. A bank write must never fail a Challenge session, as the feature doc already promises.
+2. **Stranded rows stop being regenerable (backend + migration).** Either include `learner_level` in the uniqueness key or invalidate rows whose level no longer matches, so a level correction cannot hand a learner a question they have already answered. **Decide which at scoping** — they differ in migration cost and in what happens to the 5 existing stranded rows.
+3. **Carry the Target Audience retirement direction as documentation only** — the revised proposal, its consultation brief, and two Backlog Index rows. **No Target Audience code changes in this release.**
+
+### Anti-drift — locked for this release
+
+- **No Target Audience code changes.** The `ADR-001` amendment is unratified; this release only unblocks it. Do not remove the field, its filter, its authoring control, or its columns.
+- **No depth backfill.** That is the next step, gated on ratification and on the Information Technology audit.
+- **Existing bank rows are not deleted wholesale.** `ADR-001` rule 2 holds — rows are preserved; the question is reachability and regeneration, not deletion.
+- **Do not change what a Challenge session shows a learner mid-flight.** `[CHECKPOINT — due 2026-10-15]` reads Challenge CTA impressions vs clicks; this release fixes persistence correctness, not surfacing.
+- **Do not "fix" Defect 2 by widening the transaction.** The guarantee is that a bank failure is absorbed, not that it is prevented.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.80.0 - Instrumentation Integrity
 
 **Status: Released** (kicked off and signed off 2026-08-15)
