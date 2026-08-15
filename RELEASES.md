@@ -32,7 +32,7 @@ Theme: a learner who has just mastered a pack should be told **what to study nex
 
 ### Shipped
 
-_(nothing yet)_
+- **Next Study Plan item after mastery** — Mastered Quick Review results keep `Take a Challenge` as the primary action and now offer `Next in your plan` as a secondary link to the lowest-`position` unpracticed note in the resolved containing plan. The Primary Review Set wins when it directly contains the completed note; otherwise the most recently updated containing plan is used. Practice state reuses the collection progress definition (`lastSessionCompletedAt != null`), the completed note is excluded explicitly, and no collection, no remaining unpracticed readable item, or an invalid primary yields silent absence. **Practice state has exactly one resolver, and the pre-commit audit enforced it:** the candidate query orders and excludes only, because a SQL-side `not exists` practice filter would miss **multi-note sessions** (Board/Long Exam credit their participating notes via session state, not `session.noteId`) — a second, narrower definition of done that would have silently disagreed with the plan's own progress counter. Resolving it once per plan service-side also keeps that multi-note scan off a per-page loop on a post-session path. **The candidate read is deliberately unpaged and that is bounded by precedent, not by assumption:** `NoteCollectionService.java:1648` already resolves the same practiced map over the union of note ids across *several* collections (a Goal's children), so one collection's notes is a strict subset of a shipped access pattern. A `LIMIT` was rejected — it would silently yield no suggestion whenever the first N items happened to be practiced.
 
 ## v0.77.0 - Evidence-Gated Weak Concept Recommendation
 
