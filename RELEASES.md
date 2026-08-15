@@ -18,6 +18,34 @@ Theme: the course/program a learner picks should be one the product can actually
 
 1. **Catalog-first suggestions (frontend).** Replace the hardcoded `COURSE_PROGRAM_SUGGESTIONS` constant with the live catalog from `GET /course-program-catalog`, ordered first. **Free text stays allowed** — nobody is blocked, no migration, no request queue. The hardcoded list survives only as an offline/failed-fetch fallback. Surfaces: `/profile`, the note editor, private note detail, and the Dashboard's lightweight profile-completion prompt.
 2. **Off-catalog values stop minting public shelves (backend).** `NoteService.listPublicCoursePrograms` returns catalog names only. One method. The audit called this leak *"better evidence than the original argument"*: a learner's personal free-text string currently becomes a public filter chip.
+3. **Measure whether catalog-first actually changes what learners pick (frontend).** `COURSE_PROGRAM_VALUE_SELECTED`, fired when a value is committed on any of the four changed surfaces, with `{ surface, matchedCatalog }` metadata. **Without it the release's only success signal is unobservable**, which is precisely how `v0.78.0` shipped leg (a) with no events and no way to evaluate it.
+
+**The measurement design, stated so it is not re-derived at signoff:**
+
+- **Primary signal is retrospective SQL and needs no code at all.** `notes.course_program` carries `created_at`, so the off-catalog rate for notes authored after deploy is computable directly against the 21-row catalog. This covers the note editor and note detail surfaces.
+- **The event exists for the surface SQL cannot reach.** `users.course_program` has no history — a profile change overwrites in place — so the `/profile` and Dashboard-prompt surfaces are unmeasurable retrospectively. That is what the event is for; it is not duplicating the SQL.
+- **⚠️ The pre-deploy baseline must be captured BEFORE this release merges to `main`.** The lesson is `v0.78.0`'s: the Explore pointer had emitted nothing before it was replaced, so no before-state existed and the comparison it was supposed to enable was impossible. Run the baseline query against production and record the result in this section before merging.
+
+### Baseline query — run BEFORE merge, record the result here
+
+```sql
+-- Off-catalog rate for learner-authored notes, by month. Establishes the pre-deploy trend.
+SELECT date_trunc('month', n.created_at)::date AS month,
+       count(*) AS notes_with_program,
+       count(*) FILTER (
+         WHERE NOT EXISTS (SELECT 1 FROM course_programs cp
+                           WHERE lower(cp.name) = lower(trim(n.course_program)))
+       ) AS off_catalog,
+       round(100.0 * count(*) FILTER (
+         WHERE NOT EXISTS (SELECT 1 FROM course_programs cp
+                           WHERE lower(cp.name) = lower(trim(n.course_program)))
+       ) / nullif(count(*), 0), 1) AS off_catalog_pct
+FROM notes n
+WHERE n.course_program IS NOT NULL AND trim(n.course_program) <> ''
+GROUP BY 1 ORDER BY 1 DESC LIMIT 6;
+```
+
+**Result (fill in before merge):** _(not yet run)_
 
 ### Anti-drift — locked for this release
 
@@ -27,6 +55,8 @@ Theme: the course/program a learner picks should be one the product can actually
 - **Onboarding's copy of the field is OUT OF SCOPE**, and this is a deliberate deferral rather than an oversight. `[CHECKPOINT — due 2026-09-11]` measures whether `v0.73.0`'s redesign moved onboarding completion against a 62.4% baseline — the funnel's largest single leak. **The value asymmetry decides it:** reordering a dropdown's suggestions loses almost nothing by waiting 27 days, while the completion read cannot be re-run. Onboarding gets the same change in a follow-up after 2026-09-11.
 - **The catalog is read-only here.** No new programs are seeded, renamed, or retired — `Professional / Board Exam Review` keeps working for the accounts that already chose it; catalog-first ordering demotes it without breaking anyone.
 - **Taxonomy fields stay combobox-backed, never plain free-text inputs** (standing rule) — this changes where the options come from, not the control.
+- **The event records what was picked, never why.** `COURSE_PROGRAM_VALUE_SELECTED` carries `surface` and a `matchedCatalog` boolean only — no raw learner-typed value, which would turn an analytics table into an uncurated vocabulary dump.
+- **Do not read the off-catalog rate as a measure of the 60 already-blocked learners.** This release deliberately migrates nobody, so their count will not move. The signal is the rate for *newly authored* values.
 
 ### Shipped
 
