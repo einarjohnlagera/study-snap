@@ -48,6 +48,16 @@ It now writes through the same `questionBankTransactionOperations`. The per-row 
 
 **Also corrected: `challenge-quiz.md`'s bank-*read* fallback claim.** It said read failures fall back to fresh generation. They do not, for any failure that poisons the transaction — those four methods run inside the session's transaction. The doc now states the weaker guarantee rather than implying the write path's protection. A false doc claim is worth correcting, not just recording as a limitation.
 
+### Folded in 2026-08-15 (second fold) — 15 rows that could never be claimed
+
+**`V116` stamps bank rows whose `learner_level` is NULL.** `V96` added the column nullable, so rows written before it was populated carry NULL — and because `effectiveCurriculumLevel` never returns null (note level → reader level → `COLLEGE`), `sameLearnerLevel` can never match them. **They are permanently unclaimable for their owners.** Question pools recover after one lazy refresh; bank rows have no such path, which is why the `v0.70.0` Known Limitation recording this said plainly that *"it will not resolve itself."*
+
+`COLLEGE` is the correct stamp: it is exactly what the resolution chain yields when neither the note nor the reader carries a level — the state these rows were written in.
+
+**Non-destructive by construction, and the guard exists because of `V115`.** A row is stamped only when no claimable `COLLEGE` twin already exists for the same `(user, study pack, question)`. Rows left NULL are duplicates of a row the learner can already receive, so nothing is lost and nothing is deleted — `ADR-001` rule 2 holds, and the migration cannot violate the uniqueness key this release just widened.
+
+Covered by a migration test, per the convention that data-transforming migrations get one while structural ones do not.
+
 ### Anti-drift — locked for this release
 
 - **No Target Audience code changes.** The `ADR-001` amendment is unratified; this release only unblocks it. Do not remove the field, its filter, its authoring control, or its columns.
