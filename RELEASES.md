@@ -29,7 +29,19 @@ Theme: the events four September decisions rest on should actually arrive.
 
 ### Shipped
 
-_(nothing yet)_
+- **Expiry-safe analytics delivery** — frontend analytics keeps its best-effort `keepalive` POST, refreshes through the shared in-flight refresh guard after a visible-page 401, and retries once. Analytics-only refresh failure, retry failure, and network failure remain silent and never clear auth state, invoke session-expiry handling, redirect, throw, or block the product flow; hidden/unloading documents skip refresh.
+- **Catalog create normalization** — new Course / Program catalog names now use the same whitespace and dash normalization as Public Library chips and exact-match filtering before duplicate detection and persistence. Existing rows remain untouched, and length validation, family resolution, and conflict behavior are unchanged.
+- **Instrumentation regression coverage** — analytics tests now cover successful refresh delivery, failed-refresh session safety, rejected fetches, and unload delivery. Dashboard tests assert committed closed-catalog values, await catalog rejection, and discriminate hardcoded fallback selections absent from the live catalog; Note Editor edit mode now locks unchanged-value event suppression.
+
+### Pre-commit audit — 2026-08-15
+
+**No blockers. Three things recorded because they are non-obvious and a later reader could undo them.**
+
+1. **⚠️ The hidden-page guard exists to prevent a silent logout, not to save a request — do not "simplify" it away.** `AuthService.refresh:318` **revokes the presented refresh token** and issues a new one. If analytics started a refresh while the document was unloading, the server could rotate the token while the client never received the replacement — leaving a dead refresh token and logging the learner out on their **next visit**. Skipping refresh on a hidden document avoids that. **The audit's first instinct was to remove this guard as unnecessary; checking the rotation behaviour reversed it.** The cost is a narrow gap: a 401 arriving after the document goes hidden skips recovery. That gap is worth it.
+2. **`clearAuthUser()` moved from `doRefreshAccessToken` into `fetchWithAuth`, and that is behaviour-preserving — verified by caller count, not by assumption.** The refresh has exactly two callers (`api.ts:2172` product, `:2863` analytics). Product keeps the identical clear-then-expire path; analytics is the only caller that must not expire a working session. If a third caller is ever added, it must state its own failure policy — the shared helper no longer has one.
+3. **The repaired catalog-failure test still cannot detect removal of the hook's `.catch`, and that is a property of the code rather than a weak assertion.** The handler sets `catalogNames` to `null` when the initial state is *already* `null`, so removing it changes nothing observable — it only prevents an unhandled rejection. The repair is real (the test now awaits the rejection and asserts post-rejection state instead of pre-resolution state), but **it is not a guard on the `.catch`**, and claiming otherwise would overstate the coverage.
+
+**Existing catalog rows are deliberately not normalized, and that was checked rather than assumed:** all 21 rows seeded by `V106` are already idempotent under `normalizeForStorage` (the four en-dash names — `Senior High – ABM/STEM/HUMSS`, `Special Needs Education – Generalist` — already carry the spaced form), so no pre-existing row mints a dead chip and no backfill is owed.
 
 ## v0.79.0 - Catalog-First Vocabulary
 

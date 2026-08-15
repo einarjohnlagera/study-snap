@@ -50,6 +50,21 @@ class CourseProgramCatalogServiceTest {
     }
 
     @Test
+    void normalizesDashInStoredNameToMatchPublicFilterChip() {
+        String normalizedName = "K – 12";
+        CourseProgramCatalogItemResponse created = item(UUID.randomUUID(), normalizedName, null, null);
+        when(repository.findByNormalizedName("k – 12")).thenReturn(Optional.empty());
+        when(repository.insert(normalizedName, null, null, null)).thenReturn(created);
+
+        CourseProgramCatalogItemResponse result = service.create(
+                new CreateCourseProgramCatalogRequest(" K-12 ", null, null)
+        );
+
+        assertThat(result.name()).isEqualTo(normalizedName);
+        verify(repository).insert(normalizedName, null, null, null);
+    }
+
+    @Test
     void createsProgramAssignedToExistingFamily() {
         UUID familyId = UUID.randomUUID();
         CourseProgramCatalogItemResponse created = item(UUID.randomUUID(), CHEMICAL_ENGINEERING, familyId, ENGINEERING);
