@@ -34,10 +34,19 @@ Theme: a learner's banked Challenge questions should survive an authoring correc
 
 ### Known limitations — carried, not silently dropped
 
-- **`OfficialChallengeQuizTemplateService.copyTemplateQuestions` has the same defect and is NOT fixed here.** A mechanical wrapper would change its semantics: it returns the list of successfully copied questions, and a single batch transaction turns partial success into all-or-nothing — a duplicate could leave the caller with no template questions at all. It needs per-row isolation or pre-filtering, which is its own design decision rather than a copy of this fix.
-- **Four other methods in `ChallengeQuizQuestionBankService`** (`claimEligibleQuestions`, `countEligibleIncorrectQuestions`, `claimIncorrectQuestions`, `updateOutcomesAndReleaseClaims`) swallow `RuntimeException` inside the caller's transaction and cannot protect the session from a real database error either. `challenge-quiz.md`'s claim that a bank *read* failure falls back to fresh generation is therefore false for anything that poisons the transaction. Only `releaseClaims` is genuinely isolated. Out of scope; recorded so the doc's remaining overclaim is known.
+- **Four methods in `ChallengeQuizQuestionBankService`** (`claimEligibleQuestions`, `countEligibleIncorrectQuestions`, `claimIncorrectQuestions`, `updateOutcomesAndReleaseClaims`) swallow `RuntimeException` inside the caller's transaction and cannot protect the session from a real database error. **Deliberately not isolated:** `claimEligibleQuestions` takes `PESSIMISTIC_WRITE` locks and mutates claim state, so moving it to its own transaction would commit claims independently of the session — a correctness change, not a bug fix. `challenge-quiz.md` now states this weaker guarantee honestly rather than implying the write path's protection.
 - **The migration has zero automated coverage.** Flyway is disabled in tests and H2 cannot parse `NULLS NOT DISTINCT`, so `V115` is exercised only in real environments. It requires **PostgreSQL 15+** — fine for production, but it will fail on any older lower environment.
 - **`ALTER TABLE … ADD CONSTRAINT UNIQUE` builds its index non-concurrently under `ACCESS EXCLUSIVE`**, briefly locking the table. Harmless at current size; worth knowing before the table grows.
+
+### Folded in 2026-08-15 — the template copy, after the deferral reason turned out to be wrong
+
+**`OfficialChallengeQuizTemplateService.copyTemplateQuestions` is fixed after all.** It was deferred at the pre-commit audit on the grounds that batch isolation would turn partial success into all-or-nothing, potentially leaving the caller with no template questions.
+
+**That reasoning was wrong, and checking the caller disproved it.** `ChallengeQuizService` computes `shortfall = quizCount - bankedQuestions.size()` and generates fresh questions for whatever is missing. An empty template return costs a few LLM tokens; it cannot produce a short or broken quiz. With that removed, there was no reason to leave a second copy of a defect this release exists to fix — especially one the release's own kickoff text had cited as a *working precedent*.
+
+It now writes through the same `questionBankTransactionOperations`. The per-row loop is gone: it never absorbed anything, because the assigned-UUID entity sends `save` down `em.merge()`, which queues a deferred insert rather than executing one.
+
+**Also corrected: `challenge-quiz.md`'s bank-*read* fallback claim.** It said read failures fall back to fresh generation. They do not, for any failure that poisons the transaction — those four methods run inside the session's transaction. The doc now states the weaker guarantee rather than implying the write path's protection. A false doc claim is worth correcting, not just recording as a limitation.
 
 ### Anti-drift — locked for this release
 
