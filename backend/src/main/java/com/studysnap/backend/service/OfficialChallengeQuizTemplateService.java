@@ -47,6 +47,7 @@ public class OfficialChallengeQuizTemplateService {
     private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
 
     private final ChallengeQuizQuestionBankRepository questionBankRepository;
+    private final TransactionOperations questionBankTransactionOperations;
     private final ChallengeQuizQuestionBankService questionBankService;
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
@@ -190,17 +191,24 @@ public class OfficialChallengeQuizTemplateService {
             if (copies.isEmpty()) {
                 return List.of();
             }
-            List<QuizItem> persistedQuestions = new ArrayList<>(copies.size());
-            for (int index = 0; index < copies.size(); index++) {
-                try {
-                    questionBankRepository.saveAll(List.of(copies.get(index)));
-                    persistedQuestions.add(copiedQuestions.get(index));
-                } catch (DataIntegrityViolationException exception) {
-                    log.warn("Official Challenge template copy skipped duplicate row for userId={}, studyPackId={}",
-                            userId, callerStudyPackId, exception);
-                }
+            // Runs in its OWN transaction, like every other generated-bank write. The previous per-row
+            // loop LOOKED like it absorbed duplicates and never did: the entity assigns its own UUID and
+            // has no @Version, so `save` takes the em.merge() branch, which queues a deferred insert
+            // rather than executing one — the catch was unreachable and the violation surfaced at the
+            // session's commit, marking it rollback-only (JPA) and aborting it on PostgreSQL (25P02).
+            // All-or-nothing is fine here: the caller computes `shortfall` from what comes back and
+            // generates fresh questions for the remainder, so a failed copy costs tokens, not a session.
+            try {
+                questionBankTransactionOperations.execute(status -> {
+                    questionBankRepository.saveAll(copies);
+                    return null;
+                });
+            } catch (RuntimeException exception) {
+                log.warn("Official Challenge template copy skipped duplicate rows for userId={}, studyPackId={}",
+                        userId, callerStudyPackId, exception);
+                return List.of();
             }
-            return List.copyOf(persistedQuestions);
+            return List.copyOf(copiedQuestions);
         } catch (RuntimeException exception) {
             log.warn("Official Challenge template copy failed for userId={}, studyPackId={}",
                     userId, callerStudyPackId, exception);
