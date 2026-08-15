@@ -13,10 +13,14 @@ import {
   type ProfileType,
 } from "@/lib/api";
 import {
-  COURSE_PROGRAM_SUGGESTIONS,
+  buildCatalogFirstCourseProgramSuggestions,
   getDefaultLearnerLevel,
   getGroupedLearnerLevels,
 } from "@/lib/learning-profile";
+import {
+  trackCourseProgramValueSelected,
+  useCourseProgramCatalogNames,
+} from "@/hooks/use-course-program-catalog";
 import {
   ONBOARDING_PROFILE_OPTIONS,
   type OnboardingProfileType,
@@ -52,8 +56,17 @@ export function LightweightProfileCompletionPrompt({
   const [learningProfileSaved, setLearningProfileSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const catalogCourseProgramNames = useCourseProgramCatalogNames();
 
   const groupedLearnerLevels = useMemo(() => getGroupedLearnerLevels(profileType), [profileType]);
+  const courseProgramSuggestions = useMemo(
+    () => buildCatalogFirstCourseProgramSuggestions(
+      catalogCourseProgramNames,
+      [courseProgram],
+      [initialCourseProgram],
+    ),
+    [catalogCourseProgramNames, courseProgram, initialCourseProgram],
+  );
 
   const selectProfileType = (nextProfileType: OnboardingProfileType) => {
     setProfileType(nextProfileType);
@@ -87,6 +100,7 @@ export function LightweightProfileCompletionPrompt({
     try {
       if (!savedLearningProfile) {
         await updateLearningProfileContext(learnerLevel, courseProgram);
+        trackCourseProgramValueSelected("dashboard-prompt", courseProgram, initialCourseProgram, catalogCourseProgramNames);
         setLearningProfileSaved(true);
         savedLearningProfile = true;
       }
@@ -175,7 +189,7 @@ export function LightweightProfileCompletionPrompt({
           <CourseProgramCombobox
             id="dashboard-lightweight-course-program"
             value={courseProgram}
-            suggestions={COURSE_PROGRAM_SUGGESTIONS}
+            suggestions={courseProgramSuggestions}
             onChange={setCourseProgram}
             learnerLevel={learnerLevel}
             ariaLabel="Course / Program"

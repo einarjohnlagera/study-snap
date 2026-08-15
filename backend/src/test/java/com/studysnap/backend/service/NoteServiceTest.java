@@ -1179,20 +1179,15 @@ class NoteServiceTest {
     }
 
     @Test
-    void listPublicCoursePrograms_includesProgramsReachableOnlyThroughTheJoin() {
-        // C2. The personal-string half must come from the join-guarded source, not the unguarded
-        // findCourseProgramValuesByVisibility -- otherwise a note with join rows [Nursing] and a stale
-        // string "Accountancy" publishes "Accountancy" into the filter dropdown, where selecting it
-        // returns zero notes under a chip the app itself offered. This asserts the WIRING; the NOT EXISTS
-        // guard is SQL-level and cannot be exercised through a mocked repository, which is finding B4.
-        when(noteCourseProgramRepository.findLegacyCourseProgramValuesByVisibility(NoteVisibility.PUBLIC.name()))
-                .thenReturn(List.of("Software Engineering", "Nursing"));
+    void listPublicCoursePrograms_includesOnlyCatalogProgramsUsedByPublicNotes() {
         when(noteCourseProgramRepository.findNamesByVisibility(NoteVisibility.PUBLIC.name()))
-                .thenReturn(List.of(ACCOUNTANCY_PROGRAM, "Nursing"));
+                .thenReturn(List.of("Nursing", ACCOUNTANCY_PROGRAM, "nursing"));
 
         List<String> coursePrograms = noteService.listPublicCoursePrograms();
 
-        assertThat(coursePrograms).containsExactly(ACCOUNTANCY_PROGRAM, "Nursing", "Software Engineering");
+        assertThat(coursePrograms).containsExactly(ACCOUNTANCY_PROGRAM, "Nursing");
+        verify(noteCourseProgramRepository, never())
+                .findLegacyCourseProgramValuesByVisibility(NoteVisibility.PUBLIC.name());
         verify(noteRepository, never()).findCourseProgramValuesByVisibility(any());
     }
 

@@ -60,7 +60,16 @@ GROUP BY 1 ORDER BY 1 DESC LIMIT 6;
 
 ### Shipped
 
-_(nothing yet)_
+- **Catalog-first learner Course / Program suggestions (frontend).** `/profile`, the Note Editor, private Note Detail, and the Dashboard lightweight profile-completion prompt now load the existing authenticated Course Program catalog and place its names before the retained hardcoded fallback and saved/custom values. Slow, failed, or empty catalog loads keep the hardcoded suggestions immediately usable; off-catalog saved values remain selected and free text remains accepted. Onboarding deliberately continues using `COURSE_PROGRAM_SUGGESTIONS` unchanged until after the 2026-09-11 checkpoint.
+- **Course / Program selection measurement (frontend/backend contract).** Added `COURSE_PROGRAM_VALUE_SELECTED` to both analytics event type contracts and fire it once after a commit **that actually changed the value** on the four changed surfaces — a save is not a selection, since each of those handlers persists other fields beside the program. Metadata is limited to `{ surface, matchedCatalog }`, matching catalog names case-insensitively after normalization; the raw learner value is never recorded, catalog-unavailable saves emit no event, and analytics failure never blocks a save.
+- **Catalog-only Public Library program facets (backend).** `NoteService.listPublicCoursePrograms` now returns only catalog-joined names used by public notes, retaining the existing normalization, case-insensitive de-duplication, and ordering. Personal off-catalog free text still works on notes and in direct discovery matching, but no longer mints a public Course / Program filter chip that can lead to zero results.
+
+### Pre-commit audit — 2026-08-15
+
+Two findings, both fixed before commit.
+
+1. **The event fired on every save, not on every change** — and each of the four handlers persists other fields beside the program (the profile form saves learner level; both note surfaces save the whole note). The metric would have filled with re-saves of pre-existing values, which are overwhelmingly the legacy off-catalog strings this release exists to reduce, so the off-catalog rate would have looked flat and high whether or not catalog-first worked. **Codex's own test demonstrated the failure**: it rendered with `initialCourseProgram="Nursing"`, opened and closed the suggestion list without selecting anything, saved, and asserted an event. The event now requires a changed value, compared against the **persisted** prior value — the first attempt at this fix compared against the Note Editor's `draft`, which *is* the value being saved, and suppressed every event until a pre-existing test caught it.
+2. **`allowCustom={false}` was silently dropped from the Dashboard profile-completion prompt**, so a surface that had been locked to suggestions began accepting free text. That loosens vocabulary control in the release whose purpose is to tighten it. Restored. The prompt's anti-drift rule said *"free text stays allowed on every surface"*, meaning **do not add restrictions**; it was reasonably read as *ensure* free text everywhere, so the wording — not the implementation — was the root cause.
 
 ## v0.78.0 - Post-Mastery Next Step
 

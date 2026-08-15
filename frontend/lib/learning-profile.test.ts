@@ -1,4 +1,11 @@
-import { getCourseProgramHelperText, getGroupedLearnerLevels, mergeCourseProgramSuggestions, normalizeCourseProgram } from "./learning-profile";
+import {
+  buildCatalogFirstCourseProgramSuggestions,
+  getCourseProgramHelperText,
+  getGroupedLearnerLevels,
+  isCatalogCourseProgram,
+  mergeCourseProgramSuggestions,
+  normalizeCourseProgram,
+} from "./learning-profile";
 
 describe("normalizeCourseProgram", () => {
   it("standardizes dash spacing for display and filtering", () => {
@@ -21,6 +28,36 @@ describe("mergeCourseProgramSuggestions", () => {
       "Computer Science",
       "Nursing",
     ]);
+  });
+});
+
+describe("buildCatalogFirstCourseProgramSuggestions", () => {
+  it("keeps catalog names first and appends de-duplicated fallback and saved values", () => {
+    const suggestions = buildCatalogFirstCourseProgramSuggestions(
+      ["Nursing", "Pharmacy"],
+      ["Professional / Board Exam Review", " nursing "],
+    );
+
+    expect(suggestions.slice(0, 2)).toEqual(["Nursing", "Pharmacy"]);
+    expect(suggestions.filter((value) => value.toLowerCase() === "nursing")).toHaveLength(1);
+    expect(suggestions).toContain("Professional / Board Exam Review");
+    expect(suggestions.indexOf("Software Engineering")).toBeGreaterThan(1);
+  });
+
+  it("uses the hardcoded list immediately when the catalog is unavailable or empty", () => {
+    expect(buildCatalogFirstCourseProgramSuggestions(null).slice(0, 3)).toEqual([
+      "Grade School",
+      "High School",
+      "Senior High – STEM",
+    ]);
+    expect(buildCatalogFirstCourseProgramSuggestions([])).toContain("Nursing");
+  });
+});
+
+describe("isCatalogCourseProgram", () => {
+  it("matches case-insensitively after trimming and normalizing dash spacing", () => {
+    expect(isCatalogCourseProgram("  senior high-stem ", ["Senior High – STEM"])).toBe(true);
+    expect(isCatalogCourseProgram("Professional / Board Exam Review", ["Nursing"])).toBe(false);
   });
 });
 

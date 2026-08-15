@@ -1,13 +1,15 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import ProfilePage from "./page";
 import {
   completeOnboardingProfileType,
   connectGoogle,
+  getCourseProgramCatalog,
   getMe,
   getSignInMethods,
   listCoursePrograms,
   listSubjects,
   setFocusSubjects,
+  trackAnalyticsEvent,
   updateExamDate,
   updateUserProfile,
 } from "@/lib/api";
@@ -33,6 +35,7 @@ jest.mock("@/lib/route-guards", () => ({
 jest.mock("@/lib/api", () => ({
   completeOnboardingProfileType: jest.fn(),
   connectGoogle: jest.fn(),
+  getCourseProgramCatalog: jest.fn(),
   getMe: jest.fn(),
   getSignInMethods: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
@@ -40,6 +43,7 @@ jest.mock("@/lib/api", () => ({
   listSubjects: jest.fn(),
   setFocusSubjects: jest.fn(),
   setStudyGoal: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
   updateExamDate: jest.fn(),
   updateUserProfile: jest.fn(),
 }));
@@ -84,15 +88,22 @@ describe("Profile page", () => {
     routerMock.push.mockReset();
     routerMock.refresh.mockReset();
     (getMe as jest.Mock).mockReset();
+    (getCourseProgramCatalog as jest.Mock).mockReset();
     (getSignInMethods as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     (setFocusSubjects as jest.Mock).mockReset();
     (updateUserProfile as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (connectGoogle as jest.Mock).mockReset();
     (completeOnboardingProfileType as jest.Mock).mockReset();
     (updateExamDate as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue(profileResponse);
+    (getCourseProgramCatalog as jest.Mock).mockResolvedValue([
+      { id: "program-pharmacy", name: "Pharmacy", programFamilyId: null, programFamilyName: null },
+      { id: "program-nursing", name: "Nursing", programFamilyId: null, programFamilyName: null },
+    ]);
+    (trackAnalyticsEvent as jest.Mock).mockResolvedValue(undefined);
     (getSignInMethods as jest.Mock).mockResolvedValue({
       email: "[email protected]",
       passwordEnabled: true,
@@ -450,6 +461,15 @@ describe("Profile page", () => {
 
     render(<ProfilePage />);
 
+    await waitFor(() => expect(getCourseProgramCatalog).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole("button", { name: "Toggle course program suggestions" }));
+    const courseProgramListbox = screen.getByRole("listbox");
+    await within(courseProgramListbox).findByRole("option", { name: "Pharmacy" });
+    expect(within(courseProgramListbox).getAllByRole("option").slice(0, 2).map((option) => option.textContent)).toEqual([
+      "Pharmacy",
+      "Nursing",
+    ]);
+
     fireEvent.change(await screen.findByDisplayValue("College"), {
       target: { value: "BOARD_EXAM_REVIEW" },
     });
@@ -475,6 +495,10 @@ describe("Profile page", () => {
       });
     });
     expect(await screen.findByText("Learning profile updated successfully.")).toBeInTheDocument();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "COURSE_PROGRAM_VALUE_SELECTED",
+      metadata: { surface: "profile", matchedCatalog: true },
+    });
   });
 
   it("updates the course/program helper text when learner level changes", async () => {

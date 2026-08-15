@@ -34,6 +34,10 @@ import { getCollectionLabels } from "@/lib/collection-labels";
 import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
+  trackCourseProgramValueSelected,
+  useCourseProgramCatalogNames,
+} from "@/hooks/use-course-program-catalog";
+import {
   formatStudyPackResetDate,
   isQuizLimitReachedMessage,
   isStudyPackLimitReached,
@@ -87,11 +91,10 @@ import {
   type FirstStudyOnboardingStep,
 } from "@/lib/first-study-onboarding";
 import {
-  COURSE_PROGRAM_SUGGESTIONS,
+  buildCatalogFirstCourseProgramSuggestions,
   formatLearnerLevel,
   getGroupedLearnerLevels,
   LEARNER_LEVEL_OPTIONS,
-  mergeCourseProgramSuggestions,
   normalizeCourseProgram,
 } from "@/lib/learning-profile";
 import { DOMAIN_CONTEXT_OPTIONS, isSubjectSameAsDomainContext } from "@/lib/domain-context";
@@ -502,6 +505,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [highlightedConceptAnchor, setHighlightedConceptAnchor] = useState<string | null>(null);
   const [hasViewedFullNotes, setHasViewedFullNotes] = useState(false);
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
+  const catalogCourseProgramNames = useCourseProgramCatalogNames();
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
   const navigateTo = useCallback((href: string) => {
@@ -1098,13 +1102,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     && !showFirstStudyPackSuccessBanner && note?.studyPackStatus === "STUDY_PACK_READY";
   const currentAuthUserId = getAuthUser()?.id ?? null;
   const availableCourseProgramSuggestions = useMemo(
-    () => mergeCourseProgramSuggestions(
-      COURSE_PROGRAM_SUGGESTIONS,
+    () => buildCatalogFirstCourseProgramSuggestions(
+      catalogCourseProgramNames,
       courseProgramSuggestions,
       [metadataDraft.courseProgram],
       [note?.courseProgram],
     ),
-    [courseProgramSuggestions, metadataDraft.courseProgram, note?.courseProgram],
+    [catalogCourseProgramNames, courseProgramSuggestions, metadataDraft.courseProgram, note?.courseProgram],
   );
 
   useEffect(() => {
@@ -1547,6 +1551,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setMetadataTagDraft("");
       setIsInlineMetadataEditMode(false);
       setToast("Note details updated");
+      if (!canEditAuthoringMetadata) {
+        trackCourseProgramValueSelected(
+          "note-detail",
+          updated.courseProgram ?? metadataDraft.courseProgram,
+          note?.courseProgram,
+          catalogCourseProgramNames,
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update note details.";
       setToastTone("warning");
