@@ -288,9 +288,13 @@ describe("PostSessionNextStep", () => {
       },
     }));
 
+    // A NEW object with identical content, not the same reference. The impression signature is
+    // memoized on `response`, so re-rendering the same object never re-runs the effect and the ref
+    // guard is never exercised — which is how this test previously passed with the guard deleted.
+    // A re-fetched next-step response is a fresh object every time, so this is the real path.
     view.rerender(
       <PostSessionNextStep
-        response={response}
+        response={{ ...response, secondaryAction: { ...response.secondaryAction! } }}
         currentPlan="FREE"
         noteId="note-1"
         onOpenPaywall={jest.fn()}

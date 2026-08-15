@@ -245,6 +245,13 @@ class PostSessionNextStepServiceTest {
 
         assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
         assertThat(response.actionLabel()).isEqualTo(TAKE_CHALLENGE_LABEL);
+        // The distinguishing signal. Type, label and a null secondary are ALSO true of the healthy
+        // mastered response ("Strong Quick Review. Step up with a Challenge next."), so asserting only
+        // those cannot tell the outer catch from the happy path — swapping thenThrow for thenReturn
+        // left the old assertions green. The generic message proves the fallback actually ran.
+        assertThat(response.message()).isEqualTo(
+                "You are in good shape here. Step up with a challenge or review the note when ready."
+        );
         assertThat(response.secondaryAction()).isNull();
     }
 
