@@ -59,6 +59,7 @@ Item labels are neutral backend data. The Study Plan detail page uses them as fr
 For Study Plan detail sections, there is no separate section entity or nested-plan model:
 
 - `position` is the single source of truth for item order.
+- `position` also orders the mastered Quick Review result's `Next in your plan` suggestion: within the resolved directly containing plan, it selects the lowest-position readable item whose collection progress `lastSessionCompletedAt` is null, excluding the note just completed. Changes to item ordering or the practice-timestamp contract therefore affect this surface too.
 - trimmed, non-empty `label` is the single source of truth for grouping.
 - labels are user-defined free text, not course/program, subject, learner level, audience, or taxonomy data.
 - a section is the set of items sharing the same case-sensitive trimmed non-empty label.
@@ -106,6 +107,8 @@ This resolved value is a visible client-side pre-fill source for new notes, not 
 `users.primary_collection_id` is a nullable user-level UUID reference to `note_collections.id`. It is stored as a bare UUID column, following the existing collection reference convention, and uses `ON DELETE SET NULL` at the database level like `note_collections.parent_collection_id`.
 
 The reference is the backend source of truth for the learner's default top-level Goal. It remains profile-agnostic: the backend stores and validates the collection id only, while frontend labels still resolve through `getCollectionLabels`.
+
+For the post-mastery next-item suggestion, primary is preferred only when that collection directly contains the completed note. A null, stale, or non-containing primary falls back to the most recently updated directly containing collection. Membership is not rolled up through Goal/Subject-plan relationships, so the containing child Subject plan is correctly selected when that is where the note item lives.
 
 Rules:
 
