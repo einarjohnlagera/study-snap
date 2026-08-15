@@ -10,7 +10,7 @@ Theme: a learner's banked Challenge questions should survive an authoring correc
 
 **Defect 1 — stranded bank rows are silently regenerable.** `challenge_quiz_question_bank` stores `learner_level`, but `uq_challenge_quiz_question_bank_user_pack_key` is `unique (user_id, study_pack_id, question_key)` (`V96:12`) — **`learner_level` is excluded from the key.** When a note's authored depth changes, `ExamQuestionPoolService.sameLearnerLevel` gating makes the old rows unreachable, but their keys are absent from `disallowedQuestionKeys`, so **the LLM can regenerate the same question the learner has already seen.** Measured at 5 of 6,235 rows today, but explicitly *"unbounded once authoring corrections become routine."*
 
-**Defect 2 — the documented best-effort guarantee is already false.** `docs/features/challenge-quiz.md` states bank persistence *"is best-effort and never blocks a Challenge session."* `persistGeneratedQuestions:118`'s `saveAll` INSERT flushes **at commit, outside its own `catch`**, so a constraint violation escapes the handler and can fail the session. The fix shape already exists in this codebase: `copyTemplateQuestions` does per-row saves with a `DataIntegrityViolationException` catch — which is itself evidence the collision class was known at one of the two write sites and not the other.
+**Defect 2 — the documented best-effort guarantee is already false.** `docs/features/challenge-quiz.md` states bank persistence *"is best-effort and never blocks a Challenge session."* `persistGeneratedQuestions:118`'s `saveAll` INSERT flushes **at commit, outside its own `catch`**, so a constraint violation escapes the handler and can fail the session. **⚠️ This kickoff text originally claimed the fix shape already existed in `copyTemplateQuestions`. That claim is FALSE and was disproved during the pre-commit audit** — see the audit section below. The real in-repo precedent is `AccountPurgeService.purgeEligibleAccounts`.
 
 **Why now, beyond the defects themselves.** The revised Target Audience direction (see below) requires backfilling Authored Depth onto ~905 curator-owned notes. That backfill is precisely "an authoring correction, at scale" — the condition Defect 1's own record names as making it unbounded. **Fixing this is Step 0 of that sequence**, and the sequence cannot start without it.
 
@@ -19,6 +19,25 @@ Theme: a learner's banked Challenge questions should survive an authoring correc
 1. **Bank writes become genuinely best-effort (backend).** Per-row saves with a `DataIntegrityViolationException` catch at `persistGeneratedQuestions`, matching `copyTemplateQuestions`. A bank write must never fail a Challenge session, as the feature doc already promises.
 2. **Stranded rows stop being regenerable (backend + migration).** Either include `learner_level` in the uniqueness key or invalidate rows whose level no longer matches, so a level correction cannot hand a learner a question they have already answered. **Decide which at scoping** — they differ in migration cost and in what happens to the 5 existing stranded rows.
 3. **Carry the Target Audience retirement direction as documentation only** — the revised proposal, its consultation brief, and two Backlog Index rows. **No Target Audience code changes in this release.**
+
+### Pre-commit audit — 2026-08-15, cold-context review
+
+**Codex's migration was correct. Its service fix did not work, and would have shipped looking handled.** An independent reviewer with no session context was asked to judge the implementation and reached this on its own.
+
+**The defect in the fix.** `persistGeneratedQuestions` has no `@Transactional` of its own, so it joins the caller's — and every caller is transactional (`ChallengeQuizService` carries a class-level `@Transactional`). The delivered change added a per-row `flush()` inside a try/catch on that shared transaction. **Two independent mechanisms make that unrecoverable:** Hibernate calls `markForRollbackOnly()` on any `PersistenceException` (JPA-mandated, not a quirk), and PostgreSQL aborts the transaction with SQLSTATE 25P02 so every later statement fails. The catch clears neither. The failure then surfaces **at commit, after `startSession` has returned**, so even that method's own fallback never runs and the session row is rolled back. The learner gets a 500 and no session — worse than before, because it now looks absorbed.
+
+**The correction to this session's own proposed fix.** The audit had proposed `@Transactional(REQUIRES_NEW)`. **That would not have worked either** — the inner commit runs in the proxy *after* the method body returns, leaving an internal catch just as dead. Only a `TransactionTemplate`, which commits inside `execute(...)`, makes the catch real. The in-repo precedent is `AccountPurgeService.purgeEligibleAccounts`.
+
+**`copyTemplateQuestions` is NOT a working precedent, contrary to this release's own kickoff text and the Backlog Index row it came from.** Its entity assigns its own UUID and has no `@Version`, so `SimpleJpaRepository.save` takes the `em.merge()` branch, which queues a deferred insert rather than executing one — so its `DataIntegrityViolationException` catch has never absorbed a duplicate. It is dead code, and citing it as a pattern propagated the error into this release's prompt.
+
+**The collision is still reachable after the migration**, which is why the service fix is still required: `claimEligibleQuestions` excludes rows claimed by *another* in-progress session, and those keys never reach `disallowedQuestionKeys`, so two concurrent sessions can regenerate and insert the same key at the same level.
+
+### Known limitations — carried, not silently dropped
+
+- **`OfficialChallengeQuizTemplateService.copyTemplateQuestions` has the same defect and is NOT fixed here.** A mechanical wrapper would change its semantics: it returns the list of successfully copied questions, and a single batch transaction turns partial success into all-or-nothing — a duplicate could leave the caller with no template questions at all. It needs per-row isolation or pre-filtering, which is its own design decision rather than a copy of this fix.
+- **Four other methods in `ChallengeQuizQuestionBankService`** (`claimEligibleQuestions`, `countEligibleIncorrectQuestions`, `claimIncorrectQuestions`, `updateOutcomesAndReleaseClaims`) swallow `RuntimeException` inside the caller's transaction and cannot protect the session from a real database error either. `challenge-quiz.md`'s claim that a bank *read* failure falls back to fresh generation is therefore false for anything that poisons the transaction. Only `releaseClaims` is genuinely isolated. Out of scope; recorded so the doc's remaining overclaim is known.
+- **The migration has zero automated coverage.** Flyway is disabled in tests and H2 cannot parse `NULLS NOT DISTINCT`, so `V115` is exercised only in real environments. It requires **PostgreSQL 15+** — fine for production, but it will fail on any older lower environment.
+- **`ALTER TABLE … ADD CONSTRAINT UNIQUE` builds its index non-concurrently under `ACCESS EXCLUSIVE`**, briefly locking the table. Harmless at current size; worth knowing before the table grows.
 
 ### Anti-drift — locked for this release
 
@@ -30,7 +49,9 @@ Theme: a learner's banked Challenge questions should survive an authoring correc
 
 ### Shipped
 
-_(nothing yet)_
+- **Learner-level Challenge bank key** — `V115` preserves every existing bank row and replaces the old `(user, study pack, question)` uniqueness constraint with `UNIQUE NULLS NOT DISTINCT (user, study pack, question, learner level)`. Questions stranded by an authored-depth correction can now coexist with a regenerated row at the new level, while nullable legacy levels still cannot accumulate duplicate keys.
+- **Genuinely best-effort generated-question persistence** — `persistGeneratedQuestions` keeps its in-batch normalized-key dedupe and now writes through `questionBankTransactionOperations`, a `REQUIRES_NEW` `TransactionTemplate` with a 5s timeout, with the warning catch around `execute(...)`. **Isolation is the mechanism, and it is the only one that works**: a bank failure inside the learner's session transaction marks it rollback-only (JPA-mandated) *and* aborts it on PostgreSQL (25P02), so the session's commit fails whatever the catch does. A failure now loses that batch of bank rows — questions the learner never sees — instead of the session. Level-scoped reads and stranded-row retention are unchanged.
+- **Challenge bank integrity regressions** — coverage pins the isolation invariant: the write must go through the isolated transaction and nothing may be written outside it, a failure raised when that transaction commits is absorbed with a warning, and an identical question key can be written at two learner levels. **Both isolation tests were verified to fail against a caller-transaction implementation.**
 
 ## v0.80.0 - Instrumentation Integrity
 

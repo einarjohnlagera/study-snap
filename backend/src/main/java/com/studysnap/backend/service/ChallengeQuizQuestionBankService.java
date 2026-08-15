@@ -19,6 +19,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,7 @@ public class ChallengeQuizQuestionBankService {
     private static final String OUTCOME_INCORRECT = "INCORRECT";
 
     private final ChallengeQuizQuestionBankRepository challengeQuizQuestionBankRepository;
+    private final TransactionOperations questionBankTransactionOperations;
 
     /**
      * Claims questions under the same transaction as the Challenge session change. A claimed item
@@ -92,33 +94,44 @@ public class ChallengeQuizQuestionBankService {
         if (questions == null || questions.isEmpty()) {
             return;
         }
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        Set<String> seen = new LinkedHashSet<>();
+        List<ChallengeQuizQuestionBankEntity> entries = new ArrayList<>(questions.size());
+        for (QuizItem question : questions) {
+            String questionKey = question == null ? "" : QuizDeduplicationUtils.normalizeQuestion(question.question());
+            if (questionKey.isBlank() || !seen.add(questionKey)) {
+                continue;
+            }
+            ChallengeQuizQuestionBankEntity entry = new ChallengeQuizQuestionBankEntity();
+            entry.setId(UUID.randomUUID());
+            entry.setUserId(userId);
+            entry.setStudyPackId(studyPackId);
+            entry.setOriginSessionId(sessionId);
+            entry.setQuestionKey(questionKey);
+            entry.setQuestion(question);
+            entry.setLearnerLevel(learnerLevelName(effectiveCurriculumLevel));
+            entry.setLastKnownOutcome(OUTCOME_UNANSWERED);
+            entry.setClaimedSessionId(sessionId);
+            entry.setGeneratedAt(now);
+            entries.add(entry);
+        }
+        if (entries.isEmpty()) {
+            return;
+        }
+        // Runs in its OWN transaction. Catching a constraint violation inside the learner's session
+        // transaction cannot work: the failed flush marks it rollback-only (JPA-mandated) and
+        // PostgreSQL aborts it (25P02), so the session's commit fails no matter what this catch does.
+        // A @Transactional(REQUIRES_NEW) annotation would not help either — its commit happens in the
+        // proxy after the method returns, leaving an internal catch just as dead. TransactionTemplate
+        // commits inside execute(...), which is what makes this catch real.
         try {
-            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-            List<ChallengeQuizQuestionBankEntity> entries = new ArrayList<>();
-            Set<String> seen = new LinkedHashSet<>();
-            for (QuizItem question : questions) {
-                String questionKey = question == null ? "" : QuizDeduplicationUtils.normalizeQuestion(question.question());
-                if (questionKey.isBlank() || !seen.add(questionKey)) {
-                    continue;
-                }
-                ChallengeQuizQuestionBankEntity entry = new ChallengeQuizQuestionBankEntity();
-                entry.setId(UUID.randomUUID());
-                entry.setUserId(userId);
-                entry.setStudyPackId(studyPackId);
-                entry.setOriginSessionId(sessionId);
-                entry.setQuestionKey(questionKey);
-                entry.setQuestion(question);
-                entry.setLearnerLevel(learnerLevelName(effectiveCurriculumLevel));
-                entry.setLastKnownOutcome(OUTCOME_UNANSWERED);
-                entry.setClaimedSessionId(sessionId);
-                entry.setGeneratedAt(now);
-                entries.add(entry);
-            }
-            if (!entries.isEmpty()) {
+            questionBankTransactionOperations.execute(status -> {
                 challengeQuizQuestionBankRepository.saveAll(entries);
-            }
+                return null;
+            });
         } catch (RuntimeException exception) {
-            log.warn("Challenge Quiz question-bank write failed for userId={}, studyPackId={}", userId, studyPackId, exception);
+            log.warn("Challenge Quiz question-bank write failed for userId={}, studyPackId={}",
+                    userId, studyPackId, exception);
         }
     }
 
