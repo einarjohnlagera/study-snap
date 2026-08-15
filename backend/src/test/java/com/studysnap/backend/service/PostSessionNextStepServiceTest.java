@@ -5,10 +5,11 @@ import com.studysnap.backend.dto.ConceptHealthEntryResponse;
 import com.studysnap.backend.dto.ConceptReadinessStatus;
 import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.NextStepResponse;
+import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.TodayFocusType;
-import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -17,14 +18,17 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.ChallengeQuizQuestionBankRepository;
+import com.studysnap.backend.entity.CollectionVisibility;
+import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.service.model.StudyPackQuizMastery;
-import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +36,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -94,6 +99,8 @@ class PostSessionNextStepServiceTest {
     private NoteCollectionItemRepository noteCollectionItemRepository;
     @Mock
     private QuizSessionHistoryService quizSessionHistoryService;
+    @Mock
+    private NoteCollectionRepository noteCollectionRepository;
 
     private StudySnapProperties properties;
     private PostSessionNextStepService postSessionNextStepService;
@@ -117,7 +124,8 @@ class PostSessionNextStepServiceTest {
                 examGoalCourseProgramProvider,
                 studyPackQuizMasteryService,
                 noteCollectionItemRepository,
-                quizSessionHistoryService
+                quizSessionHistoryService,
+                noteCollectionRepository
         );
         lenient().when(examGoalCourseProgramProvider.getCoursePrograms("pnle"))
                 .thenReturn(List.of("Nursing"));
@@ -145,6 +153,94 @@ class PostSessionNextStepServiceTest {
         assertThat(response.actionLabel()).isEqualTo(TAKE_CHALLENGE_LABEL);
         assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
         assertThat(response.concepts()).isEmpty();
+        assertThat(response.secondaryAction()).isNull();
+    }
+
+    @Test
+    void getNextStep_offersMatchingUnadoptedPublishedPlanWhenMasteredNoteHasNoPlan() {
+        UUID userId = UUID.randomUUID();
+        UUID planId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubMasteredQuickReviewWithCourseProgram(userId, studyPack, "Nursing");
+        when(noteCollectionRepository.findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
+                CollectionVisibility.PUBLIC, "Nursing"
+        ))
+                .thenReturn(List.of(collectionEntity(planId, "Nursing Board Review", "Nursing", null)));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.secondaryAction()).isNotNull();
+        assertThat(response.secondaryAction().actionLabel()).isEqualTo("Start Nursing Board Review");
+        assertThat(response.secondaryAction().actionHref()).isEqualTo("/collections/" + planId);
+        assertThat(response.secondaryAction().studyPlanRecommendation()).isTrue();
+        assertThat(response.secondaryAction().courseProgram()).isEqualTo("Nursing");
+    }
+
+    @Test
+    void getNextStep_keepsNextPlanItemAheadOfPublishedPlanRecommendation() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID nextNoteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubMasteredQuickReviewWithCourseProgram(userId, studyPack, "Nursing");
+        when(noteCollectionItemRepository.findContainingCollectionIdsByNoteIdAndOwnerUserIdOrderByUpdatedAtDesc(
+                studyPack.getNoteId(), userId
+        )).thenReturn(List.of(collectionId));
+        stubNextPlanCandidate(userId, studyPack, collectionId, nextNoteId);
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.secondaryAction().actionLabel()).isEqualTo(NEXT_IN_YOUR_PLAN_LABEL);
+        verify(noteCollectionRepository, never())
+                .findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(any(), any());
+    }
+
+    @Test
+    void getNextStep_returnsNoRecommendationWhenProgramHasNoPublishedPlan() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubMasteredQuickReviewWithCourseProgram(userId, studyPack, "Architecture");
+        when(noteCollectionRepository.findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
+                CollectionVisibility.PUBLIC, "Architecture"
+        )).thenReturn(List.of());
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.secondaryAction()).isNull();
+    }
+
+    @Test
+    void getNextStep_returnsNoRecommendationWhenMatchingPlanWasAlreadyAdopted() {
+        UUID userId = UUID.randomUUID();
+        UUID planId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubMasteredQuickReviewWithCourseProgram(userId, studyPack, "Education");
+        when(noteCollectionRepository.findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
+                CollectionVisibility.PUBLIC, "Education"
+        ))
+                .thenReturn(List.of(collectionEntity(planId, "LET Review", "Education", null)));
+        when(noteCollectionRepository.findByOwnerUserIdAndSourcePlanId(userId, planId))
+                .thenReturn(Optional.of(collectionEntity(UUID.randomUUID(), "My LET Review", "Education", planId)));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.secondaryAction()).isNull();
+    }
+
+    @Test
+    void getNextStep_fallsBackWithoutBrokenActionWhenPublishedPlanLookupThrows() {
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubMasteredQuickReviewWithCourseProgram(userId, studyPack, "Nursing");
+        when(noteCollectionRepository.findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
+                CollectionVisibility.PUBLIC, "Nursing"
+        ))
+                .thenThrow(new IllegalStateException("catalog unavailable"));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.actionLabel()).isEqualTo(TAKE_CHALLENGE_LABEL);
         assertThat(response.secondaryAction()).isNull();
     }
 
@@ -627,7 +723,8 @@ class PostSessionNextStepServiceTest {
                 examGoalCourseProgramProvider,
                 studyPackQuizMasteryService,
                 noteCollectionItemRepository,
-                quizSessionHistoryService
+                quizSessionHistoryService,
+                noteCollectionRepository
         );
         stubOwnedStudyPack(userId, studyPack);
         stubPlanAndUsage(userId, PlanType.FREE, 0);
@@ -857,6 +954,32 @@ class PostSessionNextStepServiceTest {
         stubConceptHealth(userId, studyPack, List.of());
         when(studyPackQuizMasteryService.resolve(userId, studyPack))
                 .thenReturn(StudyPackQuizMastery.masteredAt(NOW));
+    }
+
+    private void stubMasteredQuickReviewWithCourseProgram(
+            UUID userId,
+            StudyPackEntity studyPack,
+            String courseProgram
+    ) {
+        stubMasteredQuickReview(userId, studyPack);
+        UserEntity user = user(userId, null);
+        user.setCourseProgram(courseProgram);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+    }
+
+    private NoteCollectionEntity collectionEntity(
+            UUID id,
+            String title,
+            String courseProgram,
+            UUID sourcePlanId
+    ) {
+        NoteCollectionEntity collection = new NoteCollectionEntity();
+        collection.setId(id);
+        collection.setTitle(title);
+        collection.setCourseProgram(courseProgram);
+        collection.setSourcePlanId(sourcePlanId);
+        collection.setVisibility(CollectionVisibility.PUBLIC);
+        return collection;
     }
 
     private void stubNextPlanCandidate(

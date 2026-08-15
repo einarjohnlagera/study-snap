@@ -297,7 +297,7 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByText("25 saved")).toBeInTheDocument();
     expect(mockDashboardStudyPlanSection).toHaveBeenCalled();
     for (const [props] of mockDashboardStudyPlanSection.mock.calls) {
-      expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "pointer" }));
+      expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "recommendation" }));
       expect(props).not.toHaveProperty("viewAllHref");
       expect(props).not.toHaveProperty("browseWhenEmpty");
     }
@@ -345,7 +345,7 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByRole("heading", { name: "Study Activity This Week" })).toBeInTheDocument();
     expect(mockDashboardStudyPlanSection).toHaveBeenCalled();
     for (const [props] of mockDashboardStudyPlanSection.mock.calls) {
-      expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "pointer" }));
+      expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "recommendation" }));
       expect(props).not.toHaveProperty("viewAllHref");
       expect(props).not.toHaveProperty("browseWhenEmpty");
     }
@@ -1234,7 +1234,7 @@ describe("DashboardPage profile variants", () => {
     expect(screen.queryByText("Recent Notes")).not.toBeInTheDocument();
   });
 
-  it("keeps the Board Exam zero-note plan section in pointer mode without browse-empty props", async () => {
+  it("keeps the Board Exam zero-note plan section in recommendation mode without browse-empty props", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       firstName: "Board",
       displayName: "Board",
@@ -1262,7 +1262,7 @@ describe("DashboardPage profile variants", () => {
       expect(mockDashboardStudyPlanSection).toHaveBeenCalled();
     });
     for (const [props] of mockDashboardStudyPlanSection.mock.calls) {
-      expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "pointer" }));
+      expect(props).toEqual(expect.objectContaining({ discoveryPresentation: "recommendation" }));
       expect(props).not.toHaveProperty("viewAllHref");
       expect(props).not.toHaveProperty("browseWhenEmpty");
       expect(props.suppressPointerWhenNoPrimary).not.toBe(true);

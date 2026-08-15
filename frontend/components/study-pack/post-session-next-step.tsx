@@ -24,6 +24,11 @@ function isChallengeAction(href: string | null | undefined): boolean {
   return href?.includes("/challenge-quiz") === true;
 }
 
+function recommendedPlanId(href: string): string | null {
+  const match = /^\/collections\/([^/?#]+)$/.exec(href);
+  return match?.[1] ?? null;
+}
+
 function trackAnalyticsSafely(payload: Parameters<typeof trackAnalyticsEvent>[0]): void {
   try {
     void Promise.resolve(trackAnalyticsEvent(payload)).catch(() => undefined);
@@ -56,6 +61,14 @@ export function PostSessionNextStep({
     return challengeHref ? `${response.studyPackId}:${originatingQuizMode}:${challengeHref}` : null;
   }, [originatingQuizMode, response]);
   const impressedChallengeActionRef = useRef<string | null>(null);
+  const planRecommendationSignature = useMemo(() => {
+    const recommendation = response?.secondaryAction;
+    if (!recommendation?.studyPlanRecommendation) {
+      return null;
+    }
+    return `${response?.studyPackId ?? "none"}:post-mastery:${recommendation.courseProgram ?? "none"}:${recommendation.actionHref}`;
+  }, [response]);
+  const impressedPlanRecommendationRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!challengeActionSignature) {
@@ -72,6 +85,27 @@ export function PostSessionNextStep({
       metadata: { originatingQuizMode },
     });
   }, [challengeActionSignature, originatingQuizMode, response?.studyPackId]);
+
+  useEffect(() => {
+    if (!planRecommendationSignature) {
+      impressedPlanRecommendationRef.current = null;
+      return;
+    }
+    if (impressedPlanRecommendationRef.current === planRecommendationSignature) {
+      return;
+    }
+    impressedPlanRecommendationRef.current = planRecommendationSignature;
+    const recommendation = response?.secondaryAction;
+    trackAnalyticsSafely({
+      eventType: "STUDY_PLAN_RECOMMENDATION_IMPRESSION",
+      entityId: recommendation ? recommendedPlanId(recommendation.actionHref) : null,
+      metadata: {
+        surface: "post-mastery",
+        recommendationType: "named-plan",
+        courseProgram: recommendation?.courseProgram ?? null,
+      },
+    });
+  }, [planRecommendationSignature, response?.secondaryAction]);
 
   if (!response) {
     return null;
@@ -96,6 +130,20 @@ export function PostSessionNextStep({
       eventType: "POST_SESSION_CHALLENGE_CTA_CLICKED",
       entityId: response.studyPackId,
       metadata: { originatingQuizMode },
+    });
+  };
+  const trackPlanRecommendationClick = () => {
+    if (!secondaryAction?.studyPlanRecommendation) {
+      return;
+    }
+    trackAnalyticsSafely({
+      eventType: "STUDY_PLAN_RECOMMENDATION_CLICKED",
+      entityId: recommendedPlanId(secondaryAction.actionHref),
+      metadata: {
+        surface: "post-mastery",
+        recommendationType: "named-plan",
+        courseProgram: secondaryAction.courseProgram ?? null,
+      },
     });
   };
 
@@ -144,7 +192,10 @@ export function PostSessionNextStep({
             <Link
               href={secondaryAction.actionHref}
               className="block w-full sm:w-fit"
-              onClick={() => trackChallengeClick(secondaryAction.actionHref)}
+              onClick={() => {
+                trackChallengeClick(secondaryAction.actionHref);
+                trackPlanRecommendationClick();
+              }}
             >
               <Button type="button" variant="outline" className="w-full sm:w-auto">
                 {secondaryAction.actionLabel}

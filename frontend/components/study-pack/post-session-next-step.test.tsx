@@ -208,4 +208,65 @@ describe("PostSessionNextStep", () => {
       metadata: { originatingQuizMode: "QUICK_REVIEW" },
     });
   });
+
+  it("renders and instruments a named post-mastery plan recommendation once", async () => {
+    const response: PostSessionNextStepResponse = {
+      ...baseResponse,
+      type: "REVIEW_PACK",
+      actionLabel: "Take a Challenge",
+      actionHref: "/notes/note-1/challenge-quiz",
+      secondaryAction: {
+        actionLabel: "Start Nursing Board Review",
+        actionHref: "/collections/plan-1",
+        adaptivePractice: false,
+        studyPlanRecommendation: true,
+        courseProgram: "Nursing",
+      },
+    };
+    const view = render(
+      <PostSessionNextStep
+        response={response}
+        currentPlan="FREE"
+        noteId="note-1"
+        onOpenPaywall={jest.fn()}
+        originatingQuizMode="QUICK_REVIEW"
+      />,
+    );
+
+    const recommendation = screen.getByRole("link", { name: "Start Nursing Board Review" });
+    expect(recommendation).toHaveAttribute("href", "/collections/plan-1");
+    await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "STUDY_PLAN_RECOMMENDATION_IMPRESSION",
+      entityId: "plan-1",
+      metadata: {
+        surface: "post-mastery",
+        recommendationType: "named-plan",
+        courseProgram: "Nursing",
+      },
+    }));
+
+    view.rerender(
+      <PostSessionNextStep
+        response={response}
+        currentPlan="FREE"
+        noteId="note-1"
+        onOpenPaywall={jest.fn()}
+        originatingQuizMode="QUICK_REVIEW"
+      />,
+    );
+    expect((trackAnalyticsEvent as jest.Mock).mock.calls.filter(([event]) => (
+      event.eventType === "STUDY_PLAN_RECOMMENDATION_IMPRESSION"
+    ))).toHaveLength(1);
+
+    fireEvent.click(recommendation, { button: 1 });
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "STUDY_PLAN_RECOMMENDATION_CLICKED",
+      entityId: "plan-1",
+      metadata: {
+        surface: "post-mastery",
+        recommendationType: "named-plan",
+        courseProgram: "Nursing",
+      },
+    });
+  });
 });

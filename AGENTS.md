@@ -861,6 +861,8 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 
 - `/explore` is the single owner of content discovery. No other authenticated page may render an inline discovery catalog, adopt-picker, or public-note browse grid.
 - Other pages may point at Explore with a link or a single pointer card; they may not do Explore's job.
+- **v0.67.0 amendment (ratified 2026-08-15):** Dashboard may render one named, exact course/program-matched public-plan recommendation with coverage and the existing adoption action. It must never render a plan grid, list, filters, paging, or a second browse surface; Explore still owns browse.
+- A matched-plan recommendation must resolve to an actual, unadopted published plan before linking. No course/program, no exact match, prior adoption, or lookup failure must produce a link to an empty result; Dashboard may use its existing Explore pointer fallback, while post-mastery remains silent.
 - A bounded teaser is not discovery when it has a fixed small item count, no filters/paging/sort, no adopt/copy action, and one see-all link.
 - `/public/library` and `/collections/published` remain canonical, separately-addressable routes for deep links, SEO, and anonymous access. This is a navigation-level claim, not a route deletion.
 - `/onboarding` is exempt because it is a temporally scoped first-run wizard, not a persistent navigation page.

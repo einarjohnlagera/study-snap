@@ -5,6 +5,7 @@ import {
   adoptStudyPlan,
   listCollections,
   listPublicStudyPlans,
+  trackAnalyticsEvent,
 } from "@/lib/api";
 import { setJustAdoptedNotice } from "@/lib/just-adopted-notice";
 
@@ -21,6 +22,7 @@ jest.mock("@/lib/api", () => ({
   adoptStudyPlan: jest.fn(),
   listCollections: jest.fn(),
   listPublicStudyPlans: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 jest.mock("@/lib/just-adopted-notice", () => ({
@@ -36,6 +38,7 @@ const publicPlan = {
   sourcePlanId: null,
   parentCollectionId: null,
   itemCount: 3,
+  readyCount: 2,
   childCount: 0,
   notesPracticed: 0,
   createdAt: "2026-06-01T00:00:00Z",
@@ -50,6 +53,7 @@ describe("DashboardStudyPlanSection", () => {
     (adoptStudyPlan as jest.Mock).mockReset();
     (listCollections as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset().mockResolvedValue(undefined);
     (setJustAdoptedNotice as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockResolvedValue([publicPlan]);
     (listCollections as jest.Mock).mockResolvedValue([]);
@@ -471,6 +475,27 @@ describe("DashboardStudyPlanSection", () => {
     expect(pushMock).toHaveBeenCalledWith("/collections/primary-goal-1");
   });
 
+  it("does not fetch public plans in recommendation mode when a primary already resolves", async () => {
+    // v0.67.0 removed the per-load public-plan call from the Dashboard. Recommendation mode brings
+    // it back only for learners who can actually see a recommendation — a learner with a primary
+    // renders the continue card, so fetching for them is a regression with no reachable output.
+    (listCollections as jest.Mock).mockResolvedValue([
+      { ...publicPlan, id: "primary-goal-1", visibility: "PRIVATE", sourcePlanId: null, childCount: 2 },
+    ]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="BOARD_EXAM"
+        primaryCollectionId="primary-goal-1"
+        discoveryPresentation="recommendation"
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Primary Review Set" })).toBeInTheDocument();
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+  });
+
   it("falls back to the course/program recommendation when the primary reference isn't found", async () => {
     (listCollections as jest.Mock).mockResolvedValue([]);
 
@@ -493,5 +518,148 @@ describe("DashboardStudyPlanSection", () => {
     );
 
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+  });
+
+  it("renders and instruments one named Dashboard recommendation with coverage", async () => {
+    (adoptStudyPlan as jest.Mock).mockResolvedValue({
+      collectionId: "personal-plan-1",
+      copiedCount: 3,
+      skippedCount: 0,
+      alreadyAdopted: false,
+    });
+    const view = render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        discoveryPresentation="recommendation"
+      />,
+    );
+
+    expect(await screen.findByText("LET Reviewer Plan")).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 notes practice-ready")).toBeInTheDocument();
+    await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "STUDY_PLAN_RECOMMENDATION_IMPRESSION",
+      entityId: "source-plan-1",
+      metadata: {
+        surface: "dashboard",
+        recommendationType: "named-plan",
+        courseProgram: "LET",
+      },
+    }));
+
+    view.rerender(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        discoveryPresentation="recommendation"
+      />,
+    );
+    expect((trackAnalyticsEvent as jest.Mock).mock.calls.filter(([event]) => (
+      event.eventType === "STUDY_PLAN_RECOMMENDATION_IMPRESSION"
+    ))).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start this Study Plan" }));
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "STUDY_PLAN_RECOMMENDATION_CLICKED",
+      entityId: "source-plan-1",
+      metadata: {
+        surface: "dashboard",
+        recommendationType: "named-plan",
+        courseProgram: "LET",
+      },
+    });
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/collections/personal-plan-1"));
+  });
+
+  it("renders and instruments the pointer fallback when no plan matches", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        discoveryPresentation="recommendation"
+      />,
+    );
+
+    const pointer = await screen.findByRole("link", { name: "Browse in Explore" });
+    await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "STUDY_PLAN_RECOMMENDATION_IMPRESSION",
+      metadata: {
+        surface: "dashboard",
+        recommendationType: "generic-pointer",
+        courseProgram: "LET",
+      },
+    }));
+    fireEvent.click(pointer, { button: 1 });
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "STUDY_PLAN_RECOMMENDATION_CLICKED",
+      metadata: {
+        surface: "dashboard",
+        recommendationType: "generic-pointer",
+        courseProgram: "LET",
+      },
+    });
+  });
+
+  it("falls back to the pointer when recommendation fetching rejects", async () => {
+    (listPublicStudyPlans as jest.Mock).mockRejectedValue(new Error("catalog unavailable"));
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        discoveryPresentation="recommendation"
+      />,
+    );
+
+    expect(await screen.findByRole("link", { name: "Browse in Explore" })).toBeInTheDocument();
+  });
+
+  it("falls back to the pointer when no course or program is configured", () => {
+    render(
+      <DashboardStudyPlanSection
+        courseProgram={null}
+        profileType="STUDENT"
+        discoveryPresentation="recommendation"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Browse in Explore" })).toBeInTheDocument();
+    expect(listPublicStudyPlans).not.toHaveBeenCalled();
+  });
+
+  it("does not recommend a matching plan that is already adopted", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { ...publicPlan, id: "personal-plan-1", sourcePlanId: publicPlan.id },
+    ]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        discoveryPresentation="recommendation"
+      />,
+    );
+
+    await waitFor(() => expect(listPublicStudyPlans).toHaveBeenCalled());
+    expect(screen.queryByText("LET Reviewer Plan")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Browse in Explore" })).not.toBeInTheDocument();
+  });
+
+  it("still suppresses the recommendation pointer fallback for the zero-note call site", async () => {
+    (listPublicStudyPlans as jest.Mock).mockResolvedValue([]);
+
+    render(
+      <DashboardStudyPlanSection
+        courseProgram="LET"
+        profileType="STUDENT"
+        discoveryPresentation="recommendation"
+        suppressPointerWhenNoPrimary
+      />,
+    );
+
+    await waitFor(() => expect(listPublicStudyPlans).toHaveBeenCalled());
+    expect(screen.queryByRole("link", { name: "Browse in Explore" })).not.toBeInTheDocument();
   });
 });
