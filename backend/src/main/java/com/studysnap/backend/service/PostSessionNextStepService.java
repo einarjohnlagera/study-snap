@@ -8,7 +8,9 @@ import com.studysnap.backend.dto.GoalNudgeResponse;
 import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.NextStepSecondaryActionResponse;
 import com.studysnap.backend.dto.TodayFocusType;
+import com.studysnap.backend.entity.CollectionVisibility;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -18,12 +20,14 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackQuizMastery;
+import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import com.studysnap.backend.util.NoteEffectivePrograms;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +54,7 @@ public class PostSessionNextStepService {
     private static final String ADAPTIVE_PRACTICE_PATH = "/notes/%s/adaptive-practice";
     private static final String CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz";
     private static final String NOTE_DETAIL_PATH = "/notes/%s";
+    private static final String COLLECTION_DETAIL_PATH = "/collections/%s";
     private static final String REDO_MISSED_CHALLENGE_QUIZ_PATH = "/notes/%s/challenge-quiz?entry=redo-missed";
     private static final String FALLBACK_PATH = "/library";
     private static final String TAKE_CHALLENGE_LABEL = "Take a Challenge";
@@ -57,6 +62,7 @@ public class PostSessionNextStepService {
     private static final String REDO_MISSED_QUESTIONS_LABEL = "Redo Missed Questions";
     private static final String REVIEW_THE_NOTES_LABEL = "Review the Notes";
     private static final String NEXT_IN_YOUR_PLAN_LABEL = "Next in your plan";
+    private static final String START_RECOMMENDED_PLAN_LABEL = "Start %s";
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
@@ -74,6 +80,7 @@ public class PostSessionNextStepService {
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
     private final NoteCollectionItemRepository noteCollectionItemRepository;
     private final QuizSessionHistoryService quizSessionHistoryService;
+    private final NoteCollectionRepository noteCollectionRepository;
 
     @Transactional(readOnly = true)
     public NextStepResponse getNextStep(UUID userId, UUID studyPackId) {
@@ -92,6 +99,7 @@ public class PostSessionNextStepService {
             return resolveNextStep(
                     userId,
                     user.getPrimaryCollectionId(),
+                    user.getCourseProgram(),
                     effectiveCurriculumLevel,
                     studyPack,
                     adaptivePracticeQuota,
@@ -111,6 +119,7 @@ public class PostSessionNextStepService {
     private NextStepResponse resolveNextStep(
             UUID userId,
             UUID primaryCollectionId,
+            String courseProgram,
             LearnerLevel effectiveCurriculumLevel,
             StudyPackEntity studyPack,
             AdaptivePracticeQuota adaptivePracticeQuota,
@@ -134,6 +143,7 @@ public class PostSessionNextStepService {
             case QUICK_REVIEW -> resolveQuickReviewNextStep(
                     userId,
                     primaryCollectionId,
+                    courseProgram,
                     studyPack,
                     sessionMisses,
                     adaptivePracticeQuota,
@@ -190,6 +200,7 @@ public class PostSessionNextStepService {
     private NextStepResponse resolveQuickReviewNextStep(
             UUID userId,
             UUID primaryCollectionId,
+            String courseProgram,
             StudyPackEntity studyPack,
             List<String> sessionMisses,
             AdaptivePracticeQuota adaptivePracticeQuota,
@@ -213,6 +224,11 @@ public class PostSessionNextStepService {
         // as 1/5 directly above. The missed concepts are surfaced too, so a weak repeat session is not
         // left without remediation.
         boolean strongThisSession = sessionMisses.isEmpty();
+        NextStepSecondaryActionResponse nextPlanItem = resolveNextPlanItem(
+                userId,
+                studyPack.getNoteId(),
+                primaryCollectionId
+        );
         return reviewPackResponse(
                 studyPack,
                 adaptivePracticeQuota,
@@ -221,7 +237,46 @@ public class PostSessionNextStepService {
                 strongThisSession
                         ? "Strong Quick Review. Step up with a Challenge next."
                         : "You have already mastered this pack. Revisit the notes on these areas, or step up with a Challenge.",
-                resolveNextPlanItem(userId, studyPack.getNoteId(), primaryCollectionId)
+                nextPlanItem != null ? nextPlanItem : resolveRecommendedPlan(userId, courseProgram)
+        );
+    }
+
+    /**
+     * The program-matched published plan for a learner whose mastered note is in no plan, or null.
+     *
+     * <p>Deliberately reads the repository directly rather than {@code NoteCollectionService.listPublic}
+     * / {@code list}. Those build full summaries — item, ready, child and practiced counts across every
+     * collection — and this path needs a title, an id and one adoption boolean. {@code list} in particular
+     * resolves practiced counts through the multi-note session scan, which the merged plan-item branch
+     * was specifically restructured to keep off this request. The ordering matches {@code listPublic}
+     * exactly (same repository method, same {@code updatedAt DESC}), so both surfaces pick the same plan.
+     */
+    private NextStepSecondaryActionResponse resolveRecommendedPlan(UUID userId, String courseProgram) {
+        String normalizedCourseProgram = CourseProgramNormalizationUtils.normalizeForStorage(courseProgram);
+        if (normalizedCourseProgram == null) {
+            return null;
+        }
+        List<NoteCollectionEntity> publicPlans = noteCollectionRepository
+                .findByVisibilityAndCourseProgramAndParentCollectionIdIsNullOrderByUpdatedAtDesc(
+                        CollectionVisibility.PUBLIC,
+                        normalizedCourseProgram
+                );
+        if (publicPlans.isEmpty()) {
+            return null;
+        }
+        NoteCollectionEntity matchedPlan = publicPlans.getFirst();
+        boolean alreadyAdopted = noteCollectionRepository
+                .findByOwnerUserIdAndSourcePlanId(userId, matchedPlan.getId()).isPresent()
+                || noteCollectionRepository.findByIdAndOwnerUserId(matchedPlan.getId(), userId).isPresent();
+        if (alreadyAdopted) {
+            return null;
+        }
+        return new NextStepSecondaryActionResponse(
+                START_RECOMMENDED_PLAN_LABEL.formatted(matchedPlan.getTitle()),
+                COLLECTION_DETAIL_PATH.formatted(matchedPlan.getId()),
+                false,
+                true,
+                matchedPlan.getCourseProgram()
         );
     }
 

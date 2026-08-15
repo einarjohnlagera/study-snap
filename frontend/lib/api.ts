@@ -255,6 +255,8 @@ export type PostSessionNextStepResponse = {
     actionLabel: string;
     actionHref: string;
     adaptivePractice: boolean;
+    studyPlanRecommendation?: boolean;
+    courseProgram?: string | null;
   } | null;
 };
 
@@ -533,6 +535,8 @@ export type AnalyticsEventType =
   | "CHALLENGE_QUIZ_LAUNCHED_AFTER_MASTERY"
   | "POST_SESSION_CHALLENGE_CTA_IMPRESSION"
   | "POST_SESSION_CHALLENGE_CTA_CLICKED"
+  | "STUDY_PLAN_RECOMMENDATION_IMPRESSION"
+  | "STUDY_PLAN_RECOMMENDATION_CLICKED"
   | "QUICK_REVIEW_OPEN_LOOP_SHOWN"
   | "REVIEW_COMMITMENT_PROMPT_SHOWN"
   | "REVIEW_COMMITMENT_COMMITTED"

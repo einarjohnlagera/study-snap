@@ -856,7 +856,7 @@ export default function DashboardPage() {
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
                 primaryCollectionId={profile?.primaryCollectionId ?? null}
-                discoveryPresentation="pointer"
+                discoveryPresentation="recommendation"
                 suppressPointerWhenNoPrimary={totalNoteCount === 0}
               />
               <DashboardCommunityNotesSection
@@ -940,7 +940,7 @@ export default function DashboardPage() {
                 courseProgram={profile?.courseProgram ?? null}
                 profileType={profile?.profileType ?? null}
                 primaryCollectionId={profile?.primaryCollectionId ?? null}
-                discoveryPresentation="pointer"
+                discoveryPresentation="recommendation"
               />
               <DashboardCommunityNotesSection
                 courseProgram={profile?.courseProgram ?? null}
