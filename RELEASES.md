@@ -40,6 +40,16 @@ Theme: the events four September decisions rest on should actually arrive.
 
 **One of the four could not be meaningfully strengthened, and that is recorded rather than papered over.** The Dashboard `RecommendationImpression` guard keys on primitive deps (`courseProgram`, `planId`), so its effect only re-runs when those change — and when they change, a fresh impression is *correct*. The ref there defends against StrictMode double-invocation and remounts, neither of which a re-render test can exercise. Writing a test that passes either way would have added coverage theatre.
 
+### Folded in 2026-08-15 (second fold) — the September reads, written before their due dates
+
+**`docs/claude-plans/september-2026-checkpoint-reads.sql`** now holds a runnable query for every live checkpoint metric, written against the real `analytics_events` schema and the real emitted metadata keys.
+
+**It exists because twice in one week a metric turned out to be unanswerable only after the release depending on it had shipped.** `v0.78.0`'s checkpoint asked whether a named recommendation converts *better than the generic pointer* — impossible, because the pointer had emitted nothing before it was replaced. `v0.79.0`'s first baseline query counted curator notes and would have read ~0.1% regardless of what learners did. Both were caught by review rather than by design, and only just in time.
+
+**Writing the reads now confirms every September metric is computable — no holes found.** Had one not been expressible, there would still be 26 days to fix the instrumentation; discovering it on the due date would mean the window was wasted. **Query 0 is delivery health and must be read first**, because every other number is conditioned on whether this release's fixes actually recovered events.
+
+Each query carries its caveats inline rather than in someone's memory: the recommendation arms are disjoint populations and not a control, `CLICKED` counts clicks rather than conversions, the 09-12 secondary has a ~3-day tail on the old delivery behaviour, and `v0.79.0`'s denominator is expected to be small. The rejected unscoped off-catalog query is recorded in the file so nobody re-derives it.
+
 ### Pre-commit audit — 2026-08-15
 
 **No blockers. Three things recorded because they are non-obvious and a later reader could undo them.**
