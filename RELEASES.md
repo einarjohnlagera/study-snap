@@ -42,6 +42,19 @@ Theme: give curator notes the depth they were always meant to carry, so the axis
 - It still cited `copyTemplateQuestions` as a **working precedent** for absorbing duplicate-row failures. `v0.81.0` disproved that — the assigned-UUID entity sends `save` down `em.merge()`, which defers the insert, so its catch never fired. A false precedent in `CLAUDE.md` is how the error propagated into a prompt in the first place.
 - It described `v0.81.0` as fixing both defects. **Only one was closed.** The persistence guarantee is partial, the isolation was reverted, and a reader would otherwise have believed a solved problem was solved. Now records the outcome, the FK mechanism, and *do not propose `REQUIRES_NEW`*.
 
+### Pre-commit audit — 2026-08-16
+
+**Clean.** The migration implements every clause with its reason commented, handles both program stores, and is naturally idempotent (after a note receives a level it no longer matches `learner_level IS NULL`).
+
+**The two clauses that matter most were probed empirically, not taken on trust:** removing `u.role = 'ADMIN'` breaks `leavesLearnerOwnedBoardDepthNull`, and removing the Information Technology exclusion breaks both of its tests. Seven cases, all pinning behaviour rather than describing it.
+
+One detail worth knowing: `STUDENT` can never reach the `CASE`, because the `WHERE` admits only `BOARD_TAKER` and `PROFESSIONAL`. Had it slipped through, the `CASE` would have returned NULL and written NULL — harmless, but the guard is in the `WHERE` rather than the `CASE`, which is the safer place for it.
+
+### Known limitations — carried, not silently dropped
+
+- **The Information Technology exclusion is an exact string match** against `'Information Technology'` in either program store. A free-text variant (`IT`, `Info Tech`) would not be caught. The nine audited notes all resolve to the exact catalog name, so the known population is covered — but the exclusion is not spelling-proof, and a general licensure rule would need a catalog attribute rather than a name match.
+- **The migration records nothing about which notes it changed.** Reversing it would require re-deriving the population from `target_profile_type`, which is still intact — so it is recoverable in principle, but not from a log.
+
 ### Anti-drift — locked for this release
 
 - **Do not backfill learner-owned notes.** 4,645 of them. Private, feed no filter, and writing depth there asserts a decision their author never made.
@@ -57,6 +70,7 @@ Theme: give curator notes the depth they were always meant to carry, so the axis
 ### Shipped
 
 - **ADR-001 four-axis amendment (docs).** Ratified Target Audience as a retiring transitional field rather than a fifth durable note-metadata axis, on the narrow grounds that it reaches no generation prompt and its intended access control was never implemented. The ADR now records the non-lossless discovery cost, rejects the ~99.3% Course / Program correlation as removal grounds, binds curator-only depth migration and the no-runtime-fallback rule, and gates Public Library and URL replacement on migrated depth plus the `[CHECKPOINT — due 2026-09-13]` window before writes or storage can be removed.
+- **Curator Authored Depth backfill.** Added `V117` to populate NULL `notes.learner_level` values on `ADMIN`-owned notes only, mapping `BOARD_TAKER` to `BOARD_EXAM_REVIEW` and `PROFESSIONAL` to `PROFESSIONAL` while leaving `STUDENT`, learner-owned notes, and already-authored depths untouched. `BOARD_TAKER` notes resolve both catalog and free-text programs and stay NULL when any program is Information Technology; the exclusion is named directly rather than inferred from `exam_goal_slug`. This is one-time migration evidence only: Target Audience remains unchanged and is not a runtime depth fallback.
 
 ## v0.81.0 - Challenge Bank Integrity
 
