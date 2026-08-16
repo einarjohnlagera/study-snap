@@ -2,7 +2,13 @@
 
 ## v0.82.0 - Authored Depth Backfill
 
-**Status: In Progress** (kicked off 2026-08-16)
+**Status: Released** (kicked off and signed off 2026-08-16)
+
+**Scope: three planned items, all shipped, plus three folds — one of which was killed by its own audit.** The folds were the reversal path and its checkpoint, the exclusion widening the academic-level audit forced, and a Backlog Index consolidation. **The killed fold is worth recording:** a `V118` extending the backfill to the `STUDENT` cohort was audited before being written and returned **zero eligible notes**, because curators had already authored those depths by hand. It was dropped rather than built, and its audit is what found the second `BOARD_TAKER` mis-tag.
+
+**⚠️ One step is owed BEFORE the `main` merge and both the reversal and the 09-16 checkpoint die without it:** re-run the population capture in `docs/claude-plans/v0.82.0-curator-depth-backfill-reversal.md` immediately before merging and export it. It is the reversal key *and* the checkpoint's denominator.
+
+**⚠️ Editing `V117` after it was first committed invalidates its Flyway checksum on any database that already ran it.** Production is unaffected (it runs on the `main` merge), but a local dev DB will fail validation on next start — fix with `flyway repair` or by deleting the `version = '117'` row, since the migration is idempotent.
 
 Theme: give curator notes the depth they were always meant to carry, so the axis that will replace Target Audience actually holds information.
 
