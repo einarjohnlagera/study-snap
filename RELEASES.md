@@ -1,5 +1,40 @@
 # RELEASES.md - NoteLib
 
+## v0.82.0 - Authored Depth Backfill
+
+**Status: In Progress** (kicked off 2026-08-16)
+
+Theme: give curator notes the depth they were always meant to carry, so the axis that will replace Target Audience actually holds information.
+
+**This is Step 1 of the revised Target Audience retirement** (`docs/claude-plans/target-audience-removal-proposal.md`). **`v0.81.0` was Step 0 and it is done:** the blocker was that a depth backfill is "an authoring correction at scale," which would strand Challenge bank rows whose keys could then be regenerated into a collision that failed the session. `V115`'s widened uniqueness key closes exactly that — a regenerated question at the new level no longer collides with the preserved old-level row. Stranded rows stay unreachable, which is degradation rather than failure, and acceptable.
+
+**What this release ratifies.** `ADR-001` currently defines **five** note metadata axes. This amends it to **four**, recording the decision:
+
+> **Target Audience has no long-term architectural responsibility and should be retired — but only after the information it carries has been migrated into Authored Depth, and its live discovery contract has been replaced.**
+
+**The evidence, and the argument explicitly NOT used.** Target Audience is absent from every prompt and from the generation context; its original access-control purpose was never implemented (the filter defaults to All and nothing restricts visibility). **"Course / Program predicts audience ~99.3%" is deliberately NOT the justification** — that is correlation produced by a board-heavy catalog, not semantic equivalence, and a second opinion was right to reject it as grounds for an irreversible step.
+
+**Why the backfill is curator-scoped, settled by production data.** Of the 5,550 notes carrying an audience with no depth, **4,645 are learner-owned and 905 are curator-owned.** Writing depth onto a learner's note asserts an authoring decision its author never made, onto a field that acts as a curriculum floor for their future regenerations — precisely what `ADR-001` constraint 2 and `v0.75.0` exist to prevent. **And the learner notes are not needed:** the Public Library filter reads *public* notes, 945 of them, of which `ADMIN` owns 905. The learner-owned remainder is private and feeds no filter.
+
+### Planned Scope
+
+1. **Amend `ADR-001` — five axes to four (docs).** Records the decision above, the evidence, and the honest cost: the cross-program "student-level" filter is genuinely lost until Depth is populated, and Depth inherits that job rather than nothing replacing it.
+2. **Audit the 9 Information Technology `BOARD_TAKER` notes (owner-executed).** The one program where audience is genuinely mixed (9 board / 63 student). It was earlier dismissed as mis-tagging *by assumption*; that assumption is not evidence. **This gates item 3's scoping** — if one program can legitimately carry two depths, the mapping is not as clean as it looks.
+3. **Backfill Authored Depth on curator-owned notes only (backend migration).** Safe mappings only: `BOARD_TAKER → BOARD_EXAM_REVIEW`, `PROFESSIONAL → PROFESSIONAL`. **`STUDENT` stays NULL** — it spans four real depths and guessing would defeat the purpose.
+
+### Anti-drift — locked for this release
+
+- **Do not backfill learner-owned notes.** 4,645 of them. Private, feed no filter, and writing depth there asserts a decision their author never made.
+- **Do not map `STUDENT` to anything.** It spans `GRADE_SCHOOL` / `JUNIOR_HIGH` / `SENIOR_HIGH` / `COLLEGE`. Leave NULL for curator judgement.
+- **Target Audience is NOT removed in this release.** No column drop, no field removal, no authoring change. The amendment ratifies the *direction*; the removal is later phases.
+- **Do not touch the Public Library audience filter.** Phase 2 changes discovery and `[CHECKPOINT — due 2026-09-13]` measures Explore engagement. It waits.
+- **Target Audience must never become a runtime depth fallback.** It is migration evidence, one time. Adding it to `StudyPackGenerationContextResolver` would create a fifth fallback layer in the one resolver `ADR-001` keeps deliberately narrow.
+- **The backfill is a one-time migration, not a default write.** `v0.75.0`'s rule stands: depth is a UI pre-fill, never a server-side default. A curator-scoped historical migration is the stated exception, and it does not license one anywhere else.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.81.0 - Challenge Bank Integrity
 
 **Status: Released** (kicked off 2026-08-15, signed off 2026-08-16)
