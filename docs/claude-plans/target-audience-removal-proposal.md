@@ -172,8 +172,22 @@ So Step 2 blocks on curator classification of the `STUDENT` rows, which is unbou
 
 ## Queries owed before Step 1
 
+### (a) RAN 2026-08-16 — mis-tagged, and it changes the migration
+
+All nine: **seven database fundamentals** (ER modelling, SQL joins, ACID, stored procedures, triggers, views, security) authored **2026-07-03**, then **two JavaScript async topics** (event loop, callbacks) on **2026-07-04**. Ordinary IT coursework, and there is no Philippine IT licensure board. Two batches on consecutive days is the signature of a curator session with the audience dropdown left on one value. **`learner_level` and `domain_context` are NULL on all nine**, so nothing independently supports `BOARD_TAKER`.
+
+**Verdict: mis-tagged.** The "one program can legitimately carry two depths" hypothesis is not supported.
+
+**But the migration does not stay unchanged.** Under the safe mapping, `BOARD_TAKER → BOARD_EXAM_REVIEW` would stamp these nine at **board-exam depth** — a wrong curriculum floor on nine public notes, so every future regeneration would author *"Database Views"* and *"Callbacks in Web Development"* at licensure-review depth. **`BOARD_TAKER` is therefore not self-certifying:** it is trustworthy where a licensure board exists and unreliable where one does not.
+
+**Information Technology is excluded from the `BOARD_TAKER` mapping.** Those nine keep NULL depth and remain curator-classifiable, exactly like the `STUDENT` rows.
+
+**No catalog field models licensure status, and the obvious candidate does not work.** `course_programs.exam_goal_slug` marks only the four programs with Exam Hubs (`let`, `ale`, `pnle`, `cpale`). **Civil Engineering — 254 `BOARD_TAKER` notes, the largest population — has none**, so excluding on that column would drop the bulk of the legitimate migration. The exclusion is therefore named explicitly rather than derived, and a general rule would need a new catalog attribute.
+
+**Residual risk, bounded:** other non-licensure programs could carry the same mis-tagging. The distribution shows Computer Science, Software Engineering, Biology, Psychology and Business Administration each holding a single `STUDENT` note and no `BOARD_TAKER`, so the visible blast radius is IT alone.
+
 ```sql
--- (a) The IT audit. Are these 9 genuinely board-review material?
+-- (a) The IT audit — ANSWERED above. Kept for reproducibility.
 SELECT n.id, left(n.title, 70) AS title, n.learner_level, n.domain_context, n.created_at::date
 FROM notes n
 LEFT JOIN note_course_program ncp ON ncp.note_id = n.id

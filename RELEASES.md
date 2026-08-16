@@ -20,7 +20,13 @@ Theme: give curator notes the depth they were always meant to carry, so the axis
 
 1. **Amend `ADR-001` — five axes to four (docs).** Records the decision above, the evidence, and the honest cost: the cross-program "student-level" filter is genuinely lost until Depth is populated, and Depth inherits that job rather than nothing replacing it.
 2. **Audit the 9 Information Technology `BOARD_TAKER` notes (owner-executed).** The one program where audience is genuinely mixed (9 board / 63 student). It was earlier dismissed as mis-tagging *by assumption*; that assumption is not evidence. **This gates item 3's scoping** — if one program can legitimately carry two depths, the mapping is not as clean as it looks.
-3. **Backfill Authored Depth on curator-owned notes only (backend migration).** Safe mappings only: `BOARD_TAKER → BOARD_EXAM_REVIEW`, `PROFESSIONAL → PROFESSIONAL`. **`STUDENT` stays NULL** — it spans four real depths and guessing would defeat the purpose.
+3. **Backfill Authored Depth on curator-owned notes only (backend migration).** Scoped 2026-08-16 after the audit in item 2 returned. Exact population:
+   - **Curator-owned only** — `users.role = 'ADMIN'`. The 4,645 learner-owned notes are never touched.
+   - **Only where `notes.learner_level IS NULL`** — an authored depth is a human decision and must never be overwritten.
+   - **`BOARD_TAKER → BOARD_EXAM_REVIEW`** and **`PROFESSIONAL → PROFESSIONAL`**.
+   - **`STUDENT` stays NULL.** It spans four real depths; guessing defeats the purpose.
+   - **⚠️ Information Technology is EXCLUDED from the `BOARD_TAKER` mapping.** The item-2 audit found all nine of its `BOARD_TAKER` notes mis-tagged — ordinary database and JavaScript coursework authored in two batches on consecutive days, with `learner_level` and `domain_context` NULL throughout. Stamping them `BOARD_EXAM_REVIEW` would write a wrong curriculum floor onto nine public notes. **`BOARD_TAKER` is not self-certifying:** it is trustworthy where a licensure board exists and unreliable where one does not.
+   - **The exclusion is named, not derived.** `course_programs.exam_goal_slug` looks like a licensure marker but only covers the four programs with Exam Hubs — **Civil Engineering, the largest population at 254 notes, has none** — so excluding on it would drop most of the legitimate migration. A general rule needs a new catalog attribute and is not in scope.
 
 ### Pre-commit audit — 2026-08-16
 
@@ -43,6 +49,9 @@ Theme: give curator notes the depth they were always meant to carry, so the axis
 - **Target Audience is NOT removed in this release.** No column drop, no field removal, no authoring change. The amendment ratifies the *direction*; the removal is later phases.
 - **Do not touch the Public Library audience filter.** Phase 2 changes discovery and `[CHECKPOINT — due 2026-09-13]` measures Explore engagement. It waits.
 - **Target Audience must never become a runtime depth fallback.** It is migration evidence, one time. Adding it to `StudyPackGenerationContextResolver` would create a fifth fallback layer in the one resolver `ADR-001` keeps deliberately narrow.
+- **Do not derive the licensure exclusion from `exam_goal_slug`.** It marks Exam Hubs, not licensure boards, and would exclude Civil Engineering, Mechanical Engineering, Pharmacy and every other genuine board program.
+- **Do not "fix" the nine Information Technology notes by rewriting their `target_profile_type`.** That mutates the axis being retired and makes the migration touch two fields instead of one. They keep NULL depth and stay curator-classifiable.
+- **Accept that stamping depth strands the affected notes' Challenge bank rows** at the old level. `v0.81.0`'s `V115` means this degrades reachability rather than failing sessions, and the banks in question belong to the curator account, not to learners — a learner who adopted one of these notes has their own copy with its own Study Pack.
 - **The backfill is a one-time migration, not a default write.** `v0.75.0`'s rule stands: depth is a UI pre-fill, never a server-side default. A curator-scoped historical migration is the stated exception, and it does not license one anywhere else.
 
 ### Shipped
