@@ -2,7 +2,14 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **quiz modes, exam simulation, or practice mechanics**.
-> Last updated: v0.78.0 - 2026-08-15. **`v0.78.0` changed what a mastered Quick Review result screen offers:**
+> Last updated: v0.81.0 - 2026-08-16. **`v0.81.0` touched the Challenge question bank:** saved questions
+> are now unique per `(user, Study Pack, question, learner_level)`, so an authored-depth correction keeps
+> the old-level rows alongside the new instead of colliding; rows with a NULL level — permanently
+> unclaimable, because the resolution chain never yields null — were stamped from the pack's note level.
+> **⚠️ Bank persistence is only PARTIALLY best-effort: a concurrent same-level duplicate can still fail a
+> Challenge session.** Do not describe it as fully guaranteed, and do not propose `REQUIRES_NEW` isolation
+> as the fix — it was tried and broke every Challenge start, because the bank's session foreign keys
+> cannot see an uncommitted session row. Previously stamped v0.78.0 - 2026-08-15. **`v0.78.0` changed what a mastered Quick Review result screen offers:**
 > `Take a Challenge` remains the primary action, and the previously-empty secondary slot now carries either
 > the next unpracticed note in the learner's Study Plan (lowest plan `position`, excluding the note just
 > completed) or, when the note is in no plan, a named program-matched published Review Set linking to

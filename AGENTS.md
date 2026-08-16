@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.81.0 - Challenge Bank Integrity` (In Progress); previous: `v0.80.0 - Instrumentation Integrity` (Released)
+- `v0.81.0 - Challenge Bank Integrity` (Released); previous: `v0.80.0 - Instrumentation Integrity` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 

@@ -2,7 +2,9 @@
 
 ## v0.81.0 - Challenge Bank Integrity
 
-**Status: In Progress** (kicked off 2026-08-15)
+**Status: Released** (kicked off 2026-08-15, signed off 2026-08-16)
+
+**Scope: five PRs, and one of them reverted a headline claim of this release.** It set out to fix two `v0.70.0` Known Limitations and shipped one of them cleanly. **The persistence guarantee is PARTIAL and is stated as such everywhere** — `V115` removes the deterministic collision, a concurrent same-level duplicate can still fail a Challenge session, and the isolation attempted to close that gap broke the bank entirely and was reverted. Shipping an accurate description of what is and is not guaranteed is the honest outcome here, and it is better than the alternative that was two reviews away from being released.
 
 Theme: a learner's banked Challenge questions should survive an authoring correction, and a bank write should never be able to break the session it belongs to.
 
