@@ -1,5 +1,10 @@
 package com.studysnap.backend.service;
 
+import org.springframework.transaction.support.TransactionOperations;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ChallengeQuizQuestionBankEntity;
 import com.studysnap.backend.entity.LearnerLevel;
@@ -12,8 +17,11 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +30,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -197,10 +208,37 @@ class ChallengeQuizQuestionBankServiceTest {
         verifyNoMoreInteractions(questionBankRepository);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void persistGeneratedQuestions_allowsTheSameQuestionKeyAtDifferentLearnerLevels() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChallengeQuizQuestionBankService service = new ChallengeQuizQuestionBankService(questionBankRepository);
+        QuizItem repeatedQuestion = quizItem("Same generated question");
+
+        service.persistGeneratedQuestions(
+                userId, studyPackId, sessionId, LearnerLevel.JUNIOR_HIGH, List.of(repeatedQuestion)
+        );
+        service.persistGeneratedQuestions(
+                userId, studyPackId, sessionId, LearnerLevel.SENIOR_HIGH, List.of(repeatedQuestion)
+        );
+
+        ArgumentCaptor<Iterable<ChallengeQuizQuestionBankEntity>> entries = ArgumentCaptor.forClass(Iterable.class);
+        verify(questionBankRepository, times(2)).saveAll(entries.capture());
+        assertThat(entries.getAllValues())
+                .extracting(saved -> saved.iterator().next().getLearnerLevel())
+                .containsExactly(LearnerLevel.JUNIOR_HIGH.name(), LearnerLevel.SENIOR_HIGH.name());
+    }
+
     private ChallengeQuizQuestionBankEntity bankedQuestion(String questionText) {
         ChallengeQuizQuestionBankEntity question = new ChallengeQuizQuestionBankEntity();
         question.setQuestionKey(questionText.toLowerCase());
         question.setQuestion(new QuizItem(questionText, List.of("A", "B", "C", "D"), 0, "Concept", "Explanation"));
         return question;
+    }
+
+    private QuizItem quizItem(String questionText) {
+        return new QuizItem(questionText, List.of("A", "B", "C", "D"), 0, "Concept", "Explanation");
     }
 }

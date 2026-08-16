@@ -92,33 +92,41 @@ public class ChallengeQuizQuestionBankService {
         if (questions == null || questions.isEmpty()) {
             return;
         }
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        Set<String> seen = new LinkedHashSet<>();
+        List<ChallengeQuizQuestionBankEntity> entries = new ArrayList<>(questions.size());
+        for (QuizItem question : questions) {
+            String questionKey = question == null ? "" : QuizDeduplicationUtils.normalizeQuestion(question.question());
+            if (questionKey.isBlank() || !seen.add(questionKey)) {
+                continue;
+            }
+            ChallengeQuizQuestionBankEntity entry = new ChallengeQuizQuestionBankEntity();
+            entry.setId(UUID.randomUUID());
+            entry.setUserId(userId);
+            entry.setStudyPackId(studyPackId);
+            entry.setOriginSessionId(sessionId);
+            entry.setQuestionKey(questionKey);
+            entry.setQuestion(question);
+            entry.setLearnerLevel(learnerLevelName(effectiveCurriculumLevel));
+            entry.setLastKnownOutcome(OUTCOME_UNANSWERED);
+            entry.setClaimedSessionId(sessionId);
+            entry.setGeneratedAt(now);
+            entries.add(entry);
+        }
+        if (entries.isEmpty()) {
+            return;
+        }
+        // Deliberately joins the CALLER's transaction. Isolating this write in a REQUIRES_NEW
+        // transaction was tried in v0.81.0 and reverted: origin_session_id and claimed_session_id are
+        // FKs to quick_review_sessions, and startSession inserts that session row in its own
+        // uncommitted transaction — so a second connection cannot see the parent row and every insert
+        // failed the FK check, deterministically and silently. Isolation is still the right long-term
+        // shape, but it requires the session row to be visible first. See the Backlog Index row.
         try {
-            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-            List<ChallengeQuizQuestionBankEntity> entries = new ArrayList<>();
-            Set<String> seen = new LinkedHashSet<>();
-            for (QuizItem question : questions) {
-                String questionKey = question == null ? "" : QuizDeduplicationUtils.normalizeQuestion(question.question());
-                if (questionKey.isBlank() || !seen.add(questionKey)) {
-                    continue;
-                }
-                ChallengeQuizQuestionBankEntity entry = new ChallengeQuizQuestionBankEntity();
-                entry.setId(UUID.randomUUID());
-                entry.setUserId(userId);
-                entry.setStudyPackId(studyPackId);
-                entry.setOriginSessionId(sessionId);
-                entry.setQuestionKey(questionKey);
-                entry.setQuestion(question);
-                entry.setLearnerLevel(learnerLevelName(effectiveCurriculumLevel));
-                entry.setLastKnownOutcome(OUTCOME_UNANSWERED);
-                entry.setClaimedSessionId(sessionId);
-                entry.setGeneratedAt(now);
-                entries.add(entry);
-            }
-            if (!entries.isEmpty()) {
-                challengeQuizQuestionBankRepository.saveAll(entries);
-            }
+            challengeQuizQuestionBankRepository.saveAll(entries);
         } catch (RuntimeException exception) {
-            log.warn("Challenge Quiz question-bank write failed for userId={}, studyPackId={}", userId, studyPackId, exception);
+            log.warn("Challenge Quiz question-bank write failed for userId={}, studyPackId={}",
+                    userId, studyPackId, exception);
         }
     }
 

@@ -6,7 +6,7 @@
 > subject pages). This is a structural snapshot, not a proposal — it describes what exists now so a
 > design conversation starts from real constraints instead of assumptions.
 > Update this file when the Note schema, taxonomy model, or collection model changes.
-> Last updated: v0.79.0 — 2026-08-15. **`v0.79.0` made the 21-row `course_programs` catalog the first
+> Last updated: v0.80.0 — 2026-08-15, with the **unratified Target Audience removal proposal** noted in §0. **`v0.79.0` made the 21-row `course_programs` catalog the first
 > suggestion source** for learner Course / Program fields on `/profile`, the Note Editor, private Note
 > Detail and the Dashboard profile-completion prompt — free text still allowed, nothing migrated, and
 > **onboarding deliberately excluded** until after 2026-09-11. The public program filter now lists
@@ -42,7 +42,7 @@ Every note carries five independent metadata axes. They are not interchangeable,
 | **Domain Context** | *how* it is authored — **the sole LLM domain constraint** | **Yes — this is the one that shapes voice and framing** |
 | **Note Learner Level** — labelled **“Authored Depth”** in the UI since `v0.75.0` (copy-only; the column is still `notes.learner_level`) | *how deep* — the curriculum floor | Yes |
 | **Applicable Programs** | *where* it appears — one or many catalog programs | **Never.** Discovery only |
-| **Target Audience** | *who* it is for | **Never.** Discovery only, and never depth |
+| **Target Audience** ⚠️ **removal PROPOSED 2026-08-15, unratified** | *who* it is for | **Never.** Discovery only, and never depth |
 
 ### What to give us when you propose a note
 
@@ -51,7 +51,9 @@ Every note carries five independent metadata axes. They are not interchangeable,
 3. **Domain Context** — one of the **8 ratified values**, below. This is what makes generated content sound like it belongs to the field.
 4. **Note Learner Level** — `GRADE_SCHOOL` · `JUNIOR_HIGH` · `SENIOR_HIGH` · `COLLEGE` · `BOARD_EXAM_REVIEW` · `PROFESSIONAL`. This is the curriculum **floor**: a reader at a lower level gets softer scaffolding and wording, never easier curriculum.
 5. **Applicable Programs** — one or more catalog names, below. **Say all of them.** Under-listing recreates the duplication problem; you cannot "add the others later" without a curator editing every note by hand.
-6. **Target Audience** — `STUDENT` · `BOARD_TAKER` · `PROFESSIONAL`.
+6. **Target Audience** — `STUDENT` · `BOARD_TAKER` · `PROFESSIONAL`. **⚠️ This axis may be removed.** A 2026-08-15 audit found it absent from every prompt, its original access-control purpose never implemented, and **Course / Program predicts it ~99.3%** — licensure programs are uniformly `BOARD_TAKER`, academic-level values uniformly `STUDENT`, and **`PROFESSIONAL` is unused across all 945 public notes**. It *is* still a live Public Library filter with a shareable `?audience=` URL param, so removal would be user-visible. **Keep supplying it until the `ADR-001` amendment is ratified**, but do not design anything new that depends on it. Full audit: `docs/claude-plans/target-audience-removal-proposal.md`.
+
+**One finding from that audit that changes how you should read this list:** `Junior High`, `High School`, `Senior High – STEM/HUMSS/ABM` and `Grade School` are currently being used as **Course / Program** values on ~47 public notes. Those are academic *levels* — Note Learner Level's job. Do not propose notes that file an academic level as a program; give a real catalog program plus the level in field 4.
 
 **Hard rule: if a note has more than one Applicable Program, Domain Context is required.** The API rejects the save otherwise (`MultiProgramDomainContextRequiredException`) — a note serving several programs has no single program to infer its authoring domain from, so it must be stated.
 

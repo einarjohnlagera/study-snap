@@ -190,17 +190,18 @@ public class OfficialChallengeQuizTemplateService {
             if (copies.isEmpty()) {
                 return List.of();
             }
-            List<QuizItem> persistedQuestions = new ArrayList<>(copies.size());
-            for (int index = 0; index < copies.size(); index++) {
-                try {
-                    questionBankRepository.saveAll(List.of(copies.get(index)));
-                    persistedQuestions.add(copiedQuestions.get(index));
-                } catch (DataIntegrityViolationException exception) {
-                    log.warn("Official Challenge template copy skipped duplicate row for userId={}, studyPackId={}",
-                            userId, callerStudyPackId, exception);
-                }
+            // Joins the CALLER's transaction — see ChallengeQuizQuestionBankService.persistGeneratedQuestions
+            // for why the REQUIRES_NEW isolation attempted in v0.81.0 was reverted (FK to an uncommitted
+            // quick_review_sessions row). All-or-nothing is fine: the caller recomputes `shortfall` and
+            // generates fresh questions for the remainder.
+            try {
+                questionBankRepository.saveAll(copies);
+            } catch (RuntimeException exception) {
+                log.warn("Official Challenge template copy failed for userId={}, studyPackId={}",
+                        userId, callerStudyPackId, exception);
+                return List.of();
             }
-            return List.copyOf(persistedQuestions);
+            return List.copyOf(copiedQuestions);
         } catch (RuntimeException exception) {
             log.warn("Official Challenge template copy failed for userId={}, studyPackId={}",
                     userId, callerStudyPackId, exception);
