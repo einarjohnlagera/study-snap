@@ -58,6 +58,28 @@ It now writes through the same `questionBankTransactionOperations`. The per-row 
 
 Covered by a migration test, per the convention that data-transforming migrations get one while structural ones do not.
 
+### Pre-signoff pressure test — 2026-08-16, cold-context. THE ISOLATION WAS REVERTED.
+
+A second independent reviewer, with no session context, found that **the transaction isolation shipped in `#1084` and `#1085` broke the question bank on its most important path.** Two earlier reviews — this session's own audit and the cold agent that *designed* the isolation — both missed it.
+
+**The mechanism.** `challenge_quiz_question_bank.origin_session_id` and `claimed_session_id` are foreign keys to `quick_review_sessions` (`V96:5,10`). `startSession` inserts the session row inside its own **uncommitted** transaction (`ChallengeQuizService.java:251`), then calls the bank writes. A `REQUIRES_NEW` transaction takes a **second connection**, whose snapshot cannot see that uncommitted parent row — so every insert failed the FK check. Deterministically, on every Challenge start, and **silently**, because the catch that made the failure survivable also hid it.
+
+**Blast radius.** The bank never filled from a Challenge start, and `copyTemplateQuestions` always returned empty — so **every adopted-note Challenge start paid full LLM cost** with Official template adoption silently dead. The two paths that still worked (`generateMoreQuestions`, `seedTemplateAsync`) are exactly the two that do not reference an uncommitted session row, which is strong evidence the change was never exercised end-to-end against PostgreSQL.
+
+**We traded a rare failure for a permanent silent one.** Reverted: both writes rejoin the caller's transaction, and the `questionBankTransactionOperations` bean is removed rather than left as dead configuration.
+
+**What survives, and it is most of the value.** `V115`'s widened uniqueness key removes the *deterministic* cross-level collision, which was the original trigger. What remains is a concurrent same-level duplicate — rarer, and now documented rather than claimed fixed. `AGENTS.md` records why `REQUIRES_NEW` is not the answer here, so the next attempt starts from the FK constraint rather than rediscovering it.
+
+**`V116` was also corrected.** Its blanket `COLLEGE` stamp rested on a premise the release's own record contradicts: these rows are NULL because pre-`v0.70.0` code passed the reader's raw nullable level, **not** because the note lacked one — so a note carrying `JUNIOR_HIGH` would have stayed just as unclaimable. It now resolves the pack's note level, with `COLLEGE` only as the terminal fallback, and its guard checks for a twin at the level actually being written.
+
+### Known limitations — carried, not silently dropped
+
+- **The best-effort persistence guarantee is PARTIAL, and the docs now say so.** A concurrent same-level duplicate still fails the Challenge session. Fixing it properly requires the session row to be visible to an isolated transaction — a restructure, not a patch. Recorded in the Backlog Index.
+- **`startSession`'s failure path permanently strands claims.** `releaseClaims` is `REQUIRES_NEW`, so it cannot see claims set by the still-uncommitted outer transaction; the predicate matches nothing, the release is a no-op, and the outer transaction then commits `claimed_session_id` pointing at a FAILED session that is never revisited. Pre-existing and out of scope, but it manufactures exactly the row class `V116` exists to clean up. `generateMoreQuestions` rethrows and is unaffected.
+- **`V116`'s `NOT EXISTS` guard is defensive only.** The pre-`V115` key was unique on three `NOT NULL` columns, so a NULL row cannot have a levelled twin today. Its test exercises a state production cannot reach, and the H2 table declares no unique constraint — it cannot demonstrate `V115`'s key and must not be read as doing so.
+- **No test pins the migration's real population.** `V115` has no coverage at all (Flyway off in tests, H2 cannot parse `NULLS NOT DISTINCT`), requires PostgreSQL 15+, and builds its index under `ACCESS EXCLUSIVE`.
+- **`persistGeneratedQuestions_allowsTheSameQuestionKeyAtDifferentLearnerLevels` tests nothing about `V115`** — a Mockito repository cannot enforce a unique constraint. It verifies level stamping, which predates this release.
+
 ### Anti-drift — locked for this release
 
 - **No Target Audience code changes.** The `ADR-001` amendment is unratified; this release only unblocks it. Do not remove the field, its filter, its authoring control, or its columns.

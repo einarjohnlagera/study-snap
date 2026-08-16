@@ -288,7 +288,6 @@ class OfficialChallengeQuizTemplateServiceTest {
     ) {
         return new OfficialChallengeQuizTemplateService(
                 questionBankRepository,
-                TransactionOperations.withoutTransaction(),
                 questionBankService,
                 noteRepository,
                 studyPackRepository,

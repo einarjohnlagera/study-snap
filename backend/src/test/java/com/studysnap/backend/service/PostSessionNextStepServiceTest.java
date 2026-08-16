@@ -1,6 +1,5 @@
 package com.studysnap.backend.service;
 
-import org.springframework.transaction.support.TransactionOperations;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ConceptHealthEntryResponse;
 import com.studysnap.backend.dto.ConceptReadinessStatus;
@@ -721,7 +720,7 @@ class PostSessionNextStepServiceTest {
                 bankedQuestion("Missed three")
         );
         ChallengeQuizQuestionBankService realQuestionBankService =
-                new ChallengeQuizQuestionBankService(challengeQuizQuestionBankRepository, TransactionOperations.withoutTransaction());
+                new ChallengeQuizQuestionBankService(challengeQuizQuestionBankRepository);
         PostSessionNextStepService serviceWithRealBank = new PostSessionNextStepService(
                 studyPackRepository,
                 quickReviewSessionRepository,

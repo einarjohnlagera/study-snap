@@ -15,12 +15,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ChallengeQuizQuestionBankNullLevelStampMigrationTest {
     private static final String USER_ID = "00000000-0000-0000-0000-000000000001";
     private static final String PACK_ID = "00000000-0000-0000-0000-000000000002";
+    private static final String NOTE_ID = "00000000-0000-0000-0000-000000000003";
 
     @Test
     void stampsUnclaimableNullLevelRowsAndLeavesDuplicatesOfClaimableRowsAlone() throws Exception {
         String databaseName = "challenge-bank-null-level-" + UUID.randomUUID();
         try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:" + databaseName + ";MODE=PostgreSQL")) {
             try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate("""
+                        create table notes (
+                            id uuid primary key,
+                            learner_level varchar(50)
+                        )
+                        """);
+                statement.executeUpdate("""
+                        create table study_packs (
+                            id uuid primary key,
+                            note_id uuid not null
+                        )
+                        """);
                 statement.executeUpdate("""
                         create table challenge_quiz_question_bank (
                             id uuid primary key,
@@ -31,12 +44,24 @@ class ChallengeQuizQuestionBankNullLevelStampMigrationTest {
                         )
                         """);
 
-                // (a) unclaimable: NULL level, no COLLEGE twin -> must be stamped.
+                // The pack's note carries JUNIOR_HIGH, so a blanket COLLEGE stamp would leave these
+                // rows just as unclaimable. The migration must resolve the note's level.
+                statement.executeUpdate("insert into notes (id, learner_level) values ('"
+                        + NOTE_ID + "', 'JUNIOR_HIGH')");
+                statement.executeUpdate("insert into study_packs (id, note_id) values ('"
+                        + PACK_ID + "', '" + NOTE_ID + "')");
+
+                // (a) unclaimable: NULL level -> must be stamped with the note's level.
                 insert(statement, "orphan-key", null);
-                // (b) a duplicate of a row the learner can already receive -> must be left NULL,
-                //     because stamping it would collide with the twin under V115's widened key.
+                // (b) DEFENSIVE ONLY -- unreachable in production. The pre-V115 key made
+                //     (user, pack, question_key) unique across all three NOT NULL columns, so a NULL
+                //     row cannot have a levelled twin. Kept to pin the guard's behaviour if the
+                //     migration is ever re-run against post-V115 data. This H2 table declares no
+                //     unique constraint, so it cannot demonstrate V115's key -- do not read it as doing so.
+                //     The twin sits at JUNIOR_HIGH, the level this row WOULD resolve to, which is the
+                //     only case the guard has to catch.
                 insert(statement, "duplicated-key", null);
-                insert(statement, "duplicated-key", "COLLEGE");
+                insert(statement, "duplicated-key", "JUNIOR_HIGH");
                 // (c) already claimable at a different level -> untouched, and does NOT count as a
                 //     COLLEGE twin, so its NULL sibling is still stamped.
                 insert(statement, "other-level-key", null);
@@ -47,11 +72,11 @@ class ChallengeQuizQuestionBankNullLevelStampMigrationTest {
                 ).getContentAsString(StandardCharsets.UTF_8);
                 statement.executeUpdate(migration);
 
-                // Both previously-NULL rows are now claimable at COLLEGE.
+                // Both previously-NULL rows now carry the NOTE's level, not a blanket COLLEGE.
                 assertThat(nullCount(statement, "orphan-key")).isZero();
-                assertThat(countAtLevel(statement, "orphan-key", "COLLEGE")).isEqualTo(1);
+                assertThat(countAtLevel(statement, "orphan-key", "JUNIOR_HIGH")).isEqualTo(1);
                 assertThat(nullCount(statement, "other-level-key")).isZero();
-                assertThat(countAtLevel(statement, "other-level-key", "COLLEGE")).isEqualTo(1);
+                assertThat(countAtLevel(statement, "other-level-key", "JUNIOR_HIGH")).isEqualTo(1);
                 // The pre-existing row at another level is untouched.
                 assertThat(countAtLevel(statement, "other-level-key", "BOARD_EXAM_REVIEW")).isEqualTo(1);
                 // Nothing deleted, and the duplicate stays NULL rather than colliding.
