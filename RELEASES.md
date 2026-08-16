@@ -22,6 +22,20 @@ Theme: give curator notes the depth they were always meant to carry, so the axis
 2. **Audit the 9 Information Technology `BOARD_TAKER` notes (owner-executed).** The one program where audience is genuinely mixed (9 board / 63 student). It was earlier dismissed as mis-tagging *by assumption*; that assumption is not evidence. **This gates item 3's scoping** — if one program can legitimately carry two depths, the mapping is not as clean as it looks.
 3. **Backfill Authored Depth on curator-owned notes only (backend migration).** Safe mappings only: `BOARD_TAKER → BOARD_EXAM_REVIEW`, `PROFESSIONAL → PROFESSIONAL`. **`STUDENT` stays NULL** — it spans four real depths and guessing would defeat the purpose.
 
+### Pre-commit audit — 2026-08-16
+
+**Codex's amendment was sound and went beyond the brief in the right direction.** It found **two contradictory lines the prompt did not list**, which is exactly what it was told to do rather than leave both versions standing:
+
+1. **The Consequences section explicitly deferred the decision this amendment makes.** It read *"Whether the precise program facet makes this coarse three-value facet redundant is judged at the end of step 3, against real filter usage — not decided here."* Left in place, the ADR would have contradicted itself on its central point. Now: *"Its long-term redundancy is decided: it is retiring."*
+2. **The `Intended Audience` naming constraint** (`ADR-001` → *Authoring populates by inference*, item 4) forbade that label because `target_profile_type` occupies it. Correctly rescoped to *"not available during the transition"* rather than permanently.
+
+**The gap was mine, not Codex's.** The prompt deliberately excluded `CLAUDE.md`, `AGENTS.md`, the GPT modules and `ROADMAP.md` to avoid two sources for one statement — which was right for content, but left **five files still describing the amendment as "PROPOSED, not ratified."** Ratification makes that false. All corrected here.
+
+**Two genuinely false claims were also sitting in `CLAUDE.md`, the most-read file in the repo:**
+
+- It still cited `copyTemplateQuestions` as a **working precedent** for absorbing duplicate-row failures. `v0.81.0` disproved that — the assigned-UUID entity sends `save` down `em.merge()`, which defers the insert, so its catch never fired. A false precedent in `CLAUDE.md` is how the error propagated into a prompt in the first place.
+- It described `v0.81.0` as fixing both defects. **Only one was closed.** The persistence guarantee is partial, the isolation was reverted, and a reader would otherwise have believed a solved problem was solved. Now records the outcome, the FK mechanism, and *do not propose `REQUIRES_NEW`*.
+
 ### Anti-drift — locked for this release
 
 - **Do not backfill learner-owned notes.** 4,645 of them. Private, feed no filter, and writing depth there asserts a decision their author never made.
@@ -33,7 +47,7 @@ Theme: give curator notes the depth they were always meant to carry, so the axis
 
 ### Shipped
 
-_(nothing yet)_
+- **ADR-001 four-axis amendment (docs).** Ratified Target Audience as a retiring transitional field rather than a fifth durable note-metadata axis, on the narrow grounds that it reaches no generation prompt and its intended access control was never implemented. The ADR now records the non-lossless discovery cost, rejects the ~99.3% Course / Program correlation as removal grounds, binds curator-only depth migration and the no-runtime-fallback rule, and gates Public Library and URL replacement on migrated depth plus the `[CHECKPOINT — due 2026-09-13]` window before writes or storage can be removed.
 
 ## v0.81.0 - Challenge Bank Integrity
 

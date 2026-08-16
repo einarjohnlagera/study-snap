@@ -6,7 +6,7 @@
 > subject pages). This is a structural snapshot, not a proposal — it describes what exists now so a
 > design conversation starts from real constraints instead of assumptions.
 > Update this file when the Note schema, taxonomy model, or collection model changes.
-> Last updated: v0.80.0 — 2026-08-15, with the **unratified Target Audience removal proposal** noted in §0. **`v0.79.0` made the 21-row `course_programs` catalog the first
+> Last updated: v0.82.0 — 2026-08-16. **Target Audience retirement is RATIFIED** (`ADR-001` amended 2026-08-16) — see §0; the field still exists and is still written during the gated migration. **`v0.79.0` made the 21-row `course_programs` catalog the first
 > suggestion source** for learner Course / Program fields on `/profile`, the Note Editor, private Note
 > Detail and the Dashboard profile-completion prompt — free text still allowed, nothing migrated, and
 > **onboarding deliberately excluded** until after 2026-09-11. The public program filter now lists
@@ -42,7 +42,7 @@ Every note carries five independent metadata axes. They are not interchangeable,
 | **Domain Context** | *how* it is authored — **the sole LLM domain constraint** | **Yes — this is the one that shapes voice and framing** |
 | **Note Learner Level** — labelled **“Authored Depth”** in the UI since `v0.75.0` (copy-only; the column is still `notes.learner_level`) | *how deep* — the curriculum floor | Yes |
 | **Applicable Programs** | *where* it appears — one or many catalog programs | **Never.** Discovery only |
-| **Target Audience** ⚠️ **removal PROPOSED 2026-08-15, unratified** | *who* it is for | **Never.** Discovery only, and never depth |
+| **Target Audience** ⚠️ **RETIRING — ratified 2026-08-16, still live during migration** | transitional discovery contract | **Never.** Discovery only, and never depth |
 
 ### What to give us when you propose a note
 
