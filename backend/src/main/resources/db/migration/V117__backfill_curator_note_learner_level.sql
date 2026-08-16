@@ -17,6 +17,11 @@
 -- the personal-note free-text notes.course_program value. A note stays NULL for curator classification
 -- if ANY of its resolved programs is on the denylist, even when it also carries legitimate ones.
 --
+-- The denylist gates BOTH mappings, not just BOARD_TAKER. It excludes zero PROFESSIONAL rows today --
+-- production carries no PROFESSIONAL note at all -- but the only reason that mapping exists is that a
+-- note could acquire the audience later, and an arm kept for tomorrow must be guarded tomorrow. A
+-- 'Grade School' note tagged PROFESSIONAL is mis-tagged for exactly the reason the BOARD_TAKER ones are.
+--
 -- The academic-level values are on it because they are levels wearing a program's clothing -- the
 -- Authored Depth axis leaking into the program axis. They currently exclude zero rows (no curator note
 -- is both BOARD_TAKER and NULL-depth with such a program), so this is defence in depth: a migration
@@ -47,29 +52,24 @@ FROM users u
 WHERE u.id = n.owner_user_id
   AND u.role = 'ADMIN'
   AND n.learner_level IS NULL
-  AND (
-      n.target_profile_type = 'PROFESSIONAL'
-      OR (
-          n.target_profile_type = 'BOARD_TAKER'
-          AND NOT (
-              coalesce(lower(trim(n.course_program)), '') IN (
-                  'information technology', 'grade school', 'high school'
-              )
-              OR coalesce(lower(trim(n.course_program)), '') LIKE 'junior high%'
-              OR coalesce(lower(trim(n.course_program)), '') LIKE 'senior high%'
-          )
-          AND NOT EXISTS (
-              SELECT 1
-              FROM note_course_program ncp
-              JOIN course_programs cp ON cp.id = ncp.course_program_id
-              WHERE ncp.note_id = n.id
-                AND (
-                    lower(trim(cp.name)) IN (
-                        'information technology', 'grade school', 'high school'
-                    )
-                    OR lower(trim(cp.name)) LIKE 'junior high%'
-                    OR lower(trim(cp.name)) LIKE 'senior high%'
-                )
-          )
+  AND n.target_profile_type IN ('BOARD_TAKER', 'PROFESSIONAL')
+  AND NOT (
+      coalesce(lower(trim(n.course_program)), '') IN (
+          'information technology', 'grade school', 'high school'
       )
+      OR coalesce(lower(trim(n.course_program)), '') LIKE 'junior high%'
+      OR coalesce(lower(trim(n.course_program)), '') LIKE 'senior high%'
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM note_course_program ncp
+      JOIN course_programs cp ON cp.id = ncp.course_program_id
+      WHERE ncp.note_id = n.id
+        AND (
+            lower(trim(cp.name)) IN (
+                'information technology', 'grade school', 'high school'
+            )
+            OR lower(trim(cp.name)) LIKE 'junior high%'
+            OR lower(trim(cp.name)) LIKE 'senior high%'
+        )
   );

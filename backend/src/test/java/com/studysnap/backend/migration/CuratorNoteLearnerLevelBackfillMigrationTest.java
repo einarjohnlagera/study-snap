@@ -150,6 +150,73 @@ class CuratorNoteLearnerLevelBackfillMigrationTest {
         }
     }
 
+    // Every other ownership test has only one user in the database, so deleting the join correlation
+    // `u.id = n.owner_user_id` leaves them all green while production stamps all 4,645 learner-owned
+    // notes -- the exact outcome ADR-001 constraint 2 exists to prevent. This fixture is the only
+    // thing that can see it: both users present, so an uncorrelated join reaches the learner's note.
+    @Test
+    void leavesLearnerOwnedNoteNullWhenACuratorExistsInTheSameDatabase() throws Exception {
+        try (Connection connection = createDatabase(); Statement statement = connection.createStatement()) {
+            UUID curatorId = insertUser(statement, ADMIN);
+            UUID learnerId = insertUser(statement, USER);
+            UUID curatorNoteId = insertNote(statement, curatorId, null, BOARD_TAKER, null);
+            UUID learnerNoteId = insertNote(statement, learnerId, null, BOARD_TAKER, null);
+
+            assertThat(executeMigration(statement)).isEqualTo(1);
+
+            assertThat(readLearnerLevel(statement, curatorNoteId)).isEqualTo(BOARD_EXAM_REVIEW);
+            assertThat(readLearnerLevel(statement, learnerNoteId)).isNull();
+        }
+    }
+
+    // Same shape of gap on the other side: with only one note in the database, dropping
+    // `ncp.note_id = n.id` from the NOT EXISTS turns a per-note check into a global one and every
+    // test still passes, while production silently maps nothing. Two notes are required to see it.
+    @Test
+    void excludesOnlyTheNoteCarryingTheDenylistedProgram() throws Exception {
+        try (Connection connection = createDatabase(); Statement statement = connection.createStatement()) {
+            UUID curatorId = insertUser(statement, ADMIN);
+            UUID excludedNoteId = insertNote(statement, curatorId, null, BOARD_TAKER, null);
+            UUID eligibleNoteId = insertNote(statement, curatorId, null, BOARD_TAKER, null);
+            UUID informationTechnologyId = insertCourseProgram(statement, INFORMATION_TECHNOLOGY);
+            UUID civilEngineeringId = insertCourseProgram(statement, CIVIL_ENGINEERING);
+            linkProgram(statement, excludedNoteId, informationTechnologyId);
+            linkProgram(statement, eligibleNoteId, civilEngineeringId);
+
+            assertThat(executeMigration(statement)).isEqualTo(1);
+
+            assertThat(readLearnerLevel(statement, excludedNoteId)).isNull();
+            assertThat(readLearnerLevel(statement, eligibleNoteId)).isEqualTo(BOARD_EXAM_REVIEW);
+        }
+    }
+
+    // The denylist gates the PROFESSIONAL mapping too. Zero rows in production today, which is
+    // precisely why it needs pinning -- nothing else would notice if the guard were dropped.
+    @Test
+    void excludesProfessionalNoteWithADenylistedProgram() throws Exception {
+        try (Connection connection = createDatabase(); Statement statement = connection.createStatement()) {
+            UUID curatorId = insertUser(statement, ADMIN);
+            UUID noteId = insertNote(statement, curatorId, "Grade School", PROFESSIONAL, null);
+
+            assertThat(executeMigration(statement)).isZero();
+
+            assertThat(readLearnerLevel(statement, noteId)).isNull();
+        }
+    }
+
+    // trim() is load-bearing for values arriving with stray whitespace; no other case exercises it.
+    @Test
+    void excludesBoardNoteWhenTheDenylistedProgramHasSurroundingWhitespace() throws Exception {
+        try (Connection connection = createDatabase(); Statement statement = connection.createStatement()) {
+            UUID curatorId = insertUser(statement, ADMIN);
+            UUID noteId = insertNote(statement, curatorId, "  Information Technology  ", BOARD_TAKER, null);
+
+            assertThat(executeMigration(statement)).isZero();
+
+            assertThat(readLearnerLevel(statement, noteId)).isNull();
+        }
+    }
+
     @Test
     void preservesAlreadyAuthoredDepth() throws Exception {
         try (Connection connection = createDatabase(); Statement statement = connection.createStatement()) {
