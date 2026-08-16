@@ -1,6 +1,8 @@
 package com.studysnap.backend.migration;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.ClassPathResource;
 
 import java.nio.charset.StandardCharsets;
@@ -23,6 +25,7 @@ class CuratorNoteLearnerLevelBackfillMigrationTest {
     private static final String BOARD_EXAM_REVIEW = "BOARD_EXAM_REVIEW";
     private static final String COLLEGE = "COLLEGE";
     private static final String INFORMATION_TECHNOLOGY = "Information Technology";
+    private static final String CIVIL_ENGINEERING = "Civil Engineering";
 
     @Test
     void mapsCuratorBoardAndProfessionalNotesWithoutPrograms() throws Exception {
@@ -67,7 +70,7 @@ class CuratorNoteLearnerLevelBackfillMigrationTest {
         try (Connection connection = createDatabase(); Statement statement = connection.createStatement()) {
             UUID curatorId = insertUser(statement, ADMIN);
             UUID noteId = insertNote(statement, curatorId, null, BOARD_TAKER, null);
-            UUID civilEngineeringId = insertCourseProgram(statement, "Civil Engineering");
+            UUID civilEngineeringId = insertCourseProgram(statement, CIVIL_ENGINEERING);
             UUID informationTechnologyId = insertCourseProgram(statement, INFORMATION_TECHNOLOGY);
             linkProgram(statement, noteId, civilEngineeringId);
             linkProgram(statement, noteId, informationTechnologyId);
@@ -87,6 +90,63 @@ class CuratorNoteLearnerLevelBackfillMigrationTest {
             assertThat(executeMigration(statement)).isZero();
 
             assertThat(readLearnerLevel(statement, noteId)).isNull();
+        }
+    }
+
+    // Academic-level values are levels wearing a program's clothing, so BOARD_TAKER beside one is a
+    // mis-tag rather than a licensure claim -- the production audit found exactly that on a public
+    // High School note whose curator authored JUNIOR_HIGH as its depth. Both program stores must
+    // exclude them, and the Senior High strands must match on the prefix rather than the en dash.
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Grade School",
+            "Junior High",
+            "Junior High School",
+            "High School",
+            "Senior High – STEM",
+            "Senior High – HUMSS",
+            "Senior High – ABM",
+            "Senior High School"
+    })
+    void excludesBoardNoteWithFreeTextAcademicLevelProgram(String program) throws Exception {
+        try (Connection connection = createDatabase(); Statement statement = connection.createStatement()) {
+            UUID curatorId = insertUser(statement, ADMIN);
+            UUID noteId = insertNote(statement, curatorId, program, BOARD_TAKER, null);
+
+            assertThat(executeMigration(statement)).isZero();
+
+            assertThat(readLearnerLevel(statement, noteId)).isNull();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Grade School", "Junior High", "High School", "Senior High – STEM"})
+    void excludesBoardNoteWhenAnyCatalogProgramIsAnAcademicLevel(String program) throws Exception {
+        try (Connection connection = createDatabase(); Statement statement = connection.createStatement()) {
+            UUID curatorId = insertUser(statement, ADMIN);
+            UUID noteId = insertNote(statement, curatorId, null, BOARD_TAKER, null);
+            UUID civilEngineeringId = insertCourseProgram(statement, CIVIL_ENGINEERING);
+            UUID academicLevelId = insertCourseProgram(statement, program);
+            linkProgram(statement, noteId, civilEngineeringId);
+            linkProgram(statement, noteId, academicLevelId);
+
+            assertThat(executeMigration(statement)).isZero();
+
+            assertThat(readLearnerLevel(statement, noteId)).isNull();
+        }
+    }
+
+    // The denylist must not swallow legitimate licensure programs that merely share a word with it.
+    @ParameterizedTest
+    @ValueSource(strings = {CIVIL_ENGINEERING, "Nursing", "Accountancy", "Architecture", "Education"})
+    void mapsBoardNotesForLicensureProgramsUnaffectedByTheDenylist(String program) throws Exception {
+        try (Connection connection = createDatabase(); Statement statement = connection.createStatement()) {
+            UUID curatorId = insertUser(statement, ADMIN);
+            UUID noteId = insertNote(statement, curatorId, program, BOARD_TAKER, null);
+
+            assertThat(executeMigration(statement)).isEqualTo(1);
+
+            assertThat(readLearnerLevel(statement, noteId)).isEqualTo(BOARD_EXAM_REVIEW);
         }
     }
 
