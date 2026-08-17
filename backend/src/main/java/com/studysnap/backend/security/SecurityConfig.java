@@ -49,6 +49,14 @@ public class SecurityConfig {
                         .requestMatchers("/public/**").permitAll()
                         .requestMatchers("/notes/public/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/tags").permitAll()
+                        // Public Library renders its Subject and Course/Program facets for signed-out
+                        // visitors. Both controllers were written to serve scope=public anonymously and
+                        // throw AUTHENTICATION_REQUIRED for scope=mine themselves, but neither path was ever
+                        // permitted here, so the 401 reached the browser and PublicLibraryPageClient
+                        // swallowed it into an empty chip list. GET only: the scope=mine gate inside each
+                        // controller is what keeps this from widening access to a caller's own notes.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/subjects").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/course-programs").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/collections/public/**").permitAll()
                         .requestMatchers("/share/**").permitAll()
                         .requestMatchers("/p/**").permitAll()

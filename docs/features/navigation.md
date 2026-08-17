@@ -33,7 +33,8 @@ Current public navigation order:
 All sub-pages use a `BackLink` component (`components/ui/back-link.tsx`) that renders `← {Destination}` using `ArrowLeft` icon + destination label text.
 
 Rules:
-- Back link appears on sub-pages only. Main pages (Dashboard, Library, profile-aware Collections, Explore, Progress, Public Library, My Profile, Settings) have no default back link.
+- Back link appears on sub-pages only. Main pages (Dashboard, Library, profile-aware Collections, Explore, Progress, Public Library, **Exam Hub index (`/exam`)**, My Profile, Settings) have no default back link.
+- **`/exam` was added to that list in `v0.83.2`, after it turned out to be the reason the bug survived.** The Exam Hub index carried a `BackLink` to `/public/library`, miscategorising a destination that is top-level in both the marketing `Navbar` and `PublicFooter` as a sub-page of the Public Library. This list omitted `/exam` entirely, so nothing contradicted the stray link. **The fix was removal, not repointing** — `/exam` is reached directly, not from anywhere in particular. Pinned by a test asserting the index renders no `Public Library` link.
 - Back link uses explicit routing (not `router.back()`), so the destination is always predictable.
 - Back link label is the destination page name only — no "Back to" prefix.
 - Back link is positioned above the page header card, left-aligned.

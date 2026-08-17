@@ -28,7 +28,12 @@ Anti-drift: **no migration.** **Slice C is NOT in this release** and stays block
 
 ### Shipped
 
-_(nothing yet)_
+- **Anonymous visitors get all four Public Library filter facets (backend).** Added GET-only `permitAll` rules for `/subjects` and `/course-programs`, mirroring the existing `/tags` rule. **The controllers were already correct and already tested** — `SubjectControllerTest` covered anonymous `scope=public` and the `scope=mine` rejection before this release. What no test covered was whether Spring Security let the path through at all, which is exactly how correct, tested controller logic sat behind a config that never granted it.
+- **`/exam` no longer renders a back link (frontend).** It was pointing at `/public/library`, miscategorising a destination that is top-level in both the marketing `Navbar` and `PublicFooter`. Removed rather than repointed, and pinned by a test asserting the index renders no `Public Library` link.
+- **Tests target the gap that allowed this, not just the symptom.** `PublicFacetAnonymousAccessSecurityIntegrationTest` asserts **reachability** rather than response bodies — deliberately, because this `@SpringBootTest` context has no schema (Flyway is disabled in tests), so a permitted request reaches the handler and then fails on `Table "NOTES" not found`. Asserting 200 would have meant hand-rolling a schema to re-test query behaviour covered elsewhere. **Verified by mutation:** removing both permit rules fails the two `scope=public` cases with `must not be rejected by Spring Security for an anonymous caller`.
+- **The overreach guard is the more important half.** Separate cases assert an anonymous `scope=mine` still returns **401** on both widened paths, and that the exemption is **GET-only**. These pass with or without the fix by design — they are not proving the fix, they are the line between a fix and a data leak, and they now fail loudly if a future change moves it.
+- **Closed a coverage gap found while widening the path: `CourseProgramController` had no unit test at all.** Added one mirroring `SubjectControllerTest`, including the unknown-scope rejection. It was the only one of the two widened controllers with no coverage of the scope gate now doing the access-control work.
+- **Docs:** `docs/features/navigation.md` gains `/exam` in its no-back-link list — its omission there is why nothing contradicted the stray link — and `docs/features/public-library.md` records that all four facets load anonymously, with the GET-only and `scope=mine` constraints stated.
 
 
 ## v0.83.1 - Note Creation Integrity

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { ArrowRight, Calculator, GraduationCap, Heart, PenTool } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PublicFooter } from "@/components/public/public-footer";
-import { BackLink } from "@/components/ui/back-link";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { EXAM_HUB_SLUGS, EXAM_HUBS } from "@/lib/exam-hub-config";
 import type { ExamHubSlug } from "@/lib/exam-hub-config";
@@ -28,8 +27,6 @@ export default function ExamHubIndexPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex-1 space-y-8">
-        <BackLink href="/public/library" label="Public Library" />
-
         <header className="space-y-3 rounded-3xl border border-blue-500/20 bg-linear-to-br from-blue-500/10 via-background to-emerald-500/10 p-6 shadow-sm sm:p-8">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Exam Hubs</p>
           <div className="space-y-2">
