@@ -342,3 +342,46 @@ Settled by two queries: `select domain_context, count(*) from notes where visibi
 **A catalog is neutral to this marker**, provided §6 rules 7 stays intact — it changes where the vocabulary comes from, not the column's nullability. What destroys it is a server-side default (already forbidden by `ADR-001` constraint 2) or a `NOT NULL` + `Unclassified` seed row (a new hazard a catalog invites). Settled by query 1 above, which would show for the first time how much of that NULL population is genuinely promotable.
 
 **5. Whether "keeping the admin experience manageable" is a multi-user constraint.** `ADR-001`'s query C (2026-08-11) records *"Every curated note in production is admin-owned"* with 885 admin-owned notes. On that evidence there is one curator, and Domain Categories' entire justification is one person's dropdown. Settled by `select count(distinct owner_user_id) from notes where visibility = 'PUBLIC';` and a check of how many accounts hold `TEACHER` or `ADMIN`.
+
+---
+
+# PRODUCTION READ RESULT — 2026-08-17. The verdict holds, and the reason is stronger than assessed.
+
+Ran `domain-context-adoption-read.sql` against production. **§8's decision-relevant unknown is settled, decisively toward "do not build the catalog"** — but the numbers also reframe *why*, in a way this assessment did not anticipate.
+
+## The numbers
+
+| | |
+|---|---|
+| Curator-owned public notes | **956** |
+| …carrying a Domain Context | **121 (12.7%)** |
+| Enum values ever used | **4 of 8** |
+| Values used ZERO times | `ACCOUNTANCY`, `NURSING`, `PROFESSIONAL_EDUCATION`, `PROFESSIONAL_PRACTICE_AND_REGULATION` |
+| Distinct curators | **1** (one `ADMIN`; the one `TEACHER` account owns 4 public notes) |
+
+Values in use: `CIVIL_ENGINEERING` 54, `GENERAL_EDUCATION` 31, `ENGINEERING_MATHEMATICS` 20, `ENGINEERING_SCIENCES` 16.
+
+## ⚠️ The finding that reframes the proposal
+
+**Accountancy holds 154 unclassified public notes while `ACCOUNTANCY` is used zero times. Nursing holds 132 while `NURSING` is used zero times.** That is **286 notes across two programs whose purpose-built Domain Context already exists and has never once been applied.**
+
+**So the taxonomy is not too small. It is unused.** The proposal's premise — *"we will naturally discover subjects that don't fit perfectly into today's fixed list"* — is not what the data shows. The curator has not reached the vocabulary's ceiling; they have not reached the vocabulary at all for half the programs it was designed to serve.
+
+That is the legibility diagnosis in §1, confirmed with far stronger evidence than the covered-subject-lists argument alone provided. **Adding values to a vocabulary with 12.7% adoption and four dead entries would not have helped.** It would have added more unused rows.
+
+Consistent with a curator mid-build rather than a curator blocked: **Civil Engineering is 23% classified** (54 of 232) — the program actively being worked — while Accountancy, Nursing, Architecture and Information Technology are at zero.
+
+## Engineering Economics: the governance floor is not close to met
+
+Query 5 returned **seven** Economics notes, all NULL-context — and **three of them are `Senior High – ABM`**, which is high-school economics, a different subject from engineering economics entirely. The remaining four carry no program at all. There is also one note whose *subject* is `Engineering Mathematics` under Civil Engineering, also unclassified.
+
+**There are effectively zero engineering-economics notes in production today.** `ADR-001`'s floor is ~10 notes whose treatment cannot be represented by an existing value; the count is 0. The question was raised while *planning* the material, not while hitting a wall in it.
+
+## Revised recommendation
+
+1. **Do not build the Domain Context Catalog.** Not "later" — the read shows the problem it solves is not the problem that exists.
+2. **Ship descriptions beside the existing `<select>`** (~40 LOC, zero schema). Now justified by adoption evidence rather than by inference: values go unused partly because nothing states what belongs in them.
+3. **Classify the existing backlog before extending the vocabulary.** 286 notes have an obvious home already. If `ACCOUNTANCY` and `NURSING` are still at zero after descriptions ship, the constraint is curator time, not taxonomy — and no schema change fixes that.
+4. **Engineering Economics → `Engineering Mathematics`** per `08:57`, confirmed by `ADR-001:279`'s binary test. Revisit only if a real body of notes accumulates whose treatment demonstrably cannot be represented.
+5. **Domain Categories: declined, now on evidence.** One curator. The feature organises one person's dropdown.
+6. **The two code-level findings still bind any future catalog**, and remain unsettled by data: the `isQuantitativeContext` label substring-match, and the label-is-prompt-payload coupling. Neither is about adoption.
