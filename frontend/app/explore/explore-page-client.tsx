@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PublishedPlansPageClient } from "@/app/collections/published/published-plans-page-client";
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
@@ -12,23 +12,27 @@ import { trackAnalyticsEvent } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import {
+  DISCOVERY_ADOPT_UNAVAILABLE_NOTICE,
+  DISCOVERY_NOTICE_QUERY_PARAM,
+} from "@/lib/discovery-intent";
+import {
   EXPLORE_PATH,
   EXPLORE_SOURCE_QUERY_PARAM,
   EXPLORE_TAB_QUERY_PARAM,
   resolveExploreTab,
   type ExploreTab,
 } from "@/lib/explore-url";
-import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { cn } from "@/lib/utils";
 
 export function ExplorePageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [routeReady, setRouteReady] = useState(false);
   const activeTab = resolveExploreTab(searchParams.get(EXPLORE_TAB_QUERY_PARAM));
   const source = searchParams.get(EXPLORE_SOURCE_QUERY_PARAM);
   const authUser = useMemo(() => getAuthUser(), []);
-  const collectionLabels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser]);
+  const collectionProfileType = authUser === null ? "STUDENT" : authUser.profileType;
+  const collectionLabels = useMemo(() => getCollectionLabels(collectionProfileType), [collectionProfileType]);
+  const adoptUnavailable = searchParams.get(DISCOVERY_NOTICE_QUERY_PARAM) === DISCOVERY_ADOPT_UNAVAILABLE_NOTICE;
   const pageViewMetadata = useMemo(
     () => source === null ? undefined : { source },
     [source],
@@ -44,13 +48,6 @@ export function ExplorePageClient() {
     { id: "review-sets", label: `Official ${collectionLabels.plural}` },
     { id: "notes", label: "Notes" },
   ], [collectionLabels]);
-
-  useEffect(() => {
-    if (!requireAuthenticatedOnboardedUser(router)) {
-      return;
-    }
-    void Promise.resolve().then(() => setRouteReady(true));
-  }, [router]);
 
   const selectTab = (nextTab: ExploreTab) => {
     if (nextTab === activeTab) {
@@ -70,10 +67,6 @@ export function ExplorePageClient() {
     });
   };
 
-  if (!routeReady) {
-    return null;
-  }
-
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <AnalyticsPageViewTracker eventType="EXPLORE_VIEWED" metadata={pageViewMetadata} />
@@ -82,6 +75,12 @@ export function ExplorePageClient() {
         title="Explore"
         description="Find curated Official Review Sets and useful notes shared by the NoteLib community."
       />
+
+      {adoptUnavailable ? (
+        <Card className="border-amber-500/30 bg-amber-500/10 p-4 text-sm text-foreground/75" role="status">
+          {`We couldn't start that ${collectionLabels.singular.toLowerCase()} — it may no longer be available. You can browse the current catalog below.`}
+        </Card>
+      ) : null}
 
       <div
         className="grid grid-cols-2 rounded-xl border border-border bg-surface-alt p-1"

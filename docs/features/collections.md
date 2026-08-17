@@ -27,6 +27,10 @@ It is not:
 
 Admin-published collections are the v0.31.0 exception: an admin can publish a collection as an adoptable study plan over already-public notes. Learners do not study the source plan directly; adopting creates a private snapshot copy in their own library.
 
+The full published catalog is browseable to anonymous visitors both at `/collections/published` and in `/explore`'s default Review Sets tab. Preview and the Adopt affordance stay visible; authentication is gated only when Adopt is clicked. On Explore, that click stores the plan id, Goal-vs-leaf shape, and current Explore query context in the short-lived discovery-intent cookie, then routes to signup without calling the protected adopt endpoint. After verification and onboarding, Dashboard consumes the intent once and performs the existing authenticated adoption. An unavailable source clears the cookie and returns to Explore with a normal notice.
+
+Anonymous published-catalog vocabulary reuses `getCollectionLabels("STUDENT")`, producing `Official Study Plans`; it must not fall through to the null-profile `Official Collections` default. Authenticated profile-aware labels and Start/Continue behavior are unchanged.
+
 **Study Plans vs saved library filters (do not consolidate).** A Study Plan is a *durable, ordered, named organizer* — the canonical way a learner groups notes by unit/grade level/preference. A saved library filter is a *transient quick lens* (a stored search/filter combo) over the whole library. They serve different jobs and both are intentionally kept: filters are how a learner narrows the library (including while assembling a plan from selection); the plan is the resulting durable grouping.
 
 Fields:

@@ -2,7 +2,9 @@
 
 ## Goal
 
-Public Library is the public, canonical discovery surface for shared notes. It should feel like a real discovery page — not just a flat list — where students can find high-quality notes, browse by subject or engagement signals, and decide whether to copy a note into their workspace. Authenticated `/explore` reuses this same rendering in its `Notes` tab without replacing `/public/library` or changing its anonymous behavior.
+Public Library is the public, canonical discovery surface for shared notes. It should feel like a real discovery page — not just a flat list — where students can find high-quality notes, browse by subject or engagement signals, and decide whether to copy a note into their workspace. Anonymous and authenticated `/explore` reuse this same rendering in the `Notes` tab without replacing `/public/library` or changing its anonymous behavior.
+
+`/public/library` remains self-canonical and emits the notes-only `NoteLib Public Library` `CollectionPage`. `/explore` is separately self-canonical with a distinct composite `CollectionPage` for Official Study Plans plus public notes. This is not duplicate ownership of one collection: Public Library owns the public-note route family, including subject and note-detail canonicals, while Explore describes the cross-source discovery page. No Public Library route redirects as part of Public Explore.
 
 Routes:
 

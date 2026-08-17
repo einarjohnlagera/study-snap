@@ -1,5 +1,131 @@
 # RELEASES.md - NoteLib
 
+## v0.84.0 - Public Explore
+
+**Status: Released** (kicked off and signed off 2026-08-17)
+
+Theme: a visitor who has never signed up should be able to browse what NoteLib has, at the same URL a member uses.
+
+**Slice C of Discovery System Stage 0** — the release that actually makes `/explore` anonymous. Scope and premise verification: `docs/claude-plans/discovery-system-stage-0-scoping.md`. Slice A shipped in `v0.83.2`; **Slice B was dissolved at the `v0.83.2` kickoff** once the viewer-type dimension turned out to already exist in the data (`user_id IS NULL`).
+
+**Both blocking owner decisions were taken 2026-08-17, and the reasoning matters more than the outcome:**
+
+- **The anonymous Review Sets tab shows the FULL published catalog, with Adopt gated at click** — not a teaser, not hidden. The point of choosing the `/explore` URL over the cheaper `/public/library` retarget was one canonical destination for both audiences; a structurally different anonymous page would have given that up while still paying Stage 0's cost.
+- **`robots.ts` keeps `/explore` out of the index while it is incomplete, and allows it once metadata lands.** ⚠️ **Note the condition that makes this real:** merging to `main` *is* the deploy, so if this release ships atomically the incomplete window never exists in production and a disallow added and removed inside one release is a no-op. **The decision binds if the release is ever split across deploys** — then the disallow ships with the first and the allow with the last.
+
+### Planned Scope
+
+1. **Make `/explore` render for anonymous visitors (frontend).** `explore-page-client.tsx:49` calls `requireAuthenticatedOnboardedUser(router)`, and there is **no `frontend/middleware.ts` at all** — so this is a component change, not an auth-architecture one. The two composited components already render anonymously at their standalone routes.
+2. **A generalized discovery-intent cookie (frontend).** ⚠️ **Do not use the `redirect` query param.** `resolvePostLoginDestination` routes new signups through `/verify-email` and `/onboarding` first and drops it — recorded in `docs/features/exam-hub.md` — and the anonymous Explore audience is overwhelmingly new signups, precisely the population it fails for. **Mirror `frontend/lib/exam-intent.ts`**: a small client module (set/get/clear, 30-minute max-age, `SameSite=Strict`), set at `/auth`, consumed after onboarding the way `goal-prompt-banner.tsx` consumes the exam one.
+3. **Canonical, OG and structured data for `/explore` (frontend).** It has title-only metadata today. ⚠️ **Not purely additive:** `/public/library` already emits `CollectionPage` JSON-LD for the same content, so **the canonical direction between the two must be decided as part of this item**, not discovered after both are indexed.
+4. **Anonymous Review Sets tab per the decision above** — full catalog, Adopt routing into signup with discovery intent attached.
+5. **`robots.ts` per the decision above**, with the atomicity condition recorded rather than mechanically adding a rule that the same release removes.
+
+Anti-drift: **no backend permit changes** — Slice A already granted what the facets need, and nothing here widens access further. **No migration.** **`/public/library` is NOT redirected and its route is unchanged** — that is Stage 3, which stays **doctrine-blocked** by `AGENTS.md`'s Explore Navigation Rule until its amendment is ratified; `/public/library/{subject}` and `/public/library/{subject}/{slug}` are **never-redirect** regardless. **Exam Hubs stay in top nav and the footer** — Explore has no exam-aware browsing mode to route an exam-seeking visitor to yet. **No viewer-type analytics dimension** — already derivable via `user_id IS NULL`; any future Explore read segments on that. **No new analytics events**, and no change to `EXPLORE_VIEWED`'s firing condition or metadata, since `[CHECKPOINT — due 2026-09-13]`'s successor read is measured elsewhere and this release should not alter what Explore counts.
+
+### Shipped
+
+- **`/explore` now renders the same discovery page for visitors and members (frontend).** Removed the client-only authenticated/onboarded route guard and its blank pre-render state. Both audiences keep the same Review Sets-first tab model, URL state, Public Library composition, Exam Hub pointer, and unchanged `EXPLORE_VIEWED` / `EXPLORE_TAB_SWITCHED` event contracts; anonymous events continue to be distinguishable by nullable `user_id` rather than a duplicate viewer field.
+- **Anonymous Adopt intent survives signup, verification, and onboarding (frontend).** Explore stores the selected published-plan id, Goal-vs-leaf shape, and current Explore query context in `notelib-discovery-intent` for 30 minutes with `SameSite=Strict` and `path=/`, then enters `mode=signup` without attempting an authenticated adoption. An always-mounted Dashboard handoff consumes and clears the cookie before invoking the existing adopt action, navigates to the adopted private collection once, and cannot replay on a second mount. Malformed, partial, unavailable, and cookie-blocked cases fail open; an unavailable plan returns to the preserved Explore context with a normal notice instead of an error page or loop.
+- **Discovery intent deliberately wins a collision with exam intent (frontend).** A clicked Adopt is the newer, more specific action, so its post-onboarding consumer clears both cookies before resuming adoption. This prevents the Dashboard exam-goal prompt from racing the requested plan action or firing after it on a later visit.
+- **`/explore` now has self-canonical metadata, Open Graph/Twitter metadata, and distinct `CollectionPage` JSON-LD (frontend).** Its structured-data identity explicitly describes the composite of Official Study Plans and public notes. `/public/library` remains independently self-canonical and keeps its notes-only `CollectionPage`; Explore does not duplicate that claim or redirect any Public Library route.
+- **Anonymous Review Sets now use learner vocabulary and the full published catalog (frontend).** Signed-out visitors see `Official Study Plans`, produced by the existing `STUDENT` label set rather than the accidental null-profile `Official Collections` fallback. The full catalog and previews remain visible; the existing Adopt affordance is gated only when clicked and routes to signup with intent preserved.
+### Feature-doc drift gate — two false claims, both created by this release's own fixes
+
+**This is the gate working as intended, and the failure mode it exists for.** Codex's `onboarding.md` and `explore.md` were *accurate for Codex's code*. The pressure-test hardening then invalidated them, and per-PR review cannot see that — the doc PR and the fix are the same commit only by luck.
+
+- Both docs said the Dashboard handoff is **"always-mounted"**. It is now mounted inside Dashboard's loaded branch, precisely so it cannot run before that page's auth/onboarding guard.
+- Both said it **"clears both cookies before adoption"**. Exam intent is now cleared only after the adoption succeeds.
+
+Corrected in both, along with recording *why* each shape was chosen — the synchronous-cookie-write basis of the one-shot guarantee, and why a start-path comparison replaced a mounted-flag.
+
+### Checkpoint — `[CHECKPOINT — due 2026-09-16]`
+
+**⚠️ REVISED at the second fold — this checkpoint's premise expired inside its own release.** As first written it read *"`/explore` is still unlinked from every anonymous surface… retargeting those is Stages 1–2, which are not built."* **Folding Stages 1–2 into this release made all of that false.** The nav names Explore and the Exam Hub links point at it.
+
+**The revision makes the read cleaner, not weaker.** The original asked whether a public-but-unlinked page is enough — a question about missing work. It now asks the real one: Explore is public, canonical, sitemap-submitted **and** linked, so **is anonymous discovery a lever at all?** **The kill criterion changed with it:** single digits no longer means *"go build Stages 1–2"*, because they are built. It means anonymous discovery is not the lever and the next move is elsewhere. **Confound stated before the read:** total traffic is small, so a low count may mean the funnel is small rather than wrong — which is why it reads a count rather than a rate, and why zero differs meaningfully from single digits.
+
+**Deliberately not an SEO-ranking read.** Stage 3's measurement plan does not exist and Search Console is unassigned, so a ranking checkpoint would be decorative. The read instead uses instrumentation that already ships and **was verified emitting at signoff rather than merely present in the enum**: anonymous `EXPLORE_VIEWED` separated by `user_id IS NULL`. A raw count, not a rate, so no small-denominator problem. **Kill criterion: single digits or zero means the intervention is linking to Explore, not more work on Explore.**
+
+### Release notes rewritten for the folded scope — 2026-08-17
+
+**`docs/releases/v0.84.0.md` was written at the first signoff and described Slice C alone.** Two folds later it named none of Stages 1–2 and none of the three limitation fixes — so the user-facing notes documented roughly half of what shipped. Rewritten with a navigation feature (the nav swap and Exam Hub retarget stated as *navigation primacy*, with Public Library explicitly not removed), the sign-up-screen copy, the blocked-cookie honesty, and the browse-all attribution fix.
+
+**This is the real cost of folding after signoff, and it is worth naming rather than absorbing quietly:** each fold silently invalidated the release notes and the checkpoint, and nothing in the per-PR workflow re-reads them. The checkpoint was worse than stale — its premise was *quoted evidence* for its own kill criterion, so leaving it would have had September read a question this release had already answered.
+
+### Post-audit re-verification — 2026-08-17, no second agent run
+
+**The release outgrew its audit and that was checked rather than assumed.** The cold agent verified `b47c6050`; **ten non-test files changed after it**, four of them touched by more than one commit, including the trust boundary and the async lifecycle that agent had specifically audited — modified partly *in response to* its findings, and one of those changes was wrong on the first attempt.
+
+**A second full agent run was judged unnecessary, on a reason rather than a budget:** the first audit was warranted because the bug class was effect/lifecycle timing, which cannot be settled by inspection. The post-audit delta is mechanical (a nav entry, two link hrefs, copy strings) plus three deterministic questions, all three of which were answered directly:
+
+1. **`onSignedOutAdopt`'s widened contract is safe for its other consumer.** `exam-hub-official-review-sets.tsx:160` returns `void` from `setExamIntentCookie`, and `void` is `undefined` at runtime, so `?? signedOutHref` resolves correctly. Verified by reading both sides, not by assuming the type check was sufficient.
+2. **The setter's new read-back has no side effect on a blocked write.** `getDiscoveryIntentCookie` clears the cookie when a value is *malformed*, but early-returns before that when no cookie exists — which is the blocked-write case. So a blocked write returns `false` without touching anything.
+3. **⚠️ The mount-location fix was NOT pinned** — the third instance of correct-code-with-no-coverage in this release. Moving the handoff back above the `loading`/`error` ternary, where it reads more naturally and where it originally sat, reintroduced both bugs it was moved to fix while every test stayed green. Now pinned by asserting its **absence in the error branch**, which is what a location regression actually produces. Mutation-verified.
+
+**The pattern is worth naming, since it recurred three times here and twice in `v0.83.x`:** every defect this release's audits found was correct code with nothing holding it in place — the open-redirect guard, the one-shot invariant, and now the mount location. The code was right each time; the tests were not.
+
+### Second fold — this release's own known limitations, 2026-08-17
+
+**Folded rather than shipped as recorded limitations.** All three were gaps `v0.84.0` itself created or made reachable, so closing them here leaves the release with no self-inflicted limitations except the app-wide JSON-LD one, which is genuinely out of scope.
+
+- **`/auth` now restates the adopt intent.** `authDescription` had cases for the copy-note and learn-guide intents but none for `discovery-adopt`, so a visitor who had just clicked Adopt saw the generic *"Sign up to generate and save Study Packs."* That is the one screen where restating the action matters most, because the action stays invisible until after onboarding.
+- **Anonymous adopt clicks now carry pointer origin.** `discoveryMetadata` reached the recommended grid but not browse-all — and for an anonymous viewer `loadRecommended` returns early with an empty list, so **every** anonymous adopt originated in the grid that lacked it. Pointer origin was recorded for authenticated clicks and never for anonymous ones. **⚠️ Verified by mutation that this had NO coverage:** removing the prop left all 25 tests green.
+- **⚠️ A blocked cookie no longer loses the action silently.** `setDiscoveryIntentCookie` now **reads the cookie back** rather than trusting the assignment — a blocked cookie jar accepts the write and stores nothing, so the assignment was never evidence — and returns whether it landed. On failure the visitor goes to signup with `intent=discovery-adopt-unsaved`, whose copy tells them to pick the plan again rather than implying it is waiting.
+
+**One implementation note worth recording, because the first attempt was wrong and a test caught it.** The signup destination is **returned by the click handler**, not precomputed as a prop. My first version set React state during the click and left `signedOutHref` as a prop — but state set in a handler is not readable until the next render, so the navigation used the stale href and the fix silently did nothing. The pre-existing blocked-cookie test *passed* through that bug, because it asserted the old intent. Both the contract and that assertion changed: `onSignedOutAdopt` now returns `string | void`, and the test pins the `-unsaved` variant so asserting the plain one can never again pin a silent data loss.
+
+### Scope folded in after signoff — Stages 1 and 2, 2026-08-17
+
+**Folded deliberately rather than opened as `v0.85.0`.** The owner's objection was release-cycle overhead, and it was fair: Stages 1 and 2 are **one link and one nav entry**, and offering them as separate releases over-fragmented the work. `v0.84.0` had not merged to `main`, so nothing was public yet and folding cost nothing.
+
+**It also makes the release better-shaped.** Slice C alone opened a door nobody was directed to — which is precisely why `[CHECKPOINT — due 2026-09-16]` had to ask whether anonymous visitors arrive at all. Shipping the links with the door pre-answers half of that.
+
+- **Stage 1 — Exam Hub's outbound discovery links now point at Explore.** The low/zero-note empty state links to `/explore`, and the CTA's filtered destination is `/explore?courseProgram=…`. The filter resolves identically because `/explore`'s Notes tab renders the same component. `EXAM_HUB_CTA_CLICKED` now carries `destination: "explore"`.
+- **Stage 2 — the marketing nav names Explore instead of Public Library.** **Navigation primacy only:** `/public/library` remains a live canonical route with its own metadata and sitemap entry. Exam Hubs deliberately stays — Explore has no exam-aware browsing mode to route an exam-seeking visitor to yet.
+- **The `AGENTS.md` Explore Navigation Rule amendment is RATIFIED (owner, 2026-08-17).** All four of its stated blockers were cleared by this release: anonymous rendering, canonical metadata, structured data, and the `[CHECKPOINT — due 2026-09-13]` sequencing question. Its own text asked for explicit owner confirmation rather than silent assertion; that was given. The rule now names the narrowing inline, so rule and amendment cannot be read as contradicting.
+
+**⚠️ Ratification removed the DOCTRINE block on Stage 3 and nothing else — Stage 3 is still not shippable, and the remaining blocker is physical.** It redirects the bare `/public/library` list page, whose gate is *once measurement confirms Explore is indexing at parity*. `/explore` was submitted to the sitemap **in this release** and has not been indexed; no measurement mechanism exists (Search Console separately unassigned). **Redirecting a page that ranks to a page with no ranking history discards traffic rather than transferring it.** No date was invented for it — it depends on Google's crawl schedule, not a decision. Earliest honest signal is this release's own `2026-09-16` anonymous-`EXPLORE_VIEWED` read.
+
+**Three test suites correctly failed on the retarget and were updated rather than loosened** — `navbar.test.tsx` and `exam/[slug]/page.test.tsx` asserted the old destinations, which is the behaviour that intentionally changed. The navbar test now also asserts `Public Library` is *absent* from the nav, so the swap cannot silently revert.
+
+### Pre-signoff pressure test — cold-context agent, 2026-08-17
+
+**Run because the diff's shape matched the escalation criteria, not because the release gate fired:** removing an auth gate, plus a cookie lifecycle spanning signup → verification → onboarding → Dashboard. That is effect/lifecycle-timing territory, which `CLAUDE.md` names as inherently hard to reason about serially.
+
+**It found five confirmed issues. The code was substantially right; the tests were not, and one of my own fixes was wrong.**
+
+1. **⚠️ The one-shot invariant was correct and completely unpinned.** The agent proved both directions: current code adopts **1×** under `StrictMode`, and moving either clear after the `await` produces a genuine **double adoption** — yet **that mutation left all three consumer tests green**, because the existing remount test re-renders only after `waitFor` resolves, exercising sequential remount and never concurrent double-invoke. Added a `StrictMode` test; the mutation now fails 3 tests.
+2. **⚠️ My own unmount guard was a regression, and the new test caught it.** I first added a mounted-flag so a resolved adoption could not yank a visitor out of an in-progress note draft. **`StrictMode`'s synthetic unmount is indistinguishable from a real one**, so the flag suppressed the *first* invocation's legitimate navigation while the second found an already-cleared cookie — the adoption landed server-side and the visitor was never taken to it. Replaced with a start-path comparison, which answers the question actually being asked: *is the visitor still where they were?*
+3. **The consumer ran BEFORE the Dashboard's own auth guard**, because child effects commit before parent effects and it was mounted outside the `loading` ternary. A signed-out visitor reaching `/dashboard` had the intent burned and was told *"Your session expired"* for a session they never had; a not-yet-onboarded visitor had the adoption succeed server-side, the cookie burned, and was never shown the plan. Moved inside the loaded branch, which is only reachable once the guard has passed.
+4. **Exam intent was destroyed even when the adoption failed**, over-applying the release's own stated rule — if the plan is gone there is no competing action to suppress. Now cleared on the success paths only, with a test.
+5. **`planId` reached an unescaped URL template.** `/collections/${id}/adopt` and `/adopt-goal` used plain interpolation against a cookie-supplied value, so `../../auth/logout/adopt` normalises to an arbitrary same-origin authenticated POST path. The precondition is cookie-write ability, which already dominates the impact, but `encodeURIComponent` is a one-line hardening.
+
+**Also fixed: one vacuous test.** *"keeps the authenticated default tab and discovery sources unchanged"* mocked `STUDENT`, making its expectation byte-identical to the anonymous one — it passed even when the anonymous fallback was forced onto every viewer, the exact regression its name claims to guard. Re-fixtured to `BOARD_EXAM`; it now fails under that mutation.
+
+**Verified clean by the agent, with mechanism recorded so it is not re-litigated:** no anonymous path reaches an authenticated call or the hard redirect-to-login (every mount-time fetch on both tabs uses raw `fetch`; the one `fetchWithAuth` call returns early without a user id); the `returnPath` guard holds against absolute, protocol-relative, `javascript:`, encoded and near-miss-prefix inputs; no authenticated profile type's copy shifted; and a suspected hydration mismatch was **ruled out empirically** — the layout's `<Suspense fallback={null}>` bails the whole shell to client rendering, so there is no server HTML to mismatch.
+
+### Known limitations — carried, not silently dropped
+
+- **`intent=discovery-adopt` is inert at `/auth`.** Unlike the copy-note and learn-guide intents, the signup wall does not restate what the visitor was doing, and nothing reads the param — the cookie is the sole carrier. Since `setDiscoveryIntentCookie` swallows its write error, **a visitor with cookies blocked signs up with the intent silently gone and no recoverable signal in the URL.** The "fails open" framing understates this; signup completes, but the action they came for is lost without explanation.
+- **Anonymous Adopt clicks never carry `pointerSource`.** `discoveryMetadata` is threaded into the recommended grid but not browse-all, and for an anonymous viewer `loadRecommended` returns early with an empty list — so *every* anonymous adopt originates in browse-all. `EXPLORE_OFFICIAL_SET_ADOPT_CLICKED` therefore carries pointer origin for authenticated clicks and never for anonymous ones. Pre-existing asymmetry, newly reachable. **Recorded explicitly because `v0.80.0` exists for a biased-analytics defect** and this release's anti-drift line claims not to change what Explore counts — it does not change the events, but it changes who is missing from one field.
+- **The `CollectionPage` JSON-LD is only in the RSC flight payload, not the prerendered HTML** — identical for `/public/library`, `/exam` and `/collections/published`, so app-wide and not caused by this release. `canonical` and `og:url` *are* in `<head>`, because `export const metadata` bypasses the Suspense boundary. Worth its own investigation before the Stage 3 SEO measurement plan leans on structured data.
+
+### Pre-commit audit — 2026-08-17
+
+**Codex's implementation was sound and answered all three judgment calls the prompt left open.** It took the `STUDENT` label default, gave `/explore` a distinct `CollectionPage` identity rather than duplicating `/public/library`'s claim, and resolved the intent collision in favour of the explicit Adopt click — clearing both cookies *before* the request so a remount cannot replay the adoption. The resumed adopt was verified to be a faithful mirror of `PublicStudyPlanCard`'s own success path, including the same `plan.childCount > 0` goal-vs-plan discriminator, so a resumed adoption calls the same endpoint the click would have.
+
+**Three gaps were found and fixed, one of them a security invariant with zero coverage.**
+
+1. **⚠️ `isExplorePath` — the only thing preventing an open redirect — was completely untested.** `returnPath` round-trips through a cookie, so anything able to write that cookie chooses where the post-signup handoff sends the visitor. **Proven by mutation: weakening the guard to `typeof === "string"` left all 32 tests green**, because every fixture supplied a valid `/explore` path. Added cases covering `https://`, protocol-relative `//`, `/dashboard`, near-miss prefixes (`/exploration`, `/explore-evil`), `javascript:` and empty string, plus fallback-path cases. **Re-ran the same mutation afterwards and it now fails.** The guard was correct; nothing pinned it.
+2. **`/explore` had full canonical, OG and `CollectionPage` metadata but was absent from `sitemap.ts`** — the one public discovery surface not submitted, while `/`, `/exam`, `/public/library`, `/learn` and `/pricing` all are. It was legitimately omitted before (a signed-out visitor was redirected to `/login`, so submitting it advertised a dead end) and that reason expired with this release. Added at `daily` / `0.9`, matching `/public/library`.
+3. **The unavailable-plan notice asserted a cause the code cannot know.** The consumer's `catch` is necessarily a catch-all — the visitor has left the card that would show the real error — so a network failure, a quota rejection and an unpublished plan all landed on *"That Official Study Plan is no longer available."* Reworded to *"We couldn't start that {plan} — it may no longer be available"*, and made profile-aware through `collectionLabels` rather than hardcoding `Official Study Plan`, which read wrong for a `BOARD_EXAM` viewer whose vocabulary is `Review Set`.
+
+**Two changes beyond the prompt were reviewed and accepted.** `published-plans-page-client.tsx`'s anonymous `profileType` now resolves to `STUDENT` rather than `null`, which also changes standalone `/collections/published` from `Collections` to `Study Plans` — unrequested, but it makes the two anonymous discovery surfaces consistent and replaces an equally accidental fallback. And the `ROADMAP.md` baseline paragraph was rewritten to describe the finished implementation, which dropped three ⚠️ anti-drift notes from that paragraph; **verified they survive in `CLAUDE.md` and `docs/features/exam-hub.md`** before accepting it.
+
+- **`robots.ts` remains unchanged by design.** This release ships anonymous rendering and complete SEO metadata in the same `main` merge, so there is no production interval where an incomplete `/explore` needs a temporary disallow. If deployment is later split across multiple `main` merges, the first incomplete merge must add the disallow and the final complete merge must remove it.
+
+
 ## v0.83.2 - Anonymous Discovery Access
 
 **Status: Released** (kicked off and signed off 2026-08-17)

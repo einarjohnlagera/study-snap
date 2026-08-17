@@ -11,6 +11,11 @@ import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-track
 import { PublicStudyPlanCard } from "@/components/study-plan/public-study-plan-card";
 import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import {
+  DISCOVERY_AUTH_INTENT,
+  DISCOVERY_AUTH_INTENT_UNSAVED,
+  setDiscoveryIntentCookie,
+} from "@/lib/discovery-intent";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { getMe, listCollections, listPublicStudyPlans, type NoteCollectionSummary } from "@/lib/api";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
@@ -49,9 +54,30 @@ export function PublishedPlansPageClient({
 }: Readonly<PublishedPlansPageClientProps> = {}) {
   const authUser = useMemo(() => getAuthUser(), []);
   const searchParams = useSearchParams();
-  const profileType = authUser?.profileType ?? null;
+  const profileType = authUser === null ? "STUDENT" : authUser.profileType;
   const canAdopt = authUser !== null;
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
+  const signedOutHref = `/auth?mode=signup&intent=${DISCOVERY_AUTH_INTENT}`;
+  const exploreReturnPath = useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `/explore?${query}` : "/explore";
+  }, [searchParams]);
+  // Returns the signup destination rather than setting state: whether the cookie stored is only
+  // known inside this click, and state set here is not readable until the next render — so a
+  // precomputed href would always be one click stale.
+  const preserveSignedOutAdopt = useCallback((plan: NoteCollectionSummary) => {
+    if (discoverySource !== "explore") {
+      return undefined;
+    }
+    const stored = setDiscoveryIntentCookie({
+      planId: plan.id,
+      planType: plan.childCount > 0 ? "goal" : "study-plan",
+      returnPath: exploreReturnPath,
+    });
+    // A blocked cookie jar accepts the write and stores nothing, so the signup screen must not
+    // promise that the plan is waiting. The unsaved variant tells the visitor to pick it again.
+    return `/auth?mode=signup&intent=${stored ? DISCOVERY_AUTH_INTENT : DISCOVERY_AUTH_INTENT_UNSAVED}`;
+  }, [discoverySource, exploreReturnPath]);
   const backLink = useMemo(() => {
     const ref = searchParams.get("ref");
     if (ref === "/dashboard" || ref?.startsWith("/dashboard/")) {
@@ -231,6 +257,8 @@ export function PublishedPlansPageClient({
               canAdopt={canAdopt}
               discoverySource={discoverySource}
               discoveryMetadata={discoveryMetadata}
+              onSignedOutAdopt={() => preserveSignedOutAdopt(plan)}
+              signedOutHref={discoverySource === "explore" ? signedOutHref : undefined}
             />
           ))}
         </div>
@@ -263,6 +291,11 @@ export function PublishedPlansPageClient({
         {browseAllState === "ready" && browseAllPlans.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {browseAllPlans.map(({ plan, adoptedCollection }) => (
+              // discoveryMetadata was added here in v0.84.0. This grid was the only one without it,
+              // and for an anonymous viewer loadRecommended returns early with an empty list — so
+              // EVERY anonymous adopt originates here. Pointer origin was therefore recorded for
+              // authenticated clicks and never for anonymous ones, the biased-loss shape v0.80.0
+              // exists for.
               <PublicStudyPlanCard
                 key={plan.id}
                 plan={plan}
@@ -270,6 +303,9 @@ export function PublishedPlansPageClient({
                 profileType={profileType}
                 canAdopt={canAdopt}
                 discoverySource={discoverySource}
+                discoveryMetadata={discoveryMetadata}
+                onSignedOutAdopt={() => preserveSignedOutAdopt(plan)}
+                signedOutHref={discoverySource === "explore" ? signedOutHref : undefined}
               />
             ))}
           </div>

@@ -1,5 +1,12 @@
 # Exam Hub Feature
 
+
+## Outbound discovery links point at Explore (v0.84.0, Stage 1)
+
+The low/zero-note empty state links to `/explore` (*"Explore notes and study plans"*), and the CTA's filtered destination is `/explore?courseProgram=…` rather than `/public/library?courseProgram=…`. The filter resolves identically because `/explore`'s Notes tab renders the same component; only the surrounding surface changed. `EXAM_HUB_CTA_CLICKED` now carries `destination: "explore"`.
+
+**Why:** a signed-out visitor reaching an empty Exam Hub is exactly the audience `/explore` was opened to in `v0.84.0`. Sending them to one source of the Discovery System instead of its front door was the older behaviour.
+
 ## Goal
 
 Exam hubs give board-exam communities a public destination that collects relevant NoteLib public notes by exam context. They are acquisition and discovery surfaces, not a new content model.

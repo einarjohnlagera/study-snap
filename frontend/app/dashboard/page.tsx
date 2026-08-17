@@ -57,6 +57,7 @@ import { DashboardPrimaryCollectionHero, DashboardPrimaryCollectionHeroSkeleton 
 import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
 import { DashboardGoalCard } from "@/components/dashboard/dashboard-goal-card";
 import { GoalPromptBanner } from "@/components/dashboard/goal-prompt-banner";
+import { DiscoveryIntentConsumer } from "@/components/dashboard/discovery-intent-consumer";
 import { AppModal } from "@/components/ui/app-modal";
 import {
   clearFirstStudyOnboardingStep,
@@ -726,6 +727,7 @@ export default function DashboardPage() {
             : "Your note workspace. Revisit saved notes, reinforce weak concepts, and keep studying with less friction."}
       />
 
+
       {loading ? (
         <DashboardLoading />
       ) : error ? (
@@ -740,6 +742,13 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
+          {/* Inside the loaded branch on purpose. Child effects commit before parent effects, so
+              mounting this beside the PageHeader ran it BEFORE loadDashboard's
+              requireAuthenticatedOnboardedUser guard — burning the intent cookie for a visitor who
+              was signed out (they got "session expired" for a session they never had) or not yet
+              onboarded (the adoption succeeded server-side and they were never shown it). Reaching
+              this branch means the guard already passed and the dashboard loaded. */}
+          <DiscoveryIntentConsumer />
           {hasPrimaryCollection ? (
             primaryCollectionGoal ? (
               <DashboardPrimaryCollectionHero

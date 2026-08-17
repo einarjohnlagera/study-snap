@@ -10,6 +10,7 @@ import {
   listPublicStudyPlans,
   trackAnalyticsEvent,
 } from "@/lib/api";
+import { clearDiscoveryIntentCookie, getDiscoveryIntentCookie } from "@/lib/discovery-intent";
 
 const pushMock = jest.fn();
 const routerMock = { push: pushMock };
@@ -62,6 +63,7 @@ describe("PublishedPlansPage", () => {
     currentAuthUser = { profileType: "STUDENT" };
     pushMock.mockReset();
     globalThis.sessionStorage.clear();
+    clearDiscoveryIntentCookie();
     (adoptGoal as jest.Mock).mockReset();
     (adoptStudyPlan as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
@@ -322,7 +324,7 @@ describe("PublishedPlansPage", () => {
 
     render(<PublishedPlansPage />);
 
-    expect(await screen.findByRole("heading", { name: "Browse All Official Collections" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Browse All Official Study Plans" })).toBeInTheDocument();
     expect(await screen.findAllByRole("button", { name: "Sign in to adopt" })).toHaveLength(2);
     expect(getMe).not.toHaveBeenCalled();
     expect(listCollections).not.toHaveBeenCalled();
@@ -331,5 +333,63 @@ describe("PublishedPlansPage", () => {
 
     expect(await screen.findByText("Educational Psychology")).toBeInTheDocument();
     expect(getPublicStudyPlanDetail).toHaveBeenCalledWith("source-plan-2");
+  });
+
+  it("preserves an anonymous Explore adoption through signup without calling adopt", async () => {
+    currentAuthUser = null;
+    searchParamsMock = new URLSearchParams({ source: "dashboard" });
+
+    render(<PublishedPlansPageClient embedded discoverySource="explore" />);
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Sign in to adopt" }))[0]);
+
+    expect(adoptStudyPlan).not.toHaveBeenCalled();
+    expect(adoptGoal).not.toHaveBeenCalled();
+    expect(getDiscoveryIntentCookie()).toEqual({
+      planId: "source-plan-2",
+      planType: "study-plan",
+      returnPath: "/explore?source=dashboard",
+    });
+    expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&intent=discovery-adopt");
+  });
+
+  it("carries pointer origin on an anonymous adopt click from the browse-all grid", async () => {
+    // For an anonymous viewer loadRecommended returns early with an empty list, so EVERY anonymous
+    // adopt click originates in browse-all — the one grid that was not receiving discoveryMetadata.
+    // Pointer origin was therefore recorded for authenticated clicks and never for anonymous ones,
+    // which is the biased-loss shape v0.80.0 exists for. Verified by mutation: removing the prop
+    // from that grid left all 25 tests green before this existed.
+    currentAuthUser = null;
+
+    render(
+      <PublishedPlansPageClient
+        embedded
+        discoverySource="explore"
+        discoveryMetadata={{ pointerSource: "dashboard" }}
+      />,
+    );
+    fireEvent.click((await screen.findAllByRole("button", { name: "Sign in to adopt" }))[0]);
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "EXPLORE_OFFICIAL_SET_ADOPT_CLICKED",
+      metadata: expect.objectContaining({ pointerSource: "dashboard", source: "explore" }),
+    }));
+  });
+
+  it("still enters signup when browser privacy settings block the intent cookie", async () => {
+    currentAuthUser = null;
+    const setter = jest.spyOn(Document.prototype, "cookie", "set").mockImplementation(() => {
+      throw new Error("Cookies blocked");
+    });
+
+    render(<PublishedPlansPageClient embedded discoverySource="explore" />);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Sign in to adopt" }))[0]);
+
+    // The UNSAVED variant, not the plain one. A blocked cookie jar accepts the write and stores
+    // nothing, so the signup screen must not promise the plan is waiting — it tells the visitor to
+    // pick it again instead. Asserting the plain intent here would pin a silent data loss.
+    expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&intent=discovery-adopt-unsaved");
+    expect(adoptStudyPlan).not.toHaveBeenCalled();
+    setter.mockRestore();
   });
 });
