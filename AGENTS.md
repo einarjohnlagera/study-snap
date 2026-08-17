@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.81.0 - Challenge Bank Integrity` (Released); previous: `v0.80.0 - Instrumentation Integrity` (Released)
+- `v0.82.0 - Authored Depth Backfill` (Released); previous: `v0.81.0 - Challenge Bank Integrity` (Released)
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -172,7 +172,9 @@ Use these skills before writing prompts, before starting new features, and after
 
 ### Note Target Audience Rule
 
-- **Axis boundary (`docs/architecture/ADR-001-canonical-knowledge-architecture.md`):** Target Audience (`notes.targetProfileType`) is a **discovery** axis — it is a live Public Library audience filter (`PublicLibraryRepositoryImpl:176-178`, `NoteController:594`/`:636`, `NoteRepository:106`/`:131`) and it must **never** influence generated depth or reach a prompt. Educational depth is Note Learner Level's job; authoring treatment is Domain Context's. Do not conflate the three. Whether precise program facets eventually make this coarse three-value facet redundant is judged at the end of ADR-001's Release B, not before.
+- **Axis boundary (`docs/architecture/ADR-001-canonical-knowledge-architecture.md`):** Target Audience (`notes.targetProfileType`) is a **retiring transitional discovery field** — it remains a live Public Library audience filter (`PublicLibraryRepositoryImpl:176-178`, `NoteController:594`/`:636`, `NoteRepository:106`/`:131`) until that discovery contract is replaced, and it must **never** influence generated depth or reach a prompt. Educational depth is Note Learner Level's job; authoring treatment is Domain Context's. Do not conflate the three or remove Target Audience before ADR-001's retirement gates are complete.
+- `V117` is the one-time historical exception that derives Authored Depth for NULL-depth, `ADMIN`-owned curator notes only: `BOARD_TAKER → BOARD_EXAM_REVIEW` and `PROFESSIONAL → PROFESSIONAL`; `STUDENT`, learner-owned notes, and already-authored depths remain untouched. This migration evidence must never become a runtime fallback or default write.
+- **`BOARD_TAKER` is not self-certifying, and it has now failed in two separate programs.** `V117` excludes a **denylist of program values known not to be licensure programs** — `Information Technology`, plus the academic-level values `Grade School` / `Junior High` / `High School` / `Senior High …` — checked against both `note_course_program` → `course_programs.name` and the free-text `notes.course_program`; a note with several programs is excluded when **any one** is on the denylist. The IT entry came from an audit finding all nine of its `BOARD_TAKER` notes to be ordinary coursework; the academic-level entries came from a public curator note tagged `BOARD_TAKER` whose program is `High School` and whose depth the same curator authored as `JUNIOR_HIGH`. **Treat "this audience tag implies that depth" as an assumption needing evidence per program, not a rule.** Do not use `course_programs.exam_goal_slug` as a licensure test — it identifies Exam Hubs only and omits legitimate board programs including Civil Engineering.
 - Target Audience is required on every note.
 - Student profiles must not see the Target Audience field; backend saves `STUDENT`.
 - Board Exam profiles must not see the Target Audience field; backend saves `BOARD_TAKER`.

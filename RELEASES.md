@@ -1,5 +1,126 @@
 # RELEASES.md - NoteLib
 
+## v0.82.0 - Authored Depth Backfill
+
+**Status: Released** (kicked off and signed off 2026-08-16)
+
+**Scope: three planned items, all shipped, plus three folds — one of which was killed by its own audit.** The folds were the reversal path and its checkpoint, the exclusion widening the academic-level audit forced, and a Backlog Index consolidation. **The killed fold is worth recording:** a `V118` extending the backfill to the `STUDENT` cohort was audited before being written and returned **zero eligible notes**, because curators had already authored those depths by hand. It was dropped rather than built, and its audit is what found the second `BOARD_TAKER` mis-tag.
+
+**Pre-merge capture RAN 2026-08-17: 828 rows, of which `V117` writes 819** (9 excluded, all Information Technology). **It settled three things that had been assumptions.** (a) **Zero `PRIVATE` rows** — the visibility/status limitation below has no live instances. (b) **The academic-level denylist entries exclude zero rows**, confirming a migration-comment claim that could not be verified from the repo, and establishing that the 6 curator `High School` NULL-depth notes are all `STUDENT`. (c) 819 against a ~905 estimate, the gap being curator `STUDENT` notes the migration deliberately skips.
+
+**⚠️ One figure does not reconcile, and it is recorded rather than explained away.** 828 curator-owned public `BOARD_TAKER`/`PROFESSIONAL` NULL-depth notes exceeds the **823 total public `BOARD_TAKER` notes** measured the previous day — a subset larger than its superset. Most likely notes authored in between, which is exactly why the capture had to be re-run rather than reused. It does not affect the migration, whose predicate is independently verified, but **the `905` and `823` figures quoted throughout these docs should be re-measured rather than trusted if they are ever load-bearing again.**
+
+**⚠️ Still owed immediately AFTER deploy:** the step-2 narrowing query in `docs/claude-plans/v0.82.0-curator-depth-backfill-reversal.md`. The reversal and both checkpoint reads key on its output, not on the capture.
+
+**⚠️ Editing `V117` after it was first committed invalidates its Flyway checksum on any database that already ran it.** Production is unaffected (it runs on the `main` merge), but a local dev DB will fail validation on next start — fix with `flyway repair` or by deleting the `version = '117'` row, since the migration is idempotent.
+
+Theme: give curator notes the depth they were always meant to carry, so the axis that will replace Target Audience actually holds information.
+
+**This is Step 1 of the revised Target Audience retirement** (`docs/claude-plans/target-audience-removal-proposal.md`). **`v0.81.0` was Step 0 and it is done:** the blocker was that a depth backfill is "an authoring correction at scale," which would strand Challenge bank rows whose keys could then be regenerated into a collision that failed the session. `V115`'s widened uniqueness key closes exactly that — a regenerated question at the new level no longer collides with the preserved old-level row. Stranded rows stay unreachable, which is degradation rather than failure, and acceptable.
+
+**What this release ratifies.** `ADR-001` currently defines **five** note metadata axes. This amends it to **four**, recording the decision:
+
+> **Target Audience has no long-term architectural responsibility and should be retired — but only after the information it carries has been migrated into Authored Depth, and its live discovery contract has been replaced.**
+
+**The evidence, and the argument explicitly NOT used.** Target Audience is absent from every prompt and from the generation context; its original access-control purpose was never implemented (the filter defaults to All and nothing restricts visibility). **"Course / Program predicts audience ~99.3%" is deliberately NOT the justification** — that is correlation produced by a board-heavy catalog, not semantic equivalence, and a second opinion was right to reject it as grounds for an irreversible step.
+
+**Why the backfill is curator-scoped, settled by production data.** Of the 5,550 notes carrying an audience with no depth, **4,645 are learner-owned and 905 are curator-owned.** Writing depth onto a learner's note asserts an authoring decision its author never made, onto a field that acts as a curriculum floor for their future regenerations — precisely what `ADR-001` constraint 2 and `v0.75.0` exist to prevent. **And the learner notes are not needed:** the Public Library filter reads *public* notes, 945 of them, of which `ADMIN` owns 905. The learner-owned remainder is private and feeds no filter.
+
+### Planned Scope
+
+1. **Amend `ADR-001` — five axes to four (docs).** Records the decision above, the evidence, and the honest cost: the cross-program "student-level" filter is genuinely lost until Depth is populated, and Depth inherits that job rather than nothing replacing it.
+2. **Audit the 9 Information Technology `BOARD_TAKER` notes (owner-executed).** The one program where audience is genuinely mixed (9 board / 63 student). It was earlier dismissed as mis-tagging *by assumption*; that assumption is not evidence. **This gates item 3's scoping** — if one program can legitimately carry two depths, the mapping is not as clean as it looks.
+3. **Backfill Authored Depth on curator-owned notes only (backend migration).** Scoped 2026-08-16 after the audit in item 2 returned. Exact population:
+   - **Curator-owned only** — `users.role = 'ADMIN'`. The 4,645 learner-owned notes are never touched.
+   - **Only where `notes.learner_level IS NULL`** — an authored depth is a human decision and must never be overwritten.
+   - **`BOARD_TAKER → BOARD_EXAM_REVIEW`** and **`PROFESSIONAL → PROFESSIONAL`**.
+   - **`STUDENT` stays NULL.** It spans four real depths; guessing defeats the purpose.
+   - **⚠️ Information Technology is EXCLUDED from the `BOARD_TAKER` mapping.** The item-2 audit found all nine of its `BOARD_TAKER` notes mis-tagged — ordinary database and JavaScript coursework authored in two batches on consecutive days, with `learner_level` and `domain_context` NULL throughout. Stamping them `BOARD_EXAM_REVIEW` would write a wrong curriculum floor onto nine public notes. **`BOARD_TAKER` is not self-certifying:** it is trustworthy where a licensure board exists and unreliable where one does not.
+   - **The exclusion is named, not derived.** `course_programs.exam_goal_slug` looks like a licensure marker but only covers the four programs with Exam Hubs — **Civil Engineering, the largest population at 254 notes, has none** — so excluding on it would drop most of the legitimate migration. A general rule needs a new catalog attribute and is not in scope.
+
+### Pre-commit audit — 2026-08-16
+
+**Codex's amendment was sound and went beyond the brief in the right direction.** It found **two contradictory lines the prompt did not list**, which is exactly what it was told to do rather than leave both versions standing:
+
+1. **The Consequences section explicitly deferred the decision this amendment makes.** It read *"Whether the precise program facet makes this coarse three-value facet redundant is judged at the end of step 3, against real filter usage — not decided here."* Left in place, the ADR would have contradicted itself on its central point. Now: *"Its long-term redundancy is decided: it is retiring."*
+2. **The `Intended Audience` naming constraint** (`ADR-001` → *Authoring populates by inference*, item 4) forbade that label because `target_profile_type` occupies it. Correctly rescoped to *"not available during the transition"* rather than permanently.
+
+**The gap was mine, not Codex's.** The prompt deliberately excluded `CLAUDE.md`, `AGENTS.md`, the GPT modules and `ROADMAP.md` to avoid two sources for one statement — which was right for content, but left **five files still describing the amendment as "PROPOSED, not ratified."** Ratification makes that false. All corrected here.
+
+**Two genuinely false claims were also sitting in `CLAUDE.md`, the most-read file in the repo:**
+
+- It still cited `copyTemplateQuestions` as a **working precedent** for absorbing duplicate-row failures. `v0.81.0` disproved that — the assigned-UUID entity sends `save` down `em.merge()`, which defers the insert, so its catch never fired. A false precedent in `CLAUDE.md` is how the error propagated into a prompt in the first place.
+- It described `v0.81.0` as fixing both defects. **Only one was closed.** The persistence guarantee is partial, the isolation was reverted, and a reader would otherwise have believed a solved problem was solved. Now records the outcome, the FK mechanism, and *do not propose `REQUIRES_NEW`*.
+
+### Pre-commit audit — 2026-08-16
+
+**Clean.** The migration implements every clause with its reason commented, handles both program stores, and is naturally idempotent (after a note receives a level it no longer matches `learner_level IS NULL`).
+
+**The two clauses that matter most were probed empirically, not taken on trust:** removing `u.role = 'ADMIN'` breaks `leavesLearnerOwnedBoardDepthNull`, and removing the Information Technology exclusion breaks both of its tests. Seven cases, all pinning behaviour rather than describing it.
+
+One detail worth knowing: `STUDENT` can never reach the `CASE`, because the `WHERE` admits only `BOARD_TAKER` and `PROFESSIONAL`. Had it slipped through, the `CASE` would have returned NULL and written NULL — harmless, but the guard is in the `WHERE` rather than the `CASE`, which is the safer place for it.
+
+### Pre-signoff pressure test — cold-context agent, 2026-08-16
+
+**Run because the release's own history argued for it, not because the gate fired.** By release shape (one migration plus docs, no shared-method collision) this sat below the full-pressure-test threshold, and two `advisor()` passes were the prescribed check. **What overrode that: `V117`'s exclusion had already been found too narrow once that same day**, by an unrelated audit — after a `/audit-diff` pass, a clause-removal probe and an `advisor()` call had all missed it. A demonstrated miss on the artifact beats a favourable read of the gate.
+
+**It found a defect that would have produced a wrong decision, plus two measured test gaps.**
+
+**⚠️ 1. The checkpoint's primary read was wrong in the most damaging direction.** `NULL IS DISTINCT FROM 'BOARD_EXAM_REVIEW'` evaluates to **TRUE**. The captured population is a deliberate superset including the notes `V117` intentionally leaves NULL, so **every excluded note counted as a "correction" on day one** — a false-positive floor of ≥9 against the kill criterion deciding whether ~900 curriculum floors get reversed. The plan doc asserted the exact opposite (*"counts them as uncorrected"*). Fixed with a post-deploy step that narrows the superset to the rows `V117` actually wrote; the reversal and both checkpoint reads now key on that. **The superset is still captured** — it is the form that survives a widened denylist — so both lists are kept rather than one chosen.
+
+**⚠️ 2. The reversal could destroy human-authored depth — the exact failure it was designed to prevent.** Keyed on the superset it would NULL any of the nine excluded IT notes a curator had since authored by hand. Same fix. It also matched only `BOARD_EXAM_REVIEW`, so a `PROFESSIONAL` row would have been left un-reversed **and** unreachable by re-migration, which requires `learner_level IS NULL`.
+
+**⚠️ 3. Two mutations survived all 24 tests.** Deleting the join correlation `u.id = n.owner_user_id` left every test green while production would stamp all **4,645 learner-owned notes** — precisely what `ADR-001` constraint 2 exists to prevent. Deleting `ncp.note_id = n.id` turned the per-note exclusion into a global one, silently mapping nothing. **Both were fixture gaps rather than missing assertions**: no test had two users, none had two notes. My own clause-removal probe never touched these clauses. Four fixtures added; both mutations now fail 2 assertions each, verified by re-running them.
+
+**Also fixed: the denylist now gates the `PROFESSIONAL` mapping too.** It was a bare disjunct, so a `Grade School` note tagged `PROFESSIONAL` would have been stamped. Zero rows today — which is exactly why nothing would have noticed. The arm exists because a note could acquire that audience later, and an arm kept for tomorrow must be guarded tomorrow.
+
+### Known limitations — carried, not silently dropped
+
+- **`V117` writes to curator notes regardless of `visibility` or `status`, and logs no row count. ⚠️ The pre-merge capture found ZERO private or non-`PUBLIC` rows, so this has no live instances** — it remains a property of the predicate rather than an observed problem. The stated purpose is public-note-scoped (~945 public, 905 `ADMIN`-owned), but the predicate also reaches private drafts and `DRAFT`/`GENERATING`/`FAILED` notes. Combined with the absent row count, **a population materially larger than ~905 would go undetected at deploy.** A guard block is not available — H2 cannot parse PL/pgSQL and the migration test executes the file as a single statement, which is why `V117` has no `RAISE NOTICE` where `V104`/`V105` do. **Mitigation: read the pre-merge capture's row count rather than only archiving it** — it is the only sizing check that exists.
+- **`u.role = 'ADMIN'` is narrower than this codebase's own definition of curator** (`profileType == TEACHER || role == ADMIN`) and narrower than `V108`'s definition of learner-owned, so `TEACHER`-profile notes fall in the gap: not learner-owned by `V108`, not curator-owned by `V117`. Under-inclusive, so it leaves rows NULL and cannot corrupt anything.
+- **The stamped depth propagates to copies.** `NoteService.copyNote` carries `learnerLevel` onto every learner copy, so ~900 is a floor on the eventual footprint rather than the total. This is inheritance rather than backfill, so `ADR-001` constraint 2 holds — but it sharpens why the checkpoint read has to be correct.
+- **The only execution evidence is H2 in PostgreSQL mode.** The migration uses nothing exotic (`UPDATE … FROM`, `coalesce`, `trim`, `LIKE`, correlated `NOT EXISTS`), and the hand-rolled test schema diverges from production in several ways — a wider `learner_level`, no FKs, no unique constraints, most columns absent. Risk of a PostgreSQL-only difference is low but **unverified rather than verified**; Docker was unreachable during the review.
+
+- **The exclusion denylist is exact-match** (except `junior high …` / `senior high …`, prefix-matched) in either program store, and `trim()` removes spaces only, so a value with a trailing tab or non-breaking space also escapes it. A free-text variant (`IT`, `Info Tech`, `HS`) would not be caught. Every audited note resolves to an exact catalog name, so the known population is covered — but the denylist is not spelling-proof, and a general licensure rule would need a catalog attribute rather than a name match. **It is also a denylist, so it protects only against the non-licensure programs already discovered**; a third such program would pass until someone audits it.
+- **The migration records nothing about which notes it changed.** Reversing it would require re-deriving the population from `target_profile_type`, which is still intact — so it is recoverable in principle, but not from a log. **A pre-merge capture of the exact population closes this**, and it is written rather than assumed: `docs/claude-plans/v0.82.0-curator-depth-backfill-reversal.md` carries the capture query, the reversal keyed on those ids, and the checkpoint reads the same capture makes possible. **The capture must be re-run immediately before the merge**, not reused from earlier in the day — a note authored in between would be migrated without being captured, which is the one way the reversal can be incomplete.
+
+### Pre-deploy capture — 2026-08-16, before the `main` merge
+
+**`PROFESSIONAL` is empty, so `V117` has one live mapping and not two.** Every affected note returned `BOARD_TAKER`; not one `PROFESSIONAL` note exists in the population, consistent with the audit's earlier finding that the value is unused across all 945 public notes. **The arm is deliberately kept** — `notes.target_profile_type` is still writable with `PROFESSIONAL` in its enum, and a migration handling only the value that happened to exist on one afternoon would be wrong the moment one is authored. But this release **populated one depth, not two**, and should not be described otherwise.
+
+**The nine Information Technology notes are exactly the nine the item-2 audit found**, all `BOARD_TAKER`, all resolving to the exact catalog name. Two separate confirmations: the audit saw the **whole** population rather than a sample, and the exclusion is **correctly sized** — it catches all nine and nothing else. It remains an exact string match, so it is still not spelling-proof; the known population simply contains no free-text variant.
+
+### Academic-level program audit — 2026-08-16, and it widened the exclusion
+
+**Run to test a fold that turned out to be dead, which is the useful part.** The candidate was extending the backfill to the `STUDENT` cohort using notes that record their level in the *program* field (`Junior High`, `Senior High – STEM`, and so on) — the one place `STUDENT`'s missing depth is actually written down. **The audit returned zero eligible notes and the fold was dropped.**
+
+**Why it is dead, and why that is good news.** Of 53 notes carrying an academic level as their program, **42 already have a depth authored, and on the unambiguous values that authoring is 100% consistent** — `Grade School` → `GRADE_SCHOOL` (3/3), `Junior High` → `JUNIOR_HIGH` (24/24), `Senior High – ABM/HUMSS/STEM` → `SENIOR_HIGH` (11/11). The 11 NULL-depth notes are exactly the two groups the proposed migration would have excluded anyway: 6 curator `High School` notes and 5 learner-owned ones. **Curators have already done this work by hand.**
+
+**`High School` is empirically ambiguous, not just theoretically.** Curators authored `JUNIOR_HIGH` on 3 of them and `SENIOR_HIGH` on 1 — the split predicted from the K-12 structure, now confirmed by their own behaviour rather than by reasoning.
+
+**⚠️ The incidental finding is the one that mattered: a second `BOARD_TAKER` mis-tag, outside Information Technology.** One public curator note is tagged `BOARD_TAKER` with program `High School`, and **the same curator authored its depth as `JUNIOR_HIGH`**. There is no junior-high licensure board, so the audience tag contradicts the curator's own depth decision. `V117` never touched it — its depth is non-NULL and never-overwrite holds — but had that depth been NULL, `V117` would have stamped `BOARD_EXAM_REVIEW` onto junior-high material, because its exclusion named exactly one program.
+
+**So the exclusion was widened before merge, from one named program to a denylist of program values known not to be licensure programs:** `Information Technology`, `Grade School`, `Junior High`, `High School`, and `Senior High …` (prefix-matched, so the strand suffixes vary without the en dash becoming load-bearing). **This changes zero rows today** — no curator note is currently both `BOARD_TAKER` and NULL-depth with such a program — and it is deliberately defence in depth: a migration runs once, at merge time, against whatever the data looks like then. **17 new test cases**, each verified to fail when its denylist entry is removed, plus a case pinning that legitimate licensure programs are unaffected.
+
+**This release ships ahead of its own evidence, and owes `[CHECKPOINT — due 2026-09-16]` for it.** `V117` encodes the rule *"`BOARD_TAKER` is trustworthy where a licensure board exists."* **That rule has now been validated against two programs and failed both** — all nine Information Technology notes mis-tagged, and the `High School` note above. Every other program's `BOARD_TAKER` notes were assumed correct and never audited, and depth is a curriculum floor shaping every future regeneration. **The widened denylist covers the two failures we know about; it says nothing about the ones we have not looked for**, which is why the checkpoint still stands rather than being considered discharged by the widening. The checkpoint reads corrections against the captured population, pairs them with a spot-audit of Civil Engineering (254 notes, the largest population and the largest exposure), and states its kill criterion before the data: **if mis-tagging shows up outside Information Technology, the mapping needs a per-program allowlist rather than one named exclusion** — reverse, then re-migrate on the narrower rule.
+
+### Anti-drift — locked for this release
+
+- **Do not backfill learner-owned notes.** 4,645 of them. Private, feed no filter, and writing depth there asserts a decision their author never made.
+- **Do not map `STUDENT` to anything.** It spans `GRADE_SCHOOL` / `JUNIOR_HIGH` / `SENIOR_HIGH` / `COLLEGE`. Leave NULL for curator judgement.
+- **Target Audience is NOT removed in this release.** No column drop, no field removal, no authoring change. The amendment ratifies the *direction*; the removal is later phases.
+- **Do not touch the Public Library audience filter.** Phase 2 changes discovery and `[CHECKPOINT — due 2026-09-13]` measures Explore engagement. It waits.
+- **Target Audience must never become a runtime depth fallback.** It is migration evidence, one time. Adding it to `StudyPackGenerationContextResolver` would create a fifth fallback layer in the one resolver `ADR-001` keeps deliberately narrow.
+- **Do not derive the licensure exclusion from `exam_goal_slug`.** It marks Exam Hubs, not licensure boards, and would exclude Civil Engineering, Mechanical Engineering, Pharmacy and every other genuine board program.
+- **Do not "fix" the nine Information Technology notes by rewriting their `target_profile_type`.** That mutates the axis being retired and makes the migration touch two fields instead of one. They keep NULL depth and stay curator-classifiable.
+- **Accept that stamping depth strands the affected notes' Challenge bank rows** at the old level. `v0.81.0`'s `V115` means this degrades reachability rather than failing sessions, and the banks in question belong to the curator account, not to learners — a learner who adopted one of these notes has their own copy with its own Study Pack.
+- **The backfill is a one-time migration, not a default write.** `v0.75.0`'s rule stands: depth is a UI pre-fill, never a server-side default. A curator-scoped historical migration is the stated exception, and it does not license one anywhere else.
+
+### Shipped
+
+- **ADR-001 four-axis amendment (docs).** Ratified Target Audience as a retiring transitional field rather than a fifth durable note-metadata axis, on the narrow grounds that it reaches no generation prompt and its intended access control was never implemented. The ADR now records the non-lossless discovery cost, rejects the ~99.3% Course / Program correlation as removal grounds, binds curator-only depth migration and the no-runtime-fallback rule, and gates Public Library and URL replacement on migrated depth plus the `[CHECKPOINT — due 2026-09-13]` window before writes or storage can be removed.
+- **Curator Authored Depth backfill.** Added `V117` to populate NULL `notes.learner_level` values on `ADMIN`-owned notes only, mapping `BOARD_TAKER` to `BOARD_EXAM_REVIEW` and `PROFESSIONAL` to `PROFESSIONAL` while leaving `STUDENT`, learner-owned notes, and already-authored depths untouched. `BOARD_TAKER` notes resolve both catalog and free-text programs and stay NULL when any program is on a denylist of values known not to be licensure programs — Information Technology plus the academic levels `Grade School` / `Junior High` / `High School` / `Senior High …`; the denylist is named directly rather than inferred from `exam_goal_slug`. This is one-time migration evidence only: Target Audience remains unchanged and is not a runtime depth fallback.
+
 ## v0.81.0 - Challenge Bank Integrity
 
 **Status: Released** (kicked off 2026-08-15, signed off 2026-08-16)

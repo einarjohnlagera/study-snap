@@ -12,10 +12,10 @@
 > checkpoint-gated between 2026-09-10 and 09-14**, so proposals that change what a checkpoint measures
 > destroy the read rather than advancing it.
 >
-> **Two unratified architecture proposals are also open and should not be mistaken for decided:**
-> **(a) removing Target Audience**, reducing `ADR-001`'s five note metadata axes to four
-> (`target-audience-removal-proposal.md` — audit done, evidence supports it, but it amends an Accepted
-> ADR and its Phase 2 touches Public Library discovery inside the 2026-09-13 Explore window); and
+> **(a) Target Audience retirement is RATIFIED** (`ADR-001` amended 2026-08-16, reducing five note
+> metadata axes to four) **but NOT executed** — the field still exists, is still written, and still backs
+> the live Public Library filter. Its Phase 2 touches discovery inside the 2026-09-13 Explore window and
+> waits for it. **One unratified architecture proposal remains:**
 > **(b) the canonical Course / Program catalog amendment** (`course-program-canonical-catalog-proposal.md`
 > — `v0.79.0` shipped the *softer* counter-proposal, catalog-first suggestions, and shipping it did **not**
 > ratify locking the field). A related unscoped finding: **academic levels are being used as Course /
