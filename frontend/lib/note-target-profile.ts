@@ -1,12 +1,9 @@
 import type { NoteTargetProfileType, ProfileType, UserRole } from "@/lib/api";
 
-export const NOTE_TARGET_PROFILE_STORAGE_KEY = "notelib.note.targetProfileType";
-export const PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY = "notelib.publicLibrary.targetProfileType";
 export const NOTE_TARGET_PROFILE_ALL = "ALL";
 
 export type NoteTargetProfileFilter = NoteTargetProfileType | typeof NOTE_TARGET_PROFILE_ALL;
 
-export const SELECTABLE_NOTE_TARGET_PROFILE_TYPES: NoteTargetProfileType[] = ["STUDENT", "BOARD_TAKER", "PROFESSIONAL"];
 export const PUBLIC_NOTE_TARGET_PROFILE_TYPES: NoteTargetProfileType[] = ["STUDENT", "BOARD_TAKER", "PROFESSIONAL"];
 
 function isCurator(
@@ -26,16 +23,6 @@ export function getNoteTargetProfileLabel(value: NoteTargetProfileType): string 
     default:
       return "Student";
   }
-}
-
-export function mapProfileTypeToNoteTargetProfile(profileType: ProfileType | null | undefined): NoteTargetProfileType {
-  if (profileType === "BOARD_EXAM") {
-    return "BOARD_TAKER";
-  }
-  if (profileType === "PROFESSIONAL") {
-    return "PROFESSIONAL";
-  }
-  return "STUDENT";
 }
 
 export function resolvePublicLibraryTargetProfileFilter(
@@ -65,15 +52,6 @@ export function isQuizMasteryLockBypassed(
   role: UserRole | null | undefined,
 ): boolean {
   return isCurator(profileType, role);
-}
-
-export function toSelectableNoteTargetProfile(
-  value: NoteTargetProfileType | null | undefined,
-): NoteTargetProfileType | "" {
-  if (value === "STUDENT" || value === "BOARD_TAKER" || value === "PROFESSIONAL") {
-    return value;
-  }
-  return "";
 }
 
 export function isPublicNoteTargetProfileFilter(

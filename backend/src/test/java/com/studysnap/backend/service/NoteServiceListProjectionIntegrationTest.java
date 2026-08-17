@@ -177,7 +177,6 @@ class NoteServiceListProjectionIntegrationTest {
                 "engineering_mathematics",
                 "college",
                 List.of("algebra"),
-                null,
                 "Canonical algebra content"
         );
 
@@ -296,7 +295,6 @@ class NoteServiceListProjectionIntegrationTest {
                     assertThat(item.domainContext()).isEqualTo(DomainContext.NURSING.name());
                     assertThat(item.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
                     assertThat(item.tags()).containsExactly(NOTE_TAGS);
-                    assertThat(item.targetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER.name());
                 });
         assertThat(response.totalMatching()).isEqualTo(2);
         assertThat(response.hasMore()).isTrue();
@@ -316,7 +314,6 @@ class NoteServiceListProjectionIntegrationTest {
         assertThat(item.courseProgram()).isEqualTo(note.getCourseProgram());
         assertThat(item.domainContext()).isEqualTo(note.getDomainContext().name());
         assertThat(item.learnerLevel()).isEqualTo(note.getLearnerLevel().name());
-        assertThat(item.targetProfileType()).isEqualTo(note.getTargetProfileType().name());
         assertThat(item.subject()).isEqualTo(note.getSubject());
         assertThat(item.tags()).containsExactly(note.getTags());
         assertThat(item.contentPreview()).isEqualTo(ContentPreviewUtils.buildContentPreview(fullContent, CONTENT_PREVIEW_MAX_LENGTH));

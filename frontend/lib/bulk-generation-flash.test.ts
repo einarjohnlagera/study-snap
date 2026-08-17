@@ -34,7 +34,6 @@ describe("bulk-generation-flash", () => {
       courseProgram: "Nursing",
       domainContext: "NURSING",
       learnerLevel: "BOARD_EXAM_REVIEW",
-      targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],
     });
@@ -44,7 +43,6 @@ describe("bulk-generation-flash", () => {
       courseProgram: "Nursing",
       domainContext: "NURSING",
       learnerLevel: "BOARD_EXAM_REVIEW",
-      targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],
       // Absent from the written stash, so it reads back as an explicit null rather than
@@ -52,5 +50,28 @@ describe("bulk-generation-flash", () => {
       collectionId: null,
     });
     expect(consumeBulkGenerationRetryStash()).toBeNull();
+  });
+
+  it("restores an old-shape retry stash while ignoring its retired audience key", () => {
+    globalThis.sessionStorage.setItem("notelib.bulk.retryTopics", JSON.stringify({
+      subject: "Maternal Health",
+      courseProgram: "Nursing",
+      domainContext: "NURSING",
+      learnerLevel: "BOARD_EXAM_REVIEW",
+      targetProfileType: "BOARD_TAKER",
+      makePublic: true,
+      topics: ["Prenatal Care"],
+      collectionId: "plan-1",
+    }));
+
+    expect(consumeBulkGenerationRetryStash()).toEqual({
+      subject: "Maternal Health",
+      courseProgram: "Nursing",
+      domainContext: "NURSING",
+      learnerLevel: "BOARD_EXAM_REVIEW",
+      makePublic: true,
+      topics: ["Prenatal Care"],
+      collectionId: "plan-1",
+    });
   });
 });

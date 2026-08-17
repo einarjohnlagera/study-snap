@@ -9,7 +9,6 @@ describe("StudyPackGrid", () => {
       ownerUserId: "user-1",
       title: "React Hooks",
       courseProgram: null,
-      targetProfileType: "STUDENT",
       subject: "Web Dev",
       tags: ["react", "hooks"],
       contentPreview: "Hooks let you use state and lifecycle features in function components.",

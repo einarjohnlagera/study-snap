@@ -131,7 +131,6 @@ class NoteBulkImportServiceTest {
             assertThat(request.domainContext()).isNull();
             assertThat(request.learnerLevel()).isNull();
             assertThat(request.tags()).isEmpty();
-            assertThat(request.targetProfileType()).isNull();
         });
         verify(analyticsService).trackEvent(
                 eq(userId),
@@ -269,7 +268,6 @@ class NoteBulkImportServiceTest {
         return new NoteResponse(
                 noteId.toString(),
                 title,
-                null,
                 null,
                 null,
                 null,

@@ -8,7 +8,7 @@ Theme: retire the axis that stopped earning its place — remove Target Audience
 
 **This is Step 2 of the revised Target Audience retirement.** `v0.81.0` was Step 0 (widened the Challenge bank key so an authoring correction at scale no longer fails sessions) and `v0.82.0` was Step 1 (`V117` backfilled Authored Depth onto 819 curator notes). `ADR-001`'s amendment to **four** axes is already ratified — this release executes phases 2 and 3 of that ratified plan, not a new decision.
 
-**⚠️ `notes.target_profile_type` is NOT dropped, and this is the release's hardest constraint.** It is the input `V117` derived depth from, and `[CHECKPOINT — due 2026-09-16]`'s kill criterion — *is `BOARD_TAKER` trustworthy outside Information Technology?* — cannot run without it. Phase 4 (the column drop, plus `bulk_generation_result.target_profile_type` and the enum) waits until that checkpoint reports. **No migration ships in this release.** The column goes unread by product code and stays readable by SQL.
+**⚠️ `notes.target_profile_type` is NOT dropped, and this is the release's hardest constraint.** It is the input `V117` derived depth from, and `[CHECKPOINT — due 2026-09-16]`'s kill criterion — *is `BOARD_TAKER` trustworthy outside Information Technology?* — cannot run without it. Phase 4 (the column drop, plus `bulk_generation_result.target_profile_type` and the enum) waits until that checkpoint reports. **No migration ships in this release.** Product surfaces stop exposing it; persistence code continues writing valid constrained values, and SQL can still read the historical evidence.
 
 **⚠️ Phase 2 is deliberately UNGATED from `[CHECKPOINT — due 2026-09-13]`** — owner call, 2026-08-16. The audience chip has been a secondary filter since `v0.79.0` made course/program primary, so the Explore confound is **recorded rather than waited on**. Do not re-gate it, and do not re-derive the gate from the superseded four-phase plan in `target-audience-removal-proposal.md`.
 
@@ -17,7 +17,7 @@ Theme: retire the axis that stopped earning its place — remove Target Audience
 ### Planned Scope
 
 1. **Remove the Public Library discovery surface (backend + frontend).** The `and n.target_profile_type = :targetProfileType` clause in `PublicLibraryRepositoryImpl:197-199`, the `PublicLibraryFilterCriteria` field, the user-facing filter chips (`public-library-page-client.tsx:1842`), and `?audience=` parsing/building in `public-library-url.ts:8`. **This is the only user-visible phase and it touches a public, linkable contract** — a shared or indexed `?audience=` URL must degrade to an unfiltered view, not to an error.
-2. **Remove authoring and display (backend + frontend).** Bulk generation dropdown, note editor field, note detail display, the DTO fields on `NoteResponse` / `NoteListItemResponse` / `UpsertNoteRequest` / `BulkGenerateNotesRequest`, and onboarding's `mapProfileTypeToNoteTargetProfile` write. The column stops being written; existing values are preserved untouched.
+2. **Remove authoring and display (backend + frontend).** Bulk generation dropdown, note editor field, note detail display, the DTO fields on `NoteResponse` / `NoteListItemResponse` / `UpsertNoteRequest` / `BulkGenerateNotesRequest`, and onboarding's `mapProfileTypeToNoteTargetProfile` write. `NoteService.create` and `NoteBulkGenerationService.normalizeAndValidate` continue deriving a valid stored value from the owner's profile; update and copy preserve the stored source value.
 3. **Documentation (docs).** `ADR-001` moves Target Audience from "retiring" to "retired from product surfaces, column retained pending 2026-09-16"; `docs/features/notes.md`, `docs/features/public-library.md`, `SPEC.md` and the GPT context modules follow the final code state.
 
 ### Open decision — carried into scope, not yet made
@@ -28,7 +28,8 @@ Anti-drift: **no migration, and `notes.target_profile_type` / `bulk_generation_r
 
 ### Shipped
 
-- **Public Library discovery no longer filters by Target Audience.** Removed the backend audience predicate and listing parameters, the frontend chips/state, and audience request construction. Legacy `?audience=` and `?targetProfileType=` requests are deliberately ignored and render the same unfiltered Public Library; projection reads remain temporarily intact for the independent authoring/display PR.
+- **Public Library discovery no longer filters by Target Audience.** Removed the backend audience predicate and listing parameters, the frontend chips/state, and audience request construction. Legacy `?audience=` and `?targetProfileType=` requests are deliberately ignored and render the same unfiltered Public Library. The projection reads it left in place are removed by the authoring/display item below, which shipped in the same release.
+- **Authoring and display removal (backend + frontend).** Removed Target Audience from note and bulk request/response DTOs, authoring forms, Note Detail, onboarding, retry/draft payloads, and Library projections. New rows still satisfy the retained `NOT NULL` column through owner-profile derivation, while unrelated updates and copies preserve stored historical values. Old client JSON fields and pre-deploy browser stashes are tolerated and ignored.
 
 ## v0.82.0 - Authored Depth Backfill
 

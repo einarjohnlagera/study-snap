@@ -10,7 +10,6 @@ public record NoteListItemResponse(
         String courseProgram,
         String domainContext,
         String learnerLevel,
-        String targetProfileType,
         String subject,
         List<String> tags,
         String contentPreview,

@@ -126,7 +126,7 @@ High-level model:
 
 - `notes` table stores user-authored fields (`title`, `courseProgram`, `subject`, `content`, `tags`).
 - `notes.visibility` controls whether notes are private or listed in Public Library.
-- `notes.targetProfileType` stores who the note is written for (`STUDENT`, `BOARD_TAKER`) and is separate from the creator's user profile.
+- `notes.targetProfileType` is a retained storage-only historical field. `NoteService.create` derives a constrained non-null value from the owner's profile; product APIs and UI do not expose it.
 - Generated fields are stored and linked to the same Note (`summary`, `key concepts`, `quizzes`).
 - Quiz sessions and performance are linked by `noteId`.
 - Copy creates a new Draft Note row with copied user-authored fields only.
@@ -135,25 +135,13 @@ High-level model:
 
 Note audience is note-owned metadata, not user-owned personalization.
 
-Rules:
+Storage rules:
 
 - `User.profileType` describes the creator's current persona.
-- `Note.targetProfileType` describes who the note is for.
-- Public Library audience filtering must use `Note.targetProfileType` only.
-- Creator profile type must not be used as a proxy for note audience filtering.
-
-Creation rules:
-
-- `Student` note creation auto-assigns `Note.targetProfileType = STUDENT`.
-- `Board Taker` note creation auto-assigns `Note.targetProfileType = BOARD_TAKER`.
-- `Teacher` and `Admin` note creation/editing must require `Who is this note for?`.
-- Teacher/Admin audience choices are currently limited to `Student` and `Board Taker`.
-- `targetProfileType` is required for every saved note.
-- changing `targetProfileType` does not regenerate existing Study Packs or quizzes; it only affects future quiz generation
-
-Copy rule:
-
-- copying a note preserves `targetProfileType` on the new Draft note.
+- `NoteService.mapOwnerProfileTypeToNoteTarget` derives the retained create-time value: `BOARD_EXAM -> BOARD_TAKER`, `PROFESSIONAL -> PROFESSIONAL`, otherwise `STUDENT`.
+- `NoteService.resolveTargetProfileTypeForUpdate` preserves the stored value on unrelated edits, with a defensive owner-profile fallback only for a legacy null row.
+- `NoteService.copyNote` preserves the source note's stored value.
+- Target Audience never participates in generation or depth resolution; `StudyPackGenerationContextResolver` owns those durable chains.
 
 ## Profile Types
 
@@ -492,9 +480,9 @@ Favicon requirements:
   - `/notes/{id}/edit` for Draft notes -> edit mode with `Save Changes`, `Cancel`, and `Generate`
   - `/notes/{id}/edit` for Study Pack Ready notes -> metadata edit mode with `Save Changes`, `Cancel`, and `Make a Copy`
 - Existing notes on `/notes/{id}/edit` must render `Edit Note` copy, not the create-note title/description.
-> **Superseded in part by `docs/architecture/ADR-001-canonical-knowledge-architecture.md` (Accepted 2026-08-03) and by `v0.71.0` — read both before changing this block.** The single-axis "`courseProgram` is the top-level track" model below is exactly the defect ADR-001 exists to fix; metadata is now **five independent axes** (Subject, Domain Context, Note Learner Level, Applicable Programs, Target Audience). The editor no longer has one `courseProgram` field: curators send `courseProgramIds` (catalog ids, many, persisted to `note_course_program`) and learners send `courseProgramText` (free text, one, persisted to `notes.course_program`). **Do not restore the retired single-field model.**
+> **Superseded in part by `docs/architecture/ADR-001-canonical-knowledge-architecture.md` (Accepted 2026-08-03, amended 2026-08-16) and by `v0.71.0` — read both before changing this block.** The single-axis "`courseProgram` is the top-level track" model below is exactly the defect ADR-001 exists to fix; metadata now has **four durable axes** (Subject, Domain Context, Note Learner Level, Applicable Programs). The editor no longer has one `courseProgram` field: curators send `courseProgramIds` and learners send `courseProgramText`. **Do not restore the retired single-field model or Target Audience authoring.**
 
-- Note Editor metadata fields are `title`, Course / Program(s), `subject`, `tags`, `domainContext`, `learnerLevel`, `targetAudience`, and `content`.
+- Note Editor metadata fields are `title`, Course / Program(s), `subject`, `tags`, `domainContext`, `learnerLevel`, and `content` (`NoteEditorDraft` / `UpsertNoteRequest`).
 - Metadata hierarchy should stay:
   - Applicable Programs -> **where the note applies** (discovery only; never reaches a prompt)
   - `domainContext` -> **how it is authored** (the sole LLM domain constraint)

@@ -23,7 +23,7 @@ This was invisible while the Official Library covered four programs (ALE/PNLE/LE
 
 ### Decision
 
-Notes model **canonical knowledge**. Programs describe **where that knowledge is applicable**. The durable note metadata model has **four axes**, each with exactly one owner. The table retains Target Audience as a transitional row because the field still exists and is still written; it is no longer a fifth durable axis:
+Notes model **canonical knowledge**. Programs describe **where that knowledge is applicable**. The durable note metadata model has **four axes**, each with exactly one owner:
 
 | Axis | Field | Cardinality | Sole responsibility |
 |---|---|---|---|
@@ -31,7 +31,6 @@ Notes model **canonical knowledge**. Programs describe **where that knowledge is
 | Domain Context | `notes.domain_context` | 1 | **how** it is authored — the LLM domain constraint |
 | Note Learner Level | `notes.learner_level` | 1 | **how deep** it is authored |
 | Course / Program(s) | `note_course_program` (curated) / `notes.course_program` (personal) | N curated, 1 personal | **where** it appears — discovery only |
-| Audience framing (**retiring** — see "Target Audience retirement" below) | `notes.target_profile_type` | 1 | transitional discovery contract during migration — never depth |
 
 The **Course / Program(s)** row covers two stores, because NoteLib has two authoring modes: curated notes carry catalog programs in `note_course_program` (one or many), and personal notes carry one free-text value in `notes.course_program`. Both are current; neither is legacy. See "Two authoring modes — and therefore two program fields" below.
 
@@ -51,7 +50,9 @@ Delivered in two releases (revised 2026-08-03 after the production audit): **Rel
 
 > **Target Audience has no long-term architectural responsibility and should be retired — but only after the useful information it currently carries has been migrated into Authored Depth, and its live discovery contract has been replaced.**
 
-This amendment establishes the durable note metadata model as **four axes**. `notes.target_profile_type` remains in the Decision table only because it still exists, is still written, and still backs a live public contract during the migration. That transitional state does not restore it as a responsibility-holder.
+This amendment established the durable note metadata model as **four axes**. `notes.target_profile_type` still exists and is still written for retained evidence, but `v0.83.0` removed its product responsibility; it is no longer a row in the Decision table.
+
+**Implementation status — `v0.83.0`, 2026-08-17.** Target Audience is removed from request/response DTOs, authoring and display UI, private-library projections, and Public Library filtering. Legacy `?audience=` links and stale JSON fields are ignored. The physical `notes.target_profile_type` column, its `NOT NULL` and CHECK constraints, its index, `bulk_generation_result.target_profile_type`, and `NoteTargetProfileType` remain unchanged pending `[CHECKPOINT — due 2026-09-16]`. `NoteService.create` and bulk normalization continue writing the owner-profile-derived value so retained constraints hold; updates and copies preserve stored evidence. No migration ships in `v0.83.0`, and the value remains absent from `StudyPackGenerationContextResolver`, `StudyPackGenerationContext`, and prompt resources.
 
 **The two grounds for retirement are narrow and binding:**
 
@@ -60,7 +61,7 @@ This amendment establishes the durable note metadata model as **four axes**. `no
 
 **The observed ~99.3% correlation between Course / Program and Target Audience is not grounds for removal.** It is a supporting observation about the current board-heavy public catalog: licensure-program notes are overwhelmingly `BOARD_TAKER`, academic-level values are overwhelmingly `STUDENT`, and `PROFESSIONAL` is unused across the 945 public notes measured. It is not semantic equivalence. Civil Engineering, Nursing, Accountancy, Information Technology, and other programs can legitimately carry several authored depths; the correlation will break as general-student or professional content grows. It therefore cannot justify an irreversible column drop.
 
-**Retirement is not lossless; the discovery cost is accepted.** Target Audience is a live Public Library `WHERE` clause, a set of user-facing chips, and a shareable `?audience=` URL parameter. Its cross-program job — for example, finding student-level material across several programs — has no Course / Program equivalent and is genuinely lost anywhere Authored Depth is not populated. The replacement must come from Authored Depth, not an assertion that nothing was lost. That subsumption is real in the model and absent in the present data: the audit found Authored Depth NULL on **5,538 of 5,587** notes carrying an audience.
+**Retirement is not lossless; the discovery cost is accepted.** Before `v0.83.0`, Target Audience was a live Public Library `WHERE` clause, a set of user-facing chips, and a shareable `?audience=` URL parameter. Its cross-program job — for example, finding student-level material across several programs — has no Course / Program equivalent and is genuinely lost anywhere Authored Depth is not populated. The replacement must come from Authored Depth, not an assertion that nothing was lost. That subsumption is real in the model and absent in the present data: the audit found Authored Depth NULL on **5,538 of 5,587** notes carrying an audience.
 
 **Migration is curator-scoped.** The migration sizing found **5,550 affected notes: 4,645 learner-owned and 905 curator-owned**. The learner-owned notes must never be backfilled: writing depth there would assert an authoring decision the author never made onto a curriculum floor, violating constraint 2 of this ADR and the `v0.75.0` rule. They do not serve the Public Library contract being replaced. The 905 curator-owned notes are the legitimate migration population and are essentially the 945 public notes the audience filter reads. Learner-owned Target Audience values remain untouched during the transition and disappear only with the final schema retirement, after nothing reads or writes them.
 
@@ -79,7 +80,7 @@ The phases are ordered so the populated discovery contract is not removed ahead 
 5. **Remove writes and runtime surfaces.** Retire curator authoring, onboarding mapping, displays, DTO/service/repository fields, and other reads or writes only after the discovery and URL replacements are live.
 6. **Drop storage last.** Drop the Target Audience columns and enum only when nothing reads or writes them.
 
-This amendment records the direction and gates; it does **not** itself authorize immediate field, filter, or schema removal.
+Phases 3–5 above were superseded by the owner-ratified 2026-08-16 execution direction and shipped at the product-surface level in `v0.83.0`; phase 6 remains gated on `[CHECKPOINT — due 2026-09-16]`. The historical sequence is retained to explain the original safety argument, not as a live blocker for the already-shipped surface removal.
 
 ### Program Families are a productivity feature, not a curriculum feature
 
@@ -416,16 +417,16 @@ Pre-filling a form control is safe: the value is only persisted because a human 
 
 The Civil Engineering example above lists Year 1 through Year 4. `LearnerLevel` has a single `COLLEGE` value and will keep it. Year-level granularity would multiply the value set for a distinction the generation prompts do not currently act on, and the same governance instinct that keeps Domain Context to eight values applies here. If per-year depth ever becomes real, it is a separate decision with its own evidence, not a quiet enum expansion.
 
-**4. Renaming the user-facing label is in scope; `Intended Audience` is not available during the transition.**
+**4. Renaming the user-facing label is in scope; `Intended Audience` was not available during the authoring transition.**
 
-"Learner Level" is implementation vocabulary and may be relabelled for admins — `Educational Level` and `Authored Depth` are both viable. **`Intended Audience` is not available during the transition**, because `notes.target_profile_type` still occupies that label in the editor as *"Who is this note for?"* Reusing it before retirement would collide the durable depth axis with a still-live transitional field in the one place users actually read. Any rename is copy-only: the column stays `learner_level`.
+"Learner Level" is implementation vocabulary and may be relabelled for admins — `Educational Level` and `Authored Depth` are both viable. During the transition, `Intended Audience` was unavailable because `notes.target_profile_type` occupied that label in the editor as *"Who is this note for?"* `v0.83.0` removed that editor field; any future depth-label change is still a separate copy decision, and the column stays `learner_level`.
 
 #### Sequencing — BOTH GATES CLEARED (amended 2026-08-13, `v0.75.0` kickoff)
 
 **Status: cleared. This section previously blocked the work on two prerequisites; neither still holds, and both had been satisfied for some time before anyone checked.**
 
 - **R4 — RESOLVED 2026-08-04.** The generate-and-diff verification ran against production once `v0.70.0` deployed and passed on all three steps; zero of five drift checks fired. See *R4 verification* in this ADR. It surfaced no unexpected authoring or generation behaviour, so it informs this design by confirming it rather than by amending it.
-- **Editability — SHIPPED IN `v0.70.0`.** The original text read: *"R4 is itself currently blocked: authoring metadata is not editable once a note reaches `STUDY_PACK_READY`, so making those fields editable is the true first step, ahead of any inference work."* **That is no longer true, and had not been true for four releases when it was found.** On a `STUDY_PACK_READY` note, Edit stays on Note Detail, and Teacher/Admin authors may edit the still-transitional Target Audience field, Domain Context, and Note Learner Level — gated by `isTeacherSelectableNoteTarget`, the same gate the Note Editor uses (`AGENTS.md:1081`). `private-note-detail-page-client.tsx:1445-1452` opens that inline metadata editor for any non-draft note. Correcting either durable authoring axis shapes *future* generation only and never touches the existing Study Pack. This describes the current transition; it does not assign Target Audience a permanent responsibility.
+- **Editability — SHIPPED IN `v0.70.0`; narrowed in `v0.83.0`.** On a `STUDY_PACK_READY` note, Edit stays on Note Detail, and Teacher/Admin authors may edit Domain Context and Note Learner Level through `private-note-detail-page-client.tsx`'s `canEditAuthoringMetadata` path. Target Audience was removed from that panel in `v0.83.0`. Correcting either durable authoring axis shapes *future* generation only and never touches the existing Study Pack.
 
 **Why this correction is recorded rather than quietly deleted.** A stale gate in an ADR is more expensive than a stale line in a feature doc, because an ADR outranks a feature doc where they disagree — so anyone checking whether inference work was authorized would read this section, find a prerequisite stated as unmet, and correctly defer. The gate was satisfied in `v0.70.0` and the text describing it was never revisited. **The general lesson, which applies to every gate in this ADR: a prerequisite written as a blocker must be re-read against current code before it is trusted, not carried forward on its own authority.**
 
@@ -452,7 +453,7 @@ The Civil Engineering example above lists Year 1 through Year 4. `LearnerLevel` 
 - Filter and search paths move to join/`EXISTS` semantics on a hot paginated path that already required a dedicated performance release (`v0.51.0`).
 - **This ADR does not make generated artifacts canonical.** Study Packs, question pools, and question banks remain per-`study_pack_id`, and adopted copies get their own. Canonical *knowledge* is not canonical *generation*. Cross-user pooling is Company Redefinition Phase 3b and stays separately gated.
 - Note cards display Domain Context as their single badge. Applicable Programs surface only on note detail, as a collapsed disclosure.
-- `notes.target_profile_type` **survives only for the gated transition described above**. It remains `NOT NULL`, written, and a **live Public Library audience filter** (`PublicLibraryRepositoryImpl:176-178`, `NoteController:594`/`:636`, `NoteRepository:106`/`:131`) until Authored Depth is migrated and the discovery contract is replaced. Its long-term redundancy is decided: it is retiring, not a permanent discovery axis.
+- `notes.target_profile_type` **survives only as retained migration evidence**. It remains `NOT NULL`, constrained, indexed, readable by SQL, and written on create by `NoteService.resolveTargetProfileType`; it is absent from product requests, responses, authoring, display, discovery, and generation context. Storage retirement waits for `[CHECKPOINT — due 2026-09-16]`.
 
 **Evidence base (production, 2026-08-03).** This ADR is not taken on forecast. The vocabulary audit (`03`/`04-vocabulary-followups.sql`, results in `05-vocabulary-results.md`) established:
 

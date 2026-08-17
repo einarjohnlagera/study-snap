@@ -31,7 +31,6 @@ import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { getCollectionLabels } from "@/lib/collection-labels";
 import { buildPublicLibraryUrl, slugifyPublicLibraryFilterValue } from "@/lib/public-library-url";
 import { getPaidPlanCtaLabel } from "@/src/config/plans";
-import { mapProfileTypeToNoteTargetProfile } from "@/lib/note-target-profile";
 import {
   clearDeferredOnboardingCompletion,
   clearOnboardingDraft,
@@ -1336,7 +1335,6 @@ export default function OnboardingPage() {
         courseProgramText: draft.courseProgram.trim() || null,
         domainContext: null,
         learnerLevel: null,
-        targetProfileType: mapProfileTypeToNoteTargetProfile(profileType),
         content: draft.noteContent,
       });
       savedNote = createdNote;

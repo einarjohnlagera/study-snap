@@ -48,8 +48,6 @@ public class NoteBulkGenerationService {
     private static final int MAX_THROTTLE_DELAY_MS = 5_000;
     private static final String EMPTY_BATCH_MESSAGE = "Add at least one topic.";
     private static final String COURSE_PROGRAM_REQUIRED_MESSAGE = "Course/program is required.";
-    private static final String TARGET_AUDIENCE_REQUIRED_MESSAGE =
-            "Target audience is required for teachers and admins.";
     private static final String SUBJECT_REQUIRED_MESSAGE = "Subject is required.";
     private static final String FIELD_TOO_LONG_MESSAGE_TEMPLATE = "%s must be %d characters or less.";
     private static final String MAX_TOPICS_MESSAGE_TEMPLATE = "You can bulk generate up to %d topics at once.";
@@ -303,7 +301,6 @@ public class NoteBulkGenerationService {
                         batch.domainContext() == null ? null : batch.domainContext().name(),
                         batch.learnerLevel() == null ? null : batch.learnerLevel().name(),
                         List.of(),
-                        batch.targetProfileType().name(),
                         content
                 ),
                 ownerUserId
@@ -412,9 +409,7 @@ public class NoteBulkGenerationService {
         }
 
         boolean isTeacherOrAdmin = isCurator(owner);
-        NoteTargetProfileType targetProfileType = isTeacherOrAdmin
-                ? requireTargetProfileType(request.targetProfileType())
-                : mapProfileTypeToNoteTargetProfile(owner.getProfileType());
+        NoteTargetProfileType targetProfileType = mapProfileTypeToNoteTargetProfile(owner.getProfileType());
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
         Set<UUID> courseProgramIds = isTeacherOrAdmin
@@ -471,13 +466,6 @@ public class NoteBulkGenerationService {
 
     private String firstNonBlank(String primary, String fallback) {
         return primary != null && !primary.isBlank() ? primary : fallback;
-    }
-
-    private NoteTargetProfileType requireTargetProfileType(NoteTargetProfileType targetProfileType) {
-        if (targetProfileType == null) {
-            throw new InvalidBulkGenerationRequestException(TARGET_AUDIENCE_REQUIRED_MESSAGE);
-        }
-        return targetProfileType;
     }
 
     private void assertMaxLength(String value, int maxLength, String fieldName) {

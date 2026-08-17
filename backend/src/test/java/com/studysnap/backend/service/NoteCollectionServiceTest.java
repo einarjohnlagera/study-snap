@@ -4191,7 +4191,6 @@ class NoteCollectionServiceTest {
                 COURSE_PROGRAM,
                 null,
                 null,
-                NoteTargetProfileType.STUDENT.name(),
                 List.of(),
                 "content",
                 NoteVisibility.PRIVATE.name(),

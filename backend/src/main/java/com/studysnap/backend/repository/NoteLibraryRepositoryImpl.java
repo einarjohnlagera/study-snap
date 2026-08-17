@@ -3,7 +3,6 @@ package com.studysnap.backend.repository;
 import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteStatus;
-import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.model.NoteLibraryReadiness;
 import com.studysnap.backend.model.NoteLibrarySort;
@@ -41,7 +40,6 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
     private static final String APPLICABLE_PROGRAMS_ALIAS = "applicablePrograms";
     private static final String DOMAIN_CONTEXT_ALIAS = "domainContext";
     private static final String LEARNER_LEVEL_ALIAS = "learnerLevel";
-    private static final String TARGET_PROFILE_TYPE_ALIAS = "targetProfileType";
     private static final String SUBJECT_ALIAS = "subject";
     private static final String TAGS_ALIAS = "tags";
     private static final String CONTENT_ALIAS = "content";
@@ -61,7 +59,6 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
                    note_programs.program_names as "applicablePrograms",
                    n.domain_context as "domainContext",
                    n.learner_level as "learnerLevel",
-                   n.target_profile_type as "targetProfileType",
                    n.subject as subject,
                    n.tags as tags,
                    substring(n.content, 1, 2000) as content,
@@ -448,9 +445,6 @@ public class NoteLibraryRepositoryImpl implements NoteLibraryRepository {
         ));
         values.put(LEARNER_LEVEL_ALIAS, enumValue(
                 LearnerLevel.class, stringValue(tuple, LEARNER_LEVEL_ALIAS)
-        ));
-        values.put(TARGET_PROFILE_TYPE_ALIAS, enumValue(
-                NoteTargetProfileType.class, stringValue(tuple, TARGET_PROFILE_TYPE_ALIAS)
         ));
         values.put(SUBJECT_ALIAS, stringValue(tuple, SUBJECT_ALIAS));
         values.put(TAGS_ALIAS, stringArray(tuple.get(TAGS_ALIAS)));

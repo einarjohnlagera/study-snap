@@ -165,7 +165,6 @@ class PublicNotesScoringUtilsTest {
                 null,
                 null,
                 null,
-                "STUDENT",
                 "Subject",
                 List.of(),
                 contentPreview,

@@ -26,7 +26,6 @@ import {
   type CourseProgramCatalogItem,
   type DomainContext,
   type LearnerLevel,
-  type NoteTargetProfileType,
   trackAnalyticsEvent,
   type NoteResponse,
   updateNote,
@@ -84,8 +83,6 @@ import { hasSeenTip, markTipSeen } from "@/lib/guidance";
 import type { PaywallContextType } from "@/lib/paywall-content";
 import {
   isTeacherSelectableNoteTarget,
-  mapProfileTypeToNoteTargetProfile,
-  toSelectableNoteTargetProfile,
   isQuizMasteryLockBypassed,
 } from "@/lib/note-target-profile";
 import { OcrDisabledNotice } from "@/components/notes/ocr-disabled-notice";
@@ -115,7 +112,6 @@ function toDraft(note: NoteResponse): NoteEditorDraft {
     courseProgram: note.courseProgram ?? "",
     domainContext: note.domainContext ?? "",
     learnerLevel: note.learnerLevel ?? "",
-    targetProfileType: toSelectableNoteTargetProfile(note.targetProfileType),
     content: note.content,
     tags: note.tags ?? [],
   };
@@ -164,7 +160,6 @@ export function NoteEditorPageClient({
     courseProgram: "",
     domainContext: "",
     learnerLevel: "",
-    targetProfileType: "",
     content: "",
     tags: [],
   });
@@ -226,12 +221,9 @@ export function NoteEditorPageClient({
   const currentPlan = usageSummary?.plan ?? (authUser?.planType ?? "FREE");
   const currentProfileType = authUser?.profileType ?? "STUDENT";
   const currentUserRole = authUser?.role ?? "USER";
-  const showTargetProfileTypeField = isTeacherSelectableNoteTarget(currentProfileType, currentUserRole);
+  const showCuratorMetadataFields = isTeacherSelectableNoteTarget(currentProfileType, currentUserRole);
   const generateLabel = resolveGenerateLabel(currentProfileType);
   const generateHelperText = resolveGenerateHelperText(currentProfileType);
-  const targetProfileTypeHelperText = isEditMode
-    ? "Changing audience will affect future quiz generation."
-    : "Choose the learner audience for this note.";
   const generatingLabel = "Generating Study Pack...";
 
   useEffect(() => {
@@ -252,13 +244,13 @@ export function NoteEditorPageClient({
   }, []);
 
   useEffect(() => {
-    if (!showTargetProfileTypeField && !noteId) {
+    if (!showCuratorMetadataFields && !noteId) {
       return;
     }
     let active = true;
     setApplicableProgramsLoading(true);
     setApplicableProgramsError(null);
-    const catalogRequest = showTargetProfileTypeField ? getCourseProgramCatalog() : Promise.resolve([]);
+    const catalogRequest = showCuratorMetadataFields ? getCourseProgramCatalog() : Promise.resolve([]);
     const programsRequest = noteId ? getNoteApplicablePrograms(noteId) : Promise.resolve(null);
     void Promise.all([catalogRequest, programsRequest])
       .then(([catalog, response]) => {
@@ -291,7 +283,7 @@ export function NoteEditorPageClient({
     return () => {
       active = false;
     };
-  }, [applicableProgramsRetryToken, noteId, showTargetProfileTypeField]);
+  }, [applicableProgramsRetryToken, noteId, showCuratorMetadataFields]);
 
   useEffect(() => {
     if (!toastMessage) {
@@ -335,7 +327,7 @@ export function NoteEditorPageClient({
   // name onto an id, so it cannot live in either fetch effect alone. Only ever a pre-fill: it never
   // runs in edit mode, and never once the author has touched the selection.
   useEffect(() => {
-    if (isEditMode || !showTargetProfileTypeField || !catalogLoaded) {
+    if (isEditMode || !showCuratorMetadataFields || !catalogLoaded) {
       return;
     }
     if (applicableProgramsDirty || applicableProgramIds.length > 0) {
@@ -358,7 +350,7 @@ export function NoteEditorPageClient({
     catalogLoaded,
     isEditMode,
     profileCourseProgram,
-    showTargetProfileTypeField,
+    showCuratorMetadataFields,
   ]);
 
   useEffect(() => {
@@ -394,7 +386,7 @@ export function NoteEditorPageClient({
             // learner edits a note that already carries one (docs/features/notes.md —
             // "hiding a field must never null it"). Gating the pre-fill leaves the draft
             // seeded from the note in edit mode, so the stored value round-trips intact.
-            learnerLevel: showTargetProfileTypeField
+            learnerLevel: showCuratorMetadataFields
               ? previous.learnerLevel || me.learnerLevel || ""
               : previous.learnerLevel,
           }));
@@ -410,7 +402,7 @@ export function NoteEditorPageClient({
     return () => {
       active = false;
     };
-  }, [isEditMode, showTargetProfileTypeField]);
+  }, [isEditMode, showCuratorMetadataFields]);
 
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" | "warning" = "info") => {
     setToastTone(tone);
@@ -696,23 +688,7 @@ export function NoteEditorPageClient({
       ? IMPORT_SUCCESS_MESSAGE
       : null;
 
-  const resolveTargetProfileType = useCallback((): NoteTargetProfileType | null => {
-    if (showTargetProfileTypeField) {
-      if (!draft.targetProfileType) {
-        setRevealOptionalDetailsSignal((previous) => previous + 1);
-        showToast("Please select an audience", "info");
-        return null;
-      }
-      return draft.targetProfileType;
-    }
-    return mapProfileTypeToNoteTargetProfile(currentProfileType);
-  }, [currentProfileType, draft.targetProfileType, showTargetProfileTypeField, showToast]);
-
   const buildRequest = useCallback(async () => {
-    const targetProfileType = resolveTargetProfileType();
-    if (!targetProfileType) {
-      return null;
-    }
     // The profile program may reduce friction when CREATING a note, but it must never become an
     // existing note's persisted metadata without an explicit author decision (ADR-001). Editing a
     // note whose course/program is null previously resolved to the editor's own profile value and
@@ -743,7 +719,7 @@ export function NoteEditorPageClient({
       }
     }
     const missing: string[] = [];
-    if (showTargetProfileTypeField
+    if (showCuratorMetadataFields
       ? applicableProgramIds.length === 0
       : (!isEditMode || courseProgramShadowed === false) && !resolvedCourseProgram) {
       missing.push("Course / Program(s)");
@@ -757,7 +733,7 @@ export function NoteEditorPageClient({
     // rule; Save did not, so a curator who family-expanded to several programs with "Add details"
     // collapsed -- the default -- got a raw 400 naming a field that was off screen inside the closed
     // accordion, with no way to act on it. Reveal the panel as well as reporting it.
-    if (showTargetProfileTypeField && applicableProgramIds.length > 1 && !draft.domainContext) {
+    if (showCuratorMetadataFields && applicableProgramIds.length > 1 && !draft.domainContext) {
       setRevealOptionalDetailsSignal((previous) => previous + 1);
       setFormError(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE);
       showToast(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE, "warning");
@@ -766,12 +742,11 @@ export function NoteEditorPageClient({
     return {
       title: normalizeOptional(draft.title),
       subject: normalizeOptional(draft.subject),
-      courseProgramText: showTargetProfileTypeField ? null : resolvedCourseProgram,
-      courseProgramIds: showTargetProfileTypeField ? applicableProgramIds : [],
+      courseProgramText: showCuratorMetadataFields ? null : resolvedCourseProgram,
+      courseProgramIds: showCuratorMetadataFields ? applicableProgramIds : [],
       domainContext: draft.domainContext || null,
       learnerLevel: draft.learnerLevel || null,
       tags: draft.tags,
-      targetProfileType,
       content: draft.content,
     };
   }, [
@@ -784,10 +759,9 @@ export function NoteEditorPageClient({
     draft.title,
     profileCourseProgram,
     isEditMode,
-    resolveTargetProfileType,
     setRevealOptionalDetailsSignal,
     showToast,
-    showTargetProfileTypeField,
+    showCuratorMetadataFields,
     applicableProgramIds,
     courseProgramShadowed,
   ]);
@@ -806,7 +780,7 @@ export function NoteEditorPageClient({
       ? await updateNote(currentNoteId, payload)
       : await createNote(payload);
 
-    if (showTargetProfileTypeField) {
+    if (showCuratorMetadataFields) {
       setSavedApplicableProgramIds(applicableProgramIds);
       setApplicableProgramsDirty(false);
     }
@@ -816,7 +790,7 @@ export function NoteEditorPageClient({
     setDraft(toDraft(saved));
     persistedCourseProgramRef.current = saved.courseProgram ?? null;
     setStudyPackStatus(saved.studyPackStatus ?? "DRAFT");
-    if (!showTargetProfileTypeField) {
+    if (!showCuratorMetadataFields) {
       trackCourseProgramValueSelected(
         "note-editor",
         saved.courseProgram ?? payload.courseProgramText ?? "",
@@ -833,7 +807,7 @@ export function NoteEditorPageClient({
     contentEmpty,
     currentNoteId,
     catalogCourseProgramNames,
-    showTargetProfileTypeField,
+    showCuratorMetadataFields,
     showToast,
   ]);
 
@@ -1033,10 +1007,6 @@ export function NoteEditorPageClient({
 
     setApplyingSuggestion(true);
     try {
-      const targetProfileType = resolveTargetProfileType();
-      if (!targetProfileType) {
-        return;
-      }
       const nextMetadata = applyAiSuggestionSelection(
         {
           title: draft.title,
@@ -1053,12 +1023,11 @@ export function NoteEditorPageClient({
       const updated = await updateNote(pendingSuggestion.noteId, {
         title: nextMetadata.title,
         subject: nextMetadata.subject,
-        courseProgramText: showTargetProfileTypeField ? null : normalizeOptional(draft.courseProgram),
-        courseProgramIds: showTargetProfileTypeField ? applicableProgramIds : [],
+        courseProgramText: showCuratorMetadataFields ? null : normalizeOptional(draft.courseProgram),
+        courseProgramIds: showCuratorMetadataFields ? applicableProgramIds : [],
         domainContext: draft.domainContext || null,
         learnerLevel: draft.learnerLevel || null,
         tags: nextMetadata.tags,
-        targetProfileType,
         content: draft.content,
       });
       setDraft(toDraft(updated));
@@ -1081,9 +1050,10 @@ export function NoteEditorPageClient({
     draft.subject,
     draft.tags,
     draft.title,
+    applicableProgramIds,
     finalizeGenerationRedirect,
     pendingSuggestion,
-    resolveTargetProfileType,
+    showCuratorMetadataFields,
     showToast,
   ]);
 
@@ -1138,13 +1108,13 @@ export function NoteEditorPageClient({
     }
 
     const isReplacingContent = draft.content.trim().length > 0;
-    if (showTargetProfileTypeField && applicableProgramIds.length === 0) {
+    if (showCuratorMetadataFields && applicableProgramIds.length === 0) {
       const message = "Please complete: Course / Program(s).";
       setFormError(message);
       showToast(message, "warning");
       return;
     }
-    if (showTargetProfileTypeField && applicableProgramIds.length > 1 && !draft.domainContext) {
+    if (showCuratorMetadataFields && applicableProgramIds.length > 1 && !draft.domainContext) {
       setFormError(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE);
       showToast(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE, "warning");
       return;
@@ -1154,15 +1124,15 @@ export function NoteEditorPageClient({
     try {
       const resolvedCourseProgram = resolveGenerateFromTopicCourseProgram(draft.courseProgram, profileCourseProgram);
       let response;
-      const selectedProgramIds = showTargetProfileTypeField ? applicableProgramIds : undefined;
+      const selectedProgramIds = showCuratorMetadataFields ? applicableProgramIds : undefined;
       if (draft.domainContext) {
         response = await generateNoteFromTopic(
           normalizedTopic,
-          showTargetProfileTypeField ? undefined : resolvedCourseProgram,
+          showCuratorMetadataFields ? undefined : resolvedCourseProgram,
           draft.domainContext,
           selectedProgramIds,
         );
-      } else if (showTargetProfileTypeField && selectedProgramIds?.length) {
+      } else if (showCuratorMetadataFields && selectedProgramIds?.length) {
         response = await generateNoteFromTopic(
           normalizedTopic,
           undefined,
@@ -1219,7 +1189,7 @@ export function NoteEditorPageClient({
     draft.courseProgram,
     draft.domainContext,
     applicableProgramIds,
-    showTargetProfileTypeField,
+    showCuratorMetadataFields,
     openLockedFeaturePaywall,
     profileCourseProgram,
     refreshUsageSummary,
@@ -1346,9 +1316,6 @@ export function NoteEditorPageClient({
         onLearnerLevelChange={(value: LearnerLevel | "") => {
           setDraft((previous) => ({ ...previous, learnerLevel: value }));
         }}
-        onTargetProfileTypeChange={(value) => {
-          setDraft((previous) => ({ ...previous, targetProfileType: value }));
-        }}
         onContentChange={(value) => setDraft((previous) => ({ ...previous, content: value }))}
         onTagsChange={(nextTags) => setDraft((previous) => ({ ...previous, tags: nextTags }))}
         onSave={() => {
@@ -1417,8 +1384,7 @@ export function NoteEditorPageClient({
         resolvedCourseProgram={isEditMode
           ? normalizeOptional(draft.courseProgram)
           : normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram)}
-        showTargetProfileTypeField={showTargetProfileTypeField}
-        showAuthoringMetadataFields={showTargetProfileTypeField}
+        showAuthoringMetadataFields={showCuratorMetadataFields}
         applicableProgramCatalog={applicableProgramCatalog}
         applicableProgramIds={applicableProgramIds}
         onApplicableProgramIdsChange={(selectedIds) => {
@@ -1436,7 +1402,6 @@ export function NoteEditorPageClient({
         )}
         savedApplicableProgramNames={savedApplicableProgramNames}
         copiedFromNoteId={copiedFromNoteId}
-        targetProfileTypeHelperText={targetProfileTypeHelperText}
         backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}
         backLabel={isEditMode ? "Note" : "Library"}
         isTeacherCreateMode={!isEditMode && currentProfileType === "TEACHER"}
