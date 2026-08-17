@@ -1,5 +1,36 @@
 # RELEASES.md - NoteLib
 
+## v0.83.2 - Anonymous Discovery Access
+
+**Status: In Progress** (kicked off 2026-08-17)
+
+Theme: a signed-out visitor browsing the Public Library should get the filters the page was built to give them.
+
+**Slice A of Discovery System Stage 0.** Scope and verification: `docs/claude-plans/discovery-system-stage-0-scoping.md`. Both items are live bugs on anonymous public surfaces and both are **independent of whether the rest of the Discovery System ever proceeds** — they are required regardless of which fork that initiative takes.
+
+### Planned Scope
+
+1. **Permit anonymous `GET /subjects` and `GET /course-programs` (backend).** Both appear **zero times** in `SecurityConfig`, which ends `.anyRequest().authenticated()`, while `SubjectController` and `CourseProgramController` both explicitly serve anonymous `scope=public` and throw `AUTHENTICATION_REQUIRED` only for `scope=mine`. **The intent is in the controllers; the security config never granted it.** Two `requestMatchers(GET, …).permitAll()` additions, mirroring the existing `/tags` rule.
+
+   **⚠️ This is a security-config widening and is why it did not ride `v0.83.1`.** It needs tests asserting an anonymous `scope=public` **200** and an anonymous `scope=mine` **401** — the second is what proves the widening did not overreach.
+
+2. **Remove the `/exam` BackLink (frontend).** `/exam/page.tsx:31` renders `<BackLink href="/public/library" label="Public Library" />`, miscategorising `/exam` as a sub-page of Public Library when it is top-level in both the marketing `Navbar` and `PublicFooter`. `docs/features/navigation.md`'s own "no back link" list omits `/exam`, confirming the oversight. **The fix is removal, not repointing.**
+
+**Why this is visible now.** `PublicLibraryPageClient` fetches all four facet sources in one `Promise.allSettled`, so the 401s are swallowed into empty chip lists rather than surfacing as errors. **`v0.83.0` sharpened the symptom**: its Authored Depth chips come from `/notes/public/learner-levels`, which *is* permitted, so an anonymous visitor now sees Tags and Authored Depth populated beside **empty** Subject and Course/Program — on the surface carrying the most SEO investment.
+
+### Slice B was rescoped at this kickoff, and it is no longer engineering work
+
+The scoping doc listed a viewer-type analytics dimension as a Stage 0 deliverable that must precede any anonymous Explore traffic. **Verified at kickoff: the dimension already exists in the data.** `AnalyticsController.trackEvent` passes `user == null ? null : user.userId()`, `/analytics/events` is `permitAll`, and `analytics_events.user_id` is nullable in the live schema — so anonymous events already persist with a null user and are separable by `user_id IS NULL`.
+
+**What was actually missing is an analysis convention, not a field.** Any future Explore read must segment on `user_id IS NULL`; nothing needs building. **Do not construct a parallel viewer-type dimension.** Recorded caveat: an expired-token event could in principle land as anonymous, but `trackAnalyticsEvent` refreshes and retries on 401 (`v0.80.0`), so this is a residual edge rather than a systematic bias.
+
+Anti-drift: **no migration.** **Slice C is NOT in this release** and stays blocked on two owner decisions — what a signed-out visitor sees on the Review Sets tab, and the `robots.ts` position. **`/explore` is NOT made anonymous here**; it keeps its client-side gate, and this release neither adds canonical/OG/structured data to it nor introduces the discovery-intent cookie. **Stages 1–3 are untouched**, and Stage 3 remains doctrine-blocked by `AGENTS.md`'s Explore Navigation Rule until that amendment is ratified. No change to `/tags`, `/notes/public/**`, or any existing permit rule. **The `scope=mine` gate on both widened endpoints must keep throwing for anonymous callers** — that is the line between a fix and a data leak.
+
+### Shipped
+
+_(nothing yet)_
+
+
 ## v0.83.1 - Note Creation Integrity
 
 **Status: Released** (kicked off and signed off 2026-08-17)
