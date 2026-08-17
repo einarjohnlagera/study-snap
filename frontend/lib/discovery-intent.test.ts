@@ -74,6 +74,35 @@ describe("discovery intent cookie", () => {
     );
   });
 
+  it("reports whether the intent was actually stored", () => {
+    // The return value is the whole point of C: a blocked cookie jar accepts the assignment and
+    // stores nothing, so the write itself is not evidence. The setter reads back to find out, and
+    // the caller uses the answer to decide whether the signup screen may promise resumption.
+    expect(setDiscoveryIntentCookie({
+      planId: "plan-1",
+      planType: "study-plan",
+      returnPath: "/explore",
+    })).toBe(true);
+
+    const descriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+    Object.defineProperty(document, "cookie", {
+      configurable: true,
+      get: () => "",
+      set: () => undefined,
+    });
+    try {
+      expect(setDiscoveryIntentCookie({
+        planId: "plan-2",
+        planType: "goal",
+        returnPath: "/explore",
+      })).toBe(false);
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(document, "cookie", descriptor);
+      }
+    }
+  });
+
   it("tolerates blocked cookie writes", () => {
     const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
     const setter = jest.spyOn(Document.prototype, "cookie", "set").mockImplementation(() => {

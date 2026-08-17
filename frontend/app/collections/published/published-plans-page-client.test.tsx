@@ -353,6 +353,29 @@ describe("PublishedPlansPage", () => {
     expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&intent=discovery-adopt");
   });
 
+  it("carries pointer origin on an anonymous adopt click from the browse-all grid", async () => {
+    // For an anonymous viewer loadRecommended returns early with an empty list, so EVERY anonymous
+    // adopt click originates in browse-all — the one grid that was not receiving discoveryMetadata.
+    // Pointer origin was therefore recorded for authenticated clicks and never for anonymous ones,
+    // which is the biased-loss shape v0.80.0 exists for. Verified by mutation: removing the prop
+    // from that grid left all 25 tests green before this existed.
+    currentAuthUser = null;
+
+    render(
+      <PublishedPlansPageClient
+        embedded
+        discoverySource="explore"
+        discoveryMetadata={{ pointerSource: "dashboard" }}
+      />,
+    );
+    fireEvent.click((await screen.findAllByRole("button", { name: "Sign in to adopt" }))[0]);
+
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "EXPLORE_OFFICIAL_SET_ADOPT_CLICKED",
+      metadata: expect.objectContaining({ pointerSource: "dashboard", source: "explore" }),
+    }));
+  });
+
   it("still enters signup when browser privacy settings block the intent cookie", async () => {
     currentAuthUser = null;
     const setter = jest.spyOn(Document.prototype, "cookie", "set").mockImplementation(() => {
@@ -362,7 +385,10 @@ describe("PublishedPlansPage", () => {
     render(<PublishedPlansPageClient embedded discoverySource="explore" />);
     fireEvent.click((await screen.findAllByRole("button", { name: "Sign in to adopt" }))[0]);
 
-    expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&intent=discovery-adopt");
+    // The UNSAVED variant, not the plain one. A blocked cookie jar accepts the write and stores
+    // nothing, so the signup screen must not promise the plan is waiting — it tells the visitor to
+    // pick it again instead. Asserting the plain intent here would pin a silent data loss.
+    expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&intent=discovery-adopt-unsaved");
     expect(adoptStudyPlan).not.toHaveBeenCalled();
     setter.mockRestore();
   });
