@@ -123,7 +123,27 @@ This interacts with a gap that does not yet exist as work: **Stage 3's SEO measu
 undefined, and Search Console setup is separately unassigned.** "Verify, then allow" needs a definition
 of verified. Deciding this item may require accepting that the verification bar is informal for now.
 
-### 6. Viewer-type segmentation on Explore analytics — engineering, and the easiest item to lose
+### 6. Viewer-type segmentation on Explore analytics — ⚠️ RESCOPED 2026-08-17: NOT engineering work
+
+**This item was verified at the `v0.83.2` kickoff and it is smaller than scoped above. The dimension
+already exists in the data.** `AnalyticsController.trackEvent` passes `user == null ? null :
+user.userId()`, `/analytics/events` is `permitAll`, and `analytics_events.user_id` is nullable in the
+live schema — so anonymous events already persist with a null user, and anonymous-vs-authenticated is
+separable today by `user_id IS NULL`.
+
+**What was actually missing is an analysis convention, not a field.** Any future Explore read must
+segment on `user_id IS NULL`. **Do not build a parallel viewer-type dimension** — it would duplicate
+data the model already carries.
+
+**The original concern was still correct in substance**, which is why it was worth checking rather than
+assuming: contamination would have been silent. It just turns out to be recoverable after the fact
+rather than requiring instrumentation beforehand, which removes Slice B as a *blocker* on Slice C.
+
+**Residual caveat, recorded rather than dismissed:** an event fired with an expired token could land as
+anonymous. `trackAnalyticsEvent` refreshes and retries on 401 (`v0.80.0`), so this is an edge rather
+than a systematic bias — but it means `user_id IS NULL` is a very good discriminator, not a perfect one.
+
+*Superseded text, kept so the reasoning is auditable:*
 
 **This is the deliverable the dissolved 09-13 gate traded away, and it must not become a footnote.**
 `v0.67.0` already ships `source` segmentation (pointer-origin vs direct nav). What is missing is an
@@ -150,12 +170,11 @@ wait behind the cookie or the structured-data work:
   sub-page. `docs/features/navigation.md`'s own "no back link" list omits `/exam`, confirming the
   oversight. **The fix is removal, not repointing.**
 
-**Slice B — the measurement prerequisite.**
-- Item 6, viewer-type segmentation. Before any anonymous traffic reaches `/explore`.
+**~~Slice B — the measurement prerequisite.~~ DISSOLVED 2026-08-17** — see item 6. The dimension already exists in the data, so there is nothing to ship before anonymous traffic arrives. What remains is a one-line analysis convention (`segment on user_id IS NULL`) that belongs to whoever runs the read, not to a release.
 
 **Slice C — the anonymous surface itself.**
 - Items 2 and 3, plus whatever items 4 and 5 are decided to be.
-- Gated on Slice B, because shipping this before segmentation is what corrupts the reads.
+- **No longer gated on Slice B.** Gated only on the two owner decisions.
 
 ---
 
