@@ -35,7 +35,7 @@ import {
   isTeacherSelectableNoteTarget,
 } from "@/lib/note-target-profile";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
-import { DOMAIN_CONTEXT_OPTIONS } from "@/lib/domain-context";
+import { DOMAIN_CONTEXT_OPTIONS, getDomainContextDescription } from "@/lib/domain-context";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 import { getCollectionLabels } from "@/lib/collection-labels";
 
@@ -551,6 +551,11 @@ export function BulkGenerationPageClient() {
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
+                {getDomainContextDescription(domainContext) ? (
+                  <p className="text-xs text-foreground/70">
+                    {getDomainContextDescription(domainContext)}
+                  </p>
+                ) : null}
                 <p className="text-xs text-foreground/60">
                   {courseProgramIds.length > 1
                     ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."

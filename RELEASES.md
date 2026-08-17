@@ -12,7 +12,7 @@ Theme: the one signal that shapes how the AI writes should be declared, not gues
 
 **463 of 956 curator-owned public notes (48.4%) receive no computation guidance in their generation prompt.**
 
-`OpenAiLlmStudyPackService.isQuantitativeContext` decides this by lowercasing a haystack and **substring-matching it against 49 English keywords**, across **8 call sites**. The haystack leads with the Domain Context's **display label** (or `course_program` when unset), and one of the keywords is `engineering`. So coverage tracks the program's **name**, not its content:
+`OpenAiLlmStudyPackService.isQuantitativeContext` decides this by lowercasing a haystack and **substring-matching it against 49 English keywords**, across **7 call sites**. Six quiz/exam sites include concept hints and a summary; the production sizing below models initial Study Pack generation, whose call supplies only domain, subject, and tags. The haystack leads with the Domain Context's **display label** (or `course_program` when unset), and one of the keywords is `engineering`. So coverage tracks the program's **name**, not its content:
 
 | | notes | missing guidance |
 |---|---|---|
@@ -29,7 +29,7 @@ Theme: the one signal that shapes how the AI writes should be declared, not gues
 
 ### Planned Scope
 
-1. **Replace the substring guess with a declared per-value property (backend).** Each Domain Context declares whether its material is quantitative; the `course_program` fallback gets a defensible default. **⚠️ Do NOT fix this by lengthening the keyword list** — that keeps guessing, and would leave the next domain to fail on the same mechanism. The 8 call sites keep their current behaviour for every value that already matches, so this must not silently *remove* guidance anywhere.
+1. **Replace the substring guess with a declared per-value property (backend).** Each Domain Context declares whether its material is quantitative; the null-Domain-Context `course_program` fallback keeps the existing keyword scan because it has no declared property. **⚠️ Do NOT fix this by lengthening the keyword list** — that keeps guessing, and would leave the next domain to fail on the same mechanism. The 7 call sites keep their current behaviour for every value that already matches, so this must not silently *remove* guidance anywhere.
 2. **Domain Context descriptions beside the authoring `<select>` (frontend).** The covered-subject lists already exist in `docs/claude-prompt/canonical-knowledge-architecture-out/08-…:56-67` and appear nowhere in the product — which is why the owner could not place Engineering Economics. Copy only; **zero schema**.
 3. **Two `ADR-001` factual corrections (docs).** Its claims that note cards "display Domain Context as their single badge" and that it is "a vocabulary learners see" are both false — `getDomainContextLabel` has zero call sites outside its own file, and every option-rendering surface is curator-gated.
 
@@ -37,8 +37,33 @@ Anti-drift: **no Domain Context Catalog, no admin CRUD, no Domain Categories, no
 
 ### Shipped
 
-_(nothing yet)_
+- **Declared quantitative Domain Context signal (backend).** All eight enum values now state their quantitative treatment at declaration time. Engineering Mathematics, Engineering Sciences, and Civil Engineering preserve their prior guidance; Professional Practice & Regulation, Professional Education, Nursing, and Accountancy now opt in explicitly, while General Education remains non-quantitative by default. The unchanged 49-keyword scan remains additive for subject, tags, concepts, summary, and the null-Domain-Context program fallback, with no generation-path I/O or persistence change.
+- **Covered-subject guidance at all curator selectors (frontend).** Note Editor, Bulk Generate, and Note Detail now show the selected Domain Context's ratified covered-subject description without changing select behavior or API contracts; Engineering Economics is visibly placed under Engineering Mathematics.
+- **ADR-001 factual corrections (docs).** Corrected the claims that learners see the Domain Context vocabulary and that note cards display it. Domain Context remains curator-facing authoring metadata and an LLM input, while the binding governance conclusion remains unchanged: adding notes is authoring; adding a Domain Context is architecture.
 
+### Pre-commit audit — 2026-08-17
+
+**Both required mutations verified, and the core change is minimal and correct.** The declared-property short-circuit is four lines placed *above* the keyword scan — exactly the additive shape the scope demanded, so it cannot return `false` where the scan would return `true`. Flipping `ACCOUNTANCY` to `false` fails 2 tests; removing the keyword scan entirely fails 2 tests. **Both halves of the guarantee are pinned rather than described.** Spot-checked the rest: `effectiveAuthoringDomain` still returns `getLabel()`, `QUANTITATIVE_KEYWORDS` is unlengthened, no migration, no new I/O on the generation path, and the descriptions are faithfully transcribed from `08:57-66` rather than invented.
+
+Codex also found a **third** `ADR-001` error beyond the two named in scope: Applicable Programs surface on note cards, not "only on note detail" — verified, they are passed to cards on the Library, Dashboard community section, and public subject pages.
+
+Backend 1597 tests (up 15) · frontend 1940 tests / 184 suites · `tsc` clean · lint 0 errors.
+
+### The two Education values are declared `false`, deliberately
+
+The scope left `GENERAL_EDUCATION` and `PROFESSIONAL_EDUCATION` to judgment. **Both are `false`, and the reason is the same one that makes this whole release safe: `false` is a no-op against today's behaviour, `true` is a new signal.** A domain declaring `false` falls through to the untouched keyword scan — precisely what those notes do now — so neither value can regress. Declaring one `true` would actively instruct the model to *"use numbers, word problems, or applied calculations."*
+
+`PROFESSIONAL_EDUCATION` was delivered as `true` and **corrected to `false` before commit.** `08:64` assigns Educational Psychology, Assessment of Learning, Curriculum Development and Teaching Profession to it. Of the **136** Education notes currently missing guidance, only **`Assessment of Learning` (13, ~10%)** is plausibly quantitative — item analysis and scoring statistics. The other **~123 (~90%)** are Educational Psychology, Curriculum Development, Teaching Profession, Teaching Strategies, Evolution of Philippine Education, Historical Figures and Educational Laws.
+
+**`true` would have rescued 13 notes and pushed a false quantitative signal onto roughly 123 — inverting this release's own logic**, since the release exists because a name-based guess produced wrong signals, and substituting a different wrong signal is not progress. It would also have been the single line breaking the additive-only property everything else here rests on. Because Study Packs are never auto-regenerated, a false signal that lands is permanent per note.
+
+The cost of `false` is honest and small: `'assessment of learning'` contains no keyword, so those 13 notes keep missing guidance. **The fix is curator metadata, not an enum lie** — a subject or tag naming what the material actually is (`Item Analysis`, `Statistics`), which is better metadata regardless and is what the scan is for. `PROFESSIONAL_EDUCATION` has zero notes today, so nothing live changed either way.
+
+`GENERAL_EDUCATION` is `false` on the same reasoning, and its 31 live notes are unaffected for the same reason — recorded here so nobody rediscovers it as a bug.
+
+### Feature docs
+
+`challenge-quiz.md`'s *"Quantitative / computation guidance"* section described the signal as **keyword-only**, which was complete when written and is now half the story — a future prompt reading it would have concluded the keyword list is the definition and lengthened it. It now names both paths, states that the declared check runs first and only ever adds, and records why the keyword list must not be read as the definition. `study-pack-generation.md` gained the same rule beside the authoring-domain fallback chain it sits on.
 
 ## v0.84.0 - Public Explore
 

@@ -61,6 +61,7 @@ Inline metadata edit:
 - **Do not restore a pill list or a bordered metadata block here.** A previous pass rendered the full set as pills, which consumed roughly a quarter of the mobile viewport and pushed `Start Quick Review` and the entire content tab bar below the fold — authoring metadata outranking the product. Library cards retain their existing count presentation.
 - catalog or Course / Program(s) load failures stay inline and do not hide note content. A failed program-set save restores the last persisted selection, reports the failure, and leaves the edit panel open.
 - the two authoring axes (Domain Context and `Authored Depth`, the control label for Note Learner Level) are the only way to correct them once a Study Pack exists, and they shape future generation only — saving them does not touch the existing Study Pack.
+- the selected Domain Context shows its covered-subject description directly below the curator-only select; this is taxonomy guidance copy and does not change the saved value or fallback behavior.
 - the Subject field carries the same subject-equals-Domain-Context advisory as the Note Editor: exact case-insensitive match only, advisory text under the field, never a save block.
 - the panel's draft is seeded from the note in five places (load sync, `?edit=1` auto-open, `Edit`, `Cancel`, post-save reset) through one `toMetadataDraft` helper — add new fields there, not at the call sites.
 - saving sends `PUT /notes/{id}`, a full replace. Fields the current user cannot see must be sent back from the loaded note, never from the draft.

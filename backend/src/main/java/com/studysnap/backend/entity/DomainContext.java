@@ -9,19 +9,21 @@ import java.util.Locale;
  */
 @Getter
 public enum DomainContext {
-    ENGINEERING_MATHEMATICS("Engineering Mathematics"),
-    ENGINEERING_SCIENCES("Engineering Sciences"),
-    CIVIL_ENGINEERING("Civil Engineering"),
-    PROFESSIONAL_PRACTICE_AND_REGULATION("Professional Practice & Regulation"),
-    GENERAL_EDUCATION("General Education"),
-    PROFESSIONAL_EDUCATION("Professional Education"),
-    NURSING("Nursing"),
-    ACCOUNTANCY("Accountancy");
+    ENGINEERING_MATHEMATICS("Engineering Mathematics", true),
+    ENGINEERING_SCIENCES("Engineering Sciences", true),
+    CIVIL_ENGINEERING("Civil Engineering", true),
+    PROFESSIONAL_PRACTICE_AND_REGULATION("Professional Practice & Regulation", true),
+    GENERAL_EDUCATION("General Education", false),
+    PROFESSIONAL_EDUCATION("Professional Education", false),
+    NURSING("Nursing", true),
+    ACCOUNTANCY("Accountancy", true);
 
     private final String label;
+    private final boolean quantitative;
 
-    DomainContext(String label) {
+    DomainContext(String label, boolean quantitative) {
         this.label = label;
+        this.quantitative = quantitative;
     }
 
     public static DomainContext fromString(String value) {

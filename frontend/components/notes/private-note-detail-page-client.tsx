@@ -96,7 +96,11 @@ import {
   LEARNER_LEVEL_OPTIONS,
   normalizeCourseProgram,
 } from "@/lib/learning-profile";
-import { DOMAIN_CONTEXT_OPTIONS, isSubjectSameAsDomainContext } from "@/lib/domain-context";
+import {
+  DOMAIN_CONTEXT_OPTIONS,
+  getDomainContextDescription,
+  isSubjectSameAsDomainContext,
+} from "@/lib/domain-context";
 import {
   buildNoteDetailPathWithTab,
   normalizeNoteDetailTab,
@@ -2215,6 +2219,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>
+                      {getDomainContextDescription(metadataDraft.domainContext) ? (
+                        <p className="text-xs text-foreground/70">
+                          {getDomainContextDescription(metadataDraft.domainContext)}
+                        </p>
+                      ) : null}
                       <p className="text-xs text-foreground/60">
                         {applicableProgramIds.length > 1
                           ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
