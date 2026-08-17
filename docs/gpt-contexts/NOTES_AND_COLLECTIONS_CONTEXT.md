@@ -6,7 +6,7 @@
 > subject pages). This is a structural snapshot, not a proposal — it describes what exists now so a
 > design conversation starts from real constraints instead of assumptions.
 > Update this file when the Note schema, taxonomy model, or collection model changes.
-> Last updated: v0.82.0 — 2026-08-16. **Target Audience retirement is RATIFIED** (`ADR-001` amended 2026-08-16) — see §0; the field still exists and is still written during the gated migration. **`v0.79.0` made the 21-row `course_programs` catalog the first
+> Last updated: v0.83.0 — 2026-08-17. **⚠️ Target Audience is REMOVED from authoring, display and discovery as of `v0.83.0`** — see §0. It is no longer a request or response field; the column survives, written server-side, pending `[CHECKPOINT — due 2026-09-16]`. **`v0.79.0` made the 21-row `course_programs` catalog the first
 > suggestion source** for learner Course / Program fields on `/profile`, the Note Editor, private Note
 > Detail and the Dashboard profile-completion prompt — free text still allowed, nothing migrated, and
 > **onboarding deliberately excluded** until after 2026-09-11. The public program filter now lists
@@ -32,9 +32,9 @@
 
 **The single most important change: one note can be applicable to many programs, so do not propose the same note once per program.** An Algebra note authored once for `Engineering Mathematics` surfaces under Civil, Electrical *and* Mechanical Engineering. Proposing "Algebra for Civil Engineering", "Algebra for Mechanical Engineering" as separate notes is the duplication the whole architecture exists to remove. If two proposed notes would differ only by which program they serve, they are **one** note with several Applicable Programs.
 
-### The five axes of a note
+### The four axes of a note
 
-Every note carries five independent metadata axes. They are not interchangeable, and two of them **never reach the LLM** — proposing content that depends on them shaping generation is a category error.
+Every note carries four durable metadata axes (a fifth, Target Audience, was retired from product surfaces in `v0.83.0`). They are not interchangeable, and one of them — Applicable Programs — **never reaches the LLM** — proposing content that depends on them shaping generation is a category error.
 
 | Axis | Answers | Reaches the generation prompt? |
 |---|---|---|
@@ -42,7 +42,7 @@ Every note carries five independent metadata axes. They are not interchangeable,
 | **Domain Context** | *how* it is authored — **the sole LLM domain constraint** | **Yes — this is the one that shapes voice and framing** |
 | **Note Learner Level** — labelled **“Authored Depth”** in the UI since `v0.75.0` (copy-only; the column is still `notes.learner_level`) | *how deep* — the curriculum floor | Yes |
 | **Applicable Programs** | *where* it appears — one or many catalog programs | **Never.** Discovery only |
-| **Target Audience** ⚠️ **RETIRING — ratified 2026-08-16, still live during migration** | transitional discovery contract | **Never.** Discovery only, and never depth |
+| ~~**Target Audience**~~ ⚠️ **REMOVED from product surfaces in `v0.83.0`; column retained** | none — retired | **Never.** It never reached a prompt, and must never become a depth fallback |
 
 ### What to give us when you propose a note
 
@@ -51,7 +51,7 @@ Every note carries five independent metadata axes. They are not interchangeable,
 3. **Domain Context** — one of the **8 ratified values**, below. This is what makes generated content sound like it belongs to the field.
 4. **Note Learner Level** — `GRADE_SCHOOL` · `JUNIOR_HIGH` · `SENIOR_HIGH` · `COLLEGE` · `BOARD_EXAM_REVIEW` · `PROFESSIONAL`. This is the curriculum **floor**: a reader at a lower level gets softer scaffolding and wording, never easier curriculum.
 5. **Applicable Programs** — one or more catalog names, below. **Say all of them.** Under-listing recreates the duplication problem; you cannot "add the others later" without a curator editing every note by hand.
-6. **Target Audience** — `STUDENT` · `BOARD_TAKER` · `PROFESSIONAL`. **⚠️ RETIRING — ratified 2026-08-16 (`ADR-001` amended, five axes to four).** The grounds are that it is **absent from every prompt** and its **access-control purpose was never implemented**. **⚠️ The ~99.3% Course/Program correlation is explicitly NOT the justification** — a board-heavy-catalog artifact, not semantic equivalence; a second opinion rejected it as grounds for an irreversible step, and it must not be cited to justify dropping the column. It *is* still a live Public Library filter with a shareable `?audience=` URL param, so removal is user-visible. **`v0.82.0`'s `V117` migrated its information into Authored Depth for curator-owned notes only** (`BOARD_TAKER`→`BOARD_EXAM_REVIEW`, `PROFESSIONAL`→`PROFESSIONAL`; **`STUDENT` stays NULL**, spanning four depths; 4,645 learner-owned notes never touched). **⚠️ `BOARD_TAKER` is NOT self-certifying — it failed in both programs anyone audited**, so `V117` excludes a **denylist** of non-licensure program values: Information Technology plus `Grade School` / `Junior High` / `High School` / `Senior High …`, checked against both the catalog join and the free-text field, and **never derived from `exam_goal_slug`** (that marks Exam Hubs, and would drop Civil Engineering's 254 legitimate notes). **Keep supplying the field — nothing is removed yet**, and **never make it a runtime depth fallback**: it is one-time migration evidence. **Phase 2 (authoring field, filter chips, `?audience=`) is ungated and may ship; DROPPING the column waits on `[CHECKPOINT — due 2026-09-16]`**, which needs it to run the kill criterion. Full audit: `docs/claude-plans/target-audience-removal-proposal.md`.
+6. ~~**Target Audience**~~ — **DO NOT SUPPLY IT. Removed in `v0.83.0`** from every request, response and authoring surface; the API ignores it. The server still writes the underlying column from the owner's profile to satisfy `NOT NULL`, and that is the only thing keeping it alive. **Why it was retired:** absent from every prompt, and its access-control purpose was never implemented. **⚠️ The ~99.3% Course/Program correlation is explicitly NOT the justification** — a board-heavy-catalog artifact, not semantic equivalence, and it must not be cited to justify dropping the column. **`v0.82.0`'s `V117` migrated its information into Authored Depth for curator-owned notes only** (`BOARD_TAKER`→`BOARD_EXAM_REVIEW`, `PROFESSIONAL`→`PROFESSIONAL`; **`STUDENT` stays NULL**, spanning four depths; 4,645 learner-owned notes never touched). **⚠️ `BOARD_TAKER` is NOT self-certifying — it failed in both programs anyone audited**, so `V117` excludes a **denylist** of non-licensure program values, **never derived from `exam_goal_slug`**. **Dropping the column waits on `[CHECKPOINT — due 2026-09-16]`**, which needs it to run the kill criterion, and it must **never** become a runtime depth fallback. **What replaced it for discovery:** an Authored Depth `?level=` filter — but it is **partially populated**, since 80 of 120 curator public notes formerly tagged `STUDENT` still have NULL depth and are unreachable by it. Full audit: `docs/claude-plans/target-audience-removal-proposal.md`.
 
 **One finding from that audit that changes how you should read this list:** `Junior High`, `High School`, `Senior High – STEM/HUMSS/ABM` and `Grade School` are currently being used as **Course / Program** values on ~47 public notes. Those are academic *levels* — Note Learner Level's job. Do not propose notes that file an academic level as a program; give a real catalog program plus the level in field 4.
 
@@ -97,7 +97,7 @@ Backend: `NoteEntity` (`backend/src/main/java/com/studysnap/backend/entity/NoteE
 | `tags` | `text[]` | free-form tag list |
 | `status` | enum `NoteStatus` | `DRAFT` / `GENERATING` / `FAILED` / `GENERATED` |
 | `visibility` | enum `NoteVisibility` | `PRIVATE` / `PUBLIC` |
-| `targetProfileType` | enum `NoteTargetProfileType` | `STUDENT` / `BOARD_TAKER` / `PROFESSIONAL` |
+| ~~`targetProfileType`~~ | enum `NoteTargetProfileType` | **⚠️ COLUMN ONLY as of `v0.83.0` — not in any request or response.** Still written server-side from the owner's profile to satisfy `NOT NULL`; never supply it, never read it back |
 | `sourceNoteId` | FK | set when a note was generated from another note |
 | `copiedFromNoteId` / `copiedFromUserId` / `copiedFromTitle` / `copiedFromPublic` / `copiedAt` | | provenance when this note is a copy of a public note |
 | `createdAt` / `updatedAt` | | |
@@ -149,12 +149,12 @@ The rest of this section describes the still-current free-text convention, which
 | `courseProgramIds` | curator: yes | catalog ids, applies to the whole batch (`v0.71.0`) |
 | `courseProgramText` | learner: yes | free text, applies to the whole batch |
 | `domainContext` | required if >1 program | applies to the whole batch |
-| `targetProfileType` | no, enum | optional, applies to the whole batch |
+| ~~`targetProfileType`~~ | **REMOVED in `v0.83.0`** | Do not send it. The server derives the stored value from the owner's profile |
 | `makePublic` | no, boolean | |
 
 **CORRECTED:** this table previously listed a single free-text `courseProgram` and said learner level *"is never note-level."* Both changed — see §1 and §2.
 
-Bulk Generate sets taxonomy **once per batch, not per note** — every note in a batch shares the same subject, programs, Domain Context and audience. **This is the main practical constraint on how you propose batches:** notes that need different Applicable Programs or a different Domain Context cannot share a batch. Group your proposals by that boundary, not just by subject. `tags` remain non-bulk-settable.
+Bulk Generate sets taxonomy **once per batch, not per note** — every note in a batch shares the same subject, programs and Domain Context. (Audience was in this list until `v0.83.0` removed it.) **This is the main practical constraint on how you propose batches:** notes that need different Applicable Programs or a different Domain Context cannot share a batch. Group your proposals by that boundary, not just by subject. `tags` remain non-bulk-settable.
 
 Canonical doc: `docs/features/bulk-generation.md`.
 

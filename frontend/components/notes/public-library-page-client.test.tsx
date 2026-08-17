@@ -253,6 +253,24 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.queryByRole("button", { name: "College" })).not.toBeInTheDocument();
   });
 
+  it("applies an authored depth chosen in the filter sheet to the URL and the request", async () => {
+    (listPublicLearnerLevels as jest.Mock).mockResolvedValue(["JUNIOR_HIGH", "COLLEGE"]);
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "junior-note", title: "Junior High Algebra", learnerLevel: "JUNIOR_HIGH" }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+
+    await screen.findByText("Junior High Algebra");
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    const dialog = await screen.findByRole("dialog", { name: "More Filters" });
+    const modal = within(dialog);
+    fireEvent.click(modal.getByRole("button", { name: "College" }));
+    fireEvent.click(modal.getByRole("button", { name: "Apply" }));
+
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?level=COLLEGE", { scroll: false });
+  });
+
   it("treats an unknown authored depth URL as unfiltered", async () => {
     currentSearch = "?level=NONSENSE";
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([

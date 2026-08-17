@@ -106,7 +106,7 @@ Relevant fields:
 - `course_program` (nullable)
 - `domain_context` (nullable `VARCHAR(64)`, `DomainContext` enum)
 - `learner_level` (nullable `VARCHAR(32)`, note-level `LearnerLevel` enum)
-- `target_profile_type`
+- `target_profile_type` — **retained but no longer read by product code as of `v0.83.0`.** Still `NOT NULL` with a CHECK constraint, written server-side from the owner's profile. Kept because it is `V117`'s input and `[CHECKPOINT — due 2026-09-16]` cannot run its kill criterion without it; the drop is phase 4.
 - `make_public`
 - `requested_count`
 - `created_count`
