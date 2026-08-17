@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.84.0 - Public Explore` (Released); previous: `v0.83.2 - Anonymous Discovery Access` (Released)
+- `v0.85.0 - Domain Signal Integrity` (In Progress); previous: `v0.84.0 - Public Explore` (Released)
 
 **⚠️ `v0.83.0` removes Target Audience from authoring and Public Library discovery but does NOT drop `notes.target_profile_type`.** The column is `V117`'s input and `[CHECKPOINT — due 2026-09-16]` cannot run without it; the drop waits on that report. No migration ships in `v0.83.0`. Target Audience must never become a runtime depth fallback.
 

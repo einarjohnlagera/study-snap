@@ -1,5 +1,45 @@
 # RELEASES.md - NoteLib
 
+## v0.85.0 - Domain Signal Integrity
+
+**Status: In Progress** (kicked off 2026-08-17)
+
+Theme: the one signal that shapes how the AI writes should be declared, not guessed from a name.
+
+**Origin worth recording, because it is not where the release started.** The owner proposed a **Domain Context Catalog** on 2026-08-17 after struggling to place Engineering Economics notes while building the Civil Engineering Review Set. A cold-context agent pressure-tested it and **recommended declining it** — then, while auditing what the enum is actually responsible for, found a live generation-quality defect much larger than the proposal that surfaced it. This release is that defect.
+
+### The defect, sized against production
+
+**463 of 956 curator-owned public notes (48.4%) receive no computation guidance in their generation prompt.**
+
+`OpenAiLlmStudyPackService.isQuantitativeContext` decides this by lowercasing a haystack and **substring-matching it against 49 English keywords**, across **8 call sites**. The haystack leads with the Domain Context's **display label** (or `course_program` when unset), and one of the keywords is `engineering`. So coverage tracks the program's **name**, not its content:
+
+| | notes | missing guidance |
+|---|---|---|
+| Programs with "Engineering" in the name | 214 | **0 — 0%** |
+| Every other named program | 670 | **463 — 69%** |
+
+`Civil Engineering` 197/0 · `Education` 146/136 · `Architecture` 90/75 · `Nursing` 130/106 · `Accountancy` 154/60.
+
+**⚠️ The failing subjects are the computational ones**, which is what makes this a quality defect rather than a curiosity: Nursing `Pharmacology` (14 notes — dosage calculation, high-stakes on the NLE), `Maternal and Child` (14), `Medical-Surgical` (15); Accountancy `Income Tax`, `Business Tax`, `Basic` + `Advanced Taxation` (8), `Budgeting`, `Cash and Receivables`, `Investments`, `Financial Management`, `PPE`; Architecture `Structural Components`, `Building Utilities`.
+
+**⚠️ `Accountancy` is the sharpest case:** the keyword list contains `accounting`, which is not a substring of `accountancy`. The CPA licensure domain — amortization, cash flow, interest, ratios, every one of them a keyword — fails to match on its own name.
+
+**⚠️ The "subjects rescue it" defence fails.** Of ~117 rescued notes in Accountancy and Nursing, **74 (63%) are rescued only by free-text tags**. Notes that pass do so accidentally, and two notes on the same subject diverge on whether a curator happened to type a matching word.
+
+### Planned Scope
+
+1. **Replace the substring guess with a declared per-value property (backend).** Each Domain Context declares whether its material is quantitative; the `course_program` fallback gets a defensible default. **⚠️ Do NOT fix this by lengthening the keyword list** — that keeps guessing, and would leave the next domain to fail on the same mechanism. The 8 call sites keep their current behaviour for every value that already matches, so this must not silently *remove* guidance anywhere.
+2. **Domain Context descriptions beside the authoring `<select>` (frontend).** The covered-subject lists already exist in `docs/claude-prompt/canonical-knowledge-architecture-out/08-…:56-67` and appear nowhere in the product — which is why the owner could not place Engineering Economics. Copy only; **zero schema**.
+3. **Two `ADR-001` factual corrections (docs).** Its claims that note cards "display Domain Context as their single badge" and that it is "a vocabulary learners see" are both false — `getDomainContextLabel` has zero call sites outside its own file, and every option-rendering surface is curator-gated.
+
+Anti-drift: **no Domain Context Catalog, no admin CRUD, no Domain Categories, no prompt-hint field, and no new enum value** — including `General Engineering`. All were assessed 2026-08-17 and declined on production evidence (12.7% classification; 4 of 8 values never used; `ACCOUNTANCY` and `NURSING` at zero against 286 unclassified notes in those programs; one curator). **The enum stays an enum**, so `@Enumerated(EnumType.STRING)` and the three `Enum.valueOf` projection paths are untouched. **No migration.** **No change to what any existing value resolves to** — `effectiveAuthoringDomain` still returns `getLabel()`, because the label is the prompt payload and changing it would rewrite what past generations were told. **Engineering Economics is filed under `Engineering Mathematics`** per `08:57`; that is a curator action, not a code change.
+
+### Shipped
+
+_(nothing yet)_
+
+
 ## v0.84.0 - Public Explore
 
 **Status: Released** (kicked off and signed off 2026-08-17, merged and deployed 2026-08-17)
