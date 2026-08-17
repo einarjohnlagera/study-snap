@@ -28,7 +28,16 @@ CREATE TEMP TABLE v117_captured (id uuid PRIMARY KEY);
 \copy v117_captured (id) FROM 'docs/claude-plans/v0.82.0-curator-depth-backfill-population.csv' WITH (FORMAT csv)
 
 -- Guard: the capture must be the 828-row file, not a stale or truncated copy.
-SELECT count(*) AS captured_expect_828 FROM v117_captured;
+-- A real assertion, not a printed count. A silently short load would produce a key
+-- missing rows, which is the reversal failing open.
+DO $$
+DECLARE n int;
+BEGIN
+    SELECT count(*) INTO n FROM v117_captured;
+    IF n <> 828 THEN
+        RAISE EXCEPTION 'capture loaded % rows, expected 828 - wrong or truncated file, STOP', n;
+    END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Step 2 — narrow the superset to what V117 actually wrote.
