@@ -185,10 +185,14 @@ describe("ExplorePageClient", () => {
   });
 
   it("keeps the authenticated default tab and discovery sources unchanged", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT" });
+    // BOARD_EXAM on purpose. Mocking STUDENT made this byte-identical to the anonymous
+    // expectation, so it passed even when the anonymous fallback was forced onto every viewer —
+    // the exact regression its name claims to guard. A profile whose vocabulary differs from the
+    // anonymous default is the only fixture that can discriminate.
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM" });
     render(<ExplorePageClient />);
 
-    expect(await screen.findByRole("tab", { name: "Official Study Plans" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("tab", { name: "Official Review Sets" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Review Sets Data")).toBeInTheDocument();
     expect(screen.getByText("Notes Data")).toBeInTheDocument();
     expect(trackAnalyticsEvent).toHaveBeenCalledWith({

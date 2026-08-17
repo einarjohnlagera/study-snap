@@ -4824,7 +4824,7 @@ export async function updateCollectionVisibility(
 
 export async function adoptStudyPlan(id: string): Promise<AdoptStudyPlanResponse> {
   const response = await fetchWithAuth(
-    `/collections/${id}/adopt`,
+    `/collections/${encodeURIComponent(id)}/adopt`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -4836,7 +4836,7 @@ export async function adoptStudyPlan(id: string): Promise<AdoptStudyPlanResponse
 
 export async function adoptGoal(id: string): Promise<AdoptGoalResponse> {
   const response = await fetchWithAuth(
-    `/collections/${id}/adopt-goal`,
+    `/collections/${encodeURIComponent(id)}/adopt-goal`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),

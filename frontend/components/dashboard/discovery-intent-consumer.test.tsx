@@ -1,4 +1,5 @@
 import { render, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { DiscoveryIntentConsumer } from "./discovery-intent-consumer";
 import { adoptGoal, adoptStudyPlan } from "@/lib/api";
 import {
@@ -46,6 +47,41 @@ describe("DiscoveryIntentConsumer", () => {
     render(<DiscoveryIntentConsumer />);
     await Promise.resolve();
     expect(adoptStudyPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("adopts once under StrictMode double-invocation", async () => {
+    // The one-shot guarantee lives entirely in clearing the cookie BEFORE the await: a synchronous
+    // cookie write means the second invocation re-reads null and returns early. The existing
+    // remount test cannot see this — it re-renders only after waitFor has resolved the request, so
+    // it exercises sequential remount, never concurrent double-invoke.
+    //
+    // Verified by mutation: moving either clear after the await produces two adoptions, and before
+    // this test existed that mutation left the whole suite green.
+    (adoptStudyPlan as jest.Mock).mockResolvedValue({ collectionId: "collection-1", skippedCount: 0 });
+    setDiscoveryIntentCookie({ planId: "plan-1", planType: "study-plan", returnPath: "/explore" });
+
+    render(
+      <StrictMode>
+        <DiscoveryIntentConsumer />
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/collections/collection-1"));
+    expect(adoptStudyPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an exam intent when the adoption fails", async () => {
+    // Clearing exam intent up front over-applied the collision rule: if the plan is gone there is
+    // no competing action to suppress, so discarding it costs the visitor a prompt they earned.
+    document.cookie = "notelib-exam-intent=ale; path=/; SameSite=Strict";
+    (adoptStudyPlan as jest.Mock).mockRejectedValue(new Error("gone"));
+    setDiscoveryIntentCookie({ planId: "plan-1", planType: "study-plan", returnPath: "/explore" });
+
+    render(<DiscoveryIntentConsumer />);
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalled());
+    expect(document.cookie).toContain("notelib-exam-intent=ale");
+    expect(getDiscoveryIntentCookie()).toBeNull();
   });
 
   it("gives discovery adoption priority over an exam intent", async () => {
