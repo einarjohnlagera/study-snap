@@ -57,6 +57,7 @@ import { DashboardPrimaryCollectionHero, DashboardPrimaryCollectionHeroSkeleton 
 import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
 import { DashboardGoalCard } from "@/components/dashboard/dashboard-goal-card";
 import { GoalPromptBanner } from "@/components/dashboard/goal-prompt-banner";
+import { DiscoveryIntentConsumer } from "@/components/dashboard/discovery-intent-consumer";
 import { AppModal } from "@/components/ui/app-modal";
 import {
   clearFirstStudyOnboardingStep,
@@ -725,6 +726,8 @@ export default function DashboardPage() {
               ? "Your professional learning workspace. Review study material, practice applied scenarios, and track certification readiness."
             : "Your note workspace. Revisit saved notes, reinforce weak concepts, and keep studying with less friction."}
       />
+
+      <DiscoveryIntentConsumer />
 
       {loading ? (
         <DashboardLoading />
