@@ -1,5 +1,33 @@
 # RELEASES.md - NoteLib
 
+## v0.84.0 - Public Explore
+
+**Status: In Progress** (kicked off 2026-08-17)
+
+Theme: a visitor who has never signed up should be able to browse what NoteLib has, at the same URL a member uses.
+
+**Slice C of Discovery System Stage 0** — the release that actually makes `/explore` anonymous. Scope and premise verification: `docs/claude-plans/discovery-system-stage-0-scoping.md`. Slice A shipped in `v0.83.2`; **Slice B was dissolved at the `v0.83.2` kickoff** once the viewer-type dimension turned out to already exist in the data (`user_id IS NULL`).
+
+**Both blocking owner decisions were taken 2026-08-17, and the reasoning matters more than the outcome:**
+
+- **The anonymous Review Sets tab shows the FULL published catalog, with Adopt gated at click** — not a teaser, not hidden. The point of choosing the `/explore` URL over the cheaper `/public/library` retarget was one canonical destination for both audiences; a structurally different anonymous page would have given that up while still paying Stage 0's cost.
+- **`robots.ts` keeps `/explore` out of the index while it is incomplete, and allows it once metadata lands.** ⚠️ **Note the condition that makes this real:** merging to `main` *is* the deploy, so if this release ships atomically the incomplete window never exists in production and a disallow added and removed inside one release is a no-op. **The decision binds if the release is ever split across deploys** — then the disallow ships with the first and the allow with the last.
+
+### Planned Scope
+
+1. **Make `/explore` render for anonymous visitors (frontend).** `explore-page-client.tsx:49` calls `requireAuthenticatedOnboardedUser(router)`, and there is **no `frontend/middleware.ts` at all** — so this is a component change, not an auth-architecture one. The two composited components already render anonymously at their standalone routes.
+2. **A generalized discovery-intent cookie (frontend).** ⚠️ **Do not use the `redirect` query param.** `resolvePostLoginDestination` routes new signups through `/verify-email` and `/onboarding` first and drops it — recorded in `docs/features/exam-hub.md` — and the anonymous Explore audience is overwhelmingly new signups, precisely the population it fails for. **Mirror `frontend/lib/exam-intent.ts`**: a small client module (set/get/clear, 30-minute max-age, `SameSite=Strict`), set at `/auth`, consumed after onboarding the way `goal-prompt-banner.tsx` consumes the exam one.
+3. **Canonical, OG and structured data for `/explore` (frontend).** It has title-only metadata today. ⚠️ **Not purely additive:** `/public/library` already emits `CollectionPage` JSON-LD for the same content, so **the canonical direction between the two must be decided as part of this item**, not discovered after both are indexed.
+4. **Anonymous Review Sets tab per the decision above** — full catalog, Adopt routing into signup with discovery intent attached.
+5. **`robots.ts` per the decision above**, with the atomicity condition recorded rather than mechanically adding a rule that the same release removes.
+
+Anti-drift: **no backend permit changes** — Slice A already granted what the facets need, and nothing here widens access further. **No migration.** **`/public/library` is NOT redirected and its route is unchanged** — that is Stage 3, which stays **doctrine-blocked** by `AGENTS.md`'s Explore Navigation Rule until its amendment is ratified; `/public/library/{subject}` and `/public/library/{subject}/{slug}` are **never-redirect** regardless. **Exam Hubs stay in top nav and the footer** — Explore has no exam-aware browsing mode to route an exam-seeking visitor to yet. **No viewer-type analytics dimension** — already derivable via `user_id IS NULL`; any future Explore read segments on that. **No new analytics events**, and no change to `EXPLORE_VIEWED`'s firing condition or metadata, since `[CHECKPOINT — due 2026-09-13]`'s successor read is measured elsewhere and this release should not alter what Explore counts.
+
+### Shipped
+
+_(nothing yet)_
+
+
 ## v0.83.2 - Anonymous Discovery Access
 
 **Status: Released** (kicked off and signed off 2026-08-17)
