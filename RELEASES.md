@@ -1,5 +1,35 @@
 # RELEASES.md - NoteLib
 
+## v0.83.1 - Note Creation Integrity
+
+**Status: In Progress** (kicked off 2026-08-17)
+
+Theme: a learner who pastes notes and generates a Study Pack should get a Study Pack, not a 500 and a spent quota.
+
+**A patch for a live production bug that predates the release which found it.** `v0.83.0`'s cold-context pressure test surfaced it while auditing an unrelated invariant, and it was recorded there as a Known Limitation rather than fixed in scope.
+
+**The defect.** `StudyPackService.createGeneratedNote` (`:743`) and `ShareService.createRemixedNote` (`:111`) construct a `NoteEntity` without ever calling `setTargetProfileType`. `notes.target_profile_type` is **`NOT NULL` with no database default** (`V44:18`), `NoteEntity` has no `@PrePersist` and no field initializer, and `ddl-auto` is `none`, so the production DDL is Flyway's. **Verified empirically against a real PostgreSQL rather than inferred:** the insert fails with `null value in column "target_profile_type" ... violates not-null constraint`.
+
+**Reachability, traced end to end.** `createStudyPackFromText` posts `{ notesText }` with **no `noteId`**, so `resolveSourceNoteForGeneration` returns null and `createFromText` takes the `createGeneratedNote` branch. Same for image upload and confirm-text, and `ShareService` for share-remix. **`/study` is a live destination** — `TodayFocusCard` routes the `STUDY_SUGGESTION` focus type there.
+
+**⚠️ The cost ordering is what makes this worth a patch rather than a backlog row:** quota is asserted and the LLM call completes *before* the insert. The learner pays for a generation, waits for it, and receives an error.
+
+**Why nothing caught it:** every existing fixture passes the value explicitly, and the service-level tests are Mockito-based with no schema. The gap dates to `e66491ed` (2026-03-21) and shipped on `main` for roughly five months.
+
+### Planned Scope
+
+1. **Set the value on both paths (backend).** Lift the owner-profile mapping out of `NoteService` (it is `private` today and now has three call sites) to `NoteTargetProfileType.forOwnerProfile(ProfileType)`, and have `NoteService` delegate to it so there is still one definition.
+2. **Tests that would have caught this (backend).** Assert the **persisted** value on a note created through the real paths — not that the call merely succeeds, which is the assertion shape that let this through. Include a `BOARD_EXAM`-profile case, the one where a constant and a derivation visibly diverge.
+
+**⚠️ The value must be DERIVED from the owner's profile, never a hardcoded constant.** `SPEC.md:129` documents the contract as *"derives a constrained non-null value from the owner's profile"* — a line corrected during `v0.83.0` signoff. A hardcoded `STUDENT` would make it false again the week after it was fixed. The cost is one primary-key lookup on a path that has just completed an LLM call.
+
+Anti-drift: **no migration, and specifically no `DEFAULT` added to `notes.target_profile_type`** — a database default would mask this class of bug rather than fix it, and the column is phase-4 material gated on `[CHECKPOINT — due 2026-09-16]`. No change to `NOT NULL`, the CHECK constraint, the index, or the enum's values. No product-visible behaviour changes: the column is inert, read by nothing since `v0.83.0`. **The `[CHECKPOINT — due 2026-09-16]` reads cannot be contaminated by this fix** — they key on `id IN (the 819 narrowed ids)`, so rows created after deploy cannot enter them.
+
+### Shipped
+
+_(nothing yet)_
+
+
 ## v0.83.0 - Target Audience Removal (Phase 2)
 
 **Status: Released** (kicked off and signed off 2026-08-17)
