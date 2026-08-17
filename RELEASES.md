@@ -41,9 +41,29 @@ Corrected in both, along with recording *why* each shape was chosen — the sync
 
 ### Checkpoint — `[CHECKPOINT — due 2026-09-16]`
 
-**This release shipped on a premise that has never been measured:** that one canonical public discovery URL brings visitors. **But `/explore` is still unlinked from every anonymous surface** — the marketing nav names Public Library, and Exam Hub's outbound links still point at `/public/library`. Retargeting those is Stages 1–2, which are not built, so Slice C may be necessary and insufficient.
+**⚠️ REVISED at the second fold — this checkpoint's premise expired inside its own release.** As first written it read *"`/explore` is still unlinked from every anonymous surface… retargeting those is Stages 1–2, which are not built."* **Folding Stages 1–2 into this release made all of that false.** The nav names Explore and the Exam Hub links point at it.
+
+**The revision makes the read cleaner, not weaker.** The original asked whether a public-but-unlinked page is enough — a question about missing work. It now asks the real one: Explore is public, canonical, sitemap-submitted **and** linked, so **is anonymous discovery a lever at all?** **The kill criterion changed with it:** single digits no longer means *"go build Stages 1–2"*, because they are built. It means anonymous discovery is not the lever and the next move is elsewhere. **Confound stated before the read:** total traffic is small, so a low count may mean the funnel is small rather than wrong — which is why it reads a count rather than a rate, and why zero differs meaningfully from single digits.
 
 **Deliberately not an SEO-ranking read.** Stage 3's measurement plan does not exist and Search Console is unassigned, so a ranking checkpoint would be decorative. The read instead uses instrumentation that already ships and **was verified emitting at signoff rather than merely present in the enum**: anonymous `EXPLORE_VIEWED` separated by `user_id IS NULL`. A raw count, not a rate, so no small-denominator problem. **Kill criterion: single digits or zero means the intervention is linking to Explore, not more work on Explore.**
+
+### Release notes rewritten for the folded scope — 2026-08-17
+
+**`docs/releases/v0.84.0.md` was written at the first signoff and described Slice C alone.** Two folds later it named none of Stages 1–2 and none of the three limitation fixes — so the user-facing notes documented roughly half of what shipped. Rewritten with a navigation feature (the nav swap and Exam Hub retarget stated as *navigation primacy*, with Public Library explicitly not removed), the sign-up-screen copy, the blocked-cookie honesty, and the browse-all attribution fix.
+
+**This is the real cost of folding after signoff, and it is worth naming rather than absorbing quietly:** each fold silently invalidated the release notes and the checkpoint, and nothing in the per-PR workflow re-reads them. The checkpoint was worse than stale — its premise was *quoted evidence* for its own kill criterion, so leaving it would have had September read a question this release had already answered.
+
+### Post-audit re-verification — 2026-08-17, no second agent run
+
+**The release outgrew its audit and that was checked rather than assumed.** The cold agent verified `b47c6050`; **ten non-test files changed after it**, four of them touched by more than one commit, including the trust boundary and the async lifecycle that agent had specifically audited — modified partly *in response to* its findings, and one of those changes was wrong on the first attempt.
+
+**A second full agent run was judged unnecessary, on a reason rather than a budget:** the first audit was warranted because the bug class was effect/lifecycle timing, which cannot be settled by inspection. The post-audit delta is mechanical (a nav entry, two link hrefs, copy strings) plus three deterministic questions, all three of which were answered directly:
+
+1. **`onSignedOutAdopt`'s widened contract is safe for its other consumer.** `exam-hub-official-review-sets.tsx:160` returns `void` from `setExamIntentCookie`, and `void` is `undefined` at runtime, so `?? signedOutHref` resolves correctly. Verified by reading both sides, not by assuming the type check was sufficient.
+2. **The setter's new read-back has no side effect on a blocked write.** `getDiscoveryIntentCookie` clears the cookie when a value is *malformed*, but early-returns before that when no cookie exists — which is the blocked-write case. So a blocked write returns `false` without touching anything.
+3. **⚠️ The mount-location fix was NOT pinned** — the third instance of correct-code-with-no-coverage in this release. Moving the handoff back above the `loading`/`error` ternary, where it reads more naturally and where it originally sat, reintroduced both bugs it was moved to fix while every test stayed green. Now pinned by asserting its **absence in the error branch**, which is what a location regression actually produces. Mutation-verified.
+
+**The pattern is worth naming, since it recurred three times here and twice in `v0.83.x`:** every defect this release's audits found was correct code with nothing holding it in place — the open-redirect guard, the one-shot invariant, and now the mount location. The code was right each time; the tests were not.
 
 ### Second fold — this release's own known limitations, 2026-08-17
 
