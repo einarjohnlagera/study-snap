@@ -66,7 +66,6 @@ const readyNote = {
   title: "Newton's Laws of Motion",
   subject: null,
   courseProgram: null,
-  targetProfileType: "STUDENT" as const,
   tags: [],
   content: "Newton's Laws study content",
   visibility: "PRIVATE" as const,
@@ -1244,7 +1243,6 @@ describe("OnboardingPage", () => {
       id: "note-2",
       title: null,
       content: longNote,
-      targetProfileType: "BOARD_TAKER",
       studyPackId: "study-pack-2",
     });
     (completeOnboarding as jest.Mock).mockResolvedValue({

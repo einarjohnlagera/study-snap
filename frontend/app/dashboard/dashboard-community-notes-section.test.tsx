@@ -21,7 +21,6 @@ const publicNote = {
   ownerUserId: null,
   title: "Medical-Surgical Nursing Review",
   courseProgram: COURSE_PROGRAM,
-  targetProfileType: "BOARD_TAKER",
   subject: "Nursing",
   tags: ["review"],
   contentPreview: "Nursing board exam fundamentals.",

@@ -230,7 +230,6 @@ function note(id: string, title: string) {
     title,
     ownerUserId: "user-1",
     courseProgram: null,
-    targetProfileType: "STUDENT",
     subject: null,
     tags: [],
     contentPreview: "",

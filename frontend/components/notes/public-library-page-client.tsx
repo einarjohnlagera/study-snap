@@ -134,7 +134,11 @@ function resolveDiscoveryView(value: string | null): PublicLibraryDiscoveryView 
 }
 
 function resolveLearnerLevel(value: string | null | undefined): LearnerLevel | null {
-  const normalized = value?.trim().toUpperCase();
+  // Tolerate the slug forms the other filter params already accept (?subject=, ?courseProgram=), so
+  // ?level=senior-high selects the chip rather than silently reading as no filter. This must stay in
+  // step with LearnerLevel.fromSlug on the server: if only one side normalises, a slug-shaped link
+  // filters the results while the chip renders unselected.
+  const normalized = value?.trim().replace(/[\s-]+/g, "_").toUpperCase();
   return LEARNER_LEVEL_OPTIONS.find((option) => option.value === normalized)?.value ?? null;
 }
 

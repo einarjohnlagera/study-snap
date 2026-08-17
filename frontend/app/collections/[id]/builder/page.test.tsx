@@ -154,7 +154,6 @@ function note(id: string, title: string) {
     title,
     ownerUserId: "user-1",
     courseProgram: "LET",
-    targetProfileType: "STUDENT",
     subject: "Education",
     tags: [],
     contentPreview: "",

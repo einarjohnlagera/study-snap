@@ -64,10 +64,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.mockito.ArgumentCaptor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -671,6 +675,29 @@ class NoteControllerTest {
 
         verify(noteService).getPublicLibraryDiscoverySections(routeUser.userId());
         verify(noteService, never()).getPublicById("discovery-sections", routeUser.userId());
+    }
+
+    @Test
+    void publicRouteAcceptsSlugShapedAuthoredDepthAndStillIgnoresGarbage() throws Exception {
+        // ?subject= and ?courseProgram= are slug-shaped; ?level= now matches them via
+        // LearnerLevel.fromSlug. Garbage must still degrade to an unfiltered library, never a 400.
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        when(noteService.listPublic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyBoolean(), any()))
+                .thenReturn(new PublicNoteListResponse(List.of(), 0));
+
+        mockMvc.perform(get("/notes/public").param("level", "senior-high"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/notes/public").param("level", "NONSENSE"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<LearnerLevel> levelCaptor = ArgumentCaptor.forClass(LearnerLevel.class);
+        verify(noteService, times(2)).listPublic(
+                any(), any(), any(), any(), any(), any(), any(),
+                levelCaptor.capture(), any(), any(), any(), anyBoolean(), any()
+        );
+        assertThat(levelCaptor.getAllValues().get(0)).isEqualTo(LearnerLevel.SENIOR_HIGH);
+        assertThat(levelCaptor.getAllValues().get(1)).isNull();
     }
 
     @Test
