@@ -385,3 +385,31 @@ Query 5 returned **seven** Economics notes, all NULL-context — and **three of 
 4. **Engineering Economics → `Engineering Mathematics`** per `08:57`, confirmed by `ADR-001:279`'s binary test. Revisit only if a real body of notes accumulates whose treatment demonstrably cannot be represented.
 5. **Domain Categories: declined, now on evidence.** One curator. The feature organises one person's dropdown.
 6. **The two code-level findings still bind any future catalog**, and remain unsettled by data: the `isQuantitativeContext` label substring-match, and the label-is-prompt-payload coupling. Neither is about adoption.
+
+
+---
+
+# SECOND PRODUCTION READ — quantitative-guidance coverage, 2026-08-17
+
+Ran `quantitative-context-coverage-read.sql`. **This found a larger, live defect than the proposal that surfaced it.**
+
+**463 of 956 curator-owned public notes (48.4%) receive no computation guidance in their generation prompt.**
+
+The mechanism is the point. `isQuantitativeContext` substring-matches against 49 keywords, one of which is `engineering` — so coverage tracks the **program's name**, not its content:
+
+| | notes | missing guidance |
+|---|---|---|
+| Programs with "Engineering" in the name | 214 | **0 (0%)** |
+| Every other named program | 670 | **463 (69%)** |
+
+`Civil Engineering` 197/0 missing. `Education` 146/136. `Architecture` 90/75. `Nursing` 130/106. `Accountancy` 154/60.
+
+**The failing subjects are not marginal:** Nursing `Pharmacology` (14 notes — dosage calculation, high-stakes on the NLE); Accountancy `Income Tax`, `Business Tax`, `Basic`/`Advanced Taxation`, `Budgeting`, `Cash and Receivables`, `Investments`, `Financial Management`, `PPE`; Architecture `Structural Components`, `Building Utilities`.
+
+**And the "subjects rescue it" defence does not hold.** Of ~117 rescued notes in Accountancy and Nursing, **74 (63%) are rescued only by tags** — free text authored per note. So notes that currently pass do so accidentally, and identically-subjected notes diverge on whether a curator happened to type a matching word.
+
+## This reorders the release
+
+The descriptions fix remains correct but is no longer the headline. **Replacing the substring guess with a declared per-value property is**, because it is a live quality defect on roughly half the public catalog, concentrated in every program not named "Engineering" — including both licensure catalogs where arithmetic is most of the exam.
+
+Note what this also says about the original proposal: had the catalog shipped and a curator typed a new domain name, it would have inherited this defect silently. The proposal's own instinct that Domain Context deserves explicit per-value authoring guidance was right — it just belongs as a *declared quantitative property* first, not a free-text prompt hint.

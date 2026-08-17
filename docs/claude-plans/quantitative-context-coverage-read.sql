@@ -189,3 +189,44 @@ FROM (
 -- ⚠️ Either way the mechanism is wrong for domain labels: substring-matching a curated,
 -- closed vocabulary against 49 English keywords is guessing at something that could simply be
 -- declared per value. That conclusion does not depend on these numbers.
+
+
+-- ===========================================================================
+-- RESULT — RAN AGAINST PRODUCTION 2026-08-17. The defect is live, large, and systematic.
+--
+-- **463 of 956 curator-owned public notes (48.4%) receive NO computation guidance.**
+--
+-- The mechanism is the finding, not the number. Coverage tracks the program's NAME, not its
+-- content, because "engineering" is one of the 49 keywords:
+--
+--     programs with "Engineering" in the name:   214 notes,   0 missing  (0%)
+--     every other named program:                 670 notes, 463 missing  (69%)
+--
+--     Civil Engineering        197 notes,   0 missing
+--     Electrical Engineering     8 notes,   0 missing
+--     Mechanical Engineering     6 notes,   0 missing
+--     Education                146 notes, 136 missing  (93.2%)
+--     Architecture              90 notes,  75 missing  (83.3%)
+--     Nursing                  130 notes, 106 missing  (81.5%)
+--     Information Technology    72 notes,  38 missing  (52.8%)
+--     Accountancy              154 notes,  60 missing  (39.0%)
+--
+-- Query 2 names the failing subjects, and they are not marginal cases:
+--     Nursing / Pharmacology (14)  -- dosage calculation, high-stakes on the NLE
+--     Nursing / Maternal and Child (14), Medical-Surgical (15), Pediatric (13)
+--     Accountancy / Income Tax (4), Business Tax (4), Basic + Advanced Taxation (8),
+--                   Budgeting (2), Cash and Receivables (2), Investments (2),
+--                   Financial Management (2), PPE (1) -- depreciation
+--     Architecture / Structural Components (2), Building Utilities (7)
+--
+-- Query 3 removes the "subjects rescue it" defence. Of the ~117 rescued notes in Accountancy
+-- and Nursing, **74 (63%) are rescued ONLY by tags** -- free text, authored per note. So even
+-- the notes that currently pass do so accidentally, and identically-subjected notes diverge
+-- based on whether a curator happened to type a matching tag. This is the file's stated
+-- "treat as the high case" condition.
+--
+-- CONCLUSION: this is a live generation-quality defect affecting roughly half the public
+-- catalog, concentrated in every program that is not named "Engineering". It is unrelated to
+-- the Domain Context Catalog proposal that surfaced it, and it outranks the descriptions fix.
+-- The mechanism should be replaced by a declared per-value property rather than a substring
+-- guess -- a conclusion that never depended on these numbers, but which they make urgent.
