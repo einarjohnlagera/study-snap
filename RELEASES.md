@@ -2,7 +2,9 @@
 
 ## v0.84.0 - Public Explore
 
-**Status: Released** (kicked off and signed off 2026-08-17)
+**Status: Released** (kicked off and signed off 2026-08-17, merged and deployed 2026-08-17)
+
+**Deploy timestamp, recorded on the day because it is cheap now and expensive on 2026-09-16: `2026-08-17 18:52:45 +08`** (merge commit `b0f9c5bf`, PR #1101). `[CHECKPOINT — due 2026-09-16]`'s read filters on it, and it is already substituted into that query rather than left as a placeholder — `v0.82.0` learned this by having to reconstruct one after the fact.
 
 Theme: a visitor who has never signed up should be able to browse what NoteLib has, at the same URL a member uses.
 
