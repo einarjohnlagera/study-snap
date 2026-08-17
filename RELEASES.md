@@ -2,7 +2,7 @@
 
 ## v0.83.1 - Note Creation Integrity
 
-**Status: In Progress** (kicked off 2026-08-17)
+**Status: Released** (kicked off and signed off 2026-08-17)
 
 Theme: a learner who pastes notes and generates a Study Pack should get a Study Pack, not a 500 and a spent quota.
 
@@ -31,6 +31,29 @@ Anti-drift: **no migration, and specifically no `DEFAULT` added to `notes.target
 - **Tests that would have caught it, verified by mutation.** Four tests assert the **persisted** value through the real paths, including a `BOARD_EXAM` owner — the case where a derivation and a hardcoded `STUDENT` visibly diverge. **All four were confirmed to fail against the unfixed code with `expected: BOARD_TAKER / but was: null`.** Asserting only that the call succeeds is the assertion shape that let the defect ship for five months, since every pre-existing fixture supplied the value by hand.
 - **`?level=` now accepts slug-shaped values, closing a `v0.83.0` Known Limitation (backend + frontend).** `?level=senior-high` filtered nothing where `?subject=` and `?courseProgram=` are slug-shaped, so a hand-written or documented link silently no-opped. **Added as `LearnerLevel.fromSlug` rather than by loosening `fromString`** — that method has three other callers (the authoring metadata parser and two quiz level overrides), and the looser contract belongs to the URL boundary alone. **Fixed on BOTH sides deliberately:** `resolveLearnerLevel` normalises identically, because if only the server normalised, a slug link would filter the results while the chip rendered unselected. Backend and frontend tests both verified to fail against the unfixed parse (`expected: SENIOR_HIGH / but was: null`).
 - **Closed the cosmetic `v0.83.0` Known Limitation (frontend).** Removed the vestigial `<>…</>` fragment in `note-editor-form.tsx` — a former conditional branch that had been wrapping its fieldset body unconditionally — and re-indented its 44 children to sit under the grid they belong to. Stripped the retired `targetProfileType` key from 13 dead test fixtures across 9 files. **Two fixtures were deliberately left in place:** `bulk-generation-flash.test.ts` and `note-upgrade-draft.test.ts` seed the retired key on purpose, to prove a pre-deploy payload still parses. A blind sweep would have deleted exactly what those tests exist to check.
+### Pre-signoff pressure test — one cold-context agent, 2026-08-17
+
+**The full three-agent gate did NOT fire, and running it anyway would have been the wrong call.** By shape this release is 2 PRs, 21 code files, **zero files touched by more than one commit**, and two unrelated concerns rather than one concept spanning several surfaces — the prescribed check at that size is a single `advisor()` pass. One focused cold agent ran instead of three, on the single residual risk the author could not self-check: **PR #1096 deleted data from 13 test-fixture sites across 9 files**, and "were any of those deletions load-bearing?" is a question the person who made the edits is badly placed to answer.
+
+**Result: clean, and verified empirically rather than by inspection.** The agent restored all 13 deleted keys and re-ran the affected suites — **353/353 pass with the keys absent, 353/353 with them restored, identical** — then established structurally why: zero production readers remain, there are no Jest snapshots anywhere in `frontend/`, and no shape-sensitive assertion touches any of the 13. The two deletions that *looked* meaningful were traced individually and are not: the legacy-audience test's assertion reads filter state, never `note.targetProfileType`, and the onboarding one was an unasserted key on a mocked response.
+
+**The two preserved fixtures were proven necessary by mutation.** Making each reader leak the field (`{...parsed.draft}` / `{...stash}`) failed both tests with `+ "targetProfileType": "BOARD_TAKER"`. **Had they been swept along with the other 13, those mutations would pass silently** — which is exactly the trap a blind sweep sets.
+
+**Both fixes independently re-verified.** The agent enumerated every NoteEntity persistence path itself rather than trusting the count — four `new NoteEntity()` sites, no builder or factory, no `@Modifying` insert, no `em.persist`, and `insert into notes` only in `V19` — confirming the claim of four. `fromSlug` has exactly one call site and `fromString`'s three others are all URL-unreachable. The JSX edit is structurally identical: whitespace-stripped diff yields exactly the two removed fragment lines and nothing else.
+
+**One agreement detail worth recording, because it is not what the guard was written for:** the frontend normalisation is a strict *superset* of the Java one (JS `\s` covers `\u00A0`, `\u2028`; Java's does not). That cannot produce the divergence this release guards against, because the client sends the canonicalised enum value rather than the raw parameter — so the browser path always agrees with itself. The guard matters for hand-written and inbound links, which is what it claims.
+
+### Checkpoint gate — considered, nothing owed
+
+**Recorded rather than skipped, because the next kickoff's step-9 scan can only detect an *overdue* checkpoint, never one that was never written.** Nothing here shipped ahead of its evidence: the `NOT NULL` fix carries four mutation-verified tests plus an empirical reproduction against a real PostgreSQL, the slug fix has mutation-verified tests on both sides, and the cleanup changes no behaviour. The Stage 0 scoping document is a planning artifact, not shipped behaviour.
+
+### Known limitations — carried, not silently dropped
+
+- **`NoteTargetProfileType` in `frontend/lib/api.ts:459` is now dead** — zero usages once `v0.83.0`'s dead exports were removed. Deliberately kept: it mirrors a backend enum that still exists on the retained column, and both go in phase 4. A `v0.83.0` leftover rather than this release's doing.
+- **`ProfileType.PROFESSIONAL → PROFESSIONAL` is covered only via `NoteServiceTest`**, not on the two newly-fixed paths. Acceptable because the branch now lives in one shared method that those tests exercise.
+- **`?level=` emits the canonical `SENIOR_HIGH` while `?subject=` emits `nursing-fundamentals`.** Cosmetic asymmetry in generated URLs; this release claims tolerance parity on *inbound* links, which it has, not emission parity.
+- **Carried unchanged from `v0.83.0`:** deploy-boundary tolerance remains one-directional, and the `V117` predicate notes remain properties of a migration that already ran. Neither is fixable from here.
+
 - **All four `new NoteEntity()` sites in `backend/src/main` were audited, not just the two reported** — `NoteService` (create and copy) already set the value; the two in `StudyPackService` and `ShareService` did not. The class of bug is closed, not two instances of it.
 
 
