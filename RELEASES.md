@@ -2,7 +2,7 @@
 
 ## v0.84.0 - Public Explore
 
-**Status: In Progress** (kicked off 2026-08-17)
+**Status: Released** (kicked off and signed off 2026-08-17)
 
 Theme: a visitor who has never signed up should be able to browse what NoteLib has, at the same URL a member uses.
 
@@ -30,6 +30,21 @@ Anti-drift: **no backend permit changes** — Slice A already granted what the f
 - **Discovery intent deliberately wins a collision with exam intent (frontend).** A clicked Adopt is the newer, more specific action, so its post-onboarding consumer clears both cookies before resuming adoption. This prevents the Dashboard exam-goal prompt from racing the requested plan action or firing after it on a later visit.
 - **`/explore` now has self-canonical metadata, Open Graph/Twitter metadata, and distinct `CollectionPage` JSON-LD (frontend).** Its structured-data identity explicitly describes the composite of Official Study Plans and public notes. `/public/library` remains independently self-canonical and keeps its notes-only `CollectionPage`; Explore does not duplicate that claim or redirect any Public Library route.
 - **Anonymous Review Sets now use learner vocabulary and the full published catalog (frontend).** Signed-out visitors see `Official Study Plans`, produced by the existing `STUDENT` label set rather than the accidental null-profile `Official Collections` fallback. The full catalog and previews remain visible; the existing Adopt affordance is gated only when clicked and routes to signup with intent preserved.
+### Feature-doc drift gate — two false claims, both created by this release's own fixes
+
+**This is the gate working as intended, and the failure mode it exists for.** Codex's `onboarding.md` and `explore.md` were *accurate for Codex's code*. The pressure-test hardening then invalidated them, and per-PR review cannot see that — the doc PR and the fix are the same commit only by luck.
+
+- Both docs said the Dashboard handoff is **"always-mounted"**. It is now mounted inside Dashboard's loaded branch, precisely so it cannot run before that page's auth/onboarding guard.
+- Both said it **"clears both cookies before adoption"**. Exam intent is now cleared only after the adoption succeeds.
+
+Corrected in both, along with recording *why* each shape was chosen — the synchronous-cookie-write basis of the one-shot guarantee, and why a start-path comparison replaced a mounted-flag.
+
+### Checkpoint — `[CHECKPOINT — due 2026-09-16]`
+
+**This release shipped on a premise that has never been measured:** that one canonical public discovery URL brings visitors. **But `/explore` is still unlinked from every anonymous surface** — the marketing nav names Public Library, and Exam Hub's outbound links still point at `/public/library`. Retargeting those is Stages 1–2, which are not built, so Slice C may be necessary and insufficient.
+
+**Deliberately not an SEO-ranking read.** Stage 3's measurement plan does not exist and Search Console is unassigned, so a ranking checkpoint would be decorative. The read instead uses instrumentation that already ships and **was verified emitting at signoff rather than merely present in the enum**: anonymous `EXPLORE_VIEWED` separated by `user_id IS NULL`. A raw count, not a rate, so no small-denominator problem. **Kill criterion: single digits or zero means the intervention is linking to Explore, not more work on Explore.**
+
 ### Pre-signoff pressure test — cold-context agent, 2026-08-17
 
 **Run because the diff's shape matched the escalation criteria, not because the release gate fired:** removing an auth gate, plus a cookie lifecycle spanning signup → verification → onboarding → Dashboard. That is effect/lifecycle-timing territory, which `CLAUDE.md` names as inherently hard to reason about serially.

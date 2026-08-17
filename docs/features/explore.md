@@ -40,12 +40,12 @@ The public note and facet calls use anonymous-safe endpoints. Facet requests are
 - payload: published plan id, Goal-vs-leaf plan shape, and the current safe `/explore` query context
 - attributes: `max-age=1800`, `SameSite=Strict`, `path=/`
 - set: immediately when an anonymous Explore visitor clicks Adopt
-- consume: by the always-mounted Dashboard handoff after verification and onboarding
+- consume: by the Dashboard handoff after verification and onboarding — mounted **inside Dashboard's loaded branch**, so it cannot run before that page's own auth/onboarding guard
 - clear: before the adopt request, ensuring remounts and second passes cannot replay it
 
 Successful adoption uses the existing authenticated Goal or Study Plan action and lands on the resulting private collection. If the source was unpublished, deleted, or otherwise unavailable, the cleared intent returns the learner to the preserved Explore context with a normal catalog notice. Malformed or partial values are cleared without throwing. If cookies are blocked, signup still proceeds and only automatic adoption is lost.
 
-When both discovery and exam intent exist, discovery wins. A clicked Adopt is the newer and more specific requested action, so the Dashboard handoff clears both cookies before resuming it; the exam-goal suggestion does not race or fire later from the stale cookie.
+When both discovery and exam intent exist, discovery wins — a clicked Adopt is the newer and more specific requested action. The handoff clears the **discovery** cookie before resuming (that ordering is what makes consumption one-shot), and clears the **exam** cookie only after the adoption succeeds, so a failed adoption does not cost the visitor an exam prompt they were entitled to.
 
 ## Canonical and Structured Data Relationship
 
