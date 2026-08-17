@@ -59,7 +59,7 @@ Three coexisting navigation surfaces, **updated in `v0.67.0`**: **desktop sideba
 ### Landing / Public
 
 - Marketing positioning is notes-library-first: notes -> summaries -> quizzes -> review.
-- Public nav exposes Home, Public Library, Learn, Pricing, Login, Get Started. Public Library is accessible without login.
+- Public nav exposes Home, **Explore**, Learn, Pricing, Login, Get Started. **⚠️ Changed in `v0.84.0`: the nav names Explore, not Public Library**, and **`/explore` itself is now anonymous** (it redirected signed-out visitors to `/login` before that). Both `/explore` and `/public/library` are accessible without login; `/public/library` keeps its canonical route and only lost navigation primacy.
 - Public legal routes: `/privacy`, `/terms`. Contact email: `support@mail.notelib.app`.
 - Branding uses the NL monogram for navbar/app shell/favicon and full logo for marketing headers/footers.
 

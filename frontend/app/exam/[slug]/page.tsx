@@ -296,12 +296,16 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
         <Card className="space-y-3 p-6 text-center sm:p-8">
           <h2 className="text-lg font-semibold">No {exam.fullName} notes have been shared yet.</h2>
           <p className="text-sm text-foreground/65">
-            Start preparing with your own notes, or browse the full Public Library for related study notes, summaries, and quizzes.
+            Start preparing with your own notes, or explore related study notes, summaries, and quizzes.
           </p>
           <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
             <ExamHubCta exam={resolvedExam} />
-            <Link href="/public/library" className="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 transition-colors hover:text-blue-800 hover:underline dark:text-blue-300 dark:hover:text-blue-200">
-              Browse the Public Library
+            {/* Stage 1: retargeted from /public/library to /explore in v0.84.0, once /explore became
+                anonymous. A signed-out visitor reaching this empty state is exactly the audience
+                Explore was opened for; sending them to one source of the Discovery System instead of
+                its front door was the older behaviour. /public/library keeps its canonical route. */}
+            <Link href="/explore" className="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 transition-colors hover:text-blue-800 hover:underline dark:text-blue-300 dark:hover:text-blue-200">
+              Explore notes and study plans
             </Link>
             <Link href={buildLearnCategoryPath("board-exams")} className="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 transition-colors hover:text-blue-800 hover:underline dark:text-blue-300 dark:hover:text-blue-200">
               Read Board Exam study guides
