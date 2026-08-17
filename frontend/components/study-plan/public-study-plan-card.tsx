@@ -26,7 +26,10 @@ type PublicStudyPlanCardProps = {
   canAdopt?: boolean;
   discoveryMetadata?: Record<string, string>;
   discoverySource?: "exam_hub" | "explore";
-  onSignedOutAdopt?: () => void;
+  // Returns the destination to use, so a caller can decide it from what the click just learned
+  // (e.g. whether an intent cookie actually stored). A precomputed prop cannot: React state set
+  // during the click is not visible until the next render, so the stale href would be used.
+  onSignedOutAdopt?: () => string | void;
   signedOutHref?: string;
 };
 
@@ -120,8 +123,7 @@ export function PublicStudyPlanCard({
       });
     }
     if (!canAdopt) {
-      onSignedOutAdopt?.();
-      router.push(signedOutHref);
+      router.push(onSignedOutAdopt?.() ?? signedOutHref);
       return;
     }
     if (adoptedCollection) {

@@ -45,6 +45,16 @@ Corrected in both, along with recording *why* each shape was chosen — the sync
 
 **Deliberately not an SEO-ranking read.** Stage 3's measurement plan does not exist and Search Console is unassigned, so a ranking checkpoint would be decorative. The read instead uses instrumentation that already ships and **was verified emitting at signoff rather than merely present in the enum**: anonymous `EXPLORE_VIEWED` separated by `user_id IS NULL`. A raw count, not a rate, so no small-denominator problem. **Kill criterion: single digits or zero means the intervention is linking to Explore, not more work on Explore.**
 
+### Second fold — this release's own known limitations, 2026-08-17
+
+**Folded rather than shipped as recorded limitations.** All three were gaps `v0.84.0` itself created or made reachable, so closing them here leaves the release with no self-inflicted limitations except the app-wide JSON-LD one, which is genuinely out of scope.
+
+- **`/auth` now restates the adopt intent.** `authDescription` had cases for the copy-note and learn-guide intents but none for `discovery-adopt`, so a visitor who had just clicked Adopt saw the generic *"Sign up to generate and save Study Packs."* That is the one screen where restating the action matters most, because the action stays invisible until after onboarding.
+- **Anonymous adopt clicks now carry pointer origin.** `discoveryMetadata` reached the recommended grid but not browse-all — and for an anonymous viewer `loadRecommended` returns early with an empty list, so **every** anonymous adopt originated in the grid that lacked it. Pointer origin was recorded for authenticated clicks and never for anonymous ones. **⚠️ Verified by mutation that this had NO coverage:** removing the prop left all 25 tests green.
+- **⚠️ A blocked cookie no longer loses the action silently.** `setDiscoveryIntentCookie` now **reads the cookie back** rather than trusting the assignment — a blocked cookie jar accepts the write and stores nothing, so the assignment was never evidence — and returns whether it landed. On failure the visitor goes to signup with `intent=discovery-adopt-unsaved`, whose copy tells them to pick the plan again rather than implying it is waiting.
+
+**One implementation note worth recording, because the first attempt was wrong and a test caught it.** The signup destination is **returned by the click handler**, not precomputed as a prop. My first version set React state during the click and left `signedOutHref` as a prop — but state set in a handler is not readable until the next render, so the navigation used the stale href and the fix silently did nothing. The pre-existing blocked-cookie test *passed* through that bug, because it asserted the old intent. Both the contract and that assertion changed: `onSignedOutAdopt` now returns `string | void`, and the test pins the `-unsaved` variant so asserting the plain one can never again pin a silent data loss.
+
 ### Scope folded in after signoff — Stages 1 and 2, 2026-08-17
 
 **Folded deliberately rather than opened as `v0.85.0`.** The owner's objection was release-cycle overhead, and it was fair: Stages 1 and 2 are **one link and one nav entry**, and offering them as separate releases over-fragmented the work. `v0.84.0` had not merged to `main`, so nothing was public yet and folding cost nothing.

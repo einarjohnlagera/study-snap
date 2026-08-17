@@ -39,6 +39,10 @@ import {
 } from "@/lib/public-note-copy";
 import { LEARN_GUIDE_AUTH_INTENT } from "@/lib/learn-guides";
 import { setPendingLightweightProfileCompletion } from "@/lib/onboarding-v2";
+import {
+  DISCOVERY_AUTH_INTENT,
+  DISCOVERY_AUTH_INTENT_UNSAVED,
+} from "@/lib/discovery-intent";
 import { setExamIntentCookie } from "@/lib/exam-intent";
 import { getExamHubConfig } from "@/lib/exam-hub-config";
 import { suggestEmailCorrection } from "@/lib/email-typo-suggestion";
@@ -91,6 +95,16 @@ function AuthPageContent() {
     }
     if (authIntents.includes(LEARN_GUIDE_AUTH_INTENT)) {
       return "Sign up to keep learning with more free study guides.";
+    }
+    // Explore's anonymous Adopt. Two variants on purpose: the plan is only added automatically if
+    // the intent was actually stored, and a blocked cookie jar accepts the write while storing
+    // nothing. Promising resumption in that case would leave the visitor waiting for a plan that
+    // can never arrive — this screen is the last place it can be said honestly.
+    if (authIntents.includes(DISCOVERY_AUTH_INTENT)) {
+      return "Sign up and we'll add that study plan to your library.";
+    }
+    if (authIntents.includes(DISCOVERY_AUTH_INTENT_UNSAVED)) {
+      return "Sign up to save study plans to your library. You'll need to pick that one again — your browser blocked us from remembering it.";
     }
     return "Sign up to generate and save Study Packs.";
   }, [mode, searchParams]);

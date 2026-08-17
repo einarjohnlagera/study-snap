@@ -2,6 +2,8 @@ const DISCOVERY_INTENT_COOKIE = "notelib-discovery-intent";
 const DISCOVERY_INTENT_COOKIE_MAX_AGE_SECONDS = 1800;
 
 export const DISCOVERY_AUTH_INTENT = "discovery-adopt";
+// Used when the intent could not be stored, so /auth can promise resumption only when it is real.
+export const DISCOVERY_AUTH_INTENT_UNSAVED = "discovery-adopt-unsaved";
 export const DISCOVERY_NOTICE_QUERY_PARAM = "discoveryNotice";
 export const DISCOVERY_ADOPT_UNAVAILABLE_NOTICE = "adopt-unavailable";
 
@@ -26,15 +28,26 @@ function isDiscoveryIntent(value: unknown): value is DiscoveryIntent {
     && isExplorePath(candidate.returnPath);
 }
 
-export function setDiscoveryIntentCookie(intent: DiscoveryIntent): void {
+/**
+ * Returns whether the intent was actually stored. Callers need to know: the cookie is the only
+ * carrier that survives verify-email and onboarding (separate page loads, so nothing in memory
+ * lasts), and `redirect` is dropped on the signup path. If the write fails, the adoption cannot be
+ * resumed — and the visitor should be told that rather than completing signup expecting a plan that
+ * will never arrive. Swallowing the failure silently is what this return value exists to prevent.
+ */
+export function setDiscoveryIntentCookie(intent: DiscoveryIntent): boolean {
   if (globalThis.document === undefined) {
-    return;
+    return false;
   }
   try {
     const value = encodeURIComponent(JSON.stringify(intent));
     globalThis.document.cookie = `${DISCOVERY_INTENT_COOKIE}=${value}; path=/; max-age=${DISCOVERY_INTENT_COOKIE_MAX_AGE_SECONDS}; SameSite=Strict`;
+    // Read back rather than trusting the assignment: a blocked cookie jar accepts the write
+    // silently and stores nothing, so the assignment itself is not evidence.
+    return getDiscoveryIntentCookie() !== null;
   } catch {
     // Cookie-blocking privacy settings must not prevent the visitor from signing up.
+    return false;
   }
 }
 
