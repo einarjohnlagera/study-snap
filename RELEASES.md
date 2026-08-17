@@ -41,9 +41,17 @@ Corrected in both, along with recording *why* each shape was chosen — the sync
 
 ### Checkpoint — `[CHECKPOINT — due 2026-09-16]`
 
-**This release shipped on a premise that has never been measured:** that one canonical public discovery URL brings visitors. **But `/explore` is still unlinked from every anonymous surface** — the marketing nav names Public Library, and Exam Hub's outbound links still point at `/public/library`. Retargeting those is Stages 1–2, which are not built, so Slice C may be necessary and insufficient.
+**⚠️ REVISED at the second fold — this checkpoint's premise expired inside its own release.** As first written it read *"`/explore` is still unlinked from every anonymous surface… retargeting those is Stages 1–2, which are not built."* **Folding Stages 1–2 into this release made all of that false.** The nav names Explore and the Exam Hub links point at it.
+
+**The revision makes the read cleaner, not weaker.** The original asked whether a public-but-unlinked page is enough — a question about missing work. It now asks the real one: Explore is public, canonical, sitemap-submitted **and** linked, so **is anonymous discovery a lever at all?** **The kill criterion changed with it:** single digits no longer means *"go build Stages 1–2"*, because they are built. It means anonymous discovery is not the lever and the next move is elsewhere. **Confound stated before the read:** total traffic is small, so a low count may mean the funnel is small rather than wrong — which is why it reads a count rather than a rate, and why zero differs meaningfully from single digits.
 
 **Deliberately not an SEO-ranking read.** Stage 3's measurement plan does not exist and Search Console is unassigned, so a ranking checkpoint would be decorative. The read instead uses instrumentation that already ships and **was verified emitting at signoff rather than merely present in the enum**: anonymous `EXPLORE_VIEWED` separated by `user_id IS NULL`. A raw count, not a rate, so no small-denominator problem. **Kill criterion: single digits or zero means the intervention is linking to Explore, not more work on Explore.**
+
+### Release notes rewritten for the folded scope — 2026-08-17
+
+**`docs/releases/v0.84.0.md` was written at the first signoff and described Slice C alone.** Two folds later it named none of Stages 1–2 and none of the three limitation fixes — so the user-facing notes documented roughly half of what shipped. Rewritten with a navigation feature (the nav swap and Exam Hub retarget stated as *navigation primacy*, with Public Library explicitly not removed), the sign-up-screen copy, the blocked-cookie honesty, and the browse-all attribution fix.
+
+**This is the real cost of folding after signoff, and it is worth naming rather than absorbing quietly:** each fold silently invalidated the release notes and the checkpoint, and nothing in the per-PR workflow re-reads them. The checkpoint was worse than stale — its premise was *quoted evidence* for its own kill criterion, so leaving it would have had September read a question this release had already answered.
 
 ### Post-audit re-verification — 2026-08-17, no second agent run
 
