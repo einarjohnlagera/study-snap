@@ -45,6 +45,18 @@ Corrected in both, along with recording *why* each shape was chosen — the sync
 
 **Deliberately not an SEO-ranking read.** Stage 3's measurement plan does not exist and Search Console is unassigned, so a ranking checkpoint would be decorative. The read instead uses instrumentation that already ships and **was verified emitting at signoff rather than merely present in the enum**: anonymous `EXPLORE_VIEWED` separated by `user_id IS NULL`. A raw count, not a rate, so no small-denominator problem. **Kill criterion: single digits or zero means the intervention is linking to Explore, not more work on Explore.**
 
+### Post-audit re-verification — 2026-08-17, no second agent run
+
+**The release outgrew its audit and that was checked rather than assumed.** The cold agent verified `b47c6050`; **ten non-test files changed after it**, four of them touched by more than one commit, including the trust boundary and the async lifecycle that agent had specifically audited — modified partly *in response to* its findings, and one of those changes was wrong on the first attempt.
+
+**A second full agent run was judged unnecessary, on a reason rather than a budget:** the first audit was warranted because the bug class was effect/lifecycle timing, which cannot be settled by inspection. The post-audit delta is mechanical (a nav entry, two link hrefs, copy strings) plus three deterministic questions, all three of which were answered directly:
+
+1. **`onSignedOutAdopt`'s widened contract is safe for its other consumer.** `exam-hub-official-review-sets.tsx:160` returns `void` from `setExamIntentCookie`, and `void` is `undefined` at runtime, so `?? signedOutHref` resolves correctly. Verified by reading both sides, not by assuming the type check was sufficient.
+2. **The setter's new read-back has no side effect on a blocked write.** `getDiscoveryIntentCookie` clears the cookie when a value is *malformed*, but early-returns before that when no cookie exists — which is the blocked-write case. So a blocked write returns `false` without touching anything.
+3. **⚠️ The mount-location fix was NOT pinned** — the third instance of correct-code-with-no-coverage in this release. Moving the handoff back above the `loading`/`error` ternary, where it reads more naturally and where it originally sat, reintroduced both bugs it was moved to fix while every test stayed green. Now pinned by asserting its **absence in the error branch**, which is what a location regression actually produces. Mutation-verified.
+
+**The pattern is worth naming, since it recurred three times here and twice in `v0.83.x`:** every defect this release's audits found was correct code with nothing holding it in place — the open-redirect guard, the one-shot invariant, and now the mount location. The code was right each time; the tests were not.
+
 ### Second fold — this release's own known limitations, 2026-08-17
 
 **Folded rather than shipped as recorded limitations.** All three were gaps `v0.84.0` itself created or made reachable, so closing them here leaves the release with no self-inflicted limitations except the app-wide JSON-LD one, which is genuinely out of scope.

@@ -46,6 +46,10 @@ jest.mock("@/lib/route-guards", () => ({
   requireAuthenticatedOnboardedUser: () => true,
 }));
 
+jest.mock("@/components/dashboard/discovery-intent-consumer", () => ({
+  DiscoveryIntentConsumer: () => <div data-testid="discovery-intent-consumer" />,
+}));
+
 jest.mock("./dashboard-study-plan-section", () => ({
   DashboardStudyPlanSection: (props: Record<string, unknown>) => mockDashboardStudyPlanSection(props),
 }));
@@ -804,6 +808,25 @@ describe("DashboardPage profile variants", () => {
     expect(getCollectionGoal).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Loading study goal")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Loading primary review set")).not.toBeInTheDocument();
+  });
+
+  it("mounts the discovery-intent handoff only inside the loaded branch", async () => {
+    // Pins where the handoff lives, which is a correctness property rather than layout. Child
+    // effects commit before parent effects, so mounting it beside the PageHeader ran it BEFORE
+    // loadDashboard's requireAuthenticatedOnboardedUser guard — burning the intent cookie for a
+    // signed-out visitor (who was then told their session expired) or a not-yet-onboarded one
+    // (whose adoption succeeded server-side and was never shown to them).
+    //
+    // Asserting absence in the error branch is what catches a regression: if it moves back above
+    // the loading/error ternary it renders in every state, including this one.
+    (getDashboardOverview as jest.Mock).mockRejectedValue(new Error("overview failed"));
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("discovery-intent-consumer")).not.toBeInTheDocument();
   });
 
   it("hides the dashboard goal slot when goal summary loading fails", async () => {
