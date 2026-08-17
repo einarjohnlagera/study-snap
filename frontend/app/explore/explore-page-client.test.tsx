@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { ExplorePageClient } from "./explore-page-client";
 import { trackAnalyticsEvent } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
-import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 const replaceMock = jest.fn();
 let searchParams = new URLSearchParams();
@@ -20,11 +19,10 @@ jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
 }));
 
-jest.mock("@/lib/route-guards", () => ({
-  requireAuthenticatedOnboardedUser: jest.fn(),
-}));
-
-const publishedPlansPageClientMock = jest.fn((_props: unknown) => <div>Review Sets Data</div>);
+const publishedPlansPageClientMock = jest.fn((props: unknown) => {
+  void props;
+  return <div>Review Sets Data</div>;
+});
 
 jest.mock("@/app/collections/published/published-plans-page-client", () => ({
   PublishedPlansPageClient: (props: unknown) => publishedPlansPageClientMock(props),
@@ -41,8 +39,6 @@ describe("ExplorePageClient", () => {
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue(null);
-    (requireAuthenticatedOnboardedUser as jest.Mock).mockReset();
-    (requireAuthenticatedOnboardedUser as jest.Mock).mockReturnValue(true);
     publishedPlansPageClientMock.mockClear();
   });
 
@@ -55,6 +51,16 @@ describe("ExplorePageClient", () => {
     expect(screen.queryByRole("tab", { name: "Review Sets" })).not.toBeInTheDocument();
   });
 
+  it("renders anonymous visitors with learner vocabulary and no auth redirect", async () => {
+    render(<ExplorePageClient />);
+
+    expect(await screen.findByRole("heading", { name: "Explore" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Official Study Plans" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Review Sets Data")).toBeInTheDocument();
+    expect(screen.getByText("Notes Data")).toBeInTheDocument();
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
+
   it("gives the selected tab a solid, theme-safe background instead of bg-background", async () => {
     // Regression guard for a dark-mode contrast bug: `bg-background` on the selected tab was
     // visually indistinguishable from the tablist's own `bg-surface-alt` container in dark mode
@@ -62,7 +68,7 @@ describe("ExplorePageClient", () => {
     // the Settings page's billing-cycle toggle pattern: an explicit blue pill in both themes.
     render(<ExplorePageClient />);
 
-    const selectedTab = await screen.findByRole("tab", { name: "Official Collections" });
+    const selectedTab = await screen.findByRole("tab", { name: "Official Study Plans" });
     expect(selectedTab.className).toContain("bg-blue-600");
     expect(selectedTab.className).not.toContain("bg-background");
     // The focus ring (ring-blue-600) now matches the selected tab's own fill color, so without an
@@ -75,7 +81,7 @@ describe("ExplorePageClient", () => {
     render(<ExplorePageClient />);
 
     expect(await screen.findByRole("heading", { name: "Explore" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Official Collections" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Official Study Plans" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Review Sets Data")).toBeInTheDocument();
     expect(screen.getByText("Notes Data")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse Exam Hubs" })).toHaveAttribute("href", "/exam");
@@ -167,12 +173,32 @@ describe("ExplorePageClient", () => {
     );
   });
 
-  it("does not mount discovery data when the authenticated route guard rejects access", () => {
-    (requireAuthenticatedOnboardedUser as jest.Mock).mockReturnValue(false);
+  it("renders a normal catalog notice when a saved plan can no longer be adopted", async () => {
+    searchParams = new URLSearchParams({ discoveryNotice: "adopt-unavailable" });
 
     render(<ExplorePageClient />);
 
-    expect(screen.queryByText("Review Sets Data")).not.toBeInTheDocument();
-    expect(screen.queryByText("Notes Data")).not.toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "We couldn't start that study plan — it may no longer be available",
+    );
+    expect(screen.getByText("Review Sets Data")).toBeInTheDocument();
+  });
+
+  it("keeps the authenticated default tab and discovery sources unchanged", async () => {
+    // BOARD_EXAM on purpose. Mocking STUDENT made this byte-identical to the anonymous
+    // expectation, so it passed even when the anonymous fallback was forced onto every viewer —
+    // the exact regression its name claims to guard. A profile whose vocabulary differs from the
+    // anonymous default is the only fixture that can discriminate.
+    (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM" });
+    render(<ExplorePageClient />);
+
+    expect(await screen.findByRole("tab", { name: "Official Review Sets" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Review Sets Data")).toBeInTheDocument();
+    expect(screen.getByText("Notes Data")).toBeInTheDocument();
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith({
+      eventType: "EXPLORE_VIEWED",
+      entityId: null,
+      metadata: { referrerSource: "direct" },
+    });
   });
 });

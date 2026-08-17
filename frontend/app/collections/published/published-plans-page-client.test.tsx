@@ -10,6 +10,7 @@ import {
   listPublicStudyPlans,
   trackAnalyticsEvent,
 } from "@/lib/api";
+import { clearDiscoveryIntentCookie, getDiscoveryIntentCookie } from "@/lib/discovery-intent";
 
 const pushMock = jest.fn();
 const routerMock = { push: pushMock };
@@ -62,6 +63,7 @@ describe("PublishedPlansPage", () => {
     currentAuthUser = { profileType: "STUDENT" };
     pushMock.mockReset();
     globalThis.sessionStorage.clear();
+    clearDiscoveryIntentCookie();
     (adoptGoal as jest.Mock).mockReset();
     (adoptStudyPlan as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
@@ -322,7 +324,7 @@ describe("PublishedPlansPage", () => {
 
     render(<PublishedPlansPage />);
 
-    expect(await screen.findByRole("heading", { name: "Browse All Official Collections" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Browse All Official Study Plans" })).toBeInTheDocument();
     expect(await screen.findAllByRole("button", { name: "Sign in to adopt" })).toHaveLength(2);
     expect(getMe).not.toHaveBeenCalled();
     expect(listCollections).not.toHaveBeenCalled();
@@ -331,5 +333,37 @@ describe("PublishedPlansPage", () => {
 
     expect(await screen.findByText("Educational Psychology")).toBeInTheDocument();
     expect(getPublicStudyPlanDetail).toHaveBeenCalledWith("source-plan-2");
+  });
+
+  it("preserves an anonymous Explore adoption through signup without calling adopt", async () => {
+    currentAuthUser = null;
+    searchParamsMock = new URLSearchParams({ source: "dashboard" });
+
+    render(<PublishedPlansPageClient embedded discoverySource="explore" />);
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Sign in to adopt" }))[0]);
+
+    expect(adoptStudyPlan).not.toHaveBeenCalled();
+    expect(adoptGoal).not.toHaveBeenCalled();
+    expect(getDiscoveryIntentCookie()).toEqual({
+      planId: "source-plan-2",
+      planType: "study-plan",
+      returnPath: "/explore?source=dashboard",
+    });
+    expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&intent=discovery-adopt");
+  });
+
+  it("still enters signup when browser privacy settings block the intent cookie", async () => {
+    currentAuthUser = null;
+    const setter = jest.spyOn(Document.prototype, "cookie", "set").mockImplementation(() => {
+      throw new Error("Cookies blocked");
+    });
+
+    render(<PublishedPlansPageClient embedded discoverySource="explore" />);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Sign in to adopt" }))[0]);
+
+    expect(pushMock).toHaveBeenCalledWith("/auth?mode=signup&intent=discovery-adopt");
+    expect(adoptStudyPlan).not.toHaveBeenCalled();
+    setter.mockRestore();
   });
 });

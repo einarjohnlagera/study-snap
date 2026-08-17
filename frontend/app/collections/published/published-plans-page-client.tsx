@@ -11,6 +11,7 @@ import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-track
 import { PublicStudyPlanCard } from "@/components/study-plan/public-study-plan-card";
 import { getAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
+import { DISCOVERY_AUTH_INTENT, setDiscoveryIntentCookie } from "@/lib/discovery-intent";
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { getMe, listCollections, listPublicStudyPlans, type NoteCollectionSummary } from "@/lib/api";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
@@ -49,9 +50,24 @@ export function PublishedPlansPageClient({
 }: Readonly<PublishedPlansPageClientProps> = {}) {
   const authUser = useMemo(() => getAuthUser(), []);
   const searchParams = useSearchParams();
-  const profileType = authUser?.profileType ?? null;
+  const profileType = authUser === null ? "STUDENT" : authUser.profileType;
   const canAdopt = authUser !== null;
   const labels = useMemo(() => getCollectionLabels(profileType), [profileType]);
+  const signedOutHref = `/auth?mode=signup&intent=${DISCOVERY_AUTH_INTENT}`;
+  const exploreReturnPath = useMemo(() => {
+    const query = searchParams.toString();
+    return query ? `/explore?${query}` : "/explore";
+  }, [searchParams]);
+  const preserveSignedOutAdopt = useCallback((plan: NoteCollectionSummary) => {
+    if (discoverySource !== "explore") {
+      return;
+    }
+    setDiscoveryIntentCookie({
+      planId: plan.id,
+      planType: plan.childCount > 0 ? "goal" : "study-plan",
+      returnPath: exploreReturnPath,
+    });
+  }, [discoverySource, exploreReturnPath]);
   const backLink = useMemo(() => {
     const ref = searchParams.get("ref");
     if (ref === "/dashboard" || ref?.startsWith("/dashboard/")) {
@@ -231,6 +247,8 @@ export function PublishedPlansPageClient({
               canAdopt={canAdopt}
               discoverySource={discoverySource}
               discoveryMetadata={discoveryMetadata}
+              onSignedOutAdopt={() => preserveSignedOutAdopt(plan)}
+              signedOutHref={discoverySource === "explore" ? signedOutHref : undefined}
             />
           ))}
         </div>
@@ -270,6 +288,8 @@ export function PublishedPlansPageClient({
                 profileType={profileType}
                 canAdopt={canAdopt}
                 discoverySource={discoverySource}
+                onSignedOutAdopt={() => preserveSignedOutAdopt(plan)}
+                signedOutHref={discoverySource === "explore" ? signedOutHref : undefined}
               />
             ))}
           </div>

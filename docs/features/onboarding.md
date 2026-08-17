@@ -20,6 +20,14 @@ Current onboarding is intentionally low-friction:
 - users with both `onboardingCompletedAt` and `profileType` set should be sent to `/dashboard`
 - backend content-creating mutations enforce profile setup server-side; client guards improve UX but are not the boundary
 
+## Post-Onboarding Discovery Intent
+
+An anonymous visitor who clicks Adopt on `/explore` carries that action through signup, verification, and onboarding in the short-lived `notelib-discovery-intent` cookie. The cookie stores the published plan id, Goal-vs-leaf shape, and safe Explore tab/query context; it uses `max-age=1800`, `SameSite=Strict`, and `path=/`, matching the established exam-intent lifecycle.
+
+Dashboard is the post-onboarding consumption point. Its always-mounted discovery-intent handoff reads and clears the cookie before calling the existing authenticated adopt action, then replaces the Dashboard history entry with the adopted collection. Clearing before the request makes consumption one-shot even across remounts. If the source plan disappeared, the learner returns to the saved Explore context with a normal unavailable notice; malformed or partial values are cleared, and blocked cookies do not interrupt signup.
+
+Discovery intent wins if `notelib-exam-intent` is also present. The explicit Adopt click is newer and more specific than an exam-goal suggestion, so the handoff clears both before adoption and prevents competing Dashboard behavior.
+
 ## Current Flow
 
 Route: `/onboarding`

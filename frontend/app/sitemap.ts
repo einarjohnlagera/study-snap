@@ -61,6 +61,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
+      // Added in v0.84.0, when /explore became anonymous. It was previously omitted because a
+      // signed-out visitor was redirected to /login, so submitting it would have advertised a
+      // dead end. It is now the public discovery destination and is self-canonical with its own
+      // CollectionPage identity, so it belongs here alongside the sources it composites.
+      url: absoluteUrl("/explore"),
+      changeFrequency: "daily" as const,
+      priority: 0.9,
+    },
+    {
       url: absoluteUrl("/exam"),
       changeFrequency: "weekly" as const,
       priority: 0.9,
