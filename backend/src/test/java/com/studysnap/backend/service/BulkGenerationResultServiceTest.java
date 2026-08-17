@@ -88,7 +88,6 @@ class BulkGenerationResultServiceTest {
         assertThat(response.courseProgram()).isEqualTo(COURSE_PROGRAM);
         assertThat(response.domainContext()).isEqualTo(DomainContext.NURSING.name());
         assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
-        assertThat(response.targetProfileType()).isEqualTo(TARGET_PROFILE_TYPE);
         assertThat(response.makePublic()).isTrue();
         assertThat(response.requestedCount()).isEqualTo(2);
         assertThat(response.createdCount()).isEqualTo(1);

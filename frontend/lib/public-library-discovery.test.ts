@@ -24,7 +24,6 @@ function makeNote(
     ownerUserId: "user-1",
     title: overrides.id,
     courseProgram: null,
-    targetProfileType: "STUDENT",
     subject: null,
     tags: [],
     contentPreview: "Content preview",

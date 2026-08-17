@@ -144,7 +144,6 @@ export type BulkGenerateNotesRequest = {
   courseProgramText?: string | null;
   domainContext?: DomainContext | null;
   learnerLevel?: LearnerLevel | null;
-  targetProfileType?: NoteTargetProfileType;
   collectionId?: string | null;
 };
 
@@ -161,7 +160,6 @@ export type BulkGenerationResultResponse = {
   courseProgram: string | null;
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
-  targetProfileType: NoteTargetProfileType;
   collectionId: string | null;
   makePublic: boolean;
   requestedCount: number;
@@ -1576,7 +1574,6 @@ export type UpsertNoteRequest = {
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
   tags?: string[];
-  targetProfileType?: NoteTargetProfileType | null;
   content: string;
 };
 
@@ -1591,7 +1588,6 @@ export type NoteResponse = {
   courseProgram?: string | null;
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
-  targetProfileType: NoteTargetProfileType;
   tags: string[];
   content: string;
   visibility: NoteVisibility;
@@ -1666,7 +1662,6 @@ export type NoteListItemResponse = {
   title: string | null;
   courseProgram: string | null;
   applicablePrograms?: string[];
-  targetProfileType: NoteTargetProfileType;
   subject: string | null;
   tags: string[];
   contentPreview: string;

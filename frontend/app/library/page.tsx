@@ -144,7 +144,6 @@ type BulkGenerationFailureBanner = Pick<
   | "courseProgram"
   | "domainContext"
   | "learnerLevel"
-  | "targetProfileType"
   | "collectionId"
   | "makePublic"
   | "requestedCount"
@@ -1369,7 +1368,6 @@ export default function LibraryPage() {
       courseProgram: bulkFailureBanner.courseProgram,
       domainContext: bulkFailureBanner.domainContext,
       learnerLevel: bulkFailureBanner.learnerLevel,
-      targetProfileType: bulkFailureBanner.targetProfileType,
       makePublic: bulkFailureBanner.makePublic,
       topics: bulkFailureBanner.failedTopics,
       // Carried so a retry reproduces the batch: without it the Review Set silently reset

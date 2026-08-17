@@ -18,7 +18,6 @@ Every batch contains:
 - one required `Subject`
 - one or more `Topics`, capped at 50
 - `Course / Program(s)` for every profile: learners enter one free-text personal program, while Teacher and Admin profiles choose one-or-many catalog selections
-- `Target Audience` for Teacher and Admin profiles
 - Domain Context for Teacher and Admin profiles (optional with one program; required above one)
 - optional `Authored Depth` for Teacher and Admin profiles (the control label for the `notes.learner_level` axis, still named Note Learner Level in `ADR-001`)
 - an optional note-accepting Review Set for Teacher and Admin profiles (labelled with the profile's own collection vocabulary — see below)
@@ -34,13 +33,12 @@ Subject is full-width. The remaining visible metadata uses one responsive two-co
 
 1. Review Set
 2. Course / Program
-3. Target Audience
-4. Domain Context
-5. Authored Depth
+3. Domain Context
+4. Authored Depth
 
 The Review Set control is a dropdown over owned collections that can accept notes; Goals are excluded. **Its label is not the literal string "Review Set" — it resolves through `getCollectionLabels(profileType)`**, so a `TEACHER` sees "Lesson Plan", a `STUDENT` "Study Plan", and an account with no profile type "Collection". The control renders only for Teacher and Admin, which is exactly the audience whose vocabulary diverges, so hardcoding a label here would split it on the surface they use most. Selecting one pre-fills an empty Authored Depth control from the collection's own or nearest inherited authored depth. It never overwrites a level the curator already chose, and no resolved collection level means no pre-fill (specifically, no `COLLEGE` default). The selected level remains visible and editable before submit. Domain Context is never inferred.
 
-**Label vs. axis, stated once so the rest of this file reads unambiguously.** The control is labelled **`Authored Depth`** (`v0.75.0` item 4, `ADR-001` constraint 4). The axis it writes is still `notes.learner_level` and is still called **Note Learner Level** in `ADR-001`, `AGENTS.md`, and the API contract below — **the rename is copy-only and the column did not move.** `Intended Audience` was explicitly unavailable as a label because `notes.target_profile_type` already occupies that concept in the same form.
+**Label vs. axis, stated once so the rest of this file reads unambiguously.** The control is labelled **`Authored Depth`** (`v0.75.0` item 4, `ADR-001` constraint 4). The axis it writes is still `notes.learner_level` and is still called **Note Learner Level** in `ADR-001`, `AGENTS.md`, and the API contract below — **the rename is copy-only and the column did not move.**
 
 **Authored Depth pre-fills, in precedence order** (`ADR-001`'s chain is Review Set → author profile → explicit override):
 
@@ -64,7 +62,7 @@ The Library auto-refreshes so the queued notes appear without a manual refresh. 
 
 After the poller settles, the Library makes a best-effort read of the terminal result receipt via `GET /notes/bulk-generate/results/{id}`. If the receipt is not ready yet, the Library retries a bounded number of times; if it is still missing, already read, owned by someone else, or a transient request fails, no banner is shown and the Library continues normally. A receipt with no `failedTopics` and no `quotaBlockedTopics` is silent.
 
-When `failedTopics` is non-empty, the dismissible banner lists the full topic strings with `X of Y notes generated. These couldn't be generated — try again:` and offers `Retry these`. That action stores the failed topics plus subject, course/program, Domain Context, Authored Depth, target audience, public toggle, **and the selected Review Set** in `sessionStorage`, then navigates to `/library/bulk-generate`; the bulk form consumes that stash once, pre-fills the form, and clears it.
+When `failedTopics` is non-empty, the dismissible banner lists the full topic strings with `X of Y notes generated. These couldn't be generated — try again:` and offers `Retry these`. That action stores the failed topics plus subject, course/program, Domain Context, Authored Depth, public toggle, **and the selected Review Set** in `sessionStorage`, then navigates to `/library/bulk-generate`; `setBulkGenerationRetryStash` writes the new shape and `consumeBulkGenerationRetryStash` also tolerates the retired extra key in a pre-deploy stash.
 
 When `quotaBlockedTopics` is non-empty, the banner lists those topics separately as monthly note-generation quota blocks and shows the plan-aware upgrade action from `getUpgradeCtas(currentPlan)`. It does not offer `Retry these` for quota-blocked topics because retrying immediately would hit the same limit. Mixed receipts show both groups with their distinct actions.
 
@@ -76,15 +74,14 @@ The server loads the caller and treats profile data as authoritative for hidden 
 | --- | --- | --- | --- |
 | Subject | Request | Request | Request |
 | Course / Program | Profile | Request | Request |
-| Target Audience | Derived from profile type | Request | Request |
 | Domain Context | Hidden in UI; optional request accepted | Optional request | Optional request |
 | Note Learner Level | Hidden in UI; optional request accepted | Optional request | Optional request |
 
-Profile type maps to note target profile as follows: `BOARD_EXAM -> BOARD_TAKER`, `PROFESSIONAL -> PROFESSIONAL`, and all other non-teacher profiles -> `STUDENT`. Client-sent course/program and target-audience overrides remain ignored for non-Teacher profiles. Domain Context and Note Learner Level are the documented exception: their product controls are hidden, but the API accepts them because this release does not introduce a per-role field policy.
+The retained `bulk_generation_result.target_profile_type` value is derived in `NoteBulkGenerationService.mapProfileTypeToNoteTargetProfile`: `BOARD_EXAM -> BOARD_TAKER`, `PROFESSIONAL -> PROFESSIONAL`, and every other profile -> `STUDENT`. No client request or terminal response carries it. Domain Context and Note Learner Level remain accepted by the API because this release does not introduce a per-role field policy for those durable axes.
 
 Domain Context and Note Learner Level are parsed through the same validation path as normal note upserts before any background work is dispatched. Unknown values return HTTP 400; omitted or blank values resolve to null. The effective Domain falls back through course/program, while the effective curriculum level falls back through the owner's profile level and then `COLLEGE`.
 
-All profiles use the same pipeline. Teacher/Admin users can provide course/program, target audience, Domain Context, and Note Learner Level. The product UI hides the two authoring axes for other profiles, but the backend currently accepts and persists them if a non-Teacher/Admin client sends them; there is no API-level per-role field policy in this release.
+All profiles use the same pipeline. Teacher/Admin users can provide course/program, Domain Context, and Note Learner Level. The product UI hides the two authoring axes for other profiles, but the backend currently accepts and persists them if a non-Teacher/Admin client sends them; there is no API-level per-role field policy in this release.
 
 ## Per-Topic Flow
 
@@ -105,7 +102,7 @@ One topic failure is caught and logged without aborting later topics. Notes appe
 
 ## Terminal Result Receipt
 
-v0.29.1 adds one bounded exception to the original no-progress-infrastructure rule: `bulk_generation_result`, a terminal outcome receipt. The service generates the receipt id before queuing and returns it as `resultId` in `BulkGenerateNotesResponse`. At batch completion, the worker writes exactly one receipt with owner id, batch context (`subject`, `courseProgram`, nullable `domainContext`, nullable `learnerLevel`, `targetProfileType`, `makePublic`), `requestedCount`, `createdCount`, `failedTopics` (topic strings whose content generation failed), and `quotaBlockedTopics` (topic strings blocked by monthly note-generation quota before a note row existed). The receipt is written even when there are zero failures and even when a whole-batch setup failure means all accepted topics failed before note creation.
+v0.29.1 adds one bounded exception to the original no-progress-infrastructure rule: `bulk_generation_result`, a terminal outcome receipt. The service generates the receipt id before queuing and returns it as `resultId` in `BulkGenerateNotesResponse`. At batch completion, `NoteBulkGenerationService.processBatch` writes exactly one receipt with owner id, batch context (`subject`, `courseProgram`, nullable `domainContext`, nullable `learnerLevel`, storage-only `targetProfileType`, `makePublic`), `requestedCount`, `createdCount`, `failedTopics`, and `quotaBlockedTopics`. `BulkGenerationResultService.toResponse` deliberately omits the storage-only value. The receipt is written even when there are zero failures and even when a whole-batch setup failure means all accepted topics failed before note creation.
 
 `GET /notes/bulk-generate/results/{id}` is authenticated-user gated and owner-scoped. It returns the receipt only to the owner, deletes it in the same read-once flow, and returns 404 when the id is unknown, already read, or owned by someone else. A scheduled cleanup removes unread receipts older than 24 hours.
 

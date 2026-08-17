@@ -1,6 +1,5 @@
 package com.studysnap.backend.dto;
 
-import com.studysnap.backend.entity.NoteTargetProfileType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -20,7 +19,6 @@ public record BulkGenerateNotesRequest(
         String courseProgramText,
         String domainContext,
         String learnerLevel,
-        NoteTargetProfileType targetProfileType,
         UUID collectionId
 ) {
     public BulkGenerateNotesRequest(
@@ -29,10 +27,9 @@ public record BulkGenerateNotesRequest(
             boolean makePublic,
             String courseProgramText,
             String domainContext,
-            String learnerLevel,
-            NoteTargetProfileType targetProfileType
+            String learnerLevel
     ) {
-        this(subject, topics, makePublic, List.of(), courseProgramText, domainContext, learnerLevel, targetProfileType, null);
+        this(subject, topics, makePublic, List.of(), courseProgramText, domainContext, learnerLevel, null);
     }
 
     public BulkGenerateNotesRequest(
@@ -42,10 +39,9 @@ public record BulkGenerateNotesRequest(
             List<UUID> courseProgramIds,
             String courseProgramText,
             String domainContext,
-            String learnerLevel,
-            NoteTargetProfileType targetProfileType
+            String learnerLevel
     ) {
         this(subject, topics, makePublic, courseProgramIds, courseProgramText, domainContext,
-                learnerLevel, targetProfileType, null);
+                learnerLevel, null);
     }
 }

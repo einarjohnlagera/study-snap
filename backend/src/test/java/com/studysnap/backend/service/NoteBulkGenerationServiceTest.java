@@ -120,7 +120,6 @@ class NoteBulkGenerationServiceTest {
         BulkGenerateNotesRequest request = request(
                 List.of("Prenatal Care"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.BOARD_TAKER,
                 true
         );
 
@@ -221,24 +220,17 @@ class NoteBulkGenerationServiceTest {
     }
 
     @Test
-    void queueBatch_adminHonorsExplicitMetadataAndBypassesUsagePaths() {
+    void queueBatch_adminHonorsAuthoringMetadataAndPersistsOwnerDerivedTargetProfileType() {
         UUID userId = UUID.randomUUID();
         mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, "Profile Course");
-        BulkGenerateNotesRequest request = request(
-                List.of("Prenatal Care", "Labor Stages"),
-                COURSE_PROGRAM,
-                NoteTargetProfileType.BOARD_TAKER,
-                true
-        );
-        request = new BulkGenerateNotesRequest(
+        BulkGenerateNotesRequest request = new BulkGenerateNotesRequest(
                 SUBJECT,
                 List.of("Prenatal Care", "Labor Stages"),
                 true,
                 List.of(CATALOG_PROGRAM_ID),
                 null,
                 DomainContext.NURSING.name(),
-                LearnerLevel.BOARD_EXAM_REVIEW.name(),
-                NoteTargetProfileType.BOARD_TAKER
+                LearnerLevel.BOARD_EXAM_REVIEW.name()
         );
         StudyPackGenerationContext context = new StudyPackGenerationContext(
                 LearnerLevel.COLLEGE,
@@ -275,7 +267,6 @@ class NoteBulkGenerationServiceTest {
             assertThat(noteRequest.courseProgramText()).isNull();
             assertThat(noteRequest.domainContext()).isEqualTo(DomainContext.NURSING.name());
             assertThat(noteRequest.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
-            assertThat(noteRequest.targetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER.name());
         });
         verify(noteService, times(2))
                 .updateVisibility(anyString(), eq(NoteVisibility.PUBLIC.name()), eq(userId));
@@ -290,7 +281,7 @@ class NoteBulkGenerationServiceTest {
                 eq(COURSE_PROGRAM),
                 eq(DomainContext.NURSING),
                 eq(LearnerLevel.BOARD_EXAM_REVIEW),
-                eq(NoteTargetProfileType.BOARD_TAKER.name()),
+                eq(NoteTargetProfileType.STUDENT.name()),
                 any(),
                 eq(true),
                 eq(2),
@@ -308,7 +299,6 @@ class NoteBulkGenerationServiceTest {
         BulkGenerateNotesRequest request = request(
                 List.of("Topic One", "Topic Two", "Topic Three"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.STUDENT,
                 false
         );
 
@@ -350,7 +340,6 @@ class NoteBulkGenerationServiceTest {
         BulkGenerateNotesRequest request = request(
                 List.of("Topic One", "Topic Two"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.STUDENT,
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
@@ -394,7 +383,6 @@ class NoteBulkGenerationServiceTest {
         BulkGenerateNotesRequest request = request(
                 List.of("Topic One", "Topic Two", "Topic Three"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.STUDENT,
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
@@ -415,13 +403,12 @@ class NoteBulkGenerationServiceTest {
     }
 
     @Test
-    void queueBatch_teacherUsesExplicitCategorizationAndProfileLearnerLevel() {
+    void queueBatch_teacherUsesProfileDerivedStorageValueAndProfileLearnerLevel() {
         UUID userId = UUID.randomUUID();
         mockUser(userId, UserRole.USER, ProfileType.TEACHER, LearnerLevel.SENIOR_HIGH, PROFILE_COURSE_PROGRAM);
         BulkGenerateNotesRequest request = request(
                 List.of("Classroom Assessment"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.STUDENT,
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.SENIOR_HIGH, COURSE_PROGRAM);
@@ -442,11 +429,10 @@ class NoteBulkGenerationServiceTest {
         verify(noteService).create(captor.capture(), eq(userId));
         assertThat(captor.getValue().courseProgramIds()).containsExactly(CATALOG_PROGRAM_ID);
         assertThat(captor.getValue().courseProgramText()).isNull();
-        assertThat(captor.getValue().targetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT.name());
     }
 
     @Test
-    void queueBatch_nonTeacherUsesProfileCategorizationButAcceptsAuthoringAxes() {
+    void queueBatch_nonTeacherAcceptsAuthoringAxesWithoutClientCategorization() {
         UUID userId = UUID.randomUUID();
         mockUser(
                 userId,
@@ -462,8 +448,7 @@ class NoteBulkGenerationServiceTest {
                 List.of(),
                 "Ignored Course",
                 DomainContext.PROFESSIONAL_PRACTICE_AND_REGULATION.name(),
-                LearnerLevel.BOARD_EXAM_REVIEW.name(),
-                NoteTargetProfileType.PROFESSIONAL
+                LearnerLevel.BOARD_EXAM_REVIEW.name()
         );
         StudyPackGenerationContext context = new StudyPackGenerationContext(
                 LearnerLevel.BOARD_EXAM_REVIEW,
@@ -489,7 +474,6 @@ class NoteBulkGenerationServiceTest {
         verify(noteService).create(captor.capture(), eq(userId));
         assertThat(captor.getValue().courseProgramIds()).isEmpty();
         assertThat(captor.getValue().courseProgramText()).isEqualTo("Ignored Course");
-        assertThat(captor.getValue().targetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER.name());
         assertThat(captor.getValue().domainContext())
                 .isEqualTo(DomainContext.PROFESSIONAL_PRACTICE_AND_REGULATION.name());
         assertThat(captor.getValue().learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
@@ -506,8 +490,7 @@ class NoteBulkGenerationServiceTest {
                 List.of(CATALOG_PROGRAM_ID),
                 null,
                 "engineering_math",
-                null,
-                NoteTargetProfileType.STUDENT
+                null
         );
 
         assertThatThrownBy(() -> service.queueBatch(request, userId, false))
@@ -528,8 +511,7 @@ class NoteBulkGenerationServiceTest {
                 List.of(CATALOG_PROGRAM_ID),
                 null,
                 DomainContext.ENGINEERING_MATHEMATICS.name(),
-                "university",
-                NoteTargetProfileType.STUDENT
+                "university"
         );
 
         assertThatThrownBy(() -> service.queueBatch(request, userId, false))
@@ -546,7 +528,6 @@ class NoteBulkGenerationServiceTest {
         BulkGenerateNotesRequest request = request(
                 List.of("Rejected Topic", "Healthy Topic"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.STUDENT,
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
@@ -593,7 +574,6 @@ class NoteBulkGenerationServiceTest {
         BulkGenerateNotesRequest request = request(
                 List.of("Healthy Topic", "Over Limit Topic", "Broken Topic"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.STUDENT,
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
@@ -642,7 +622,6 @@ class NoteBulkGenerationServiceTest {
         BulkGenerateNotesRequest request = request(
                 List.of("Healthy Topic"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.STUDENT,
                 false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
@@ -680,7 +659,6 @@ class NoteBulkGenerationServiceTest {
         BulkGenerateNotesRequest request = request(
                 List.of("Topic One", "Topic Two"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.STUDENT,
                 false
         );
         when(generationContextResolver.resolveForBulkGeneration(userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null))
@@ -711,16 +689,16 @@ class NoteBulkGenerationServiceTest {
         UUID userId = UUID.randomUUID();
         mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
         BulkGenerateNotesRequest missingSubject = new BulkGenerateNotesRequest(
-                " ", List.of("Topic"), false, List.of(CATALOG_PROGRAM_ID), null, null, null, NoteTargetProfileType.STUDENT
+                " ", List.of("Topic"), false, List.of(CATALOG_PROGRAM_ID), null, null, null
         );
         BulkGenerateNotesRequest emptyTopics = request(
-                List.of(), COURSE_PROGRAM, NoteTargetProfileType.STUDENT, false
+                List.of(), COURSE_PROGRAM, false
         );
         List<String> tooManyTopics = java.util.stream.IntStream.rangeClosed(1, 51)
                 .mapToObj(index -> "Topic " + index)
                 .toList();
         BulkGenerateNotesRequest overCap = request(
-                tooManyTopics, COURSE_PROGRAM, NoteTargetProfileType.STUDENT, false
+                tooManyTopics, COURSE_PROGRAM, false
         );
 
         assertThatThrownBy(() -> service.queueBatch(missingSubject, userId, false))
@@ -735,22 +713,16 @@ class NoteBulkGenerationServiceTest {
     }
 
     @Test
-    void queueBatch_rejectsTeacherMissingRequiredMetadata() {
+    void queueBatch_rejectsTeacherMissingRequiredCourseMetadata() {
         UUID teacherId = UUID.randomUUID();
         mockUser(teacherId, UserRole.USER, ProfileType.TEACHER, LearnerLevel.COLLEGE, COURSE_PROGRAM);
         BulkGenerateNotesRequest missingCourse = new BulkGenerateNotesRequest(
-                SUBJECT, List.of("Topic"), false, List.of(), null, null, null, NoteTargetProfileType.STUDENT
-        );
-        BulkGenerateNotesRequest missingTarget = request(
-                List.of("Topic"), COURSE_PROGRAM, null, false
+                SUBJECT, List.of("Topic"), false, List.of(), null, null, null
         );
 
         assertThatThrownBy(() -> service.queueBatch(missingCourse, teacherId, false))
                 .isInstanceOf(com.studysnap.backend.exception.CourseProgramSelectionRequiredException.class)
                 .hasMessage("Choose at least one course or program.");
-        assertThatThrownBy(() -> service.queueBatch(missingTarget, teacherId, false))
-                .isInstanceOf(InvalidBulkGenerationRequestException.class)
-                .hasMessage("Target audience is required for teachers and admins.");
     }
 
     @Test
@@ -788,7 +760,7 @@ class NoteBulkGenerationServiceTest {
         UUID adminId = UUID.randomUUID();
         mockUser(adminId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
         BulkGenerateNotesRequest request = request(
-                List.of("Topic"), COURSE_PROGRAM, NoteTargetProfileType.STUDENT, false
+                List.of("Topic"), COURSE_PROGRAM, false
         );
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
         when(generationContextResolver.resolveForBulkGeneration(
@@ -810,7 +782,7 @@ class NoteBulkGenerationServiceTest {
         UUID userId = UUID.randomUUID();
         mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, null, COURSE_PROGRAM);
         BulkGenerateNotesRequest request = request(
-                List.of("Topic"), COURSE_PROGRAM, NoteTargetProfileType.STUDENT, false
+                List.of("Topic"), COURSE_PROGRAM, false
         );
         StudyPackGenerationContext context = context(null, COURSE_PROGRAM);
         when(generationContextResolver.resolveForBulkGeneration(userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null))
@@ -848,7 +820,6 @@ class NoteBulkGenerationServiceTest {
         BulkGenerateNotesRequest request = request(
                 List.of("Topic One", "Topic Two"),
                 COURSE_PROGRAM,
-                NoteTargetProfileType.STUDENT,
                 false
         );
 
@@ -860,7 +831,6 @@ class NoteBulkGenerationServiceTest {
     private BulkGenerateNotesRequest request(
             List<String> topics,
             String courseProgram,
-            NoteTargetProfileType targetProfileType,
             boolean makePublic
     ) {
         return new BulkGenerateNotesRequest(
@@ -870,8 +840,7 @@ class NoteBulkGenerationServiceTest {
                 List.of(CATALOG_PROGRAM_ID),
                 null,
                 null,
-                null,
-                targetProfileType
+                null
         );
     }
 
@@ -884,7 +853,6 @@ class NoteBulkGenerationServiceTest {
                 null,
                 null,
                 null,
-                NoteTargetProfileType.STUDENT,
                 collectionId
         );
     }
@@ -932,7 +900,6 @@ class NoteBulkGenerationServiceTest {
                 COURSE_PROGRAM,
                 null,
                 null,
-                NoteTargetProfileType.STUDENT.name(),
                 List.of(),
                 "Content",
                 NoteVisibility.PRIVATE.name(),

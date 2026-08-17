@@ -754,7 +754,6 @@ describe("OnboardingPage", () => {
       // cannot silently drop them (PUT is a full replace and omission persists as null).
       domainContext: null,
       learnerLevel: null,
-      targetProfileType: "STUDENT",
       content: "Edited Newton note content for onboarding so the study pack can start.",
     });
     expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1", { autoApplyMetadata: true });

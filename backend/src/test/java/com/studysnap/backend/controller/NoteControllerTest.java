@@ -48,6 +48,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
@@ -70,6 +71,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -145,8 +147,7 @@ class NoteControllerTest {
                 true,
                 "Nursing",
                 null,
-                null,
-                NoteTargetProfileType.BOARD_TAKER
+                null
         );
         UUID resultId = UUID.randomUUID();
         BulkGenerateNotesResponse expected = new BulkGenerateNotesResponse(resultId, 1, 1, 0);
@@ -157,6 +158,35 @@ class NoteControllerTest {
         verify(authService).requireEmailVerified(userId);
         verify(noteBulkGenerationService).queueBatch(request, userId, false);
         assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void create_ignoresLegacyTargetProfileTypeJsonField() throws Exception {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        NoteResponse expected = buildNoteResponse(UUID.randomUUID().toString(), "DRAFT");
+        when(noteService.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(userId)))
+                .thenReturn(expected);
+
+        buildMockMvc(user).perform(post("/notes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Legacy client note",
+                                  "domainContext": null,
+                                  "learnerLevel": null,
+                                  "targetProfileType": "BOARD_TAKER",
+                                  "content": "Safe content"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(expected.id()));
+
+        org.mockito.ArgumentCaptor<com.studysnap.backend.dto.UpsertNoteRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(com.studysnap.backend.dto.UpsertNoteRequest.class);
+        verify(noteService).create(captor.capture(), org.mockito.ArgumentMatchers.eq(userId));
+        assertThat(captor.getValue().title()).isEqualTo("Legacy client note");
+        assertThat(captor.getValue().content()).isEqualTo("Safe content");
     }
 
     @Test
@@ -306,7 +336,6 @@ class NoteControllerTest {
                 false,
                 null,
                 null,
-                null,
                 null
         );
         UUID resultId = UUID.randomUUID();
@@ -345,7 +374,6 @@ class NoteControllerTest {
                 "Nursing",
                 null,
                 null,
-                NoteTargetProfileType.BOARD_TAKER.name(),
                 null,
                 true,
                 2,
@@ -417,7 +445,6 @@ class NoteControllerTest {
                 "Nursing",
                 null,
                 null,
-                "STUDENT",
                 List.of("tag"),
                 "content",
                 "PRIVATE",
@@ -460,7 +487,6 @@ class NoteControllerTest {
                 "Nursing",
                 null,
                 null,
-                "STUDENT",
                 List.of("tag"),
                 "content",
                 "PRIVATE",
@@ -819,7 +845,6 @@ class NoteControllerTest {
                         "Nursing",
                         null,
                         null,
-                        "STUDENT",
                         "Biology",
                         List.of("cells"),
                         "preview",
@@ -911,7 +936,6 @@ class NoteControllerTest {
                 "Nursing",
                 null,
                 null,
-                "STUDENT",
                 List.of("tag"),
                 "content",
                 "PRIVATE",

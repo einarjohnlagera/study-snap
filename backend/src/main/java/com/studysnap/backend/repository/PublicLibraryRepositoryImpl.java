@@ -78,7 +78,6 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                    note_programs.program_names as "applicablePrograms",
                    n.domain_context as "domainContext",
                    n.learner_level as "learnerLevel",
-                   n.target_profile_type as "targetProfileType",
                    n.subject as subject,
                    n.tags as tags,
                    substring(n.content, 1, 2000) as content,
@@ -397,9 +396,6 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         ));
         values.put(LEARNER_LEVEL_ALIAS, enumValue(
                 LearnerLevel.class, stringValue(tuple, LEARNER_LEVEL_ALIAS)
-        ));
-        values.put(TARGET_PROFILE_TYPE_ALIAS, enumValue(
-                NoteTargetProfileType.class, stringValue(tuple, TARGET_PROFILE_TYPE_ALIAS)
         ));
         values.put(SUBJECT_ALIAS, stringValue(tuple, SUBJECT_ALIAS));
         values.put(TAGS_ALIAS, stringArray(tuple.get(TAGS_ALIAS)));
