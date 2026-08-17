@@ -181,7 +181,6 @@ const publicNotes = [
     ownerUserId: null,
     title: "PNLE Fundamentals",
     courseProgram: "PNLE",
-    targetProfileType: "BOARD_TAKER",
     subject: "Nursing",
     tags: ["review"],
     contentPreview: "Nursing board exam fundamentals.",

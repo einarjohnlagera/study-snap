@@ -53,7 +53,6 @@ function createPublicNote(overrides: Record<string, unknown> = {}) {
     ownerUserId: "user-2",
     title: "Community Note",
     courseProgram: "Engineering",
-    targetProfileType: "STUDENT",
     subject: "Physics",
     tags: ["motion"],
     contentPreview: "Community preview",
@@ -223,7 +222,6 @@ describe("PublicLibraryPageClient", () => {
       createPublicNote({
         id: "note-student",
         title: "Student Note",
-        targetProfileType: "STUDENT",
       }),
     ]));
 
@@ -269,6 +267,23 @@ describe("PublicLibraryPageClient", () => {
     fireEvent.click(modal.getByRole("button", { name: "Apply" }));
 
     expect(replaceMock).toHaveBeenCalledWith("/public/library?level=COLLEGE", { scroll: false });
+  });
+
+  it("accepts a slug-shaped authored depth URL, matching the other filter params", async () => {
+    // ?subject= and ?courseProgram= are slug-shaped, so a hand-written or documented
+    // ?level=senior-high should filter rather than silently reading as no filter. Must stay in step
+    // with LearnerLevel.fromSlug on the server: if only one side normalises, the results filter
+    // while the chip renders unselected.
+    currentSearch = "?level=senior-high";
+    (listPublicLearnerLevels as jest.Mock).mockResolvedValue(["SENIOR_HIGH"]);
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "senior-note", title: "Senior High Physics", learnerLevel: "SENIOR_HIGH" }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Senior High Physics")).toBeInTheDocument();
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ level: "SENIOR_HIGH" }));
   });
 
   it("treats an unknown authored depth URL as unfiltered", async () => {

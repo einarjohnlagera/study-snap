@@ -1,5 +1,62 @@
 # RELEASES.md - NoteLib
 
+## v0.83.1 - Note Creation Integrity
+
+**Status: Released** (kicked off and signed off 2026-08-17)
+
+Theme: a learner who pastes notes and generates a Study Pack should get a Study Pack, not a 500 and a spent quota.
+
+**A patch for a live production bug that predates the release which found it.** `v0.83.0`'s cold-context pressure test surfaced it while auditing an unrelated invariant, and it was recorded there as a Known Limitation rather than fixed in scope.
+
+**The defect.** `StudyPackService.createGeneratedNote` (`:743`) and `ShareService.createRemixedNote` (`:111`) construct a `NoteEntity` without ever calling `setTargetProfileType`. `notes.target_profile_type` is **`NOT NULL` with no database default** (`V44:18`), `NoteEntity` has no `@PrePersist` and no field initializer, and `ddl-auto` is `none`, so the production DDL is Flyway's. **Verified empirically against a real PostgreSQL rather than inferred:** the insert fails with `null value in column "target_profile_type" ... violates not-null constraint`.
+
+**Reachability, traced end to end.** `createStudyPackFromText` posts `{ notesText }` with **no `noteId`**, so `resolveSourceNoteForGeneration` returns null and `createFromText` takes the `createGeneratedNote` branch. Same for image upload and confirm-text, and `ShareService` for share-remix. **`/study` is a live destination** — `TodayFocusCard` routes the `STUDY_SUGGESTION` focus type there.
+
+**⚠️ The cost ordering is what makes this worth a patch rather than a backlog row:** quota is asserted and the LLM call completes *before* the insert. The learner pays for a generation, waits for it, and receives an error.
+
+**Why nothing caught it:** every existing fixture passes the value explicitly, and the service-level tests are Mockito-based with no schema. The gap dates to `e66491ed` (2026-03-21) and shipped on `main` for roughly five months.
+
+### Planned Scope
+
+1. **Set the value on both paths (backend).** Lift the owner-profile mapping out of `NoteService` (it is `private` today and now has three call sites) to `NoteTargetProfileType.forOwnerProfile(ProfileType)`, and have `NoteService` delegate to it so there is still one definition.
+2. **Tests that would have caught this (backend).** Assert the **persisted** value on a note created through the real paths — not that the call merely succeeds, which is the assertion shape that let this through. Include a `BOARD_EXAM`-profile case, the one where a constant and a derivation visibly diverge.
+
+**⚠️ The value must be DERIVED from the owner's profile, never a hardcoded constant.** `SPEC.md:129` documents the contract as *"derives a constrained non-null value from the owner's profile"* — a line corrected during `v0.83.0` signoff. A hardcoded `STUDENT` would make it false again the week after it was fixed. The cost is one primary-key lookup on a path that has just completed an LLM call.
+
+Anti-drift: **no migration, and specifically no `DEFAULT` added to `notes.target_profile_type`** — a database default would mask this class of bug rather than fix it, and the column is phase-4 material gated on `[CHECKPOINT — due 2026-09-16]`. No change to `NOT NULL`, the CHECK constraint, the index, or the enum's values. No product-visible behaviour changes: the column is inert, read by nothing since `v0.83.0`. **The `[CHECKPOINT — due 2026-09-16]` reads cannot be contaminated by this fix** — they key on `id IN (the 819 narrowed ids)`, so rows created after deploy cannot enter them.
+
+### Shipped
+
+- **Note creation no longer 500s on the paths that never set `target_profile_type` (backend).** `StudyPackService.createGeneratedNote` and `ShareService.createRemixedNote` now persist a value derived from the owner's profile, restoring `/study` paste-text, image upload, confirm-text and share-remix. The owner-profile mapping moved from a `private` method on `NoteService` to `NoteTargetProfileType.forOwnerProfile(ProfileType)` — it has three call sites now — and `NoteService` delegates to it, so there is still one definition. A missing owner yields `STUDENT` rather than null, because the column is `NOT NULL`.
+- **Tests that would have caught it, verified by mutation.** Four tests assert the **persisted** value through the real paths, including a `BOARD_EXAM` owner — the case where a derivation and a hardcoded `STUDENT` visibly diverge. **All four were confirmed to fail against the unfixed code with `expected: BOARD_TAKER / but was: null`.** Asserting only that the call succeeds is the assertion shape that let the defect ship for five months, since every pre-existing fixture supplied the value by hand.
+- **`?level=` now accepts slug-shaped values, closing a `v0.83.0` Known Limitation (backend + frontend).** `?level=senior-high` filtered nothing where `?subject=` and `?courseProgram=` are slug-shaped, so a hand-written or documented link silently no-opped. **Added as `LearnerLevel.fromSlug` rather than by loosening `fromString`** — that method has three other callers (the authoring metadata parser and two quiz level overrides), and the looser contract belongs to the URL boundary alone. **Fixed on BOTH sides deliberately:** `resolveLearnerLevel` normalises identically, because if only the server normalised, a slug link would filter the results while the chip rendered unselected. Backend and frontend tests both verified to fail against the unfixed parse (`expected: SENIOR_HIGH / but was: null`).
+- **Closed the cosmetic `v0.83.0` Known Limitation (frontend).** Removed the vestigial `<>…</>` fragment in `note-editor-form.tsx` — a former conditional branch that had been wrapping its fieldset body unconditionally — and re-indented its 44 children to sit under the grid they belong to. Stripped the retired `targetProfileType` key from 13 dead test fixtures across 9 files. **Two fixtures were deliberately left in place:** `bulk-generation-flash.test.ts` and `note-upgrade-draft.test.ts` seed the retired key on purpose, to prove a pre-deploy payload still parses. A blind sweep would have deleted exactly what those tests exist to check.
+### Pre-signoff pressure test — one cold-context agent, 2026-08-17
+
+**The full three-agent gate did NOT fire, and running it anyway would have been the wrong call.** By shape this release is 2 PRs, 21 code files, **zero files touched by more than one commit**, and two unrelated concerns rather than one concept spanning several surfaces — the prescribed check at that size is a single `advisor()` pass. One focused cold agent ran instead of three, on the single residual risk the author could not self-check: **PR #1096 deleted data from 13 test-fixture sites across 9 files**, and "were any of those deletions load-bearing?" is a question the person who made the edits is badly placed to answer.
+
+**Result: clean, and verified empirically rather than by inspection.** The agent restored all 13 deleted keys and re-ran the affected suites — **353/353 pass with the keys absent, 353/353 with them restored, identical** — then established structurally why: zero production readers remain, there are no Jest snapshots anywhere in `frontend/`, and no shape-sensitive assertion touches any of the 13. The two deletions that *looked* meaningful were traced individually and are not: the legacy-audience test's assertion reads filter state, never `note.targetProfileType`, and the onboarding one was an unasserted key on a mocked response.
+
+**The two preserved fixtures were proven necessary by mutation.** Making each reader leak the field (`{...parsed.draft}` / `{...stash}`) failed both tests with `+ "targetProfileType": "BOARD_TAKER"`. **Had they been swept along with the other 13, those mutations would pass silently** — which is exactly the trap a blind sweep sets.
+
+**Both fixes independently re-verified.** The agent enumerated every NoteEntity persistence path itself rather than trusting the count — four `new NoteEntity()` sites, no builder or factory, no `@Modifying` insert, no `em.persist`, and `insert into notes` only in `V19` — confirming the claim of four. `fromSlug` has exactly one call site and `fromString`'s three others are all URL-unreachable. The JSX edit is structurally identical: whitespace-stripped diff yields exactly the two removed fragment lines and nothing else.
+
+**One agreement detail worth recording, because it is not what the guard was written for:** the frontend normalisation is a strict *superset* of the Java one (JS `\s` covers `\u00A0`, `\u2028`; Java's does not). That cannot produce the divergence this release guards against, because the client sends the canonicalised enum value rather than the raw parameter — so the browser path always agrees with itself. The guard matters for hand-written and inbound links, which is what it claims.
+
+### Checkpoint gate — considered, nothing owed
+
+**Recorded rather than skipped, because the next kickoff's step-9 scan can only detect an *overdue* checkpoint, never one that was never written.** Nothing here shipped ahead of its evidence: the `NOT NULL` fix carries four mutation-verified tests plus an empirical reproduction against a real PostgreSQL, the slug fix has mutation-verified tests on both sides, and the cleanup changes no behaviour. The Stage 0 scoping document is a planning artifact, not shipped behaviour.
+
+### Known limitations — carried, not silently dropped
+
+- **`NoteTargetProfileType` in `frontend/lib/api.ts:459` is now dead** — zero usages once `v0.83.0`'s dead exports were removed. Deliberately kept: it mirrors a backend enum that still exists on the retained column, and both go in phase 4. A `v0.83.0` leftover rather than this release's doing.
+- **`ProfileType.PROFESSIONAL → PROFESSIONAL` is covered only via `NoteServiceTest`**, not on the two newly-fixed paths. Acceptable because the branch now lives in one shared method that those tests exercise.
+- **`?level=` emits the canonical `SENIOR_HIGH` while `?subject=` emits `nursing-fundamentals`.** Cosmetic asymmetry in generated URLs; this release claims tolerance parity on *inbound* links, which it has, not emission parity.
+- **Carried unchanged from `v0.83.0`:** deploy-boundary tolerance remains one-directional, and the `V117` predicate notes remain properties of a migration that already ran. Neither is fixable from here.
+
+- **All four `new NoteEntity()` sites in `backend/src/main` were audited, not just the two reported** — `NoteService` (create and copy) already set the value; the two in `StudyPackService` and `ShareService` did not. The class of bug is closed, not two instances of it.
+
+
 ## v0.83.0 - Target Audience Removal (Phase 2)
 
 **Status: Released** (kicked off and signed off 2026-08-17)

@@ -608,7 +608,7 @@ public class NoteController {
                 tags,
                 courseProgram,
                 creator,
-                LearnerLevel.fromString(level),
+                LearnerLevel.fromSlug(level),
                 size == null ? null : Math.clamp(size, PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE),
                 paginated
                         ? Math.clamp(
