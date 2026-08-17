@@ -1,5 +1,6 @@
 package com.studysnap.backend.repository;
 
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.model.PublicLibrarySource;
 
 import java.util.List;
@@ -13,6 +14,7 @@ public record PublicLibraryFilterCriteria(
         List<String> tagSlugs,
         String courseProgramSlug,
         String creator,
+        LearnerLevel learnerLevel,
         boolean readyOnly,
         List<PublicLibrarySource> sources
 ) {

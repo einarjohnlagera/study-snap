@@ -4908,6 +4908,7 @@ export async function setCollectionItemOrder(
 export async function listPublicNotes(params?: {
   courseProgram?: string;
   creator?: string | null;
+  level?: LearnerLevel;
   page?: number;
   pageSize?: number;
   readyOnly?: boolean;
@@ -4924,6 +4925,9 @@ export async function listPublicNotes(params?: {
   }
   if (params?.creator) {
     searchParams.set("creator", params.creator);
+  }
+  if (params?.level) {
+    searchParams.set("level", params.level);
   }
   if (typeof params?.page === "number") {
     searchParams.set("page", String(params.page));
@@ -4965,6 +4969,14 @@ export async function listPublicLibraryDiscoverySections(): Promise<PublicLibrar
     response,
     "Could not load public library discovery sections.",
   );
+}
+
+export async function listPublicLearnerLevels(): Promise<LearnerLevel[]> {
+  const response = await fetch(buildUrl("/notes/public/learner-levels"), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<LearnerLevel[]>(response, "Could not load authored depths.");
 }
 
 export async function togglePublicNoteLike(noteId: string): Promise<PublicNoteLikeResponse> {

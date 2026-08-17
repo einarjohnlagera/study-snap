@@ -118,6 +118,48 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     }
 
     @Test
+    void authoredDepthFilterMatchesOneColumnExcludesNullAndOffersOnlyPublicDepths() {
+        UUID ownerId = insertUser("depthreader", UserRole.USER);
+        NoteEntity juniorHigh = saveNote(
+                ownerId, "Junior High Algebra", "Mathematics", null,
+                new String[]{"algebra"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 1
+        );
+        juniorHigh.setLearnerLevel(LearnerLevel.JUNIOR_HIGH);
+        NoteEntity seniorHigh = saveNote(
+                ownerId, "Senior High Calculus", "Mathematics", null,
+                new String[]{"calculus"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 2
+        );
+        seniorHigh.setLearnerLevel(LearnerLevel.SENIOR_HIGH);
+        NoteEntity withoutDepth = saveNote(
+                ownerId, "Unclassified Mathematics", "Mathematics", null,
+                new String[]{"foundations"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 3
+        );
+        NoteEntity privateCollege = saveNote(
+                ownerId, "Private College Algebra", "Mathematics", null,
+                new String[]{"algebra"}, NoteStatus.DRAFT, NoteVisibility.PRIVATE,
+                NoteTargetProfileType.STUDENT, 4
+        );
+        privateCollege.setLearnerLevel(LearnerLevel.COLLEGE);
+        flushAndClear();
+
+        PublicNoteListResponse juniorHighPage = pageAtLevel(LearnerLevel.JUNIOR_HIGH);
+        PublicNoteListResponse juniorHighLegacy = legacyAtLevel(LearnerLevel.JUNIOR_HIGH);
+        PublicNoteListResponse unusedProfessionalPage = pageAtLevel(LearnerLevel.PROFESSIONAL);
+
+        assertThat(ids(juniorHighPage)).containsExactly(juniorHigh.getId().toString());
+        assertThat(ids(juniorHighLegacy)).containsExactly(juniorHigh.getId().toString());
+        assertThat(ids(juniorHighPage)).doesNotContain(withoutDepth.getId().toString());
+        assertThat(unusedProfessionalPage.items()).isEmpty();
+        assertThat(unusedProfessionalPage.totalMatching()).isZero();
+        assertThat(noteService.listPublicLearnerLevels())
+                .containsExactly(LearnerLevel.JUNIOR_HIGH, LearnerLevel.SENIOR_HIGH)
+                .doesNotContain(LearnerLevel.COLLEGE, LearnerLevel.PROFESSIONAL);
+    }
+
+    @Test
     void joinedProgramsDrivePublicSlugSearchAndBlockTheLegacyString() {
         UUID ownerId = insertUser("multireader", UserRole.USER);
         NoteEntity curated = saveNote(
@@ -229,6 +271,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 List.of("kidney-health"),
                 "nursing",
                 "nursecreator",
+                null,
                 10,
                 null,
                 null,
@@ -300,7 +343,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
 
         PublicNoteListResponse legacyOfficial = noteService.listPublic(
                 viewerId, null, null, null, null, null, null, null,
-                null, null, true, List.of("OFFICIAL")
+                null, null, null, true, List.of("OFFICIAL")
         );
         PublicNoteListResponse paginatedViewer = page(
                 viewerId, null, "recent", null, List.of(), null, null, true, List.of("BY_YOU"), 0, 20
@@ -512,6 +555,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 courseProgram,
                 creator,
                 null,
+                null,
                 page,
                 pageSize,
                 readyOnly,
@@ -521,6 +565,42 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
 
     private PublicNoteListResponse searchPage(String search) {
         return page(null, search, "recent", null, List.of(), null, null, false, List.of(), 0, 20);
+    }
+
+    private PublicNoteListResponse pageAtLevel(LearnerLevel learnerLevel) {
+        return noteService.listPublic(
+                null,
+                null,
+                "recent",
+                null,
+                List.of(),
+                null,
+                null,
+                learnerLevel,
+                null,
+                0,
+                20,
+                false,
+                List.of()
+        );
+    }
+
+    private PublicNoteListResponse legacyAtLevel(LearnerLevel learnerLevel) {
+        return noteService.listPublic(
+                null,
+                null,
+                "recent",
+                null,
+                List.of(),
+                null,
+                null,
+                learnerLevel,
+                null,
+                null,
+                null,
+                false,
+                List.of()
+        );
     }
 
     private List<String> ids(PublicNoteListResponse response) {

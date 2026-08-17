@@ -245,22 +245,15 @@ All users share the same learning engine:
 
 Do not create separate note, study-pack, quiz, or activity systems per profile type.
 
-## Public Library audience filtering
+## Public Library Authored Depth filtering
 
-Public Library browsing supports an audience-first filter based on note audience:
+Public Library browsing supports an Authored Depth equality filter based on the note's `learnerLevel`:
 
-- filter options:
-  - `All`
-  - `Student`
-  - `Board Taker`
-- signed-in users default to their mapped audience:
-  - `Student` -> `Student`
-  - `Board Taker` -> `Board Taker`
-- `Teacher` and `Admin` default to `All` because note audience is limited to student-facing targets
-- guests default to `All`
-- empty category state copy should use:
-  - `No notes available for this category yet.`
-  - CTA: `View all notes`
+- `?level=` is parsed tolerantly through `LearnerLevel.fromString`; unknown or blank values are ignored and render the unfiltered library.
+- valid levels with no matching public notes render the standard filtered empty state.
+- chips come only from distinct non-null learner levels present on public notes, not from the complete enum.
+- equality filtering excludes NULL-depth notes; the facet is partially populated until remaining curator notes are classified.
+- legacy `?audience=` values are ignored and never mapped into depth at runtime.
 
 ## Product Philosophy
 
@@ -953,10 +946,14 @@ Users can:
   - `Public`
   - `Private`
 - Public Library filters:
+  - `Authored Depth`
+  - `Course / Program`
   - `Subject`
   - `Tags`
   - `By You`
   - `Official`
+  - `Community`
+  - `Study Pack Ready`
 - Private Library sort options:
   - `Recently Updated`
   - `Recently Reviewed`
