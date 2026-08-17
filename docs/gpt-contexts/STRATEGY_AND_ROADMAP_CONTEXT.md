@@ -2,7 +2,7 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **what to build next, sequencing, or why past releases went the way they did**.
-> Last updated: v0.80.0 - 2026-08-15. **Stamp had gone seven releases stale (v0.73.0); restamped at the
+> Last updated: v0.83.0 - 2026-08-17. **`v0.83.0` executed the Target Audience retirement** — authoring field, filter chips and `?audience=` removed; column retained pending `[CHECKPOINT — due 2026-09-16]`. Previously v0.80.0 - 2026-08-15. **Stamp had gone seven releases stale (v0.73.0); restamped at the
 > `v0.80.0` signoff.** Roadmap structure changed materially in that span: **eleven dated checkpoints are
 > now live** (earliest 2026-09-10), and the Backlog Index gained rows for the **onboarding catalog-first
 > follow-up** (gated on 2026-09-11 and, by `v0.79.0`'s own baseline, the load-bearing half of that work),
@@ -12,7 +12,7 @@
 > checkpoint-gated between 2026-09-10 and 09-14**, so proposals that change what a checkpoint measures
 > destroy the read rather than advancing it.
 >
-> **(a) Target Audience retirement is RATIFIED** (`ADR-001` amended 2026-08-16, reducing five note
+> **(a) Target Audience retirement is RATIFIED and EXECUTED in `v0.83.0`** (`ADR-001` amended 2026-08-16, reducing five note
 > metadata axes to four) **but NOT executed** — the field still exists, is still written, and still backs
 > the live Public Library filter. Its Phase 2 touches discovery inside the 2026-09-13 Explore window and
 > waits for it. **One unratified architecture proposal remains:**
@@ -129,7 +129,7 @@ Synthesized from `docs/product/ROADMAP.md`'s Backlog Index (~55 rows) — the au
 ### Active now — no gate, just not yet done
 - ~~**`v0.71.0` Slice 3 — Program Family expansion.**~~ **No longer a gate — ratified 2026-08-05 and shipped in `v0.71.0`.** The four rulings are closed and binding; see the Slice 3 section in `DECISION_HISTORY_CONTEXT.md`.
 - **Retiring the legacy-string discovery fallback.** Slice 2 left `notes.course_program` load-bearing on read paths for notes with no join row. Retiring it is **unscheduled** and depends on what happens to notes carrying catalog-excluded values — a population that currently **grows**, because the legacy course/program field still accepts freetext (`CourseProgramCombobox` defaults `allowCustom = true` and neither authoring surface overrides it). A production query sizing this exists at `19-slice-2-facet-equivalence-impact.sql`.
-- **`notes.target_profile_type` redundancy check.** ADR-001 says to judge at the *end* of Slice 2, against real filter usage, whether precise program facets make the coarse 3-value audience facet redundant. Slice 2 has now merged, so this is due — and it is a product question, not an engineering one.
+- ~~**`notes.target_profile_type` redundancy check.**~~ **RESOLVED.** Judged redundant, ratified in the 2026-08-16 `ADR-001` amendment (five axes to four), and executed in `v0.83.0`: the authoring field, the filter chips and `?audience=` are removed, replaced by an Authored Depth `?level=` filter. **The column is retained** pending `[CHECKPOINT — due 2026-09-16]`, whose kill criterion needs it.
 - **Messaging Architecture rollout (ratified 2026-08-01, one slice shipped).** No gate on the architecture — it is an owner decision, and explicitly **not** gated on a conversion experiment. `/pricing` shipped in `v0.68.0`; **the landing page, paywall modal, Exam Hub upsell, `PLAN_COMPARISON_ROWS`'s "Best for" row, and per-plan feature bullets are all still un-actioned**, each needing its own scoping pass and `/kickoff`. `FREE.title` is the one already-identified concrete item and must be written against the locked hierarchy rather than derived from Plus/Pro consistency. Explicitly incremental — do not propose this as one release.
 - **Company Redefinition Phase 4 items 5 and 7.** Item 5 (which IA/landing changes follow from the packaging recommendation, e.g. whether Exam Hub changes structure) and item 7's implementation substance — the unexecuted **"AI" de-emphasis rename** in `fable-out/06`: ~13 actionable rows across `ai-suggestion-modal.tsx`, `profile-learning-section.tsx`, `paywall-content.ts`, `learn-guides.ts`, `study-packs-guide.tsx`, `professional-guide.tsx` ("AI Suggestions" → "Suggested Details", "AI Critique" → "Answer Critique", Help-guide mechanism copy to NoteLib-as-actor). It touches public SEO content and landing copy, so it needs its own scoping pass and `/kickoff` — **not a fold into an unrelated release.** Item 9 (prices, quotas, pass durations, checkout mechanics) is out of scope by the source doc's own constraint.
 - **User interviews (retained + churned exam-dated).** Script written, zero engineering cost. The one item on the entire retention track that can't happen from a keyboard.
