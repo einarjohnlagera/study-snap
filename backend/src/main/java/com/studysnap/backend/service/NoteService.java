@@ -110,10 +110,6 @@ public class NoteService {
     private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
     private static final String DEFAULT_AUTHOR_NAME = "Anonymous learner";
     private static final String OFFICIAL_AUTHOR_DISPLAY_NAME = "NoteLib";
-    private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_CODE = "NOTE_TARGET_PROFILE_TYPE_REQUIRED";
-    private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_CODE = "NOTE_TARGET_PROFILE_TYPE_INVALID";
-    private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_MESSAGE = "Please choose who this note is for.";
-    private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE = "Please choose Student, Exam Reviewer, or Professional for this note.";
     private static final String PUBLIC_SORT_FEATURED = "featured";
     private static final String PUBLIC_SORT_POPULAR = "popular";
     private static final String PUBLIC_SORT_RECENT = "recent";
@@ -172,7 +168,7 @@ public class NoteService {
         boolean curator = isTeacherSelectableOwner(owner);
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
-        NoteTargetProfileType targetProfileType = resolveTargetProfileType(request.targetProfileType(), owner);
+        NoteTargetProfileType targetProfileType = resolveTargetProfileType(owner);
         Set<UUID> courseProgramIds = curator ? validateCuratedProgramIds(request.courseProgramIds()) : Set.of();
         // Create needs no stored-row lookup, unlike update: the note does not exist yet, so the request
         // set is the whole post-create truth, and a learner create writes no join rows at all.
@@ -251,11 +247,7 @@ public class NoteService {
         entity.setDomainContext(domainContext);
         entity.setLearnerLevel(learnerLevel);
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
-        entity.setTargetProfileType(resolveTargetProfileTypeForUpdate(
-                request.targetProfileType(),
-                owner,
-                entity.getTargetProfileType()
-        ));
+        entity.setTargetProfileType(resolveTargetProfileTypeForUpdate(owner, entity.getTargetProfileType()));
         entity.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(entity);
@@ -341,7 +333,7 @@ public class NoteService {
         copy.setContent(source.getContent());
         copy.setStatus(NoteStatus.DRAFT);
         copy.setVisibility(NoteVisibility.PRIVATE);
-        copy.setTargetProfileType(resolveTargetProfileType(source));
+        copy.setTargetProfileType(source.getTargetProfileType());
         copy.setSourceNoteId(source.getId());
         StudyPackEntity sourceStudyPack = null;
         if (isOwner) {
@@ -667,7 +659,6 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType,
             Integer size
     ) {
         return listPublic(
@@ -678,7 +669,7 @@ public class NoteService {
                 tags,
                 courseProgram,
                 creator,
-                targetProfileType,
+                null,
                 size,
                 null,
                 null,
@@ -696,7 +687,7 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType,
+            LearnerLevel learnerLevel,
             Integer size,
             Integer page,
             Integer pageSize,
@@ -713,7 +704,7 @@ public class NoteService {
                     tags,
                     courseProgram,
                     creator,
-                    targetProfileType,
+                    learnerLevel,
                     size,
                     readyOnly,
                     sources
@@ -730,7 +721,7 @@ public class NoteService {
                 tags,
                 courseProgram,
                 creator,
-                targetProfileType,
+                learnerLevel,
                 readyOnly,
                 sources
         );
@@ -785,7 +776,7 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType,
+            LearnerLevel learnerLevel,
             Integer size,
             boolean readyOnly,
             List<PublicLibrarySource> sources
@@ -793,11 +784,14 @@ public class NoteService {
         String normalizedCreator = normalizePublicLibraryCreator(creator);
         List<NoteEntity> notes;
         if (normalizedCreator != null) {
-            notes = noteRepository.findPublicNotes(NoteVisibility.PUBLIC, targetProfileType, normalizedCreator);
-        } else if (targetProfileType == null) {
-            notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+            notes = noteRepository.findPublicNotes(NoteVisibility.PUBLIC, normalizedCreator);
         } else {
-            notes = noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
+            notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+        }
+        if (learnerLevel != null) {
+            notes = notes.stream()
+                    .filter(note -> note.getLearnerLevel() == learnerLevel)
+                    .toList();
         }
         int total = notes.size();
         List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
@@ -815,10 +809,7 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(
-            UUID viewerUserId,
-            NoteTargetProfileType targetProfileType
-    ) {
+    public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(UUID viewerUserId) {
         PublicLibraryFilterCriteria criteria = buildPublicLibraryFilterCriteria(
                 viewerUserId,
                 null,
@@ -826,7 +817,7 @@ public class NoteService {
                 List.of(),
                 null,
                 null,
-                targetProfileType,
+                null,
                 false,
                 List.of()
         );
@@ -955,7 +946,6 @@ public class NoteService {
                         null,
                         null,
                         null,
-                        NoteTargetProfileType.STUDENT.name(),
                         null,
                         List.of(),
                         candidate.hasContent() ? PUBLIC_RANKING_PLACEHOLDER : "",
@@ -1121,7 +1111,7 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType,
+            LearnerLevel learnerLevel,
             boolean readyOnly,
             List<PublicLibrarySource> sources
     ) {
@@ -1133,7 +1123,7 @@ public class NoteService {
                 normalizePublicLibraryFilterSlugs(tags),
                 normalizePublicLibraryFilterSlug(courseProgram),
                 normalizePublicLibraryCreator(creator),
-                targetProfileType,
+                learnerLevel,
                 readyOnly,
                 sources
         );
@@ -1217,6 +1207,11 @@ public class NoteService {
         return normalizeCoursePrograms(
                 noteCourseProgramRepository.findNamesByVisibility(NoteVisibility.PUBLIC.name())
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<LearnerLevel> listPublicLearnerLevels() {
+        return noteRepository.findLearnerLevelsByVisibility(NoteVisibility.PUBLIC);
     }
 
     @Transactional(readOnly = true)
@@ -1449,27 +1444,19 @@ public class NoteService {
         return CourseProgramNormalizationUtils.normalizeForStorage(value);
     }
 
-    private NoteTargetProfileType resolveTargetProfileType(String requestedTargetProfileType, UserEntity owner) {
-        if (isTeacherSelectableOwner(owner)) {
-            return parseSelectableTargetProfileTypeOrThrow(requestedTargetProfileType);
-        }
+    private NoteTargetProfileType resolveTargetProfileType(UserEntity owner) {
         return mapOwnerProfileTypeToNoteTarget(owner.getProfileType());
     }
 
     private NoteTargetProfileType resolveTargetProfileTypeForUpdate(
-            String requestedTargetProfileType,
             UserEntity owner,
             NoteTargetProfileType storedTargetProfileType
     ) {
-        if (isTeacherSelectableOwner(owner)) {
-            return parseSelectableTargetProfileTypeOrThrow(requestedTargetProfileType);
-        }
-        // The audience select is not rendered for these owners, so the request carries no intent about
+        // The audience select no longer exists for any owner, so the request carries no intent about
         // it. Re-deriving from the owner's *current* profile let an unrelated metadata save — a title
-        // fix from Note Detail's inline panel — silently rewrite the note's audience, and
-        // notes.target_profile_type is a live Public Library discovery filter. It also discarded the
-        // author's audience on a copied note. Preserve what is stored; fall back to the profile mapping
-        // only for legacy rows that carry none.
+        // fix from Note Detail's inline panel — silently rewrite the note's retained historical value.
+        // It also discarded the author's value on a copied note. Preserve what is stored; fall back to
+        // the profile mapping only for legacy rows that carry none.
         return storedTargetProfileType != null
                 ? storedTargetProfileType
                 : mapOwnerProfileTypeToNoteTarget(owner.getProfileType());
@@ -1490,36 +1477,6 @@ public class NoteService {
         return owner.getRole() == UserRole.ADMIN || owner.getProfileType() == ProfileType.TEACHER;
     }
 
-    private NoteTargetProfileType parseSelectableTargetProfileTypeOrThrow(String rawValue) {
-        if (rawValue == null || rawValue.isBlank()) {
-            throw new AppException(
-                    NOTE_TARGET_PROFILE_TYPE_REQUIRED_CODE,
-                    NOTE_TARGET_PROFILE_TYPE_REQUIRED_MESSAGE,
-                    HttpStatus.BAD_REQUEST
-            );
-        }
-        NoteTargetProfileType targetProfileType;
-        try {
-            targetProfileType = NoteTargetProfileType.valueOf(rawValue.trim().toUpperCase());
-        } catch (IllegalArgumentException exception) {
-            throw new AppException(
-                    NOTE_TARGET_PROFILE_TYPE_INVALID_CODE,
-                    NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE,
-                    HttpStatus.BAD_REQUEST
-            );
-        }
-        if (targetProfileType == NoteTargetProfileType.STUDENT
-                || targetProfileType == NoteTargetProfileType.BOARD_TAKER
-                || targetProfileType == NoteTargetProfileType.PROFESSIONAL) {
-            return targetProfileType;
-        }
-        throw new AppException(
-                NOTE_TARGET_PROFILE_TYPE_INVALID_CODE,
-                NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE,
-                HttpStatus.BAD_REQUEST
-        );
-    }
-
     private NoteTargetProfileType mapOwnerProfileTypeToNoteTarget(ProfileType profileType) {
         if (profileType == ProfileType.BOARD_EXAM) {
             return NoteTargetProfileType.BOARD_TAKER;
@@ -1528,10 +1485,6 @@ public class NoteService {
             return NoteTargetProfileType.PROFESSIONAL;
         }
         return NoteTargetProfileType.STUDENT;
-    }
-
-    private NoteTargetProfileType resolveTargetProfileType(NoteListItemView note) {
-        return note.getTargetProfileType() == null ? NoteTargetProfileType.STUDENT : note.getTargetProfileType();
     }
 
     private NoteResponse mapToResponse(NoteEntity entity, StudyPackEntity studyPack) {
@@ -1553,7 +1506,6 @@ public class NoteService {
                 entity.getCourseProgram(),
                 entity.getDomainContext() == null ? null : entity.getDomainContext().name(),
                 entity.getLearnerLevel() == null ? null : entity.getLearnerLevel().name(),
-                resolveTargetProfileType(entity).name(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getContent(),
                 resolveVisibility(entity).name(),
@@ -1609,7 +1561,6 @@ public class NoteService {
                 normalizeOptionalText(note.getCourseProgram()),
                 note.getDomainContext() == null ? null : note.getDomainContext().name(),
                 note.getLearnerLevel() == null ? null : note.getLearnerLevel().name(),
-                resolveTargetProfileType(note).name(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                 ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),

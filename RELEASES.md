@@ -1,5 +1,53 @@
 # RELEASES.md - NoteLib
 
+## v0.83.0 - Target Audience Removal (Phase 2)
+
+**Status: Released** (kicked off and signed off 2026-08-17)
+
+Theme: retire the axis that stopped earning its place — remove Target Audience from authoring and from Public Library discovery, while keeping the column that the September checkpoint still needs to read.
+
+**This is Step 2 of the revised Target Audience retirement.** `v0.81.0` was Step 0 (widened the Challenge bank key so an authoring correction at scale no longer fails sessions) and `v0.82.0` was Step 1 (`V117` backfilled Authored Depth onto 819 curator notes). `ADR-001`'s amendment to **four** axes is already ratified — this release executes phases 2 and 3 of that ratified plan, not a new decision.
+
+**⚠️ `notes.target_profile_type` is NOT dropped, and this is the release's hardest constraint.** It is the input `V117` derived depth from, and `[CHECKPOINT — due 2026-09-16]`'s kill criterion — *is `BOARD_TAKER` trustworthy outside Information Technology?* — cannot run without it. Phase 4 (the column drop, plus `bulk_generation_result.target_profile_type` and the enum) waits until that checkpoint reports. **No migration ships in this release.** Product surfaces stop exposing it; persistence code continues writing valid constrained values, and SQL can still read the historical evidence.
+
+**⚠️ Phase 2 is deliberately UNGATED from `[CHECKPOINT — due 2026-09-13]`** — owner call, 2026-08-16. The audience chip has been a secondary filter since `v0.79.0` made course/program primary, so the Explore confound is **recorded rather than waited on**. Do not re-gate it, and do not re-derive the gate from the superseded four-phase plan in `target-audience-removal-proposal.md`.
+
+**⚠️ Do not re-propose a `V118` `STUDENT` depth backfill.** It was audited before being written in `v0.82.0` and returned **zero eligible notes**. That audit is also what found the second `BOARD_TAKER` mis-tag.
+
+### Planned Scope
+
+1. **Remove the Public Library discovery surface (backend + frontend).** The `and n.target_profile_type = :targetProfileType` clause in `PublicLibraryRepositoryImpl:197-199`, the `PublicLibraryFilterCriteria` field, the user-facing filter chips (`public-library-page-client.tsx:1842`), and `?audience=` parsing/building in `public-library-url.ts:8`. **This is the only user-visible phase and it touches a public, linkable contract** — a shared or indexed `?audience=` URL must degrade to an unfiltered view, not to an error.
+2. **Remove authoring and display (backend + frontend).** Bulk generation dropdown, note editor field, note detail display, the DTO fields on `NoteResponse` / `NoteListItemResponse` / `UpsertNoteRequest` / `BulkGenerateNotesRequest`, and onboarding's `mapProfileTypeToNoteTargetProfile` write. `NoteService.create` and `NoteBulkGenerationService.normalizeAndValidate` continue deriving a valid stored value from the owner's profile; update and copy preserve the stored source value.
+3. **Documentation (docs).** `ADR-001` moves Target Audience from "retiring" to "retired from product surfaces, column retained pending 2026-09-16"; `docs/features/notes.md`, `docs/features/public-library.md`, `SPEC.md` and the GPT context modules follow the final code state.
+4. **Replace the retired discovery facet with Authored Depth.** Add a tolerant `?level=` filter backed by the single `notes.learner_level` column and populate its chips only from distinct non-null depths present on public notes.
+
+### Authored Depth replacement decision — resolved 2026-08-17
+
+The production read found 120 curator-owned public notes formerly classified as `STUDENT`: 26 `JUNIOR_HIGH`, 11 `SENIOR_HIGH`, 3 `GRADE_SCHOOL`, and 80 with NULL Authored Depth. The owner chose to ship the replacement mechanism now. Equality filtering deliberately excludes those 80 NULL-depth notes until curators classify them, so the facet is rebuilt and partially populated rather than equivalent in coverage to Target Audience.
+
+Anti-drift: **no migration, and `notes.target_profile_type` / `bulk_generation_result.target_profile_type` / the `NoteTargetProfileType` enum all survive this release.** Target Audience must never become a runtime depth fallback — it is migration evidence only. No change to Authored Depth, Domain Context, Applicable Programs or Subject. No change to `V117`'s written rows. No re-gating of Phase 2. The private Library's projection of the column (`NoteLibraryRepositoryImpl:64`, selected but never filtered) is removed with the DTO fields, not left dangling.
+
+### Shipped
+
+- **Public Library discovery no longer filters by Target Audience.** Removed the backend audience predicate and listing parameters, the frontend chips/state, and audience request construction. Legacy `?audience=` and `?targetProfileType=` requests are deliberately ignored and render the same unfiltered Public Library. The projection reads it left in place are removed by the authoring/display item below, which shipped in the same release.
+- **Authoring and display removal (backend + frontend).** Removed Target Audience from note and bulk request/response DTOs, authoring forms, Note Detail, onboarding, retry/draft payloads, and Library projections. New rows still satisfy the retained `NOT NULL` column through owner-profile derivation, while unrelated updates and copies preserve stored historical values. Old client JSON fields and pre-deploy browser stashes are tolerated and ignored **in the old→new direction**; the new→old direction is not, and is recorded as a Known Limitation below.
+- **Authored Depth Public Library filter (backend + frontend).** Added tolerant `?level=` filtering through `LearnerLevel.fromString` and the single `notes.learner_level` predicate, plus data-backed Authored Depth chips sourced from distinct non-null depths on public notes. Unknown values render the unfiltered library, valid unused values render the standard empty state, and NULL-depth notes are intentionally excluded; legacy `?audience=` remains ignored.
+
+### Pre-signoff pressure test — three cold-context agents, 2026-08-17
+
+**Run because the release crossed the gate on shape**: one concept across backend and several frontend surfaces, three PRs, and `NoteService` / `PublicLibraryRepositoryImpl` / `api.ts` / `NoteControllerTest` each touched by three separate commits. Agents started cold and were told not to trust summaries written by the session that spawned them.
+
+**The release code is clean on correctness.** Projection↔SQL alias parity verified 16=16 in both repository implementations; `PublicLibraryFilterCriteria` has exactly one construction site so the removed/added field cannot misalign; all three merge commits are tree-identical to their second parents, so the PR-2 rebase left no conflict-resolution damage; and no test assertion was weakened across commits — the one that lost a DTO assertion still pins the invariant on the entity (`NoteServiceTest:854`).
+
+**One test gap was found and closed, not documented away.** The depth filter's chip→Apply path had zero coverage: mutating `level: learnerLevelDraft` to `level: null` (`public-library-page-client.tsx:1099`) left **49 of 49 tests passing**. A test now covers it and was verified to fail under that exact mutation. Same fixture-gap class as the two `V117` clause deletions that survived all 24 tests in `v0.82.0`.
+
+### Known limitations — carried, not silently dropped
+
+- **⚠️ Deploy-boundary tolerance is ONE-DIRECTIONAL.** Old payloads read by new code are tolerated; **new payloads read by OLD code are not.** A curator holding a stale tab who writes a bulk-generation retry stash from a freshly-loaded Library page, then triggers retry against the pre-deploy bundle, hits the old `consumeBulkGenerationRetryStash`, which hard-required `typeof stash.targetProfileType === "string"` and discarded the whole stash — an empty retry form instead of a prefilled one. Same shape, lower impact: an old-bundle curator on the note editor gets `note.targetProfileType === undefined` and trips the old client's *"Please select an audience"* guard. Both self-heal on reload and neither is fixable from this side of the deploy.
+- **⚠️ PRE-EXISTING and unrelated to this release, but found by its pressure test and therefore recorded rather than dropped: two `NoteEntity` insert paths never set `target_profile_type`, which is `NOT NULL` with no database default.** `StudyPackService.createGeneratedNote` (`:743`) and `ShareService.createRemixedNote` (`:111`). **Verified empirically against a real PostgreSQL with the production schema** — the insert fails with `null value in column "target_profile_type" ... violates not-null constraint`. Reachable through `/study` paste-text (`createStudyPackFromText` sends `{notesText}` with no `noteId`, so `resolveSourceNoteForGeneration` returns null), image upload, confirm-text, and share-remix — and `/study` is a live destination, reached from the Dashboard Today Focus card's `STUDY_SUGGESTION` branch. **The LLM call succeeds and bills against quota before the insert 500s.** The gap dates to `e66491ed` (2026-03-21) and `main` has it too, so it does not block this signoff; it needs its own patch release. Every existing test passes the value explicitly, which is why nothing caught it.
+- **Cosmetic, deliberately not churned before signoff.** `note-editor-form.tsx:468` has a `<>…</>` fragment that used to be a conditional branch and now wraps its fieldset body unconditionally, leaving dead markup and stale indentation — dedenting ~45 lines of JSX carries more regression risk than the cleanup is worth. Roughly eleven test fixtures still pass `targetProfileType`; they type-check because they flow through `jest.Mock`, and they are dead data rather than a live contract.
+- **`?level=` is less tolerant than the `?audience=` parser it replaced.** The removed `resolvePublicAudienceFilter` normalised `-` and space to `_`; `LearnerLevel.fromString` only trims and uppercases, so `?level=senior-high` renders unfiltered where `?subject=` and `?courseProgram=` are slug-shaped. No live impact — the UI writes raw enum values and reads them back — but a hand-written link in the house slug style silently no-ops.
+
 ## v0.82.0 - Authored Depth Backfill
 
 **Status: Released** (kicked off and signed off 2026-08-16)
@@ -10,7 +58,7 @@
 
 **⚠️ One figure does not reconcile, and it is recorded rather than explained away.** 828 curator-owned public `BOARD_TAKER`/`PROFESSIONAL` NULL-depth notes exceeds the **823 total public `BOARD_TAKER` notes** measured the previous day — a subset larger than its superset. Most likely notes authored in between, which is exactly why the capture had to be re-run rather than reused. It does not affect the migration, whose predicate is independently verified, but **the `905` and `823` figures quoted throughout these docs should be re-measured rather than trusted if they are ever load-bearing again.**
 
-**⚠️ Still owed immediately AFTER deploy:** the step-2 narrowing query in `docs/claude-plans/v0.82.0-curator-depth-backfill-reversal.md`. The reversal and both checkpoint reads key on its output, not on the capture.
+**⚠️ Still owed immediately AFTER deploy:** the step-2 narrowing query, now runnable as **`docs/claude-plans/v0.82.0-post-deploy-narrowing.sql`**. The reversal and both checkpoint reads key on its output, not on the capture. **Expected: 819 rows** (828 captured − 9 Information Technology). The capture itself was exported to `docs/claude-plans/v0.82.0-curator-depth-backfill-population.csv` and verified 2026-08-17 — 828 unique ids, all nine excluded IT ids present, so the 819 reconciles by identity and not by count alone. **Deploy timestamp, recorded for `[CHECKPOINT — due 2026-09-16]` read (b): `2026-08-17 08:29:14 +08`** (merge commit `c7523652`, PR #1089).
 
 **⚠️ Editing `V117` after it was first committed invalidates its Flyway checksum on any database that already ran it.** Production is unaffected (it runs on the `main` merge), but a local dev DB will fail validation on next start — fix with `flyway repair` or by deleting the `version = '117'` row, since the migration is idempotent.
 

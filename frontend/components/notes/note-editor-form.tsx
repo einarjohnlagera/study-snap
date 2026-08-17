@@ -13,7 +13,7 @@ import {
     Tag,
     UploadCloud
 } from "lucide-react";
-import type {CourseProgramCatalogItem, DomainContext, LearnerLevel, NoteTargetProfileType} from "@/lib/api";
+import type {CourseProgramCatalogItem, DomainContext, LearnerLevel} from "@/lib/api";
 import {CourseProgramCombobox} from "@/components/metadata/course-program-combobox";
 import {ApplicableProgramsCombobox} from "@/components/metadata/applicable-programs-combobox";
 import {ApplicableProgramsProvenance} from "@/components/metadata/applicable-programs-provenance";
@@ -21,7 +21,6 @@ import {SubjectCombobox} from "@/components/notes/subject-combobox";
 import {BackLink} from "@/components/ui/back-link";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
-import {getNoteTargetProfileLabel, SELECTABLE_NOTE_TARGET_PROFILE_TYPES} from "@/lib/note-target-profile";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { IMPORT_ACCEPT_VALUE } from "@/lib/note-import";
 import { DOMAIN_CONTEXT_OPTIONS, isSubjectSameAsDomainContext } from "@/lib/domain-context";
@@ -35,7 +34,6 @@ export type NoteEditorDraft = {
     courseProgram: string;
     domainContext: DomainContext | "";
     learnerLevel: LearnerLevel | "";
-    targetProfileType: NoteTargetProfileType | "";
     content: string;
     tags: string[];
 };
@@ -50,7 +48,6 @@ type NoteEditorFormProps = {
     onCourseProgramChange: (value: string) => void;
     onDomainContextChange?: (value: DomainContext | "") => void;
     onLearnerLevelChange?: (value: LearnerLevel | "") => void;
-    onTargetProfileTypeChange?: (value: NoteTargetProfileType | "") => void;
     onContentChange: (value: string) => void;
     onTagsChange?: (nextTags: string[]) => void;
     onSave: () => void;
@@ -107,7 +104,6 @@ type NoteEditorFormProps = {
     subjectSuggestions?: string[];
     courseProgramSuggestions?: string[];
     resolvedCourseProgram?: string | null;
-    showTargetProfileTypeField?: boolean;
     showAuthoringMetadataFields?: boolean;
     applicableProgramCatalog?: CourseProgramCatalogItem[];
     applicableProgramIds?: string[];
@@ -121,7 +117,6 @@ type NoteEditorFormProps = {
     courseProgramShadowed?: boolean | null;
     savedApplicableProgramNames?: string[];
     copiedFromNoteId?: string | null;
-    targetProfileTypeHelperText?: string;
     backHref?: string;
     backLabel?: string;
     isTeacherCreateMode?: boolean;
@@ -140,7 +135,6 @@ export function NoteEditorForm({
                                    onCourseProgramChange,
                                    onDomainContextChange,
                                    onLearnerLevelChange,
-                                   onTargetProfileTypeChange,
                                    onContentChange,
                                    onTagsChange,
                                    onSave,
@@ -195,7 +189,6 @@ export function NoteEditorForm({
                                    subjectSuggestions = [],
                                    courseProgramSuggestions = [],
                                    resolvedCourseProgram = null,
-                                   showTargetProfileTypeField = false,
                                    showAuthoringMetadataFields = false,
                                    applicableProgramCatalog = [],
                                    applicableProgramIds = [],
@@ -209,7 +202,6 @@ export function NoteEditorForm({
                                    courseProgramShadowed = null,
                                    savedApplicableProgramNames = [],
                                    copiedFromNoteId = null,
-                                   targetProfileTypeHelperText = "Choose the learner audience for this note.",
                                    backHref,
                                    backLabel,
                                    isTeacherCreateMode = false,
@@ -469,36 +461,11 @@ export function NoteEditorForm({
                 </div>
             </div>
 
-            {showTargetProfileTypeField || showAuthoringMetadataFields ? (
+            {showAuthoringMetadataFields ? (
                 <fieldset className="space-y-4 rounded-xl border border-border/80 bg-muted/15 p-4">
-                    <legend className="px-1 text-sm font-semibold text-foreground">Generation &amp; discovery</legend>
+                    <legend className="px-1 text-sm font-semibold text-foreground">Generation context</legend>
                     <div className="grid gap-4 sm:grid-cols-2">
-                        {showTargetProfileTypeField ? (
-                            <div className="space-y-2 sm:col-span-2">
-                                <label htmlFor="note-target-profile-type" className="text-sm font-medium text-foreground">
-                                    Who is this note for? <span className="text-red-500" aria-hidden="true">*</span>
-                                </label>
-                                <select
-                                    id="note-target-profile-type"
-                                    aria-label="Who is this note for?"
-                                    value={note.targetProfileType}
-                                    onChange={(event) => onTargetProfileTypeChange?.(event.target.value as NoteTargetProfileType | "")}
-                                    disabled={isCopying}
-                                    className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                                >
-                                    <option value="">Select an audience</option>
-                                    {SELECTABLE_NOTE_TARGET_PROFILE_TYPES.map((targetProfileType) => (
-                                        <option key={targetProfileType} value={targetProfileType}>
-                                            {getNoteTargetProfileLabel(targetProfileType)}
-                                        </option>
-                                    ))}
-                                </select>
-                                <p className="text-xs text-foreground/60">{targetProfileTypeHelperText}</p>
-                            </div>
-                        ) : null}
-
-                        {showAuthoringMetadataFields ? (
-                            <>
+                        <>
                                 <div className="space-y-2">
                                     <label htmlFor="note-domain-context" className="text-sm font-medium text-foreground">
                                         Domain Context {applicableProgramIds.length > 1 ? <span className="text-red-500" aria-hidden="true">*</span> : "(optional)"}
@@ -543,8 +510,7 @@ export function NoteEditorForm({
                                         reader gets gentler wording, never easier material.
                                     </p>
                                 </div>
-                            </>
-                        ) : null}
+                        </>
                     </div>
                 </fieldset>
             ) : null}

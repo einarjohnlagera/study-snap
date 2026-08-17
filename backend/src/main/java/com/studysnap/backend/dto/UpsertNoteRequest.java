@@ -20,7 +20,6 @@ public record UpsertNoteRequest(
         String domainContext,
         String learnerLevel,
         List<String> tags,
-        String targetProfileType,
         @NotBlank(message = "Please provide note content before saving.")
         String content
 ) {
@@ -32,9 +31,8 @@ public record UpsertNoteRequest(
             String domainContext,
             String learnerLevel,
             List<String> tags,
-            String targetProfileType,
             String content
     ) {
-        this(title, subject, List.of(), courseProgramText, domainContext, learnerLevel, tags, targetProfileType, content);
+        this(title, subject, List.of(), courseProgramText, domainContext, learnerLevel, tags, content);
     }
 }

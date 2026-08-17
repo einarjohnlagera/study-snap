@@ -1,7 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.NoteEntity;
-import com.studysnap.backend.entity.NoteTargetProfileType;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.model.NoteListItemProjection;
 import org.springframework.data.domain.Page;
@@ -83,7 +83,6 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
     );
 
     List<NoteEntity> findByVisibilityOrderByUpdatedAtDesc(NoteVisibility visibility);
-    List<NoteEntity> findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility visibility, NoteTargetProfileType targetProfileType);
 
     @Query("""
             select count(distinct n.ownerUserId)
@@ -108,13 +107,11 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
             from NoteEntity n
             join UserEntity u on u.id = n.ownerUserId
             where n.visibility = :visibility
-              and (:targetProfileType is null or n.targetProfileType = :targetProfileType)
               and (:creator is null or lower(u.username) = lower(:creator))
             order by n.updatedAt desc
             """)
     List<NoteEntity> findPublicNotes(
             @Param("visibility") NoteVisibility visibility,
-            @Param("targetProfileType") NoteTargetProfileType targetProfileType,
             @Param("creator") String creator
     );
 
@@ -186,6 +183,15 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
               and trim(n.subject) <> ''
             """)
     List<String> findSubjectValuesByVisibility(@Param("visibility") NoteVisibility visibility);
+
+    @Query("""
+            select distinct n.learnerLevel
+            from NoteEntity n
+            where n.visibility = :visibility
+              and n.learnerLevel is not null
+            order by n.learnerLevel
+            """)
+    List<LearnerLevel> findLearnerLevelsByVisibility(@Param("visibility") NoteVisibility visibility);
 
     @Query("""
             select n.copiedFromNoteId as noteId, count(n) as copyCount

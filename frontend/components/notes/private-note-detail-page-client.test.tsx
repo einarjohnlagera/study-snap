@@ -111,7 +111,6 @@ const baseNote = {
   title: "Test Note",
   subject: "Biology",
   courseProgram: "Nursing",
-  targetProfileType: "STUDENT" as const,
   tags: ["cells"],
   content: "Cell content",
   visibility: "PRIVATE" as const,
@@ -472,13 +471,12 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, audience, Domain Context, and Authored Depth.",
+        "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, Domain Context, and Authored Depth.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add all 3 Engineering programs" })).toBeInTheDocument();
-    expect(screen.getByText("Changing audience will affect future quiz generation.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
   });

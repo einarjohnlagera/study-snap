@@ -1,4 +1,4 @@
-import type { DomainContext, LearnerLevel, NoteTargetProfileType } from "@/lib/api";
+import type { DomainContext, LearnerLevel } from "@/lib/api";
 
 const BULK_QUEUED_FLASH_KEY = "notelib.bulk.queuedFlash";
 const BULK_RETRY_STASH_KEY = "notelib.bulk.retryTopics";
@@ -17,7 +17,6 @@ export type BulkGenerationRetryStash = {
   courseProgram: string | null;
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
-  targetProfileType: NoteTargetProfileType;
   makePublic: boolean;
   topics: string[];
   // Optional so a stash written before v0.75.0 still parses. Without it, retrying a failed
@@ -93,7 +92,6 @@ export function consumeBulkGenerationRetryStash(): BulkGenerationRetryStash | nu
       : [];
     if (
       typeof stash.subject !== "string"
-      || typeof stash.targetProfileType !== "string"
       || typeof stash.makePublic !== "boolean"
       || topics.length === 0
     ) {
@@ -104,7 +102,6 @@ export function consumeBulkGenerationRetryStash(): BulkGenerationRetryStash | nu
       courseProgram: typeof stash.courseProgram === "string" ? stash.courseProgram : null,
       domainContext: typeof stash.domainContext === "string" ? stash.domainContext as DomainContext : null,
       learnerLevel: typeof stash.learnerLevel === "string" ? stash.learnerLevel as LearnerLevel : null,
-      targetProfileType: stash.targetProfileType as NoteTargetProfileType,
       makePublic: stash.makePublic,
       topics,
       // This reader whitelists fields, so a new stash field is dropped on read unless it

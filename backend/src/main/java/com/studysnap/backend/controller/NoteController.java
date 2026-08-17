@@ -37,7 +37,7 @@ import com.studysnap.backend.dto.CopyOnSignupResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
-import com.studysnap.backend.entity.NoteTargetProfileType;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -107,8 +107,6 @@ public class NoteController {
     private static final String PAGE_SIZE_REQUEST_PARAM = "pageSize";
     private static final String READY_ONLY_REQUEST_PARAM = "readyOnly";
     private static final String SOURCE_REQUEST_PARAM = "source";
-    private static final String AUDIENCE_REQUEST_PARAM = "audience";
-    private static final String TARGET_PROFILE_TYPE_REQUEST_PARAM = "targetProfileType";
     private static final String ENTRY_REQUEST_PARAM = "entry";
     private static final int PUBLIC_LIBRARY_DEFAULT_PAGE = 0;
     private static final int PUBLIC_LIBRARY_DEFAULT_PAGE_SIZE = 20;
@@ -592,8 +590,7 @@ public class NoteController {
             @RequestParam(value = "tag", required = false) List<String> tags,
             @RequestParam(value = "courseProgram", required = false) String courseProgram,
             @RequestParam(value = "creator", required = false) String creator,
-            @RequestParam(value = AUDIENCE_REQUEST_PARAM, required = false) String audience,
-            @RequestParam(value = TARGET_PROFILE_TYPE_REQUEST_PARAM, required = false) NoteTargetProfileType targetProfileType,
+            @RequestParam(value = "level", required = false) String level,
             @RequestParam(value = "size", required = false) Integer size,
             @RequestParam(value = PAGE_REQUEST_PARAM, required = false) Integer page,
             @RequestParam(value = PAGE_SIZE_REQUEST_PARAM, required = false) Integer pageSize,
@@ -611,7 +608,7 @@ public class NoteController {
                 tags,
                 courseProgram,
                 creator,
-                resolvePublicAudienceFilter(audience, targetProfileType),
+                LearnerLevel.fromString(level),
                 size == null ? null : Math.clamp(size, PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE),
                 paginated
                         ? Math.clamp(
@@ -634,14 +631,14 @@ public class NoteController {
 
     @GetMapping("/public/discovery-sections")
     public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(
-            @RequestParam(value = AUDIENCE_REQUEST_PARAM, required = false) String audience,
-            @RequestParam(value = TARGET_PROFILE_TYPE_REQUEST_PARAM, required = false) NoteTargetProfileType targetProfileType,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return noteService.getPublicLibraryDiscoverySections(
-                user == null ? null : user.userId(),
-                resolvePublicAudienceFilter(audience, targetProfileType)
-        );
+        return noteService.getPublicLibraryDiscoverySections(user == null ? null : user.userId());
+    }
+
+    @GetMapping("/public/learner-levels")
+    public List<LearnerLevel> listPublicLearnerLevels() {
+        return noteService.listPublicLearnerLevels();
     }
 
     @GetMapping("/public/{id}")
@@ -670,25 +667,4 @@ public class NoteController {
         return noteService.getPublicBySeoPath(subject, slug, user == null ? null : user.userId());
     }
 
-    private NoteTargetProfileType resolvePublicAudienceFilter(
-            String audience,
-            NoteTargetProfileType targetProfileType
-    ) {
-        if (targetProfileType != null) {
-            return targetProfileType;
-        }
-        if (audience == null || audience.isBlank()) {
-            return null;
-        }
-
-        String normalized = audience.trim()
-                .toUpperCase()
-                .replace('-', '_')
-                .replace(' ', '_');
-        try {
-            return NoteTargetProfileType.valueOf(normalized);
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
-    }
 }

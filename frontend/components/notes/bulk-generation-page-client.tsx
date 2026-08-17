@@ -26,17 +26,13 @@ import {
   type CourseProgramCatalogItem,
   type DomainContext,
   type LearnerLevel,
-  type NoteTargetProfileType,
   type NoteCollectionSummary,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { consumeBulkGenerationRetryStash, setBulkQueuedFlash } from "@/lib/bulk-generation-flash";
 import { MAX_TOPIC_LENGTH, parsePastedTopics } from "@/lib/bulk-topics";
 import {
-  getNoteTargetProfileLabel,
   isTeacherSelectableNoteTarget,
-  mapProfileTypeToNoteTargetProfile,
-  SELECTABLE_NOTE_TARGET_PROFILE_TYPES,
 } from "@/lib/note-target-profile";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { DOMAIN_CONTEXT_OPTIONS } from "@/lib/domain-context";
@@ -63,7 +59,7 @@ export function BulkGenerationPageClient() {
   const isAdmin = authUser?.role === "ADMIN";
   // This selector renders only for teachers/admins, and a TEACHER profile calls these
   // "Lesson Plans" everywhere else in the app — hardcoding "Review Set" here would split
-  // the vocabulary on the one surface that audience uses most.
+  // the vocabulary on a primary curator surface.
   const collectionLabels = getCollectionLabels(authUser?.profileType);
   const nextTopicId = useRef(2);
   const [subject, setSubject] = useState("");
@@ -107,9 +103,6 @@ export function BulkGenerationPageClient() {
   const [collectionsLoading, setCollectionsLoading] = useState(false);
   const [collectionsError, setCollectionsError] = useState<string | null>(null);
   const [collectionsRetry, setCollectionsRetry] = useState(0);
-  const [targetProfileType, setTargetProfileType] = useState<NoteTargetProfileType | "">(
-    mapProfileTypeToNoteTargetProfile(authUser?.profileType),
-  );
   const [topics, setTopics] = useState<TopicRow[]>([{ id: 1, value: "" }]);
   const [makePublic, setMakePublic] = useState(false);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
@@ -152,7 +145,6 @@ export function BulkGenerationPageClient() {
     // the batch they replaced.
     applyLearnerLevel((stash.learnerLevel ?? "") as LearnerLevel | "", "user");
     setCollectionId(stash.collectionId ?? "");
-    setTargetProfileType(stash.targetProfileType as NoteTargetProfileType);
     setMakePublic(stash.makePublic);
     setTopics(stash.topics.map((value, index) => ({ id: index + 1, value })));
     nextTopicId.current = stash.topics.length + 1;
@@ -304,9 +296,6 @@ export function BulkGenerationPageClient() {
     if (isTeacherOrAdmin && courseProgramIds.length > 1 && !domainContext) {
       return "A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in.";
     }
-    if (isTeacherOrAdmin && !targetProfileType) {
-      return "Select a target audience for this batch.";
-    }
     return null;
   };
 
@@ -397,7 +386,6 @@ export function BulkGenerationPageClient() {
             courseProgramIds,
             domainContext: domainContext || null,
             learnerLevel: learnerLevel || null,
-            targetProfileType: targetProfileType as NoteTargetProfileType,
             ...(collectionId ? { collectionId } : {}),
           }
         : { courseProgramText: courseProgram.trim() }),
@@ -546,28 +534,6 @@ export function BulkGenerationPageClient() {
                 />
               </div>
             )}
-
-            {isTeacherOrAdmin ? (
-              <div className="space-y-2">
-                <label htmlFor="bulk-target-profile-type" className="text-sm font-medium text-foreground">
-                  Target Audience <span className="text-red-500" aria-hidden="true">*</span>
-                </label>
-                <select
-                  id="bulk-target-profile-type"
-                  value={targetProfileType}
-                  onChange={(event) => setTargetProfileType(event.target.value as NoteTargetProfileType | "")}
-                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                >
-                  <option value="">Select an audience</option>
-                  {SELECTABLE_NOTE_TARGET_PROFILE_TYPES.map((value) => (
-                    <option key={value} value={value}>{getNoteTargetProfileLabel(value)}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-foreground/60">
-                  Categorizes these notes for Library and Public Library audiences.
-                </p>
-              </div>
-            ) : null}
 
             {isTeacherOrAdmin ? (
               <div className="space-y-2">

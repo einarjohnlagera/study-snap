@@ -5,6 +5,7 @@ import {
   listCoursePrograms,
   listNotes,
   listPublicLibraryDiscoverySections,
+  listPublicLearnerLevels,
   listPublicNotes,
   listPublicStudyPlans,
   listSubjects,
@@ -37,6 +38,7 @@ jest.mock("@/lib/api", () => ({
   listCoursePrograms: jest.fn(),
   listNotes: jest.fn(),
   listPublicLibraryDiscoverySections: jest.fn(),
+  listPublicLearnerLevels: jest.fn(),
   listPublicNotes: jest.fn(),
   listPublicStudyPlans: jest.fn(),
   listSubjects: jest.fn(),
@@ -132,6 +134,7 @@ describe("PublicLibraryPageClient", () => {
     (listCoursePrograms as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (listPublicLibraryDiscoverySections as jest.Mock).mockReset();
+    (listPublicLearnerLevels as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
     (listPublicStudyPlans as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
@@ -151,6 +154,7 @@ describe("PublicLibraryPageClient", () => {
     ]);
     (listTags as jest.Mock).mockResolvedValue(["cells", "history", "motion"]);
     (listPublicLibraryDiscoverySections as jest.Mock).mockResolvedValue({ featured: [], popular: [], recent: [] });
+    (listPublicLearnerLevels as jest.Mock).mockResolvedValue(["JUNIOR_HIGH", "SENIOR_HIGH"]);
   });
 
   it("shows viewer-relative author metadata and subtle save actions on non-owner cards", async () => {
@@ -212,7 +216,7 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByTestId("note-count-pill")).toHaveTextContent("1 of 3 notes");
   });
 
-  it("reads the audience filter from the URL and hides any Teacher audience filter", async () => {
+  it("ignores a legacy audience URL and loads the unfiltered library", async () => {
     currentAuthUser = { id: "user-1", profileType: "STUDENT" };
     currentSearch = "?audience=student";
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
@@ -226,8 +230,69 @@ describe("PublicLibraryPageClient", () => {
     render(<PublicLibraryPageClient />);
 
     expect(await screen.findByText("Student Note")).toBeInTheDocument();
-    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ audience: "STUDENT", tags: [] }));
-    expect(screen.queryByRole("button", { name: "Teacher" })).not.toBeInTheDocument();
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ tags: [] }));
+    expect(Object.hasOwn((listPublicNotes as jest.Mock).mock.calls[0][0], "audience")).toBe(false);
+    expect(screen.queryByText("For", { selector: "p" })).not.toBeInTheDocument();
+  });
+
+  it("loads a valid authored depth from the URL and offers only depths present on public notes", async () => {
+    currentSearch = "?level=JUNIOR_HIGH";
+    (listPublicLearnerLevels as jest.Mock).mockResolvedValue(["JUNIOR_HIGH"]);
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "junior-note", title: "Junior High Algebra", learnerLevel: "JUNIOR_HIGH" }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Junior High Algebra")).toBeInTheDocument();
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ level: "JUNIOR_HIGH" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+
+    expect(screen.getByRole("button", { name: "Junior High" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "College" })).not.toBeInTheDocument();
+  });
+
+  it("applies an authored depth chosen in the filter sheet to the URL and the request", async () => {
+    (listPublicLearnerLevels as jest.Mock).mockResolvedValue(["JUNIOR_HIGH", "COLLEGE"]);
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ id: "junior-note", title: "Junior High Algebra", learnerLevel: "JUNIOR_HIGH" }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+
+    await screen.findByText("Junior High Algebra");
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    const dialog = await screen.findByRole("dialog", { name: "More Filters" });
+    const modal = within(dialog);
+    fireEvent.click(modal.getByRole("button", { name: "College" }));
+    fireEvent.click(modal.getByRole("button", { name: "Apply" }));
+
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?level=COLLEGE", { scroll: false });
+  });
+
+  it("treats an unknown authored depth URL as unfiltered", async () => {
+    currentSearch = "?level=NONSENSE";
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
+      createPublicNote({ title: "Unfiltered Note" }),
+    ]));
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Unfiltered Note")).toBeInTheDocument();
+    expect((listPublicNotes as jest.Mock).mock.calls[0][0].level).toBeUndefined();
+    expect(screen.getByTestId("note-count-pill")).toHaveTextContent("1 note");
+  });
+
+  it("shows the standard empty state for a valid depth with no public notes", async () => {
+    currentSearch = "?level=COLLEGE";
+    (listPublicLearnerLevels as jest.Mock).mockResolvedValue(["JUNIOR_HIGH"]);
+    (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([]));
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("No public notes match your filters.")).toBeInTheDocument();
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ level: "COLLEGE" }));
   });
 
   it("updates the card like count when a user likes a public note", async () => {
@@ -1109,7 +1174,7 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.queryByText("Popular 5")).not.toBeInTheDocument();
     expect(screen.getByText("Recent 4")).toBeInTheDocument();
     expect(screen.queryByText("Recent 5")).not.toBeInTheDocument();
-    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledWith({ audience: undefined });
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledWith();
   });
 
   it.each([

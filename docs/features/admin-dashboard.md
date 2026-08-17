@@ -152,6 +152,6 @@ Reuse existing data sources where possible:
 
 ## Notes
 
-- Admin note-authoring surfaces use the shared Note Editor and Bulk Generate forms, plus Note Detail's inline metadata panel for notes that already have a Study Pack. All three expose optional Domain Context and Authored Depth selects alongside Target Audience; the values apply to the saved note or every note in the batch and drive generation through the shared resolver.
+- Admin note-authoring surfaces use the shared Note Editor and Bulk Generate forms, plus Note Detail's inline metadata panel for notes that already have a Study Pack. All three expose optional Domain Context and Authored Depth selects; the values apply to the saved note or every note in the batch and drive generation through `StudyPackGenerationContextResolver`.
 - Revenue numbers are estimates for internal monitoring, not accounting-grade reporting.
 - Admin Dashboard should support dark mode and remain usable on smaller screens, but it is primarily desktop-oriented.

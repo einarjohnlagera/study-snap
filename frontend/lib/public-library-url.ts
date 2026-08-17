@@ -1,13 +1,11 @@
-import type { NoteTargetProfileType } from "@/lib/api";
-
 export const PUBLIC_LIBRARY_PATH = "/public/library";
 export const PUBLIC_LIBRARY_VIEW_QUERY_PARAM = "view";
 export const PUBLIC_LIBRARY_SEARCH_QUERY_PARAM = "search";
 export const PUBLIC_LIBRARY_SUBJECT_QUERY_PARAM = "subject";
 export const PUBLIC_LIBRARY_TAG_QUERY_PARAM = "tag";
-export const PUBLIC_LIBRARY_AUDIENCE_QUERY_PARAM = "audience";
 export const PUBLIC_LIBRARY_COURSE_PROGRAM_QUERY_PARAM = "courseProgram";
 export const PUBLIC_LIBRARY_CREATOR_QUERY_PARAM = "creator";
+export const PUBLIC_LIBRARY_LEVEL_QUERY_PARAM = "level";
 export const PUBLIC_LIBRARY_SORT_QUERY_PARAM = "sort";
 
 const PUBLIC_LIBRARY_FILTER_QUERY_PARAMS = [
@@ -15,9 +13,10 @@ const PUBLIC_LIBRARY_FILTER_QUERY_PARAMS = [
   PUBLIC_LIBRARY_SEARCH_QUERY_PARAM,
   PUBLIC_LIBRARY_SUBJECT_QUERY_PARAM,
   PUBLIC_LIBRARY_TAG_QUERY_PARAM,
-  PUBLIC_LIBRARY_AUDIENCE_QUERY_PARAM,
+  "audience",
   PUBLIC_LIBRARY_COURSE_PROGRAM_QUERY_PARAM,
   PUBLIC_LIBRARY_CREATOR_QUERY_PARAM,
+  PUBLIC_LIBRARY_LEVEL_QUERY_PARAM,
   PUBLIC_LIBRARY_SORT_QUERY_PARAM,
 ] as const;
 
@@ -25,9 +24,9 @@ export type PublicLibraryDiscoveryView = "featured" | "popular" | "recent";
 export type PublicLibrarySortQuery = "popular" | "recent" | "title" | "views" | "copied" | "most_copied" | "recommended";
 
 export type PublicLibraryUrlFilters = {
-  audience?: NoteTargetProfileType | "ALL" | null;
   courseProgram?: string | null;
   creator?: string | null;
+  level?: string | null;
   search?: string | null;
   sort?: PublicLibrarySortQuery | null;
   subject?: string | null;
@@ -118,42 +117,15 @@ export function resolvePublicLibraryValuesBySlug(values: string[], slugs: string
     .filter((value): value is string => value !== null);
 }
 
-export function toPublicLibraryAudienceQueryValue(value: NoteTargetProfileType | "ALL" | null | undefined) {
-  if (!value) {
-    return null;
-  }
-  if (value === "ALL") {
-    return "all";
-  }
-  return slugifyPublicLibraryFilterValue(value.replaceAll("_", "-"));
-}
-
-export function parsePublicLibraryAudienceQueryValue(value: string | null | undefined): NoteTargetProfileType | "ALL" | null {
-  const normalized = slugifyPublicLibraryFilterValue(value);
-  if (normalized === "all") {
-    return "ALL";
-  }
-  if (normalized === "student") {
-    return "STUDENT";
-  }
-  if (normalized === "board-taker") {
-    return "BOARD_TAKER";
-  }
-  if (normalized === "professional") {
-    return "PROFESSIONAL";
-  }
-  return null;
-}
-
 export function parsePublicLibraryFilters(searchParams?: SearchParamsInput): Required<PublicLibraryUrlFilters> {
   const params = cloneSearchParams(searchParams);
   const sort = normalizeFilterValue(params.get(PUBLIC_LIBRARY_SORT_QUERY_PARAM));
   const view = normalizeFilterValue(params.get(PUBLIC_LIBRARY_VIEW_QUERY_PARAM));
 
   return {
-    audience: parsePublicLibraryAudienceQueryValue(params.get(PUBLIC_LIBRARY_AUDIENCE_QUERY_PARAM)),
     courseProgram: normalizeFilterValue(params.get(PUBLIC_LIBRARY_COURSE_PROGRAM_QUERY_PARAM)),
     creator: normalizeFilterValue(params.get(PUBLIC_LIBRARY_CREATOR_QUERY_PARAM)),
+    level: normalizeFilterValue(params.get(PUBLIC_LIBRARY_LEVEL_QUERY_PARAM)),
     search: normalizeFilterValue(params.get(PUBLIC_LIBRARY_SEARCH_QUERY_PARAM)),
     sort: sort === "popular" || sort === "recent" || sort === "title" || sort === "views" || sort === "copied"
       || sort === "most_copied" || sort === "recommended"
@@ -182,7 +154,7 @@ export function buildPublicLibraryUrl(
   const subject = normalizeFilterValue(filters.subject);
   const courseProgram = normalizeFilterValue(filters.courseProgram);
   const creator = normalizeFilterValue(filters.creator);
-  const audience = toPublicLibraryAudienceQueryValue(filters.audience);
+  const level = normalizeFilterValue(filters.level);
 
   if (filters.view) {
     params.set(PUBLIC_LIBRARY_VIEW_QUERY_PARAM, filters.view);
@@ -199,8 +171,8 @@ export function buildPublicLibraryUrl(
   if (creator) {
     params.set(PUBLIC_LIBRARY_CREATOR_QUERY_PARAM, creator);
   }
-  if (audience) {
-    params.set(PUBLIC_LIBRARY_AUDIENCE_QUERY_PARAM, audience);
+  if (level) {
+    params.set(PUBLIC_LIBRARY_LEVEL_QUERY_PARAM, level);
   }
   if (filters.sort) {
     params.set(PUBLIC_LIBRARY_SORT_QUERY_PARAM, filters.sort);

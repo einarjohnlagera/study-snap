@@ -7,7 +7,9 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.82.0 - Authored Depth Backfill` (Released); previous: `v0.81.0 - Challenge Bank Integrity` (Released)
+- `v0.83.0 - Target Audience Removal (Phase 2)` (Released); previous: `v0.82.0 - Authored Depth Backfill` (Released)
+
+**⚠️ `v0.83.0` removes Target Audience from authoring and Public Library discovery but does NOT drop `notes.target_profile_type`.** The column is `V117`'s input and `[CHECKPOINT — due 2026-09-16]` cannot run without it; the drop waits on that report. No migration ships in `v0.83.0`. Target Audience must never become a runtime depth fallback.
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -170,17 +172,16 @@ Use these skills before writing prompts, before starting new features, and after
 - This visibility split must not change prices, quotas, pass durations, checkout behavior, Adaptive Practice access, generated content, AI calls, or persisted readiness fields.
 - Concept-health load failures must not hide or wipe note content; show a neutral readiness-unavailable state instead.
 
-### Note Target Audience Rule
+### Retained Target Audience Storage Rule
 
-- **Axis boundary (`docs/architecture/ADR-001-canonical-knowledge-architecture.md`):** Target Audience (`notes.targetProfileType`) is a **retiring transitional discovery field** — it remains a live Public Library audience filter (`PublicLibraryRepositoryImpl:176-178`, `NoteController:594`/`:636`, `NoteRepository:106`/`:131`) until that discovery contract is replaced, and it must **never** influence generated depth or reach a prompt. Educational depth is Note Learner Level's job; authoring treatment is Domain Context's. Do not conflate the three or remove Target Audience before ADR-001's retirement gates are complete.
+- **Axis boundary (`docs/architecture/ADR-001-canonical-knowledge-architecture.md`):** Target Audience is removed from product requests, responses, authoring, display, and Public Library discovery. `notes.target_profile_type` remains mapped, populated, constrained, indexed, and SQL-readable solely as retained migration evidence pending `[CHECKPOINT — due 2026-09-16]`. It must never influence generated depth or reach a prompt.
 - `V117` is the one-time historical exception that derives Authored Depth for NULL-depth, `ADMIN`-owned curator notes only: `BOARD_TAKER → BOARD_EXAM_REVIEW` and `PROFESSIONAL → PROFESSIONAL`; `STUDENT`, learner-owned notes, and already-authored depths remain untouched. This migration evidence must never become a runtime fallback or default write.
 - **`BOARD_TAKER` is not self-certifying, and it has now failed in two separate programs.** `V117` excludes a **denylist of program values known not to be licensure programs** — `Information Technology`, plus the academic-level values `Grade School` / `Junior High` / `High School` / `Senior High …` — checked against both `note_course_program` → `course_programs.name` and the free-text `notes.course_program`; a note with several programs is excluded when **any one** is on the denylist. The IT entry came from an audit finding all nine of its `BOARD_TAKER` notes to be ordinary coursework; the academic-level entries came from a public curator note tagged `BOARD_TAKER` whose program is `High School` and whose depth the same curator authored as `JUNIOR_HIGH`. **Treat "this audience tag implies that depth" as an assumption needing evidence per program, not a rule.** Do not use `course_programs.exam_goal_slug` as a licensure test — it identifies Exam Hubs only and omits legitimate board programs including Civil Engineering.
-- Target Audience is required on every note.
-- Student profiles must not see the Target Audience field; backend saves `STUDENT`.
-- Board Exam profiles must not see the Target Audience field; backend saves `BOARD_TAKER`.
-- Professional profiles must not see the Target Audience field; backend saves `PROFESSIONAL`.
-- Teacher and Admin profiles must see the Target Audience field in Create/Edit Note, with a required indicator and all audience values selectable.
-- Do not make Target Audience optional or replace hidden profile-based defaulting with a visible picker for Student, Board Exam, or Professional profiles.
+- `NoteEntity.targetProfileType` and `NoteTargetProfileType` must remain. No migration, default, constraint, index, or enum change ships in `v0.83.0`.
+- Note creation derives the stored value through `mapOwnerProfileTypeToNoteTarget`: `BOARD_EXAM -> BOARD_TAKER`, `PROFESSIONAL -> PROFESSIONAL`, every other profile (including Teacher/Parent/Student) -> `STUDENT`. Do not accept a client override or hardcode a replacement constant.
+- Note update preserves the stored value; it falls back to owner-profile derivation only for a defensive legacy-null row. Do not make create and update symmetric.
+- Note copy carries the source note's stored value. Bulk generation derives once from the owner and still persists it on `bulk_generation_result`, but does not expose it in the receipt response.
+- Public Library replaces the retired audience facet with an Authored Depth equality filter on `notes.learner_level`. `?level=` must parse through tolerant `LearnerLevel.fromString`; invalid values are ignored, valid values with no matches use the standard empty state, and NULL-depth notes are excluded. Populate chips only from distinct non-null depths present on public notes, never from the full enum.
 
 ### Async Study Pack Generation Rule
 
@@ -648,7 +649,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Public Library index should emit JSON-LD `CollectionPage` schema.
 - Public Library filter state must stay in sync with URL query params; direct opens of filtered `/public/library?...` URLs must restore the same selected filters in the UI.
 - Public Library search inputs must not update the URL on every keypress. Use local input state plus a short debounce, then `router.replace(..., { scroll: false })`.
-- Public Library filter interactions must preserve focus and scroll position. Subject chips, tag chips, audience changes, sort changes, and clear-filter actions must not jump the page back to the top.
+- Public Library filter interactions must preserve focus and scroll position. Subject chips, tag chips, program changes, sort changes, and clear-filter actions must not jump the page back to the top.
 - Public Library tag browsing must always stay accessible through a dedicated action such as `Browse all` / `Browse tags`; do not rely on a disappearing `+ More` tag chip when the visible tag list is short.
 - Searchable Public Library selector modals must keep the search input focused while typing; do not let modal rerenders or close-button autofocus steal the caret.
 - Public SEO note pages should emit JSON-LD `Article` schema using real note data only.
@@ -1083,7 +1084,7 @@ Keep app shell grouping:
   - `/notes/{id}/edit` for Draft notes stays in edit mode with `Save Changes`, `Cancel`, and `Generate`
   - `/notes/{id}/edit` for Study Pack Ready notes shows `Save Changes`, `Cancel`, and `Make a Copy`. **Note that neither the backend nor this route enforces the content lock** — `NoteService.update` has no status guard and the editor renders an unlocked textarea. The lock is an entry-point convention: Note Detail's `Edit` action routes ready notes to the inline panel instead. The route stays reachable by direct URL deliberately (it is the escape hatch that made ADR-001's R4 verification runnable); do not add a guard without an explicit decision. See `docs/features/notes.md`.
   - edit routes must render `Edit Note` copy, not create-note copy
-  - note editor metadata fields are `title`, `courseProgram`, `subject`, `tags`, `content`, and — for Teacher/Admin authors — `targetProfileType`, `domainContext`, and `learnerLevel`
+  - note editor metadata fields are `title`, `courseProgram`, `subject`, `tags`, `content`, and — for Teacher/Admin authors — `domainContext` and `learnerLevel`; `targetProfileType` is not an API or UI field
   - subject suggestions must come from persisted note subjects and still allow custom typed values
   - tags remain optional and should include helper guidance rather than hard validation pressure
 - Generate button wording may vary by `profileType` (`Generate`, `Practice`, `Create Quiz`) but must still hit the same Study Pack generation flow.
@@ -1097,7 +1098,7 @@ Keep app shell grouping:
 - Do not use browser-native `window.confirm` or `alert` for product dialogs.
 - Note Detail edit rules:
   - `DRAFT`: Edit routes to full editor (content + OCR)
-  - `STUDY_PACK_READY`: Edit stays on Note Detail. Every owner may edit title/courseProgram/subject/tags; **Teacher/Admin authors may additionally edit Target Audience, Domain Context, and Note Learner Level** (`v0.70.0`, gated by `isTeacherSelectableNoteTarget` — the same gate the Note Editor uses). Correcting either authoring axis shapes *future* generation only and never touches the existing Study Pack. Note **content** stays locked; that is the lock this rule protects.
+  - `STUDY_PACK_READY`: Edit stays on Note Detail. Every owner may edit title/courseProgram/subject/tags; **Teacher/Admin authors may additionally edit Domain Context and Note Learner Level** (`v0.70.0`, narrowed in `v0.83.0`, gated by `isTeacherSelectableNoteTarget` — the shared curator gate). Correcting either authoring axis shapes *future* generation only and never touches the existing Study Pack. Note **content** stays locked; that is the lock this rule protects.
   - Because `PUT /notes/{id}` is a full replace, any surface that hides a field must send the note's stored value back untouched rather than an empty draft. Hiding a field must never null it.
   - While inline metadata edit is active, hide/disable share/visibility/learning actions.
 - Share flow for private notes:
@@ -1258,7 +1259,7 @@ Rules:
 3. Always implement loading and error states.
 4. Use theme tokens (`bg-background`, `text-foreground`, etc.).
 5. Keep Note Detail unified; do not split Note vs Study Pack detail pages again.
-6. **Taxonomy / enumerated fields must use a shared combobox/dropdown, never a freetext `<input>`.** Course/program, learner level, subject, and target audience are all matched by normalization (e.g. a study plan's `courseProgram` is normalize-matched against the learner's profile value to surface it on the Dashboard); a freetext value that matches no learner silently never appears. Reach for `components/metadata/course-program-combobox.tsx`, `components/notes/subject-combobox.tsx`, or `components/ui/suggestion-combobox.tsx` first. This drift has recurred (Bulk Generate, then the Adoptable Study Plans publish card).
+6. **Taxonomy / enumerated fields must use a shared combobox/dropdown, never a freetext `<input>`.** Course/program, learner level, and subject are matched by normalization (e.g. a study plan's `courseProgram` is normalize-matched against the learner's profile value to surface it on the Dashboard); a freetext value that matches no learner silently never appears. Reach for `components/metadata/course-program-combobox.tsx`, `components/notes/subject-combobox.tsx`, or `components/ui/suggestion-combobox.tsx` first. This drift has recurred (Bulk Generate, then the Adoptable Study Plans publish card).
 
 ### Sonar / Code Smell Rules (Frontend)
 
@@ -1656,7 +1657,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 - Quiz/exam prompts receive learner level and course/program separately through `buildLearnerContextBlock()`; content prompts use `buildContentContextBlock()`, which omits the **reader's** level but does read the note's authored level.
 - The note's authored level is the **curriculum floor** for quizzes and exams. A lower reader level may soften scaffolding and wording; it must never lower curriculum, terminology, or difficulty, and a higher reader level must never raise them above the note's level.
 - Study Pack, Challenge Quiz, Board Exam, and Adaptive Practice generation must resolve both axes through `StudyPackGenerationContextResolver` — `effectiveAuthoringDomain()` (Domain Context wins; note `courseProgram` then profile `courseProgram` are fallbacks) and `effectiveCurriculumLevel()` (note level → reader level → `COLLEGE`). Never reconstruct either chain inside a generation service.
-- Learner Level is required at the user/profile level for completed accounts, but generation context remains nullable for legacy/best-effort paths. `notes.learner_level` is the authored depth axis and outranks the profile level; it must not be removed or narrowed. **The "not renamed before the R4 checkpoint runs" half of this constraint has EXPIRED — R4 resolved 2026-08-04** (`ADR-001` → *R4 verification*), and `ADR-001` constraint 4 now governs renaming: the user-facing label may become `Educational Level` or `Authored Depth`, `Intended Audience` is unavailable (`notes.target_profile_type` already owns that concept), and any rename is **copy-only — the column stays `learner_level`**. Teacher quiz modal's `targetLearnerLevel` is the only per-generation override, and only an explicitly chosen value is persisted — never the resolved level.
+- Learner Level is required at the user/profile level for completed accounts, but generation context remains nullable for legacy/best-effort paths. `notes.learner_level` is the authored depth axis and outranks the profile level; it must not be removed or narrowed. **The "not renamed before the R4 checkpoint runs" half of this constraint has EXPIRED — R4 resolved 2026-08-04** (`ADR-001` → *R4 verification*), and `ADR-001` constraint 4 now governs renaming: the user-facing label may become `Educational Level` or `Authored Depth`, and any rename is **copy-only — the column stays `learner_level`**. Teacher quiz modal's `targetLearnerLevel` is the only per-generation override, and only an explicitly chosen value is persisted — never the resolved level.
 - A collection's `learnerLevel` may pre-fill a visible new-note authoring control from the collection or nearest ancestor, but it is never a server-side default write and never changes an existing note when membership is added. No resolved collection level means no pre-fill, not `COLLEGE`.
 - See `docs/features/profile-learning-context.md` for the full rule set.
 

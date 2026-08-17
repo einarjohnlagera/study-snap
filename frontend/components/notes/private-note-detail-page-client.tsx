@@ -75,7 +75,6 @@ import {
   type ConceptHealthEntry,
   type DomainContext,
   type LearnerLevel,
-  type NoteTargetProfileType,
   type NoteResponse,
   type NoteStudyPackStatus,
   type NoteVisibility,
@@ -110,10 +109,8 @@ import {
 } from "@/lib/challenge-quiz-entry";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
 import {
-  getNoteTargetProfileLabel,
   isQuizMasteryLockBypassed,
   isTeacherSelectableNoteTarget,
-  SELECTABLE_NOTE_TARGET_PROFILE_TYPES,
 } from "@/lib/note-target-profile";
 import {
   buildRecentQuizSessionHistory,
@@ -151,7 +148,6 @@ type NoteMetadataDraft = {
   courseProgram: string;
   domainContext: DomainContext | "";
   learnerLevel: LearnerLevel | "";
-  targetProfileType: NoteTargetProfileType | "";
   tags: string[];
 };
 
@@ -161,7 +157,6 @@ const EMPTY_METADATA_DRAFT: NoteMetadataDraft = {
   courseProgram: "",
   domainContext: "",
   learnerLevel: "",
-  targetProfileType: "",
   tags: [],
 };
 
@@ -177,7 +172,6 @@ function toMetadataDraft(note: NoteResponse): NoteMetadataDraft {
     courseProgram: note.courseProgram ?? "",
     domainContext: note.domainContext ?? "",
     learnerLevel: note.learnerLevel ?? "",
-    targetProfileType: note.targetProfileType,
     tags: [...(note.tags ?? [])],
   };
 }
@@ -868,10 +862,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
   const isTeacherMode = profileType === "TEACHER";
-  const canEditTargetProfileType = isTeacherSelectableNoteTarget(profileType, userRole);
   // Same gate the Note Editor uses for its authoring metadata fieldset, so the two surfaces expose
   // the same axes to the same authors.
-  const canEditAuthoringMetadata = canEditTargetProfileType;
+  const canEditAuthoringMetadata = isTeacherSelectableNoteTarget(profileType, userRole);
   useEffect(() => {
     if (!note?.id) {
       return;
@@ -1389,7 +1382,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         domainContext: note.domainContext ?? null,
         learnerLevel: note.learnerLevel ?? null,
         tags: nextMetadata.tags,
-        targetProfileType: note.targetProfileType,
         content: note.content,
       });
       setNote(updated);
@@ -1511,13 +1503,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast(`Please complete: ${missing.join(", ")}.`);
       return;
     }
-    if (canEditTargetProfileType && !metadataDraft.targetProfileType) {
-      setError("Please select an audience");
-      return;
-    }
-    const nextTargetProfileType: NoteTargetProfileType = canEditTargetProfileType
-      ? metadataDraft.targetProfileType as NoteTargetProfileType
-      : note.targetProfileType;
     // PUT is a full replace. The authoring axes only render for Teacher/Admin, so for everyone else
     // the draft holds a blank that would silently null a set Domain Context or Note Learner Level.
     const nextDomainContext: DomainContext | null = canEditAuthoringMetadata
@@ -1536,7 +1521,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         domainContext: nextDomainContext,
         learnerLevel: nextLearnerLevel,
         tags: metadataDraft.tags,
-        targetProfileType: nextTargetProfileType,
         content: note.content,
       });
       if (canEditAuthoringMetadata) {
@@ -2186,33 +2170,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     )}
                   </div>
                 </div> : null}
-                {canEditTargetProfileType ? (
-                  <div className="space-y-2">
-                    <label htmlFor="note-target-profile-type-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                      Who is this note for? <span className="text-red-500" aria-hidden="true">*</span>
-                    </label>
-                    <select
-                      id="note-target-profile-type-inline"
-                      aria-label="Who is this note for?"
-                      value={metadataDraft.targetProfileType}
-                      onChange={(event) => setMetadataDraft((previous) => ({
-                        ...previous,
-                        targetProfileType: event.target.value as NoteTargetProfileType | "",
-                      }))}
-                      className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                    >
-                      <option value="">Select an audience</option>
-                      {SELECTABLE_NOTE_TARGET_PROFILE_TYPES.map((targetProfileType) => (
-                        <option key={targetProfileType} value={targetProfileType}>
-                          {getNoteTargetProfileLabel(targetProfileType)}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-foreground/60">
-                      Changing audience will affect future quiz generation.
-                    </p>
-                  </div>
-                ) : null}
                 {canEditAuthoringMetadata ? (
                   <div className="space-y-2">
                     <label htmlFor="note-applicable-programs-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
@@ -2359,7 +2316,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             {isInlineMetadataEditMode ? (
               <p className="text-xs text-foreground/70">
                 {canEditAuthoringMetadata
-                  ? "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, audience, Domain Context, and Authored Depth."
+                  ? "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, tags, Domain Context, and Authored Depth."
                   : "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."}
               </p>
             ) : isTeacherMode ? (

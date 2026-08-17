@@ -76,7 +76,6 @@ public class BulkGenerationResultService {
                 entity.getCourseProgram(),
                 entity.getDomainContext() == null ? null : entity.getDomainContext().name(),
                 entity.getLearnerLevel() == null ? null : entity.getLearnerLevel().name(),
-                entity.getTargetProfileType(),
                 entity.getCollectionId(),
                 Boolean.TRUE.equals(entity.getMakePublic()),
                 entity.getRequestedCount(),

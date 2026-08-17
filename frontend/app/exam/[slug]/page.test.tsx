@@ -44,7 +44,6 @@ function buildNote(overrides: Partial<TestNote> & Pick<TestNote, "id" | "title" 
   return {
     ownerUserId: "user-1",
     courseProgram: "Architecture",
-    targetProfileType: "BOARD_TAKER",
     subject: "Architecture",
     tags: ["board exam"],
     contentPreview: "A concise public note preview for board exam reviewers.",

@@ -46,7 +46,6 @@ async function fillAdminForm(topicValues: string[]) {
   const courseProgramInput = screen.getByLabelText("Add a course or program");
   fireEvent.change(courseProgramInput, { target: { value: "Nursing" } });
   fireEvent.click(await screen.findByRole("option", { name: "Nursing" }));
-  // Target Audience defaults to "Student" for admin.
   topicValues.forEach((value, index) => {
     if (index > 0) {
       fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
@@ -85,7 +84,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByText("Library tool")).toBeInTheDocument();
     expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Authored Depth/)).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
@@ -103,7 +102,7 @@ describe("BulkGenerationPageClient", () => {
     await waitFor(() => expect(getMe).toHaveBeenCalled());
 
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Target Audience/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Authored Depth/)).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
@@ -162,7 +161,6 @@ describe("BulkGenerationPageClient", () => {
         courseProgramIds: ["program-nursing"],
         domainContext: "NURSING",
         learnerLevel: "BOARD_EXAM_REVIEW",
-        targetProfileType: "STUDENT",
       });
     });
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/library"));
@@ -309,7 +307,6 @@ describe("BulkGenerationPageClient", () => {
       courseProgram: "Nursing",
       domainContext: "NURSING",
       learnerLevel: null,
-      targetProfileType: "BOARD_TAKER",
       makePublic: false,
       topics: ["Prenatal Care"],
     });
@@ -329,7 +326,6 @@ describe("BulkGenerationPageClient", () => {
       courseProgram: "Civil Engineering",
       domainContext: null,
       learnerLevel: null,
-      targetProfileType: "STUDENT",
       makePublic: false,
       topics: ["Quadratic Equations"],
       collectionId: "subject-plan-1",
@@ -396,7 +392,6 @@ describe("BulkGenerationPageClient", () => {
       courseProgram: "Nursing",
       domainContext: "NURSING",
       learnerLevel: "BOARD_EXAM_REVIEW",
-      targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],
     });
@@ -408,7 +403,7 @@ describe("BulkGenerationPageClient", () => {
     expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toHaveValue("NURSING");
     expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("BOARD_EXAM_REVIEW");
-    expect(screen.getByLabelText(/^Target Audience/)).toHaveValue("BOARD_TAKER");
+    expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
     expect(screen.getByLabelText(/^Topic 2$/)).toHaveValue("Labor Stages");

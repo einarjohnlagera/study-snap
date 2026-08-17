@@ -868,7 +868,6 @@ describe("Library page", () => {
       id: "result-1",
       subject: "Maternal Health",
       courseProgram: "Nursing",
-      targetProfileType: "BOARD_TAKER",
       makePublic: true,
       requestedCount: 5,
       createdCount: 4,
@@ -890,7 +889,6 @@ describe("Library page", () => {
       courseProgram: "Nursing",
       domainContext: null,
       learnerLevel: null,
-      targetProfileType: "BOARD_TAKER",
       makePublic: true,
       topics: ["Prenatal Care", "Labor Stages"],
       // Carried through so the retry reproduces the batch's Review Set.

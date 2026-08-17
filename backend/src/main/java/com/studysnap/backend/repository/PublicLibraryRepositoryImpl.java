@@ -3,7 +3,6 @@ package com.studysnap.backend.repository;
 import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteStatus;
-import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.model.PublicLibrarySort;
@@ -42,7 +41,6 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     private static final String APPLICABLE_PROGRAMS_ALIAS = "applicablePrograms";
     private static final String DOMAIN_CONTEXT_ALIAS = "domainContext";
     private static final String LEARNER_LEVEL_ALIAS = "learnerLevel";
-    private static final String TARGET_PROFILE_TYPE_ALIAS = "targetProfileType";
     private static final String SUBJECT_ALIAS = "subject";
     private static final String TAGS_ALIAS = "tags";
     private static final String CONTENT_ALIAS = "content";
@@ -78,7 +76,6 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                    note_programs.program_names as "applicablePrograms",
                    n.domain_context as "domainContext",
                    n.learner_level as "learnerLevel",
-                   n.target_profile_type as "targetProfileType",
                    n.subject as subject,
                    n.tags as tags,
                    substring(n.content, 1, 2000) as content,
@@ -194,10 +191,6 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         StringBuilder where = new StringBuilder(" where n.visibility = 'PUBLIC'");
         Map<String, Object> parameters = new LinkedHashMap<>();
 
-        if (criteria.targetProfileType() != null) {
-            where.append(" and n.target_profile_type = :targetProfileType");
-            parameters.put(TARGET_PROFILE_TYPE_ALIAS, criteria.targetProfileType().name());
-        }
         if (criteria.creator() != null) {
             where.append("""
                      and exists (
@@ -227,6 +220,10 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                     .append(normalizedSlugSql("n.course_program"))
                     .append(" = :courseProgramSlug))");
             parameters.put("courseProgramSlug", criteria.courseProgramSlug());
+        }
+        if (criteria.learnerLevel() != null) {
+            where.append(" and n.learner_level = :learnerLevel");
+            parameters.put("learnerLevel", criteria.learnerLevel().name());
         }
         if (criteria.tagSlugs() != null && !criteria.tagSlugs().isEmpty()) {
             appendTagFilter(where, criteria.tagSlugs(), parameters);
@@ -401,9 +398,6 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         ));
         values.put(LEARNER_LEVEL_ALIAS, enumValue(
                 LearnerLevel.class, stringValue(tuple, LEARNER_LEVEL_ALIAS)
-        ));
-        values.put(TARGET_PROFILE_TYPE_ALIAS, enumValue(
-                NoteTargetProfileType.class, stringValue(tuple, TARGET_PROFILE_TYPE_ALIAS)
         ));
         values.put(SUBJECT_ALIAS, stringValue(tuple, SUBJECT_ALIAS));
         values.put(TAGS_ALIAS, stringArray(tuple.get(TAGS_ALIAS)));

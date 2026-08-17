@@ -106,10 +106,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         UUID nursingId = insertCourseProgram(NURSING_PROGRAM);
         insertApplicableProgram(nursing.getId(), nursingId);
 
-        List<String> nursingFilterIds = ids(page(null, null, "recent", null, List.of(), "nursing", null,
-                null, false, List.of(), 0, 20));
-        List<String> excludedFilterIds = ids(page(null, null, "recent", null, List.of(), "software-engineering", null,
-                null, false, List.of(), 0, 20));
+        List<String> nursingFilterIds = ids(page(null, null, "recent", null, List.of(), "nursing", null, false, List.of(), 0, 20));
+        List<String> excludedFilterIds = ids(page(null, null, "recent", null, List.of(), "software-engineering", null, false, List.of(), 0, 20));
         List<String> nursingSearchIds = ids(searchPage("nursing"));
         List<String> excludedSearchIds = ids(searchPage("software engineering"));
 
@@ -117,6 +115,48 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         assertThat(excludedFilterIds).containsExactly(excluded.getId().toString());
         assertThat(nursingSearchIds).containsExactly(nursing.getId().toString());
         assertThat(excludedSearchIds).containsExactly(excluded.getId().toString());
+    }
+
+    @Test
+    void authoredDepthFilterMatchesOneColumnExcludesNullAndOffersOnlyPublicDepths() {
+        UUID ownerId = insertUser("depthreader", UserRole.USER);
+        NoteEntity juniorHigh = saveNote(
+                ownerId, "Junior High Algebra", "Mathematics", null,
+                new String[]{"algebra"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 1
+        );
+        juniorHigh.setLearnerLevel(LearnerLevel.JUNIOR_HIGH);
+        NoteEntity seniorHigh = saveNote(
+                ownerId, "Senior High Calculus", "Mathematics", null,
+                new String[]{"calculus"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 2
+        );
+        seniorHigh.setLearnerLevel(LearnerLevel.SENIOR_HIGH);
+        NoteEntity withoutDepth = saveNote(
+                ownerId, "Unclassified Mathematics", "Mathematics", null,
+                new String[]{"foundations"}, NoteStatus.DRAFT, NoteVisibility.PUBLIC,
+                NoteTargetProfileType.STUDENT, 3
+        );
+        NoteEntity privateCollege = saveNote(
+                ownerId, "Private College Algebra", "Mathematics", null,
+                new String[]{"algebra"}, NoteStatus.DRAFT, NoteVisibility.PRIVATE,
+                NoteTargetProfileType.STUDENT, 4
+        );
+        privateCollege.setLearnerLevel(LearnerLevel.COLLEGE);
+        flushAndClear();
+
+        PublicNoteListResponse juniorHighPage = pageAtLevel(LearnerLevel.JUNIOR_HIGH);
+        PublicNoteListResponse juniorHighLegacy = legacyAtLevel(LearnerLevel.JUNIOR_HIGH);
+        PublicNoteListResponse unusedProfessionalPage = pageAtLevel(LearnerLevel.PROFESSIONAL);
+
+        assertThat(ids(juniorHighPage)).containsExactly(juniorHigh.getId().toString());
+        assertThat(ids(juniorHighLegacy)).containsExactly(juniorHigh.getId().toString());
+        assertThat(ids(juniorHighPage)).doesNotContain(withoutDepth.getId().toString());
+        assertThat(unusedProfessionalPage.items()).isEmpty();
+        assertThat(unusedProfessionalPage.totalMatching()).isZero();
+        assertThat(noteService.listPublicLearnerLevels())
+                .containsExactly(LearnerLevel.JUNIOR_HIGH, LearnerLevel.SENIOR_HIGH)
+                .doesNotContain(LearnerLevel.COLLEGE, LearnerLevel.PROFESSIONAL);
     }
 
     @Test
@@ -133,15 +173,13 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         insertApplicableProgram(curated.getId(), accountancyId);
         insertApplicableProgram(curated.getId(), nursingId);
 
-        PublicNoteListResponse accountancy = page(null, null, "recent", null, List.of(), "accountancy", null,
-                null, false, List.of(), 0, 20);
+        PublicNoteListResponse accountancy = page(null, null, "recent", null, List.of(), "accountancy", null, false, List.of(), 0, 20);
 
         assertThat(ids(accountancy)).containsExactly(curated.getId().toString());
         assertThat(accountancy.items().getFirst().applicablePrograms())
                 .containsExactly(ACCOUNTANCY_PROGRAM, NURSING_PROGRAM);
         assertThat(ids(searchPage("nursing"))).containsExactly(curated.getId().toString());
-        assertThat(ids(page(null, null, "recent", null, List.of(), "pharmacy", null,
-                null, false, List.of(), 0, 20))).isEmpty();
+        assertThat(ids(page(null, null, "recent", null, List.of(), "pharmacy", null, false, List.of(), 0, 20))).isEmpty();
         assertThat(ids(searchPage("pharmacy"))).isEmpty();
     }
 
@@ -169,17 +207,16 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         insertApplicableProgram(mixed.getId(), nursingId);
 
         PublicNoteListResponse legacyNursing = noteService.listPublic(
-                null, null, "recent", null, List.of(), NURSING_PROGRAM, null, null, null
+                null, null, "recent", null, List.of(), NURSING_PROGRAM, null, null
         );
         PublicNoteListResponse paginatedNursing = page(
-                null, null, "recent", null, List.of(), NURSING_PROGRAM, null,
-                null, false, List.of(), 0, 20
+                null, null, "recent", null, List.of(), NURSING_PROGRAM, null, false, List.of(), 0, 20
         );
         PublicNoteListResponse staleLegacyProgram = noteService.listPublic(
-                null, null, "recent", null, List.of(), ACCOUNTANCY_PROGRAM, null, null, null
+                null, null, "recent", null, List.of(), ACCOUNTANCY_PROGRAM, null, null
         );
         PublicNoteListResponse programSearch = noteService.listPublic(
-                null, NURSING_PROGRAM, "recent", null, List.of(), null, null, null, null
+                null, NURSING_PROGRAM, "recent", null, List.of(), null, null, null
         );
 
         assertThat(ids(legacyNursing))
@@ -224,7 +261,6 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 List.of("kidney-health"),
                 "nursing",
                 "nursecreator",
-                NoteTargetProfileType.STUDENT,
                 10
         );
         PublicNoteListResponse extendedLegacy = noteService.listPublic(
@@ -235,7 +271,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 List.of("kidney-health"),
                 "nursing",
                 "nursecreator",
-                NoteTargetProfileType.STUDENT,
+                null,
                 10,
                 null,
                 null,
@@ -250,7 +286,6 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 List.of("kidney-health"),
                 "nursing",
                 "nursecreator",
-                NoteTargetProfileType.STUDENT,
                 false,
                 List.of(),
                 0,
@@ -307,20 +342,17 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         flushAndClear();
 
         PublicNoteListResponse legacyOfficial = noteService.listPublic(
-                viewerId, null, null, null, null, null, null, null, null,
-                null, null, true, List.of("OFFICIAL")
+                viewerId, null, null, null, null, null, null, null,
+                null, null, null, true, List.of("OFFICIAL")
         );
         PublicNoteListResponse paginatedViewer = page(
-                viewerId, null, "recent", null, List.of(), null, null,
-                null, true, List.of("BY_YOU"), 0, 20
+                viewerId, null, "recent", null, List.of(), null, null, true, List.of("BY_YOU"), 0, 20
         );
         PublicNoteListResponse paginatedCommunity = page(
-                viewerId, null, "recent", null, List.of(), null, null,
-                null, false, List.of("COMMUNITY"), 0, 20
+                viewerId, null, "recent", null, List.of(), null, null, false, List.of("COMMUNITY"), 0, 20
         );
         PublicNoteListResponse combined = page(
-                viewerId, null, "recent", null, List.of(READY_SOURCE_TAG), null, null,
-                null, true, List.of("BY_YOU", "OFFICIAL"), 0, 20
+                viewerId, null, "recent", null, List.of(READY_SOURCE_TAG), null, null, true, List.of("BY_YOU", "OFFICIAL"), 0, 20
         );
 
         assertThat(ids(legacyOfficial)).containsExactly(officialReady.getId().toString());
@@ -335,12 +367,10 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         );
 
         assertThatThrownBy(() -> page(
-                viewerId, null, "recent", null, List.of(), null, null,
-                null, false, List.of("UNKNOWN"), 0, 20
+                viewerId, null, "recent", null, List.of(), null, null, false, List.of("UNKNOWN"), 0, 20
         )).isInstanceOf(InvalidPublicLibraryQueryException.class);
         assertThatThrownBy(() -> page(
-                viewerId, null, "unknown", null, List.of(), null, null,
-                null, false, List.of(), 0, 20
+                viewerId, null, "unknown", null, List.of(), null, null, false, List.of(), 0, 20
         )).isInstanceOf(InvalidPublicLibraryQueryException.class);
     }
 
@@ -384,13 +414,10 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         flushAndClear();
 
         SqlCaptureStatementInspector.clear();
-        PublicNoteListResponse titleFirst = page(null, null, "title", null, List.of(), null, null,
-                null, false, List.of(), 0, 2);
+        PublicNoteListResponse titleFirst = page(null, null, "title", null, List.of(), null, null, false, List.of(), 0, 2);
         List<String> firstPageQueries = publicPaginationQueries();
-        PublicNoteListResponse titleSecond = page(null, null, "title", null, List.of(), null, null,
-                null, false, List.of(), 1, 2);
-        PublicNoteListResponse recent = page(null, null, "recent", null, List.of(), null, null,
-                null, false, List.of(), 0, 20);
+        PublicNoteListResponse titleSecond = page(null, null, "title", null, List.of(), null, null, false, List.of(), 1, 2);
+        PublicNoteListResponse recent = page(null, null, "recent", null, List.of(), null, null, false, List.of(), 0, 20);
 
         assertThat(ids(titleFirst)).containsExactly(alpha.getId().toString(), bravo.getId().toString());
         assertThat(ids(titleSecond)).containsExactly(charlie.getId().toString());
@@ -423,22 +450,15 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         insertCopies(copied.getId(), ownerId, 4);
         flushAndClear();
 
-        PublicNoteListResponse featuredPage = page(null, null, "featured", null, List.of(), null, null,
-                null, false, List.of(), 0, 20);
-        PublicNoteListResponse popularPage = page(null, null, "popular", null, List.of(), null, null,
-                null, false, List.of(), 0, 20);
-        PublicNoteListResponse copiedAliasPage = page(null, null, "copied", null, List.of(), null, null,
-                null, false, List.of(), 0, 20);
+        PublicNoteListResponse featuredPage = page(null, null, "featured", null, List.of(), null, null, false, List.of(), 0, 20);
+        PublicNoteListResponse popularPage = page(null, null, "popular", null, List.of(), null, null, false, List.of(), 0, 20);
+        PublicNoteListResponse copiedAliasPage = page(null, null, "copied", null, List.of(), null, null, false, List.of(), 0, 20);
         SqlCaptureStatementInspector.clear();
-        PublicNoteListResponse mostCopiedFirstPage = page(null, null, "most_copied", null, List.of(), null, null,
-                null, false, List.of(), 0, 2);
+        PublicNoteListResponse mostCopiedFirstPage = page(null, null, "most_copied", null, List.of(), null, null, false, List.of(), 0, 2);
         List<String> materializedQueries = publicPaginationQueries();
-        PublicNoteListResponse mostCopiedSecondPage = page(null, null, "most_copied", null, List.of(), null, null,
-                null, false, List.of(), 1, 2);
-        PublicNoteListResponse recommendedPage = page(null, null, "recommended", null, List.of(), null, null,
-                null, false, List.of(), 0, 20);
-        PublicNoteListResponse viewsPage = page(null, null, "views", null, List.of(), null, null,
-                null, false, List.of(), 0, 20);
+        PublicNoteListResponse mostCopiedSecondPage = page(null, null, "most_copied", null, List.of(), null, null, false, List.of(), 1, 2);
+        PublicNoteListResponse recommendedPage = page(null, null, "recommended", null, List.of(), null, null, false, List.of(), 0, 20);
+        PublicNoteListResponse viewsPage = page(null, null, "views", null, List.of(), null, null, false, List.of(), 0, 20);
 
         assertThat(ids(featuredPage)).containsExactly(featured.getId().toString());
         assertThat(featuredPage.items().getFirst().quizCount()).isEqualTo(1);
@@ -464,7 +484,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     }
 
     @Test
-    void discoverySectionsAreCappedAudienceScopedAndMutuallyExclusive() {
+    void discoverySectionsAreCappedUnfilteredAndMutuallyExclusive() {
         UUID ownerId = insertUser("discoveryowner", UserRole.USER);
         List<NoteEntity> featuredNotes = new ArrayList<>();
         List<NoteEntity> popularNotes = new ArrayList<>();
@@ -492,9 +512,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 NoteStatus.GENERATED, NoteVisibility.PRIVATE, NoteTargetProfileType.STUDENT, 100);
         flushAndClear();
 
-        PublicLibraryDiscoverySectionsResponse sections = noteService.getPublicLibraryDiscoverySections(
-                null, NoteTargetProfileType.STUDENT
-        );
+        PublicLibraryDiscoverySectionsResponse sections = noteService.getPublicLibraryDiscoverySections(null);
         Set<String> featuredIds = ids(sections.featured());
         Set<String> popularIds = ids(sections.popular());
         Set<String> recentIds = ids(sections.recent());
@@ -505,20 +523,14 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
         assertThat(featuredIds).doesNotContainAnyElementsOf(popularIds).doesNotContainAnyElementsOf(recentIds);
         assertThat(popularIds).doesNotContainAnyElementsOf(recentIds);
         assertThat(featuredIds).allMatch(id -> featuredNotes.stream().anyMatch(note -> note.getId().toString().equals(id)));
-        Set<String> allPublicStudentIds = java.util.stream.Stream.of(featuredNotes, popularNotes, recentNotes)
+        Set<String> allPublicNoteIds = java.util.stream.Stream.of(featuredNotes, popularNotes, recentNotes)
                 .flatMap(List::stream)
                 .map(note -> note.getId().toString())
                 .collect(java.util.stream.Collectors.toSet());
-        assertThat(popularIds).allMatch(allPublicStudentIds::contains);
-        assertThat(recentIds).allMatch(allPublicStudentIds::contains);
-
-        PublicLibraryDiscoverySectionsResponse boardSections = noteService.getPublicLibraryDiscoverySections(
-                null, NoteTargetProfileType.BOARD_TAKER
-        );
-        assertThat(boardSections.featured()).isEmpty();
-        assertThat(boardSections.popular()).isEmpty();
-        assertThat(boardSections.recent()).extracting(NoteListItemResponse::id)
-                .containsExactly(boardOnly.getId().toString());
+        allPublicNoteIds.add(boardOnly.getId().toString());
+        assertThat(popularIds).allMatch(allPublicNoteIds::contains);
+        assertThat(recentIds).allMatch(allPublicNoteIds::contains)
+                .contains(boardOnly.getId().toString());
     }
 
     private PublicNoteListResponse page(
@@ -529,7 +541,6 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType,
             boolean readyOnly,
             List<String> sources,
             int page,
@@ -543,7 +554,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 tags,
                 courseProgram,
                 creator,
-                targetProfileType,
+                null,
                 null,
                 page,
                 pageSize,
@@ -553,8 +564,43 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
     }
 
     private PublicNoteListResponse searchPage(String search) {
-        return page(null, search, "recent", null, List.of(), null, null,
-                null, false, List.of(), 0, 20);
+        return page(null, search, "recent", null, List.of(), null, null, false, List.of(), 0, 20);
+    }
+
+    private PublicNoteListResponse pageAtLevel(LearnerLevel learnerLevel) {
+        return noteService.listPublic(
+                null,
+                null,
+                "recent",
+                null,
+                List.of(),
+                null,
+                null,
+                learnerLevel,
+                null,
+                0,
+                20,
+                false,
+                List.of()
+        );
+    }
+
+    private PublicNoteListResponse legacyAtLevel(LearnerLevel learnerLevel) {
+        return noteService.listPublic(
+                null,
+                null,
+                "recent",
+                null,
+                List.of(),
+                null,
+                null,
+                learnerLevel,
+                null,
+                null,
+                null,
+                false,
+                List.of()
+        );
     }
 
     private List<String> ids(PublicNoteListResponse response) {

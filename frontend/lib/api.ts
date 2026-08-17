@@ -144,7 +144,6 @@ export type BulkGenerateNotesRequest = {
   courseProgramText?: string | null;
   domainContext?: DomainContext | null;
   learnerLevel?: LearnerLevel | null;
-  targetProfileType?: NoteTargetProfileType;
   collectionId?: string | null;
 };
 
@@ -161,7 +160,6 @@ export type BulkGenerationResultResponse = {
   courseProgram: string | null;
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
-  targetProfileType: NoteTargetProfileType;
   collectionId: string | null;
   makePublic: boolean;
   requestedCount: number;
@@ -1576,7 +1574,6 @@ export type UpsertNoteRequest = {
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
   tags?: string[];
-  targetProfileType?: NoteTargetProfileType | null;
   content: string;
 };
 
@@ -1591,7 +1588,6 @@ export type NoteResponse = {
   courseProgram?: string | null;
   domainContext: DomainContext | null;
   learnerLevel: LearnerLevel | null;
-  targetProfileType: NoteTargetProfileType;
   tags: string[];
   content: string;
   visibility: NoteVisibility;
@@ -1666,7 +1662,6 @@ export type NoteListItemResponse = {
   title: string | null;
   courseProgram: string | null;
   applicablePrograms?: string[];
-  targetProfileType: NoteTargetProfileType;
   subject: string | null;
   tags: string[];
   contentPreview: string;
@@ -4911,9 +4906,9 @@ export async function setCollectionItemOrder(
 }
 
 export async function listPublicNotes(params?: {
-  audience?: NoteTargetProfileType;
   courseProgram?: string;
   creator?: string | null;
+  level?: LearnerLevel;
   page?: number;
   pageSize?: number;
   readyOnly?: boolean;
@@ -4925,14 +4920,14 @@ export async function listPublicNotes(params?: {
   tags?: string[];
 }): Promise<PublicNoteListResponse> {
   const searchParams = new URLSearchParams();
-  if (params?.audience) {
-    searchParams.set("audience", params.audience);
-  }
   if (params?.courseProgram) {
     searchParams.set("courseProgram", params.courseProgram);
   }
   if (params?.creator) {
     searchParams.set("creator", params.creator);
+  }
+  if (params?.level) {
+    searchParams.set("level", params.level);
   }
   if (typeof params?.page === "number") {
     searchParams.set("page", String(params.page));
@@ -4965,15 +4960,8 @@ export async function listPublicNotes(params?: {
   return parseApiResponse<PublicNoteListResponse>(response, "Could not load public notes.");
 }
 
-export async function listPublicLibraryDiscoverySections(params?: {
-  audience?: NoteTargetProfileType;
-}): Promise<PublicLibraryDiscoverySectionsResponse> {
-  const searchParams = new URLSearchParams();
-  if (params?.audience) {
-    searchParams.set("audience", params.audience);
-  }
-  const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
-  const response = await fetch(buildUrl(`/notes/public/discovery-sections${query}`), {
+export async function listPublicLibraryDiscoverySections(): Promise<PublicLibraryDiscoverySectionsResponse> {
+  const response = await fetch(buildUrl("/notes/public/discovery-sections"), {
     method: "GET",
     headers: buildAuthHeaders(),
   });
@@ -4981,6 +4969,14 @@ export async function listPublicLibraryDiscoverySections(params?: {
     response,
     "Could not load public library discovery sections.",
   );
+}
+
+export async function listPublicLearnerLevels(): Promise<LearnerLevel[]> {
+  const response = await fetch(buildUrl("/notes/public/learner-levels"), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<LearnerLevel[]>(response, "Could not load authored depths.");
 }
 
 export async function togglePublicNoteLike(noteId: string): Promise<PublicNoteLikeResponse> {
