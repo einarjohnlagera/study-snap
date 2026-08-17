@@ -45,6 +45,20 @@ Corrected in both, along with recording *why* each shape was chosen — the sync
 
 **Deliberately not an SEO-ranking read.** Stage 3's measurement plan does not exist and Search Console is unassigned, so a ranking checkpoint would be decorative. The read instead uses instrumentation that already ships and **was verified emitting at signoff rather than merely present in the enum**: anonymous `EXPLORE_VIEWED` separated by `user_id IS NULL`. A raw count, not a rate, so no small-denominator problem. **Kill criterion: single digits or zero means the intervention is linking to Explore, not more work on Explore.**
 
+### Scope folded in after signoff — Stages 1 and 2, 2026-08-17
+
+**Folded deliberately rather than opened as `v0.85.0`.** The owner's objection was release-cycle overhead, and it was fair: Stages 1 and 2 are **one link and one nav entry**, and offering them as separate releases over-fragmented the work. `v0.84.0` had not merged to `main`, so nothing was public yet and folding cost nothing.
+
+**It also makes the release better-shaped.** Slice C alone opened a door nobody was directed to — which is precisely why `[CHECKPOINT — due 2026-09-16]` had to ask whether anonymous visitors arrive at all. Shipping the links with the door pre-answers half of that.
+
+- **Stage 1 — Exam Hub's outbound discovery links now point at Explore.** The low/zero-note empty state links to `/explore`, and the CTA's filtered destination is `/explore?courseProgram=…`. The filter resolves identically because `/explore`'s Notes tab renders the same component. `EXAM_HUB_CTA_CLICKED` now carries `destination: "explore"`.
+- **Stage 2 — the marketing nav names Explore instead of Public Library.** **Navigation primacy only:** `/public/library` remains a live canonical route with its own metadata and sitemap entry. Exam Hubs deliberately stays — Explore has no exam-aware browsing mode to route an exam-seeking visitor to yet.
+- **The `AGENTS.md` Explore Navigation Rule amendment is RATIFIED (owner, 2026-08-17).** All four of its stated blockers were cleared by this release: anonymous rendering, canonical metadata, structured data, and the `[CHECKPOINT — due 2026-09-13]` sequencing question. Its own text asked for explicit owner confirmation rather than silent assertion; that was given. The rule now names the narrowing inline, so rule and amendment cannot be read as contradicting.
+
+**⚠️ Ratification removed the DOCTRINE block on Stage 3 and nothing else — Stage 3 is still not shippable, and the remaining blocker is physical.** It redirects the bare `/public/library` list page, whose gate is *once measurement confirms Explore is indexing at parity*. `/explore` was submitted to the sitemap **in this release** and has not been indexed; no measurement mechanism exists (Search Console separately unassigned). **Redirecting a page that ranks to a page with no ranking history discards traffic rather than transferring it.** No date was invented for it — it depends on Google's crawl schedule, not a decision. Earliest honest signal is this release's own `2026-09-16` anonymous-`EXPLORE_VIEWED` read.
+
+**Three test suites correctly failed on the retarget and were updated rather than loosened** — `navbar.test.tsx` and `exam/[slug]/page.test.tsx` asserted the old destinations, which is the behaviour that intentionally changed. The navbar test now also asserts `Public Library` is *absent* from the nav, so the swap cannot silently revert.
+
 ### Pre-signoff pressure test — cold-context agent, 2026-08-17
 
 **Run because the diff's shape matched the escalation criteria, not because the release gate fired:** removing an auth gate, plus a cookie lifecycle spanning signup → verification → onboarding → Dashboard. That is effect/lifecycle-timing territory, which `CLAUDE.md` names as inherently hard to reason about serially.

@@ -12,7 +12,11 @@ const PUBLIC_NAV = [
   { href: "/", label: "Home" },
   { href: "/how-it-works", label: "How it Works" },
   { href: "/demo", label: "Demo" },
-  { href: "/public/library", label: "Public Library" },
+  // Stage 2 (v0.84.0): the marketing nav names Explore rather than Public Library, now that
+  // /explore renders anonymously. Public Library remains a live canonical route and a
+  // Discovery System source — only which source the nav names first has changed. Exam Hubs
+  // deliberately stays: Explore has no exam-aware browsing mode to route a visitor to yet.
+  { href: "/explore", label: "Explore" },
   { href: "/exam", label: "Exam Hubs" },
   { href: "/learn", label: "Learn" },
   { href: "/pricing", label: "Pricing" },

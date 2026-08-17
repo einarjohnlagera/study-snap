@@ -24,9 +24,11 @@ Current public navigation order:
 
 - `Home`
 - `How it Works`
-- `Public Library`
+- `Explore`
 - `Learn`
 - `Pricing`
+
+**`Explore` replaced `Public Library` here in `v0.84.0` (Discovery System Stage 2)**, once `/explore` gained anonymous rendering. **This changes navigation primacy only, not routes** — `/public/library` remains a live canonical route with its own metadata and sitemap entry, reachable directly and from search. `Exam Hubs` deliberately stays reachable from the footer: Explore has no exam-aware browsing mode to route an exam-seeking visitor to yet.
 
 ## Back Navigation Pattern
 

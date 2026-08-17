@@ -205,7 +205,7 @@ describe("ExamHubPage", () => {
 
     expect(screen.getByText(/NoteLib turns ALE notes into a free, interactive reviewer/)).toBeInTheDocument();
     expect(screen.getByText("No Architect Licensure Examination (ALE) notes have been shared yet.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Browse the Public Library" })).toHaveAttribute("href", "/public/library");
+    expect(screen.getByRole("link", { name: "Explore notes and study plans" })).toHaveAttribute("href", "/explore");
     expect(screen.getByRole("link", { name: "Read Board Exam study guides" })).toHaveAttribute("href", "/learn#board-exams");
     const emptyStateCta = screen.getAllByRole("link", { name: "Start preparing for the ALE" })[1];
     expect(emptyStateCta).toHaveAttribute("href", "/auth?mode=signup&intent=exam&exam=ale");
@@ -324,7 +324,7 @@ describe("ExamHubPage", () => {
     render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
 
     const cta = await screen.findByRole("link", { name: "Browse Architecture Notes" });
-    expect(cta).toHaveAttribute("href", "/public/library?courseProgram=architecture");
+    expect(cta).toHaveAttribute("href", "/explore?courseProgram=architecture");
 
     cta.addEventListener("click", (event) => event.preventDefault());
     fireEvent.click(cta);
@@ -332,7 +332,7 @@ describe("ExamHubPage", () => {
     expect(trackAnalyticsEvent).toHaveBeenCalledWith({
       eventType: "EXAM_HUB_CTA_CLICKED",
       entityId: null,
-      metadata: { slug: "ale", destination: "public_library" },
+      metadata: { slug: "ale", destination: "explore" },
     });
   });
 });
