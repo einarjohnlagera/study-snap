@@ -2,7 +2,7 @@
 
 ## v0.83.0 - Target Audience Removal (Phase 2)
 
-**Status: In Progress** (kicked off 2026-08-17)
+**Status: Released** (kicked off and signed off 2026-08-17)
 
 Theme: retire the axis that stopped earning its place — remove Target Audience from authoring and from Public Library discovery, while keeping the column that the September checkpoint still needs to read.
 

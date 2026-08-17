@@ -131,9 +131,11 @@ High-level model:
 - Quiz sessions and performance are linked by `noteId`.
 - Copy creates a new Draft Note row with copied user-authored fields only.
 
-### Note target profile type
+### Note target profile type — RETIRED from product surfaces in `v0.83.0`
 
-Note audience is note-owned metadata, not user-owned personalization.
+**This section describes a storage-only column, not a product behaviour.** Target Audience is no longer authored, displayed, or filterable; the rules below survive because the column is still written and must stay valid until it is dropped in phase 4, gated on `[CHECKPOINT — due 2026-09-16]`.
+
+Note audience was note-owned metadata, not user-owned personalization — which is why the stored value is preserved on update and copy rather than re-derived from the owner's current persona.
 
 Storage rules:
 
