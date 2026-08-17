@@ -465,52 +465,50 @@ export function NoteEditorForm({
                 <fieldset className="space-y-4 rounded-xl border border-border/80 bg-muted/15 p-4">
                     <legend className="px-1 text-sm font-semibold text-foreground">Generation context</legend>
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <>
-                                <div className="space-y-2">
-                                    <label htmlFor="note-domain-context" className="text-sm font-medium text-foreground">
-                                        Domain Context {applicableProgramIds.length > 1 ? <span className="text-red-500" aria-hidden="true">*</span> : "(optional)"}
-                                    </label>
-                                    <select
-                                        id="note-domain-context"
-                                        value={note.domainContext}
-                                        onChange={(event) => onDomainContextChange?.(event.target.value as DomainContext | "")}
-                                        disabled={isCopying}
-                                        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                                    >
-                                        <option value="">Automatic — based on the program</option>
-                                        {DOMAIN_CONTEXT_OPTIONS.map((option) => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-foreground/60">
-                                        {applicableProgramIds.length > 1
-                                            ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
-                                            : "Required when this note applies to more than one program."}
-                                    </p>
-                                </div>
+                        <div className="space-y-2">
+                            <label htmlFor="note-domain-context" className="text-sm font-medium text-foreground">
+                                Domain Context {applicableProgramIds.length > 1 ? <span className="text-red-500" aria-hidden="true">*</span> : "(optional)"}
+                            </label>
+                            <select
+                                id="note-domain-context"
+                                value={note.domainContext}
+                                onChange={(event) => onDomainContextChange?.(event.target.value as DomainContext | "")}
+                                disabled={isCopying}
+                                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                            >
+                                <option value="">Automatic — based on the program</option>
+                                {DOMAIN_CONTEXT_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-foreground/60">
+                                {applicableProgramIds.length > 1
+                                    ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
+                                    : "Required when this note applies to more than one program."}
+                            </p>
+                        </div>
 
-                                <div className="space-y-2">
-                                    <label htmlFor="note-learner-level" className="text-sm font-medium text-foreground">
-                                        Authored Depth (optional)
-                                    </label>
-                                    <select
-                                        id="note-learner-level"
-                                        value={note.learnerLevel}
-                                        onChange={(event) => onLearnerLevelChange?.(event.target.value as LearnerLevel | "")}
-                                        disabled={isCopying}
-                                        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                                    >
-                                        <option value="">Automatic — based on the reader</option>
-                                        {LEARNER_LEVEL_OPTIONS.map((option) => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-foreground/60">
-                                        Sets how deeply this note is written, independent of who reads it. A lower-level
-                                        reader gets gentler wording, never easier material.
-                                    </p>
-                                </div>
-                        </>
+                        <div className="space-y-2">
+                            <label htmlFor="note-learner-level" className="text-sm font-medium text-foreground">
+                                Authored Depth (optional)
+                            </label>
+                            <select
+                                id="note-learner-level"
+                                value={note.learnerLevel}
+                                onChange={(event) => onLearnerLevelChange?.(event.target.value as LearnerLevel | "")}
+                                disabled={isCopying}
+                                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                            >
+                                <option value="">Automatic — based on the reader</option>
+                                {LEARNER_LEVEL_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-foreground/60">
+                                Sets how deeply this note is written, independent of who reads it. A lower-level
+                                reader gets gentler wording, never easier material.
+                            </p>
+                        </div>
                     </div>
                 </fieldset>
             ) : null}

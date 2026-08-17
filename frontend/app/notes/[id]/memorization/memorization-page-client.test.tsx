@@ -32,7 +32,6 @@ const readyNote = {
   title: "Biology Review",
   subject: "Biology",
   courseProgram: "STEM",
-  targetProfileType: "STUDENT" as const,
   tags: [],
   content: "Cell notes",
   visibility: "PRIVATE" as const,
