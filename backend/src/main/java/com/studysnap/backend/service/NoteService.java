@@ -1478,13 +1478,7 @@ public class NoteService {
     }
 
     private NoteTargetProfileType mapOwnerProfileTypeToNoteTarget(ProfileType profileType) {
-        if (profileType == ProfileType.BOARD_EXAM) {
-            return NoteTargetProfileType.BOARD_TAKER;
-        }
-        if (profileType == ProfileType.PROFESSIONAL) {
-            return NoteTargetProfileType.PROFESSIONAL;
-        }
-        return NoteTargetProfileType.STUDENT;
+        return NoteTargetProfileType.forOwnerProfile(profileType);
     }
 
     private NoteResponse mapToResponse(NoteEntity entity, StudyPackEntity studyPack) {

@@ -14,6 +14,9 @@ import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
+import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackDraftEntity;
@@ -88,6 +91,7 @@ public class StudyPackService {
     private final StudyPackRepository studyPackRepository;
     private final StudyPackDraftRepository studyPackDraftRepository;
     private final NoteRepository noteRepository;
+    private final UserRepository userRepository;
     private final OcrService ocrService;
     private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
@@ -751,9 +755,22 @@ public class StudyPackService {
         note.setStatus(NoteStatus.GENERATED);
         note.setVisibility(NoteVisibility.PRIVATE);
         note.setSourceNoteId(null);
+        note.setTargetProfileType(resolveTargetProfileType(ownerUserId));
         note.setCreatedAt(OffsetDateTime.now());
         note.setUpdatedAt(OffsetDateTime.now());
         return noteRepository.save(note);
+    }
+
+    // notes.target_profile_type is NOT NULL with no database default, so this path has to supply a
+    // value even though nothing reads the column any more (Target Audience was removed from every
+    // product surface in v0.83.0 and the column survives only as migration evidence until phase 4).
+    // Derived rather than hardcoded because SPEC.md documents the contract as "derives a constrained
+    // non-null value from the owner's profile"; a constant would write an audience the owner never
+    // chose. Missing owner falls through to the same STUDENT default the mapping already uses.
+    private NoteTargetProfileType resolveTargetProfileType(UUID ownerUserId) {
+        return NoteTargetProfileType.forOwnerProfile(
+                userRepository.findById(ownerUserId).map(UserEntity::getProfileType).orElse(null)
+        );
     }
 
     private StudyPackResponse mapToResponse(
