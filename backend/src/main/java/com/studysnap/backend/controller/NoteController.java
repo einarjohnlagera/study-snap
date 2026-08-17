@@ -37,6 +37,7 @@ import com.studysnap.backend.dto.CopyOnSignupResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -589,6 +590,7 @@ public class NoteController {
             @RequestParam(value = "tag", required = false) List<String> tags,
             @RequestParam(value = "courseProgram", required = false) String courseProgram,
             @RequestParam(value = "creator", required = false) String creator,
+            @RequestParam(value = "level", required = false) String level,
             @RequestParam(value = "size", required = false) Integer size,
             @RequestParam(value = PAGE_REQUEST_PARAM, required = false) Integer page,
             @RequestParam(value = PAGE_SIZE_REQUEST_PARAM, required = false) Integer pageSize,
@@ -606,6 +608,7 @@ public class NoteController {
                 tags,
                 courseProgram,
                 creator,
+                LearnerLevel.fromString(level),
                 size == null ? null : Math.clamp(size, PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE),
                 paginated
                         ? Math.clamp(
@@ -631,6 +634,11 @@ public class NoteController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return noteService.getPublicLibraryDiscoverySections(user == null ? null : user.userId());
+    }
+
+    @GetMapping("/public/learner-levels")
+    public List<LearnerLevel> listPublicLearnerLevels() {
+        return noteService.listPublicLearnerLevels();
     }
 
     @GetMapping("/public/{id}")

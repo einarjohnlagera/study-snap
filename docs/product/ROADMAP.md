@@ -347,10 +347,11 @@ Kicked off 2026-08-17, cut from `main` after `v0.82.0` merged and deployed the s
 1. **Remove the Public Library discovery surface** — the `target_profile_type` WHERE clause in `PublicLibraryRepositoryImpl`, the `PublicLibraryFilterCriteria` field, the filter chips, and `?audience=` parsing/building in `public-library-url.ts`.
 2. **Remove authoring and display** — bulk generation dropdown, note editor field, note detail display, the four DTO fields, onboarding's `mapProfileTypeToNoteTargetProfile` write, and the private Library's unused projection.
 3. **Documentation** — `ADR-001`, `docs/features/notes.md`, `docs/features/public-library.md`, `SPEC.md`, GPT context modules, re-read against the **final** code state rather than per-PR.
+4. **Replace the retired discovery facet with Authored Depth** — tolerant `?level=` filtering on `notes.learner_level`, with chips populated only from distinct non-null depths present on public notes.
 
-### The one open decision, carried rather than assumed
+### Authored Depth replacement decision — resolved 2026-08-17
 
-**Removing the audience filter leaves student-level material with an empty depth filter**, because `V117` deliberately left `STUDENT` depth NULL — it spans four real depths and guessing defeats the purpose. **This is a product regression, not bookkeeping.** ⚠️ **The repo contradicts itself on its size:** the killed `V118` audit reported zero eligible notes *"because curators had already authored those depths by hand"* (implying student material does carry depth), while the reversal doc records *"the 6 curator `High School` NULL-depth notes are all `STUDENT`"* (implying it does not). Both cannot be true. **Sizing query is in `docs/claude-plans/v0.82.0-post-deploy-narrowing.sql`; the decision is made on that number** — accept the regression with a dated curator-classification follow-up, or classify before removing the chips. **This is not a re-proposal of `V118`**, which was audited and killed; it sizes a product decision and writes nothing.
+The production read found 120 curator-owned public notes formerly classified as `STUDENT`: 26 `JUNIOR_HIGH`, 11 `SENIOR_HIGH`, 3 `GRADE_SCHOOL`, and 80 with NULL Authored Depth. Owner decision: ship the replacement filter before signoff. It restores the cross-program depth-filter mechanism but not full coverage; the 80 NULL-depth notes remain outside every depth-filtered result until curators classify them. This does not revive the killed `V118` backfill and writes no depth.
 
 ### Explicitly out of scope — anti-drift
 

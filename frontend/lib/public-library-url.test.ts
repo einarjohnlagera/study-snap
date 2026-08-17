@@ -14,6 +14,14 @@ describe("public-library-url creator filter", () => {
     });
   });
 
+  it("parses and builds the authored depth query param", () => {
+    expect(parsePublicLibraryFilters("?level=JUNIOR_HIGH")).toMatchObject({
+      level: "JUNIOR_HIGH",
+    });
+    expect(buildPublicLibraryUrl({ level: "JUNIOR_HIGH" }))
+      .toBe("/public/library?level=JUNIOR_HIGH");
+  });
+
   it.each(["most_copied", "recommended"] as const)("preserves the %s backend sort key", (sort) => {
     expect(parsePublicLibraryFilters(`?sort=${sort}`)).toMatchObject({ sort });
     expect(buildPublicLibraryUrl({ sort })).toBe(`/public/library?sort=${sort}`);

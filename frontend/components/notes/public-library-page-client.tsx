@@ -27,15 +27,17 @@ import {
   listCoursePrograms,
   listNotes,
   listPublicLibraryDiscoverySections,
+  listPublicLearnerLevels,
   listPublicNotes,
   listPublicStudyPlans,
   listSubjects,
   listTags,
   type NoteCollectionSummary,
+  type LearnerLevel,
   type NoteListItemResponse,
   type PublicLibraryDiscoverySectionsResponse,
 } from "@/lib/api";
-import { normalizeCourseProgram } from "@/lib/learning-profile";
+import { LEARNER_LEVEL_OPTIONS, normalizeCourseProgram } from "@/lib/learning-profile";
 import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicCreatorOrProfilePath, buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { getBrowsingCardClassName } from "@/lib/clickable-card";
@@ -87,7 +89,7 @@ type PublicLibrarySortOption =
   | "TITLE_ASC";
 
 type PublicLibrarySourceFilter = "BY_YOU" | "OFFICIAL" | "COMMUNITY";
-type PublicLibraryFilterKey = "courseProgram" | "ready" | "search" | "source" | "subject" | "tags";
+type PublicLibraryFilterKey = "courseProgram" | "learnerLevel" | "ready" | "search" | "source" | "subject" | "tags";
 
 const PUBLIC_SORT_LABELS: Record<PublicLibrarySortOption, string> = {
   RECOMMENDED: "Recommended",
@@ -131,10 +133,20 @@ function resolveDiscoveryView(value: string | null): PublicLibraryDiscoveryView 
   return null;
 }
 
+function resolveLearnerLevel(value: string | null | undefined): LearnerLevel | null {
+  const normalized = value?.trim().toUpperCase();
+  return LEARNER_LEVEL_OPTIONS.find((option) => option.value === normalized)?.value ?? null;
+}
+
+function getLearnerLevelLabel(value: LearnerLevel) {
+  return LEARNER_LEVEL_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
 function hasUrlFilterCriteria(filters: PublicLibraryUrlFilters): boolean {
   return Boolean(
     filters.courseProgram
     || filters.creator
+    || resolveLearnerLevel(filters.level)
     || filters.search
     || filters.subject
     || (filters.tags?.length ?? 0) > 0,
@@ -491,6 +503,7 @@ export function PublicLibraryPageClient({
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
+  const [learnerLevelDraft, setLearnerLevelDraft] = useState<LearnerLevel | null>(null);
   const [courseProgramDraft, setCourseProgramDraft] = useState<string>(ALL_COURSE_PROGRAMS);
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [selectedSort, setSelectedSort] = useState<PublicLibrarySortOption>(() => (
@@ -508,6 +521,7 @@ export function PublicLibraryPageClient({
   const [courseProgramSearchQuery, setCourseProgramSearchQuery] = useState("");
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
+  const [learnerLevelSuggestions, setLearnerLevelSuggestions] = useState<LearnerLevel[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [discoverySections, setDiscoverySections] = useState<PublicLibraryDiscoverySectionsResponse>({
     featured: [],
@@ -556,6 +570,7 @@ export function PublicLibraryPageClient({
   const courseProgramDropdownRef = useRef<HTMLDivElement>(null);
 
   const activeDiscoveryView = resolveDiscoveryView(parsedUrlFilters.view);
+  const selectedLearnerLevel = resolveLearnerLevel(parsedUrlFilters.level);
   const effectiveSelectedSort = selectedSort === "NEWEST"
     && parsedUrlFilters.sort === null
     && (hasUrlFilterCriteria(parsedUrlFilters) || selectedSourceFilters.length > 0 || studyPackReadyOnly)
@@ -570,6 +585,7 @@ export function PublicLibraryPageClient({
   const buildPageRequest = useCallback((page: number) => ({
     courseProgram: parsedUrlFilters.courseProgram ?? undefined,
     creator: parsedUrlFilters.creator ?? undefined,
+    level: selectedLearnerLevel ?? undefined,
     page,
     pageSize: PUBLIC_LIBRARY_PAGE_SIZE,
     readyOnly: studyPackReadyOnly,
@@ -578,7 +594,7 @@ export function PublicLibraryPageClient({
     source: selectedSourceFilters.map((filter) => filter.toLowerCase() as "by_you" | "official" | "community"),
     subject: parsedUrlFilters.subject ?? undefined,
     tags: parsedUrlFilters.tags,
-  }), [activeDiscoveryView, effectiveSelectedSort, parsedUrlFilters.courseProgram, parsedUrlFilters.creator, parsedUrlFilters.search, parsedUrlFilters.subject, parsedUrlFilters.tags, selectedSourceFilters, studyPackReadyOnly]);
+  }), [activeDiscoveryView, effectiveSelectedSort, parsedUrlFilters.courseProgram, parsedUrlFilters.creator, parsedUrlFilters.search, parsedUrlFilters.subject, parsedUrlFilters.tags, selectedLearnerLevel, selectedSourceFilters, studyPackReadyOnly]);
 
   const loadNotes = useCallback(async () => {
     const requestToken = ++listRequestTokenRef.current;
@@ -587,10 +603,11 @@ export function PublicLibraryPageClient({
     setError(null);
     setLoadMoreError(null);
     try {
-      const [notesResult, subjectsResult, courseProgramsResult, tagsResult] = await Promise.allSettled([
+      const [notesResult, subjectsResult, courseProgramsResult, learnerLevelsResult, tagsResult] = await Promise.allSettled([
         listPublicNotes(buildPageRequest(0)),
         listSubjects("public"),
         listCoursePrograms("public"),
+        listPublicLearnerLevels(),
         listTags("public"),
       ]);
       if (requestToken !== listRequestTokenRef.current) {
@@ -605,6 +622,7 @@ export function PublicLibraryPageClient({
       setCurrentPage(notesResult.value.page ?? 0);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
+      setLearnerLevelSuggestions(learnerLevelsResult.status === "fulfilled" ? learnerLevelsResult.value : []);
       setTagSuggestions(tagsResult.status === "fulfilled" ? tagsResult.value : []);
     } catch (loadError) {
       if (requestToken === listRequestTokenRef.current) {
@@ -777,6 +795,9 @@ export function PublicLibraryPageClient({
 
   const availableSubjects = subjectSuggestions;
   const availableCoursePrograms = courseProgramSuggestions;
+  const availableLearnerLevels = LEARNER_LEVEL_OPTIONS
+    .map((option) => option.value)
+    .filter((learnerLevel) => learnerLevelSuggestions.includes(learnerLevel));
   const availableTags = tagSuggestions;
 
   useEffect(() => {
@@ -880,6 +901,7 @@ export function PublicLibraryPageClient({
 
   useEffect(() => {
     if (filterSheetOpen) {
+      setLearnerLevelDraft(selectedLearnerLevel);
       setSubjectFilterDraft(selectedSubject);
       setTagsFilterDraft(selectedTags);
       setCourseProgramDraft(selectedCourseProgram);
@@ -889,7 +911,7 @@ export function PublicLibraryPageClient({
       setSubjectComboOpen(false);
       setCourseProgramComboOpen(false);
     }
-  }, [filterSheetOpen, selectedCourseProgram, selectedSubject, selectedTags, studyPackReadyOnly]);
+  }, [filterSheetOpen, selectedCourseProgram, selectedLearnerLevel, selectedSubject, selectedTags, studyPackReadyOnly]);
 
   useEffect(() => {
     const timeoutId = globalThis.setTimeout(() => {
@@ -961,6 +983,7 @@ export function PublicLibraryPageClient({
     setSearchQuery("");
     setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
     setCourseProgramDraft(ALL_COURSE_PROGRAMS);
+    setLearnerLevelDraft(null);
     setSelectedSubject(ALL_SUBJECTS);
     setSubjectFilterDraft(ALL_SUBJECTS);
     setSelectedTags([]);
@@ -977,6 +1000,7 @@ export function PublicLibraryPageClient({
     replacePublicLibraryFilters({
       courseProgram: null,
       creator: null,
+      level: null,
       search: null,
       sort: null,
       subject: null,
@@ -990,6 +1014,9 @@ export function PublicLibraryPageClient({
       case "courseProgram":
         setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
         replacePublicLibraryFilters({ ...parsedUrlFilters, courseProgram: null, view: null });
+        break;
+      case "learnerLevel":
+        replacePublicLibraryFilters({ ...parsedUrlFilters, level: null, view: null });
         break;
       case "ready":
         setStudyPackReadyOnly(false);
@@ -1043,6 +1070,7 @@ export function PublicLibraryPageClient({
     const nextCourseProgram = courseProgramDraft !== ALL_COURSE_PROGRAMS ? slugifyPublicLibraryFilterValue(courseProgramDraft) : null;
     const filterChanges: Array<[PublicLibraryFilterKey, boolean]> = [
       ["courseProgram", courseProgramDraft !== selectedCourseProgram],
+      ["learnerLevel", learnerLevelDraft !== selectedLearnerLevel],
       ["subject", subjectFilterDraft !== selectedSubject],
       ["tags", tagsFilterDraft.join("\u0000") !== selectedTags.join("\u0000")],
       ["ready", studyPackReadyDraft !== studyPackReadyOnly],
@@ -1068,10 +1096,11 @@ export function PublicLibraryPageClient({
       subject: nextSubject,
       tags: nextTags,
       courseProgram: nextCourseProgram,
+      level: learnerLevelDraft,
       view: null,
     });
     setFilterSheetOpen(false);
-  }, [courseProgramDraft, parsedUrlFilters, replacePublicLibraryFilters, selectedCourseProgram, selectedSubject, selectedTags, studyPackReadyDraft, studyPackReadyOnly, subjectFilterDraft, tagsFilterDraft]);
+  }, [courseProgramDraft, learnerLevelDraft, parsedUrlFilters, replacePublicLibraryFilters, selectedCourseProgram, selectedLearnerLevel, selectedSubject, selectedTags, studyPackReadyDraft, studyPackReadyOnly, subjectFilterDraft, tagsFilterDraft]);
 
   const subjectPriorityComparator = useMemo(
     () => buildPriorityComparator(recentSubjects, EMPTY_FACET_COUNTS),
@@ -1138,6 +1167,7 @@ export function PublicLibraryPageClient({
 
   const hasActiveFilters = searchQuery.trim().length > 0
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
+    || selectedLearnerLevel !== null
     || parsedUrlFilters.creator !== null
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
@@ -1145,6 +1175,7 @@ export function PublicLibraryPageClient({
     || studyPackReadyOnly;
   const hasActiveUrlFilters = (parsedUrlFilters.search?.trim().length ?? 0) > 0
     || selectedCourseProgram !== ALL_COURSE_PROGRAMS
+    || selectedLearnerLevel !== null
     || parsedUrlFilters.creator !== null
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
@@ -1182,6 +1213,24 @@ export function PublicLibraryPageClient({
             className="text-foreground/65 hover:text-foreground"
             onClick={clearCreatorFilter}
             aria-label="Clear creator filter"
+          >
+            x
+          </button>
+        </span>
+      ) : null}
+
+      {selectedLearnerLevel ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
+          Depth: {getLearnerLevelLabel(selectedLearnerLevel)}
+          <button
+            type="button"
+            className="text-foreground/65 hover:text-foreground"
+            onClick={() => replacePublicLibraryFilters({
+              ...parsedUrlFilters,
+              level: null,
+              view: null,
+            })}
+            aria-label="Clear authored depth filter"
           >
             x
           </button>
@@ -1705,6 +1754,33 @@ export function PublicLibraryPageClient({
         )}
       >
         <div className="space-y-6">
+          {availableLearnerLevels.length > 0 || selectedLearnerLevel ? (
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Authored Depth</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={getFilterChipClassName(learnerLevelDraft === null)}
+                  onClick={() => setLearnerLevelDraft(null)}
+                  aria-pressed={learnerLevelDraft === null}
+                >
+                  All
+                </button>
+                {availableLearnerLevels.map((learnerLevel) => (
+                  <button
+                    key={learnerLevel}
+                    type="button"
+                    className={getFilterChipClassName(learnerLevelDraft === learnerLevel)}
+                    onClick={() => setLearnerLevelDraft(learnerLevel)}
+                    aria-pressed={learnerLevelDraft === learnerLevel}
+                  >
+                    {getLearnerLevelLabel(learnerLevel)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {availableCoursePrograms.length > 0 ? (
             <div className="space-y-2">
               <p className="text-sm font-medium">Course / Program</p>

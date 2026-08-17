@@ -669,6 +669,7 @@ public class NoteService {
                 tags,
                 courseProgram,
                 creator,
+                null,
                 size,
                 null,
                 null,
@@ -686,6 +687,7 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
+            LearnerLevel learnerLevel,
             Integer size,
             Integer page,
             Integer pageSize,
@@ -702,6 +704,7 @@ public class NoteService {
                     tags,
                     courseProgram,
                     creator,
+                    learnerLevel,
                     size,
                     readyOnly,
                     sources
@@ -718,6 +721,7 @@ public class NoteService {
                 tags,
                 courseProgram,
                 creator,
+                learnerLevel,
                 readyOnly,
                 sources
         );
@@ -772,6 +776,7 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
+            LearnerLevel learnerLevel,
             Integer size,
             boolean readyOnly,
             List<PublicLibrarySource> sources
@@ -782,6 +787,11 @@ public class NoteService {
             notes = noteRepository.findPublicNotes(NoteVisibility.PUBLIC, normalizedCreator);
         } else {
             notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+        }
+        if (learnerLevel != null) {
+            notes = notes.stream()
+                    .filter(note -> note.getLearnerLevel() == learnerLevel)
+                    .toList();
         }
         int total = notes.size();
         List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
@@ -805,6 +815,7 @@ public class NoteService {
                 null,
                 null,
                 List.of(),
+                null,
                 null,
                 null,
                 false,
@@ -1100,6 +1111,7 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
+            LearnerLevel learnerLevel,
             boolean readyOnly,
             List<PublicLibrarySource> sources
     ) {
@@ -1111,6 +1123,7 @@ public class NoteService {
                 normalizePublicLibraryFilterSlugs(tags),
                 normalizePublicLibraryFilterSlug(courseProgram),
                 normalizePublicLibraryCreator(creator),
+                learnerLevel,
                 readyOnly,
                 sources
         );
@@ -1194,6 +1207,11 @@ public class NoteService {
         return normalizeCoursePrograms(
                 noteCourseProgramRepository.findNamesByVisibility(NoteVisibility.PUBLIC.name())
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<LearnerLevel> listPublicLearnerLevels() {
+        return noteRepository.findLearnerLevelsByVisibility(NoteVisibility.PUBLIC);
     }
 
     @Transactional(readOnly = true)

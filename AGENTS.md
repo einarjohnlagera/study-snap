@@ -181,6 +181,7 @@ Use these skills before writing prompts, before starting new features, and after
 - Note creation derives the stored value through `mapOwnerProfileTypeToNoteTarget`: `BOARD_EXAM -> BOARD_TAKER`, `PROFESSIONAL -> PROFESSIONAL`, every other profile (including Teacher/Parent/Student) -> `STUDENT`. Do not accept a client override or hardcode a replacement constant.
 - Note update preserves the stored value; it falls back to owner-profile derivation only for a defensive legacy-null row. Do not make create and update symmetric.
 - Note copy carries the source note's stored value. Bulk generation derives once from the owner and still persists it on `bulk_generation_result`, but does not expose it in the receipt response.
+- Public Library replaces the retired audience facet with an Authored Depth equality filter on `notes.learner_level`. `?level=` must parse through tolerant `LearnerLevel.fromString`; invalid values are ignored, valid values with no matches use the standard empty state, and NULL-depth notes are excluded. Populate chips only from distinct non-null depths present on public notes, never from the full enum.
 
 ### Async Study Pack Generation Rule
 

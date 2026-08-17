@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.model.NoteListItemProjection;
 import org.springframework.data.domain.Page;
@@ -182,6 +183,15 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
               and trim(n.subject) <> ''
             """)
     List<String> findSubjectValuesByVisibility(@Param("visibility") NoteVisibility visibility);
+
+    @Query("""
+            select distinct n.learnerLevel
+            from NoteEntity n
+            where n.visibility = :visibility
+              and n.learnerLevel is not null
+            order by n.learnerLevel
+            """)
+    List<LearnerLevel> findLearnerLevelsByVisibility(@Param("visibility") NoteVisibility visibility);
 
     @Query("""
             select n.copiedFromNoteId as noteId, count(n) as copyCount
