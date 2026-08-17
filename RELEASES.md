@@ -2,7 +2,7 @@
 
 ## v0.83.2 - Anonymous Discovery Access
 
-**Status: In Progress** (kicked off 2026-08-17)
+**Status: Released** (kicked off and signed off 2026-08-17)
 
 Theme: a signed-out visitor browsing the Public Library should get the filters the page was built to give them.
 
@@ -33,6 +33,22 @@ Anti-drift: **no migration.** **Slice C is NOT in this release** and stays block
 - **Tests target the gap that allowed this, not just the symptom.** `PublicFacetAnonymousAccessSecurityIntegrationTest` asserts **reachability** rather than response bodies — deliberately, because this `@SpringBootTest` context has no schema (Flyway is disabled in tests), so a permitted request reaches the handler and then fails on `Table "NOTES" not found`. Asserting 200 would have meant hand-rolling a schema to re-test query behaviour covered elsewhere. **Verified by mutation:** removing both permit rules fails the two `scope=public` cases with `must not be rejected by Spring Security for an anonymous caller`.
 - **The overreach guard is the more important half.** Separate cases assert an anonymous `scope=mine` still returns **401** on both widened paths, and that the exemption is **GET-only**. These pass with or without the fix by design — they are not proving the fix, they are the line between a fix and a data leak, and they now fail loudly if a future change moves it.
 - **Closed a coverage gap found while widening the path: `CourseProgramController` had no unit test at all.** Added one mirroring `SubjectControllerTest`, including the unknown-scope rejection. It was the only one of the two widened controllers with no coverage of the scope gate now doing the access-control work.
+### Pre-signoff check — single `advisor()` pass, no cold agent
+
+**The full gate did not fire and neither did the narrower one.** One feature PR, zero files touched by more than one commit, two independent fixes. The prescribed check at that size is a single `advisor()` call; `v0.83.1` earned one focused cold agent because it deleted data from 13 test fixtures, and nothing here has that shape.
+
+**Feature-doc drift gate — every claim anchored to code, not to the PR that wrote it.** `navigation.md` says `/exam` renders no back link (verified: zero `BackLink` references in `app/exam/page.tsx`); `public-library.md` says all four facets load anonymously (verified: both `permitAll` rules present); both docs claim `scope=mine` stays gated (verified: `AUTHENTICATION_REQUIRED` still thrown in each controller).
+
+### Checkpoint gate — considered, nothing owed
+
+Recorded rather than skipped, since the next kickoff's step-9 scan can only detect an *overdue* checkpoint, never one that was never written. Nothing here shipped ahead of its evidence: both fixes are mutation-verified, and neither introduces a behaviour whose value is unknown.
+
+### Known limitations — carried, not silently dropped
+
+- **The security test asserts reachability, not `200`.** This `@SpringBootTest` context has no schema, so a permitted request reaches the handler and fails on `Table "NOTES" not found`. That proves the permit rule works but would also tolerate an unrelated handler failure. Accepted deliberately: asserting `200` means hand-rolling a schema to re-test query behaviour already covered by `SubjectControllerTest`, `CourseProgramControllerTest` and the pagination integration tests.
+- **Anonymous facet reads are unauthenticated and unrated-limited**, like `/tags` and `/notes/public/**` before them. No new exposure class — the same shape the Public Library already had — but the endpoint count on that footing grew by two.
+- **Slice C remains blocked on two owner decisions:** what a signed-out visitor sees on the Review Sets tab, and the `robots.ts` position. Neither is engineering work, and Slice B was dissolved at this release's kickoff, so Slice C's only remaining blockers are those decisions.
+
 - **Docs:** `docs/features/navigation.md` gains `/exam` in its no-back-link list — its omission there is why nothing contradicted the stray link — and `docs/features/public-library.md` records that all four facets load anonymously, with the GET-only and `scope=mine` constraints stated.
 
 
