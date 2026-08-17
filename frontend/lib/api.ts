@@ -4911,7 +4911,6 @@ export async function setCollectionItemOrder(
 }
 
 export async function listPublicNotes(params?: {
-  audience?: NoteTargetProfileType;
   courseProgram?: string;
   creator?: string | null;
   page?: number;
@@ -4925,9 +4924,6 @@ export async function listPublicNotes(params?: {
   tags?: string[];
 }): Promise<PublicNoteListResponse> {
   const searchParams = new URLSearchParams();
-  if (params?.audience) {
-    searchParams.set("audience", params.audience);
-  }
   if (params?.courseProgram) {
     searchParams.set("courseProgram", params.courseProgram);
   }
@@ -4965,15 +4961,8 @@ export async function listPublicNotes(params?: {
   return parseApiResponse<PublicNoteListResponse>(response, "Could not load public notes.");
 }
 
-export async function listPublicLibraryDiscoverySections(params?: {
-  audience?: NoteTargetProfileType;
-}): Promise<PublicLibraryDiscoverySectionsResponse> {
-  const searchParams = new URLSearchParams();
-  if (params?.audience) {
-    searchParams.set("audience", params.audience);
-  }
-  const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
-  const response = await fetch(buildUrl(`/notes/public/discovery-sections${query}`), {
+export async function listPublicLibraryDiscoverySections(): Promise<PublicLibraryDiscoverySectionsResponse> {
+  const response = await fetch(buildUrl("/notes/public/discovery-sections"), {
     method: "GET",
     headers: buildAuthHeaders(),
   });

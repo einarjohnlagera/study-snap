@@ -510,58 +510,50 @@ class NoteControllerTest {
     }
 
     @Test
-    void listPublic_mapsAudienceQueryToTargetProfileFilter() {
-        UUID userId = UUID.randomUUID();
-        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, NoteTargetProfileType.STUDENT, 4, null, null, false, null))
+    void listPublic_ignoresLegacyAudienceQueryAndReturnsUnfilteredResults() throws Exception {
+        AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
+        MockMvc mockMvc = buildMockMvc(routeUser);
+        when(noteService.listPublic(routeUser.userId(), "cinco", "recent", "history", List.of("mexican-history"), "nursing", CREATOR_USERNAME, 4, null, null, false, null))
                 .thenReturn(new PublicNoteListResponse(List.of(), 0));
 
-        PublicNoteListResponse response = noteController.listPublic(
-                "cinco",
-                "recent",
-                "history",
-                List.of("mexican-history"),
-                "nursing",
-                CREATOR_USERNAME,
-                "student",
-                null,
-                4,
-                null,
-                null,
-                false,
-                null,
-                user
-        );
+        mockMvc.perform(get("/notes/public")
+                        .param("search", "cinco")
+                        .param("sort", "recent")
+                        .param("subject", "history")
+                        .param("tag", "mexican-history")
+                        .param("courseProgram", "nursing")
+                        .param("creator", CREATOR_USERNAME)
+                        .param("audience", "BOARD_TAKER")
+                        .param("targetProfileType", "PROFESSIONAL")
+                        .param("size", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.total").value(0));
 
         verify(noteService).listPublic(
-                userId,
+                routeUser.userId(),
                 "cinco",
                 "recent",
                 "history",
                 List.of("mexican-history"),
                 "nursing",
                 CREATOR_USERNAME,
-                NoteTargetProfileType.STUDENT,
                 4,
                 null,
                 null,
                 false,
                 null
         );
-        assertThat(response.items()).isEmpty();
-        assertThat(response.total()).isZero();
     }
 
     @Test
     void listPublic_clampsLargeSizeBeforeDelegating() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        when(noteService.listPublic(userId, null, null, null, null, null, null, null, 50, null, null, false, null))
+        when(noteService.listPublic(userId, null, null, null, null, null, null, 50, null, null, false, null))
                 .thenReturn(new PublicNoteListResponse(List.of(), 0));
 
         PublicNoteListResponse response = noteController.listPublic(
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -576,7 +568,7 @@ class NoteControllerTest {
                 user
         );
 
-        verify(noteService).listPublic(userId, null, null, null, null, null, null, null, 50, null, null, false, null);
+        verify(noteService).listPublic(userId, null, null, null, null, null, null, 50, null, null, false, null);
         assertThat(response.items()).isEmpty();
         assertThat(response.total()).isZero();
     }
@@ -587,19 +579,8 @@ class NoteControllerTest {
         MockMvc mockMvc = buildMockMvc(routeUser);
         PublicNoteListResponse expected = new PublicNoteListResponse(List.of(), 0, 0, 50, 0L, false);
         when(noteService.listPublic(
-                routeUser.userId(),
-                null,
-                "most_copied",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                0,
-                50,
-                true,
-                List.of("BY_YOU", "OFFICIAL")
+                routeUser.userId(), null, "most_copied", null, null, null, null,
+                null, 0, 50, true, List.of("BY_YOU", "OFFICIAL")
         )).thenReturn(expected);
 
         mockMvc.perform(get("/notes/public")
@@ -615,19 +596,8 @@ class NoteControllerTest {
                 .andExpect(jsonPath("$.hasMore").value(false));
 
         verify(noteService).listPublic(
-                routeUser.userId(),
-                null,
-                "most_copied",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                0,
-                50,
-                true,
-                List.of("BY_YOU", "OFFICIAL")
+                routeUser.userId(), null, "most_copied", null, null, null, null,
+                null, 0, 50, true, List.of("BY_YOU", "OFFICIAL")
         );
     }
 
@@ -636,19 +606,8 @@ class NoteControllerTest {
         AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
         MockMvc mockMvc = buildMockMvc(routeUser);
         when(noteService.listPublic(
-                routeUser.userId(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                false,
-                null
+                routeUser.userId(), null, null, null, null, null, null,
+                null, null, null, false, null
         )).thenReturn(new PublicNoteListResponse(List.of(), 0));
 
         mockMvc.perform(get("/notes/public"))
@@ -661,19 +620,8 @@ class NoteControllerTest {
                 .andExpect(jsonPath("$.hasMore").doesNotExist());
 
         verify(noteService).listPublic(
-                routeUser.userId(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                false,
-                null
+                routeUser.userId(), null, null, null, null, null, null,
+                null, null, null, false, null
         );
     }
 
@@ -681,9 +629,8 @@ class NoteControllerTest {
     void publicDiscoverySectionsRouteResolvesToLiteralHandler() throws Exception {
         AuthenticatedUser routeUser = new AuthenticatedUser(UUID.randomUUID(), UserRole.USER, true, 1);
         MockMvc mockMvc = buildMockMvc(routeUser);
-        when(noteService.getPublicLibraryDiscoverySections(
-                routeUser.userId(), NoteTargetProfileType.BOARD_TAKER
-        )).thenReturn(new PublicLibraryDiscoverySectionsResponse(List.of(), List.of(), List.of()));
+        when(noteService.getPublicLibraryDiscoverySections(routeUser.userId()))
+                .thenReturn(new PublicLibraryDiscoverySectionsResponse(List.of(), List.of(), List.of()));
 
         mockMvc.perform(get("/notes/public/discovery-sections").param("audience", "board-taker"))
                 .andExpect(status().isOk())
@@ -691,9 +638,7 @@ class NoteControllerTest {
                 .andExpect(jsonPath("$.popular").isArray())
                 .andExpect(jsonPath("$.recent").isArray());
 
-        verify(noteService).getPublicLibraryDiscoverySections(
-                routeUser.userId(), NoteTargetProfileType.BOARD_TAKER
-        );
+        verify(noteService).getPublicLibraryDiscoverySections(routeUser.userId());
         verify(noteService, never()).getPublicById("discovery-sections", routeUser.userId());
     }
 
@@ -904,17 +849,17 @@ class NoteControllerTest {
                         List.of("Nursing")
                 )
         );
-        when(noteService.listPublic(userId, null, null, null, null, null, null, null, null, null, null, false, null))
+        when(noteService.listPublic(userId, null, null, null, null, null, null, null, null, null, false, null))
                 .thenReturn(new PublicNoteListResponse(expected, expected.size()));
 
         PublicNoteListResponse response = noteController.listPublic(
-                null, null, null, null, null, null, null, null, null, null, null, false, null, user
+                null, null, null, null, null, null, null, null, null, false, null, user
         );
 
         assertThat(response.items()).isEqualTo(expected);
         assertThat(response.total()).isEqualTo(expected.size());
         verify(noteService).listPublic(
-                userId, null, null, null, null, null, null, null, null, null, null, false, null
+                userId, null, null, null, null, null, null, null, null, null, false, null
         );
     }
 

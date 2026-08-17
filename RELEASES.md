@@ -28,7 +28,7 @@ Anti-drift: **no migration, and `notes.target_profile_type` / `bulk_generation_r
 
 ### Shipped
 
-_(nothing yet)_
+- **Public Library discovery no longer filters by Target Audience.** Removed the backend audience predicate and listing parameters, the frontend chips/state, and audience request construction. Legacy `?audience=` and `?targetProfileType=` requests are deliberately ignored and render the same unfiltered Public Library; projection reads remain temporarily intact for the independent authoring/display PR.
 
 ## v0.82.0 - Authored Depth Backfill
 

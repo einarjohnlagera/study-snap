@@ -194,10 +194,6 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         StringBuilder where = new StringBuilder(" where n.visibility = 'PUBLIC'");
         Map<String, Object> parameters = new LinkedHashMap<>();
 
-        if (criteria.targetProfileType() != null) {
-            where.append(" and n.target_profile_type = :targetProfileType");
-            parameters.put(TARGET_PROFILE_TYPE_ALIAS, criteria.targetProfileType().name());
-        }
         if (criteria.creator() != null) {
             where.append("""
                      and exists (

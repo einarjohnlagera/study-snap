@@ -200,7 +200,7 @@ class NoteServiceListProjectionIntegrationTest {
         entityManager.clear();
         SqlCaptureStatementInspector.clear();
 
-        var response = noteService.listPublic(null, null, null, null, null, null, null, null, null);
+        var response = noteService.listPublic(null, null, null, null, null, null, null, null);
 
         assertThat(response.items()).singleElement()
                 .extracting(NoteListItemResponse::contentPreview)
