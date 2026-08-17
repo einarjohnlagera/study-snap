@@ -7,6 +7,9 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
+import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ShareLinkEntity;
 import com.studysnap.backend.exception.AppException;
@@ -41,6 +44,7 @@ public class ShareService {
     private final StudyPackRepository studyPackRepository;
     private final NoteRepository noteRepository;
     private final ActivityTrackingService activityTrackingService;
+    private final UserRepository userRepository;
 
     public ShareLinkResponse createShareLink(String studyPackId, UUID ownerUserId) {
         UUID id = UuidParsingUtils.parseUuidOrThrow(studyPackId, StudyPackNotFoundException::new);
@@ -122,6 +126,11 @@ public class ShareService {
         note.setStatus(NoteStatus.GENERATED);
         note.setVisibility(NoteVisibility.PRIVATE);
         note.setSourceNoteId(source.getNoteId());
+        // NOT NULL with no database default; see NoteTargetProfileType.forOwnerProfile. Derived from
+        // the REMIXER's profile, not the source pack owner's — this is a new note owned by them.
+        note.setTargetProfileType(NoteTargetProfileType.forOwnerProfile(
+                userRepository.findById(ownerUserId).map(UserEntity::getProfileType).orElse(null)
+        ));
         if (ownerUserId.equals(source.getOwnerUserId())) {
             note.setCopiedFromNoteId(null);
             note.setCopiedFromUserId(null);

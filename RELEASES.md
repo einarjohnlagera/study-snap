@@ -27,7 +27,9 @@ Anti-drift: **no migration, and specifically no `DEFAULT` added to `notes.target
 
 ### Shipped
 
-_(nothing yet)_
+- **Note creation no longer 500s on the paths that never set `target_profile_type` (backend).** `StudyPackService.createGeneratedNote` and `ShareService.createRemixedNote` now persist a value derived from the owner's profile, restoring `/study` paste-text, image upload, confirm-text and share-remix. The owner-profile mapping moved from a `private` method on `NoteService` to `NoteTargetProfileType.forOwnerProfile(ProfileType)` — it has three call sites now — and `NoteService` delegates to it, so there is still one definition. A missing owner yields `STUDENT` rather than null, because the column is `NOT NULL`.
+- **Tests that would have caught it, verified by mutation.** Four tests assert the **persisted** value through the real paths, including a `BOARD_EXAM` owner — the case where a derivation and a hardcoded `STUDENT` visibly diverge. **All four were confirmed to fail against the unfixed code with `expected: BOARD_TAKER / but was: null`.** Asserting only that the call succeeds is the assertion shape that let the defect ship for five months, since every pre-existing fixture supplied the value by hand.
+- **All four `new NoteEntity()` sites in `backend/src/main` were audited, not just the two reported** — `NoteService` (create and copy) already set the value; the two in `StudyPackService` and `ShareService` did not. The class of bug is closed, not two instances of it.
 
 
 ## v0.83.0 - Target Audience Removal (Phase 2)

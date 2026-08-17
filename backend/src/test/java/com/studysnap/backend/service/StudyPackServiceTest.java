@@ -20,6 +20,9 @@ import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
@@ -115,6 +118,7 @@ class StudyPackServiceTest {
                 studyPackRepository,
                 studyPackDraftRepository,
                 noteRepository,
+                userRepository,
                 ocrService,
                 llmStudyPackService,
                 new StudySnapProperties(),
@@ -334,6 +338,79 @@ class StudyPackServiceTest {
     }
 
     @Test
+    void createFromText_withoutNoteId_persistsTargetProfileTypeDerivedFromTheOwner() {
+        // The /study paste-text flow: createStudyPackFromText posts {notesText} with no noteId, so
+        // resolveSourceNoteForGeneration returns null and createFromText takes the createGeneratedNote
+        // branch. That branch never set target_profile_type, which is NOT NULL with no database
+        // default, so the insert failed AFTER the LLM call had already billed quota.
+        //
+        // Assert the PERSISTED value, not merely that the call succeeds -- "it returns without
+        // throwing" is exactly the assertion shape that let this ship for five months, because every
+        // other fixture supplied the value by hand.
+        UUID userId = UUID.randomUUID();
+        UserEntity owner = new UserEntity();
+        owner.setId(userId);
+        owner.setProfileType(ProfileType.BOARD_EXAM);
+        stubTextGeneration(userId, owner);
+
+        studyPackService.createFromText(new CreateStudyPackRequest("pasted notes", null), userId);
+
+        ArgumentCaptor<NoteEntity> noteCaptor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(noteCaptor.capture());
+        // BOARD_EXAM is the discriminating case: a hardcoded STUDENT would pass a weaker assertion.
+        assertThat(noteCaptor.getValue().getTargetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER);
+    }
+
+    @Test
+    void createFromText_withoutNoteId_persistsNonNullTargetProfileTypeWhenTheOwnerCannotBeLoaded() {
+        // The column is NOT NULL, so a missing owner must still produce a valid value rather than a
+        // constraint violation.
+        UUID userId = UUID.randomUUID();
+        stubTextGeneration(userId, null);
+
+        studyPackService.createFromText(new CreateStudyPackRequest("pasted notes", null), userId);
+
+        ArgumentCaptor<NoteEntity> noteCaptor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(noteCaptor.capture());
+        assertThat(noteCaptor.getValue().getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
+    }
+
+    private void stubTextGeneration(UUID userId, UserEntity owner) {
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(generationContextResolver.resolve(userId, null)).thenReturn(
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Biology", "Subject", List.of())
+        );
+        when(llmStudyPackService.generateStudyPack(eq("pasted notes"), any(StudyPackGenerationContext.class)))
+                .thenReturn(new GeneratedStudyPackContent(
+                        "Generated title",
+                        "Generated summary",
+                        "Biology",
+                        List.of("cells"),
+                        List.of("Cell membrane"),
+                        List.of(new QuizItem(
+                                "What powers the cell?",
+                                List.of("Nucleus", "Mitochondria", "Ribosome", "Golgi body"),
+                                "Mitochondria",
+                                "Cell biology",
+                                "Mitochondria generate ATP."
+                        )),
+                        "gpt-4.1-mini",
+                        100,
+                        220,
+                        0,
+                        new BigDecimal("0.0100")
+                ));
+        when(userRepository.findById(userId)).thenReturn(Optional.ofNullable(owner));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
     void createFromText_queuesOfficialTemplateSeedForTheSavedStudyPack() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -514,6 +591,7 @@ class StudyPackServiceTest {
                 studyPackRepository,
                 studyPackDraftRepository,
                 noteRepository,
+                userRepository,
                 ocrService,
                 llmStudyPackService,
                 properties,
@@ -558,6 +636,7 @@ class StudyPackServiceTest {
                 studyPackRepository,
                 studyPackDraftRepository,
                 noteRepository,
+                userRepository,
                 ocrService,
                 llmStudyPackService,
                 properties,
@@ -637,6 +716,7 @@ class StudyPackServiceTest {
                 studyPackRepository,
                 studyPackDraftRepository,
                 noteRepository,
+                userRepository,
                 ocrService,
                 llmStudyPackService,
                 new StudySnapProperties(),
