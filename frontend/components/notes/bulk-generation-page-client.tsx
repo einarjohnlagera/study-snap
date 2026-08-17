@@ -59,7 +59,7 @@ export function BulkGenerationPageClient() {
   const isAdmin = authUser?.role === "ADMIN";
   // This selector renders only for teachers/admins, and a TEACHER profile calls these
   // "Lesson Plans" everywhere else in the app — hardcoding "Review Set" here would split
-  // the vocabulary on the one surface that audience uses most.
+  // the vocabulary on a primary curator surface.
   const collectionLabels = getCollectionLabels(authUser?.profileType);
   const nextTopicId = useRef(2);
   const [subject, setSubject] = useState("");

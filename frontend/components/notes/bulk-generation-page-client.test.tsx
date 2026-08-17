@@ -46,7 +46,6 @@ async function fillAdminForm(topicValues: string[]) {
   const courseProgramInput = screen.getByLabelText("Add a course or program");
   fireEvent.change(courseProgramInput, { target: { value: "Nursing" } });
   fireEvent.click(await screen.findByRole("option", { name: "Nursing" }));
-  // Target Audience defaults to "Student" for admin.
   topicValues.forEach((value, index) => {
     if (index > 0) {
       fireEvent.click(screen.getByRole("button", { name: "+ Add topic" }));
