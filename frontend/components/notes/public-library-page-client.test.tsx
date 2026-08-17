@@ -212,7 +212,7 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByTestId("note-count-pill")).toHaveTextContent("1 of 3 notes");
   });
 
-  it("reads the audience filter from the URL and hides any Teacher audience filter", async () => {
+  it("ignores a legacy audience URL and loads the unfiltered library", async () => {
     currentAuthUser = { id: "user-1", profileType: "STUDENT" };
     currentSearch = "?audience=student";
     (listPublicNotes as jest.Mock).mockResolvedValue(publicNoteListResponse([
@@ -226,8 +226,9 @@ describe("PublicLibraryPageClient", () => {
     render(<PublicLibraryPageClient />);
 
     expect(await screen.findByText("Student Note")).toBeInTheDocument();
-    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ audience: "STUDENT", tags: [] }));
-    expect(screen.queryByRole("button", { name: "Teacher" })).not.toBeInTheDocument();
+    expect(listPublicNotes).toHaveBeenCalledWith(expect.objectContaining({ tags: [] }));
+    expect(Object.hasOwn((listPublicNotes as jest.Mock).mock.calls[0][0], "audience")).toBe(false);
+    expect(screen.queryByText("For", { selector: "p" })).not.toBeInTheDocument();
   });
 
   it("updates the card like count when a user likes a public note", async () => {
@@ -1109,7 +1110,7 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.queryByText("Popular 5")).not.toBeInTheDocument();
     expect(screen.getByText("Recent 4")).toBeInTheDocument();
     expect(screen.queryByText("Recent 5")).not.toBeInTheDocument();
-    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledWith({ audience: undefined });
+    expect(listPublicLibraryDiscoverySections).toHaveBeenCalledWith();
   });
 
   it.each([

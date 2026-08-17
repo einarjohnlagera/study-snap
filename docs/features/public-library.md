@@ -19,7 +19,6 @@ Shareable filter URLs:
 - `/public/library?subject=history`
 - `/public/library?tag=mexican-history`
 - `/public/library?search=cinco`
-- `/public/library?audience=student`
 - `/public/library?courseProgram=nursing`
 - `/public/library?sort=recent`
 - filters may be combined, for example:
@@ -37,7 +36,7 @@ The More Filters sheet includes a `Study Pack Ready` boolean toggle. Applied sta
 
 **Backend**
 - `backend/src/main/java/com/studysnap/backend/controller/NoteController.java` — `GET /notes/public` (filter endpoint), `GET /notes/public/{id}`, `POST /notes/public/{id}/like`, `GET /notes/public/seo/{subject}/{slug}`
-- `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — `listPublic(viewerUserId, search, sort, subject, tags, courseProgram, creator, audience)`, `getPublicById`, `togglePublicNoteLike`
+- `backend/src/main/java/com/studysnap/backend/service/NoteService.java` — `listPublic(viewerUserId, search, sort, subject, tags, courseProgram, creator)`, `getPublicById`, `togglePublicNoteLike`
 - `backend/src/main/java/com/studysnap/backend/repository/NoteRepository.java` — JPQL public note query with multi-param filtering
 - `backend/src/main/java/com/studysnap/backend/util/PublicNotesScoringUtils.java` — discovery score formula (`viewCount + copyCount×3 + likeCount×2`) with 30-day age decay; `computeScore(note, now)`
 
@@ -53,7 +52,7 @@ The More Filters sheet includes a `Study Pack Ready` boolean toggle. Applied sta
 
 - Public Library back-navigation to a filtered state uses `sessionStorage` (key: `notelib_public_library_return_url`, exported as `PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY` from `frontend/lib/public-library-url.ts`) — not `?ref=` — because public note URLs are canonical SEO slugs that must not be polluted with navigation state. Any surface that navigates a visitor into a note from an inherently filtered context must call `savePublicLibraryReturnUrl()` (same file) before navigating, so `PublicLibraryBackLink` doesn't discard that context — this covers the main Public Library grid (`handleNoteNavigate`), Explore's embedded Notes tab, public note detail's two related-notes sections, and the subject-landing (`/public/library/{subject}`) and Exam Hub (`/exam/{slug}`) pages' own note grids, all via the shared `frontend/components/notes/public-library-return-link.tsx` client wrapper where needed. A note opened from Explore returns to its `/explore?tab=notes...` filter context with the label `Explore`; other filtered contexts continue returning to Public Library. Course/program-scoped cards on Exam Hub always save a `courseProgram`-filtered *Public Library* URL, never an Exam Hub URL even when one exists for that course/program. On the Exam Hub page specifically, the return URL is built from each note's own `courseProgram`, not the hub's aggregate list, since one hub can span more than one course/program (e.g. PNLE covers both "Nursing" and "Medical – Surgical Nursing").
 - Discovery mode and filter mode are **mutually exclusive** — any active filter/search/sort switches to filter mode and hides the Featured / Popular / Recent sections
-- Audience filter uses `note.targetProfileType`, never the creator's `user.profileType`
+- Legacy `?audience=` and `?targetProfileType=` query keys are ignored by `NoteController`; `public-library-url.ts` also discards `audience` while parsing/building so old shared and indexed URLs render the unfiltered library without preserving the retired key
 - The `creator` filter (v0.21.0) uses `username`, not `userId` or `displayName`
 - Do not implement "Trending this week" without windowed backend fields (`recentCopyCount`, `recentLikeCount`) — lifetime totals on recent notes is a different signal; see section H under Planned Improvements
 - Anonymous quiz sessions must not create `QuickReviewSessionEntity` rows — no backend session state until the user authenticates
@@ -105,10 +104,9 @@ The preview is read-only and does not change the Start/Continue adopt action. A 
 
 Switching from discovery to filter mode:
 - Typing in search → filter mode
-- Selecting any filter (Course, Learner Level, Subject, Tags, Source) → filter mode
+- Selecting any filter (Course / Program, Subject, Tags, Source, Study Pack Ready) → filter mode
 - Changing sort from Newest → filter mode
 - Clicking a subject chip or tag chip in the top rails → applies filter → filter mode
-- Changing the audience rail (`All`, `Student`, `Board Taker`) reloads Public Library for that note audience and updates the shareable URL
 
 Filter combobox behavior (Course/Program and Subject, shared with Private Library):
 - Focusing a combobox that already has a selection seeds the input with the current value and keeps it editable (you can backspace-refine instead of retyping); the full option list stays visible until you actually type, then it filters.
@@ -224,16 +222,14 @@ Density improvements should come from tighter section limits and focused section
 
 Public Library More Filters modal order (canonical):
 
-1. For (audience)
-2. Course / Program
-3. Subjects
-4. Popular Tags
-5. Study readiness (`Study Pack Ready`)
-6. Source
+1. Course / Program
+2. Subjects
+3. Popular Tags
+4. Study readiness (`Study Pack Ready`)
+5. Source
 
 Public Library filters:
 
-- `Audience` / note target profile
 - `Course / Program`
 - `Subject`
 - `Tags`
@@ -264,12 +260,6 @@ Facet suggestion scope after F8:
 
 Public Library browsing rails:
 
-- `Audience` is note-owned and uses:
-  - `All`
-  - `Student`
-  - `Board Taker`
-- canonical base route `/public/library` means `All`; the UI should only apply an audience filter when `?audience=` is present — **do not apply a profile-based default audience on fresh visit**
-- audience filtering must use `note.targetProfileType`, never the creator's `user.profileType`
 - `Subjects` stays single-select with `All` as the default
 - `Popular Tags` stays multi-select and should use OR logic within the tag group
 - both rails should stay on one horizontal scroll line instead of wrapping
@@ -305,7 +295,7 @@ Response shape:
 ```
 
 - The four pagination fields are nullable and omitted from legacy JSON responses.
-- In legacy mode, `items` contains the public notes after the current in-memory filters, sorting, and optional `size` clamp; `total` is captured after public-note list mapping and before in-memory `search`, `subject`, `tag`, and `courseProgram` filters. DB-level creator and audience pre-filters still apply before this baseline.
+- In legacy mode, `items` contains the public notes after the current in-memory filters, sorting, and optional `size` clamp; `total` is captured after public-note list mapping and before in-memory `search`, `subject`, `tag`, and `courseProgram` filters. The DB-level creator pre-filter still applies before this baseline.
 - In paginated mode, `items` is the requested enriched page and `totalMatching` is the post-filter count. `total` mirrors that count for response compatibility.
 - Server-side Public Library helpers unwrap `items` and continue returning `NoteListItemResponse[]` to static/SSR callers.
 
@@ -314,7 +304,6 @@ Supported query params:
 - `search`
 - `subject`
 - `tag` (repeatable)
-- `audience`
 - `courseProgram`
 - `creator` (username — filters to a single creator's public notes)
 - `size` (optional integer, clamped to 1-50 when present — limits result count; omitted means uncapped)
@@ -325,7 +314,7 @@ Supported query params:
 
 `most_copied` sorts every matching note by copies then creation time without the Popular eligibility gate. `recommended` applies the existing decay-adjusted engagement score to every matching note without the Featured eligibility gate. The gated `featured` and `popular`/`copied` keys remain available for focused discovery-section views.
 
-`GET /notes/public/discovery-sections` accepts only the optional audience/target-profile filter. It returns mutually exclusive `featured`, `popular`, and `recent` lists capped at six each: Featured is selected first, Popular excludes Featured ids, and Recent excludes both earlier sections. Its candidate scan is lean and candidate-set engagement counts are batch-loaded; full list-item enrichment runs only for the final union of at most 18 notes. The discovery homepage consumes these lists directly and preserves its existing 3/5/5 visual display limits.
+`GET /notes/public/discovery-sections` is unfiltered. It returns mutually exclusive `featured`, `popular`, and `recent` lists capped at six each: Featured is selected first, Popular excludes Featured ids, and Recent excludes both earlier sections. Its candidate scan is lean and candidate-set engagement counts are batch-loaded; full list-item enrichment runs only for the final union of at most 18 notes. The discovery homepage consumes these lists directly and preserves its existing 3/5/5 visual display limits (`NoteService.getPublicLibraryDiscoverySections`, `PublicLibraryPageClient.loadDiscoverySections`).
 
 Whole-library Public Library facet values have dedicated anonymous endpoints, independent of the currently loaded result page:
 
@@ -363,13 +352,6 @@ A dismissible discovery hint shown above the note list when no `courseProgram` f
 - Dismiss button (X) hides the card and stores dismissal in `sessionStorage` (key: `notelib_public_library_cp_cta_dismissed`); it reappears on a new browsing session
 - Hidden when `?courseProgram=` or `?creator=` is already present in the URL
 - Do not show while the note list is loading
-
-## Empty state
-
-If the selected audience category has no matching notes and no other filters are active:
-
-- show `No notes available for this category yet.`
-- show `View all notes`
 
 ## Sorting
 

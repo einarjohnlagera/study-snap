@@ -1389,7 +1389,7 @@ class NoteServiceTest {
         when(userRepository.findAllById(List.of(viewerUserId, officialOwnerUserId)))
                 .thenReturn(List.of(viewer, officialOwner));
 
-        var response = noteService.listPublic(viewerUserId, null, null, null, null, null, null, null, null);
+        var response = noteService.listPublic(viewerUserId, null, null, null, null, null, null, null);
 
         assertThat(response.total()).isEqualTo(2);
         assertThat(response.items()).hasSize(2);
@@ -1448,7 +1448,7 @@ class NoteServiceTest {
         when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(viewerUserId, List.of(likedNoteId, plainNoteId)))
                 .thenReturn(List.of(likedNoteId));
 
-        var response = noteService.listPublic(viewerUserId, null, null, null, null, null, null, null, null);
+        var response = noteService.listPublic(viewerUserId, null, null, null, null, null, null, null);
 
         assertThat(response.total()).isEqualTo(2);
         assertThat(response.items()).extracting(NoteListItemResponse::likeCount).containsExactly(12L, 0L);
@@ -1543,7 +1543,7 @@ class NoteServiceTest {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(note1, note2));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, null, null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, null, null, null, null, null, null);
 
         assertThat(result.total()).isEqualTo(2);
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Note1", "Note2");
@@ -1568,7 +1568,7 @@ class NoteServiceTest {
                 .thenReturn(java.util.stream.Stream.concat(notes.stream(), java.util.stream.Stream.of(otherProgram)).toList());
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, null, null, null, "PNLE", null, null, 4);
+        var result = noteService.listPublic(null, null, null, null, null, "PNLE", null, 4);
 
         assertThat(result.total()).isEqualTo(7);
         assertThat(result.items()).hasSize(4);
@@ -1591,7 +1591,7 @@ class NoteServiceTest {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(notes);
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, null, null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, null, null, null, null, null, null);
 
         assertThat(result.total()).isEqualTo(6);
         assertThat(result.items()).hasSize(6);
@@ -1610,7 +1610,7 @@ class NoteServiceTest {
         org.mockito.Mockito.doReturn(List.of(buildListItemProjection(retained)))
                 .when(noteRepository).findPublicLibraryListItemProjectionsByIdIn(any());
 
-        var result = noteService.listPublic(null, null, null, null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, null, null, null, null, null, null);
 
         assertThat(result.total()).isEqualTo(2);
         assertThat(result.items()).extracting(NoteListItemResponse::id)
@@ -1653,7 +1653,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(highViews, lowViews));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, "featured", null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, "featured", null, null, null, null, null);
 
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("HighScore", "LowScore");
     }
@@ -1694,7 +1694,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(olderViews, newerViews));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, "featured", null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, "featured", null, null, null, null, null);
 
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("NewerNote", "OlderNote");
     }
@@ -1732,7 +1732,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(eligibleViews, noSummaryViews));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, "featured", null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, "featured", null, null, null, null, null);
 
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Eligible");
     }
@@ -1761,7 +1761,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(manyLikes, fewLikes));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, "popular", null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, "popular", null, null, null, null, null);
 
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("ManyCopies", "FewCopies");
     }
@@ -1795,7 +1795,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(popularViews, belowViews));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, "popular", null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, "popular", null, null, null, null, null);
 
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Popular");
     }
@@ -1819,7 +1819,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(old, recent));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, "recent", null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, "recent", null, null, null, null, null);
 
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("RecentNote", "OldNote");
     }
@@ -1835,7 +1835,7 @@ class NoteServiceTest {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(note1, note2));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, "unknown_value", null, null, null, null, null, null);
+        var result = noteService.listPublic(null, null, "unknown_value", null, null, null, null, null);
 
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("First", "Second");
     }
@@ -1844,9 +1844,9 @@ class NoteServiceTest {
     void listPublic_withEmptyPublicNotes_returnsEmptyRegardlessOfSort() {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of());
 
-        assertThat(noteService.listPublic(null, null, "featured", null, null, null, null, null, null).items()).isEmpty();
-        assertThat(noteService.listPublic(null, null, "popular", null, null, null, null, null, null).items()).isEmpty();
-        assertThat(noteService.listPublic(null, null, "recent", null, null, null, null, null, null).items()).isEmpty();
+        assertThat(noteService.listPublic(null, null, "featured", null, null, null, null, null).items()).isEmpty();
+        assertThat(noteService.listPublic(null, null, "popular", null, null, null, null, null).items()).isEmpty();
+        assertThat(noteService.listPublic(null, null, "recent", null, null, null, null, null).items()).isEmpty();
     }
 
     @Test
@@ -1863,7 +1863,7 @@ class NoteServiceTest {
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
         // Case-insensitive match
-        var result = noteService.listPublic(null, null, null, "Integral Calculus", null, null, null, null, null);
+        var result = noteService.listPublic(null, null, null, "Integral Calculus", null, null, null, null);
 
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("MatchNote");
     }
@@ -1881,7 +1881,7 @@ class NoteServiceTest {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(match, noMatch));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, "cinco", null, null, null, null, null, null, null);
+        var result = noteService.listPublic(null, "cinco", null, null, null, null, null, null);
 
         assertThat(result.total()).isEqualTo(2);
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Cinco de Mayo");
@@ -1900,7 +1900,7 @@ class NoteServiceTest {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(match, noMatch));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, null, null, List.of("battle-of-puebla"), null, null, null, null);
+        var result = noteService.listPublic(null, null, null, null, List.of("battle-of-puebla"), null, null, null);
 
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Battle Notes");
     }
@@ -1925,14 +1925,14 @@ class NoteServiceTest {
                 .thenReturn(List.of(match, wrongCourseProgram, wrongTag));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, null, null, List.of("kidneys"), "nursing", null, null, null);
+        var result = noteService.listPublic(null, null, null, null, List.of("kidneys"), "nursing", null, null);
 
         assertThat(result.total()).isEqualTo(3);
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Renal Review");
     }
 
     @Test
-    void listPublic_withTargetProfileFilter_usesNoteTargetProfileType() {
+    void listPublic_returnsNotesRegardlessOfStoredTargetProfileType() {
         UUID viewerUserId = UUID.randomUUID();
         UUID studentOwnerId = UUID.randomUUID();
         UUID teacherOwnerId = UUID.randomUUID();
@@ -1949,15 +1949,16 @@ class NoteServiceTest {
         UserEntity teacherOwner = buildUser(teacherOwnerId, "teacher@example.com");
         teacherOwner.setProfileType(ProfileType.TEACHER);
 
-        when(noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, NoteTargetProfileType.BOARD_TAKER))
-                .thenReturn(List.of(boardTargetNote));
-        when(userRepository.findAllById(List.of(studentOwnerId))).thenReturn(List.of(studentOwner));
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(studentTargetNote, boardTargetNote));
+        when(userRepository.findAllById(List.of(teacherOwnerId, studentOwnerId)))
+                .thenReturn(List.of(teacherOwner, studentOwner));
 
-        var result = noteService.listPublic(viewerUserId, null, null, null, null, null, null, NoteTargetProfileType.BOARD_TAKER, null);
+        var result = noteService.listPublic(viewerUserId, null, null, null, null, null, null, null);
 
-        assertThat(result.total()).isEqualTo(1);
-        assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Board target");
-        assertThat(result.items().getFirst().targetProfileType()).isEqualTo("BOARD_TAKER");
+        assertThat(result.total()).isEqualTo(2);
+        assertThat(result.items()).extracting(NoteListItemResponse::title)
+                .containsExactly("Student target", "Board target");
     }
 
     @Test
@@ -1971,27 +1972,27 @@ class NoteServiceTest {
         otherCourseNote.setCourseProgram("Engineering");
         UserEntity owner = buildUser(ownerId, "creator@example.com");
         owner.setUsername(EXISTING_CREATOR_USERNAME);
-        when(noteRepository.findPublicNotes(NoteVisibility.PUBLIC, null, EXISTING_CREATOR_USERNAME))
+        when(noteRepository.findPublicNotes(NoteVisibility.PUBLIC, EXISTING_CREATOR_USERNAME))
                 .thenReturn(List.of(creatorNote, otherCourseNote));
         when(userRepository.findAllById(List.of(ownerId))).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, null, null, null, "nursing", EXISTING_CREATOR_USERNAME, null, null);
+        var result = noteService.listPublic(null, null, null, null, null, "nursing", EXISTING_CREATOR_USERNAME, null);
 
         assertThat(result.total()).isEqualTo(2);
         assertThat(result.items()).extracting(NoteListItemResponse::title).containsExactly("Creator note");
-        verify(noteRepository).findPublicNotes(NoteVisibility.PUBLIC, null, EXISTING_CREATOR_USERNAME);
+        verify(noteRepository).findPublicNotes(NoteVisibility.PUBLIC, EXISTING_CREATOR_USERNAME);
     }
 
     @Test
     void listPublic_withUnknownCreator_returnsEmptyList() {
         String unknownCreator = "doesnotexist";
-        when(noteRepository.findPublicNotes(NoteVisibility.PUBLIC, null, unknownCreator)).thenReturn(List.of());
+        when(noteRepository.findPublicNotes(NoteVisibility.PUBLIC, unknownCreator)).thenReturn(List.of());
 
-        var result = noteService.listPublic(null, null, null, null, null, null, unknownCreator, null, null);
+        var result = noteService.listPublic(null, null, null, null, null, null, unknownCreator, null);
 
         assertThat(result.total()).isZero();
         assertThat(result.items()).isEmpty();
-        verify(noteRepository).findPublicNotes(NoteVisibility.PUBLIC, null, unknownCreator);
+        verify(noteRepository).findPublicNotes(NoteVisibility.PUBLIC, unknownCreator);
     }
 
     // --- sort test helpers ---

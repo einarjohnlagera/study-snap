@@ -18,4 +18,13 @@ describe("public-library-url creator filter", () => {
     expect(parsePublicLibraryFilters(`?sort=${sort}`)).toMatchObject({ sort });
     expect(buildPublicLibraryUrl({ sort })).toBe(`/public/library?sort=${sort}`);
   });
+
+  it("discards a legacy audience parameter without affecting other filters", () => {
+    const parsed = parsePublicLibraryFilters("?audience=BOARD_TAKER&subject=history");
+
+    expect(parsed).toMatchObject({ subject: "history" });
+    expect(Object.hasOwn(parsed, "audience")).toBe(false);
+    expect(buildPublicLibraryUrl(parsed, "?audience=BOARD_TAKER&subject=history"))
+      .toBe("/public/library?subject=history");
+  });
 });

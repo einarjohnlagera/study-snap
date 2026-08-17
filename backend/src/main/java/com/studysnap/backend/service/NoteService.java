@@ -667,7 +667,6 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType,
             Integer size
     ) {
         return listPublic(
@@ -678,7 +677,6 @@ public class NoteService {
                 tags,
                 courseProgram,
                 creator,
-                targetProfileType,
                 size,
                 null,
                 null,
@@ -696,7 +694,6 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType,
             Integer size,
             Integer page,
             Integer pageSize,
@@ -713,7 +710,6 @@ public class NoteService {
                     tags,
                     courseProgram,
                     creator,
-                    targetProfileType,
                     size,
                     readyOnly,
                     sources
@@ -730,7 +726,6 @@ public class NoteService {
                 tags,
                 courseProgram,
                 creator,
-                targetProfileType,
                 readyOnly,
                 sources
         );
@@ -785,7 +780,6 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType,
             Integer size,
             boolean readyOnly,
             List<PublicLibrarySource> sources
@@ -793,11 +787,9 @@ public class NoteService {
         String normalizedCreator = normalizePublicLibraryCreator(creator);
         List<NoteEntity> notes;
         if (normalizedCreator != null) {
-            notes = noteRepository.findPublicNotes(NoteVisibility.PUBLIC, targetProfileType, normalizedCreator);
-        } else if (targetProfileType == null) {
-            notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+            notes = noteRepository.findPublicNotes(NoteVisibility.PUBLIC, normalizedCreator);
         } else {
-            notes = noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
+            notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
         }
         int total = notes.size();
         List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
@@ -815,10 +807,7 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(
-            UUID viewerUserId,
-            NoteTargetProfileType targetProfileType
-    ) {
+    public PublicLibraryDiscoverySectionsResponse getPublicLibraryDiscoverySections(UUID viewerUserId) {
         PublicLibraryFilterCriteria criteria = buildPublicLibraryFilterCriteria(
                 viewerUserId,
                 null,
@@ -826,7 +815,6 @@ public class NoteService {
                 List.of(),
                 null,
                 null,
-                targetProfileType,
                 false,
                 List.of()
         );
@@ -1121,7 +1109,6 @@ public class NoteService {
             List<String> tags,
             String courseProgram,
             String creator,
-            NoteTargetProfileType targetProfileType,
             boolean readyOnly,
             List<PublicLibrarySource> sources
     ) {
@@ -1133,7 +1120,6 @@ public class NoteService {
                 normalizePublicLibraryFilterSlugs(tags),
                 normalizePublicLibraryFilterSlug(courseProgram),
                 normalizePublicLibraryCreator(creator),
-                targetProfileType,
                 readyOnly,
                 sources
         );
