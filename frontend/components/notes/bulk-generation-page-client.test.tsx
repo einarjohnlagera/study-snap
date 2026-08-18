@@ -402,6 +402,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Subject/)).toHaveValue("Maternal Health");
     expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toHaveValue("NURSING");
+    expect(screen.getByText(/nursing-framed Pharmacology/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Authored Depth/)).toHaveValue("BOARD_EXAM_REVIEW");
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toHaveAttribute("aria-checked", "true");

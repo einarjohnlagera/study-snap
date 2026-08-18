@@ -1,4 +1,22 @@
-import { isSubjectSameAsDomainContext } from "./domain-context";
+import {
+  DOMAIN_CONTEXT_OPTIONS,
+  getDomainContextDescription,
+  isSubjectSameAsDomainContext,
+} from "./domain-context";
+
+describe("Domain Context descriptions", () => {
+  it("declares curator guidance for every option", () => {
+    expect(DOMAIN_CONTEXT_OPTIONS).toHaveLength(8);
+    DOMAIN_CONTEXT_OPTIONS.forEach((option) => {
+      expect(getDomainContextDescription(option.value)).toBe(option.description);
+      expect(option.description).not.toHaveLength(0);
+    });
+  });
+
+  it("stays silent while the automatic fallback is selected", () => {
+    expect(getDomainContextDescription("")).toBeNull();
+  });
+});
 
 describe("isSubjectSameAsDomainContext", () => {
   it("flags a subject that exactly matches the Domain Context label", () => {

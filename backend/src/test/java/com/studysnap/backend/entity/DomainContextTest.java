@@ -1,6 +1,8 @@
 package com.studysnap.backend.entity;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,5 +31,20 @@ class DomainContextTest {
                 "Nursing",
                 "Accountancy"
         );
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "ENGINEERING_MATHEMATICS, true",
+            "ENGINEERING_SCIENCES, true",
+            "CIVIL_ENGINEERING, true",
+            "PROFESSIONAL_PRACTICE_AND_REGULATION, true",
+            "GENERAL_EDUCATION, false",
+            "PROFESSIONAL_EDUCATION, false",
+            "NURSING, true",
+            "ACCOUNTANCY, true"
+    })
+    void declaresWhetherEachDomainContextIsQuantitative(DomainContext domainContext, boolean quantitative) {
+        assertThat(domainContext.isQuantitative()).isEqualTo(quantitative);
     }
 }

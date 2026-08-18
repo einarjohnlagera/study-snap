@@ -38,6 +38,8 @@ Subject is full-width. The remaining visible metadata uses one responsive two-co
 
 The Review Set control is a dropdown over owned collections that can accept notes; Goals are excluded. **Its label is not the literal string "Review Set" — it resolves through `getCollectionLabels(profileType)`**, so a `TEACHER` sees "Lesson Plan", a `STUDENT` "Study Plan", and an account with no profile type "Collection". The control renders only for Teacher and Admin, which is exactly the audience whose vocabulary diverges, so hardcoding a label here would split it on the surface they use most. Selecting one pre-fills an empty Authored Depth control from the collection's own or nearest inherited authored depth. It never overwrites a level the curator already chose, and no resolved collection level means no pre-fill (specifically, no `COLLEGE` default). The selected level remains visible and editable before submit. Domain Context is never inferred.
 
+When a curator selects a Domain Context, the form shows that value's covered-subject description directly below the select. The descriptions come from ADR-001's ratified eight-value taxonomy and are guidance copy only; selection, submission, and fallback behavior are unchanged.
+
 **Label vs. axis, stated once so the rest of this file reads unambiguously.** The control is labelled **`Authored Depth`** (`v0.75.0` item 4, `ADR-001` constraint 4). The axis it writes is still `notes.learner_level` and is still called **Note Learner Level** in `ADR-001`, `AGENTS.md`, and the API contract below — **the rename is copy-only and the column did not move.**
 
 **Authored Depth pre-fills, in precedence order** (`ADR-001`'s chain is Review Set → author profile → explicit override):
