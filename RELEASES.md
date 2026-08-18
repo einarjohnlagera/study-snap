@@ -1,5 +1,41 @@
 # RELEASES.md - NoteLib
 
+## v0.86.0 - Generation Recovery
+
+**Status: In Progress**
+
+Theme: a Study Pack generation that dies mid-flight should be recoverable by the learner, not stuck forever.
+
+### The defect
+
+A note is stamped `GENERATING` and committed **before** its generation task is dispatched (`StudyPackService:209-211`, then `dispatchAfterCommit`). If that task never finishes, the row stays `GENERATING` — and **the learner can never get out of it**, because `resolveSourceNoteForGeneration:622` throws a 409 `NOTE_GENERATION_IN_PROGRESS` on every subsequent generate attempt, and **no `@Scheduled` job sweeps stale rows** (11 scheduled jobs exist; none touches note generation state). Only a manual DB write clears it. Dates to `2802fab3` (2026-04-08), the commit that introduced async generation and widened `ck_notes_status` to carry `GENERATING`.
+
+**Deploy is the most frequent trigger, not the only one.** `studyPackGenerationTaskExecutor` (`AppConfig:52`) sets **no** `waitForTasksToCompleteOnShutdown`, so Spring's `ExecutorConfigurationSupport` calls `shutdownNow()` — the queue is discarded and running tasks are interrupted. `main` auto-deploys on merge, so every release does this. But a crash, an OOM, a SIGKILL, or a `TaskRejectedException` on queue overflow (capacity 100, core pool 3) produce the **identical** unrecoverable row. That is the coverage argument for making recovery the fix rather than a shutdown hook.
+
+**⚠️ `analyticsTaskExecutor` right above it already carries the drain treatment** (`v0.80.0`), with a comment naming this exact auto-deploy mechanism. **Do not transfer that pattern here** — see anti-drift.
+
+Cost to the learner: the note shows a spinner forever, `library/page.tsx:840` keeps an unbounded `listNoteStatuses` poll alive for as long as the page is open, and the OpenAI call — if the task had started — was billed. Quota is the one thing **not** lost: `incrementStudyPackGeneration` fires only inside `saveStudyPack`, so an interrupted generation consumes none.
+
+### Planned Scope
+
+- **Stale-generation sweeper (backend).** A scheduled job that resolves notes stuck in `GENERATING` past a bounded age to `FAILED` — the state the existing **Retry Generation** button (`private-note-detail-page-client.tsx:404`) already acts on. Age-threshold based, so it is correct regardless of instance count and covers deploy, crash, SIGKILL, rejection and datasource-closed-mid-task alike.
+- **A real clock for that sweeper (backend + migration).** `notes.updated_at` cannot serve — `NoteService` writes it on ordinary note edits, so an edit during generation would reset the sweeper's clock. Needs a dedicated timestamp stamped when the task **starts**, not when it is enqueued: `NoteBulkGenerationService:323` enqueues in a loop, and with core pool 3 a note deep in the queue legitimately sits `GENERATING` for a long time before its first LLM call.
+- **Threshold anchored to a measured bound, not a guess.** `OpenAiLlmConfig:26` sets a **180s read timeout** per LLM call, so one generation is bounded by a small multiple of that. Sized against production first: `docs/claude-plans/v0.86.0-stuck-generation-sizing.sql` (current `GENERATING` count, age distribution, curator vs learner ownership). The age distribution picks the number empirically; the count decides whether a one-time data fix for already-stuck rows is owed in scope.
+- **Sweeper observability (backend).** The threshold is a guess until observed, so the job must emit a per-run reclaim count and age, designed in rather than bolted on — this release owes a `[CHECKPOINT]` and `v0.83.0` was reduced to raw DB reads because its surface emitted nothing.
+
+### Anti-drift
+
+- **No auto-regeneration, ever.** The sweeper resolves a row to `FAILED`; it never re-dispatches. The Study Pack versioning rule requires explicit user confirmation for every regeneration.
+- **⚠️ Do NOT copy the `analyticsTaskExecutor` drain onto the generation executors.** Verify the mechanism before proposing it: with `waitForTasksToCompleteOnShutdown(true)` the executor calls `shutdown()`, not `shutdownNow()` — the **entire queue runs to completion**, uninterrupted, while `awaitTerminationSeconds` bounds only how long shutdown *blocks*. Up to 100 queued 60–180s LLM calls would then bill OpenAI and persist nothing against a closing datasource, and `markNoteGenerationFailed` would fail too. That is a regression. Analytics works because 500 fast DB inserts finish inside 20s; generation is not that shape. `v0.81.0`'s `REQUIRES_NEW` is the in-repo scar for shipping the obvious-looking concurrency fix.
+- **No quota refund path.** Nothing was charged — `incrementStudyPackGeneration` is inside `saveStudyPack`. Do not invent a refund for a charge that was never made.
+- **No `REQUIRES_NEW`** anywhere in this release.
+- **Quiz-session statuses are NOT in scope until sized.** `LongExamService:169`, `ExamQuestionPoolService:210`, Adaptive Practice, Interview Practice and Challenge Quiz share the same executors and the same stuck shape. Decide on the production numbers; record whatever is excluded as a Known Limitation rather than leaving it silent.
+- **The Official Challenge Quiz template seed is declared out of scope** — it is genuinely best-effort and its loss is invisible to the learner.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.85.0 - Domain Signal Integrity
 
 **Status: Released** (kicked off 2026-08-17, signed off 2026-08-18)

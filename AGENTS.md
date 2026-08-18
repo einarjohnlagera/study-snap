@@ -7,7 +7,9 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.85.0 - Domain Signal Integrity` (Released); previous: `v0.84.0 - Public Explore` (Released)
+- `v0.86.0 - Generation Recovery` (In Progress); previous: `v0.85.0 - Domain Signal Integrity` (Released)
+
+**⚠️ `v0.86.0` fixes stuck `GENERATING` notes with an age-threshold recovery sweeper, NOT a shutdown drain.** Copying `analyticsTaskExecutor`'s `waitForTasksToCompleteOnShutdown(true)` onto the generation executors is a regression: it runs the entire queue uninterrupted, billing up to 100 LLM calls against a closing datasource. The sweeper marks `FAILED` and never re-dispatches — Study Packs never auto-regenerate.
 
 **⚠️ `v0.83.0` removes Target Audience from authoring and Public Library discovery but does NOT drop `notes.target_profile_type`.** The column is `V117`'s input and `[CHECKPOINT — due 2026-09-16]` cannot run without it; the drop waits on that report. No migration ships in `v0.83.0`. Target Audience must never become a runtime depth fallback.
 
