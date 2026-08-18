@@ -191,21 +191,22 @@ where s.status in ('GENERATING', 'PAUSED', 'IN_PROGRESS')
 group by 1, 2
 order by 1, 2;
 
--- 6c — How much is the stuck-pool cost recurring rather than one-off?
--- A stuck pool degrades every exam start on that Study Pack to on-demand LLM
--- generation. This shows whether those 18 packs are ones learners actually use.
+-- 6c — CORRECTED 2026-08-18. The first version used min(id) on a uuid column, and PostgreSQL
+-- has no min() for uuid: "ERROR: function min(uuid) does not exist". Counting distinct
+-- study_pack_id in a plain join needs no aggregate over the id at all.
+--
+-- How much is the stuck-pool cost recurring rather than one-off? A stuck pool degrades every
+-- exam start on that Study Pack to on-demand LLM generation, so this shows whether the affected
+-- packs are ones learners actually use.
 select
     p.generation_status,
-    count(*)                                       as pools,
-    count(*) filter (where s.id is not null)       as pools_with_sessions,
-    sum(coalesce(s.session_count, 0))              as total_sessions_on_those_packs
+    count(distinct p.study_pack_id)                          as packs,
+    count(distinct s.id) filter (where s.id is not null)     as exam_sessions_on_those_packs,
+    count(distinct s.user_id) filter (where s.id is not null) as learners_affected
 from exam_question_pool p
-left join (
-    select study_pack_id, count(*) as session_count, min(id) as id
-    from quick_review_sessions
-    where session_mode in ('LONG_EXAM', 'BOARD_EXAM')
-    group by study_pack_id
-) s on s.study_pack_id = p.study_pack_id
+left join quick_review_sessions s
+       on s.study_pack_id = p.study_pack_id
+      and s.session_mode in ('LONG_EXAM', 'BOARD_EXAM')
 where p.generation_status <> 'READY'
-group by 1
-order by 1;
+group by p.generation_status
+order by p.generation_status;

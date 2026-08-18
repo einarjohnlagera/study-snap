@@ -3,7 +3,7 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.86.0 (Released) - 2026-08-18. **`v0.86.0` added an age-based recovery sweep for generation work stranded in a non-terminal status** — 18 exam question pools (oldest 6.5 weeks) and 1 Long Exam session were permanently stuck in production, because the code that would restart them refuses while the row still reads `PENDING`/`GENERATING` and nothing swept them. Stale rows now resolve to `FAILED`, which the existing next-use refresh and Retry paths already recover from; **recovery never re-dispatches, never auto-regenerates, and never touches quota**. **⚠️ The note half is PROSPECTIVE — production had ZERO stuck notes; do not describe it as a backlog.** Previously v0.85.0.
+> Last updated: v0.86.0 (Released) - 2026-08-18. **`v0.86.0` added an age-based recovery sweep for generation work stranded in a non-terminal status** — 37 exam question pools (18 `GENERATING` + 19 `PENDING`, corrected 2026-08-18) (oldest 6.5 weeks) and 1 Long Exam session were permanently stuck in production, because the code that would restart them refuses while the row still reads `PENDING`/`GENERATING` and nothing swept them. Stale rows now resolve to `FAILED`, which the existing next-use refresh and Retry paths already recover from; **recovery never re-dispatches, never auto-regenerates, and never touches quota**. **⚠️ The note half is PROSPECTIVE — production had ZERO stuck notes; do not describe it as a backlog.** Previously v0.85.0.
 
 ---
 
