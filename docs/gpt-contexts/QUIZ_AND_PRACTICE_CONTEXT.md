@@ -2,7 +2,7 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **quiz modes, exam simulation, or practice mechanics**.
-> Last updated: v0.81.0 - 2026-08-16. **`v0.81.0` touched the Challenge question bank:** saved questions
+> Last updated: v0.85.0 - 2026-08-18. **`v0.85.0` changed how a quiz prompt decides to ask computation questions.** Whether a note counts as quantitative is now **declared** by its Domain Context rather than guessed by substring-matching 49 English keywords against the domain's own display label — a mechanism under which `Accountancy` failed to match, because the keyword is `accounting`. The keyword scan still runs, unchanged, over subject, tags, concept hints and summary, and for any note with no Domain Context. **The declared check only ever ADDS: `false` means "fall through to the scan", never "never quantitative".** **⚠️ Impact is prospective — it changes no existing note's prompt**, because it fires only on classified notes and classification is at 12.7%. **Do not propose lengthening the keyword list**; that is the guess this replaced. Previously v0.81.0 - 2026-08-16. **`v0.81.0` touched the Challenge question bank:** saved questions
 > are now unique per `(user, Study Pack, question, learner_level)`, so an authored-depth correction keeps
 > the old-level rows alongside the new instead of colliding; rows with a NULL level — permanently
 > unclaimable, because the resolution chain never yields null — were stamped from the pack's note level.

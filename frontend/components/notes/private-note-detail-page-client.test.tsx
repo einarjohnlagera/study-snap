@@ -747,8 +747,11 @@ describe("PrivateNoteDetailPageClient", () => {
     const learnerLevelSelect = screen.getByLabelText("Authored Depth (optional)");
     expect(domainContextSelect).toHaveValue("NURSING");
     expect(learnerLevelSelect).toHaveValue("COLLEGE");
+    expect(screen.getByText(/nursing-framed Pharmacology/)).toBeInTheDocument();
 
     fireEvent.change(domainContextSelect, { target: { value: "ENGINEERING_MATHEMATICS" } });
+    expect(screen.getByText(/Engineering Economics/)).toBeInTheDocument();
+    expect(screen.queryByText(/nursing-framed Pharmacology/)).not.toBeInTheDocument();
     fireEvent.change(learnerLevelSelect, { target: { value: "BOARD_EXAM_REVIEW" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 

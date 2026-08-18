@@ -1631,6 +1631,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private boolean isQuantitativeContext(StudyPackGenerationContext context, List<String> conceptHints, String summary) {
+        if (context != null && context.domainContext() != null && context.domainContext().isQuantitative()) {
+            return true;
+        }
+
         StringBuilder haystack = new StringBuilder();
         if (context != null) {
             String authoringDomain = StudyPackGenerationContextResolver.effectiveAuthoringDomain(context);

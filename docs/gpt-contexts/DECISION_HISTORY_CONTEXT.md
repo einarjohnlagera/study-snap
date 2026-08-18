@@ -2,7 +2,27 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **a question that may already have been settled — read before reopening one**.
-> Last updated: v0.73.0 - 2026-08-12
+> Last updated: v0.85.0 - 2026-08-18. Adds the **Domain Context Catalog** decline (2026-08-17), which is the single most likely thing to be re-proposed from this span. Previously v0.73.0 - 2026-08-12.
+
+---
+
+## Domain Context Catalog — DECLINED 2026-08-17, on production evidence
+
+**This is the one most likely to come back, because the motivating experience is real and recurring.** The owner hit it while building a Civil Engineering Review Set: *where does an* **Engineering Economics** *note go?* The proposal was to make Domain Context an admin-managed catalog — still curated, still closed to learners — so new values could be added without a code change. Its own framing: *"My goal is not to make Domain Context flexible. My goal is to make it scalable while keeping it curated."*
+
+**A cold-context agent assessed it and recommended declining. The production read is what settled it, and it points the opposite way from the proposal's premise:**
+
+- Curator public notes are **12.7% classified** — 121 of 956. **835 carry no Domain Context at all.**
+- **Only 4 of 8 existing values have ever been used.** `ACCOUNTANCY` and `NURSING` are at **zero** — against **286 unclassified notes sitting in those exact programs**.
+- There is **one curator**. A catalog is coordination infrastructure for a problem of coordination between multiple authors.
+
+**So the taxonomy is not too small. It is unused.** Adding a management surface to a vocabulary where half the values have never been applied would build capacity for a constraint nobody has hit yet, and the notes that would populate the new values are the same notes that have not populated the old ones. **Domain Categories (a grouping layer above the 8 values) was declined on the same ground** — grouping is for navigating a vocabulary too large to scan, and eight items on one screen for one person is not that.
+
+**What the assessment found instead is the part worth remembering:** while auditing what the enum is actually responsible for, it found a **live generation-quality defect much larger than the proposal that surfaced it** — computation guidance was off for 48.4% of the public catalog because the signal was substring-matched against the domain's display **name**. That became `v0.85.0`. **A proposal being declined is not the same as the itch behind it being imaginary**; here the itch was pointing at something real, one level down.
+
+**The answer to the original question, for the record: Engineering Economics belongs to `ENGINEERING_MATHEMATICS`** — `08:57` files it there, and it is time-value-of-money math (annuities, present worth, depreciation, rate of return), a calculation subject wearing a business word. **That answer already existed in a ratified planning doc and appeared nowhere in the product**, which is why `v0.85.0` put each value's covered subjects beside the authoring select.
+
+**Reopen only on new evidence, and the evidence is named:** a second curator, or classification moving materially off 12.7% with authors hitting genuine gaps in the 8 values. **Do not reopen it as free-text Domain Context, automatic creation, or learner-editable values** — all three were out of scope in the original proposal too. Full reasoning: `docs/claude-plans/domain-context-catalog-assessment.md`; reads: `domain-context-adoption-read.sql`, `quantitative-context-coverage-read.sql`.
 
 ---
 

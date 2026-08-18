@@ -21,6 +21,8 @@ import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -349,7 +351,7 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
-    void isQuantitativeContext_usesEffectiveDomainInsteadOfLegacyProgram() throws Exception {
+    void isQuantitativeContext_usesDeclaredDomainPropertyInsteadOfLegacyProgram() throws Exception {
         StudyPackGenerationContext quantitativeDomain = new StudyPackGenerationContext(
                 LearnerLevel.COLLEGE,
                 "Nursing",
@@ -363,12 +365,114 @@ class OpenAiLlmStudyPackServiceTest {
                 ENGINEERING_MATHEMATICS_LABEL,
                 null,
                 List.of(),
-                DomainContext.NURSING,
+                DomainContext.GENERAL_EDUCATION,
                 LearnerLevel.COLLEGE
         );
 
         assertThat(invokeIsQuantitativeContext(quantitativeDomain)).isTrue();
         assertThat(invokeIsQuantitativeContext(nonQuantitativeDomain)).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DomainContext.class, names = {
+            "ENGINEERING_MATHEMATICS",
+            "ENGINEERING_SCIENCES",
+            "CIVIL_ENGINEERING"
+    })
+    void isQuantitativeContext_preservesEveryPreviouslyQuantitativeEngineeringDomain(
+            DomainContext domainContext
+    ) throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                null,
+                null,
+                List.of(),
+                domainContext,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeIsQuantitativeContext(context)).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DomainContext.class, names = {"ACCOUNTANCY", "NURSING"})
+    void declaredQuantitativeDomainsProduceComputationGuidance(DomainContext domainContext) throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                null,
+                null,
+                List.of(),
+                domainContext,
+                LearnerLevel.BOARD_EXAM_REVIEW
+        );
+
+        String guidance = invokeBuildComputationGuidance(
+                invokeIsQuantitativeContext(context),
+                "QUICK_REVIEW"
+        );
+
+        assertThat(guidance).isNotEmpty();
+    }
+
+    // Pins the DECLARED-FALSE half at the service level, which the declaration mirror in
+    // DomainContextTest cannot do: that test is a tautology against the enum, so flipping one of
+    // these to true would leave every behavioural test green. A false signal is permanent per note
+    // -- Study Packs are never auto-regenerated -- so the false half needs the same pinning as the
+    // true half.
+    @ParameterizedTest
+    @EnumSource(value = DomainContext.class,
+            names = {"GENERAL_EDUCATION", "PROFESSIONAL_EDUCATION", "PROFESSIONAL_PRACTICE_AND_REGULATION"})
+    void declaredNonQuantitativeDomainsProduceNoComputationGuidance(DomainContext domainContext) throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                null,
+                "Teaching Profession",
+                List.of(),
+                domainContext,
+                LearnerLevel.BOARD_EXAM_REVIEW
+        );
+
+        String guidance = invokeBuildComputationGuidance(
+                invokeIsQuantitativeContext(context),
+                "QUICK_REVIEW"
+        );
+
+        assertThat(guidance).isEmpty();
+    }
+
+    // The additive guarantee: declaring a domain non-quantitative must mean "fall through to the
+    // keyword scan", never "never quantitative". Parameterized across all three declared-false
+    // values rather than one, so the guarantee is not pinned by a single case.
+    @ParameterizedTest
+    @EnumSource(value = DomainContext.class,
+            names = {"GENERAL_EDUCATION", "PROFESSIONAL_EDUCATION", "PROFESSIONAL_PRACTICE_AND_REGULATION"})
+    void keywordScanStillRescuesQuantitativeSubjectUnderNonQuantitativeDomain(
+            DomainContext domainContext
+    ) throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                null,
+                "Biostatistics",
+                List.of(),
+                domainContext,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeIsQuantitativeContext(context)).isTrue();
+    }
+
+    @Test
+    void keywordScanStillUsesCourseProgramWhenDomainContextIsNull() throws Exception {
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Electrical Engineering",
+                null,
+                List.of(),
+                null,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(invokeIsQuantitativeContext(context)).isTrue();
     }
 
     @Test

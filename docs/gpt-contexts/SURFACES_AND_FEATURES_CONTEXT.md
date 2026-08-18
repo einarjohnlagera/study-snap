@@ -2,7 +2,7 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **a specific screen or feature surface, Note Collections, or the Companion**.
-> Last updated: v0.72.1 - 2026-08-11
+> Last updated: v0.85.0 - 2026-08-18. **Stamp had gone thirteen releases stale (v0.72.1) while the CONTENT was kept current** — the `v0.84.0` Explore changes below were written in without restamping, which is the drift this line exists to prevent: a reader trusts the stamp, not the body. Restamped at the `v0.85.0` signoff after re-reading the nav and Explore sections against the code. **No surface changed in `v0.85.0`** — it is a generation-signal release whose only UI change is curator-facing descriptions beside the Domain Context select on Note Editor, Bulk Generate and Note Detail.
 
 ---
 

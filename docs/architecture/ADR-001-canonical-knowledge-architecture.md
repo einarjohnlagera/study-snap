@@ -314,7 +314,7 @@ This is the clearest worked example of the rule, and it is worth preserving as o
 
 ### Domain Context governance
 
-> **Domain Contexts are expected to remain relatively stable.** Introducing a new one is an **architectural decision, not routine curriculum authoring** — it changes how the LLM is instructed to author an entire class of content, and it permanently widens a vocabulary that learners see. Treat it with the weight of a schema change: it needs an owner decision and a recorded rationale, not a curator's judgment call mid-authoring-session. **Adding notes is authoring. Adding a Domain Context is architecture.** This distinction is the primary defence against taxonomy explosion, and it is the reason the field is a curated closed set rather than free text.
+> **Domain Contexts are expected to remain relatively stable.** Introducing a new one is an **architectural decision, not routine curriculum authoring** — it changes how the LLM is instructed to author an entire class of content and permanently widens the closed vocabulary curators assign. Learners do not see this authoring vocabulary. Treat it with the weight of a schema change: it needs an owner decision and a recorded rationale, not a curator's judgment call mid-authoring-session. **Adding notes is authoring. Adding a Domain Context is architecture.** This distinction is the primary defence against taxonomy explosion, and it is the reason the field is a curated closed set rather than free text.
 >
 > A new Domain Context value may be introduced only when **both** hold: (a) there is a sustained body of canonical knowledge — as a concrete floor, **~10 or more notes already authored or firmly planned** — whose treatment cannot be accurately represented by an existing value; and (b) an explicit owner decision is recorded in this ADR's revision log. **When in doubt, reuse an existing Domain Context.**
 >
@@ -452,7 +452,7 @@ The Civil Engineering example above lists Year 1 through Year 4. `LearnerLevel` 
 - Library and Explore program facet counts will sum above the note total, because a note appears under every applicable program. This is correct and needs a UI affordance, not a fix.
 - Filter and search paths move to join/`EXISTS` semantics on a hot paginated path that already required a dedicated performance release (`v0.51.0`).
 - **This ADR does not make generated artifacts canonical.** Study Packs, question pools, and question banks remain per-`study_pack_id`, and adopted copies get their own. Canonical *knowledge* is not canonical *generation*. Cross-user pooling is Company Redefinition Phase 3b and stays separately gated.
-- Note cards display Domain Context as their single badge. Applicable Programs surface only on note detail, as a collapsed disclosure.
+- Note cards do not display Domain Context; the value remains curator-facing authoring metadata and an LLM input. Applicable Programs surface on note cards as a count and on note detail as a collapsed disclosure.
 - `notes.target_profile_type` **survives only as retained migration evidence**. It remains `NOT NULL`, constrained, indexed, readable by SQL, and written on create by `NoteService.resolveTargetProfileType`; it is absent from product requests, responses, authoring, display, discovery, and generation context. Storage retirement waits for `[CHECKPOINT — due 2026-09-16]`.
 
 **Evidence base (production, 2026-08-03).** This ADR is not taken on forecast. The vocabulary audit (`03`/`04-vocabulary-followups.sql`, results in `05-vocabulary-results.md`) established:

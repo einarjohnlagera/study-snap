@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.84.0 - Public Explore` (Released); previous: `v0.83.2 - Anonymous Discovery Access` (Released)
+- `v0.85.0 - Domain Signal Integrity` (Released); previous: `v0.84.0 - Public Explore` (Released)
 
 **⚠️ `v0.83.0` removes Target Audience from authoring and Public Library discovery but does NOT drop `notes.target_profile_type`.** The column is `V117`'s input and `[CHECKPOINT — due 2026-09-16]` cannot run without it; the drop waits on that report. No migration ships in `v0.83.0`. Target Audience must never become a runtime depth fallback.
 
@@ -998,6 +998,7 @@ Ratified 2026-07-31 (Company Redefinition Phase 4, considered and narrowed 2026-
 - All LLM calls must resolve context through `StudyPackGenerationContextResolver` (backend service).
 - Static note and Study Pack content must call the content-context builder, which calibrates depth, vocabulary, terminology, and examples from the effective Domain Context plus the note's authored level. It must never calibrate from the reader's learner level.
 - Quiz and exam prompts must call `buildLearnerContextBlock()`, which carries the effective domain and curriculum floor plus the reader's level for scaffolding only.
+- Each `DomainContext` enum value declares whether its catalog is quantitative. Treat that declaration as an additive positive signal for computation guidance; keep the existing keyword scan for quantitative subjects, tags, concepts, summaries, and the free-text course/program fallback when Domain Context is null. Do not infer a declared Domain Context's quantitative treatment from its display label, and do not map free-text program names to enum declarations.
 - Never inline raw learner-level or course/program formatting in individual prompt builders.
 - Learner level defaults to `COLLEGE` for quiz/exam prompts when the user has no saved `learnerLevel`; note and Study Pack content generation must also work when context learner level is null.
 - Course/program is omitted from the context block when the user has no saved `courseProgram`.

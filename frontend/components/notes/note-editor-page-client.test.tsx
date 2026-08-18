@@ -719,6 +719,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(screen.getByLabelText("Domain Context (optional)"), {
       target: { value: "ENGINEERING_MATHEMATICS" },
     });
+    expect(screen.getByText(/Engineering Economics/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Authored Depth (optional)"), {
       target: { value: "COLLEGE" },
     });

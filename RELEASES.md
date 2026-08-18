@@ -1,5 +1,105 @@
 # RELEASES.md - NoteLib
 
+## v0.85.0 - Domain Signal Integrity
+
+**Status: Released** (kicked off 2026-08-17, signed off 2026-08-18)
+
+Theme: the one signal that shapes how the AI writes should be declared, not guessed from a name.
+
+**Origin worth recording, because it is not where the release started.** The owner proposed a **Domain Context Catalog** on 2026-08-17 after struggling to place Engineering Economics notes while building the Civil Engineering Review Set. A cold-context agent pressure-tested it and **recommended declining it** — then, while auditing what the enum is actually responsible for, found a live generation-quality defect much larger than the proposal that surfaced it. This release is that defect.
+
+### The defect, sized against production
+
+**463 of 956 curator-owned public notes (48.4%) receive no computation guidance in their generation prompt.**
+
+`OpenAiLlmStudyPackService.isQuantitativeContext` decides this by lowercasing a haystack and **substring-matching it against 49 English keywords**, across **7 call sites**. Six quiz/exam sites include concept hints and a summary; the production sizing below models initial Study Pack generation, whose call supplies only domain, subject, and tags. The haystack leads with the Domain Context's **display label** (or `course_program` when unset), and one of the keywords is `engineering`. So coverage tracks the program's **name**, not its content:
+
+| | notes | missing guidance |
+|---|---|---|
+| Programs with "Engineering" in the name | 214 | **0 — 0%** |
+| Every other named program | 670 | **463 — 69%** |
+
+`Civil Engineering` 197/0 · `Education` 146/136 · `Architecture` 90/75 · `Nursing` 130/106 · `Accountancy` 154/60.
+
+**⚠️ The failing subjects are the computational ones**, which is what makes this a quality defect rather than a curiosity: Nursing `Pharmacology` (14 notes — dosage calculation, high-stakes on the NLE), `Maternal and Child` (14), `Medical-Surgical` (15); Accountancy `Income Tax`, `Business Tax`, `Basic` + `Advanced Taxation` (8), `Budgeting`, `Cash and Receivables`, `Investments`, `Financial Management`, `PPE`; Architecture `Structural Components`, `Building Utilities`.
+
+**⚠️ `Accountancy` is the sharpest case:** the keyword list contains `accounting`, which is not a substring of `accountancy`. The CPA licensure domain — amortization, cash flow, interest, ratios, every one of them a keyword — fails to match on its own name.
+
+**⚠️ The "subjects rescue it" defence fails.** Of ~117 rescued notes in Accountancy and Nursing, **74 (63%) are rescued only by free-text tags**. Notes that pass do so accidentally, and two notes on the same subject diverge on whether a curator happened to type a matching word.
+
+### Planned Scope
+
+1. **Replace the substring guess with a declared per-value property (backend).** Each Domain Context declares whether its material is quantitative; the null-Domain-Context `course_program` fallback keeps the existing keyword scan because it has no declared property. **⚠️ Do NOT fix this by lengthening the keyword list** — that keeps guessing, and would leave the next domain to fail on the same mechanism. The 7 call sites keep their current behaviour for every value that already matches, so this must not silently *remove* guidance anywhere.
+2. **Domain Context descriptions beside the authoring `<select>` (frontend).** The covered-subject lists already exist in `docs/claude-prompt/canonical-knowledge-architecture-out/08-…:56-67` and appear nowhere in the product — which is why the owner could not place Engineering Economics. Copy only; **zero schema**.
+3. **Two `ADR-001` factual corrections (docs).** Its claims that note cards "display Domain Context as their single badge" and that it is "a vocabulary learners see" are both false — `getDomainContextLabel` has zero call sites outside its own file, and every option-rendering surface is curator-gated.
+
+Anti-drift: **no Domain Context Catalog, no admin CRUD, no Domain Categories, no prompt-hint field, and no new enum value** — including `General Engineering`. All were assessed 2026-08-17 and declined on production evidence (12.7% classification; 4 of 8 values never used; `ACCOUNTANCY` and `NURSING` at zero against 286 unclassified notes in those programs; one curator). **The enum stays an enum**, so `@Enumerated(EnumType.STRING)` and the three `Enum.valueOf` projection paths are untouched. **No migration.** **No change to what any existing value resolves to** — `effectiveAuthoringDomain` still returns `getLabel()`, because the label is the prompt payload and changing it would rewrite what past generations were told. **Engineering Economics is filed under `Engineering Mathematics`** per `08:57`; that is a curator action, not a code change.
+
+### Shipped
+
+- **Declared quantitative Domain Context signal (backend).** All eight enum values now state their quantitative treatment at declaration time. Engineering Mathematics, Engineering Sciences, and Civil Engineering preserve their prior guidance; Professional Practice & Regulation, Nursing, and Accountancy now opt in explicitly, while General Education **and Professional Education** declare `false` and fall through to the unchanged scan (see the decision recorded below — Professional Education was delivered as `true` and corrected before commit). The unchanged 49-keyword scan remains additive for subject, tags, concepts, summary, and the null-Domain-Context program fallback, with no generation-path I/O or persistence change.
+- **Covered-subject guidance at all curator selectors (frontend).** Note Editor, Bulk Generate, and Note Detail now show the selected Domain Context's ratified covered-subject description without changing select behavior or API contracts; Engineering Economics is visibly placed under Engineering Mathematics.
+- **ADR-001 factual corrections (docs).** Corrected the claims that learners see the Domain Context vocabulary and that note cards display it. Domain Context remains curator-facing authoring metadata and an LLM input, while the binding governance conclusion remains unchanged: adding notes is authoring; adding a Domain Context is architecture.
+
+### Pre-commit audit — 2026-08-17
+
+**Both required mutations verified, and the core change is minimal and correct.** The declared-property short-circuit is four lines placed *above* the keyword scan — exactly the additive shape the scope demanded, so it cannot return `false` where the scan would return `true`. Flipping `ACCOUNTANCY` to `false` fails 2 tests; removing the keyword scan entirely fails 2 tests. **Both halves of the guarantee are pinned rather than described.** Spot-checked the rest: `effectiveAuthoringDomain` still returns `getLabel()`, `QUANTITATIVE_KEYWORDS` is unlengthened, no migration, no new I/O on the generation path, and the descriptions are faithfully transcribed from `08:57-66` rather than invented.
+
+Codex also found a **third** `ADR-001` error beyond the two named in scope: Applicable Programs surface on note cards, not "only on note detail" — verified, they are passed to cards on the Library, Dashboard community section, and public subject pages.
+
+Backend 1597 tests (up 15) · frontend 1940 tests / 184 suites · `tsc` clean · lint 0 errors.
+
+### ⚠️ Impact is PROSPECTIVE — this release changes the prompt for zero notes today
+
+**Verified after the fix landed, and it corrects how the headline number should be read.** The declared property fires only when `context.domainContext()` is non-null, and `StudyPackGenerationContextResolver` (`:43`, `:51`) populates that **solely from the note's own `domain_context` column** — there is no program→enum map. Against production:
+
+| Domain Context | notes | before | after |
+|---|---|---|---|
+| `CIVIL_ENGINEERING` | 54 | `true` (label contains *engineering*) | `true` |
+| `GENERAL_EDUCATION` | 31 | `false` | `false` (declared, falls through) |
+| `ENGINEERING_MATHEMATICS` | 20 | `true` | `true` |
+| `ENGINEERING_SCIENCES` | 16 | `true` | `true` |
+| *(unclassified)* | **835** | keyword scan | **keyword scan, unchanged** |
+| `ACCOUNTANCY`, `NURSING`, `PROFESSIONAL_PRACTICE_AND_REGULATION`, `PROFESSIONAL_EDUCATION` | **0** | — | — |
+
+**Every enum value in production use already matched the keyword scan on its own label; every value that newly opts in has zero notes.** So `isQuantitativeContext` returns an identical result for all 956 curator public notes. **The 463 do not move on deploy, and the Shipped bullet above was corrected because it read as though they would.**
+
+**This is not a defect in the fix — it is the fix's boundary, and it names the real constraint.** The guess is gone and cannot mis-fire on the next domain, which is the architectural win. But guidance reaches a note only once a curator classifies it, and classification sits at **12.7% (121 of 956)**. **What actually changed is that classification became a lever:** before this release, setting a note to `ACCOUNTANCY` did nothing for computation guidance, so there was no generation-quality reason to classify. Now there is.
+
+**The 463 therefore close by curator classification, not by more code** — and deliberately not by lengthening `QUANTITATIVE_KEYWORDS` (which would restore the guess) nor by declaring `quantitative` on the `course_program` catalog row, which would repeat the `PROFESSIONAL_EDUCATION` mistake at program scale: `Nursing` and `Architecture` are mixed catalogs where the computational subjects are a minority of a program whose other notes would inherit a false signal. Owed as `[CHECKPOINT — due 2026-09-17]`.
+
+### `PROFESSIONAL_PRACTICE_AND_REGULATION` is declared `false` — found by the cold-context pressure test
+
+**An asymmetry, not a bug, and the pressure test's most useful finding.** PPR is one of **three** values whose display label matched no keyword before this release — alongside `NURSING` and `ACCOUNTANCY` — so it flips to a genuinely new `true`. This release wrote a careful ~10-line justification for declaring each Education value `false`, established the rule that *a false signal is permanent per note* because Study Packs never auto-regenerate, and then **applied no equivalent test to PPR at all.** Its only appearance was a Shipped bullet lumping it with Nursing and Accountancy.
+
+`08:59` defines PPR as *Engineering Laws / Ethics / Contracts, Architecture's Professional Practice, Building Laws, BP 344* — a legal and regulatory catalog. **The counter-case is real and is recorded rather than dismissed:** architectural professional practice includes fee and area computation, and accessibility law carries dimensional requirements. Neither reading is settleable from evidence, because the value has **zero production notes**.
+
+**So it takes the default that is a no-op.** `false` falls through to the untouched keyword scan — exactly today's behaviour, incapable of regressing. `true` is a new signal asserted without evidence, on a value nobody has used. **One character reverses it** if the owner reads that catalog the other way; this is a defensible product judgment, not a defect, and it is written down here precisely so it can be revisited rather than inherited silently.
+
+### The two Education values are declared `false`, deliberately
+
+The scope left `GENERAL_EDUCATION` and `PROFESSIONAL_EDUCATION` to judgment. **Both are `false`, and the reason is the same one that makes this whole release safe: `false` is a no-op against today's behaviour, `true` is a new signal.** A domain declaring `false` falls through to the untouched keyword scan — precisely what those notes do now — so neither value can regress. Declaring one `true` would actively instruct the model to *"use numbers, word problems, or applied calculations."*
+
+`PROFESSIONAL_EDUCATION` was delivered as `true` and **corrected to `false` before commit.** `08:64` assigns Educational Psychology, Assessment of Learning, Curriculum Development and Teaching Profession to it. Of the **136** Education notes currently missing guidance, only **`Assessment of Learning` (13, ~10%)** is plausibly quantitative — item analysis and scoring statistics. The other **~123 (~90%)** are Educational Psychology, Curriculum Development, Teaching Profession, Teaching Strategies, Evolution of Philippine Education, Historical Figures and Educational Laws.
+
+**`true` would have rescued 13 notes and pushed a false quantitative signal onto roughly 123 — inverting this release's own logic**, since the release exists because a name-based guess produced wrong signals, and substituting a different wrong signal is not progress. It would also have been the single line breaking the additive-only property everything else here rests on. Because Study Packs are never auto-regenerated, a false signal that lands is permanent per note.
+
+The cost of `false` is honest and small: `'assessment of learning'` contains no keyword, so those 13 notes keep missing guidance. **The fix is curator metadata, not an enum lie** — a subject or tag naming what the material actually is (`Item Analysis`, `Statistics`), which is better metadata regardless and is what the scan is for. `PROFESSIONAL_EDUCATION` has zero notes today, so nothing live changed either way.
+
+`GENERAL_EDUCATION` is `false` on the same reasoning, and its 31 live notes are unaffected for the same reason — recorded here so nobody rediscovers it as a bug.
+
+### Cold-context pressure test — 2026-08-18, before signoff
+
+Run because one concept touched backend enum, generation service, and three curator frontend surfaces — the 3+ surfaces clause — even though the release is only two PRs. A fresh agent with no inherited context, instructed to treat every summary in the repo (including ones written during this release) as a claim to verify.
+
+**No code defects.** All seven implementation claims verified against real code: the short-circuit is `if (A) return true;` prepended to an otherwise byte-identical body, so it provably cannot turn a previous `true` into `false`; it lives inside `isQuantitativeContext`, so all **7** call sites get it uniformly and none bypasses it; `QUANTITATIVE_KEYWORDS` is byte-identical at 49 entries; `effectiveAuthoringDomain` is untouched; no migration or persistence change; and `DomainContext` carries no `@JsonValue`, so the new getter cannot leak into an API response. The three `ADR-001` corrections were independently confirmed true, including that Applicable Programs really do render on cards (`shared-note-card.tsx:61-68,138`). Frontend descriptions are **structurally** learner-unreachable — each sits inside the same gated block as its select — rather than merely untested.
+
+**Six findings, all documentation, justification or test coverage. Every one is fixed or recorded; none was dropped.** The two substantive ones — the PPR asymmetry above, and test gaps measured by mutation rather than by running the suite — shipped as their own PR. The pressure test also corrected this release's own audit language: *"both halves of the guarantee are pinned"* was **overstated**, because `isQuantitativeContext_preservesEveryPreviouslyQuantitativeEngineeringDomain` survives deleting the short-circuit entirely (its three labels all contain `engineering`, so it cannot distinguish "preserved by the declaration" from "preserved by the scan"). **Mutation-kill counts — *"fails 2 tests"* — are precisely the reporting form that hid that**, and are worth distrusting in the next audit: a count says a mutation died, not that the mechanism under test is what killed it.
+
+### Feature docs
+
+`challenge-quiz.md`'s *"Quantitative / computation guidance"* section described the signal as **keyword-only**, which was complete when written and is now half the story — a future prompt reading it would have concluded the keyword list is the definition and lengthened it. It now names both paths, states that the declared check runs first and only ever adds, and records why the keyword list must not be read as the definition. `study-pack-generation.md` gained the same rule beside the authoring-domain fallback chain it sits on.
+
 ## v0.84.0 - Public Explore
 
 **Status: Released** (kicked off and signed off 2026-08-17, merged and deployed 2026-08-17)

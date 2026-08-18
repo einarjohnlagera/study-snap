@@ -23,7 +23,11 @@ import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { IMPORT_ACCEPT_VALUE } from "@/lib/note-import";
-import { DOMAIN_CONTEXT_OPTIONS, isSubjectSameAsDomainContext } from "@/lib/domain-context";
+import {
+    DOMAIN_CONTEXT_OPTIONS,
+    getDomainContextDescription,
+    isSubjectSameAsDomainContext,
+} from "@/lib/domain-context";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 
 const OPTIONAL_DETAILS_SCROLL_DELAY_MS = 140;
@@ -481,6 +485,11 @@ export function NoteEditorForm({
                                     <option key={option.value} value={option.value}>{option.label}</option>
                                 ))}
                             </select>
+                            {getDomainContextDescription(note.domainContext) ? (
+                                <p className="text-xs text-foreground/70">
+                                    {getDomainContextDescription(note.domainContext)}
+                                </p>
+                            ) : null}
                             <p className="text-xs text-foreground/60">
                                 {applicableProgramIds.length > 1
                                     ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
