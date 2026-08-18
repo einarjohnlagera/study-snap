@@ -38,7 +38,7 @@ class DomainContextTest {
             "ENGINEERING_MATHEMATICS, true",
             "ENGINEERING_SCIENCES, true",
             "CIVIL_ENGINEERING, true",
-            "PROFESSIONAL_PRACTICE_AND_REGULATION, true",
+            "PROFESSIONAL_PRACTICE_AND_REGULATION, false",
             "GENERAL_EDUCATION, false",
             "PROFESSIONAL_EDUCATION, false",
             "NURSING, true",

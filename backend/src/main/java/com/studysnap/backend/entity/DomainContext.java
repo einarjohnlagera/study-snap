@@ -12,7 +12,7 @@ public enum DomainContext {
     ENGINEERING_MATHEMATICS("Engineering Mathematics", true),
     ENGINEERING_SCIENCES("Engineering Sciences", true),
     CIVIL_ENGINEERING("Civil Engineering", true),
-    PROFESSIONAL_PRACTICE_AND_REGULATION("Professional Practice & Regulation", true),
+    PROFESSIONAL_PRACTICE_AND_REGULATION("Professional Practice & Regulation", false),
     GENERAL_EDUCATION("General Education", false),
     PROFESSIONAL_EDUCATION("Professional Education", false),
     NURSING("Nursing", true),
