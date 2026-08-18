@@ -2,7 +2,7 @@
 
 ## v0.86.0 - Generation Recovery
 
-**Status: In Progress**
+**Status: Released** (kicked off and signed off 2026-08-18)
 
 Theme: pre-warmed exam content and in-flight sessions that die on deploy should recover themselves, instead of sitting in a status nothing can leave.
 

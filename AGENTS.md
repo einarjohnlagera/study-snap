@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.86.0 - Generation Recovery` (In Progress); previous: `v0.85.0 - Domain Signal Integrity` (Released)
+- `v0.86.0 - Generation Recovery` (Released); previous: `v0.85.0 - Domain Signal Integrity` (Released)
 
 **⚠️ `v0.86.0` recovers rows stranded in a non-terminal generation status with an age-threshold sweeper, NOT a shutdown drain.** The production damage was **18 stuck `exam_question_pool` rows and 1 Long Exam session**, not notes — the note half is **prospective** (zero stuck notes at sizing) and must not be described as a backlog. Copying `analyticsTaskExecutor`'s `waitForTasksToCompleteOnShutdown(true)` onto the generation executors is a regression: it runs the entire queue uninterrupted, billing up to 100 LLM calls against a closing datasource. The sweeper marks `FAILED` and never re-dispatches — Study Packs never auto-regenerate.
 
