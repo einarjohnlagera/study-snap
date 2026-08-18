@@ -47,6 +47,28 @@ One row, but a hard block: `LongExamService:169` hands the learner back the stuc
 
 Same sweep, same job. With zero stuck rows the two-clock design's justification ("up to ~97 stranded bulk rows") no longer holds as an observed claim, so notes take **the enqueue stamp only** — written in the same transaction as `setStatus(GENERATING)` at `:209-211`, which is the sole writer of that status in the codebase. It covers both the killed-while-queued and killed-mid-call cases at the cost of a looser bound, and a second column cannot be justified against zero observations.
 
+**4. Topic note generation rejects word-dense bullets on an unpublished limit — ADDED 2026-08-18, ordered LAST.**
+
+Folded in on an owner report of repeated Bulk Generate failures blocking Review Set building; **reproduced live against the real OpenAI API**. Full evidence: `docs/claude-plans/v0.86.0-note-item-limit-mismatch.md`.
+
+`normalizeGeneratedNoteItems` (`OpenAiLlmStudyPackService:2504-2512`) validates every `coreDetails` / `whyItMatters` bullet against **`MAX_GENERATED_NOTE_ITEM_WORDS = 28`**. Nothing publishes that bound. What the model is told, and what the API strictly enforces, is **240 characters** — `note-generation-developer.txt:46` and the schema's `maxLength` (`:1161`). A formula with its variable definitions is word-dense and character-light, so it clears the published contract and fails the unpublished one:
+
+```
+words=43 chars=240  The formula for compound interest is $A = P \left(1 + \frac{r}{n}\right)^{nt}$, ...
+                    ^ exactly at the schema's maxLength — the model hit its stated budget
+                      precisely and was still rejected
+```
+
+**⚠️ This is NOT an oversight, and the fix reverses a deliberate prior decision.** The identical bug class was fixed for `quickRecall` after the "Weirs" failure (2026-08-03), and `coreDetails` was **knowingly** left on the word ceiling — the reason is recorded in `OpenAiLlmStudyPackServiceTest:1039`: *"coreDetails and whyItMatters are prose and deliberately keep the 28-word ceiling."* The prompt's 240-char rule sits under the `quickRecall` heading only. The prior fix treated one field; the same root cause resurfaced on the neighbouring one, at the same 4-of-5 sampled failure rate.
+
+**Fix:** validate `coreDetails` / `whyItMatters` by **characters**, as `quickRecall` already does (`normalizeQuickRecallItems:2514-2522`), **and state the 240-char bound in those prompt sections** — applying the "Weirs" fix's own recorded lesson that its failures came from the model never being told the bound it was judged against. Remove `MAX_GENERATED_NOTE_ITEM_WORDS`, whose only remaining use this is.
+
+**⚠️ Do NOT fix by raising the word cap** — that keeps two limits for one contract and reopens the gap on the next word-dense shape.
+
+**Scope honesty: this was NOT shown to be widespread.** A 10-topic sweep across every domain in the catalog returned **8 OK / 2 failed**, and both failures were Engineering Economics. Nursing dosage calculation, Accountancy tax rates and bank reconciliation, Civil Engineering beam deflection, Professional Practice, General Education and Professional Education all passed, and **no second failure mode surfaced**. The justification is therefore *"the only unpublished bound in the path, and it bites where content is word-dense"* — **not** *"many subjects are silently failing."* The owner reports other subject areas failing; those topics were not named and guessed substitutes did not reproduce it, so that remains open rather than claimed.
+
+**Routing:** isolated bug fix, one method plus a prompt edit → Claude Code implements directly, on its own branch and PR. Ordered after items 1-3 so it does not disturb the pool-first sequence.
+
 ### Anti-drift
 
 - **No auto-regeneration, ever.** The sweeper moves a row to a recoverable status and stops. It never re-dispatches. For pools, `refreshPool` firing on next use is the existing machinery doing its job — the sweeper must not call it directly.
@@ -59,7 +81,11 @@ Same sweep, same job. With zero stuck rows the two-clock design's justification 
 
 ### Shipped
 
-_(nothing yet)_
+- **Age-based generation recovery.** Added one scheduled, kill-switchable recovery sweep for the three production-sized dead-end surfaces. Reused exam-pool rows now stamp every `PENDING` / `GENERATING` attempt with `generation_status_at`; stale rows resolve to `FAILED` and stop, leaving the existing next-use `sampleQuestions` refresh path to rebuild them. Stale `LONG_EXAM` `GENERATING` sessions resolve to `FAILED`, which is outside the active-session set and lets the next start create a fresh session. Notes now stamp `generation_enqueued_at` whenever generation is queued and prospectively resolve stale `GENERATING` attempts through the existing shared failed transition and Retry Generation UI; production had zero stuck notes and this is not a note-backlog repair. Bounds remain deliberately conservative, independently configurable per surface (`60m` pool pending, `60m` pool generating, `30m` Long Exam, `120m` note) with a `200`-row batch, ten-minute cron and deploy kill switch; tightening them later is a config change. `V118` seeds existing non-terminal pool clocks from deploy-time `now()` rather than unsafe reused-row `created_at`, so the existing pool backlog becomes eligible one full bound after deploy. Recovery never re-dispatches, refunds quota, calls `refreshPool`, runs at startup, changes executor shutdown, or uses `REQUIRES_NEW`.
+
+### Known limitations
+
+- **Other generated-session recovery remains mode-owned.** Challenge Quiz is not swept because its stale-session recovery must also release question-bank claims; Adaptive Practice and Interview Practice remain excluded with it rather than being generalized through the Long Exam query. The Official Challenge Quiz template seed remains permanently best-effort and invisible to learners, so it has no recovery sweep.
 
 ## v0.85.0 - Domain Signal Integrity
 
