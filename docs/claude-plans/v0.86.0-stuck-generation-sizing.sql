@@ -24,9 +24,17 @@
 --       cleanly or overlap.
 --
 --   (b) WHETHER A ONE-TIME DATA FIX IS OWED IN SCOPE. Step 1's count decides it. Notes already
---       stuck today will NOT be reached by a sweeper that keys on a new start-timestamp column
---       (they have no value in it), so if the count is non-trivial the release owes a V118 that
---       resolves the existing backlog explicitly.
+--       stuck today have no value in either new timestamp column, so a sweeper keyed on them
+--       cannot reach the existing backlog; if the count is non-trivial the release owes a V118
+--       that resolves it explicitly.
+--
+--       ⚠️ AND THE SAME BLIND SPOT RECURS ON EVERY DEPLOY IF THE SWEEPER USES ONE CLOCK.
+--       shutdownNow() discards QUEUED tasks. A queued task never starts, so it would never stamp
+--       a start timestamp, and a start-keyed sweeper would never see its row — permanently. That
+--       is why the design takes TWO stamps: an ENQUEUE time written in the same transaction as
+--       setStatus(GENERATING) at StudyPackService:209-211, and a START time written when the task
+--       actually begins. Step 5 sizes the queued-at-death class, because a deploy landing mid-bulk
+--       run can strand up to ~97 rows at once (core pool 3, queue capacity 100).
 --
 -- ⚠️ ONE CAVEAT ON THE CLOCK, and it is the reason step 2 is a proxy rather than an answer.
 -- There is no generation_started_at column today. `updated_at` is the only timestamp available,
