@@ -141,3 +141,71 @@ group by 1, 2
 having count(*) > 1
 order by 3 desc, 1 desc
 limit 25;
+
+
+-- ============================================================================
+-- STEP 6 — ADDED 2026-08-18, after steps 1-5 ran. Run this one too.
+--
+-- WHY. Steps 1-3 and 5 returned ZERO stuck notes. Step 4 returned 18 stuck
+-- exam_question_pool rows (oldest 2026-07-02) and 1 stuck LONG_EXAM session
+-- (oldest 2026-05-19). That inverts the release: the observed damage is on the
+-- surfaces the original scope declared OUT.
+--
+-- And step 4 asked the wrong question of the pool table. It counted only
+-- generation_status = 'GENERATING'. But PENDING is ALSO a terminal-stuck state:
+--   - initiatePoolForUsage (ExamQuestionPoolService:208-212) returns early on
+--     READY, PENDING *or* GENERATING, so a stuck PENDING row refuses re-init;
+--   - sampleQuestions (:98) returns empty for anything that is not READY, and
+--     only STATUS_FAILED (:94) triggers refreshPool.
+-- So FAILED self-heals and PENDING does not. A pool killed while still QUEUED
+-- never reaches GENERATING at all — it stays PENDING forever, and step 4 could
+-- not see it.
+--
+-- READ-ONLY.
+-- ============================================================================
+
+-- 6a — Every non-READY pool status, with age. PENDING is the number step 4 missed.
+select
+    p.generation_status,
+    p.mode,
+    count(*)          as pools,
+    min(p.created_at) as oldest_created,
+    max(p.created_at) as newest_created
+from exam_question_pool p
+where p.generation_status <> 'READY'
+group by 1, 2
+order by 1, 2;
+
+-- 6b — Every non-terminal quiz session status by mode, so the session half is
+-- sized the same way. GENERATING is the blocking one (LongExamService:169 hands
+-- the learner back the stuck session instead of creating a new one), but the
+-- neighbouring statuses are worth seeing beside it.
+select
+    s.status,
+    s.session_mode,
+    count(*)          as sessions,
+    count(distinct s.user_id) as distinct_users,
+    min(s.created_at) as oldest_created
+from quick_review_sessions s
+where s.status in ('GENERATING', 'PAUSED', 'IN_PROGRESS')
+group by 1, 2
+order by 1, 2;
+
+-- 6c — How much is the stuck-pool cost recurring rather than one-off?
+-- A stuck pool degrades every exam start on that Study Pack to on-demand LLM
+-- generation. This shows whether those 18 packs are ones learners actually use.
+select
+    p.generation_status,
+    count(*)                                       as pools,
+    count(*) filter (where s.id is not null)       as pools_with_sessions,
+    sum(coalesce(s.session_count, 0))              as total_sessions_on_those_packs
+from exam_question_pool p
+left join (
+    select study_pack_id, count(*) as session_count, min(id) as id
+    from quick_review_sessions
+    where session_mode in ('LONG_EXAM', 'BOARD_EXAM')
+    group by study_pack_id
+) s on s.study_pack_id = p.study_pack_id
+where p.generation_status <> 'READY'
+group by 1
+order by 1;

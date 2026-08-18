@@ -4,35 +4,58 @@
 
 **Status: In Progress**
 
-Theme: a Study Pack generation that dies mid-flight should be recoverable by the learner, not stuck forever.
+Theme: pre-warmed exam content and in-flight sessions that die on deploy should recover themselves, instead of sitting in a status nothing can leave.
 
-### The defect
+**⚠️ SCOPE WAS INVERTED BY THE PRODUCTION READ, 2026-08-18.** The release was kicked off against stuck **notes**. `docs/claude-plans/v0.86.0-stuck-generation-sizing.sql` then returned **zero** stuck notes and found the damage on the two surfaces the kickoff had declared out of scope. The order below is the order the data gives, not the order the defect was found in.
 
-A note is stamped `GENERATING` and committed **before** its generation task is dispatched (`StudyPackService:209-211`, then `dispatchAfterCommit`). If that task never finishes, the row stays `GENERATING` — and **the learner can never get out of it**, because `resolveSourceNoteForGeneration:622` throws a 409 `NOTE_GENERATION_IN_PROGRESS` on every subsequent generate attempt, and **no `@Scheduled` job sweeps stale rows** (11 scheduled jobs exist; none touches note generation state). Only a manual DB write clears it. Dates to `2802fab3` (2026-04-08), the commit that introduced async generation and widened `ck_notes_status` to carry `GENERATING`.
+### What is actually stuck in production
 
-**Deploy is the most frequent trigger, not the only one.** `studyPackGenerationTaskExecutor` (`AppConfig:52`) sets **no** `waitForTasksToCompleteOnShutdown`, so Spring's `ExecutorConfigurationSupport` calls `shutdownNow()` — the queue is discarded and running tasks are interrupted. `main` auto-deploys on merge, so every release does this. But a crash, an OOM, a SIGKILL, or a `TaskRejectedException` on queue overflow (capacity 100, core pool 3) produce the **identical** unrecoverable row. That is the coverage argument for making recovery the fix rather than a shutdown hook.
+| Surface | Stuck rows | Oldest | Learner impact |
+|---|---|---|---|
+| `exam_question_pool` | **18** | 2026-07-02 (6.5 weeks) | Every exam start on those Study Packs falls back to on-demand LLM generation — recurring cost and latency, not a block |
+| Long Exam session | **1** | 2026-05-19 (3 months) | **Hard permanent block** — that learner cannot start a Long Exam on that pack, ever |
+| `notes` | **0** | — | Defect and mechanism verified; production impact is **PROSPECTIVE** |
 
-**⚠️ `analyticsTaskExecutor` right above it already carries the drain treatment** (`v0.80.0`), with a comment naming this exact auto-deploy mechanism. **Do not transfer that pattern here** — see anti-drift.
+**⚠️ The note half is prospective and must not be described as a backlog.** It is real — `StudyPackService:209-211` commits `GENERATING` before dispatch, `:622` throws 409 `NOTE_GENERATION_IN_PROGRESS` on every retry, and nothing sweeps — but zero notes are in that state today. It ships because the fix is nearly free once the sweeper exists and because a single occurrence is permanent and unrecoverable for that learner, not because anyone is currently stuck.
 
-Cost to the learner: the note shows a spinner forever, `library/page.tsx:840` keeps an unbounded `listNoteStatuses` poll alive for as long as the page is open, and the OpenAI call — if the task had started — was billed. Quota is the one thing **not** lost: `incrementStudyPackGeneration` fires only inside `saveStudyPack`, so an interrupted generation consumes none.
+### The mechanism, and why it hits pools hardest
+
+All three surfaces have a full `catch` that self-heals a **running** task into a recoverable status. What differs is how long the task runs. `OpenAiLlmConfig:24` uses `SimpleClientHttpRequestFactory`, i.e. `HttpURLConnection`, whose socket reads do **not** respond to `Thread.interrupt()` — so `shutdownNow()` never unwinds the thread, JVM exit kills it, and **the catch never runs**. A note is one LLM call; an exam pool is a `generateLongExamParallel` fan-out. Wider window, more stuck rows. That predicts 18-vs-0 without appealing to traffic volume, and it is why the fix generalises across the three surfaces rather than being three separate bugs.
+
+Dates to `2802fab3` (2026-04-08) for notes; the pool and session paths carry the same shape.
 
 ### Planned Scope
 
-- **Stale-generation sweeper (backend).** A scheduled job that resolves notes stuck in `GENERATING` past a bounded age to `FAILED` — the state the existing **Retry Generation** button (`private-note-detail-page-client.tsx:404`) already acts on. Age-threshold based, so it is correct regardless of instance count and covers deploy, crash, SIGKILL, rejection and datasource-closed-mid-task alike.
-- **TWO clocks for that sweeper, not one (backend + migration).** `notes.updated_at` cannot serve at all — `NoteService` writes it on ordinary note edits (`:191`, `:251`, `:316`, `:459`), so an edit during generation resets it. And a single start-timestamp **misses the largest stuck population outright**: `shutdownNow()` discards *queued* tasks, a queued task never starts, so it never stamps a start time and a sweeper keyed on that column would never see it — permanently. A deploy mid-bulk-run (`NoteBulkGenerationService:323` enqueues in a loop against core pool 3, queue capacity 100) leaves up to ~97 such rows at once. So: an **enqueue** timestamp written in the same transaction as `setStatus(GENERATING)` at `:209-211`, and a **start** timestamp written when the task actually begins. The sweeper reads both — `started IS NULL AND enqueued older than the longer bound` catches the killed-while-queued class, `started older than the shorter bound` catches the killed-mid-call class.
-- **Two thresholds, both anchored to measured bounds rather than guesses.** `OpenAiLlmConfig:26` sets a **180s read timeout** per LLM call, so the *start* bound is a small multiple of that; the *enqueue* bound must additionally sit above the longest legitimate bulk queue wait, which is what makes it the harder of the two. Sized against production first: `docs/claude-plans/v0.86.0-stuck-generation-sizing.sql` (current `GENERATING` count, age distribution, curator vs learner ownership). The age distribution picks the number empirically; the count decides whether a one-time data fix for already-stuck rows is owed in scope.
-- **Sweeper observability (backend).** The threshold is a guess until observed, so the job must emit a per-run reclaim count and age, designed in rather than bolted on — this release owes a `[CHECKPOINT]` and `v0.83.0` was reduced to raw DB reads because its surface emitted nothing.
+**1. Exam question pools — PRIMARY, and the cheapest fix in the release.**
+
+Recovery already exists: `sampleQuestions:94` calls `refreshPool` when it finds `FAILED`. **The only thing missing is the transition into `FAILED`.** Both non-terminal statuses dead-end instead:
+
+- `GENERATING` — task died mid-run.
+- **`PENDING` — task died while still QUEUED, so it never reached `GENERATING` at all.** This is why the original step 4 undercounted: it queried only `GENERATING`. `initiatePoolForUsage:208-212` refuses re-initiation on `READY`, `PENDING` **or** `GENERATING`, and `sampleQuestions:98` returns empty for anything non-`READY`, so a stuck `PENDING` row is exactly as terminal.
+
+**⚠️ `created_at` cannot be the pool clock.** A pool row is reused: a pool created months ago and re-initiated 30 seconds ago is legitimately `PENDING` with an ancient `created_at`, and a `created_at`-keyed sweep would resolve it, trigger `refreshPool`, and cause duplicate generation. Pools need a stamp written wherever the status is set — **four sites**, verified by grep: `:145` (`GENERATING`), `:215`, `:236`, `:327` (all `PENDING`).
+
+**2. Long Exam sessions.**
+
+One row, but a hard block: `LongExamService:169` hands the learner back the stuck `GENERATING` session instead of creating a new one. `FAILED` is in `OBSERVABLE_STATUSES` and **not** in `ACTIVE_STATUSES`, so resolving there lets `:169` build a fresh session on the next attempt — the unblock needs no new logic.
+
+**⚠️ `created_at` IS a safe clock here, unlike for pools** — verified: `buildGeneratingSession` (`:634-650`) constructs a **new** entity already in `GENERATING`, and no path returns an existing session to that status. So sessions need no new column.
+
+**⚠️ `LONG_EXAM` only.** Challenge Quiz sessions carry the same shape but a different fix: `ChallengeQuizService:1011` `forfeitStaleOrdinarySession` also calls `challengeQuizQuestionBankService.releaseClaims`, so sweeping a Challenge session to `FAILED` without releasing its bank claims would leak them. Adaptive Practice and Interview Practice are likewise excluded. All three are recorded as Known Limitations, not silently skipped.
+
+**3. Notes — kept, demoted, labelled prospective.**
+
+Same sweep, same job. With zero stuck rows the two-clock design's justification ("up to ~97 stranded bulk rows") no longer holds as an observed claim, so notes take **the enqueue stamp only** — written in the same transaction as `setStatus(GENERATING)` at `:209-211`, which is the sole writer of that status in the codebase. It covers both the killed-while-queued and killed-mid-call cases at the cost of a looser bound, and a second column cannot be justified against zero observations.
 
 ### Anti-drift
 
-- **No auto-regeneration, ever.** The sweeper resolves a row to `FAILED`; it never re-dispatches. The Study Pack versioning rule requires explicit user confirmation for every regeneration.
-- **⚠️ Do NOT copy the `analyticsTaskExecutor` drain onto the generation executors.** Verify the mechanism before proposing it: with `waitForTasksToCompleteOnShutdown(true)` the executor calls `shutdown()`, not `shutdownNow()` — the **entire queue runs to completion**, uninterrupted, while `awaitTerminationSeconds` bounds only how long shutdown *blocks*. Up to 100 queued 60–180s LLM calls would then bill OpenAI and persist nothing against a closing datasource, and `markNoteGenerationFailed` would fail too. That is a regression. **Verified against Spring source, not asserted:** `ExecutorConfigurationSupport.shutdown()` branches on the flag — `true` calls `executor.shutdown()`, `false` calls `executor.shutdownNow()` and cancels every remaining task; the setter's own Javadoc reads *"not interrupting running tasks and executing all tasks in the queue"* (spring-context 7.0.6). Analytics works because 500 fast DB inserts finish inside 20s; generation is not that shape. `v0.81.0`'s `REQUIRES_NEW` is the in-repo scar for shipping the obvious-looking concurrency fix.
-- **No quota refund path.** Nothing was charged — `incrementStudyPackGeneration` is inside `saveStudyPack`. Do not invent a refund for a charge that was never made.
-- **⚠️ Do NOT remove or invert the `status != GENERATING` skip at `StudyPackService:688`.** It reads like a bug once a sweeper exists ("we generated a pack and threw it away"), and it is the opposite: it is the sweeper's safety interlock. If the sweeper flips a row to `FAILED` at T and the still-running task completes at T+30s, that guard makes it discard its result instead of resurrecting a note the learner has already been told failed — and possibly already retried. The cost is wasted LLM spend; the alternative is a write race. This is exactly the two-PRs-one-shared-method class the pre-signoff pressure test exists to catch, written down instead of discovered.
-- **The sweeper resolves rows through the existing `markNoteGenerationFailed` path, never a raw `UPDATE notes SET status='FAILED'`** — so it cannot diverge from whatever else that method sets (`error_code`, `updated_at`).
-- **No `REQUIRES_NEW`** anywhere in this release.
-- **Quiz-session statuses are NOT in scope until sized.** `LongExamService:169`, `ExamQuestionPoolService:210`, Adaptive Practice, Interview Practice and Challenge Quiz share the same executors and the same stuck shape. Decide on the production numbers; record whatever is excluded as a Known Limitation rather than leaving it silent.
-- **The Official Challenge Quiz template seed is declared out of scope** — it is genuinely best-effort and its loss is invisible to the learner.
+- **No auto-regeneration, ever.** The sweeper moves a row to a recoverable status and stops. It never re-dispatches. For pools, `refreshPool` firing on next use is the existing machinery doing its job — the sweeper must not call it directly.
+- **⚠️ Do NOT add `setWaitForTasksToCompleteOnShutdown(true)` to `studyPackGenerationTaskExecutor` or `llmParallelTaskExecutor`, and do not touch `AppConfig`'s executor beans at all.** `analyticsTaskExecutor` above them carries exactly that treatment from `v0.80.0` and copying it here is a **regression**. Verified against spring-context 7.0.6 source: `ExecutorConfigurationSupport.shutdown()` calls `executor.shutdown()` when the flag is true, and the setter's Javadoc reads *"not interrupting running tasks and executing all tasks in the queue"* — so up to 100 queued 60–180s LLM calls would run against a closing datasource, billing OpenAI and persisting nothing. Shutdown behaviour is out of scope.
+- **⚠️ Do NOT remove or invert the `status != GENERATING` skip at `StudyPackService:687-695`.** Once a sweeper exists it reads like a bug and it is the opposite: it is the safety interlock that makes a late-finishing task discard its result rather than resurrect a row the learner was already told had failed.
+- **No quota refund path.** `incrementStudyPackGeneration` fires only inside `saveStudyPack`, which a dead task never reached.
+- **No `REQUIRES_NEW`** anywhere in this release (`v0.81.0`'s scar).
+- **Challenge Quiz, Adaptive Practice and Interview Practice sessions are OUT**, for the claim-leak reason above. The Official Challenge Quiz template seed is out permanently — genuinely best-effort and invisible to the learner.
+- **No startup sweep.** Age thresholds are what make the design multi-instance-safe; a boot-time sweep would kill another instance's live work.
 
 ### Shipped
 
