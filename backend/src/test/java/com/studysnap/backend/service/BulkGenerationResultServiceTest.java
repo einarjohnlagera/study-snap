@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.BulkGenerationResultResponse;
+import com.studysnap.backend.dto.BulkGenerationFailureReason;
 import com.studysnap.backend.entity.BulkGenerationResultEntity;
 import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
@@ -28,6 +29,11 @@ class BulkGenerationResultServiceTest {
     private static final String SUBJECT = "Maternal Health";
     private static final String COURSE_PROGRAM = "Nursing";
     private static final String TARGET_PROFILE_TYPE = "BOARD_TAKER";
+    private static final BulkGenerationFailureReason FAILURE_REASON = new BulkGenerationFailureReason(
+            "Prenatal Care",
+            "LLM_INVALID_OUTPUT",
+            "Generated note has an invalid overview."
+    );
 
     @Mock
     private BulkGenerationResultRepository repository;
@@ -51,6 +57,7 @@ class BulkGenerationResultServiceTest {
                 2,
                 1,
                 List.of("Prenatal Care"),
+                List.of(FAILURE_REASON),
                 List.of("Quota Topic")
         );
 
@@ -69,6 +76,7 @@ class BulkGenerationResultServiceTest {
         assertThat(entity.getRequestedCount()).isEqualTo(2);
         assertThat(entity.getCreatedCount()).isEqualTo(1);
         assertThat(entity.getFailedTopics()).containsExactly("Prenatal Care");
+        assertThat(entity.getFailedTopicReasons()).containsExactly(FAILURE_REASON);
         assertThat(entity.getQuotaBlockedTopics()).containsExactly("Quota Topic");
         assertThat(entity.getCreatedAt()).isNotNull();
     }
@@ -92,7 +100,24 @@ class BulkGenerationResultServiceTest {
         assertThat(response.requestedCount()).isEqualTo(2);
         assertThat(response.createdCount()).isEqualTo(1);
         assertThat(response.failedTopics()).containsExactly("Prenatal Care");
+        assertThat(response.failedTopicReasons()).containsExactly(FAILURE_REASON);
         assertThat(response.quotaBlockedTopics()).containsExactly("Quota Topic");
+        verify(repository).delete(entity);
+    }
+
+    @Test
+    void consumeResult_keepsLegacyNullFailureReasonsReadable() {
+        BulkGenerationResultService service = new BulkGenerationResultService(repository);
+        UUID resultId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        BulkGenerationResultEntity entity = entity(resultId, ownerUserId);
+        entity.setFailedTopicReasons(null);
+        when(repository.findByIdAndOwnerUserId(resultId, ownerUserId)).thenReturn(Optional.of(entity));
+
+        BulkGenerationResultResponse response = service.consumeResult(resultId, ownerUserId);
+
+        assertThat(response.failedTopics()).containsExactly("Prenatal Care");
+        assertThat(response.failedTopicReasons()).isNull();
         verify(repository).delete(entity);
     }
 
@@ -132,6 +157,7 @@ class BulkGenerationResultServiceTest {
         entity.setRequestedCount(2);
         entity.setCreatedCount(1);
         entity.setFailedTopics(List.of("Prenatal Care"));
+        entity.setFailedTopicReasons(List.of(FAILURE_REASON));
         entity.setQuotaBlockedTopics(List.of("Quota Topic"));
         entity.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         return entity;

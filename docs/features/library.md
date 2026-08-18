@@ -135,6 +135,13 @@ Private Library pagination and filtering:
 - the lean, unfiltered `GET /notes/status` poll remains the discovery signal for newly materialized bulk rows; when it detects growth or a generating-status resolution, the enriched refresh is limited to the currently loaded filtered window, capped at 100 notes
 - the summary line reports the backend `totalMatching` value and labels it as matching the active filters when applicable
 
+Bulk generation terminal failures:
+
+- the existing dismissible bulk failure banner continues to list `failedTopics` and uses that unchanged string list for `Retry these`
+- when the read-once receipt includes a matching per-topic failure reason, the banner shows it as secondary text beneath the topic name
+- receipts created before failure attribution have no reason list and render the original topic-only rows with no placeholder or layout change
+- quota-blocked topics remain in their separately explained group and do not display a generated failure reason
+
 ### Stats Strip
 
 The private Library shows a compact subject stats strip inside the filter card, between the filter controls and the note list.

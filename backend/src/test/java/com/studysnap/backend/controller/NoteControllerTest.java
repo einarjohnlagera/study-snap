@@ -385,6 +385,7 @@ class NoteControllerTest {
                 1,
                 List.of("Prenatal Care"),
                 List.of(),
+                List.of(),
                 OffsetDateTime.now()
         );
         when(bulkGenerationResultService.consumeResult(resultId, userId)).thenReturn(expected);

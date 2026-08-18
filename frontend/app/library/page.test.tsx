@@ -857,7 +857,46 @@ describe("Library page", () => {
     expect(await screen.findByText(/Queued 2 notes/)).toBeInTheDocument();
   });
 
-  it("shows failed bulk topics after the poller settles and stashes them for retry", async () => {
+  it("shows a recorded reason beneath each failed bulk topic", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "admin-1",
+      role: "ADMIN",
+      profileType: "STUDENT",
+    });
+    setBulkQueuedFlash(3, "result-with-reasons");
+    (getBulkGenerationResult as jest.Mock).mockResolvedValueOnce({
+      id: "result-with-reasons",
+      subject: "Maternal Health",
+      courseProgram: "Nursing",
+      makePublic: true,
+      requestedCount: 3,
+      createdCount: 1,
+      failedTopics: ["Prenatal Care", "Labor Stages"],
+      failedTopicReasons: [
+        {
+          topic: "Prenatal Care",
+          code: "LLM_INVALID_OUTPUT",
+          reason: "Generated note has an invalid overview.",
+        },
+        {
+          topic: "Labor Stages",
+          code: "UNEXPECTED_ERROR",
+          reason: "An unexpected error occurred while generating this topic (IllegalStateException).",
+        },
+      ],
+      quotaBlockedTopics: [],
+      createdAt: "2026-06-17T00:00:00Z",
+    });
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("Prenatal Care")).toBeInTheDocument();
+    expect(screen.getByText("Generated note has an invalid overview.")).toBeInTheDocument();
+    expect(screen.getByText("Labor Stages")).toBeInTheDocument();
+    expect(screen.getByText(/unexpected error occurred.*IllegalStateException/)).toBeInTheDocument();
+  });
+
+  it("renders legacy failed bulk topics unchanged and stashes the same topics for retry", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "admin-1",
       role: "ADMIN",
@@ -879,8 +918,8 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     expect(await screen.findByText(/4 of 5 notes generated/)).toBeInTheDocument();
-    expect(screen.getByText("Prenatal Care")).toBeInTheDocument();
-    expect(screen.getByText("Labor Stages")).toBeInTheDocument();
+    expect(screen.getByText("Prenatal Care").closest("li")).toHaveTextContent(/^Prenatal Care$/);
+    expect(screen.getByText("Labor Stages").closest("li")).toHaveTextContent(/^Labor Stages$/);
 
     fireEvent.click(screen.getByRole("button", { name: "Retry these" }));
 

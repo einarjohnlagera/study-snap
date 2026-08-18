@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
+import com.studysnap.backend.dto.BulkGenerationFailureReason;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
@@ -64,6 +65,7 @@ public class NoteBulkGenerationService {
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final OnboardingGuardService onboardingGuardService;
     private final BulkGenerationResultService bulkGenerationResultService;
+    private final BulkGenerationFailureReasonNormalizer failureReasonNormalizer;
     private final MePlanService mePlanService;
     private final NoteCollectionService noteCollectionService;
     private final int maxTopics;
@@ -82,6 +84,7 @@ public class NoteBulkGenerationService {
             CourseProgramCatalogRepository courseProgramCatalogRepository,
             OnboardingGuardService onboardingGuardService,
             BulkGenerationResultService bulkGenerationResultService,
+            BulkGenerationFailureReasonNormalizer failureReasonNormalizer,
             MePlanService mePlanService,
             NoteCollectionService noteCollectionService,
             @Value("${note.bulk-generation.max-topics:50}") int maxTopics,
@@ -98,6 +101,7 @@ public class NoteBulkGenerationService {
         this.courseProgramCatalogRepository = courseProgramCatalogRepository;
         this.onboardingGuardService = onboardingGuardService;
         this.bulkGenerationResultService = bulkGenerationResultService;
+        this.failureReasonNormalizer = failureReasonNormalizer;
         this.mePlanService = mePlanService;
         this.noteCollectionService = noteCollectionService;
         this.maxTopics = Math.clamp(maxTopics, MIN_MAX_TOPICS, Integer.MAX_VALUE);
@@ -132,6 +136,7 @@ public class NoteBulkGenerationService {
                 new CourseProgramCatalogRepository(null),
                 onboardingGuardService,
                 bulkGenerationResultService,
+                new BulkGenerationFailureReasonNormalizer(),
                 mePlanService,
                 null,
                 maxTopics,
@@ -179,6 +184,7 @@ public class NoteBulkGenerationService {
     private void processBatch(UUID resultId, NormalizedBatch batch, UUID ownerUserId, boolean enforceLimits) {
         AtomicInteger createdCount = new AtomicInteger();
         List<String> failedTopics = new ArrayList<>();
+        List<BulkGenerationFailureReason> failedTopicReasons = new ArrayList<>();
         List<String> quotaBlockedTopics = new ArrayList<>();
         List<String> createdNoteIds = new ArrayList<>();
         String resultCourseProgram = null;
@@ -212,6 +218,7 @@ public class NoteBulkGenerationService {
                         quotaBlockedTopics.add(item.topic());
                     } else {
                         failedTopics.add(item.topic());
+                        failedTopicReasons.add(normalizeFailureReason(item.topic(), exception));
                     }
                     log.warn(
                             "action=bulk_generate_note outcome=failed topic={} subject={} ownerUserId={}",
@@ -226,6 +233,10 @@ public class NoteBulkGenerationService {
         } catch (RuntimeException exception) {
             failedTopics.clear();
             failedTopics.addAll(batch.items().stream().map(BulkGenerationItem::topic).toList());
+            failedTopicReasons.clear();
+            failedTopicReasons.addAll(batch.items().stream()
+                    .map(item -> normalizeFailureReason(item.topic(), exception))
+                    .toList());
             quotaBlockedTopics.clear();
             log.warn(
                     "action=bulk_generate_batch outcome=failed_before_loop accepted={} subject={} ownerUserId={}",
@@ -250,6 +261,7 @@ public class NoteBulkGenerationService {
                         batch.items().size(),
                         createdCount.get(),
                         failedTopics,
+                        failedTopicReasons,
                         quotaBlockedTopics
                 );
             } catch (RuntimeException exception) {
@@ -269,6 +281,22 @@ public class NoteBulkGenerationService {
                     quotaBlockedTopics.size(),
                     ownerUserId
             );
+        }
+    }
+
+    private BulkGenerationFailureReason normalizeFailureReason(String topic, RuntimeException exception) {
+        try {
+            BulkGenerationFailureReason normalized = failureReasonNormalizer.normalize(topic, exception);
+            return normalized == null
+                    ? BulkGenerationFailureReasonNormalizer.unexpected(topic, exception)
+                    : normalized;
+        } catch (RuntimeException normalizationException) {
+            log.warn(
+                    "action=bulk_generate_failure_reason outcome=normalization_failed topic={} exceptionType={}",
+                    topic,
+                    normalizationException.getClass().getSimpleName()
+            );
+            return BulkGenerationFailureReasonNormalizer.unexpected(topic, exception);
         }
     }
 
