@@ -717,6 +717,16 @@ public class StudyPackService {
                 return savedEntity;
             });
 
+            if (saved == null) {
+                // The interlock above declined to persist: the note is no longer GENERATING, so a
+                // recovery sweep (or a mid-generation delete) already resolved it and the learner has
+                // been told so. Return quietly. Dereferencing `saved` here used to throw an NPE that
+                // the catch below swallowed into a false `outcome=failed` with a stack trace — on the
+                // one surface whose purpose is operational visibility — and re-wrote FAILED, bumping
+                // `updated_at` and floating the note to the top of a library sorted by that column.
+                return;
+            }
+
             analyticsService.trackEvent(ownerUserId, AnalyticsEventType.STUDY_PACK_GENERATED, saved.getId(), buildGenerationMetadata(
                     noteId,
                     InputType.TEXT,

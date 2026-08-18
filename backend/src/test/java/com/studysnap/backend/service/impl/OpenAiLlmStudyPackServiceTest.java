@@ -1142,7 +1142,14 @@ class OpenAiLlmStudyPackServiceTest {
                         .getInputStream().readAllBytes(),
                 StandardCharsets.UTF_8
         );
+        // One occurrence per section the bound governs: coreDetails, whyItMatters, quickRecall.
+        // A `contains` check is satisfied by the quickRecall line alone, so deleting the two lines
+        // added for coreDetails and whyItMatters left this green — the exact "model uninstructed,
+        // tests still pass" hole this test exists to close, reopened one field over.
         assertThat(template).contains("{MAX_ITEM_CHARS}");
+        assertThat(template.split("\\{MAX_ITEM_CHARS\\}", -1).length - 1)
+                .as("the character bound must be stated in every section it is enforced on")
+                .isEqualTo(3);
     }
 
     private ObjectNode generatedNotePayloadWithQuickRecall(String firstQuickRecallItem) {

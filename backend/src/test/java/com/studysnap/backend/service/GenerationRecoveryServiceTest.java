@@ -121,6 +121,31 @@ class GenerationRecoveryServiceTest {
     }
 
     @Test
+    void recoverStaleExamQuestionPools_appliesEachBoundToItsOwnStatus() {
+        // Both pool bounds default to 60 minutes, so pendingCutoff and generatingCutoff are the SAME
+        // value and every other test passes with the two arguments swapped, or with the branches of
+        // isRecoverablePool swapped. The release plans to tighten these from config after production
+        // observation — which is exactly when a latent swap would start misfiring silently. Setting
+        // them apart is what makes the pairing testable at all.
+        properties.getGeneration().setPoolPendingBoundMinutes(10);
+        properties.getGeneration().setPoolGeneratingBoundMinutes(180);
+
+        // 30 minutes old: past the 10-minute PENDING bound, inside the 180-minute GENERATING one.
+        ExamQuestionPoolEntity pending = pool(STATUS_PENDING, OffsetDateTime.now().minusMinutes(30));
+        ExamQuestionPoolEntity generating = pool(STATUS_GENERATING, OffsetDateTime.now().minusMinutes(30));
+        when(examQuestionPoolRepository.findStaleNonTerminalIds(any(), any(), any(), any(), any()))
+                .thenReturn(List.of(pending.getId(), generating.getId()));
+        when(examQuestionPoolRepository.findByIdForUpdate(pending.getId())).thenReturn(Optional.of(pending));
+        when(examQuestionPoolRepository.findByIdForUpdate(generating.getId())).thenReturn(Optional.of(generating));
+
+        GenerationRecoveryService.SurfaceRecoveryResult result = service.recoverStaleExamQuestionPools();
+
+        assertThat(pending.getGenerationStatus()).isEqualTo(STATUS_FAILED);
+        assertThat(generating.getGenerationStatus()).isEqualTo(STATUS_GENERATING);
+        assertThat(result.recoveredCount()).isEqualTo(1);
+    }
+
+    @Test
     void recoverStaleExamQuestionPools_readyAndFailedAreNeverTouched() {
         ExamQuestionPoolEntity ready = pool(STATUS_READY, OffsetDateTime.now().minusDays(2));
         ExamQuestionPoolEntity failed = pool(STATUS_FAILED, OffsetDateTime.now().minusDays(2));
@@ -283,6 +308,11 @@ class GenerationRecoveryServiceTest {
                 .isAnnotationPresent(Transactional.class)).isFalse();
         assertThat(GenerationRecoveryService.class.getMethod("recoverStaleNotes")
                 .isAnnotationPresent(Transactional.class)).isFalse();
+
+        // Method-level absence is not enough: a CLASS-level @Transactional on the sweep service —
+        // precisely the "simplification" its Javadoc warns against — would wrap the loop in one
+        // transaction while every method-level assertion above still passed.
+        assertThat(GenerationRecoveryService.class.isAnnotationPresent(Transactional.class)).isFalse();
 
         assertThat(GenerationRecoveryRowWriter.class
                 .getMethod("recoverPool", UUID.class, OffsetDateTime.class, OffsetDateTime.class)
