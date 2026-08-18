@@ -1,44 +1,46 @@
 # RELEASES.md - NoteLib
 
-## v0.87.0 - Published Bounds
+## v0.87.0 - Failure Attribution
 
 **Status: In Progress**
 
-Theme: a generated note should be judged only against limits the model was actually given.
+Theme: when a bulk-generated topic fails, the curator should be told which check rejected it.
 
-**Found by `v0.86.0`'s cold-context pressure test, which falsified that release's own justification.** `v0.86.0` fixed the note *bullet arrays* and claimed the 28-word cap was "the only unpublished bound in this path." It was not. Three more sit in the same method, and they have the identical shape.
+### Why this replaced the release's original scope
 
-### The defect
+**This release was kicked off as "Published Bounds" and rescoped the same day, on its own pre-committed gate.** The original scope targeted three unpublished word bounds — `title` (1–12), `overview` (8–90), `keyIdea` (4–40) — that `v0.86.0`'s pressure test found surviving in the method it had just fixed, and named as the leading candidate for owner-reported Bulk Generate failures in other subject areas. Scope item 1 was *reproduce before fixing*, with the gate stated in advance: **"if these bounds never fire in practice, say so and rescope."**
 
-`buildGeneratedNoteContent` validates three scalar fields by **word count**. The JSON schema publishes a **character** bound for each, and the prompt states **sentence counts** — a different unit again. So every one of them judges the model against a number it never sees, and in all three the Java bound is the tighter of the two:
+**They never fired.** A live probe over 14 topics spanning all eight `DomainContext` values, run against the real API:
 
-| Field | Java bound (unpublished) | Schema `maxLength` (published) | What the prompt says |
+| Field | Bound | Observed range | Closest approach |
 |---|---|---|---|
-| `title` | 1–12 **words** | 160 chars | *"specific, academic, anchored to the topic"* — no length at all |
-| `overview` | 8–90 **words** | 1200 chars | *"2 to 3 sentences maximum"* |
-| `keyIdea` | 4–40 **words** | 500 chars | *"1 to 2 sentences"* |
+| `title` | 1–12 words | 5–9 | 9/12 (75%) |
+| `overview` | 8–90 words | 28–40 | 40/90 (44%) |
+| `keyIdea` | 4–40 words | 18–31 | 31/40 (78%) |
 
-**⚠️ The minimums are unpublished too, and nothing states them anywhere.** A correct, terse 7-word overview is rejected by a floor of 8 that the prompt never mentions — and the prompt actively pushes *toward* brevity (*"2 to 3 sentences maximum"*, *"no filler openers"*). The two-sided nature is why this cannot be fixed by raising a ceiling.
+**14 of 14 generated cleanly. Nothing landed out of bounds, and nothing came within 15% of a ceiling.** The `overview` floor of 8 — the likeliest to reject correct terse output, since the prompt pushes toward brevity — was never approached; the shortest observed overview was 28 words. **The bounds are real and mismatched in unit, but they do not bite**, and a prompt change is a cost paid on every generation call. Fixing them would have been principle-driven against zero evidence of harm. The finding stays recorded in `docs/claude-plans/v0.86.0-note-item-limit-mismatch.md` and at the constants themselves.
 
-**Why it bites hardest on quantitative content, exactly as in `v0.86.0`:** a whitespace word count inflates on notation, and the prompt mandates LaTeX. `$P$ is the principal` is four "words" and twenty characters.
+### The actual defect, which two failed investigations have now pointed at
 
-### Why this is a real release and not bookkeeping
+**`BulkGenerationResultEntity.failedTopics` is a `List<String>` of topic NAMES. The reason is discarded.** `NoteBulkGenerationService.processBatch` catches per item, logs the exception server-side, and records only the topic. The curator sees a list of topics that failed and no indication why, on a surface that already renders that list with a retry affordance.
 
-**⚠️ These are the leading candidate for the owner-reported Bulk Generate failures in other subject areas that `v0.86.0` could not reproduce.** They raise **`invalid title` / `invalid overview` / `invalid key idea`**, which is why a probe looking for `invalid core details` found nothing. That hypothesis is **code-traced, not reproduced** — establishing it is scope item 1, and if it fails the release rescopes rather than proceeding on a guess.
+**That gap has now cost two investigations.** `v0.86.0` fixed `invalid core details` and the owner-reported other-subject failures persisted; `v0.87.0` bet on the three word bounds and they came back clean. `buildGeneratedNoteContent` alone can raise **six distinct** rejections — invalid title, overview, key idea, core details, why-it-matters, quick recall — plus the whole-note length bound and the filler guard, and the product throws away which one it was. Each investigation has had to guess, then burn a live probe to test the guess.
+
+**This is evidence infrastructure, and it is justified by the two misses rather than by a hypothesis.**
 
 ### Planned Scope
 
-- **1. Reproduce before fixing — this gates everything else.** Run the live harness (`@SpringBootTest` + real API; **note `src/test/resources/application.yaml` shadows the main one, so `studysnap.*` must be re-supplied via `@DynamicPropertySource`**) across topics from several subject areas, capturing the *exact* failure message per topic. **If these bounds never fire in practice, say so and rescope** — `v0.86.0`'s own sweep found 8 of 10 topics clean, and a fix for a bound that never bites is not worth a prompt change that affects all note generation.
-- **2. Align each surviving bound to its published contract.** Same shape as `v0.86.0`'s fix: validate by characters against the schema's own `maxLength`, and state the bound in that field's prompt section. Per field, decide deliberately: align, or keep a word bound *and publish it*.
-- **3. Resolve the unpublished minimums.** Either publish them or drop them. A floor that contradicts the prompt's own push toward brevity is the harder half, and it is the one most likely to reject correct output.
+- **1. Record the reason per failed topic (backend).** A new nullable `jsonb` column alongside `failed_topics`, mapping topic to a normalized reason. **Additive by design:** `failed_topics` keeps its shape and meaning, so the existing retry path and every receipt already in the database keep working untouched.
+- **2. Normalize what gets stored (backend).** An `AppException` contributes its code and its already user-facing message, which is what distinguishes the six cases. **Anything else contributes a generic reason and its exception class — never a raw message, never a stack trace.**
+- **3. Surface it beside each topic (frontend).** The bulk failure banner already lists failed topics in `library/page.tsx`; each row gains its reason. **A receipt with no recorded reason must render exactly as it does today** — old rows are the common case until the hourly cleanup job ages them out.
 
 ### Anti-drift
 
-- **⚠️ Do NOT simply raise the numbers.** Two limits in different units for one contract is the defect; its size is not. This is the same rule `v0.86.0` set and is the most likely thing to be got wrong here.
-- **⚠️ Do NOT delete the Java checks outright.** Unlike a bare removal, the schema bound is the fallback — and it is far looser (1200 chars for `overview` against ~550 for 90 words), so deleting the check quietly widens what is accepted rather than leaving it unchanged. If a check goes, that widening is the decision being made, and it must be stated.
-- **No change to the bullet-array bounds** shipped in `v0.86.0` — `coreDetails`, `whyItMatters` and `quickRecall` are settled at 240 characters and stay there.
-- **The prompt governs all note generation**, so every added line is a cost paid on every call. Add the minimum that publishes the bound; do not restate rules already present.
-- **Verify live, not only by unit test.** `v0.86.0` proved a unit test cannot tell whether the model can actually satisfy a published bound.
+- **⚠️ Do NOT change the shape or meaning of `failed_topics`.** The retry affordance reads it, and every existing receipt is a plain string list. This release adds a parallel column; it does not migrate the old one.
+- **⚠️ Do NOT surface raw exception text for non-`AppException` failures.** Bulk generation is curator-only, which is not a reason to relax this.
+- **No new validation, and no bound is changed, published, raised or removed.** The three unpublished word bounds stay exactly as they are — this release makes failures *legible*, it does not alter which inputs fail. Changing both at once would destroy the read this release exists to produce.
+- **No new analytics event.** The receipt is the record; a second parallel channel is not needed to answer the question this release asks.
+- **Study Pack generation failures remain out of this receipt.** Only the note-from-topic step is caught per item; the Study Pack step is dispatched async and surfaces as a note status. That boundary is unchanged, and the release notes must not imply otherwise.
 
 ### Shipped
 
