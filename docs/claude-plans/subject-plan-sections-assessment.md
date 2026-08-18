@@ -36,7 +36,14 @@ The Engineering Mathematics plan was recovered with `docs/claude-plans/engineeri
 **Backend write paths (exhaustive, 2):** `setOrder:1074` (the only user-facing writer) and `buildAdoptedItems:1838` (adoption copy). Plus `buildItems:1818`, which hard-sets `null`.
 **Backend read paths (exhaustive, 3):** item response mapping, adoption copy, validation. **No backend feature reads `label`** — not next-step, readiness, export, analytics, or prompts.
 
-**Grouping is derived, client-side, in two places** that agree: `collection-detail-page-client.tsx:142-177` (learner) and `study-plan-builder-page-client.tsx:111-129` (Builder). Blank label → a synthetic `"Ungrouped"` bucket.
+**Grouping is derived, client-side, in two places that do NOT agree** — corrected 2026-08-18 by the UX pressure test: `collection-detail-page-client.tsx:142-177` (learner) and `study-plan-builder-page-client.tsx:111-129` (Builder). Blank label → a synthetic `"Ungrouped"` bucket. **But the two diverge, and the Builder is the side violating the documented contract:**
+
+| | Learner (`:146`) | Builder (`:118`) |
+|---|---|---|
+| Unsectioned bucket | collected separately, **always pushed last** | **interleaved** at its first note's position |
+| No labels at all | `hasSections === false` → flat list, no heading | one section headed `Ungrouped`, **with an editable input** |
+
+`collections.md:71` documents the trailing-bucket contract and `:73` documents "cross-section drag is a no-op" — the Builder breaks both (`handleLeafDragEnd:1629` allows cross-section drag). **The Builder is a preview surface, so a curator cannot currently trust that what they arrange is what the learner sees.**
 
 **API.** `PUT /collections/{id}/items/order` accepts `[{noteId, label}]`. **Multiple distinct labels with stable ordering are authorable today with zero backend change** — that is exactly what the Builders do.
 
@@ -149,6 +156,7 @@ Two caveats worth knowing: a **single-note section vanishes silently** on adopti
 ## 10. Risks and edge cases
 
 - **Duplicate names silently merge in the Builder.** The learner surface has an explicit merge-confirmation modal for the identical operation; the surface a curator can reach does not. Structure-loss risk on a 77-note plan.
+- **Item 7 inherits the whole-collection write exposure.** "Set sections from note subjects" goes through the same `setOrder` path as every other edit, so it carries the same last-write-wins risk below — a curator running it while a bulk-generation batch is finishing could clobber the batch's new rows. Not a reason to add `@Version` in this release; a reason to disable the action while a batch is in flight, or to refresh immediately before it runs.
 - **No optimistic concurrency anywhere** — no `@Version` on either entity, and edits are whole-collection PUTs with a 500 ms debounce. Two tabs, or a debounced label edit racing a running bulk batch, is **last-write-wins over the entire collection**.
 - **`maxLength` 150 in the Builder vs 120 in the backend and DDL** — a 121–150 char name 400s with a rollback.
 - **`AccountDataExportService.toCollection:110-122` drops `label` entirely** — user-authored data missing from the data export today.
@@ -181,3 +189,147 @@ Two caveats worth knowing: a **single-note section vanishes silently** on adopti
 **Yes — formalize the existing mechanism, but the framing "build Sections" is wrong: Sections already ship, and the release is a create control, a guard, and a section-aware bulk path.** Do not add a table yet. The two symptoms driving this scoping are bug fixes under either model, and buying persistence to fix a missing guard would be paying schema for an `if`. Ship the staged scope, use it to build the Civil Engineering set, and let the need for empty sections or independent ordering prove itself before it is bought.
 
 **Blocking input needed from the owner:** run the §2 query, and confirm whether generating each area as its own bulk batch (which §3 would make section-forming) matches how you actually want to author.
+
+---
+
+# ADDENDUM — Builder at curriculum scale (A–E)
+
+**Added 2026-08-18** after the owner reported five adjacent Builder limitations while continuing to author the CE Review Set. Investigated directly rather than by cold agent: the questions are specific rather than exploratory, and the two prior agents' findings are the context a fresh agent would have to rediscover at full cost.
+
+## The single most important finding in this addendum
+
+**Three of the five proposals are far cheaper than they look, because the machinery already exists**, and one of them changes the release boundary:
+
+| | Assumed to need | Actually needs |
+|---|---|---|
+| **A** program-scoped picker | server-side filtering, new API | **nothing server-side.** `NoteListItemResponse.applicablePrograms` already ships, and `courseProgram` is already on both the detail and summary collection responses. `filterPickerNotes` (`:141-153`) already filters client-side over title/subject/courseProgram/tags — it simply does not consider `applicablePrograms` |
+| **B** section destination in Add Notes | a new selection model | **the picker is already multi-select with a selected tray.** `selectedIds: Set<string>`, `toggleSelected`, `selectedNotes`, and `resultNotes` excludes selected ids so they visibly move out of the results — exactly the `SELECTED (8)` shape proposed. `handleAddLeafNotes(targetId, noteIds)` already takes a batch. B is **one destination control** beside a tray that exists |
+| **D** bulk Move to Section | a batch API | **zero new API.** `setOrder` is already whole-set-or-nothing (`validateSubmittedSetMatchesCurrent:1780`), so moving 20 notes is *the same single PUT* as moving one |
+
+**But D's other half is the opposite.** `DELETE /{id}/items/{noteId}` (`NoteCollectionController:275`) is the only removal endpoint, and `removeItem:1041-1054` does a **full position rewrite of the whole collection per call**. Removing 20 notes is 20 round trips, 20 transactions and 20 O(n) rewrites — O(n·m), and **not atomic**: a partial failure leaves the plan half-modified. Bulk Move and bulk Remove are not one feature.
+
+## 1–2. Add Notes discovery, and multi-program representation
+
+**Scope source: the Goal's `courseProgram` is the right one, with one caveat.** It is the level that carries curriculum intent, it is already exposed, and a Subject Plan inherits context from its parent rather than declaring its own audience. **The caveat the owner asked about is real:** a child Subject Plan *also* has a `courseProgram` column, so the two can disagree. Recommendation: **scope from the Goal, ignore the child's value for filtering, and never write either from the picker.** A child with a conflicting value is a data smell to surface later, not a filter input.
+
+**Filtering must be a default, not a constraint.** Hidden-by-default with a visible "Show all programs" escape. A curator legitimately pulls a General Education note into a CE review; a hard filter would make that impossible and would be discovered as a bug.
+
+**Null Goal program → no filtering**, as proposed. Correct, and it is also the backward-compatible path for every existing collection.
+
+**Compact representation.** `Algebra · 11 programs` is right for mobile, with the full list behind a tap. Deriving it needs no request — `applicablePrograms` is already on each row. **Do not render program chips per card**; at 77 rows that is the density problem the owner flagged in B.
+
+**⚠️ Performance, and it is pre-existing:** the Builder calls `listNotes()` with **no limit** (`:1166`, `api.ts:4395`) and filters the entire library client-side. Program filtering makes the *displayed* set smaller but does not reduce the payload. For a curator with thousands of notes this is already the wrong shape — but it is not caused by Sections and should not be fixed under their banner.
+
+## 3. Section assignment during Add Notes
+
+**Recommended, and small.** One destination control beside the existing selected tray: existing sections, `No section`, and — only if it stays one control — `+ Create section`. `handleAddLeafNotes` already receives the batch; it needs to pass a label through the same `setOrder` call it already makes.
+
+**Do not put a section selector on every result card.** The owner is right about density, and the selected-tray pattern already in the picker is the correct home.
+
+**On inline creation:** include it. Without it the curator must leave the picker to create a section and come back, which is the exact round trip B exists to remove. It is a free-text combobox, not a modal — the same primitive recommended for the leaf Builder.
+
+## 4. Sections in the parent Build page
+
+**Real, and confirmed:** `SortableSubjectBlock` already has a `collapsed` prop and renders note cards when expanded (`subject.items.map`, two call sites). A 77-note plan is 77 flat cards there today.
+
+**But it is a second surface, and the curator can do all section work in the leaf Builder.** Recommendation: **defer**, and when it lands, nest the existing leaf section block inside the existing subject block rather than inventing a third collapsible primitive. Note the pre-existing inconsistency to resolve at that point: the learner collapses at 1024px, the leaf Builder at 640px, via two different mechanisms.
+
+## 5–6. Bulk selection and bulk actions
+
+**Bulk Move to Section: cheap, and the natural pair to D's selection model.** One PUT, atomic, no new endpoint.
+
+**Bulk Remove: not cheap, and needs an endpoint** (`DELETE /{id}/items` taking a body, or a `POST /{id}/items/remove`) to be atomic and O(n) rather than O(n·m).
+
+**Move to another Subject Plan: defer.** It is remove-from-A + add-to-B across two collections with no transaction spanning them, and a partial failure loses the note's placement silently. It needs its own design, not a checkbox.
+
+## 7. Desktop and mobile
+
+Selection needs a visible mode toggle on touch (`Select`) rather than long-press, which collides with scroll. The action bar should be a sticky footer on mobile and inline on desktop. The repo already has the ▲▼ button pairs beside every drag handle (`aria-label="Move … up"`), which is the established non-drag path and the pattern bulk actions should extend.
+
+## 8. Accessibility and keyboard
+
+Checkboxes must be real focusable inputs with labels, not click-target divs. The existing ▲▼ buttons are the keyboard-accessible reordering path and must stay. Announce selection count via a live region. **The existing drag handles already carry `aria-label`s** — match that standard rather than lowering it.
+
+## 9. Selection state across search and filter
+
+**Keep selection across query changes — which the picker already does**, and visibly: selected notes are excluded from `resultNotes` and rendered in the tray, so they cannot be lost behind a filter. **Preserve that behaviour if program filtering is added**: a note selected before a filter change must remain selected and visible in the tray even when the filter would now hide it, or the curator loses work silently.
+
+## 10. Confirmation and destructive-action rules
+
+**"Remove" for collection membership, never "Delete".** The leaf Builder already says Remove (`handleRemoveLeafNote`). Bulk removal must state the count and the scope explicitly — *"Remove 12 notes from this Subject Plan? The notes stay in your library."* — because the canonical-deletion fear is exactly what bulk selection amplifies. Section deletion is not destructive to notes (they fall to Unsectioned) and should say so rather than warn.
+
+## 11. API changes for true batch operations
+
+- **Bulk Move to Section: none.** `setOrder` is already whole-set.
+- **Bulk Remove: one endpoint**, or accept O(n·m) and non-atomic.
+- **Add with section: none** — `addItems` then the existing `setOrder`, or a label on `AddNoteCollectionItemsRequest` to make it one call.
+- **Program-filtered picker: none** client-side; a server-side `?programId=` only if payload size forces it.
+
+## 12. Transaction and error behaviour
+
+`setOrder` is `@Transactional` and whole-set, so bulk Move is **already atomic**. The per-note DELETE loop is **not** — this is the strongest technical argument for a batch remove endpoint rather than a client loop.
+
+**⚠️ Correction from the pressure test, and it is in the plan's favour:** the *add* race is **not** silent loss. `validateSubmittedSetMatchesCurrent:1780` rejects a stale `setOrder` with `ORDER_SET_MISMATCH`, so a curator editing while a bulk batch lands gets a visible error and a refresh, not a clobber. **Last-write-wins is real only between two Builder tabs.** That removes an argument against shipping the section-aware and set-from-subjects items beside live Builder editing.
+
+**⚠️ The concurrency exposure widens with bulk operations.** There is **no `@Version` on either entity**, and edits are whole-collection PUTs behind a 500 ms debounce — so two tabs, or a bulk action racing a running bulk-generation batch, is **last-write-wins across the entire collection**. Today that costs one label; with bulk actions it can silently revert a whole reorganisation. If bulk ships, optimistic concurrency stops being optional.
+
+## 13. Performance at 50–100+ notes
+
+Every label edit PUTs all 77 rows; `removeItem` rewrites all positions per call; the picker loads the entire library. None of these is fatal at 77 and all degrade predictably. **The one that degrades worst is bulk remove via a client loop** — quadratic and non-atomic — which is why it is the item that must not ship without its endpoint.
+
+---
+
+# Revised release boundary
+
+**Principle: fix the inflow before building the repair tools.** Most of the pain in this addendum is the cost of *reorganising notes that arrived in the wrong place*. Bulk selection, bulk move and parent-page section editing are all repair machinery. If notes arrive already sectioned, the demand for repair drops sharply — and how sharply is measurable rather than assumable. Building repair first would bake in the assumption that notes will keep arriving unsectioned.
+
+## Necessary to make Sections genuinely usable — the next release
+
+**Revised 2026-08-18 after a cold UX pressure test**, which corroborated the dropped set-from-subjects item as its own lead finding, **disproved one cost estimate in this document**, and found a defect that exists only when two items ship together.
+
+1. **Guard the synthetic `Ungrouped` bucket** — non-editable, and reject it as a typed name. Without this the original incident recurs. *Blocking.*
+2. **Port the section combobox into the Builder** — restores section creation. **Two required details, both from the pressure test:**
+   - **⚠️ Key the card `${noteId}:${item.label ?? ""}`, not `noteId`.** The ported control carries local `labelValue` state plus a debounced auto-save. `LeafSortableNoteCard` is currently keyed by note id, which is **stable across `refreshBuilder`** — so after item 3's rename mass-relabels a section, every card keeps its stale `labelValue`, the effect sees a difference, and it schedules `onLabelChange(noteId, staleValue)`, **silently reverting the rename one note at a time.** `LeafSectionBlock` is already keyed `${section.id}:${section.name}`; match it. **Items 2 and 3 are each correct alone and wrong together — this is the whole-release-only class the pre-signoff pressure test exists for.**
+   - **Snap a typed case-variant onto the existing option.** Picking is already typo-proof (`SuggestionCombobox.matchesOption` normalizes), but free-typing `algebra` beside `Algebra` mints a second section that renders **identically**, because grouping is case-sensitive while the learner header is `uppercase`. Fix in the combobox, not in `buildLeafSections` — case-folding the grouping is the riskier change.
+3. **Merge confirmation on rename**, mirroring the learner modal.
+4. **`maxLength` 150 → 120.**
+5. **Section-aware bulk generation — as an EDITABLE field pre-filled from the batch subject.** *Revised: not a hidden coupling.* A silent subject→section coupling gives the curator no override and no way to prevent the degenerate case this document already identified (every batch run as "Engineering Mathematics"). The pre-fill is free — `batch.subject()` is in hand — and the field costs one input plus a nullable label threaded through `addGeneratedItems` / `addItems` / `buildItems` (which hard-sets `null` at `:1806`).
+6. **"Set sections from note subjects" Builder action.** One button, ~10 lines, **no API and no migration**: `leafItems.map(i => ({ ...i, label: i.subject?.trim() || null }))` through the existing `persistLeafItems`. Provably safe on length — `notes.subject` is `VARCHAR(64)` against a 120-char label cap, so it **can never 400**. `NoteCollectionItemResponse.subject` already ships and the frontend already reads it.
+7. **Desktop section collapse — ~2 lines, and load-bearing rather than cosmetic.** `LeafSectionBlock`'s collapse is `sm:hidden` / `hidden sm:block`, so it exists **only below 640px**: on desktop, where the curator works, a 77-note plan is an **uncollapsible 77-card page**. This compounds item 5 — because `addItems` appends at `max(position)+1`, section order *is* generation order, and repairing a wrong order means dragging a section header across exactly the page that cannot collapse.
+
+**⚠️ CUT: "section destination in Add Notes" (former item 6).** The pressure test **disproved this document's cost estimate for it.** The addendum claimed `handleAddLeafNotes` "needs to pass a label through the same `setOrder` call it already makes" — **there is no `setOrder` call there**; it calls `addCollectionItems` then `refreshBuilder`. So it needs a second whole-collection PUT after every add, or an API change. `AddNotesModal` also has **two call sites** with different section vocabularies, and the control only helps when an entire added batch belongs to one section — a multi-area add still needs several picker rounds. **Item 6 covers all of those cases for less.**
+
+### Why this list is right, with the interaction count
+
+- **A plan generated after this ships:** every batch lands labelled, contiguous, in generation order. **Repair interactions: zero.** Multi-select would have no work to do — which is why deferring it is correct.
+- **Any batch that lands unsectioned** (notes generated before this release, notes added via the picker, a batch where the curator typed the plan name as subject, or any later re-cut): per note the curator scrolls, opens the combobox, types, and waits on a 500 ms debounce → a whole-collection PUT → `refreshBuilder`, which re-fetches the collection **and the entire note library**, with every section disabled meanwhile. **~230 UI actions and 77 serialized, UI-blocking round trips for a 77-note plan.**
+
+**Item 6 collapses that second case from ~230 interactions to one.** That is the whole argument, and it is why multi-select can still wait.
+
+## High-value, belongs beside it — but the release after
+
+- **A. Program-scoped picker + `· N programs`** — improves discovery quality, not Sections usability. Client-side only.
+- **C. Sections in the parent Build page** — real, but the leaf Builder covers the authoring need today.
+- **D. Multi-select + bulk Move** — cheap on the API, but needs a selection model, an action bar, and confirmation rules. **Its value is measurable only after 5–6 land.**
+
+## Deferred, with reasons
+
+- **Bulk Remove** — until its endpoint exists; a client loop is quadratic and non-atomic.
+- **Move notes to another Subject Plan** — cross-collection with no spanning transaction.
+- **E. Multi-item drag — recommended against, not merely deferred.** Select → Move already covers it; drag rewrites every position anyway, so multi-drag adds state without reducing writes; and it is poor touch ergonomics on the surface where a 77-note plan hurts most. **No use case in this addendum requires it.**
+- **Optimistic concurrency (`@Version`)** — not needed for 1–6, but a prerequisite for bulk actions.
+- **Picker pagination / server-side filtering** — pre-existing, unrelated to Sections.
+
+## Owed alongside the release — found by the pressure test, cheap, and easy to lose
+
+- **⚠️ Adoption sequencing guidance, which nothing else in this document covers.** `persistAdoptedPlan:1398-1402` returns `alreadyAdoptedResponse` on any existing `sourcePlanId` — **re-adopt is a hard no-op**. Anyone who adopts the CE Goal before it is sectioned keeps the unsectioned copy **forever**, and under the snapshot rule that is correct behaviour, not a bug. **So: finish sectioning before publishing or promoting the Goal.** This is guidance the release owes the curator, not code.
+- **Builder / learner grouping parity.** Make the Builder match the documented contract: unsectioned bucket **pinned last**, non-editable, and suppressed entirely when it is the only group (as the learner already does via `hasSections`). This is most of item 1 anyway.
+- **Name the bucket "Not in a section", and do NOT rename it to "Other notes" as this document earlier floated.** The sentinel doubles as the reserved name, so displaying a different string requires a **two-string** reserved guard or a curator can type the displayed name and mint a real section that renders identically — the exact collision that started this assessment. "Not in a section" names the state rather than inventing a category.
+- **⚠️ `CollectionLabels` profile-maps every level except this one.** `frontend/lib/collection-labels.ts` maps Goal / Subject Plan / Note per profile — a TEACHER sees Course / **Unit** / Lesson Plan — but carries **no field for the section label**, which is a hardcoded constant in two files. A teacher therefore sees Course → Unit → **Section** → Note, where "section" already means a class cohort. Either add `sectionSingular` alongside the others, or accept the collision **knowingly** rather than by omission.
+- **The empty-section placeholder is unreachable dead code.** `LeafSectionBlock:583` renders *"No notes in this section yet. Drag notes here from another section"* — but a derived section cannot be empty. It advertises precisely the capability curators go hunting for and can never reach it. Remove it, or the create control ships beside a promise it cannot keep.
+- **⚠️ Deferring bulk Move rests on a measurement that does not exist.** This document says its value is "measurable only after 5–6 land" — but **sectioning emits zero analytics**, so nothing will be measurable. This is the same shape as the `v0.83.0` checkpoint that had to read a column directly because Public Library filtering emitted no events. **Either fire one event on section assignment, or restate the deferral as a judgement rather than a measurement.** Do not leave it claiming evidence it will not have.
+- Two one-liners: `AccountDataExportService.toCollection:110` drops `label`, so section structure is missing from the data export; and `defaultSectionExpanded` starts `null`, giving desktop learners a brief collapsed→expanded flash.
+
+## Answer to the framing question
+
+**Has the Builder outgrown its small-collection interaction model?** Partly — but less than the addendum implies. Its *authoring* model is sound; what it lacks is a create control, a guard, and any way for notes to arrive pre-sectioned. Its *bulk-editing* model genuinely has not been built. Fixing inflow first tests whether bulk editing is needed at all, at a fraction of the cost of assuming it is.
