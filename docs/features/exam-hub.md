@@ -71,6 +71,8 @@ Exam hubs also perform a best-effort Official Review Set enrichment:
 
 Exam practice launched from adopted content follows the note's curriculum axis rather than the hub visitor's profile level. On the single-Study-Pack paths, Long Exam and Board Exam question pools are stamped and sampled by the note's effective curriculum level (`notes.learner_level` -> reader level -> `COLLEGE`). Changing the reader's profile level therefore does not invalidate a pool for a note with an authored level. Multi-note exam assembly remains always assembled from its selected sources and does not use this single-note pool key.
 
+Single-note exam-pool generation also carries an attempt clock. Every transition into `PENDING` or `GENERATING` refreshes `generation_status_at`; an age-based recovery sweep resolves stale non-terminal pools to `FAILED`. This prevents a pool killed while queued or generating from permanently forcing every later exam start on that Study Pack onto live generation. The sweep stops at `FAILED`: the existing `sampleQuestions` path refreshes the pool only when a learner next uses it. Pool `created_at` is never the recovery clock because pool rows are reused, and a late live task that finishes after recovery may still write the correct `READY` outcome.
+
 ## Conversion
 
 Anonymous CTA:

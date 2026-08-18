@@ -40,6 +40,9 @@ public class ExamQuestionPoolEntity {
     @Column(name = "generation_status", nullable = false, length = 20)
     private String generationStatus;
 
+    @Column(name = "generation_status_at")
+    private OffsetDateTime generationStatusAt;
+
     @Column(name = "learner_level", length = 50)
     private String learnerLevel;
 

@@ -88,4 +88,7 @@ public class NoteEntity implements NoteListItemView {
 
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
+
+    @Column(name = "generation_enqueued_at")
+    private OffsetDateTime generationEnqueuedAt;
 }

@@ -25,6 +25,7 @@ public class StudySnapProperties {
     private final Email email = new Email();
     private final Retention retention = new Retention();
     private final Account account = new Account();
+    private final Generation generation = new Generation();
 
     @Setter
     private String appName = "NoteLib";
@@ -401,5 +402,18 @@ public class StudySnapProperties {
     public static class Account {
         private int deletionGraceDays = 30;
         private String purgeCron = "0 30 3 * * *";
+    }
+
+    @Getter
+    @Setter
+    public static class Generation {
+        // Conservative placeholders until production observations justify tighter config-only bounds.
+        private String recoveryCron = "0 */10 * * * *";
+        private boolean enabled = true;
+        private int recoveryBatchSize = 200;
+        private int poolPendingBoundMinutes = 60;
+        private int poolGeneratingBoundMinutes = 60;
+        private int longExamSessionBoundMinutes = 30;
+        private int noteBoundMinutes = 120;
     }
 }

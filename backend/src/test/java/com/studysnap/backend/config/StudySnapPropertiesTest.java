@@ -65,6 +65,19 @@ class StudySnapPropertiesTest {
     }
 
     @Test
+    void generationRecoveryUsesConservativeConfigurableDefaults() {
+        StudySnapProperties.Generation generation = new StudySnapProperties().getGeneration();
+
+        assertThat(generation.getRecoveryCron()).isEqualTo("0 */10 * * * *");
+        assertThat(generation.isEnabled()).isTrue();
+        assertThat(generation.getRecoveryBatchSize()).isEqualTo(200);
+        assertThat(generation.getPoolPendingBoundMinutes()).isEqualTo(60);
+        assertThat(generation.getPoolGeneratingBoundMinutes()).isEqualTo(60);
+        assertThat(generation.getLongExamSessionBoundMinutes()).isEqualTo(30);
+        assertThat(generation.getNoteBoundMinutes()).isEqualTo(120);
+    }
+
+    @Test
     void askCompanionIsAvailableToPlusAndProWithTwentyMonthlySessions() {
         StudySnapProperties.Pricing pricing = new StudySnapProperties().getPricing();
 
