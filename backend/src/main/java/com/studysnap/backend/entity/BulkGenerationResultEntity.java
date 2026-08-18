@@ -1,5 +1,6 @@
 package com.studysnap.backend.entity;
 
+import com.studysnap.backend.dto.BulkGenerationFailureReason;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -65,6 +66,10 @@ public class BulkGenerationResultEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "failed_topics", nullable = false, columnDefinition = "jsonb")
     private List<String> failedTopics;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "failed_topic_reasons", columnDefinition = "jsonb")
+    private List<BulkGenerationFailureReason> failedTopicReasons;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "quota_blocked_topics", nullable = false, columnDefinition = "jsonb")

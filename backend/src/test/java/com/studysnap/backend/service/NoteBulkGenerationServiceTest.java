@@ -1,13 +1,16 @@
 package com.studysnap.backend.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.dto.BulkGenerateNotesRequest;
 import com.studysnap.backend.dto.BulkGenerateNotesResponse;
+import com.studysnap.backend.dto.BulkGenerationFailureReason;
 import com.studysnap.backend.dto.AddNoteCollectionItemsRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.DomainContext;
+import com.studysnap.backend.entity.BulkGenerationResultEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -15,6 +18,7 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.BulkNoteGenerationQuotaExceededException;
+import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
@@ -22,6 +26,7 @@ import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
+import com.studysnap.backend.repository.BulkGenerationResultRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -31,6 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -46,6 +52,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
@@ -58,6 +65,7 @@ class NoteBulkGenerationServiceTest {
     private static final String PROFILE_COURSE_PROGRAM = "Secondary Education";
     private static final String SUBJECT = "Maternal Health";
     private static final String ENGINEERING_ALGEBRA_TOPIC = "Engineering Algebra";
+    private static final String INVALID_OVERVIEW_MESSAGE = "Generated note has an invalid overview.";
     private static final UUID CATALOG_PROGRAM_ID = UUID.randomUUID();
 
     @Mock
@@ -78,8 +86,9 @@ class NoteBulkGenerationServiceTest {
     private CourseProgramCatalogRepository courseProgramCatalogRepository;
     @Mock
     private OnboardingGuardService onboardingGuardService;
-    @Mock
     private BulkGenerationResultService bulkGenerationResultService;
+    @Mock
+    private BulkGenerationResultRepository bulkGenerationResultRepository;
     @Mock
     private MePlanService mePlanService;
     @Mock
@@ -87,10 +96,13 @@ class NoteBulkGenerationServiceTest {
 
     private NoteBulkGenerationService service;
     private StudyPackGenerationTaskDispatcher taskDispatcher;
+    private BulkGenerationFailureReasonNormalizer failureReasonNormalizer;
 
     @BeforeEach
     void setUp() {
         taskDispatcher = spy(new StudyPackGenerationTaskDispatcher(Runnable::run));
+        bulkGenerationResultService = spy(new BulkGenerationResultService(bulkGenerationResultRepository));
+        failureReasonNormalizer = spy(new BulkGenerationFailureReasonNormalizer());
         service = new NoteBulkGenerationService(
                 noteGenerationService,
                 noteService,
@@ -103,6 +115,7 @@ class NoteBulkGenerationServiceTest {
                 courseProgramCatalogRepository,
                 onboardingGuardService,
                 bulkGenerationResultService,
+                failureReasonNormalizer,
                 mePlanService,
                 noteCollectionService,
                 50,
@@ -215,7 +228,8 @@ class NoteBulkGenerationServiceTest {
         verify(noteService, times(1)).create(any(UpsertNoteRequest.class), eq(userId));
         verify(noteCollectionService, times(1)).addGeneratedItems(any(), any(), any());
         verify(bulkGenerationResultService).recordResult(
-                any(), eq(userId), eq(SUBJECT), any(), any(), any(), any(), any(), eq(false), eq(1), eq(1), any(), any()
+                any(), eq(userId), eq(SUBJECT), any(), any(), any(), any(), any(), eq(false), eq(1), eq(1),
+                any(), any(), any()
         );
     }
 
@@ -287,6 +301,7 @@ class NoteBulkGenerationServiceTest {
                 eq(2),
                 eq(2),
                 eq(List.of()),
+                eq(List.of()),
                 eq(List.of())
         );
     }
@@ -327,6 +342,7 @@ class NoteBulkGenerationServiceTest {
                 anyBoolean(),
                 anyInt(),
                 anyInt(),
+                any(),
                 any(),
                 any()
         );
@@ -371,6 +387,7 @@ class NoteBulkGenerationServiceTest {
                 eq(false),
                 eq(2),
                 eq(2),
+                eq(List.of()),
                 eq(List.of()),
                 eq(List.of())
         );
@@ -563,8 +580,77 @@ class NoteBulkGenerationServiceTest {
                 eq(2),
                 eq(1),
                 eq(List.of("Rejected Topic")),
+                any(),
                 eq(List.of())
         );
+    }
+
+    @Test
+    void queueBatch_persistsAppExceptionCodeAndMessageThroughProcessBatch() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(List.of("Invalid Overview"), COURSE_PROGRAM, false);
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Invalid Overview", context))
+                .thenThrow(new TestLlmInvalidOutputException());
+
+        service.queueBatch(request, userId, false);
+
+        BulkGenerationResultEntity receipt = savedReceipt();
+        assertThat(receipt.getFailedTopicReasons()).containsExactly(
+                new BulkGenerationFailureReason(
+                        "Invalid Overview",
+                        TestLlmInvalidOutputException.CODE,
+                        INVALID_OVERVIEW_MESSAGE
+                )
+        );
+    }
+
+    @Test
+    void queueBatch_persistsGenericReasonWithoutNonAppExceptionMessage() {
+        UUID userId = UUID.randomUUID();
+        String sensitiveMessage = "provider response contained secret payload";
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(List.of("Provider Failure"), COURSE_PROGRAM, false);
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Provider Failure", context))
+                .thenThrow(new IllegalStateException(sensitiveMessage));
+
+        service.queueBatch(request, userId, false);
+
+        BulkGenerationFailureReason reason = savedReceipt().getFailedTopicReasons().getFirst();
+        assertThat(reason.code()).isEqualTo(BulkGenerationFailureReasonNormalizer.UNEXPECTED_ERROR_CODE);
+        assertThat(reason.reason())
+                .contains(IllegalStateException.class.getSimpleName())
+                .doesNotContain(sensitiveMessage);
+    }
+
+    @Test
+    void queueBatch_preservesFailedTopicsJsonShapeContentAndOrder() throws Exception {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(
+                List.of("First Failed Topic", "Second Failed Topic"),
+                COURSE_PROGRAM,
+                false
+        );
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
+                .thenThrow(new IllegalStateException("first"), new IllegalArgumentException("second"));
+
+        service.queueBatch(request, userId, false);
+
+        String persistedJson = new ObjectMapper().writeValueAsString(savedReceipt().getFailedTopics());
+        assertThat(persistedJson).isEqualTo("[\"First Failed Topic\",\"Second Failed Topic\"]");
     }
 
     @Test
@@ -611,7 +697,48 @@ class NoteBulkGenerationServiceTest {
                 eq(3),
                 eq(1),
                 eq(List.of("Broken Topic")),
+                any(),
                 eq(List.of("Over Limit Topic"))
+        );
+        assertThat(savedReceipt().getFailedTopicReasons())
+                .extracting(BulkGenerationFailureReason::topic)
+                .containsExactly("Broken Topic")
+                .doesNotContain("Over Limit Topic");
+    }
+
+    @Test
+    void queueBatch_fallsBackForOneNormalizationFailureAndRecordsTheRest() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(
+                List.of("Fallback Topic", "App Topic"),
+                COURSE_PROGRAM,
+                false
+        );
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic(anyString(), eq(context)))
+                .thenThrow(new IllegalStateException("original failure"), new TestLlmInvalidOutputException());
+        doThrow(new IllegalStateException("normalizer failed"))
+                .doCallRealMethod()
+                .when(failureReasonNormalizer)
+                .normalize(anyString(), any(RuntimeException.class));
+
+        service.queueBatch(request, userId, false);
+
+        BulkGenerationResultEntity receipt = savedReceipt();
+        assertThat(receipt.getFailedTopicReasons()).containsExactly(
+                BulkGenerationFailureReasonNormalizer.unexpected(
+                        "Fallback Topic",
+                        new IllegalStateException()
+                ),
+                new BulkGenerationFailureReason(
+                        "App Topic",
+                        TestLlmInvalidOutputException.CODE,
+                        INVALID_OVERVIEW_MESSAGE
+                )
         );
     }
 
@@ -648,6 +775,7 @@ class NoteBulkGenerationServiceTest {
                 eq(1),
                 eq(1),
                 eq(List.of()),
+                eq(List.of()),
                 eq(List.of())
         );
     }
@@ -680,6 +808,7 @@ class NoteBulkGenerationServiceTest {
                 eq(2),
                 eq(0),
                 eq(List.of("Topic One", "Topic Two")),
+                any(),
                 eq(List.of())
         );
     }
@@ -892,6 +1021,13 @@ class NoteBulkGenerationServiceTest {
         return new StudyPackGenerationContext(learnerLevel, courseProgram, SUBJECT, List.of());
     }
 
+    private BulkGenerationResultEntity savedReceipt() {
+        ArgumentCaptor<BulkGenerationResultEntity> captor =
+                ArgumentCaptor.forClass(BulkGenerationResultEntity.class);
+        verify(bulkGenerationResultRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
     private NoteResponse noteResponse(String id) {
         return new NoteResponse(
                 id,
@@ -922,5 +1058,13 @@ class NoteBulkGenerationServiceTest {
                 false,
                 false
         );
+    }
+
+    private static final class TestLlmInvalidOutputException extends AppException {
+        private static final String CODE = "LLM_INVALID_OUTPUT";
+
+        private TestLlmInvalidOutputException() {
+            super(CODE, INVALID_OVERVIEW_MESSAGE, HttpStatus.BAD_GATEWAY);
+        }
     }
 }

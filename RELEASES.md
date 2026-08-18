@@ -1,5 +1,66 @@
 # RELEASES.md - NoteLib
 
+## v0.87.0 - Failure Attribution
+
+**Status: Released** (kicked off, rescoped and signed off 2026-08-18)
+
+Theme: when a bulk-generated topic fails, the curator should be told which check rejected it.
+
+### Why this replaced the release's original scope
+
+**This release was kicked off as "Published Bounds" and rescoped the same day, on its own pre-committed gate.** The original scope targeted three unpublished word bounds — `title` (1–12), `overview` (8–90), `keyIdea` (4–40) — that `v0.86.0`'s pressure test found surviving in the method it had just fixed, and named as the leading candidate for owner-reported Bulk Generate failures in other subject areas. Scope item 1 was *reproduce before fixing*, with the gate stated in advance: **"if these bounds never fire in practice, say so and rescope."**
+
+**They never fired.** A live probe over 14 topics spanning all eight `DomainContext` values, run against the real API:
+
+| Field | Bound | Observed range | Closest approach |
+|---|---|---|---|
+| `title` | 1–12 words | 5–9 | 9/12 (75%) |
+| `overview` | 8–90 words | 28–40 | 40/90 (44%) |
+| `keyIdea` | 4–40 words | 18–31 | 31/40 (78%) |
+
+**14 of 14 generated cleanly. Nothing landed out of bounds, and nothing came within 15% of a ceiling.** The `overview` floor of 8 — the likeliest to reject correct terse output, since the prompt pushes toward brevity — was never approached; the shortest observed overview was 28 words. **The bounds are real and mismatched in unit, but they do not bite**, and a prompt change is a cost paid on every generation call. Fixing them would have been principle-driven against zero evidence of harm. The finding stays recorded in `docs/claude-plans/v0.86.0-note-item-limit-mismatch.md` and at the constants themselves.
+
+### The actual defect, which two failed investigations have now pointed at
+
+**`BulkGenerationResultEntity.failedTopics` is a `List<String>` of topic NAMES. The reason is discarded.** `NoteBulkGenerationService.processBatch` catches per item, logs the exception server-side, and records only the topic. The curator sees a list of topics that failed and no indication why, on a surface that already renders that list with a retry affordance.
+
+**That gap has now cost two investigations.** `v0.86.0` fixed `invalid core details` and the owner-reported other-subject failures persisted; `v0.87.0` bet on the three word bounds and they came back clean. `buildGeneratedNoteContent` alone can raise **six distinct** rejections — invalid title, overview, key idea, core details, why-it-matters, quick recall — plus the whole-note length bound and the filler guard, and the product throws away which one it was. Each investigation has had to guess, then burn a live probe to test the guess.
+
+**This is evidence infrastructure, and it is justified by the two misses rather than by a hypothesis.**
+
+### Planned Scope
+
+- **1. Record the reason per failed topic (backend).** A new nullable `jsonb` column alongside `failed_topics`, mapping topic to a normalized reason. **Additive by design:** `failed_topics` keeps its shape and meaning, so the existing retry path and every receipt already in the database keep working untouched.
+- **2. Normalize what gets stored (backend).** An `AppException` contributes its code and its already user-facing message, which is what distinguishes the six cases. **Anything else contributes a generic reason and its exception class — never a raw message, never a stack trace.**
+- **3. Surface it beside each topic (frontend).** The bulk failure banner already lists failed topics in `library/page.tsx`; each row gains its reason. **A receipt with no recorded reason must render exactly as it does today** — old rows are the common case until the hourly cleanup job ages them out.
+
+### Anti-drift
+
+- **⚠️ Do NOT change the shape or meaning of `failed_topics`.** The retry affordance reads it, and every existing receipt is a plain string list. This release adds a parallel column; it does not migrate the old one.
+- **⚠️ Do NOT surface raw exception text for non-`AppException` failures.** Bulk generation is curator-only, which is not a reason to relax this.
+- **No new validation, and no bound is changed, published, raised or removed.** The three unpublished word bounds stay exactly as they are — this release makes failures *legible*, it does not alter which inputs fail. Changing both at once would destroy the read this release exists to produce.
+- **No new analytics event.** The receipt is the record; a second parallel channel is not needed to answer the question this release asks.
+- **Study Pack generation failures remain out of this receipt.** Only the note-from-topic step is caught per item; the Study Pack step is dispatched async and surfaces as a note status. That boundary is unchanged, and the release notes must not imply otherwise.
+
+### Shipped
+
+- **Per-topic bulk failure attribution** — Bulk Generate now stores a parallel nullable `failed_topic_reasons` receipt field and shows each recorded reason beneath its failed topic in Library. `AppException` failures preserve their user-facing code and message; every other runtime failure stores only `UNEXPECTED_ERROR`, fixed generic copy, and the exception's simple class name. The existing `failed_topics` string list and retry path are unchanged, quota-blocked topics receive no reason entry, and legacy receipts with no reason data retain the previous banner markup.
+
+### ⚠️ The instrument this release ships is EPHEMERAL, and that is a property of the receipt, not a defect introduced here
+
+`BulkGenerationResultService.consumeResult` **deletes the receipt on read**, and `BulkGenerationResultCleanupJob` expires unread ones after **24 hours**. A recorded reason therefore exists only until the curator loads the banner, or one day — whichever comes first.
+
+**This cannot be queried from the database after the fact.** Anyone trying to answer *"what have bulk failures actually been failing on?"* from `bulk_generation_result` will find an empty or near-empty table and may wrongly conclude nothing is failing. The durable record remains the **server log line**, which already carries the exception. The product surface serves the curator in the moment; the log serves the retrospective. Recorded because this release exists to make failures diagnosable and its own output is the shortest-lived data in the system.
+
+### Pre-signoff check — 2026-08-18
+
+**Cheap path taken deliberately.** One PR, one concept, additive, no pre-existing shared method touched by two PRs — none of the conditions for a full cold-context pressure test were met, and `v0.86.0` had just paid for one. `/audit-diff` found **no blocking issues**, which is a change from the previous release.
+
+The two acceptance criteria carrying real risk were verified rather than read: **zero** files under `prompts/` or `OpenAiLlmStudyPackService` changed across the entire release, so no validation moved while failures were being made legible; and the raw-message leak guard is **mutation-verified** — appending `getMessage()` for non-`AppException` failures fails three named tests, including one asserting `doesNotContain` on the *persisted* value.
+
+Backend 1636 tests · frontend 1941 across 184 suites · `tsc` clean.
+
+
 ## v0.86.0 - Generation Recovery
 
 **Status: Released** (kicked off and signed off 2026-08-18)
@@ -12,9 +73,11 @@ Theme: pre-warmed exam content and in-flight sessions that die on deploy should 
 
 | Surface | Stuck rows | Oldest | Learner impact |
 |---|---|---|---|
-| `exam_question_pool` | **18** | 2026-07-02 (6.5 weeks) | Every exam start on those Study Packs falls back to on-demand LLM generation — recurring cost and latency, not a block |
+| `exam_question_pool` | **37** (18 `GENERATING` + 19 `PENDING`; the 19 corrected in 2026-08-18) | 2026-07-02 (6.5 weeks) | Would degrade every exam start on those Study Packs to on-demand LLM generation — **but see the correction below: no exam has ever been started on any of them** |
 | Long Exam session | **1** | 2026-05-19 (3 months) | **Hard permanent block** — that learner cannot start a Long Exam on that pack, ever |
 | `notes` | **0** | — | Defect and mechanism verified; production impact is **PROSPECTIVE** |
+
+**⚠️ CORRECTION, 2026-08-18, from step 6c of the sizing query — the POOL half is largely prospective too, and the release's cost argument was overstated.** The 37 stuck pools sit on **38 Study Packs carrying ZERO Long Exam or Board Exam sessions between them, affecting ZERO learners.** Pools are pre-warmed eagerly on every Study Pack creation, so a stuck pool on a pack nobody sits an exam on costs nothing until someone does. The degradation this release describes is **real in mechanism and unrealized in practice**: it would be paid on the first exam start against one of those packs, and that has not happened. **The only REALIZED damage in this release was the single Long Exam session** — one learner, hard-blocked since 2026-05-19. Everything else is protection against a cost not yet incurred. Recorded because the release was justified partly on *"recurring cost and latency"*, and that framing did not survive its own follow-up read.
 
 **⚠️ The note half is prospective and must not be described as a backlog.** It is real — `StudyPackService:209-211` commits `GENERATING` before dispatch, `:622` throws 409 `NOTE_GENERATION_IN_PROGRESS` on every retry, and nothing sweeps — but zero notes are in that state today. It ships because the fix is nearly free once the sweeper exists and because a single occurrence is permanent and unrecoverable for that learner, not because anyone is currently stuck.
 

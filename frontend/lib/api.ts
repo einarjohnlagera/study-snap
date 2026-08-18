@@ -154,6 +154,12 @@ export type BulkGenerateNotesResponse = {
   rejectedTopics: number;
 };
 
+export type BulkGenerationFailureReason = {
+  topic: string;
+  code: string;
+  reason: string;
+};
+
 export type BulkGenerationResultResponse = {
   id: string;
   subject: string;
@@ -165,6 +171,7 @@ export type BulkGenerationResultResponse = {
   requestedCount: number;
   createdCount: number;
   failedTopics: string[];
+  failedTopicReasons?: BulkGenerationFailureReason[] | null;
   quotaBlockedTopics: string[];
   createdAt: string;
 };
