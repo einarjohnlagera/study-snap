@@ -37,7 +37,7 @@ Anti-drift: **no Domain Context Catalog, no admin CRUD, no Domain Categories, no
 
 ### Shipped
 
-- **Declared quantitative Domain Context signal (backend).** All eight enum values now state their quantitative treatment at declaration time. Engineering Mathematics, Engineering Sciences, and Civil Engineering preserve their prior guidance; Professional Practice & Regulation, Professional Education, Nursing, and Accountancy now opt in explicitly, while General Education remains non-quantitative by default. The unchanged 49-keyword scan remains additive for subject, tags, concepts, summary, and the null-Domain-Context program fallback, with no generation-path I/O or persistence change.
+- **Declared quantitative Domain Context signal (backend).** All eight enum values now state their quantitative treatment at declaration time. Engineering Mathematics, Engineering Sciences, and Civil Engineering preserve their prior guidance; Professional Practice & Regulation, Nursing, and Accountancy now opt in explicitly, while General Education **and Professional Education** declare `false` and fall through to the unchanged scan (see the decision recorded below — Professional Education was delivered as `true` and corrected before commit). The unchanged 49-keyword scan remains additive for subject, tags, concepts, summary, and the null-Domain-Context program fallback, with no generation-path I/O or persistence change.
 - **Covered-subject guidance at all curator selectors (frontend).** Note Editor, Bulk Generate, and Note Detail now show the selected Domain Context's ratified covered-subject description without changing select behavior or API contracts; Engineering Economics is visibly placed under Engineering Mathematics.
 - **ADR-001 factual corrections (docs).** Corrected the claims that learners see the Domain Context vocabulary and that note cards display it. Domain Context remains curator-facing authoring metadata and an LLM input, while the binding governance conclusion remains unchanged: adding notes is authoring; adding a Domain Context is architecture.
 
@@ -48,6 +48,25 @@ Anti-drift: **no Domain Context Catalog, no admin CRUD, no Domain Categories, no
 Codex also found a **third** `ADR-001` error beyond the two named in scope: Applicable Programs surface on note cards, not "only on note detail" — verified, they are passed to cards on the Library, Dashboard community section, and public subject pages.
 
 Backend 1597 tests (up 15) · frontend 1940 tests / 184 suites · `tsc` clean · lint 0 errors.
+
+### ⚠️ Impact is PROSPECTIVE — this release changes the prompt for zero notes today
+
+**Verified after the fix landed, and it corrects how the headline number should be read.** The declared property fires only when `context.domainContext()` is non-null, and `StudyPackGenerationContextResolver` (`:43`, `:51`) populates that **solely from the note's own `domain_context` column** — there is no program→enum map. Against production:
+
+| Domain Context | notes | before | after |
+|---|---|---|---|
+| `CIVIL_ENGINEERING` | 54 | `true` (label contains *engineering*) | `true` |
+| `GENERAL_EDUCATION` | 31 | `false` | `false` (declared, falls through) |
+| `ENGINEERING_MATHEMATICS` | 20 | `true` | `true` |
+| `ENGINEERING_SCIENCES` | 16 | `true` | `true` |
+| *(unclassified)* | **835** | keyword scan | **keyword scan, unchanged** |
+| `ACCOUNTANCY`, `NURSING`, `PROFESSIONAL_PRACTICE_AND_REGULATION`, `PROFESSIONAL_EDUCATION` | **0** | — | — |
+
+**Every enum value in production use already matched the keyword scan on its own label; every value that newly opts in has zero notes.** So `isQuantitativeContext` returns an identical result for all 956 curator public notes. **The 463 do not move on deploy, and the Shipped bullet above was corrected because it read as though they would.**
+
+**This is not a defect in the fix — it is the fix's boundary, and it names the real constraint.** The guess is gone and cannot mis-fire on the next domain, which is the architectural win. But guidance reaches a note only once a curator classifies it, and classification sits at **12.7% (121 of 956)**. **What actually changed is that classification became a lever:** before this release, setting a note to `ACCOUNTANCY` did nothing for computation guidance, so there was no generation-quality reason to classify. Now there is.
+
+**The 463 therefore close by curator classification, not by more code** — and deliberately not by lengthening `QUANTITATIVE_KEYWORDS` (which would restore the guess) nor by declaring `quantitative` on the `course_program` catalog row, which would repeat the `PROFESSIONAL_EDUCATION` mistake at program scale: `Nursing` and `Architecture` are mixed catalogs where the computational subjects are a minority of a program whose other notes would inherit a false signal. Owed as `[CHECKPOINT — due 2026-09-17]`.
 
 ### The two Education values are declared `false`, deliberately
 
