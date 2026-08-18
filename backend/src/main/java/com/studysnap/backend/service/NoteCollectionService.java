@@ -250,7 +250,7 @@ public class NoteCollectionService {
         collection.setUpdatedAt(now);
         NoteCollectionEntity saved = collectionRepository.save(collection);
 
-        List<NoteCollectionItemEntity> items = buildItems(saved.getId(), orderedNoteIds, 0, now);
+        List<NoteCollectionItemEntity> items = buildItems(saved.getId(), orderedNoteIds, 0, now, null);
         itemRepository.saveAll(items);
         reassertPrimaryInvariant(userId);
         analyticsService.trackEvent(
@@ -954,7 +954,8 @@ public class NoteCollectionService {
                 .mapToInt(NoteCollectionItemEntity::getPosition)
                 .max()
                 .orElse(-1) + 1;
-        List<NoteCollectionItemEntity> newItems = buildItems(collectionId, newNoteIds, nextPosition, now);
+        String label = validateOptionalLabel(request == null ? null : request.label());
+        List<NoteCollectionItemEntity> newItems = buildItems(collectionId, newNoteIds, nextPosition, now, label);
         itemRepository.saveAll(newItems);
         touch(collection, now);
         NoteCollectionEntity saved = collectionRepository.save(collection);
@@ -977,7 +978,7 @@ public class NoteCollectionService {
      * server log. Input order is preserved so batch order still determines position.
      */
     @Transactional
-    public int addGeneratedItems(UUID collectionId, UUID userId, List<UUID> noteIds) {
+    public int addGeneratedItems(UUID collectionId, UUID userId, List<UUID> noteIds, String label) {
         List<UUID> requested = dedupeNoteIds(noteIds);
         if (requested.isEmpty()) {
             return 0;
@@ -989,7 +990,7 @@ public class NoteCollectionService {
         if (resolvable.isEmpty()) {
             return 0;
         }
-        addItems(collectionId, userId, new AddNoteCollectionItemsRequest(resolvable));
+        addItems(collectionId, userId, new AddNoteCollectionItemsRequest(resolvable, label));
         return resolvable.size();
     }
 
@@ -1807,7 +1808,8 @@ public class NoteCollectionService {
             UUID collectionId,
             List<UUID> noteIds,
             int startingPosition,
-            Instant now
+            Instant now,
+            String label
     ) {
         List<NoteCollectionItemEntity> items = new ArrayList<>();
         for (int index = 0; index < noteIds.size(); index++) {
@@ -1815,7 +1817,7 @@ public class NoteCollectionService {
             item.setId(UUID.randomUUID());
             item.setCollectionId(collectionId);
             item.setNoteId(noteIds.get(index));
-            item.setLabel(null);
+            item.setLabel(label);
             item.setPosition(startingPosition + index);
             item.setCreatedAt(now);
             items.add(item);

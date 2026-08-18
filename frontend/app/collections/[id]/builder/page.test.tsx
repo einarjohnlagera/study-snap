@@ -11,6 +11,7 @@ import {
   reorderCollectionChildren,
   setCollectionItemOrder,
   setCollectionParent,
+  trackAnalyticsEvent,
   updateCollection,
   type NoteCollectionItem,
 } from "@/lib/api";
@@ -59,6 +60,7 @@ jest.mock("@/lib/api", () => {
     reorderCollectionChildren: jest.fn(),
     setCollectionItemOrder: jest.fn(),
     setCollectionParent: jest.fn(),
+    trackAnalyticsEvent: jest.fn(),
     updateCollection: jest.fn(),
   };
 });
@@ -207,6 +209,7 @@ describe("StudyPlanBuilderPageClient", () => {
     (reorderCollectionChildren as jest.Mock).mockReset();
     (setCollectionItemOrder as jest.Mock).mockReset();
     (setCollectionParent as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (updateCollection as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "STUDENT", planType: "FREE" });
     (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
@@ -293,8 +296,10 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
     expect(await screen.findByRole("heading", { name: "Anatomy Plan" })).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Week 1")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Ungrouped")).toBeInTheDocument();
+    expect(screen.getByLabelText("Section name Week 1")).toBeInTheDocument();
+    expect(screen.getAllByText("Not in a section")[0]).toBeInTheDocument();
+    expect(screen.queryByLabelText("Section name Not in a section")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Drag section Not in a section" })).not.toBeInTheDocument();
     expect(screen.getByText("Skeletal System")).toBeInTheDocument();
     expect(screen.getByText("Muscle Groups")).toBeInTheDocument();
     expect(getCollectionGoal).not.toHaveBeenCalled();
@@ -411,7 +416,7 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
     await screen.findByRole("heading", { name: "Anatomy Plan" });
-    fireEvent.change(screen.getByLabelText("Move Muscle Groups to section"), { target: { value: "Week 1" } });
+    fireEvent.change(screen.getByLabelText("Section for Muscle Groups"), { target: { value: "Week 1" } });
 
     await waitFor(() => {
       expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
@@ -419,6 +424,147 @@ describe("StudyPlanBuilderPageClient", () => {
         { noteId: "note-2", label: "Week 1" },
       ]);
     });
+  });
+
+  it("snaps a typed case variant to the existing section casing", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Calculus" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.change(await screen.findByLabelText("Section for Muscle Groups"), { target: { value: "algebra" } });
+
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
+      { noteId: "note-1", label: "Algebra" },
+      { noteId: "note-2", label: "Algebra" },
+    ]));
+  });
+
+  it.each(["Not in a section", "not in a section", "  NOT IN A SECTION  "])(
+    "rejects the reserved section name %s before writing",
+    async (reservedName) => {
+      (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+        { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      ], { parentCollectionId: null, childCount: 0 }));
+      render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+      const sectionInput = await screen.findByLabelText("Section name Algebra");
+      fireEvent.change(sectionInput, { target: { value: reservedName } });
+      fireEvent.blur(sectionInput);
+
+      expect(await screen.findByText(/is reserved for notes without a section/i)).toBeInTheDocument();
+      expect(sectionInput).toHaveValue("Algebra");
+      expect(setCollectionItemOrder).not.toHaveBeenCalled();
+    },
+  );
+
+  it("pins the unsectioned bucket last and suppresses it when it is the only group", async () => {
+    (getCollection as jest.Mock).mockResolvedValueOnce(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Loose Note", 0), label: null },
+      { ...collectionItem("note-2", "Grouped Note", 1), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    const { unmount } = render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    const groupedHeading = await screen.findByLabelText("Section name Algebra");
+    const unsectionedHeading = screen.getAllByText("Not in a section")
+      .find((element) => element.classList.contains("text-lg"));
+    expect(unsectionedHeading).toBeDefined();
+    expect(groupedHeading.compareDocumentPosition(unsectionedHeading!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Drag section Not in a section" })).not.toBeInTheDocument();
+
+    unmount();
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Loose Note", 0), label: null },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+    await screen.findByText("Loose Note");
+    expect(screen.queryByText("Not in a section")).not.toBeInTheDocument();
+  });
+
+  it("asks before combining a renamed section and cancellation writes nothing", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Calculus" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    const sectionInput = await screen.findByLabelText("Section name Algebra");
+    fireEvent.change(sectionInput, { target: { value: "calculus" } });
+    fireEvent.blur(sectionInput);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/two sections will be combined/i)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(setCollectionItemOrder).not.toHaveBeenCalled();
+    expect(trackAnalyticsEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not let stale card state revert a multi-note section rename after refresh", async () => {
+    let fetchCount = 0;
+    (getCollection as jest.Mock).mockImplementation(() => {
+      fetchCount += 1;
+      const label = fetchCount === 1 ? "Algebra" : "Foundations";
+      return Promise.resolve(collectionDetail("leaf-1", "Anatomy Plan", [
+        { ...collectionItem("note-1", "Skeletal System", 0), label },
+        { ...collectionItem("note-2", "Muscle Groups", 1), label },
+      ], { parentCollectionId: null, childCount: 0 }));
+    });
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    const sectionInput = await screen.findByLabelText("Section name Algebra");
+    fireEvent.change(sectionInput, { target: { value: "Foundations" } });
+    fireEvent.blur(sectionInput);
+
+    await waitFor(() => expect(screen.getByLabelText("Section name Foundations")).toBeInTheDocument());
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 600));
+    expect(setCollectionItemOrder).toHaveBeenCalledTimes(1);
+    expect(setCollectionItemOrder).not.toHaveBeenCalledWith("leaf-1", expect.arrayContaining([
+      expect.objectContaining({ label: "Algebra" }),
+    ]));
+  });
+
+  it("sets every section from note subjects after confirmation", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Old", subject: "Biology" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Old", subject: "Anatomy" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Set sections from note subjects" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/all 2 notes/i)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Set sections" }));
+
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
+      { noteId: "note-1", label: "Biology" },
+      { noteId: "note-2", label: "Anatomy" },
+    ]));
+    expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "COLLECTION_SECTION_ASSIGNED",
+      metadata: { collectionId: "leaf-1", source: "set-from-subjects" },
+    }));
+  });
+
+  it("disables set-from-subjects when every subject is blank", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Loose Note", 0), subject: " " },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+    expect(await screen.findByRole("button", { name: "Set sections from note subjects" })).toBeDisabled();
+  });
+
+  it("starts sections expanded and collapses them at desktop widths", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    expect(await screen.findByText("Skeletal System")).toBeInTheDocument();
+    const collapseButton = screen.getByRole("button", { name: "Collapse section Algebra" });
+    expect(collapseButton).not.toHaveClass("sm:hidden");
+    fireEvent.click(collapseButton);
+    expect(screen.getByRole("button", { name: "Expand section Algebra" })).toBeInTheDocument();
+    expect(screen.getByText("Skeletal System").closest("div.space-y-3")?.parentElement).toHaveClass("hidden");
   });
 
   it("shows an empty-goal state with add subject", async () => {

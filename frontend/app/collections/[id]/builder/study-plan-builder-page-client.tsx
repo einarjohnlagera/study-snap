@@ -24,6 +24,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
@@ -42,6 +43,7 @@ import {
   reorderCollectionChildren,
   setCollectionItemOrder,
   setCollectionParent,
+  trackAnalyticsEvent,
   updateCollection,
   type GoalCollectionChildResponse,
   type GoalCollectionDetailResponse,
@@ -51,7 +53,7 @@ import {
 } from "@/lib/api";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
-type MutationKind = "add-notes" | "add-subject" | "delete-subject" | "move-note" | "rename-section" | "rename-subject" | "reorder-notes" | "reorder-subjects" | "remove-note" | null;
+type MutationKind = "add-notes" | "add-subject" | "delete-subject" | "move-note" | "rename-section" | "rename-subject" | "reorder-notes" | "reorder-subjects" | "remove-note" | "set-sections" | null;
 type BuilderSubject = GoalCollectionChildResponse & {
   items: NoteCollectionItem[];
 };
@@ -69,7 +71,8 @@ type ActiveDrag =
   | null;
 
 const TITLE_MAX_LENGTH = 150;
-const UNGROUPED_SECTION_NAME = "Ungrouped";
+const LABEL_MAX_LENGTH = 120;
+const UNGROUPED_SECTION_NAME = "Not in a section";
 const DND_TRANSITION_CLASS = "transition-[transform,box-shadow,border-color,background-color,opacity] duration-150 ease-out";
 const DND_DROP_ANIMATION: DropAnimation = {
   duration: 160,
@@ -114,20 +117,37 @@ function getSectionName(label: string | null | undefined): string {
 
 function getSectionLabel(sectionName: string): string | null {
   const trimmed = sectionName.trim();
-  return trimmed && trimmed !== UNGROUPED_SECTION_NAME ? trimmed : null;
+  return trimmed && normalizeSectionValue(trimmed) !== normalizeSectionValue(UNGROUPED_SECTION_NAME) ? trimmed : null;
+}
+
+function normalizeSectionValue(value: string): string {
+  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
 }
 
 function buildLeafSections(items: LeafBuilderNote[]): LeafBuilderSection[] {
   const sections = new Map<string, LeafBuilderNote[]>();
+  const unsectionedItems: LeafBuilderNote[] = [];
   for (const item of items) {
     const sectionName = getSectionName(item.label);
+    if (sectionName === UNGROUPED_SECTION_NAME) {
+      unsectionedItems.push(item);
+      continue;
+    }
     sections.set(sectionName, [...(sections.get(sectionName) ?? []), item]);
   }
-  return Array.from(sections.entries()).map(([name, sectionItems]) => ({
+  const grouped = Array.from(sections.entries()).map(([name, sectionItems]) => ({
     id: getLeafSectionDropzoneId(name),
     name,
     items: sectionItems,
   }));
+  if (unsectionedItems.length > 0) {
+    grouped.push({
+      id: getLeafSectionDropzoneId(UNGROUPED_SECTION_NAME),
+      name: UNGROUPED_SECTION_NAME,
+      items: unsectionedItems,
+    });
+  }
+  return grouped;
 }
 
 function clampPercentage(value: number): number {
@@ -349,10 +369,11 @@ function LeafSortableNoteCard({
   index,
   totalCount,
   disabled,
-  targetSections,
+  sectionNames,
+  sectionLabel,
   activeDrag,
   onMoveWithinSection,
-  onMoveToSection,
+  onLabelChange,
   onRemove,
 }: Readonly<{
   item: LeafBuilderNote;
@@ -361,10 +382,11 @@ function LeafSortableNoteCard({
   index: number;
   totalCount: number;
   disabled: boolean;
-  targetSections: string[];
+  sectionNames: string[];
+  sectionLabel: string;
   activeDrag: ActiveDrag;
   onMoveWithinSection: (noteId: string, direction: "up" | "down") => void;
-  onMoveToSection: (noteId: string, targetSectionName: string) => void;
+  onLabelChange: (noteId: string, nextLabel: string) => void;
   onRemove: (noteId: string) => void;
 }>) {
   const {
@@ -387,6 +409,23 @@ function LeafSortableNoteCard({
     transition,
   };
   const title = getNoteTitle(item);
+  const [labelValue, setLabelValue] = useState(item.label ?? "");
+  const sectionOptions = useMemo(
+    () => sectionNames.map((name) => ({ value: name, label: name })),
+    [sectionNames],
+  );
+
+  useEffect(() => {
+    if (disabled) {
+      return;
+    }
+    const nextLabel = labelValue.trim().replaceAll(/\s+/g, " ");
+    if ((item.label ?? "") === nextLabel) {
+      return;
+    }
+    const handle = globalThis.setTimeout(() => onLabelChange(item.noteId, nextLabel), 500);
+    return () => globalThis.clearTimeout(handle);
+  }, [disabled, item.label, item.noteId, labelValue, onLabelChange]);
 
   return (
     <div
@@ -428,30 +467,31 @@ function LeafSortableNoteCard({
             <p className="text-xs text-foreground/60">{getNoteMeta(item)}</p>
           </Link>
           <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/55">
-            <span>{sectionName}</span>
+            {sectionName ? <span>{sectionName}</span> : null}
             <span>Position {index + 1}</span>
           </div>
         </div>
       </div>
       <div className="flex w-full items-center justify-end gap-1">
-        {targetSections.length > 0 ? (
-          <select
-            aria-label={`Move ${title} to section`}
-            value=""
+        <div className="min-w-[220px] space-y-1.5">
+          <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">{sectionLabel}</span>
+          <SuggestionCombobox
+            id={`builder-section-${item.noteId}`}
+            value={labelValue}
+            options={sectionOptions}
+            ariaLabel={`${sectionLabel} for ${title}`}
+            placeholder={`Choose or type a ${sectionLabel.toLowerCase()}`}
             disabled={disabled}
-            onChange={(event) => {
-              if (event.target.value) {
-                onMoveToSection(item.noteId, event.target.value);
+            onChange={(nextValue) => {
+              const boundedValue = nextValue.slice(0, LABEL_MAX_LENGTH);
+              if (normalizeSectionValue(boundedValue) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
+                onLabelChange(item.noteId, boundedValue);
+                return;
               }
+              setLabelValue(boundedValue);
             }}
-            className="h-9 rounded-lg border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-          >
-            <option value="">Move</option>
-            {targetSections.map((section) => (
-              <option key={section} value={section}>{section}</option>
-            ))}
-          </select>
-        ) : null}
+          />
+        </div>
         <Button type="button" variant="ghost" size="sm" aria-label={`Remove ${title}`} className="h-9 px-2 text-red-700 dark:text-red-300" disabled={disabled} onClick={() => onRemove(item.noteId)}>
           <Trash2 className="h-4 w-4 sm:mr-1" aria-hidden="true" />
           <span className="hidden sm:inline">Remove</span>
@@ -467,9 +507,12 @@ function LeafSectionBlock({
   disabled,
   allSections,
   activeDrag,
+  sectionLabel,
+  hideSyntheticHeader,
   onRename,
   onMoveWithinSection,
-  onMoveToSection,
+  onLabelChange,
+  onReservedName,
   onRemove,
 }: Readonly<{
   section: LeafBuilderSection;
@@ -477,13 +520,17 @@ function LeafSectionBlock({
   disabled: boolean;
   allSections: LeafBuilderSection[];
   activeDrag: ActiveDrag;
+  sectionLabel: string;
+  hideSyntheticHeader: boolean;
   onRename: (oldName: string, newName: string) => void;
   onMoveWithinSection: (sectionName: string, noteId: string, direction: "up" | "down") => void;
-  onMoveToSection: (noteId: string, targetSectionName: string) => void;
+  onLabelChange: (noteId: string, nextLabel: string) => void;
+  onReservedName: () => void;
   onRemove: (noteId: string) => void;
 }>) {
   const [nameValue, setNameValue] = useState(section.name);
-  const [mobileCollapsed, setMobileCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+  const isUnsectioned = section.name === UNGROUPED_SECTION_NAME;
   const {
     attributes,
     listeners,
@@ -496,16 +543,21 @@ function LeafSectionBlock({
   } = useSortable({
     id: section.id,
     data: { type: "leaf-section", sectionName: section.name },
-    disabled,
+    disabled: disabled || isUnsectioned,
   });
 
   const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition };
-  const targetSections = allSections
+  const sectionNames = allSections
     .map((candidate) => candidate.name)
-    .filter((name) => name !== section.name);
+    .filter((name) => name !== UNGROUPED_SECTION_NAME);
 
   const commitRename = () => {
     const trimmedName = nameValue.trim();
+    if (normalizeSectionValue(trimmedName) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
+      setNameValue(section.name);
+      onReservedName();
+      return;
+    }
     if (trimmedName && trimmedName !== section.name) {
       onRename(section.name, trimmedName);
       return;
@@ -524,23 +576,25 @@ function LeafSectionBlock({
         isOver && activeDrag?.type === "leaf-note" && "border-blue-300 bg-blue-50/40 dark:bg-blue-950/20",
       )}
     >
-      <div className="flex items-start gap-3">
-        <button
+      {hideSyntheticHeader ? null : <div className="flex items-start gap-3">
+        {isUnsectioned ? null : <button
           ref={setActivatorNodeRef}
           type="button"
-          aria-label={`Drag section ${section.name}`}
+          aria-label={`Drag ${sectionLabel.toLowerCase()} ${section.name}`}
           className="mt-0.5 inline-flex h-9 w-9 shrink-0 touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/60 hover:bg-highlight disabled:opacity-50"
           disabled={disabled}
           {...attributes}
           {...listeners}
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
-        </button>
+        </button>}
         <div className="min-w-0 flex-1 space-y-1">
-          <input
-            aria-label={`Section name ${section.name}`}
+          {isUnsectioned ? (
+            <span className="block px-2 py-1 text-lg font-semibold text-foreground">{section.name}</span>
+          ) : <input
+            aria-label={`${sectionLabel} name ${section.name}`}
             value={nameValue}
-            maxLength={TITLE_MAX_LENGTH}
+            maxLength={LABEL_MAX_LENGTH}
             disabled={disabled}
             onChange={(event) => setNameValue(event.target.value)}
             onBlur={commitRename}
@@ -550,52 +604,43 @@ function LeafSectionBlock({
               }
             }}
             className="min-w-0 w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-semibold text-foreground outline-none hover:border-border focus:border-blue-500 focus:bg-background focus:ring-2 focus:ring-blue-500/20"
-          />
+          />}
           <p className="px-2 text-xs text-foreground/60">
             {section.items.length} {section.items.length === 1 ? "note" : "notes"}
           </p>
         </div>
         <button
           type="button"
-          aria-label={`${mobileCollapsed ? "Expand" : "Collapse"} section ${section.name}`}
-          className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/60 hover:bg-highlight sm:hidden"
-          onClick={() => setMobileCollapsed((prev) => !prev)}
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${sectionLabel.toLowerCase()} ${section.name}`}
+          className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/60 hover:bg-highlight"
+          onClick={() => setCollapsed((prev) => !prev)}
         >
-          {mobileCollapsed ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
+          {collapsed ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
         </button>
-      </div>
+      </div>}
 
-      <div className={cn("mt-4 space-y-3", mobileCollapsed && "hidden sm:block")}>
-        {section.items.length > 0 ? (
+      <div className={cn(hideSyntheticHeader ? "space-y-3" : "mt-4 space-y-3", collapsed && "hidden")}>
           <SortableContext items={section.items.map((item) => getLeafNoteSortableId(item.noteId))} strategy={verticalListSortingStrategy}>
             <div className="space-y-3">
               {section.items.map((item, noteIndex) => (
                 <LeafSortableNoteCard
-                  key={getLeafNoteSortableId(item.noteId)}
+                  key={`${item.noteId}:${item.label ?? ""}`}
                   item={item}
-                  sectionName={section.name}
+                  sectionName={hideSyntheticHeader ? "" : section.name}
                   collectionId={collectionId}
                   index={noteIndex}
                   totalCount={section.items.length}
                   disabled={disabled}
-                  targetSections={targetSections}
+                  sectionNames={sectionNames}
+                  sectionLabel={sectionLabel}
                   activeDrag={activeDrag}
                   onMoveWithinSection={(noteId, direction) => onMoveWithinSection(section.name, noteId, direction)}
-                  onMoveToSection={onMoveToSection}
+                  onLabelChange={onLabelChange}
                   onRemove={onRemove}
                 />
               ))}
             </div>
           </SortableContext>
-        ) : (
-          <div className={cn(
-            "rounded-lg border border-dashed border-border px-4 py-5 text-center",
-            isOver && activeDrag?.type === "leaf-note" && "border-blue-400 bg-blue-50 dark:bg-blue-950/20",
-          )}>
-            <p className="text-sm font-medium text-foreground">No notes in this section yet.</p>
-            <p className="mt-1 text-xs text-foreground/60">Drag notes here from another section.</p>
-          </div>
-        )}
       </div>
     </section>
   );
@@ -1150,6 +1195,8 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [leafAddNotesOpen, setLeafAddNotesOpen] = useState(false);
   const [deleteSubject, setDeleteSubject] = useState<BuilderSubject | null>(null);
   const [activeDrag, setActiveDrag] = useState<ActiveDrag>(null);
+  const [pendingSectionRename, setPendingSectionRename] = useState<{ oldName: string; newName: string } | null>(null);
+  const [setSectionsConfirmOpen, setSetSectionsConfirmOpen] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1255,19 +1302,36 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     [addNotesSubjectId, subjects],
   );
   const leafSections = useMemo(() => buildLeafSections(leafItems), [leafItems]);
+  const hasNonBlankLeafSubject = useMemo(
+    () => leafItems.some((item) => Boolean(item.subject?.trim())),
+    [leafItems],
+  );
   const mutationInProgress = mutationKind !== null;
   // A collection nested under a Goal can never itself become a parent (backend
   // rejects nesting under a non-top-level collection), so only an undecided
   // top-level collection can still choose to become a Goal.
   const canBecomeGoal = leafItems.length === 0 && collection?.parentCollectionId == null;
 
-  const persistLeafItems = async (nextItems: LeafBuilderNote[], previousItems: LeafBuilderNote[], fallback: string, kind: MutationKind = "reorder-notes") => {
+  const persistLeafItems = async (
+    nextItems: LeafBuilderNote[],
+    previousItems: LeafBuilderNote[],
+    fallback: string,
+    kind: MutationKind = "reorder-notes",
+    analyticsSource?: "combobox" | "rename" | "set-from-subjects",
+  ) => {
     setMutationKind(kind);
     setMutationError(null);
     setLeafItems(nextItems);
     try {
       await setCollectionItemOrder(collectionId, buildOrderPayload(nextItems));
       await refreshBuilder();
+      if (analyticsSource) {
+        void trackAnalyticsEvent({
+          eventType: "COLLECTION_SECTION_ASSIGNED",
+          entityId: collectionId,
+          metadata: { collectionId, source: analyticsSource },
+        });
+      }
     } catch (error) {
       await recoverLeafAfterFailure(error, fallback, previousItems);
     } finally {
@@ -1275,7 +1339,12 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     }
   };
 
-  const moveLeafNote = (noteId: string, targetSectionName: string, targetIndex: number) => {
+  const moveLeafNote = (
+    noteId: string,
+    targetSectionName: string,
+    targetIndex: number,
+    analyticsSource?: "combobox",
+  ) => {
     const previousItems = leafItems;
     const movedItem = leafItems.find((item) => item.noteId === noteId);
     if (!movedItem) {
@@ -1303,20 +1372,69 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       { ...movedItem, label: targetLabel },
       ...withoutMoved.slice(insertionIndex),
     ].map((item, index) => ({ ...item, position: index }));
-    void persistLeafItems(nextItems, previousItems, "Could not save note order.", "reorder-notes");
+    void persistLeafItems(nextItems, previousItems, "Could not save note order.", "reorder-notes", analyticsSource);
   };
 
-  const handleRenameLeafSection = (oldName: string, newName: string) => {
+  const commitLeafSectionRename = (oldName: string, newName: string) => {
     const previousItems = leafItems;
     const trimmedName = newName.trim();
-    if (!trimmedName || trimmedName === oldName) {
+    if (!trimmedName || trimmedName === oldName || oldName === UNGROUPED_SECTION_NAME) {
       return;
     }
     const nextLabel = getSectionLabel(trimmedName);
     const nextItems = leafItems.map((item, index) => (
       getSectionName(item.label) === oldName ? { ...item, label: nextLabel, position: index } : item
     ));
-    void persistLeafItems(nextItems, previousItems, "Could not rename this section.", "rename-section");
+    void persistLeafItems(
+      nextItems,
+      previousItems,
+      `Could not rename this ${labels.sectionSingular.toLowerCase()}.`,
+      "rename-section",
+      "rename",
+    );
+  };
+
+  const handleRenameLeafSection = (oldName: string, newName: string) => {
+    const trimmedName = newName.trim().replaceAll(/\s+/g, " ");
+    if (normalizeSectionValue(trimmedName) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
+      setMutationError(`"${UNGROUPED_SECTION_NAME}" is reserved for notes without a ${labels.sectionSingular.toLowerCase()}.`);
+      return;
+    }
+    const existingName = leafSections
+      .map((section) => section.name)
+      .find((name) => name !== oldName && normalizeSectionValue(name) === normalizeSectionValue(trimmedName));
+    if (existingName) {
+      setPendingSectionRename({ oldName, newName: existingName });
+      return;
+    }
+    commitLeafSectionRename(oldName, trimmedName);
+  };
+
+  const handleLeafLabelChange = (noteId: string, requestedLabel: string) => {
+    const trimmedLabel = requestedLabel.trim().replaceAll(/\s+/g, " ");
+    if (normalizeSectionValue(trimmedLabel) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
+      setMutationError(`"${UNGROUPED_SECTION_NAME}" is reserved for notes without a ${labels.sectionSingular.toLowerCase()}.`);
+      return;
+    }
+    const exactExistingName = leafSections
+      .map((section) => section.name)
+      .find((name) => name !== UNGROUPED_SECTION_NAME && normalizeSectionValue(name) === normalizeSectionValue(trimmedLabel));
+    const targetSectionName = exactExistingName ?? (trimmedLabel || UNGROUPED_SECTION_NAME);
+    const targetSection = leafSections.find((section) => section.name === targetSectionName);
+    moveLeafNote(noteId, targetSectionName, targetSection?.items.length ?? 0, "combobox");
+  };
+
+  const handleSetSectionsFromSubjects = () => {
+    const previousItems = leafItems;
+    const nextItems = leafItems.map((item) => ({ ...item, label: item.subject?.trim() || null }));
+    setSetSectionsConfirmOpen(false);
+    void persistLeafItems(
+      nextItems,
+      previousItems,
+      `Could not set ${labels.sectionSingular.toLowerCase()}s from note subjects.`,
+      "set-sections",
+      "set-from-subjects",
+    );
   };
 
   const handleMoveLeafWithinSection = (sectionName: string, noteId: string, direction: "up" | "down") => {
@@ -1327,11 +1445,6 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       return;
     }
     moveLeafNote(noteId, sectionName, targetIndex);
-  };
-
-  const handleMoveLeafToSection = (noteId: string, targetSectionName: string) => {
-    const section = leafSections.find((candidate) => candidate.name === targetSectionName);
-    moveLeafNote(noteId, targetSectionName, section?.items.length ?? 0);
   };
 
   const handleRemoveLeafNote = async (noteId: string) => {
@@ -1613,6 +1726,9 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       if (!overSectionName || overSectionName === activeData.sectionName) {
         return;
       }
+      if (activeData.sectionName === UNGROUPED_SECTION_NAME || overSectionName === UNGROUPED_SECTION_NAME) {
+        return;
+      }
       const currentOrder = leafSections.map((s) => s.name);
       const fromIdx = currentOrder.indexOf(activeData.sectionName);
       const toIdx = currentOrder.indexOf(overSectionName);
@@ -1754,7 +1870,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         <PageHeader
           eyebrow={`${labels.singular.toUpperCase()} BUILDER`}
           title={collection.title}
-          description={collection.description ?? "Organize notes and sections on one canvas."}
+          description={collection.description ?? `Organize notes and ${labels.sectionSingular.toLowerCase()}s on one canvas.`}
           actions={canBecomeGoal ? (
             <Button type="button" onClick={() => setAddSubjectOpen(true)} disabled={mutationInProgress}>
               <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
@@ -1782,11 +1898,19 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
             <div>
               <CardTitle>Your notes</CardTitle>
               <CardDescription>
-                {leafItems.length} {leafItems.length === 1 ? "note" : "notes"} grouped by section.
+                {leafItems.length} {leafItems.length === 1 ? "note" : "notes"} grouped by {labels.sectionSingular.toLowerCase()}.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-3">
-              <p className="text-xs text-foreground/55">Drag notes or sections to reorganize.</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-xs text-foreground/55">Drag notes or {labels.sectionSingular.toLowerCase()}s to reorganize.</p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSetSectionsConfirmOpen(true)}
+                disabled={mutationInProgress || !hasNonBlankLeafSubject}
+              >
+                Set {labels.sectionSingular.toLowerCase()}s from note subjects
+              </Button>
               <Button type="button" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
                 <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
                 Add notes
@@ -1834,9 +1958,12 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
                       disabled={mutationInProgress}
                       allSections={leafSections}
                       activeDrag={activeDrag}
+                      sectionLabel={labels.sectionSingular}
+                      hideSyntheticHeader={leafSections.length === 1 && section.name === UNGROUPED_SECTION_NAME}
                       onRename={handleRenameLeafSection}
                       onMoveWithinSection={handleMoveLeafWithinSection}
-                      onMoveToSection={handleMoveLeafToSection}
+                      onLabelChange={handleLeafLabelChange}
+                      onReservedName={() => setMutationError(`"${UNGROUPED_SECTION_NAME}" is reserved for notes without a ${labels.sectionSingular.toLowerCase()}.`)}
                       onRemove={(noteId) => void handleRemoveLeafNote(noteId)}
                     />
                   ))}
@@ -1904,6 +2031,42 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
           submitting={mutationKind === "add-subject"}
           onClose={() => setAddSubjectOpen(false)}
           onAdd={handleAddSubject}
+        />
+        <AppModal
+          isOpen={pendingSectionRename !== null}
+          title={`Combine ${labels.sectionSingular.toLowerCase()}s?`}
+          description={pendingSectionRename
+            ? `"${pendingSectionRename.newName}" already exists. The two ${labels.sectionSingular.toLowerCase()}s will be combined.`
+            : undefined}
+          onClose={() => setPendingSectionRename(null)}
+          actions={(
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setPendingSectionRename(null)}>Cancel</Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (pendingSectionRename) {
+                    commitLeafSectionRename(pendingSectionRename.oldName, pendingSectionRename.newName);
+                    setPendingSectionRename(null);
+                  }
+                }}
+              >
+                Combine
+              </Button>
+            </div>
+          )}
+        />
+        <AppModal
+          isOpen={setSectionsConfirmOpen}
+          title={`Set ${labels.sectionSingular.toLowerCase()}s from note subjects?`}
+          description={`This will overwrite the current ${labels.sectionSingular.toLowerCase()} assignment for all ${leafItems.length} ${leafItems.length === 1 ? "note" : "notes"} in this plan.`}
+          onClose={() => setSetSectionsConfirmOpen(false)}
+          actions={(
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setSetSectionsConfirmOpen(false)}>Cancel</Button>
+              <Button type="button" onClick={handleSetSectionsFromSubjects}>Set {labels.sectionSingular.toLowerCase()}s</Button>
+            </div>
+          )}
         />
       </main>
     );

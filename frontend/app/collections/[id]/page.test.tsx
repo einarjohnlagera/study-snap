@@ -265,7 +265,7 @@ describe("collection detail helpers", () => {
     });
 
     expect(result.get("Week 1")).toEqual({ mastered: 3, total: 7, due: 2 });
-    expect(result.get("Ungrouped")).toEqual({ mastered: 0, total: 2, due: 0 });
+    expect(result.get("Not in a section")).toEqual({ mastered: 0, total: 2, due: 0 });
   });
 
   it("selects the latest practiced note for continue state", () => {
@@ -2038,7 +2038,7 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByRole("button", { name: /Professional Education.*2 notes/ })).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("renders null and empty labels in an Ungrouped section after named sections", async () => {
+  it("renders null and empty assignments in Not in a section after named sections", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collection({
       items: [
         { ...collection().items[0], noteId: "note-1", title: "Early Ungrouped", label: " ", position: 0 },
@@ -2055,7 +2055,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     const namedHeader = await screen.findByRole("button", { name: /Major Specialization.*1 note/ });
-    const ungroupedHeader = screen.getByRole("button", { name: "Ungrouped 2 notes" });
+    const ungroupedHeader = screen.getByRole("button", { name: "Not in a section 2 notes" });
     expect(Boolean(namedHeader.compareDocumentPosition(ungroupedHeader) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(screen.getByRole("heading", { level: 2, name: "Early Ungrouped" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Null Ungrouped" })).toBeInTheDocument();
@@ -2071,7 +2071,7 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Cell Respiration" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Dosage Calculations" })).toBeInTheDocument();
     expect(screen.queryAllByTestId("collection-section-heading")).toHaveLength(0);
-    expect(screen.queryByRole("button", { name: /Ungrouped/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Not in a section/ })).not.toBeInTheDocument();
   });
 
   it("routes note organization to the Builder from the leaf hero only", async () => {

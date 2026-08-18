@@ -113,7 +113,7 @@ type ContinuePlanAction = {
 
 const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
-const UNGROUPED_SECTION_NAME = "Ungrouped";
+const UNGROUPED_SECTION_NAME = "Not in a section";
 const LARGE_VIEWPORT_MIN_WIDTH = 1024;
 const TODAY_FOCUS_EYEBROW = "Today's Focus";
 const CONTINUE_STUDYING_LABEL = "Continue Studying";
@@ -141,6 +141,10 @@ function buildOrderPayload(items: NoteCollectionItem[]) {
 
 function normalizeSectionName(label: string | null | undefined): string {
   return label?.trim() ?? "";
+}
+
+function normalizeSectionComparison(value: string): string {
+  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
 }
 
 function getCollectionItemSections(items: NoteCollectionItem[]): { hasSections: boolean; sections: CollectionItemSection[]; sectionNames: string[] } {
@@ -3019,7 +3023,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     const trimmed = newName.trim();
     setEditingSectionId(null);
     setEditingSectionName("");
-    if (!trimmed || trimmed === section.name || trimmed === UNGROUPED_SECTION_NAME) return;
+    if (
+      !trimmed
+      || trimmed === section.name
+      || normalizeSectionComparison(trimmed) === normalizeSectionComparison(UNGROUPED_SECTION_NAME)
+    ) return;
     const targetExists = sectionNames.some((name) => name === trimmed && name !== section.name);
     if (targetExists) {
       setPendingSectionRename({ oldName: section.name, newName: trimmed });

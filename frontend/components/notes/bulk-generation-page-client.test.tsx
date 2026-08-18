@@ -368,6 +368,50 @@ describe("BulkGenerationPageClient", () => {
     ));
   });
 
+  it("prefills an editable section from subject only while it is untouched", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    render(<BulkGenerationPageClient />);
+
+    expect(screen.queryByLabelText(/^Section \(optional\)/)).not.toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText(/^Collection \(optional\)/), {
+      target: { value: "subject-plan-1" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Algebra" } });
+    const sectionInput = screen.getByLabelText(/^Section \(optional\)/);
+    expect(sectionInput).toHaveValue("Algebra");
+    expect(sectionInput).toHaveAttribute("maxlength", "120");
+
+    fireEvent.change(sectionInput, { target: { value: "Foundations" } });
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Engineering Mathematics" } });
+    expect(sectionInput).toHaveValue("Foundations");
+  });
+
+  it("submits the edited section only with a selected Review Set", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    (bulkGenerateNotes as jest.Mock).mockResolvedValue({
+      resultId: "result-1",
+      acceptedTopics: 1,
+      queuedTopics: 1,
+      rejectedTopics: 0,
+    });
+    render(<BulkGenerationPageClient />);
+    fireEvent.change(await screen.findByLabelText(/^Collection \(optional\)/), {
+      target: { value: "subject-plan-1" },
+    });
+    await fillAdminForm(["Quadratic Equations"]);
+    fireEvent.change(screen.getByLabelText(/^Section \(optional\)/), { target: { value: "Core Algebra" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => expect(bulkGenerateNotes).toHaveBeenCalledWith(
+      expect.objectContaining({ collectionId: "subject-plan-1", sectionLabel: "Core Algebra" }),
+    ));
+  });
+
   it("keeps generation usable when Review Sets fail to load", async () => {
     (listCollections as jest.Mock).mockRejectedValue(new Error("Could not load Collections."));
     (bulkGenerateNotes as jest.Mock).mockResolvedValue({
@@ -409,6 +453,52 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
     expect(screen.getByLabelText(/^Topic 2$/)).toHaveValue("Labor Stages");
     expect(globalThis.sessionStorage.getItem("notelib.bulk.retryTopics")).toBeNull();
+  });
+
+  it("restores a stashed section without resuming subject tracking", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    setBulkGenerationRetryStash({
+      subject: "Algebra",
+      courseProgram: "Civil Engineering",
+      domainContext: null,
+      learnerLevel: null,
+      makePublic: false,
+      topics: ["Quadratic Equations"],
+      collectionId: "subject-plan-1",
+      sectionLabel: "Foundations",
+    });
+    render(<BulkGenerationPageClient />);
+
+    const sectionInput = await screen.findByLabelText(/^Section \(optional\)/);
+    expect(sectionInput).toHaveValue("Foundations");
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Calculus" } });
+    expect(sectionInput).toHaveValue("Foundations");
+  });
+
+  it("does not invent a section when the retry stash carries none", async () => {
+    // The real retry path: retryBulkFailures cannot write sectionLabel, because
+    // bulk_generation_result has no column for it. Falling back to the subject here would
+    // section every retried batch by subject -- including one whose curator deliberately left
+    // the section blank -- which is an assignment they never made.
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    setBulkGenerationRetryStash({
+      subject: "Algebra",
+      courseProgram: "Civil Engineering",
+      domainContext: null,
+      learnerLevel: null,
+      makePublic: false,
+      topics: ["Quadratic Equations"],
+      collectionId: "subject-plan-1",
+    });
+    render(<BulkGenerationPageClient />);
+
+    const sectionInput = await screen.findByLabelText(/^Section \(optional\)/);
+    expect(sectionInput).toHaveValue("");
+    expect(screen.getByLabelText(/^Subject/)).toHaveValue("Algebra");
   });
 
   it("splits a multi-line paste into separate topic rows and strips list markers", async () => {

@@ -21,6 +21,7 @@ Every batch contains:
 - Domain Context for Teacher and Admin profiles (optional with one program; required above one)
 - optional `Authored Depth` for Teacher and Admin profiles (the control label for the `notes.learner_level` axis, still named Note Learner Level in `ADR-001`)
 - an optional note-accepting Review Set for Teacher and Admin profiles (labelled with the profile's own collection vocabulary — see below)
+- an optional editable Section / Part assignment when a target Review Set is selected, pre-filled from the batch subject until the curator edits it
 - a `Public` toggle
 
 Topics are discrete rows with `+ Add topic` and per-row removal. They are not note titles. A topic such as `Newton's Laws of Motion` seeds note-content generation; the Study Pack write-back supplies the AI-refined title and tags. The Topics helper states this expectation inline (title and tags are auto-generated; the subject and other batch details apply to every note) so users are not surprised by AI-named notes in their Library.
@@ -32,11 +33,14 @@ Pasting a multi-line block into a topic row splits it into one topic per line (`
 Subject is full-width. The remaining visible metadata uses one responsive two-column grid in this order:
 
 1. Review Set
-2. Course / Program
-3. Domain Context
-4. Authored Depth
+2. Section / Part (only after selecting a Review Set)
+3. Course / Program
+4. Domain Context
+5. Authored Depth
 
 The Review Set control is a dropdown over owned collections that can accept notes; Goals are excluded. **Its label is not the literal string "Review Set" — it resolves through `getCollectionLabels(profileType)`**, so a `TEACHER` sees "Lesson Plan", a `STUDENT` "Study Plan", and an account with no profile type "Collection". The control renders only for Teacher and Admin, which is exactly the audience whose vocabulary diverges, so hardcoding a label here would split it on the surface they use most. Selecting one pre-fills an empty Authored Depth control from the collection's own or nearest inherited authored depth. It never overwrites a level the curator already chose, and no resolved collection level means no pre-fill (specifically, no `COLLEGE` default). The selected level remains visible and editable before submit. Domain Context is never inferred.
+
+The section field is meaningful only with a selected target plan, so it is hidden and omitted from the request otherwise. It is capped at 120 characters, begins as the first 120 characters of the visible batch subject, and stops tracking subject edits after the curator edits the field. Blank values are omitted. On completion, the backend validates the value through the collection item's existing optional-label guard and adds successful notes with that assignment; a membership failure remains logged and swallowed so it cannot fail the generated batch.
 
 When a curator selects a Domain Context, the form shows that value's covered-subject description directly below the select. The descriptions come from ADR-001's ratified eight-value taxonomy and are guidance copy only; selection, submission, and fallback behavior are unchanged.
 
@@ -96,7 +100,7 @@ The endpoint validates the request, queues one throttled background batch on the
 5. Apply PUBLIC visibility when requested.
 6. Start the existing async Study Pack generation pipeline.
 
-After all topics have been attempted, the worker adds the successfully created note ids to the selected Review Set, preserving batch order. It uses `NoteCollectionService.addItems`, so membership positioning, ownership validation, goal rejection, and duplicate filtering stay centralized. Queueing validates ownership and leaf status before dispatch; completion rechecks through the same owner-scoped path across the async boundary. The membership write is its own transaction, independent of already-committed note generation.
+After all topics have been attempted, the worker adds the successfully created note ids to the selected Review Set with the optional section assignment, preserving batch order. It uses `NoteCollectionService.addItems`, so membership positioning, section-length validation, ownership validation, goal rejection, and duplicate filtering stay centralized. Queueing validates ownership and leaf status before dispatch; completion rechecks through the same owner-scoped path across the async boundary. The membership write is its own transaction, independent of already-committed note generation.
 
 Partial failure is normal: failed or quota-blocked topics contribute no note id, so only successful notes are added. If the collection was deleted or any membership write fails at completion, the failure is logged and the batch still completes normally; note generation is neither failed nor retried. Repeating membership is idempotent because `addItems` filters ids already present in the collection.
 

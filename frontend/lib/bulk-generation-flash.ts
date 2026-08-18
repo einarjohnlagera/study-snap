@@ -23,6 +23,7 @@ export type BulkGenerationRetryStash = {
   // batch silently dropped the Review Set and the retried notes landed outside it, which
   // defeats the retry flow's premise that it reproduces the batch.
   collectionId?: string | null;
+  sectionLabel?: string | null;
 };
 
 export function setBulkQueuedFlash(count: number, resultId: string | null = null): void {
@@ -107,6 +108,7 @@ export function consumeBulkGenerationRetryStash(): BulkGenerationRetryStash | nu
       // This reader whitelists fields, so a new stash field is dropped on read unless it
       // is listed here — adding it to the type alone is not enough.
       collectionId: typeof stash.collectionId === "string" ? stash.collectionId : null,
+      ...(typeof stash.sectionLabel === "string" ? { sectionLabel: stash.sectionLabel } : {}),
     };
   } catch {
     return null;

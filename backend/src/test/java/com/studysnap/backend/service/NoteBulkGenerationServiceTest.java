@@ -199,8 +199,47 @@ class NoteBulkGenerationServiceTest {
         verify(noteCollectionService).addGeneratedItems(
                 collectionId,
                 userId,
-                List.of(firstNoteId, thirdNoteId)
+                List.of(firstNoteId, thirdNoteId),
+                null
         );
+    }
+
+    @Test
+    void queueBatch_threadsNormalizedSectionToCollectionMembership() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = requestWithCollection(collectionId, List.of("Topic"), "  Algebra  ");
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse(noteId.toString()));
+
+        service.queueBatch(request, userId, false);
+
+        verify(noteCollectionService).addGeneratedItems(collectionId, userId, List.of(noteId), "Algebra");
+    }
+
+    @Test
+    void queueBatch_normalizesBlankSectionToNull() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = requestWithCollection(collectionId, List.of("Topic"), "   ");
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Topic", context)).thenReturn("Content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenReturn(noteResponse(noteId.toString()));
+
+        service.queueBatch(request, userId, false);
+
+        verify(noteCollectionService).addGeneratedItems(collectionId, userId, List.of(noteId), null);
     }
 
     @Test
@@ -209,7 +248,7 @@ class NoteBulkGenerationServiceTest {
         UUID collectionId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
-        BulkGenerateNotesRequest request = requestWithCollection(collectionId, List.of("Topic"));
+        BulkGenerateNotesRequest request = requestWithCollection(collectionId, List.of("Topic"), "Algebra");
         StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
         when(generationContextResolver.resolveForBulkGeneration(
                 userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
@@ -219,14 +258,15 @@ class NoteBulkGenerationServiceTest {
         doThrow(new CollectionNotFoundException()).when(noteCollectionService).addGeneratedItems(
                 collectionId,
                 userId,
-                List.of(noteId)
+                List.of(noteId),
+                "Algebra"
         );
 
         BulkGenerateNotesResponse response = service.queueBatch(request, userId, false);
 
         assertThat(response.queuedTopics()).isEqualTo(1);
         verify(noteService, times(1)).create(any(UpsertNoteRequest.class), eq(userId));
-        verify(noteCollectionService, times(1)).addGeneratedItems(any(), any(), any());
+        verify(noteCollectionService, times(1)).addGeneratedItems(any(), any(), any(), any());
         verify(bulkGenerationResultService).recordResult(
                 any(), eq(userId), eq(SUBJECT), any(), any(), any(), any(), any(), eq(false), eq(1), eq(1),
                 any(), any(), any()
@@ -863,7 +903,7 @@ class NoteBulkGenerationServiceTest {
         UUID adminId = UUID.randomUUID();
         mockMidOnboardingUser(adminId, UserRole.ADMIN, ProfileType.STUDENT);
         BulkGenerateNotesRequest requestWithoutCatalogIds = new BulkGenerateNotesRequest(
-                SUBJECT, List.of("Topic"), false, List.of(), COURSE_PROGRAM, null, null, null
+                SUBJECT, List.of("Topic"), false, List.of(), COURSE_PROGRAM, null, null, null, null
         );
         StudyPackGenerationContext context = new StudyPackGenerationContext(
                 LearnerLevel.COLLEGE, COURSE_PROGRAM, SUBJECT, List.of(), null, null
@@ -974,6 +1014,14 @@ class NoteBulkGenerationServiceTest {
     }
 
     private BulkGenerateNotesRequest requestWithCollection(UUID collectionId, List<String> topics) {
+        return requestWithCollection(collectionId, topics, null);
+    }
+
+    private BulkGenerateNotesRequest requestWithCollection(
+            UUID collectionId,
+            List<String> topics,
+            String sectionLabel
+    ) {
         return new BulkGenerateNotesRequest(
                 SUBJECT,
                 topics,
@@ -982,7 +1030,8 @@ class NoteBulkGenerationServiceTest {
                 null,
                 null,
                 null,
-                collectionId
+                collectionId,
+                sectionLabel
         );
     }
 
