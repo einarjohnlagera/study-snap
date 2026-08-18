@@ -149,6 +149,7 @@ type BulkGenerationFailureBanner = Pick<
   | "requestedCount"
   | "createdCount"
   | "failedTopics"
+  | "failedTopicReasons"
   | "quotaBlockedTopics"
 >;
 
@@ -1380,6 +1381,14 @@ export default function LibraryPage() {
 
   const currentPlan = (authUser?.planType ?? "FREE") as AppPlanType;
   const upgradeCtas = getUpgradeCtas(currentPlan, { profileType: authUser?.profileType ?? null });
+  const bulkFailureReasonsByTopic = useMemo(() => {
+    const reasonsByTopic = new Map<string, string>();
+    bulkFailureBanner?.failedTopicReasons?.forEach(({ topic, reason }) => {
+      // A repeated topic is valid receipt data; the last recorded reason wins deterministically.
+      reasonsByTopic.set(topic, reason);
+    });
+    return reasonsByTopic;
+  }, [bulkFailureBanner]);
 
   const handlePlanCreated = useCallback((collectionId: string) => {
     setCreatePlanOpen(false);
@@ -1467,9 +1476,19 @@ export default function LibraryPage() {
                     {bulkFailureBanner.createdCount} of {bulkFailureBanner.requestedCount} notes generated. These couldn&apos;t be generated — try again:
                   </p>
                   <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed">
-                    {bulkFailureBanner.failedTopics.map((topic) => (
-                      <li key={topic} className="break-words">{topic}</li>
-                    ))}
+                    {bulkFailureBanner.failedTopics.map((topic, index) => {
+                      const reason = bulkFailureReasonsByTopic.get(topic);
+                      return reason ? (
+                        <li key={`${topic}-${index}`} className="break-words">
+                          <span>{topic}</span>
+                          <span className="block text-xs text-amber-800 dark:text-amber-200/80">
+                            {reason}
+                          </span>
+                        </li>
+                      ) : (
+                        <li key={`${topic}-${index}`} className="break-words">{topic}</li>
+                      );
+                    })}
                   </ul>
                 </section>
               ) : null}

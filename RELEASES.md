@@ -44,7 +44,7 @@ Theme: when a bulk-generated topic fails, the curator should be told which check
 
 ### Shipped
 
-_(nothing yet)_
+- **Per-topic bulk failure attribution** — Bulk Generate now stores a parallel nullable `failed_topic_reasons` receipt field and shows each recorded reason beneath its failed topic in Library. `AppException` failures preserve their user-facing code and message; every other runtime failure stores only `UNEXPECTED_ERROR`, fixed generic copy, and the exception's simple class name. The existing `failed_topics` string list and retry path are unchanged, quota-blocked topics receive no reason entry, and legacy receipts with no reason data retain the previous banner markup.
 
 ## v0.86.0 - Generation Recovery
 

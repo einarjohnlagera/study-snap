@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.BulkGenerationResultResponse;
+import com.studysnap.backend.dto.BulkGenerationFailureReason;
 import com.studysnap.backend.entity.BulkGenerationResultEntity;
 import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
@@ -35,6 +36,7 @@ public class BulkGenerationResultService {
             int requestedCount,
             int createdCount,
             List<String> failedTopics,
+            List<BulkGenerationFailureReason> failedTopicReasons,
             List<String> quotaBlockedTopics
     ) {
         BulkGenerationResultEntity entity = new BulkGenerationResultEntity();
@@ -50,6 +52,7 @@ public class BulkGenerationResultService {
         entity.setRequestedCount(requestedCount);
         entity.setCreatedCount(createdCount);
         entity.setFailedTopics(List.copyOf(failedTopics));
+        entity.setFailedTopicReasons(List.copyOf(failedTopicReasons));
         entity.setQuotaBlockedTopics(List.copyOf(quotaBlockedTopics));
         entity.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         repository.save(entity);
@@ -81,6 +84,7 @@ public class BulkGenerationResultService {
                 entity.getRequestedCount(),
                 entity.getCreatedCount(),
                 List.copyOf(entity.getFailedTopics()),
+                entity.getFailedTopicReasons() == null ? null : List.copyOf(entity.getFailedTopicReasons()),
                 List.copyOf(entity.getQuotaBlockedTopics()),
                 entity.getCreatedAt()
         );
