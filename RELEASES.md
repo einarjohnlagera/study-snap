@@ -1,5 +1,49 @@
 # RELEASES.md - NoteLib
 
+## v0.87.0 - Published Bounds
+
+**Status: In Progress**
+
+Theme: a generated note should be judged only against limits the model was actually given.
+
+**Found by `v0.86.0`'s cold-context pressure test, which falsified that release's own justification.** `v0.86.0` fixed the note *bullet arrays* and claimed the 28-word cap was "the only unpublished bound in this path." It was not. Three more sit in the same method, and they have the identical shape.
+
+### The defect
+
+`buildGeneratedNoteContent` validates three scalar fields by **word count**. The JSON schema publishes a **character** bound for each, and the prompt states **sentence counts** — a different unit again. So every one of them judges the model against a number it never sees, and in all three the Java bound is the tighter of the two:
+
+| Field | Java bound (unpublished) | Schema `maxLength` (published) | What the prompt says |
+|---|---|---|---|
+| `title` | 1–12 **words** | 160 chars | *"specific, academic, anchored to the topic"* — no length at all |
+| `overview` | 8–90 **words** | 1200 chars | *"2 to 3 sentences maximum"* |
+| `keyIdea` | 4–40 **words** | 500 chars | *"1 to 2 sentences"* |
+
+**⚠️ The minimums are unpublished too, and nothing states them anywhere.** A correct, terse 7-word overview is rejected by a floor of 8 that the prompt never mentions — and the prompt actively pushes *toward* brevity (*"2 to 3 sentences maximum"*, *"no filler openers"*). The two-sided nature is why this cannot be fixed by raising a ceiling.
+
+**Why it bites hardest on quantitative content, exactly as in `v0.86.0`:** a whitespace word count inflates on notation, and the prompt mandates LaTeX. `$P$ is the principal` is four "words" and twenty characters.
+
+### Why this is a real release and not bookkeeping
+
+**⚠️ These are the leading candidate for the owner-reported Bulk Generate failures in other subject areas that `v0.86.0` could not reproduce.** They raise **`invalid title` / `invalid overview` / `invalid key idea`**, which is why a probe looking for `invalid core details` found nothing. That hypothesis is **code-traced, not reproduced** — establishing it is scope item 1, and if it fails the release rescopes rather than proceeding on a guess.
+
+### Planned Scope
+
+- **1. Reproduce before fixing — this gates everything else.** Run the live harness (`@SpringBootTest` + real API; **note `src/test/resources/application.yaml` shadows the main one, so `studysnap.*` must be re-supplied via `@DynamicPropertySource`**) across topics from several subject areas, capturing the *exact* failure message per topic. **If these bounds never fire in practice, say so and rescope** — `v0.86.0`'s own sweep found 8 of 10 topics clean, and a fix for a bound that never bites is not worth a prompt change that affects all note generation.
+- **2. Align each surviving bound to its published contract.** Same shape as `v0.86.0`'s fix: validate by characters against the schema's own `maxLength`, and state the bound in that field's prompt section. Per field, decide deliberately: align, or keep a word bound *and publish it*.
+- **3. Resolve the unpublished minimums.** Either publish them or drop them. A floor that contradicts the prompt's own push toward brevity is the harder half, and it is the one most likely to reject correct output.
+
+### Anti-drift
+
+- **⚠️ Do NOT simply raise the numbers.** Two limits in different units for one contract is the defect; its size is not. This is the same rule `v0.86.0` set and is the most likely thing to be got wrong here.
+- **⚠️ Do NOT delete the Java checks outright.** Unlike a bare removal, the schema bound is the fallback — and it is far looser (1200 chars for `overview` against ~550 for 90 words), so deleting the check quietly widens what is accepted rather than leaving it unchanged. If a check goes, that widening is the decision being made, and it must be stated.
+- **No change to the bullet-array bounds** shipped in `v0.86.0` — `coreDetails`, `whyItMatters` and `quickRecall` are settled at 240 characters and stay there.
+- **The prompt governs all note generation**, so every added line is a cost paid on every call. Add the minimum that publishes the bound; do not restate rules already present.
+- **Verify live, not only by unit test.** `v0.86.0` proved a unit test cannot tell whether the model can actually satisfy a published bound.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.86.0 - Generation Recovery
 
 **Status: Released** (kicked off and signed off 2026-08-18)
