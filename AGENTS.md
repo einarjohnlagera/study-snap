@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.87.0 - Failure Attribution` (In Progress); previous: `v0.86.0 - Generation Recovery` (Released)
+- `v0.87.0 - Failure Attribution` (Released); previous: `v0.86.0 - Generation Recovery` (Released)
 
 **⚠️ `v0.87.0` — Failure Attribution.** **When a bulk-generated topic fails, the curator is told only WHICH topic — never why.** `BulkGenerationResultEntity.failedTopics` is a `List<String>` of names; `NoteBulkGenerationService.processBatch` logs the exception server-side and discards it from the receipt. `buildGeneratedNoteContent` alone raises **six distinct** rejections (title, overview, key idea, core details, why-it-matters, quick recall), plus the whole-note bound and the filler guard. **That gap has now cost two investigations** — `v0.86.0` fixed `invalid core details` and the owner's other-subject failures persisted; `v0.87.0` opened against three unpublished word bounds and **a live 14-topic probe across all eight domains came back 14/14 clean, nothing within 15% of a ceiling**, killing that hypothesis too. **⚠️ This release makes failures LEGIBLE and changes no validation** — no bound is altered, published, raised or removed, because changing both at once would destroy the read it exists to produce. **⚠️ `failed_topics` keeps its shape** (the retry path reads it, and every existing receipt is a plain string list); the reason goes in a parallel nullable column. **⚠️ Never surface raw exception text** for non-`AppException` failures.
 

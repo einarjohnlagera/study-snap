@@ -2,7 +2,7 @@
 
 ## v0.87.0 - Failure Attribution
 
-**Status: In Progress**
+**Status: Released** (kicked off, rescoped and signed off 2026-08-18)
 
 Theme: when a bulk-generated topic fails, the curator should be told which check rejected it.
 
@@ -45,6 +45,21 @@ Theme: when a bulk-generated topic fails, the curator should be told which check
 ### Shipped
 
 - **Per-topic bulk failure attribution** — Bulk Generate now stores a parallel nullable `failed_topic_reasons` receipt field and shows each recorded reason beneath its failed topic in Library. `AppException` failures preserve their user-facing code and message; every other runtime failure stores only `UNEXPECTED_ERROR`, fixed generic copy, and the exception's simple class name. The existing `failed_topics` string list and retry path are unchanged, quota-blocked topics receive no reason entry, and legacy receipts with no reason data retain the previous banner markup.
+
+### ⚠️ The instrument this release ships is EPHEMERAL, and that is a property of the receipt, not a defect introduced here
+
+`BulkGenerationResultService.consumeResult` **deletes the receipt on read**, and `BulkGenerationResultCleanupJob` expires unread ones after **24 hours**. A recorded reason therefore exists only until the curator loads the banner, or one day — whichever comes first.
+
+**This cannot be queried from the database after the fact.** Anyone trying to answer *"what have bulk failures actually been failing on?"* from `bulk_generation_result` will find an empty or near-empty table and may wrongly conclude nothing is failing. The durable record remains the **server log line**, which already carries the exception. The product surface serves the curator in the moment; the log serves the retrospective. Recorded because this release exists to make failures diagnosable and its own output is the shortest-lived data in the system.
+
+### Pre-signoff check — 2026-08-18
+
+**Cheap path taken deliberately.** One PR, one concept, additive, no pre-existing shared method touched by two PRs — none of the conditions for a full cold-context pressure test were met, and `v0.86.0` had just paid for one. `/audit-diff` found **no blocking issues**, which is a change from the previous release.
+
+The two acceptance criteria carrying real risk were verified rather than read: **zero** files under `prompts/` or `OpenAiLlmStudyPackService` changed across the entire release, so no validation moved while failures were being made legible; and the raw-message leak guard is **mutation-verified** — appending `getMessage()` for non-`AppException` failures fails three named tests, including one asserting `doesNotContain` on the *persisted* value.
+
+Backend 1636 tests · frontend 1941 across 184 suites · `tsc` clean.
+
 
 ## v0.86.0 - Generation Recovery
 
