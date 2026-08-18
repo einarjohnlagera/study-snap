@@ -1,5 +1,127 @@
 # RELEASES.md - NoteLib
 
+## v0.86.0 - Generation Recovery
+
+**Status: Released** (kicked off and signed off 2026-08-18)
+
+Theme: pre-warmed exam content and in-flight sessions that die on deploy should recover themselves, instead of sitting in a status nothing can leave.
+
+**⚠️ SCOPE WAS INVERTED BY THE PRODUCTION READ, 2026-08-18.** The release was kicked off against stuck **notes**. `docs/claude-plans/v0.86.0-stuck-generation-sizing.sql` then returned **zero** stuck notes and found the damage on the two surfaces the kickoff had declared out of scope. The order below is the order the data gives, not the order the defect was found in.
+
+### What is actually stuck in production
+
+| Surface | Stuck rows | Oldest | Learner impact |
+|---|---|---|---|
+| `exam_question_pool` | **18** | 2026-07-02 (6.5 weeks) | Every exam start on those Study Packs falls back to on-demand LLM generation — recurring cost and latency, not a block |
+| Long Exam session | **1** | 2026-05-19 (3 months) | **Hard permanent block** — that learner cannot start a Long Exam on that pack, ever |
+| `notes` | **0** | — | Defect and mechanism verified; production impact is **PROSPECTIVE** |
+
+**⚠️ The note half is prospective and must not be described as a backlog.** It is real — `StudyPackService:209-211` commits `GENERATING` before dispatch, `:622` throws 409 `NOTE_GENERATION_IN_PROGRESS` on every retry, and nothing sweeps — but zero notes are in that state today. It ships because the fix is nearly free once the sweeper exists and because a single occurrence is permanent and unrecoverable for that learner, not because anyone is currently stuck.
+
+### The mechanism, and why it hits pools hardest
+
+All three surfaces have a full `catch` that self-heals a **running** task into a recoverable status. What differs is how long the task runs. `OpenAiLlmConfig:24` uses `SimpleClientHttpRequestFactory`, i.e. `HttpURLConnection`, whose socket reads do **not** respond to `Thread.interrupt()` — so `shutdownNow()` never unwinds the thread, JVM exit kills it, and **the catch never runs**. A note is one LLM call; an exam pool is a `generateLongExamParallel` fan-out. Wider window, more stuck rows. That predicts 18-vs-0 without appealing to traffic volume, and it is why the fix generalises across the three surfaces rather than being three separate bugs.
+
+Dates to `2802fab3` (2026-04-08) for notes; the pool and session paths carry the same shape.
+
+### Planned Scope
+
+**1. Exam question pools — PRIMARY, and the cheapest fix in the release.**
+
+Recovery already exists: `sampleQuestions:94` calls `refreshPool` when it finds `FAILED`. **The only thing missing is the transition into `FAILED`.** Both non-terminal statuses dead-end instead:
+
+- `GENERATING` — task died mid-run.
+- **`PENDING` — task died while still QUEUED, so it never reached `GENERATING` at all.** This is why the original step 4 undercounted: it queried only `GENERATING`. `initiatePoolForUsage:208-212` refuses re-initiation on `READY`, `PENDING` **or** `GENERATING`, and `sampleQuestions:98` returns empty for anything non-`READY`, so a stuck `PENDING` row is exactly as terminal.
+
+**⚠️ `created_at` cannot be the pool clock.** A pool row is reused: a pool created months ago and re-initiated 30 seconds ago is legitimately `PENDING` with an ancient `created_at`, and a `created_at`-keyed sweep would resolve it, trigger `refreshPool`, and cause duplicate generation. Pools need a stamp written wherever the status is set — **four sites**, verified by grep: `:145` (`GENERATING`), `:215`, `:236`, `:327` (all `PENDING`).
+
+**2. Long Exam sessions.**
+
+One row, but a hard block: `LongExamService:169` hands the learner back the stuck `GENERATING` session instead of creating a new one. `FAILED` is in `OBSERVABLE_STATUSES` and **not** in `ACTIVE_STATUSES`, so resolving there lets `:169` build a fresh session on the next attempt — the unblock needs no new logic.
+
+**⚠️ `created_at` IS a safe clock here, unlike for pools** — verified: `buildGeneratingSession` (`:634-650`) constructs a **new** entity already in `GENERATING`, and no path returns an existing session to that status. So sessions need no new column.
+
+**⚠️ `LONG_EXAM` only.** Challenge Quiz sessions carry the same shape but a different fix: `ChallengeQuizService:1011` `forfeitStaleOrdinarySession` also calls `challengeQuizQuestionBankService.releaseClaims`, so sweeping a Challenge session to `FAILED` without releasing its bank claims would leak them. Adaptive Practice and Interview Practice are likewise excluded. All three are recorded as Known Limitations, not silently skipped.
+
+**3. Notes — kept, demoted, labelled prospective.**
+
+Same sweep, same job. With zero stuck rows the two-clock design's justification ("up to ~97 stranded bulk rows") no longer holds as an observed claim, so notes take **the enqueue stamp only** — written in the same transaction as `setStatus(GENERATING)` at `:209-211`, which is the sole writer of that status in the codebase. It covers both the killed-while-queued and killed-mid-call cases at the cost of a looser bound, and a second column cannot be justified against zero observations.
+
+**4. Topic note generation rejects word-dense bullets on an unpublished limit — ADDED 2026-08-18, ordered LAST.**
+
+Folded in on an owner report of repeated Bulk Generate failures blocking Review Set building; **reproduced live against the real OpenAI API**. Full evidence: `docs/claude-plans/v0.86.0-note-item-limit-mismatch.md`.
+
+`normalizeGeneratedNoteItems` (`OpenAiLlmStudyPackService:2504-2512`) validates every `coreDetails` / `whyItMatters` bullet against **`MAX_GENERATED_NOTE_ITEM_WORDS = 28`**. Nothing publishes that bound. What the model is told, and what the API strictly enforces, is **240 characters** — `note-generation-developer.txt:46` and the schema's `maxLength` (`:1161`). A formula with its variable definitions is word-dense and character-light, so it clears the published contract and fails the unpublished one:
+
+```
+words=43 chars=240  The formula for compound interest is $A = P \left(1 + \frac{r}{n}\right)^{nt}$, ...
+                    ^ exactly at the schema's maxLength — the model hit its stated budget
+                      precisely and was still rejected
+```
+
+**⚠️ This is NOT an oversight, and the fix reverses a deliberate prior decision.** The identical bug class was fixed for `quickRecall` after the "Weirs" failure (2026-08-03), and `coreDetails` was **knowingly** left on the word ceiling — the reason is recorded in `OpenAiLlmStudyPackServiceTest:1039`: *"coreDetails and whyItMatters are prose and deliberately keep the 28-word ceiling."* The prompt's 240-char rule sits under the `quickRecall` heading only. The prior fix treated one field; the same root cause resurfaced on the neighbouring one, at the same 4-of-5 sampled failure rate.
+
+**Fix:** validate `coreDetails` / `whyItMatters` by **characters**, as `quickRecall` already does (`normalizeQuickRecallItems:2514-2522`), **and state the 240-char bound in those prompt sections** — applying the "Weirs" fix's own recorded lesson that its failures came from the model never being told the bound it was judged against. Remove `MAX_GENERATED_NOTE_ITEM_WORDS`, whose only remaining use this is.
+
+**⚠️ Do NOT fix by raising the word cap** — that keeps two limits for one contract and reopens the gap on the next word-dense shape.
+
+**Scope honesty: this was NOT shown to be widespread.** A 10-topic sweep across every domain in the catalog returned **8 OK / 2 failed**, and both failures were Engineering Economics. Nursing dosage calculation, Accountancy tax rates and bank reconciliation, Civil Engineering beam deflection, Professional Practice, General Education and Professional Education all passed, and **no second failure mode surfaced**. The justification is therefore *"the only unpublished bound in the path, and it bites where content is word-dense"* — **not** *"many subjects are silently failing."* The owner reports other subject areas failing; those topics were not named and guessed substitutes did not reproduce it, so that remains open rather than claimed.
+
+**Routing:** isolated bug fix, one method plus a prompt edit → Claude Code implements directly, on its own branch and PR. Ordered after items 1-3 so it does not disturb the pool-first sequence.
+
+### Anti-drift
+
+- **No auto-regeneration, ever.** The sweeper moves a row to a recoverable status and stops. It never re-dispatches. For pools, `refreshPool` firing on next use is the existing machinery doing its job — the sweeper must not call it directly.
+- **⚠️ Do NOT add `setWaitForTasksToCompleteOnShutdown(true)` to `studyPackGenerationTaskExecutor` or `llmParallelTaskExecutor`, and do not touch `AppConfig`'s executor beans at all.** `analyticsTaskExecutor` above them carries exactly that treatment from `v0.80.0` and copying it here is a **regression**. Verified against spring-context 7.0.6 source: `ExecutorConfigurationSupport.shutdown()` calls `executor.shutdown()` when the flag is true, and the setter's Javadoc reads *"not interrupting running tasks and executing all tasks in the queue"* — so up to 100 queued 60–180s LLM calls would run against a closing datasource, billing OpenAI and persisting nothing. Shutdown behaviour is out of scope.
+- **⚠️ Do NOT remove or invert the `status != GENERATING` skip at `StudyPackService:687-695`.** Once a sweeper exists it reads like a bug and it is the opposite: it is the safety interlock that makes a late-finishing task discard its result rather than resurrect a row the learner was already told had failed.
+- **No quota refund path.** `incrementStudyPackGeneration` fires only inside `saveStudyPack`, which a dead task never reached.
+- **No `REQUIRES_NEW`** anywhere in this release (`v0.81.0`'s scar).
+- **Challenge Quiz, Adaptive Practice and Interview Practice sessions are OUT**, for the claim-leak reason above. The Official Challenge Quiz template seed is out permanently — genuinely best-effort and invisible to the learner.
+- **No startup sweep.** Age thresholds are what make the design multi-instance-safe; a boot-time sweep would kill another instance's live work.
+
+### Shipped
+
+- **Age-based generation recovery.** Added one scheduled, kill-switchable recovery sweep for the three production-sized dead-end surfaces. Reused exam-pool rows now stamp every `PENDING` / `GENERATING` attempt with `generation_status_at`; stale rows resolve to `FAILED` and stop, leaving the existing next-use `sampleQuestions` refresh path to rebuild them. Stale `LONG_EXAM` `GENERATING` sessions resolve to `FAILED`, which is outside the active-session set and lets the next start create a fresh session. Notes now stamp `generation_enqueued_at` whenever generation is queued and prospectively resolve stale `GENERATING` attempts through the existing shared failed transition and Retry Generation UI; production had zero stuck notes and this is not a note-backlog repair. Bounds remain deliberately conservative, independently configurable per surface (`60m` pool pending, `60m` pool generating, `30m` Long Exam, `120m` note) with a `200`-row batch, ten-minute cron and deploy kill switch; tightening them later is a config change. `V118` seeds existing non-terminal pool clocks from deploy-time `now()` rather than unsafe reused-row `created_at`, so the existing pool backlog becomes eligible one full bound after deploy. Recovery never re-dispatches, refunds quota, calls `refreshPool`, runs at startup, changes executor shutdown, or uses `REQUIRES_NEW`.
+
+- **Per-row transaction isolation, found by the pre-commit audit (backend).** The sweep methods were delivered with `@Transactional` around the whole batch loop, which made the per-row `catch` illusory: an exception escaping a Spring Data repository call marks the shared transaction rollback-only, so the loop finishes and reports a count while the commit fails and **every row that batch recovered is discarded**. Because candidates are ordered oldest-first, one reliably-failing row would poison every batch forever and permanently block the sweeper behind it — inverting the release's purpose, silently. Row mutation moved to `GenerationRecoveryRowWriter`, whose three methods each own their transaction while the sweep methods hold none. **This is not the `REQUIRES_NEW` pattern reverted in `v0.81.0`** — that failure was a nested transaction whose second connection could not see an uncommitted row; here the caller holds no transaction at all, so there is one connection and nothing invisible. Both classes carry that distinction in their Javadoc so it is not "simplified" back.
+
+- **Topic note generation stops rejecting word-dense bullets (backend).** `coreDetails` and `whyItMatters` bullets are now bounded by **characters**, matching the only contract the model is ever given: `note-generation-developer.txt` states it and the strict JSON schema enforces it as `maxLength`. The 28-word ceiling beside it was published nowhere, and it rejected exactly the content the note asks for — a formula plus its variable definitions is word-dense and character-light, so it cleared 240 characters while blowing past 28 words. `MAX_GENERATED_NOTE_ITEM_WORDS` is **removed rather than raised**; a second, unpublished bound is the defect, not its size. **⚠️ Correction, from the pre-signoff pressure test: this was NOT the only unpublished bound in the path, as an earlier draft of this entry claimed.** `title` (1–12 words), `overview` (8–90 words) and `keyIdea` (4–40 words) are validated in the same method and are equally unstated — the prompt gives the model *sentence* counts and no title length at all. They survive this release **unfixed and unmeasured**, and they are a live candidate for the owner-reported failures in other subject areas that this release could not reproduce, because they raise `invalid title` / `invalid overview` / `invalid key idea` rather than `invalid core details`. Recorded as a Known Limitation below rather than silently widened into scope. The 240-character bound is now **stated in both prompt sections**, applying the "Weirs" fix's own recorded lesson that its failures came from the model never being told the bound it was judged against, and `coreDetails` gains an explicit instruction to state the formula when the mechanism *is* the formula, splitting across bullets rather than truncating.
+
+  **Verified live against the real OpenAI API, before and after.** Before: 4 of 5 sampled Engineering Economics topics failed, one on a bullet measuring **exactly 240 characters** — the model hit its stated budget precisely and was still rejected. After: **5 of 5 generate**, including the three reported (`Compound Interest`, `Present Worth`, `Future Worth`).
+
+  **This reverses a deliberate prior decision and says so.** The identical class was fixed for `quickRecall` after the "Weirs" failure (2026-08-03), and these two fields were knowingly left on the prose ceiling. `generateNoteFromTopic_stillRejectsAnOverlongCoreDetailsItem` encoded that decision; it was **rewritten, not deleted**, into `..._rejectsACoreDetailsItemOverTheCharacterCeiling`, so the character bound still bites and `coreDetails` does not become unbounded on the backend side. **Mutation-verified:** restoring the 28-word ceiling fails exactly three tests — `..._rejectsACoreDetailsItemOverTheCharacterCeiling`, `..._acceptsAFormulaCoreDetailsItemThatExceedsTheOldProseWordCeiling`, and `..._acceptsAWordDenseWhyItMattersItem`.
+
+  **Scope honesty: this was not shown to be widespread.** A 10-topic sweep across all eight `DomainContext` values returned 8 OK / 2 failed, both Engineering Economics, with **no second failure mode**. A prediction that Nursing dosage strings and Accountancy statutory citations would fail the same way was tested and **withdrawn**.
+
+### Pre-commit audit — 2026-08-18
+
+**The delivery was clean against every anti-drift rule** — `AppConfig`'s executor beans untouched, the `StudyPackService:687-695` interlock preserved and now commented as the interlock, no new `REQUIRES_NEW`, no `refreshPool` call from the sweeper, no quota write, no startup sweep, and `V118` seeding pool clocks from `now()` rather than reused-row `created_at`. Test coverage matched the scope, including the reuse trap, the excluded session modes, and the late-completion interlock.
+
+**One defect survived it, and the test suite could not see it.** `recoverStalePools_oneBadRowDoesNotAbortBatch` asserted per-row isolation and passed — because `@ExtendWith(MockitoExtension.class)` means no transaction manager exists, so a loop-wide `@Transactional` is invisible to it. A behavioural test structurally cannot prove a transaction boundary. The guard added instead is `transactionBoundarySitsOnTheRowWriterAndNotOnTheSweepMethods`, which asserts the annotation shape directly; **mutation-verified — re-adding `@Transactional` to `recoverStaleNotes` fails that test and no other.**
+
+Backend 1629 tests · `./mvnw clean install` green.
+
+### Pre-signoff pressure test — 2026-08-18
+
+**Two cold-context agents, no inherited context, instructed to read the real code rather than any summary — including summaries written by the session that spawned them.** Scope split so neither could lean on the other: one took the recovery sweeper, one took the note-item bound plus documentation truthfulness against final code state.
+
+**Both independently found the same blocking defect, which every existing test passed over.** `StudyPackService`'s recovery interlock returned `null` from its transaction callback and then dereferenced it, throwing an NPE that the outer `catch` swallowed into a false `outcome=failed` **with a stack trace** — on the one surface whose purpose is operational visibility — and re-wrote `FAILED`, bumping `updated_at` and floating the note to the top of a library sorted by that column. The branch was near-unreachable before; **this release makes it the steady state**, which is exactly the class of defect per-PR `/audit-diff` cannot see: untouched code whose exposure a new feature multiplies. The release's own new test passed *because* the NPE was swallowed — it asserted outcome, never the absence of an error. Fixed, and the test strengthened until it fails without the fix.
+
+**Three further tests were found passing for the wrong reason and were strengthened:** the two pool bounds both default to 60 minutes, so swapping them passed all 14 tests until one test set them apart; the transaction-boundary guard checked only method-level `@Transactional`, so a class-level one — the exact "simplification" its Javadoc warns against — would have passed; and deleting **both** new prompt lines left the suite 90/90 green, because the existing placeholder guard was satisfied by the surviving `quickRecall` line. Each fix was mutation-verified.
+
+**`V118` was made symmetric.** It seeded the pool clock but not the note clock, justified by a doc claim that a null note clock is "impossible after the migration". False for the notes that matter most: the deploy installing the sweeper is itself the event that strands in-flight generation, and such a note could never satisfy `generation_enqueued_at < cutoff` — unrecoverable forever, warning every ten minutes. Notes are now seeded on the same argument as pools.
+
+### Known limitations
+
+- **⚠️ Three unpublished word bounds survive in the same method item 4 fixed.** `title` (12), `overview` (90) and `keyIdea` (40) are Java-only ceilings the prompt never states, so the model is still judged against numbers it cannot see. They were traced in code during the pressure test but **not reproduced live**, so they are recorded rather than fixed. **If a topic fails with `invalid title`, `invalid overview` or `invalid key idea`, this is the cause** — and the fix is to publish the bound in the prompt, never to raise the number.
+- **A late pool worker can clobber a re-dispatched pool.** `ExamQuestionPoolService`'s completion transaction writes `READY` with no attempt guard, and the entity carries no `@Version`. The sweeper's `FAILED` write is the first transition that can open the next-use refresh branch while a worker is still alive, so in principle: sweep → `FAILED` → learner samples → refresh → new worker writes `READY` with Q2 → old worker overwrites with Q1 **and resets `servedQuestionKeys`**, wiping the exclusion that stops seen questions being re-served. Likelihood is low — it needs a worker alive past the 60-minute bound against a ~4–5 minute worst-case wall time, and the queued variant is safe because the executor is FIFO. Left unfixed because the correct guard is an *attempt token* (compare `generationStatusAt` across the two transactions), not a status check: a plain "only if `GENERATING`" guard would break the intended case where a late worker legitimately writes `READY` over a swept `FAILED`.
+- **Recovering a Long Exam session costs the learner a second quota unit.** The stuck session already consumed one and nothing refunds it, so the sweeper converts "stuck, paid once" into "failed, pay again". Pre-existing behaviour for genuine failures; the sweeper makes it reachable. With one affected session in production, a manual refund is the proportionate remedy.
+- **A swept Long Exam session is `FAILED` with its counters intact.** `GenerationRecoveryRowWriter` sets only `status`, while `LongExamService.markSessionFailed` also zeroes the question counters and nulls `completedAt`. Cosmetic today — the frontend branches on status and quiz length, and a `GENERATING` session carries no quiz. Noted because the note surface avoided this by reusing the shared transition and the session surface reimplements it partially.
+- **`LongExamServiceTest.startSession_afterRecoveredFailedSessionCreatesFreshSession` is decorative.** Its `recoveredSession` never enters the code path — the repository lookup is stubbed empty — so its only assertion compares against a random UUID. It does not pin *"a `FAILED` session is not treated as active"*, and with a mocked repository it cannot: that filtering is a DB-level `statusIn` predicate. Left as-is rather than strengthened into a test that still could not prove its claim; the real guarantee is pinned by `ACTIVE_STATUSES` excluding `FAILED`.
+- **`StudySnapProperties.Generation.recoveryCron` is a decoy.** The job resolves `${studysnap.generation.recovery-cron}` straight from the environment, so editing the field changes nothing. Both defaults agree, so behaviour is correct; the field is inert.
+- **No migration in this repo is executed by the test suite.** `flyway.enabled: false` in the test config means `GenerationRecoveryMigrationTest` asserts on SQL **text** and would pass on invalid SQL. `V118` was validated by execution against a real PostgreSQL during the pressure test — index creation, planner selection, the seeding block and the existing CHECK constraint — but that validation is not repeatable in CI.
+- **Other generated-session recovery remains mode-owned.** Challenge Quiz is not swept because its stale-session recovery must also release question-bank claims; Adaptive Practice and Interview Practice remain excluded with it rather than being generalized through the Long Exam query. The Official Challenge Quiz template seed remains permanently best-effort and invisible to learners, so it has no recovery sweep.
+
 ## v0.85.0 - Domain Signal Integrity
 
 **Status: Released** (kicked off 2026-08-17, signed off 2026-08-18)

@@ -416,6 +416,14 @@ studysnap:
     weekly-cooldown-days: ${RETENTION_WEEKLY_COOLDOWN_DAYS:7}
     knowledge-impact-digest-cooldown-days: ${RETENTION_KNOWLEDGE_IMPACT_DIGEST_COOLDOWN_DAYS:30}
     weak-concept-threshold-percent: ${RETENTION_WEAK_CONCEPT_THRESHOLD_PERCENT:60}
+  generation:
+    recovery-cron: ${GENERATION_RECOVERY_CRON:0 */10 * * * *}
+    enabled: ${GENERATION_RECOVERY_ENABLED:true}
+    recovery-batch-size: ${GENERATION_RECOVERY_BATCH_SIZE:200}
+    pool-pending-bound-minutes: ${GENERATION_POOL_PENDING_BOUND_MINUTES:60}
+    pool-generating-bound-minutes: ${GENERATION_POOL_GENERATING_BOUND_MINUTES:60}
+    long-exam-session-bound-minutes: ${GENERATION_LONG_EXAM_SESSION_BOUND_MINUTES:30}
+    note-bound-minutes: ${GENERATION_NOTE_BOUND_MINUTES:120}
   security:
     google:
       client-id: ${GOOGLE_CLIENT_ID:}

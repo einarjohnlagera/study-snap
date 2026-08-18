@@ -139,7 +139,8 @@ class DashboardServiceProjectionIntegrationTest {
                     primary_collection_id uuid,
                     study_days_per_week integer,
                     created_at timestamp with time zone not null,
-                    updated_at timestamp with time zone not null
+                    updated_at timestamp with time zone not null,
+                    generation_enqueued_at timestamp with time zone
                 )
                 """);
         jdbcTemplate.execute("""

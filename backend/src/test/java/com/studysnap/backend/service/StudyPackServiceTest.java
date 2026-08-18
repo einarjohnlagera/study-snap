@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -751,9 +752,125 @@ class StudyPackServiceTest {
         studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
 
         assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.GENERATING);
+        assertThat(draftNote.getGenerationEnqueuedAt()).isNotNull();
+        ArgumentCaptor<NoteEntity> savedNote = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(savedNote.capture());
+        assertThat(savedNote.getValue().getGenerationEnqueuedAt()).isNotNull();
         assertThat(generationTasks).hasSize(1);
         verify(llmStudyPackService, never()).generateStudyPack(any(), any());
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_retryReplacesPreviousGenerationEnqueuedAt() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        OffsetDateTime previousAttempt = OffsetDateTime.now().minusDays(1);
+        NoteEntity failedNote = buildDraftNote(noteId, userId, "draft note content");
+        failedNote.setStatus(NoteStatus.FAILED);
+        failedNote.setGenerationEnqueuedAt(previousAttempt);
+        List<Runnable> generationTasks = new ArrayList<>();
+        studyPackService = new StudyPackService(
+                studyPackRepository,
+                studyPackDraftRepository,
+                noteRepository,
+                userRepository,
+                ocrService,
+                llmStudyPackService,
+                new StudySnapProperties(),
+                activityTrackingService,
+                analyticsService,
+                subscriptionService,
+                userUsageService,
+                studyPackUsageService,
+                ocrRateLimitService,
+                ocrUsageProtectionService,
+                aiRateLimitService,
+                generationContextResolver,
+                TEST_TRANSACTION_OPERATIONS,
+                new StudyPackGenerationTaskDispatcher(generationTasks::add),
+                contentModerationService,
+                examQuestionPoolService,
+                officialChallengeQuizTemplateService,
+                onboardingGuardService,
+                studyPackQuizMasteryService
+        );
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(failedNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+
+        assertThat(failedNote.getStatus()).isEqualTo(NoteStatus.GENERATING);
+        assertThat(failedNote.getGenerationEnqueuedAt()).isAfter(previousAttempt);
+        assertThat(generationTasks).hasSize(1);
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_lateCompletionAfterRecoveryPersistsNoStudyPack() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        List<Runnable> generationTasks = new ArrayList<>();
+        studyPackService = new StudyPackService(
+                studyPackRepository,
+                studyPackDraftRepository,
+                noteRepository,
+                userRepository,
+                ocrService,
+                llmStudyPackService,
+                new StudySnapProperties(),
+                activityTrackingService,
+                analyticsService,
+                subscriptionService,
+                userUsageService,
+                studyPackUsageService,
+                ocrRateLimitService,
+                ocrUsageProtectionService,
+                aiRateLimitService,
+                generationContextResolver,
+                TEST_TRANSACTION_OPERATIONS,
+                new StudyPackGenerationTaskDispatcher(generationTasks::add),
+                contentModerationService,
+                examQuestionPoolService,
+                officialChallengeQuizTemplateService,
+                onboardingGuardService,
+                studyPackQuizMasteryService
+        );
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generatedContent("Recovered too late"));
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+        draftNote.setStatus(NoteStatus.FAILED);
+        generationTasks.getFirst().run();
+
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.FAILED);
+        verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+        // The three assertions above ALL held while the interlock was throwing an NPE that the outer
+        // catch swallowed into a re-FAIL — they cannot tell a clean discard from a crash. These two
+        // can: a discarded generation must not announce itself, and must not take the failure path
+        // that re-writes FAILED and bumps updated_at (which floats the note up a library sorted by it).
+        verify(analyticsService, never())
+                .trackEvent(any(UUID.class), eq(AnalyticsEventType.STUDY_PACK_GENERATED), any(UUID.class), any());
+        // Exactly one save: the enqueue that stamped GENERATING. A second would mean the worker
+        // took the failure path and re-wrote FAILED over a row recovery had already resolved.
+        verify(noteRepository, times(1)).save(any(NoteEntity.class));
     }
 
     @Test
@@ -1110,6 +1227,28 @@ class StudyPackServiceTest {
         note.setUpdatedAt(OffsetDateTime.now().minusHours(1));
         note.setCopiedFromPublic(Boolean.FALSE);
         return note;
+    }
+
+    private GeneratedStudyPackContent generatedContent(String title) {
+        return new GeneratedStudyPackContent(
+                title,
+                "Generated summary",
+                "Biology",
+                List.of("cells"),
+                List.of("Cell structure"),
+                List.of(new QuizItem(
+                        "What surrounds a cell?",
+                        List.of("Membrane", "Bone", "Bark", "Stone"),
+                        "Membrane",
+                        "Cell structure",
+                        "The cell membrane surrounds the cell."
+                )),
+                "gpt-4.1-mini",
+                10,
+                20,
+                0,
+                new BigDecimal("0.0100")
+        );
     }
 
     private StudyPackListItemProjection listProjection(

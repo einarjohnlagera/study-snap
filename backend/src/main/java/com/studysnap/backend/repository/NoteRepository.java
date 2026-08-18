@@ -2,11 +2,14 @@ package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.model.NoteListItemProjection;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,6 +36,25 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
             """;
 
     Optional<NoteEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select n from NoteEntity n where n.id = :id")
+    Optional<NoteEntity> findByIdForUpdate(@Param("id") UUID id);
+
+    @Query("""
+            select n.id
+            from NoteEntity n
+            where n.status = :status
+              and n.generationEnqueuedAt < :cutoff
+            order by n.generationEnqueuedAt asc
+            """)
+    List<UUID> findStaleGenerationIds(
+            @Param("status") NoteStatus status,
+            @Param("cutoff") OffsetDateTime cutoff,
+            Pageable pageable
+    );
+
+    long countByStatusAndGenerationEnqueuedAtIsNull(NoteStatus status);
     Optional<NoteEntity> findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(UUID ownerUserId, UUID copiedFromNoteId);
     Page<NoteEntity> findByOwnerUserId(UUID ownerUserId, Pageable pageable);
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);

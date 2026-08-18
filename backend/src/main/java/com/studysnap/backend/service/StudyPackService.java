@@ -206,8 +206,10 @@ public class StudyPackService {
                 : generationContextOverride;
         UUID noteId = sourceNote.getId();
 
+        OffsetDateTime generationEnqueuedAt = OffsetDateTime.now();
         sourceNote.setStatus(NoteStatus.GENERATING);
-        sourceNote.setUpdatedAt(OffsetDateTime.now());
+        sourceNote.setGenerationEnqueuedAt(generationEnqueuedAt);
+        sourceNote.setUpdatedAt(generationEnqueuedAt);
         noteRepository.save(sourceNote);
 
         Runnable generationTask = () -> generateStudyPackFromExistingNoteAsync(
@@ -686,6 +688,8 @@ public class StudyPackService {
                 NoteEntity sourceNote = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                         .orElseThrow(NoteNotFoundException::new);
                 if (sourceNote.getStatus() != NoteStatus.GENERATING) {
+                    // Generation recovery safety interlock: a late worker must discard its result
+                    // instead of resurrecting a note already resolved to FAILED for the learner.
                     log.info(
                             "requestId={} action=complete_async_studyPack_generation noteId={} outcome=skipped status={}",
                             requestId,
@@ -712,6 +716,16 @@ public class StudyPackService {
                 }
                 return savedEntity;
             });
+
+            if (saved == null) {
+                // The interlock above declined to persist: the note is no longer GENERATING, so a
+                // recovery sweep (or a mid-generation delete) already resolved it and the learner has
+                // been told so. Return quietly. Dereferencing `saved` here used to throw an NPE that
+                // the catch below swallowed into a false `outcome=failed` with a stack trace — on the
+                // one surface whose purpose is operational visibility — and re-wrote FAILED, bumping
+                // `updated_at` and floating the note to the top of a library sorted by that column.
+                return;
+            }
 
             analyticsService.trackEvent(ownerUserId, AnalyticsEventType.STUDY_PACK_GENERATED, saved.getId(), buildGenerationMetadata(
                     noteId,
@@ -996,14 +1010,16 @@ public class StudyPackService {
     }
 
     private void markNoteGenerationFailed(UUID noteId, UUID ownerUserId) {
-        noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId).ifPresent(note -> {
-            if (note.getStatus() == NoteStatus.GENERATED) {
-                return;
-            }
-            note.setStatus(NoteStatus.FAILED);
-            note.setUpdatedAt(OffsetDateTime.now());
-            noteRepository.save(note);
-        });
+        noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId).ifPresent(this::markNoteGenerationFailed);
+    }
+
+    public void markNoteGenerationFailed(NoteEntity note) {
+        if (note.getStatus() == NoteStatus.GENERATED) {
+            return;
+        }
+        note.setStatus(NoteStatus.FAILED);
+        note.setUpdatedAt(OffsetDateTime.now());
+        noteRepository.save(note);
     }
 
     private void syncNoteTags(UUID noteId, UUID ownerUserId, String[] tags) {

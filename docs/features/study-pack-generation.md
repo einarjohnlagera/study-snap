@@ -143,12 +143,13 @@ Rules:
 - generated note content remains editable before save
 - this is a note-drafting assist, not a saved note or Study Pack
 
-Generated-note item validation (v0.69.0):
+Generated-note item validation (v0.69.0; **the prose/notation split was removed in v0.86.0**):
 
-- `coreDetails` and `whyItMatters` are prose and are bounded at **28 whitespace-delimited words** per item
-- `quickRecall` is bounded by **characters, not words** — the same 240-character limit the JSON schema already applies to every generated-note array item
-- the split is deliberate. A whitespace word count measures the wrong thing on notation: `Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2)` is roughly 15 "words" of pure symbols, so a formula followed by its variable definitions could exceed a prose ceiling while staying visually compact and well inside the schema's own bound. That mismatch rejected valid Civil Engineering content intermittently — see `docs/claude-prompt/topic-note-quick-recall-validation-review.md`
-- the prompt states the Quick Recall character bound via `{MAX_ITEM_CHARS}`, substituted from the same constant the schema uses. **A bound the model is not told about is enforced by chance** — that is what produced the original four-of-five pass rate. If a new bound is added, state it in the prompt too
+- **every** generated-note array item — `coreDetails`, `whyItMatters` and `quickRecall` alike — is bounded by **characters**: the same 240-character limit the JSON schema applies as `maxLength`, and the same one the prompt states via `{MAX_ITEM_CHARS}`
+- a whitespace word count measures the wrong thing on notation: `Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2)` is roughly 15 "words" of pure symbols, so a formula followed by its variable definitions is word-dense and character-light — visually compact, well inside the schema's bound, and over any prose ceiling
+- **v0.69.0 applied that reasoning to `quickRecall` only**, leaving `coreDetails` and `whyItMatters` on a 28-word prose ceiling on the theory that formulas belong in Quick Recall. **v0.86.0 removed that split**: for a quantitative topic the *mechanism* is the formula, so the model files it under `coreDetails` — which is what that section asks for — and it was then judged by a ceiling built for prose. Four of five sampled Engineering Economics topics failed, one on a bullet measuring exactly 240 characters. Background: `docs/claude-plans/v0.86.0-note-item-limit-mismatch.md`, and the original Quick Recall review at `docs/claude-prompt/topic-note-quick-recall-validation-review.md`
+- **the bound is stated in every section it governs.** *A bound the model is not told about is enforced by chance* — that produced the original four-of-five pass rate in v0.69.0 and reproduced it in v0.86.0 on the neighbouring fields. **Do not add a validation bound without publishing it in the prompt, and do not reintroduce a word ceiling beside the character one**: two limits for one contract is the defect, independent of their sizes
+- `coreDetails` additionally instructs the model to state the formula when the mechanism is the formula, splitting across bullets rather than truncating
 - the whole generated note remains bounded at 700 words independently
 
 Create/Edit Note supports multiple content input paths before save or generation:
@@ -263,6 +264,18 @@ User-facing generation statuses:
 - `GENERATING`: generation is running in the background.
 - `STUDY_PACK_READY`: generated summary, key concepts, and quiz are available.
 - `FAILED`: generation did not complete and can be retried from Note Detail.
+
+### Age-based generation recovery
+
+The scheduled generation-recovery job covers three independently processed surfaces and moves stale work only into a status the existing product can recover from:
+
+- exam pools stamp nullable `generation_status_at` on every `PENDING` and `GENERATING` write. Separate default bounds are `60` minutes for queued `PENDING` work and `60` minutes for `GENERATING` fan-out work. A stale pool becomes `FAILED`; `sampleQuestions` owns the existing next-use refresh.
+- Long Exam sessions use immutable `created_at`, with a default `30`-minute bound. Only `session_mode = LONG_EXAM` is eligible; a stale session becomes `FAILED`, allowing a later start to create a fresh session.
+- notes stamp nullable `generation_enqueued_at` in the same transaction that sets `GENERATING`, refreshing it on every retry. The default `120`-minute bound covers both queue wait and the single LLM call. A stale note becomes `FAILED` through the same entity transition used by generation errors and exposes the existing Retry Generation action. This protection is prospective: production sizing found zero stuck notes.
+
+The job runs every ten minutes by default, processes at most `200` candidates per surface per run, reports recovered count and oldest age, and has a deploy kill switch. Every bound, the cron and batch size are configuration-owned placeholders; they can be tightened after production observation without a code change. `V118` seeds existing non-terminal pool attempts with deploy time rather than reused-row `created_at`, so no live attempt is swept early and genuinely stuck rows become eligible one full bound after deploy. Notes with a null enqueue clock are left untouched and warned. `V118` seeds the clock for any note already `GENERATING` at deploy time — on the same argument as pools, because the deploy that installs the sweeper is itself the event that strands in-flight generation — and `StudyPackService` is the single writer of `GENERATING` and stamps in the same transaction. So a null clock after that means a **new writer** appeared without a stamp, and silently recovering it would hide that bug rather than surface it.
+
+Recovery is status-only and idempotent. It never auto-regenerates, re-dispatches a task, calls pool refresh directly, refunds or increments quota, changes executor shutdown, or runs as a startup sweep. Age thresholds and locked status rechecks provide multi-instance safety on all three surfaces. **Live-task safety is not uniform:** the pool and note surfaces take a pessimistic lock and recheck under it, while the Long Exam session surface gets its safety from the age threshold sitting far above the worker envelope plus the one-active-generation index — its own generation path reads with a plain `findById` and takes no row lock until commit. A late note worker discards its generated result when the note is no longer `GENERATING`; a late pool worker may write `READY`, which is already a correct terminal outcome.
 
 ## Metadata suggestion parity
 

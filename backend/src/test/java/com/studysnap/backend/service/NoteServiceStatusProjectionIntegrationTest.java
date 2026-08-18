@@ -75,7 +75,8 @@ class NoteServiceStatusProjectionIntegrationTest {
                     copied_from_public boolean,
                     copied_at timestamp with time zone,
                     created_at timestamp with time zone not null,
-                    updated_at timestamp with time zone not null
+                    updated_at timestamp with time zone not null,
+                    generation_enqueued_at timestamp with time zone
                 )
                 """);
         createApplicableProgramsSchema();

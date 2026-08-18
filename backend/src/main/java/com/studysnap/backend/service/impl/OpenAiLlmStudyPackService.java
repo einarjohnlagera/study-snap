@@ -65,14 +65,22 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_SUMMARY_WORDS = 350;
     private static final int MAX_STUDY_TIP_WORDS = 20;
     private static final int MAX_GENERATED_NOTE_WORDS = 700;
+    // ⚠️ These three are WORD bounds that the prompt does not state. `note-generation-developer.txt`
+    // gives the model sentence counts ("2 to 3 sentences maximum", "1 to 2 sentences") and no length
+    // at all for the title, so the model is judged against numbers it never sees -- the same defect
+    // v0.86.0 fixed for the bullet arrays below. It bites hardest on notation, where a whitespace
+    // word count inflates. Surviving deliberately, unfixed and unmeasured; see
+    // docs/claude-plans/v0.86.0-note-item-limit-mismatch.md. Do NOT treat them as a settled contract:
+    // if one starts rejecting valid content, publish the bound in the prompt rather than raising it.
     private static final int MAX_GENERATED_NOTE_TITLE_WORDS = 12;
     private static final int MAX_GENERATED_NOTE_OVERVIEW_WORDS = 90;
     private static final int MAX_GENERATED_NOTE_KEY_IDEA_WORDS = 40;
-    private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
-    // Quick Recall is bounded by characters rather than words. A whitespace word count measures
-    // the wrong thing on notation -- "Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2)" is ~15 "words" of
-    // pure symbols -- so a formula plus its variable definitions could exceed the prose ceiling
-    // while staying visually compact and well under the schema's own length bound.
+    // Every generated-note array item -- coreDetails, whyItMatters and quickRecall alike -- is bounded
+    // by characters rather than words (v0.86.0; quickRecall alone since v0.69.0). A whitespace word
+    // count measures the wrong thing on notation -- "Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2)" is ~15
+    // "words" of pure symbols -- so a formula plus its variable definitions could exceed a prose
+    // ceiling while staying visually compact and well under the schema's own length bound. This is
+    // the bound the prompt states, in all three sections.
     private static final int MAX_GENERATED_NOTE_ITEM_CHARS = 240;
     private static final int COMPANION_FAQ_MIN_ITEMS = 3;
     private static final int COMPANION_FAQ_MAX_ITEMS = 6;
@@ -2501,9 +2509,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return normalized;
     }
 
+    /**
+     * Bounds each bullet by CHARACTERS, which is the only bound the model is ever told about:
+     * {@code note-generation-developer.txt} states it and the strict JSON schema enforces it as
+     * {@code maxLength}. A prose word ceiling used to sit here as a second, unpublished bound, and it
+     * rejected exactly the content the prompt asks for — a formula plus its variable definitions is
+     * word-dense and character-light, so it cleared 240 characters while blowing past 28 words. Four
+     * of five sampled Engineering Economics topics failed that way. Keep validation on the published
+     * contract; do not reintroduce a bound the model cannot see.
+     */
     private List<String> normalizeGeneratedNoteItems(List<String> values, int minItems, String errorMessage) {
         List<String> normalized = sanitizeStringList(values).stream()
-                .map(value -> normalizeGeneratedNoteText(value, 1, MAX_GENERATED_NOTE_ITEM_WORDS, errorMessage))
+                .map(value -> normalizeGeneratedNoteChars(value, MAX_GENERATED_NOTE_ITEM_CHARS, errorMessage))
                 .toList();
         if (normalized.size() < minItems) {
             throw invalidOutput(errorMessage);

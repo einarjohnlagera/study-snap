@@ -1035,12 +1035,16 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
-    void generateNoteFromTopic_stillRejectsAnOverlongCoreDetailsItem() throws JsonProcessingException {
-        // coreDetails and whyItMatters are prose and deliberately keep the 28-word ceiling.
-        String wordyProse = "word ".repeat(40).trim();
+    void generateNoteFromTopic_rejectsACoreDetailsItemOverTheCharacterCeiling() throws JsonProcessingException {
+        // Replaces an earlier test that asserted a 28-WORD ceiling here. That ceiling was removed
+        // because it was never published to the model, but the CHARACTER bound must still bite —
+        // otherwise dropping the word count would leave coreDetails unbounded on the backend side,
+        // which is exactly what the Quick Recall fix was careful to avoid.
+        String overlong = "x".repeat(241);
+        assertThat(overlong.length()).isGreaterThan(240);
         ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
         payload.putArray("coreDetails")
-                .add(wordyProse)
+                .add(overlong)
                 .add("Second Law: net force equals mass times acceleration.")
                 .add("Third Law: for every action there is an equal and opposite reaction.");
 
@@ -1050,7 +1054,61 @@ class OpenAiLlmStudyPackServiceTest {
         assertThatThrownBy(() -> service.generateNoteFromTopic(
                 "Weirs",
                 new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("hydraulics"))
-        )).isInstanceOf(AppException.class);
+        )).hasMessageContaining("invalid core details");
+    }
+
+    @Test
+    void generateNoteFromTopic_acceptsAFormulaCoreDetailsItemThatExceedsTheOldProseWordCeiling() throws JsonProcessingException {
+        // Reproduces the reported Bulk Generate failure verbatim (Engineering Economics /
+        // "Compound Interest", 2026-08-18). Captured from a live API run: 191 characters — inside
+        // the bound the prompt and schema both publish — but 35 whitespace-delimited "words", which
+        // the unpublished 28-word prose ceiling rejected. It is a formula followed by definitions of
+        // its variables, i.e. exactly what the note asks for on a quantitative topic.
+        String formulaItem = "The future value (FV) with compound interest is calculated by $FV = P(1 + r)^n$, "
+                + "where $P$ is the principal, $r$ is the interest rate per period, and $n$ is the number "
+                + "of compounding periods.";
+        assertThat(formulaItem.length()).isLessThanOrEqualTo(240);
+        assertThat(formulaItem.split("\\s+")).hasSizeGreaterThan(28);
+
+        ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
+        payload.putArray("coreDetails")
+                .add(formulaItem)
+                .add("Interest compounds on principal plus accumulated interest.")
+                .add("Effective rate rises with compounding frequency.");
+
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        String content = service.generateNoteFromTopic(
+                "Compound Interest",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("engineering economics"))
+        );
+
+        assertThat(content).contains("compound interest is calculated by");
+    }
+
+    @Test
+    void generateNoteFromTopic_acceptsAWordDenseWhyItMattersItem() throws JsonProcessingException {
+        // whyItMatters carried the same unpublished ceiling and the same exposure.
+        String wordDense = "It sets how much a borrower pays over time, so a small change in the rate per "
+                + "period, the number of periods, or the compounding frequency moves the total cost a lot.";
+        assertThat(wordDense.length()).isLessThanOrEqualTo(240);
+        assertThat(wordDense.split("\\s+")).hasSizeGreaterThan(28);
+
+        ObjectNode payload = generatedNotePayloadWithQuickRecall("First Law — law of inertia");
+        payload.putArray("whyItMatters")
+                .add(wordDense)
+                .add("Board exams test compound interest computation directly.");
+
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        String content = service.generateNoteFromTopic(
+                "Compound Interest",
+                new StudyPackGenerationContext(null, "Civil Engineering", null, List.of("engineering economics"))
+        );
+
+        assertThat(content).contains("how much a borrower pays over time");
     }
 
     @Test
@@ -1084,7 +1142,14 @@ class OpenAiLlmStudyPackServiceTest {
                         .getInputStream().readAllBytes(),
                 StandardCharsets.UTF_8
         );
+        // One occurrence per section the bound governs: coreDetails, whyItMatters, quickRecall.
+        // A `contains` check is satisfied by the quickRecall line alone, so deleting the two lines
+        // added for coreDetails and whyItMatters left this green — the exact "model uninstructed,
+        // tests still pass" hole this test exists to close, reopened one field over.
         assertThat(template).contains("{MAX_ITEM_CHARS}");
+        assertThat(template.split("\\{MAX_ITEM_CHARS\\}", -1).length - 1)
+                .as("the character bound must be stated in every section it is enforced on")
+                .isEqualTo(3);
     }
 
     private ObjectNode generatedNotePayloadWithQuickRecall(String firstQuickRecallItem) {

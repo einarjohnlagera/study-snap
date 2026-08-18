@@ -306,6 +306,38 @@ class LongExamServiceTest {
     }
 
     @Test
+    void startSession_afterRecoveredFailedSessionCreatesFreshSession() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
+        QuickReviewSessionEntity recoveredSession = buildSession(
+                userId,
+                studyPackId,
+                QuickReviewSessionStatus.FAILED,
+                List.of()
+        );
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.LONG_EXAM),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LongExamStartResponse response = longExamService.startSession(studyPackId.toString(), userId, null);
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING.name());
+        assertThat(response.sessionId()).isNotEqualTo(recoveredSession.getId());
+        verify(quickReviewSessionRepository).save(any(QuickReviewSessionEntity.class));
+    }
+
+    @Test
     void startSession_monthlyLongExamLimitReachedThrowsBeforeGeneration() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
