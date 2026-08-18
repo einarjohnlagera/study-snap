@@ -56,9 +56,11 @@ Theme: pre-warmed exam content and in-flight sessions that die on deploy should 
 
 | Surface | Stuck rows | Oldest | Learner impact |
 |---|---|---|---|
-| `exam_question_pool` | **18** | 2026-07-02 (6.5 weeks) | Every exam start on those Study Packs falls back to on-demand LLM generation — recurring cost and latency, not a block |
+| `exam_question_pool` | **37** (18 `GENERATING` + 19 `PENDING`; the 19 corrected in 2026-08-18) | 2026-07-02 (6.5 weeks) | Would degrade every exam start on those Study Packs to on-demand LLM generation — **but see the correction below: no exam has ever been started on any of them** |
 | Long Exam session | **1** | 2026-05-19 (3 months) | **Hard permanent block** — that learner cannot start a Long Exam on that pack, ever |
 | `notes` | **0** | — | Defect and mechanism verified; production impact is **PROSPECTIVE** |
+
+**⚠️ CORRECTION, 2026-08-18, from step 6c of the sizing query — the POOL half is largely prospective too, and the release's cost argument was overstated.** The 37 stuck pools sit on **38 Study Packs carrying ZERO Long Exam or Board Exam sessions between them, affecting ZERO learners.** Pools are pre-warmed eagerly on every Study Pack creation, so a stuck pool on a pack nobody sits an exam on costs nothing until someone does. The degradation this release describes is **real in mechanism and unrealized in practice**: it would be paid on the first exam start against one of those packs, and that has not happened. **The only REALIZED damage in this release was the single Long Exam session** — one learner, hard-blocked since 2026-05-19. Everything else is protection against a cost not yet incurred. Recorded because the release was justified partly on *"recurring cost and latency"*, and that framing did not survive its own follow-up read.
 
 **⚠️ The note half is prospective and must not be described as a backlog.** It is real — `StudyPackService:209-211` commits `GENERATING` before dispatch, `:622` throws 409 `NOTE_GENERATION_IN_PROGRESS` on every retry, and nothing sweeps — but zero notes are in that state today. It ships because the fix is nearly free once the sweeper exists and because a single occurrence is permanent and unrecoverable for that learner, not because anyone is currently stuck.
 
