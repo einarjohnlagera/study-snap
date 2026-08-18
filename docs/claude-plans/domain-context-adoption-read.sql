@@ -127,7 +127,7 @@ ORDER BY notes DESC;
 -- ⚠️ Whatever the numbers say, two code-level findings stand and are NOT settled by data,
 -- because they are properties of the implementation rather than of adoption:
 --   • `isQuantitativeContext` substring-matches the domain LABEL against ~49 keywords
---     across 8 call sites, so a curator-typed name that matches none silently turns
+--     across 7 call sites, so a curator-typed name that matches none silently turns
 --     computation guidance OFF.
 --   • `effectiveAuthoringDomain` returns `getLabel()`, so the display label IS the prompt
 --     payload — renaming retroactively changes what the model was told.

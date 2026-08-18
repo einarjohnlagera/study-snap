@@ -3,7 +3,7 @@
 > **This is the core brief. Paste it as your first message in a new GPT chat session.**
 > Then paste any module below that matches the conversation — see "Which modules to paste".
 > Update this file whenever a new version ships or the roadmap shifts significantly.
-> Last updated: v0.83.0 (In Progress) - 2026-08-17
+> Last updated: v0.85.0 (Released) - 2026-08-18
 
 ---
 

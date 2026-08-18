@@ -2,7 +2,7 @@
 
 ## v0.85.0 - Domain Signal Integrity
 
-**Status: In Progress** (kicked off 2026-08-17)
+**Status: Released** (kicked off 2026-08-17, signed off 2026-08-18)
 
 Theme: the one signal that shapes how the AI writes should be declared, not guessed from a name.
 
@@ -68,6 +68,14 @@ Backend 1597 tests (up 15) · frontend 1940 tests / 184 suites · `tsc` clean ·
 
 **The 463 therefore close by curator classification, not by more code** — and deliberately not by lengthening `QUANTITATIVE_KEYWORDS` (which would restore the guess) nor by declaring `quantitative` on the `course_program` catalog row, which would repeat the `PROFESSIONAL_EDUCATION` mistake at program scale: `Nursing` and `Architecture` are mixed catalogs where the computational subjects are a minority of a program whose other notes would inherit a false signal. Owed as `[CHECKPOINT — due 2026-09-17]`.
 
+### `PROFESSIONAL_PRACTICE_AND_REGULATION` is declared `false` — found by the cold-context pressure test
+
+**An asymmetry, not a bug, and the pressure test's most useful finding.** PPR is one of **three** values whose display label matched no keyword before this release — alongside `NURSING` and `ACCOUNTANCY` — so it flips to a genuinely new `true`. This release wrote a careful ~10-line justification for declaring each Education value `false`, established the rule that *a false signal is permanent per note* because Study Packs never auto-regenerate, and then **applied no equivalent test to PPR at all.** Its only appearance was a Shipped bullet lumping it with Nursing and Accountancy.
+
+`08:59` defines PPR as *Engineering Laws / Ethics / Contracts, Architecture's Professional Practice, Building Laws, BP 344* — a legal and regulatory catalog. **The counter-case is real and is recorded rather than dismissed:** architectural professional practice includes fee and area computation, and accessibility law carries dimensional requirements. Neither reading is settleable from evidence, because the value has **zero production notes**.
+
+**So it takes the default that is a no-op.** `false` falls through to the untouched keyword scan — exactly today's behaviour, incapable of regressing. `true` is a new signal asserted without evidence, on a value nobody has used. **One character reverses it** if the owner reads that catalog the other way; this is a defensible product judgment, not a defect, and it is written down here precisely so it can be revisited rather than inherited silently.
+
 ### The two Education values are declared `false`, deliberately
 
 The scope left `GENERAL_EDUCATION` and `PROFESSIONAL_EDUCATION` to judgment. **Both are `false`, and the reason is the same one that makes this whole release safe: `false` is a no-op against today's behaviour, `true` is a new signal.** A domain declaring `false` falls through to the untouched keyword scan — precisely what those notes do now — so neither value can regress. Declaring one `true` would actively instruct the model to *"use numbers, word problems, or applied calculations."*
@@ -79,6 +87,14 @@ The scope left `GENERAL_EDUCATION` and `PROFESSIONAL_EDUCATION` to judgment. **B
 The cost of `false` is honest and small: `'assessment of learning'` contains no keyword, so those 13 notes keep missing guidance. **The fix is curator metadata, not an enum lie** — a subject or tag naming what the material actually is (`Item Analysis`, `Statistics`), which is better metadata regardless and is what the scan is for. `PROFESSIONAL_EDUCATION` has zero notes today, so nothing live changed either way.
 
 `GENERAL_EDUCATION` is `false` on the same reasoning, and its 31 live notes are unaffected for the same reason — recorded here so nobody rediscovers it as a bug.
+
+### Cold-context pressure test — 2026-08-18, before signoff
+
+Run because one concept touched backend enum, generation service, and three curator frontend surfaces — the 3+ surfaces clause — even though the release is only two PRs. A fresh agent with no inherited context, instructed to treat every summary in the repo (including ones written during this release) as a claim to verify.
+
+**No code defects.** All seven implementation claims verified against real code: the short-circuit is `if (A) return true;` prepended to an otherwise byte-identical body, so it provably cannot turn a previous `true` into `false`; it lives inside `isQuantitativeContext`, so all **7** call sites get it uniformly and none bypasses it; `QUANTITATIVE_KEYWORDS` is byte-identical at 49 entries; `effectiveAuthoringDomain` is untouched; no migration or persistence change; and `DomainContext` carries no `@JsonValue`, so the new getter cannot leak into an API response. The three `ADR-001` corrections were independently confirmed true, including that Applicable Programs really do render on cards (`shared-note-card.tsx:61-68,138`). Frontend descriptions are **structurally** learner-unreachable — each sits inside the same gated block as its select — rather than merely untested.
+
+**Six findings, all documentation, justification or test coverage. Every one is fixed or recorded; none was dropped.** The two substantive ones — the PPR asymmetry above, and test gaps measured by mutation rather than by running the suite — shipped as their own PR. The pressure test also corrected this release's own audit language: *"both halves of the guarantee are pinned"* was **overstated**, because `isQuantitativeContext_preservesEveryPreviouslyQuantitativeEngineeringDomain` survives deleting the short-circuit entirely (its three labels all contain `engineering`, so it cannot distinguish "preserved by the declaration" from "preserved by the scan"). **Mutation-kill counts — *"fails 2 tests"* — are precisely the reporting form that hid that**, and are worth distrusting in the next audit: a count says a mutation died, not that the mechanism under test is what killed it.
 
 ### Feature docs
 
