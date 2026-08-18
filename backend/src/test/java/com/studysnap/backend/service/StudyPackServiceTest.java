@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -861,6 +862,15 @@ class StudyPackServiceTest {
         assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.FAILED);
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+        // The three assertions above ALL held while the interlock was throwing an NPE that the outer
+        // catch swallowed into a re-FAIL — they cannot tell a clean discard from a crash. These two
+        // can: a discarded generation must not announce itself, and must not take the failure path
+        // that re-writes FAILED and bumps updated_at (which floats the note up a library sorted by it).
+        verify(analyticsService, never())
+                .trackEvent(any(UUID.class), eq(AnalyticsEventType.STUDY_PACK_GENERATED), any(UUID.class), any());
+        // Exactly one save: the enqueue that stamped GENERATING. A second would mean the worker
+        // took the failure path and re-wrote FAILED over a row recovery had already resolved.
+        verify(noteRepository, times(1)).save(any(NoteEntity.class));
     }
 
     @Test

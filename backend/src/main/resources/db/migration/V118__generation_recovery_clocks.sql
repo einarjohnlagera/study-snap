@@ -7,6 +7,7 @@ ALTER TABLE notes
 DO $$
 DECLARE
     seeded_pool_count INTEGER;
+    seeded_note_count INTEGER;
 BEGIN
     -- Pool rows are reused, so created_at is not a generation clock. Seed from deploy time to
     -- protect live work; genuinely stuck rows become eligible exactly one configured bound later.
@@ -18,6 +19,22 @@ BEGIN
     GET DIAGNOSTICS seeded_pool_count = ROW_COUNT;
     RAISE NOTICE 'V118: seeded generation_status_at with deploy time for % non-terminal exam question pools',
         seeded_pool_count;
+
+    -- Notes get the same treatment, for the same reason. Production sizing found zero stuck notes,
+    -- but that was measured BEFORE this deploy — and the deploy itself is precisely the event that
+    -- strands in-flight generation, because the generation executor takes no drain on shutdown. A
+    -- note left GENERATING by this very deploy would keep a NULL clock, and the sweep predicate
+    -- requires `generation_enqueued_at < cutoff`, which NULL never satisfies: unrecoverable forever,
+    -- while warning every ten minutes. Seeding from deploy time makes it eligible one bound later,
+    -- exactly as it does for pools. Expected row count in production: 0.
+    UPDATE notes
+       SET generation_enqueued_at = now()
+     WHERE status = 'GENERATING'
+       AND generation_enqueued_at IS NULL;
+
+    GET DIAGNOSTICS seeded_note_count = ROW_COUNT;
+    RAISE NOTICE 'V118: seeded generation_enqueued_at with deploy time for % notes still GENERATING',
+        seeded_note_count;
 END $$;
 
 CREATE INDEX idx_exam_question_pool_generation_recovery

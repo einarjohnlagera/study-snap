@@ -9,7 +9,7 @@ Current documentation baseline:
 
 - `v0.86.0 - Generation Recovery` (In Progress); previous: `v0.85.0 - Domain Signal Integrity` (Released)
 
-**⚠️ `v0.86.0` fixes stuck `GENERATING` notes with an age-threshold recovery sweeper, NOT a shutdown drain.** Copying `analyticsTaskExecutor`'s `waitForTasksToCompleteOnShutdown(true)` onto the generation executors is a regression: it runs the entire queue uninterrupted, billing up to 100 LLM calls against a closing datasource. The sweeper marks `FAILED` and never re-dispatches — Study Packs never auto-regenerate.
+**⚠️ `v0.86.0` recovers rows stranded in a non-terminal generation status with an age-threshold sweeper, NOT a shutdown drain.** The production damage was **18 stuck `exam_question_pool` rows and 1 Long Exam session**, not notes — the note half is **prospective** (zero stuck notes at sizing) and must not be described as a backlog. Copying `analyticsTaskExecutor`'s `waitForTasksToCompleteOnShutdown(true)` onto the generation executors is a regression: it runs the entire queue uninterrupted, billing up to 100 LLM calls against a closing datasource. The sweeper marks `FAILED` and never re-dispatches — Study Packs never auto-regenerate.
 
 **⚠️ `v0.83.0` removes Target Audience from authoring and Public Library discovery but does NOT drop `notes.target_profile_type`.** The column is `V117`'s input and `[CHECKPOINT — due 2026-09-16]` cannot run without it; the drop waits on that report. No migration ships in `v0.83.0`. Target Audience must never become a runtime depth fallback.
 
