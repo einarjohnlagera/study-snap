@@ -33,11 +33,14 @@ Rules:
 - 3 to 6 bullets
 - Key events, facts, mechanisms, stages, or categories
 - One fact per bullet — no storytelling, no multi-clause sentences
+- Keep each bullet at or under {MAX_ITEM_CHARS} characters, counting any formula and its variable definitions together
+- When the mechanism IS a formula, state it here rather than omitting it; if the formula plus all its variable definitions will not fit, split it across two bullets rather than truncating either
 
 `whyItMatters`
 - 2 to 4 bullets
 - Significance, real-world relevance, or lasting impact
 - Not a repeat of coreDetails — answer "so what?"
+- Keep each bullet at or under {MAX_ITEM_CHARS} characters
 
 `quickRecall`
 - 3 to 5 bullets

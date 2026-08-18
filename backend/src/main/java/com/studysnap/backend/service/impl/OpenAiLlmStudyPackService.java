@@ -68,7 +68,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_GENERATED_NOTE_TITLE_WORDS = 12;
     private static final int MAX_GENERATED_NOTE_OVERVIEW_WORDS = 90;
     private static final int MAX_GENERATED_NOTE_KEY_IDEA_WORDS = 40;
-    private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
     // Quick Recall is bounded by characters rather than words. A whitespace word count measures
     // the wrong thing on notation -- "Q = (2/3) * C_d * L * sqrt(2g) * H^(3/2)" is ~15 "words" of
     // pure symbols -- so a formula plus its variable definitions could exceed the prose ceiling
@@ -2501,9 +2500,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return normalized;
     }
 
+    /**
+     * Bounds each bullet by CHARACTERS, which is the only bound the model is ever told about:
+     * {@code note-generation-developer.txt} states it and the strict JSON schema enforces it as
+     * {@code maxLength}. A prose word ceiling used to sit here as a second, unpublished bound, and it
+     * rejected exactly the content the prompt asks for — a formula plus its variable definitions is
+     * word-dense and character-light, so it cleared 240 characters while blowing past 28 words. Four
+     * of five sampled Engineering Economics topics failed that way. Keep validation on the published
+     * contract; do not reintroduce a bound the model cannot see.
+     */
     private List<String> normalizeGeneratedNoteItems(List<String> values, int minItems, String errorMessage) {
         List<String> normalized = sanitizeStringList(values).stream()
-                .map(value -> normalizeGeneratedNoteText(value, 1, MAX_GENERATED_NOTE_ITEM_WORDS, errorMessage))
+                .map(value -> normalizeGeneratedNoteChars(value, MAX_GENERATED_NOTE_ITEM_CHARS, errorMessage))
                 .toList();
         if (normalized.size() < minItems) {
             throw invalidOutput(errorMessage);
