@@ -264,6 +264,18 @@ User-facing generation statuses:
 - `STUDY_PACK_READY`: generated summary, key concepts, and quiz are available.
 - `FAILED`: generation did not complete and can be retried from Note Detail.
 
+### Age-based generation recovery
+
+The scheduled generation-recovery job covers three independently processed surfaces and moves stale work only into a status the existing product can recover from:
+
+- exam pools stamp nullable `generation_status_at` on every `PENDING` and `GENERATING` write. Separate default bounds are `60` minutes for queued `PENDING` work and `60` minutes for `GENERATING` fan-out work. A stale pool becomes `FAILED`; `sampleQuestions` owns the existing next-use refresh.
+- Long Exam sessions use immutable `created_at`, with a default `30`-minute bound. Only `session_mode = LONG_EXAM` is eligible; a stale session becomes `FAILED`, allowing a later start to create a fresh session.
+- notes stamp nullable `generation_enqueued_at` in the same transaction that sets `GENERATING`, refreshing it on every retry. The default `120`-minute bound covers both queue wait and the single LLM call. A stale note becomes `FAILED` through the same entity transition used by generation errors and exposes the existing Retry Generation action. This protection is prospective: production sizing found zero stuck notes.
+
+The job runs every ten minutes by default, processes at most `200` candidates per surface per run, reports recovered count and oldest age, and has a deploy kill switch. Every bound, the cron and batch size are configuration-owned placeholders; they can be tightened after production observation without a code change. `V118` seeds existing non-terminal pool attempts with deploy time rather than reused-row `created_at`, so no live attempt is swept early and genuinely stuck rows become eligible one full bound after deploy. Notes with a null enqueue clock are left untouched and warned because that shape is impossible after the migration and silently recovering it would hide a writer bug.
+
+Recovery is status-only and idempotent. It never auto-regenerates, re-dispatches a task, calls pool refresh directly, refunds or increments quota, changes executor shutdown, or runs as a startup sweep. Age thresholds and locked status rechecks provide multi-instance and live-task safety. A late note worker discards its generated result when the note is no longer `GENERATING`; a late pool worker may write `READY`, which is already a correct terminal outcome.
+
 ## Metadata suggestion parity
 
 - Create Note and Note Detail must use the same metadata suggestion behavior after successful generation.

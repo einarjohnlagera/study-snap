@@ -143,6 +143,7 @@ public class ExamQuestionPoolService {
                     return null;
                 }
                 pool.setGenerationStatus(STATUS_GENERATING);
+                pool.setGenerationStatusAt(OffsetDateTime.now(ZoneOffset.UTC));
                 examQuestionPoolRepository.save(pool);
 
                 StudyPackEntity studyPack = studyPackRepository.findById(pool.getStudyPackId())
@@ -213,6 +214,7 @@ public class ExamQuestionPoolService {
             }
             ExamQuestionPoolEntity pool = existingPool.orElseGet(() -> newPool(studyPack.getId(), mode));
             pool.setGenerationStatus(STATUS_PENDING);
+            pool.setGenerationStatusAt(OffsetDateTime.now(ZoneOffset.UTC));
             pool.setServedQuestionKeys(List.of());
             ExamQuestionPoolEntity saved = examQuestionPoolRepository.save(pool);
             dispatchPoolGenerationAfterCommit(saved.getId());
@@ -234,6 +236,7 @@ public class ExamQuestionPoolService {
         pool.setQuestions(List.of());
         pool.setPoolSize(0);
         pool.setGenerationStatus(STATUS_PENDING);
+        pool.setGenerationStatusAt(now);
         pool.setLearnerLevel(null);
         pool.setServedQuestionKeys(List.of());
         pool.setCreatedAt(now);
@@ -325,6 +328,7 @@ public class ExamQuestionPoolService {
     private void refreshPool(ExamQuestionPoolEntity pool) {
         pool.setServedQuestionKeys(List.of());
         pool.setGenerationStatus(STATUS_PENDING);
+        pool.setGenerationStatusAt(OffsetDateTime.now(ZoneOffset.UTC));
         ExamQuestionPoolEntity saved = examQuestionPoolRepository.save(pool);
         dispatchPoolGenerationAfterCommit(saved.getId());
     }

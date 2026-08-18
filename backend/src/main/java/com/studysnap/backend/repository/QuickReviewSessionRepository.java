@@ -79,6 +79,25 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
 
     Optional<QuickReviewSessionEntity> findByIdAndUserId(UUID id, UUID userId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select q from QuickReviewSessionEntity q where q.id = :id")
+    Optional<QuickReviewSessionEntity> findByIdForUpdate(@Param("id") UUID id);
+
+    @Query("""
+            select q.id
+            from QuickReviewSessionEntity q
+            where q.status = :status
+              and q.sessionMode = :sessionMode
+              and q.createdAt < :cutoff
+            order by q.createdAt asc
+            """)
+    List<UUID> findStaleSessionIds(
+            @Param("status") QuickReviewSessionStatus status,
+            @Param("sessionMode") QuickReviewSessionMode sessionMode,
+            @Param("cutoff") OffsetDateTime cutoff,
+            Pageable pageable
+    );
+
     boolean existsByUserIdAndStatusAndCompletedAtIsNotNull(UUID userId, QuickReviewSessionStatus status);
 
     long countByUserIdAndStatusAndCompletedAtIsNotNull(UUID userId, QuickReviewSessionStatus status);

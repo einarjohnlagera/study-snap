@@ -1,0 +1,117 @@
+package com.studysnap.backend.service;
+
+import com.studysnap.backend.entity.ExamQuestionPoolEntity;
+import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteStatus;
+import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionMode;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.repository.ExamQuestionPoolRepository;
+import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.QuickReviewSessionRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Commits one recovered row per transaction, on purpose.
+ *
+ * <p>The sweep methods in {@link GenerationRecoveryService} catch per row and continue, so that one
+ * unreadable or contended row cannot stop the rest of a batch. That guarantee is only real if each
+ * row commits independently. With a single transaction spanning the loop, an exception escaping a
+ * Spring Data repository call marks the shared transaction rollback-only — the {@code catch} still
+ * swallows it and the loop still finishes, but the final commit fails and **every row the sweep just
+ * recovered is discarded**. Because candidates are ordered oldest-first, one row that reliably throws
+ * would poison every batch forever and permanently block the sweeper behind it.
+ *
+ * <p><strong>This is NOT the {@code REQUIRES_NEW} pattern reverted in v0.81.0.</strong> That failure
+ * was a nested transaction opened <em>inside</em> an outer one: a second connection could not see the
+ * uncommitted {@code quick_review_sessions} row, so every FK check failed. Here the caller holds no
+ * transaction at all, so these methods open the only one — plain {@code REQUIRED} propagation, one
+ * connection, nothing invisible. Do not "simplify" this back onto the sweep methods.
+ */
+@Service
+@RequiredArgsConstructor
+public class GenerationRecoveryRowWriter {
+    private static final String POOL_STATUS_PENDING = "PENDING";
+    private static final String POOL_STATUS_GENERATING = "GENERATING";
+    private static final String POOL_STATUS_FAILED = "FAILED";
+
+    private final ExamQuestionPoolRepository examQuestionPoolRepository;
+    private final QuickReviewSessionRepository quickReviewSessionRepository;
+    private final NoteRepository noteRepository;
+    private final StudyPackService studyPackService;
+
+    /**
+     * @return when recovered, the instant the row became stale, for the caller's age reporting
+     */
+    @Transactional
+    public Optional<OffsetDateTime> recoverPool(UUID poolId, OffsetDateTime pendingCutoff, OffsetDateTime generatingCutoff) {
+        return examQuestionPoolRepository.findByIdForUpdate(poolId)
+                .filter(pool -> isRecoverablePool(pool, pendingCutoff, generatingCutoff))
+                .map(pool -> {
+                    OffsetDateTime staleSince = pool.getGenerationStatusAt();
+                    pool.setGenerationStatus(POOL_STATUS_FAILED);
+                    examQuestionPoolRepository.save(pool);
+                    return staleSince;
+                });
+    }
+
+    @Transactional
+    public Optional<OffsetDateTime> recoverLongExamSession(UUID sessionId, OffsetDateTime cutoff) {
+        return quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .filter(session -> isRecoverableLongExamSession(session, cutoff))
+                .map(session -> {
+                    OffsetDateTime staleSince = session.getCreatedAt();
+                    session.setStatus(QuickReviewSessionStatus.FAILED);
+                    quickReviewSessionRepository.save(session);
+                    return staleSince;
+                });
+    }
+
+    @Transactional
+    public Optional<OffsetDateTime> recoverNote(UUID noteId, OffsetDateTime cutoff) {
+        return noteRepository.findByIdForUpdate(noteId)
+                .filter(note -> isRecoverableNote(note, cutoff))
+                .map(note -> {
+                    OffsetDateTime staleSince = note.getGenerationEnqueuedAt();
+                    studyPackService.markNoteGenerationFailed(note);
+                    return note.getStatus() == NoteStatus.FAILED ? staleSince : null;
+                })
+                .filter(staleSince -> staleSince != null);
+    }
+
+    private boolean isRecoverablePool(
+            ExamQuestionPoolEntity pool,
+            OffsetDateTime pendingCutoff,
+            OffsetDateTime generatingCutoff
+    ) {
+        if (pool.getGenerationStatusAt() == null) {
+            return false;
+        }
+        if (POOL_STATUS_PENDING.equals(pool.getGenerationStatus())) {
+            return pool.getGenerationStatusAt().isBefore(pendingCutoff);
+        }
+        if (POOL_STATUS_GENERATING.equals(pool.getGenerationStatus())) {
+            return pool.getGenerationStatusAt().isBefore(generatingCutoff);
+        }
+        return false;
+    }
+
+    private boolean isRecoverableLongExamSession(QuickReviewSessionEntity session, OffsetDateTime cutoff) {
+        return session.getStatus() == QuickReviewSessionStatus.GENERATING
+                && session.getSessionMode() == QuickReviewSessionMode.LONG_EXAM
+                && session.getCreatedAt() != null
+                && session.getCreatedAt().isBefore(cutoff);
+    }
+
+    private boolean isRecoverableNote(NoteEntity note, OffsetDateTime cutoff) {
+        return note.getStatus() == NoteStatus.GENERATING
+                && note.getGenerationEnqueuedAt() != null
+                && note.getGenerationEnqueuedAt().isBefore(cutoff);
+    }
+}

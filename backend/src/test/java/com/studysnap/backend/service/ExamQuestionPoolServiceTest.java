@@ -21,6 +21,7 @@ import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -98,6 +99,33 @@ class ExamQuestionPoolServiceTest {
     }
 
     @Test
+    void sampleQuestions_failedPoolUsesExistingOnDemandRefreshPath() {
+        UUID studyPackId = UUID.randomUUID();
+        ExamQuestionPoolEntity failedPool = pool(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                "FAILED",
+                List.of()
+        );
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM
+        )).thenReturn(Optional.of(failedPool));
+
+        Optional<List<QuizItem>> result = service.sampleQuestions(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                20,
+                LearnerLevel.COLLEGE
+        );
+
+        assertThat(result).isEmpty();
+        assertThat(failedPool.getGenerationStatus()).isEqualTo("PENDING");
+        assertThat(failedPool.getGenerationStatusAt()).isNotNull();
+        verify(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
+    }
+
+    @Test
     void sampleQuestions_returnsEmptyWhenAvailableQuestionsAreBelowRequestedCount() {
         UUID studyPackId = UUID.randomUUID();
         ExamQuestionPoolEntity pool = pool(studyPackId, ExamQuestionPoolService.MODE_LONG_EXAM, "READY", buildQuiz(10));
@@ -135,6 +163,10 @@ class ExamQuestionPoolServiceTest {
 
         assertThat(result).isEmpty();
         assertThat(pool.getGenerationStatus()).isEqualTo("PENDING");
+        assertThat(pool.getGenerationStatusAt()).isNotNull();
+        ArgumentCaptor<ExamQuestionPoolEntity> savedPool = ArgumentCaptor.forClass(ExamQuestionPoolEntity.class);
+        verify(examQuestionPoolRepository).save(savedPool.capture());
+        assertThat(savedPool.getValue().getGenerationStatusAt()).isNotNull();
         verify(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
     }
 
@@ -370,8 +402,40 @@ class ExamQuestionPoolServiceTest {
 
         service.initiatePool(studyPack, userId);
 
-        verify(examQuestionPoolRepository, org.mockito.Mockito.times(2)).save(any(ExamQuestionPoolEntity.class));
+        ArgumentCaptor<ExamQuestionPoolEntity> savedPools = ArgumentCaptor.forClass(ExamQuestionPoolEntity.class);
+        verify(examQuestionPoolRepository, org.mockito.Mockito.times(2)).save(savedPools.capture());
+        assertThat(savedPools.getAllValues())
+                .allMatch(pool -> "PENDING".equals(pool.getGenerationStatus()))
+                .allMatch(pool -> pool.getGenerationStatusAt() != null);
         verify(studyPackGenerationTaskDispatcher, org.mockito.Mockito.times(2)).execute(any(Runnable.class));
+    }
+
+    @Test
+    void initiatePoolForUsage_reusedFailedPoolPersistsFreshPendingStatusStamp() {
+        UUID studyPackId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        OffsetDateTime previousAttempt = OffsetDateTime.now().minusDays(2);
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+        ExamQuestionPoolEntity failedPool = pool(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM,
+                "FAILED",
+                List.of()
+        );
+        failedPool.setGenerationStatusAt(previousAttempt);
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId,
+                ExamQuestionPoolService.MODE_LONG_EXAM
+        )).thenReturn(Optional.of(failedPool));
+
+        service.initiatePoolForUsage(studyPack, userId, ExamQuestionPoolService.MODE_LONG_EXAM);
+
+        ArgumentCaptor<ExamQuestionPoolEntity> savedPool = ArgumentCaptor.forClass(ExamQuestionPoolEntity.class);
+        verify(examQuestionPoolRepository).save(savedPool.capture());
+        assertThat(savedPool.getValue().getGenerationStatus()).isEqualTo("PENDING");
+        assertThat(savedPool.getValue().getGenerationStatusAt()).isAfter(previousAttempt);
     }
 
     @Test
@@ -401,6 +465,14 @@ class ExamQuestionPoolServiceTest {
                 LearnerLevel.BOARD_EXAM_REVIEW
         );
         int poolSize = properties.getPricing().getLongExamPoolSize();
+        List<String> savedStatuses = new ArrayList<>();
+        List<OffsetDateTime> savedStatusStamps = new ArrayList<>();
+        when(examQuestionPoolRepository.save(any(ExamQuestionPoolEntity.class))).thenAnswer(invocation -> {
+            ExamQuestionPoolEntity saved = invocation.getArgument(0);
+            savedStatuses.add(saved.getGenerationStatus());
+            savedStatusStamps.add(saved.getGenerationStatusAt());
+            return saved;
+        });
         when(examQuestionPoolRepository.findByIdForUpdate(poolId)).thenReturn(Optional.of(pool));
         when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
@@ -419,6 +491,8 @@ class ExamQuestionPoolServiceTest {
 
         assertThat(pool.getGenerationStatus()).isEqualTo("READY");
         assertThat(pool.getLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());
+        assertThat(savedStatuses).startsWith("GENERATING");
+        assertThat(savedStatusStamps.getFirst()).isNotNull();
         ArgumentCaptor<ExamQuestionPoolEntity> savedPool = ArgumentCaptor.forClass(ExamQuestionPoolEntity.class);
         verify(examQuestionPoolRepository, org.mockito.Mockito.atLeastOnce()).save(savedPool.capture());
         assertThat(savedPool.getValue().getLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW.name());

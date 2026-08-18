@@ -40,6 +40,7 @@ Failed generation behavior:
 - `FAILED` shows a friendly recovery state instead of empty Study Pack content.
 - copy should make clear that the note is saved and generation did not complete.
 - `Retry Generation` queues generation again without consuming quota unless a Study Pack is successfully persisted.
+- `FAILED` may come from an LLM error or from age-based recovery after a queued/running task disappears during deploy or process exit. Both use the same saved-note recovery UI and retry path; recovery itself never re-dispatches generation.
 
 Study Pack Ready actions:
 
