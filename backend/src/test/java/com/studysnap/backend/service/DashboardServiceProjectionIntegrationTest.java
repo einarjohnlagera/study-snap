@@ -96,6 +96,7 @@ class DashboardServiceProjectionIntegrationTest {
                     display_name varchar(100),
                     username varchar(30) not null,
                     bio varchar(200),
+                    birth_year smallint,
                     learner_level varchar(32),
                     course_program varchar(120),
                     study_goal text,

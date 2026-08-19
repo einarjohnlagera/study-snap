@@ -143,7 +143,7 @@ class AuthControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         DataExportResponse export = new DataExportResponse(
-                new DataExportResponse.Meta(OffsetDateTime.parse("2026-06-23T10:00:00Z"), "1.0"),
+                new DataExportResponse.Meta(OffsetDateTime.parse("2026-06-23T10:00:00Z"), "1.1"),
                 new DataExportResponse.Account(
                         "note@example.com",
                         "Note",
@@ -155,6 +155,7 @@ class AuthControllerTest {
                         null,
                         null,
                         List.of(),
+                        null,
                         null,
                         OffsetDateTime.parse("2026-06-01T10:00:00Z")
                 ),

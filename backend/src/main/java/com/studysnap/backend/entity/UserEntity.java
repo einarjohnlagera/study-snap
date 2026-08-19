@@ -98,6 +98,9 @@ public class UserEntity {
     @Column(name = "exam_date")
     private LocalDate examDate;
 
+    @Column(name = "birth_year")
+    private Integer birthYear;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "review_days", columnDefinition = "text[]")
     private String[] reviewDays;

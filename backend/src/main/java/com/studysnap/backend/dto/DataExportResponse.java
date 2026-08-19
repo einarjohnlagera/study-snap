@@ -38,6 +38,7 @@ public record DataExportResponse(
             String studyGoal,
             List<String> focusSubjects,
             LocalDate examDate,
+            Integer birthYear,
             OffsetDateTime createdAt
     ) {
     }

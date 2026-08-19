@@ -1,0 +1,7 @@
+Hi {{recipientName}},
+
+{{inviterName}} invited you to connect on NoteLib so one of you can support the other's learning.
+
+Review the invitation: {{invitationUrl}}
+
+The relationship is not active unless you explicitly accept it. You can revoke it at any time.

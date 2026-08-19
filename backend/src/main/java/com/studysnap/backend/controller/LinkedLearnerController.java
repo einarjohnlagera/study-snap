@@ -1,0 +1,79 @@
+package com.studysnap.backend.controller;
+
+import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
+import com.studysnap.backend.dto.GuardianConsentRequest;
+import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
+import com.studysnap.backend.dto.LinkedLearnerResponse;
+import com.studysnap.backend.dto.RecordLinkedLearnerBirthYearRequest;
+import com.studysnap.backend.dto.SimpleMessageResponse;
+import com.studysnap.backend.security.AuthenticatedUser;
+import com.studysnap.backend.service.LinkedLearnerService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/linked-learners")
+@RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('USER','ADMIN')")
+public class LinkedLearnerController {
+    private final LinkedLearnerService linkedLearnerService;
+
+    @PostMapping("/invite")
+    public SimpleMessageResponse invite(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody InviteLinkedLearnerRequest request
+    ) {
+        return linkedLearnerService.invite(user.userId(), request);
+    }
+
+    @GetMapping
+    public List<LinkedLearnerResponse> list(@AuthenticationPrincipal AuthenticatedUser user) {
+        return linkedLearnerService.list(user.userId());
+    }
+
+    @PostMapping("/{relationshipId}/accept")
+    public LinkedLearnerResponse accept(
+            @PathVariable UUID relationshipId,
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestBody AcceptLinkedLearnerRequest request
+    ) {
+        return linkedLearnerService.accept(relationshipId, user.userId(), request);
+    }
+
+    @PostMapping("/{relationshipId}/birth-year")
+    public LinkedLearnerResponse recordBirthYear(
+            @PathVariable UUID relationshipId,
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody RecordLinkedLearnerBirthYearRequest request
+    ) {
+        return linkedLearnerService.recordBirthYear(relationshipId, user.userId(), request.birthYear());
+    }
+
+    @PostMapping("/{relationshipId}/guardian-consent")
+    public LinkedLearnerResponse recordGuardianConsent(
+            @PathVariable UUID relationshipId,
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody GuardianConsentRequest request
+    ) {
+        return linkedLearnerService.recordGuardianConsent(relationshipId, user.userId());
+    }
+
+    @PostMapping("/{relationshipId}/revoke")
+    public LinkedLearnerResponse revoke(
+            @PathVariable UUID relationshipId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return linkedLearnerService.revoke(relationshipId, user.userId());
+    }
+}
