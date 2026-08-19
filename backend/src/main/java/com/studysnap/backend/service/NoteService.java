@@ -329,7 +329,7 @@ public class NoteService {
         copy.setOwnerUserId(ownerUserId);
         copy.setTitle(source.getTitle());
         copy.setSubject(resolveCanonicalSubjectForCopy(source.getSubject()));
-        copy.setCourseProgram(normalizeOptionalCourseProgram(source.getCourseProgram()));
+        copy.setCourseProgram(normalizeCourseProgramForCopy(source.getCourseProgram()));
         copy.setDomainContext(source.getDomainContext());
         copy.setLearnerLevel(source.getLearnerLevel());
         copy.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
@@ -1453,6 +1453,24 @@ public class NoteService {
 
     private String normalizeOptionalCourseProgram(String value) {
         return CourseProgramNormalizationUtils.normalizeForStorage(value);
+    }
+
+    /**
+     * Copy-only variant that CLAMPS instead of throwing. It carries an ALREADY-STORED program the copier
+     * did not author, and re-normalization can grow it past the column bound (a bare hyphen expands to
+     * " - "), so failing would 500 the copier over someone else's metadata or silently skip the note
+     * inside plan adoption. Mirrors {@code resolveCanonicalSubjectForCopy}.
+     *
+     * <p>Deliberately NOT folded into {@code normalizeOptionalCourseProgram}: that one also feeds
+     * {@code resolveRequestedCourseProgram}, where {@code assertCourseProgramFitsStorage} must still
+     * reject over-long REQUEST input. Clamping there would make that check unreachable.
+     */
+    private String normalizeCourseProgramForCopy(String value) {
+        String normalized = CourseProgramNormalizationUtils.normalizeForStorage(value);
+        if (normalized != null && normalized.length() > NoteMetadataBounds.COURSE_PROGRAM_MAX_LENGTH) {
+            return normalized.substring(0, NoteMetadataBounds.COURSE_PROGRAM_MAX_LENGTH).trim();
+        }
+        return normalized;
     }
 
     private NoteTargetProfileType resolveTargetProfileType(UserEntity owner) {

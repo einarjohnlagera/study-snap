@@ -497,6 +497,27 @@ describe("BulkGenerationPageClient", () => {
     expect(sectionInput).toHaveValue("Foundations");
   });
 
+  it("refuses a section that collides with the reserved bucket name", async () => {
+    // The bucket's display string doubles as the reserved name, so a batch must not be able to mint
+    // a real section that renders identically to it. The Builder already refuses this; bulk
+    // generation is the other authoring path and had no guard.
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Algebra" } });
+    fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Quadratics" } });
+    fireEvent.change(await screen.findByLabelText(/Review Set|Study Plan|Collection/i), { target: { value: "subject-plan-1" } });
+    const sectionInput = await screen.findByLabelText(/^Section \(optional\)/);
+    fireEvent.change(sectionInput, { target: { value: "  NOT IN A SECTION  " } });
+    fireEvent.click(screen.getByRole("button", { name: /Generate/i }));
+
+    expect(await screen.findByText(/is reserved for notes without a section/i)).toBeInTheDocument();
+    expect(bulkGenerateNotes).not.toHaveBeenCalled();
+  });
+
   it("does not invent a section when the retry stash carries none", async () => {
     // The real retry path: retryBulkFailures cannot write sectionLabel, because
     // bulk_generation_result has no column for it. Falling back to the subject here would

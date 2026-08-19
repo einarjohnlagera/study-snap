@@ -993,6 +993,27 @@ class NoteServiceTest {
     }
 
     @Test
+    void copyNote_clampsAStoredCourseProgramThatGrowsPastStorageInsteadOfFailingTheCopy() {
+        // Sibling of the subject case above. normalizeForStorage expands a bare hyphen to " - ", so a
+        // stored program near the 120 bound can cross it on re-normalization. The copier did not author
+        // it, and inside plan adoption a throw here is swallowed into skippedCount -- a silently missing
+        // note rather than a visible error.
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        NoteEntity source = buildNote(sourceNoteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "source content");
+        source.setTitle("Source title");
+        source.setCourseProgram("x".repeat(117) + "-y");
+        source.setTargetProfileType(NoteTargetProfileType.STUDENT);
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+
+        noteService.copyNote(sourceNoteId.toString(), ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getCourseProgram()).hasSizeLessThanOrEqualTo(120);
+    }
+
+    @Test
     void copyNote_flushesTheParentBeforeWritingInheritedJoinRows() {
         // B1. replace() is raw JDBC and cannot see JPA's pending persistence context, so without a flush
         // between them the child insert hits the foreign key before the parent note row exists and copyNote

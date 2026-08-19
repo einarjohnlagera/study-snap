@@ -27,7 +27,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
-import { getCollectionLabels } from "@/lib/collection-labels";
+import { getCollectionLabels, normalizeSectionValue, UNGROUPED_SECTION_NAME } from "@/lib/collection-labels";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { sortCollectionItemsByPosition } from "@/lib/collection-exam";
 import { cn } from "@/lib/utils";
@@ -72,7 +72,11 @@ type ActiveDrag =
 
 const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
-const UNGROUPED_SECTION_NAME = "Not in a section";
+
+// "drag" is load-bearing: dropping a note into another section is the canonical one-at-a-time
+// repair on a drag-first surface. Omitting it would hide exactly the behaviour that argues for
+// building multi-select, which is the question the checkpoint on this event has to answer.
+type SectionAssignmentSource = "combobox" | "drag" | "rename" | "set-from-subjects";
 const DND_TRANSITION_CLASS = "transition-[transform,box-shadow,border-color,background-color,opacity] duration-150 ease-out";
 const DND_DROP_ANIMATION: DropAnimation = {
   duration: 160,
@@ -112,16 +116,23 @@ function buildOrderPayload(items: NoteCollectionItem[]) {
 }
 
 function getSectionName(label: string | null | undefined): string {
-  return label?.trim() || UNGROUPED_SECTION_NAME;
+  const trimmed = label?.trim();
+  if (!trimmed) {
+    return UNGROUPED_SECTION_NAME;
+  }
+  // Compare NORMALIZED, not exact. A stored "not in a section" written by any path that does not
+  // guard the sentinel would otherwise become a real section rendering identically to the synthetic
+  // bucket under the uppercase header -- the collision this release exists to prevent. This folds
+  // only the sentinel comparison; grouping between real sections stays case-sensitive.
+  if (normalizeSectionValue(trimmed) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
+    return UNGROUPED_SECTION_NAME;
+  }
+  return trimmed;
 }
 
 function getSectionLabel(sectionName: string): string | null {
   const trimmed = sectionName.trim();
   return trimmed && normalizeSectionValue(trimmed) !== normalizeSectionValue(UNGROUPED_SECTION_NAME) ? trimmed : null;
-}
-
-function normalizeSectionValue(value: string): string {
-  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
 }
 
 function buildLeafSections(items: LeafBuilderNote[]): LeafBuilderSection[] {
@@ -410,13 +421,19 @@ function LeafSortableNoteCard({
   };
   const title = getNoteTitle(item);
   const [labelValue, setLabelValue] = useState(item.label ?? "");
+  const [editing, setEditing] = useState(false);
   const sectionOptions = useMemo(
     () => sectionNames.map((name) => ({ value: name, label: name })),
     [sectionNames],
   );
 
+  // Gated on `editing` deliberately. Saving mid-keystroke tears down the control the curator is
+  // typing into: persistLeafItems flips `disabled` (a disabled input loses focus) and the write
+  // changes item.label, which changes this card's key AND moves it into a different section block.
+  // Typing "Week", pausing, then " 1" used to create a section called "Week" and drop the rest.
+  // The save now lands 500ms after focus LEAVES the field, which is also when the value is final.
   useEffect(() => {
-    if (disabled) {
+    if (disabled || editing) {
       return;
     }
     const nextLabel = labelValue.trim().replaceAll(/\s+/g, " ");
@@ -425,7 +442,7 @@ function LeafSortableNoteCard({
     }
     const handle = globalThis.setTimeout(() => onLabelChange(item.noteId, nextLabel), 500);
     return () => globalThis.clearTimeout(handle);
-  }, [disabled, item.label, item.noteId, labelValue, onLabelChange]);
+  }, [disabled, editing, item.label, item.noteId, labelValue, onLabelChange]);
 
   return (
     <div
@@ -473,22 +490,29 @@ function LeafSortableNoteCard({
         </div>
       </div>
       <div className="flex w-full items-center justify-end gap-1">
-        <div className="min-w-[220px] space-y-1.5">
+        {/* React onFocus/onBlur are focusin/focusout, so this tracks focus anywhere inside the
+            combobox -- input or dropdown -- and releases it only when focus leaves the whole control. */}
+        <div
+          className="min-w-[220px] space-y-1.5"
+          onFocus={() => setEditing(true)}
+          onBlur={() => setEditing(false)}
+        >
           <span className="text-xs font-medium uppercase tracking-wide text-foreground/50">{sectionLabel}</span>
           <SuggestionCombobox
             id={`builder-section-${item.noteId}`}
             value={labelValue}
             options={sectionOptions}
             ariaLabel={`${sectionLabel} for ${title}`}
+            toggleLabel={`Toggle ${sectionLabel.toLowerCase()} suggestions for ${title}`}
             placeholder={`Choose or type a ${sectionLabel.toLowerCase()}`}
             disabled={disabled}
+            maxLength={LABEL_MAX_LENGTH}
             onChange={(nextValue) => {
-              const boundedValue = nextValue.slice(0, LABEL_MAX_LENGTH);
-              if (normalizeSectionValue(boundedValue) === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
-                onLabelChange(item.noteId, boundedValue);
-                return;
-              }
-              setLabelValue(boundedValue);
+              // Always mirror what is on screen. The previous version skipped setLabelValue when the
+              // typed value hit the reserved name, which left labelValue one keystroke behind and let
+              // the pending timer persist that truncated string as a real label. The reserved name is
+              // rejected in handleLeafLabelChange, which is the single place that decides.
+              setLabelValue(nextValue.slice(0, LABEL_MAX_LENGTH));
             }}
           />
         </div>
@@ -1317,7 +1341,8 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     previousItems: LeafBuilderNote[],
     fallback: string,
     kind: MutationKind = "reorder-notes",
-    analyticsSource?: "combobox" | "rename" | "set-from-subjects",
+    analyticsSource?: SectionAssignmentSource,
+    analyticsNoteCount?: number,
   ) => {
     setMutationKind(kind);
     setMutationError(null);
@@ -1329,7 +1354,10 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
         void trackAnalyticsEvent({
           eventType: "COLLECTION_SECTION_ASSIGNED",
           entityId: collectionId,
-          metadata: { collectionId, source: analyticsSource },
+          // noteCount is what makes this readable: "combobox" and "drag" move one note, "rename" and
+          // "set-from-subjects" move many. Without it the deferral of multi-select cannot be judged
+          // from the event, because one-at-a-time repair is indistinguishable from a bulk pass.
+          metadata: { collectionId, source: analyticsSource, noteCount: analyticsNoteCount ?? 1 },
         });
       }
     } catch (error) {
@@ -1343,7 +1371,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     noteId: string,
     targetSectionName: string,
     targetIndex: number,
-    analyticsSource?: "combobox",
+    analyticsSource?: SectionAssignmentSource,
   ) => {
     const previousItems = leafItems;
     const movedItem = leafItems.find((item) => item.noteId === noteId);
@@ -1391,6 +1419,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       `Could not rename this ${labels.sectionSingular.toLowerCase()}.`,
       "rename-section",
       "rename",
+      leafItems.filter((item) => getSectionName(item.label) === oldName).length,
     );
   };
 
@@ -1426,7 +1455,28 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
 
   const handleSetSectionsFromSubjects = () => {
     const previousItems = leafItems;
-    const nextItems = leafItems.map((item) => ({ ...item, label: item.subject?.trim() || null }));
+    // Must apply the SAME normalization and case-snap as the combobox path. Without it this action
+    // mints lookalike sections -- "Cash  and Receivables" beside "cash and receivables" render
+    // identically -- which is the exact defect the combobox snap exists to prevent.
+    const canonicalByNormalized = new Map<string, string>();
+    for (const section of leafSections) {
+      if (section.name !== UNGROUPED_SECTION_NAME) {
+        canonicalByNormalized.set(normalizeSectionValue(section.name), section.name);
+      }
+    }
+    const nextItems = leafItems.map((item) => {
+      const trimmed = (item.subject ?? "").trim().replaceAll(/\s+/g, " ");
+      const normalized = normalizeSectionValue(trimmed);
+      if (!trimmed || normalized === normalizeSectionValue(UNGROUPED_SECTION_NAME)) {
+        return { ...item, label: null };
+      }
+      const canonical = canonicalByNormalized.get(normalized);
+      if (canonical) {
+        return { ...item, label: canonical };
+      }
+      canonicalByNormalized.set(normalized, trimmed);
+      return { ...item, label: trimmed };
+    });
     setSetSectionsConfirmOpen(false);
     void persistLeafItems(
       nextItems,
@@ -1434,6 +1484,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       `Could not set ${labels.sectionSingular.toLowerCase()}s from note subjects.`,
       "set-sections",
       "set-from-subjects",
+      nextItems.filter((next, index) => (next.label ?? null) !== (previousItems[index]?.label ?? null)).length,
     );
   };
 
@@ -1771,7 +1822,14 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     if (sourceSectionName === targetSectionName && currentIndex === targetIndex) {
       return;
     }
-    moveLeafNote(activeData.noteId, targetSectionName, targetIndex);
+    // Only a CROSS-section drop is a section assignment. Reordering inside one section is not, and
+    // counting it would inflate the very number the multi-select deferral is judged on.
+    moveLeafNote(
+      activeData.noteId,
+      targetSectionName,
+      targetIndex,
+      sourceSectionName === targetSectionName ? undefined : "drag",
+    );
   };
 
   const handleDragEnd = (event: DragEndEvent) => {

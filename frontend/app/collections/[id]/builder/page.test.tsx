@@ -541,8 +541,60 @@ describe("StudyPlanBuilderPageClient", () => {
     ]));
     expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
       eventType: "COLLECTION_SECTION_ASSIGNED",
-      metadata: { collectionId: "leaf-1", source: "set-from-subjects" },
+      metadata: { collectionId: "leaf-1", source: "set-from-subjects", noteCount: 2 },
     }));
+  });
+
+  it("folds a stored label matching the reserved bucket in any casing into the bucket", async () => {
+    // Guards against data already stored by a path with no reserved-name check. With an exact-only
+    // comparison this renders as a real section whose uppercase header is indistinguishable from
+    // the synthetic bucket -- the collision the whole sentinel design exists to prevent.
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Plan", [
+      { ...collectionItem("note-1", "Stored Lowercase", 0), label: "not in a section" },
+      { ...collectionItem("note-2", "Real Section", 1), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    await screen.findByText("Stored Lowercase");
+    // A real section is editable and draggable; the synthetic bucket is neither. If the stored
+    // lowercase label had minted a section, both of these would exist.
+    expect(screen.queryByLabelText("Section name not in a section")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Drag section not in a section$/i })).not.toBeInTheDocument();
+    // The real section beside it still renders normally, so the fold is not over-broad.
+    expect(screen.getByLabelText("Section name Algebra")).toBeInTheDocument();
+  });
+
+  it("snaps subject case and whitespace variants onto one section when grouping", async () => {
+    // Group by subject must apply the SAME normalization and snap as the combobox. Without it,
+    // "Cash  and Receivables" and "cash and receivables" become two sections that render
+    // identically -- the defect the combobox snap exists to prevent.
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Accountancy Plan", [
+      { ...collectionItem("note-1", "Petty Cash", 0), label: null, subject: "Cash  and Receivables" },
+      { ...collectionItem("note-2", "Bank Recon", 1), label: null, subject: "cash and receivables" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Group by subject" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Set sections" }));
+
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
+      { noteId: "note-1", label: "Cash and Receivables" },
+      { noteId: "note-2", label: "Cash and Receivables" },
+    ]));
+  });
+
+  it("routes a subject matching the reserved bucket to no section", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Plan", [
+      { ...collectionItem("note-1", "Loose Note", 0), label: null, subject: "not in a section" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Group by subject" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Set sections" }));
+
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
+      { noteId: "note-1", label: null },
+    ]));
   });
 
   it("disables set-from-subjects when every subject is blank", async () => {

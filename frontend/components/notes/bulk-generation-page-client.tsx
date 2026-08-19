@@ -37,7 +37,7 @@ import {
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { DOMAIN_CONTEXT_OPTIONS, getDomainContextDescription } from "@/lib/domain-context";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
-import { getCollectionLabels } from "@/lib/collection-labels";
+import { getCollectionLabels, isReservedSectionName, UNGROUPED_SECTION_NAME } from "@/lib/collection-labels";
 
 export const MAX_BULK_GENERATION_TOPICS = 50;
 const SECTION_MAX_LENGTH = 120;
@@ -294,6 +294,12 @@ export function BulkGenerationPageClient() {
   }, [courseProgram, courseProgramCatalog, courseProgramIds.length, isTeacherOrAdmin]);
 
   const validate = (): string | null => {
+    if (collectionId && sectionLabel.trim() && isReservedSectionName(sectionLabel)) {
+      // The bucket's display string doubles as the reserved name. Without this guard a batch could
+      // mint a real section that renders identically to the synthetic bucket -- the exact collision
+      // the Builder already refuses, reachable through the path this release added.
+      return `"${UNGROUPED_SECTION_NAME}" is reserved for notes without a ${collectionLabels.sectionSingular.toLowerCase()}.`;
+    }
     if (!subject.trim()) {
       return "Enter a subject for this batch.";
     }
@@ -448,10 +454,17 @@ export function BulkGenerationPageClient() {
     event.preventDefault();
     const validationError = validate();
     if (validationError) {
-      setError(validationError);
+      // Route a section-field problem to the field, not the page banner -- the banner sits far from
+      // the input and does not tell the curator which control to fix.
+      if (collectionId && sectionLabel.trim() && isReservedSectionName(sectionLabel)) {
+        setSectionError(validationError);
+      } else {
+        setError(validationError);
+      }
       return;
     }
     setError(null);
+    setSectionError(null);
     if (studyPackShortfall > 0) {
       setStudyPackConfirmOpen(true);
       return;
@@ -559,7 +572,7 @@ export function BulkGenerationPageClient() {
                 <p className="text-xs text-foreground/60">
                   Pre-filled from the subject. Edit it to choose where these notes appear.
                 </p>
-                {sectionError ? <p className="text-xs text-red-600 dark:text-red-400">{sectionError}</p> : null}
+                {sectionError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{sectionError}</p> : null}
               </div>
             ) : null}
             {isTeacherOrAdmin ? (

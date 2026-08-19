@@ -974,8 +974,18 @@ public class StudyPackService {
                 .orElse(normalized);
     }
 
+    /**
+     * Clamps rather than throws, for the same reason {@code normalizeGeneratedSubject} does: this runs
+     * inside note creation that follows an already-billed LLM call, and normalization can GROW the value
+     * (a bare hyphen expands to " - "), so a stored-or-derived program sitting near the column bound can
+     * cross it here. Failing would discard a completed generation over a secondary metadata field.
+     */
     private String normalizeCourseProgram(String courseProgram) {
-        return CourseProgramNormalizationUtils.normalizeForStorage(courseProgram);
+        String normalized = CourseProgramNormalizationUtils.normalizeForStorage(courseProgram);
+        if (normalized != null && normalized.length() > NoteMetadataBounds.COURSE_PROGRAM_MAX_LENGTH) {
+            return normalized.substring(0, NoteMetadataBounds.COURSE_PROGRAM_MAX_LENGTH).trim();
+        }
+        return normalized;
     }
 
     private String normalizeEditableTitle(String title) {
