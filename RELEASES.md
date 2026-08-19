@@ -1,5 +1,49 @@
 # RELEASES.md - NoteLib
 
+## v0.89.0 - Regeneration Integrity
+
+**Status: In Progress** (kicked off 2026-08-19)
+
+Theme: regenerating a Study Pack should not silently take content away.
+
+### The defect
+
+**A learner regenerates a Study Pack and the new summary is missing a comparison table or a Common Misconceptions block the previous version had.** There is no warning before, no indication after, and **no version history to recover from** — regeneration updates the pack in place, by design, so the prior content is simply gone.
+
+Observed 2026-08-04 during the `R4` verification, on the `Strength of Materials` note. **One sample, cause unestablished.** Two explanations were already ruled out at observation time and must not be re-proposed without new evidence: it is **not domain drift** (the surviving prose stayed fully domain-specific) and it is **not a null level signal** (the note's own history falsifies it — the original pack also had `learner_level` NULL and *did* carry the table).
+
+### The leading hypothesis, and why the release does not assume it
+
+`prompts/study-pack-v1/developer.txt:35-36` makes both blocks **conditionally optional by design**:
+
+- *"if the notes cover multiple related concepts that can be meaningfully compared … include a compact markdown comparison table; **omit if not applicable**"*
+- *"if the notes contain concepts that are commonly misunderstood … end with a short **Common Misconceptions** paragraph; **omit if no clear misconceptions apply**"*
+
+So on every regeneration the model **re-decides** whether each block applies, and nothing carries the prior answer forward. That is a plausible mechanism for exactly the observed loss — but it is a reading of a prompt, not a measurement.
+
+### Planned Scope
+
+1. **⚠️ REPRODUCE FIRST, and this is a gate, not a formality.** Regenerate the same pack several times against the real API and record which optional blocks survive each round. **State the gate in advance: if the blocks do not drop across repeated regenerations, the hypothesis is wrong and this release rescopes** — exactly as `v0.87.0` did when a 14-topic probe came back 14/14 clean and killed its premise. Do not write a fix before this runs.
+2. **Fix, shaped by what step 1 finds.** Deliberately not pre-committed. The candidates, in rising cost: warn before regenerating and name what may change; carry the prior version's structural features into the regeneration prompt as a floor; or preserve the prior content so it is recoverable.
+3. **Make the recovery sweep write `generation_status_at` (backend).** `GenerationRecoveryRowWriter.recoverPool:58-59` sets `POOL_STATUS_FAILED` and saves without stamping — a fifth status-write site beside the four lifecycle sites that do stamp. Small, certain, and evidence-found.
+
+### Anti-drift
+
+- **⚠️ Do NOT re-propose domain drift or a null level signal as the cause.** Both were ruled out on the original sample, on evidence recorded in the Backlog Index. Re-deriving them wastes the release.
+- **⚠️ Regeneration stays IN-PLACE.** `CLAUDE.md`'s versioning rule is binding: regeneration updates the existing Study Pack so quiz and session history stay linked. **A fix that writes a new Study Pack row per version breaks that link** and is out of scope. If the answer turns out to be version history, it needs a separate archive and its own decision — not a second live pack.
+- **⚠️ Regeneration still requires explicit user confirmation.** No auto-regeneration, ever.
+- **⚠️ Do NOT make the optional blocks mandatory.** They are optional for a reason — forcing a comparison table onto material with nothing to compare produces a worse pack, not a safer one. The problem is *losing a block that applied*, not the blocks being conditional.
+- **No new bounds or validation on generated content.** `v0.87.0` is on record that changing validation while measuring failures destroys the read; the same logic applies here.
+- **Item 3 changes no sweep behaviour** — the eligibility filter, the bounds, and the FAILED transition all stay exactly as they are. It writes one additional column.
+
+### Why item 3 rides this release
+
+It is unrelated to regeneration and small enough to say so plainly. It ships now because **it blocks a question already on the calendar**: `[CHECKPOINT — due 2026-09-01]` has a bounds half — *are the bounds too tight?* — which reads as churn, pools repeatedly swept and rebuilt. With no sweep timestamp there is no way to distinguish a pool swept in August from one swept five minutes ago, so that read cannot run. Fixing it after the due date means the checkpoint answers with a confident guess instead of an honest unknown.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.88.0 - Section Authoring
 
 **Status: Released** (kicked off 2026-08-18, signed off 2026-08-19)
