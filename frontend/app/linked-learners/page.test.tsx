@@ -108,3 +108,20 @@ it("rolls an optimistic revoke back when the API fails", async () => {
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Network failed"));
   expect(screen.getByText("accepted")).toBeInTheDocument();
 });
+
+it("offers progress only to the supporter on an accepted connection", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([
+    { ...baseLink, id: "accepted-support", callerRole: "SUPPORTER", status: "ACCEPTED", incomingInvitation: false },
+    { ...baseLink, id: "pending-support", callerRole: "SUPPORTER", status: "PENDING", incomingInvitation: false },
+    { ...baseLink, id: "accepted-learning", callerRole: "LEARNER", status: "ACCEPTED", incomingInvitation: false },
+  ]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByRole("link", { name: "View progress" })).toHaveAttribute(
+    "href",
+    "/linked-learners/accepted-support/progress",
+  );
+  expect(screen.getAllByText("pending")).toHaveLength(1);
+  expect(screen.getAllByRole("link", { name: "View progress" })).toHaveLength(1);
+});

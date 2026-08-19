@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { ResponsiveActionLink } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -232,6 +233,9 @@ export default function LinkedLearnersPage() {
               {pending && link.guardianConsentRequired && link.guardianConsentRecorded ? <p className="text-sm text-foreground/70">Guardian consent has been recorded.</p> : null}
 
               <div className="flex flex-wrap gap-2">
+                {link.status === "ACCEPTED" && link.callerRole === "SUPPORTER" ? (
+                  <ResponsiveActionLink href={`/linked-learners/${link.id}/progress`} action="progress" label="View progress" />
+                ) : null}
                 {canAccept ? <Button type="button" onClick={() => void handleAccept(link)} loading={busyId === link.id} disabled={(link.birthYearRequired && (link.callerRole !== "LEARNER" || !birthYears[link.id]?.trim())) || (supporterCanConsent && consentChecked[link.id] !== true)}>Accept invitation</Button> : null}
                 {link.status !== "REVOKED" ? <Button type="button" variant="destructiveOutline" onClick={() => void handleRevoke(link)} loading={busyId === link.id}>Revoke</Button> : null}
               </div>

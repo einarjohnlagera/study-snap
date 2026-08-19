@@ -4,10 +4,12 @@ import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.GuardianConsentRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
+import com.studysnap.backend.dto.LinkedLearnerProgressResponse;
 import com.studysnap.backend.dto.RecordLinkedLearnerBirthYearRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.LinkedLearnerService;
+import com.studysnap.backend.service.LinkedLearnerProgressService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +30,7 @@ import java.util.UUID;
 @PreAuthorize("hasAnyRole('USER','ADMIN')")
 public class LinkedLearnerController {
     private final LinkedLearnerService linkedLearnerService;
+    private final LinkedLearnerProgressService linkedLearnerProgressService;
 
     @PostMapping("/invite")
     public SimpleMessageResponse invite(
@@ -40,6 +43,14 @@ public class LinkedLearnerController {
     @GetMapping
     public List<LinkedLearnerResponse> list(@AuthenticationPrincipal AuthenticatedUser user) {
         return linkedLearnerService.list(user.userId());
+    }
+
+    @GetMapping("/{relationshipId}/progress")
+    public LinkedLearnerProgressResponse getProgress(
+            @PathVariable UUID relationshipId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return linkedLearnerProgressService.getProgress(user.userId(), relationshipId);
     }
 
     @PostMapping("/{relationshipId}/accept")

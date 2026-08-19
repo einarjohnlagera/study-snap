@@ -8,6 +8,7 @@ import {
   getFeedbackPromptContext,
   getCollectionGoal,
   getGoalSummary,
+  getLinkedLearners,
   getMe,
   getNote,
   getQuickReviewLastReviewedBatch,
@@ -68,6 +69,7 @@ jest.mock("@/lib/api", () => ({
   getFeedbackPromptContext: jest.fn(),
   getCollectionGoal: jest.fn(),
   getGoalSummary: jest.fn(),
+  getLinkedLearners: jest.fn(),
   getMe: jest.fn(),
   getNote: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
@@ -221,6 +223,7 @@ describe("DashboardPage profile variants", () => {
     (getFeedbackPromptContext as jest.Mock).mockReset();
     (getCollectionGoal as jest.Mock).mockReset();
     (getGoalSummary as jest.Mock).mockReset();
+    (getLinkedLearners as jest.Mock).mockReset();
     (getQuickReviewLastReviewedBatch as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (getTodayFocus as jest.Mock).mockReset();
@@ -264,10 +267,69 @@ describe("DashboardPage profile variants", () => {
       adaptivePracticeAvailable: false,
     });
     (getGoalSummary as jest.Mock).mockResolvedValue(null);
+    (getLinkedLearners as jest.Mock).mockResolvedValue([]);
     (getQuickReviewLastReviewedBatch as jest.Mock).mockResolvedValue([]);
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue(null);
     (listPublicNotes as jest.Mock).mockResolvedValue({ items: publicNotes, total: publicNotes.length });
     (listCollections as jest.Mock).mockResolvedValue([]);
+  });
+
+  it("gives a supporter-only account a direct home surface for accepted and pending learners", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Mara",
+      displayName: "Mara",
+      emailVerifiedAt: "2026-08-19T00:00:00Z",
+      productOnboardingCompletedAt: "2026-08-19T00:00:00Z",
+      studyPackCount: 0,
+      profileType: "STUDENT",
+      courseProgram: "",
+      onboardingCompletedAt: "2026-08-19T00:00:00Z",
+    });
+    (listNotes as jest.Mock).mockResolvedValue([]);
+    (getDashboardOverview as jest.Mock).mockResolvedValue({ ...overview, totalNoteCount: 0 });
+    (getLinkedLearners as jest.Mock).mockResolvedValue([
+      {
+        id: "accepted-link",
+        callerRole: "SUPPORTER",
+        initiatedBy: "SUPPORTER",
+        incomingInvitation: false,
+        counterpartyDisplayName: "Alex Learner",
+        counterpartyEmail: "alex@example.com",
+        status: "ACCEPTED",
+        createdAt: "2026-08-18T00:00:00Z",
+        acceptedAt: "2026-08-19T00:00:00Z",
+        revokedAt: null,
+        birthYearRequired: false,
+        guardianConsentRequired: false,
+        guardianConsentRecorded: false,
+      },
+      {
+        id: "pending-link",
+        callerRole: "SUPPORTER",
+        initiatedBy: "SUPPORTER",
+        incomingInvitation: false,
+        counterpartyDisplayName: "Sam Learner",
+        counterpartyEmail: "sam@example.com",
+        status: "PENDING",
+        createdAt: "2026-08-19T00:00:00Z",
+        acceptedAt: null,
+        revokedAt: null,
+        birthYearRequired: false,
+        guardianConsentRequired: false,
+        guardianConsentRecorded: false,
+      },
+    ]);
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("heading", { name: "People you support" })).toBeInTheDocument();
+    expect(screen.getByText("Alex Learner")).toBeInTheDocument();
+    expect(screen.getByText("Sam Learner")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View progress" })).toHaveAttribute(
+      "href",
+      "/linked-learners/accepted-link/progress",
+    );
+    expect(screen.getByText("Progress becomes available after the invitation is accepted.")).toBeInTheDocument();
   });
 
   it("renders the student dashboard with review-first sections", async () => {
