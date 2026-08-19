@@ -102,12 +102,24 @@ A supporter who creates a quiz and then sees nothing has no reason to return; th
 The *link* is free — it is metadata and costs nothing. **But generating a quiz costs real LLM tokens.** The owner has ratified that each learner keeps their own account and quota, so this is the one live cost question.
 *Recommendation: the supporter's own quota.* They initiated it; it prevents a supporter draining a learner's small Free allowance; and it gives the supporter's own plan a coherent reason to exist. **Under this rule the pricing question dissolves entirely** — no new SKU, no per-learner charge, no proration.
 
-**Q4 — How is a link established and broken? (Phase 2)**
-*Recommendation: mutual consent, revocable from both sides.* **Without mutual consent, anyone could claim a supporting relationship over any account by knowing an email address** — a serious privacy hole.
+**Q4 — How is a link established and broken? (Phase 2) — ✅ RATIFIED 2026-08-19: invite + accept, both directions, revocable from either side.**
 
-**Q5 — Minors and the Data Privacy Act. (Phase 2/3)**
-If supported learners include minors, consent, age gating and deletion rights carry real obligations. NoteLib does not collect age today.
-*Recommendation: decide the minimum age and consent mechanism during design.* This is the item most likely to be discovered late and most expensive when it is.
+Either party may send an invitation; **the other must explicitly accept before any link exists**, and either may revoke at any time. **Acceptance is the load-bearing half** — it is what closes the hole below. An opt-out notification would NOT satisfy this: under opt-out the relationship exists, and progress may be visible, before the learner has agreed to anything.
+
+*Original recommendation, now ratified: mutual consent, revocable from both sides.* **Without mutual consent, anyone could claim a supporting relationship over any account by knowing an email address** — a serious privacy hole.
+
+⚠️ **Learner-initiated-code-only was considered and rejected**, though it is the strictest option: it is structurally immune to the email-claim hole, but it requires the learner to act first, which fails exactly where the parent→young-child case needs it most.
+
+**Q5 — Minors and the Data Privacy Act. (Phase 2/3) — ✅ RATIFIED 2026-08-19: age is collected AT LINK TIME, and a guardian consent step is required below the threshold.**
+
+- **Age is collected when a link is formed, never at signup.** This keeps onboarding untouched, which matters concretely: onboarding is under measurement against a 62.4% baseline until `[CHECKPOINT — due 2026-09-11]`, and adding a signup field would confound that read.
+- **The obligation attaches where the relationship is formed**, which is also where it is legally relevant. Minimal collection: a learner who never links is never asked.
+- ⚠️ **`learnerLevel` was considered as a proxy and REJECTED.** `GRADE_SCHOOL` / `JUNIOR_HIGH` / `SENIOR_HIGH` do imply minors and cost nothing to read, but the mapping breaks in both directions — `PERSONAL_LEARNING` and adult re-takers are the obvious cases — and a proxy is weaker ground than a declared age if the obligation is ever tested.
+- ⚠️ **Adults-only-first was considered and rejected** because it excludes the parent→child case, which is the motivating one.
+
+**⚠️ ONE PIECE IS DELIBERATELY NOT DECIDED HERE, AND MUST NOT BE GUESSED IN SCOPING: the age threshold itself.** The mechanism is ratified; the number is a legal question under the Philippine Data Privacy Act and is **owner-owned, pending counsel**. Scope the consent flow so the threshold is configuration, not a literal, and do not ship a default that reads as a legal position.
+
+*Original note: this is the item most likely to be discovered late and most expensive when it is.*
 
 **Q6 — What does a supporter's own home surface look like?**
 If someone is purely a supporter and not a learner, their Dashboard has nothing on it by construction, and will read as broken.
