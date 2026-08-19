@@ -1,5 +1,40 @@
 # RELEASES.md - NoteLib
 
+## v0.89.1 - Birth Year Correction
+
+**Status: In Progress** (kicked off 2026-08-19)
+
+Theme: a learner who mis-declared their age should be able to fix it, and the consent gate should hold when they do.
+
+### The defect
+
+**`users.birth_year` is account-global and write-once, with no correction path.** `LinkedLearnerService:203` is the only writer in the codebase, and all three read sites guard on `== null` (`:120`, `:158`, `:173`), so the first value ever recorded is permanent.
+
+A learner who declares an adult year — **by mistake, or coached by a supporter who wants the consent step gone** — permanently disables guardian consent for **every future supporter link they ever form**, not just the one being negotiated. `requiresGuardianConsent` reads that one frozen field forever.
+
+Found by the `v0.89.0` cold pressure test and recorded there as a Known Limitation rather than fixed in-scope. **On a minors-consent contract, an un-correctable self-declaration is the wrong shape.**
+
+### Planned Scope
+
+1. **A learner-only correction path (backend + frontend).** Only the learner may change their own birth year, matching `recordBirthYear`'s existing rule that a supporter can never declare it for them. Record when it last changed.
+2. **⚠️ Re-evaluate existing links on a DOWNWARD correction (backend).** This is the half that makes the fix mean something. If a learner corrects to a year that now requires guardian consent, every `ACCEPTED` link of theirs **without** a consent record reverts to `PENDING` until consent is attested. Leaving them active would mean an un-consented minor relationship — the exact state the gate exists to prevent, reached by a route the gate does not currently watch.
+3. **Tell both sides why access stopped (frontend).** A supporter whose access reverts must see that consent is now required, not a silent empty state. The learner must see which connections are paused and what unblocks them.
+4. **Close the six documentation gaps `v0.89.0` recorded** — `dashboard.md` (the People-you-support card), `navigation.md` (`/linked-learners` in the no-back-link list, and the new nav item), `data-export.md` (`birthYear`), `account-deletion.md` (the three new cascade-deleted objects), and the three `collections.md` lines still describing share links as teacher-gated.
+
+### Anti-drift
+
+- **⚠️ Do NOT move birth year into signup, onboarding or profile editing.** `v0.89.0` collects it **at link time only**, and has a test asserting signup and profile update leave it null. That is a deliberate minimal-collection posture, and onboarding additionally stays frozen until `[CHECKPOINT — due 2026-09-11]`. The correction lives on the **linked-learners** surface, where the obligation was incurred.
+- **⚠️ A downward correction must NOT revoke.** Reverting to `PENDING` preserves the relationship both people already agreed to; revoking would destroy it and require re-invitation. The gate is about consent, not about ending the connection.
+- **⚠️ Only the learner may correct their own year.** A supporter must never be able to change it — that would hand the consent gate to the party it exists to check.
+- **⚠️ Do NOT store a history of declared values.** Keep the current value plus when it last changed. This is a minor's personal data, and the consent record already carries `attested_at`, so "consent was attested while we believed they were older" is already reconstructable without retaining an age log.
+- **The threshold stays configuration** with its conservative default, and the number remains owner-owned pending counsel. This release does not decide it.
+- **No change to the authorization model, the privacy line, or the cross-user read.** Phase 3 is untouched; a supporter still sees readiness, progress and quiz performance and never notes.
+- **No new analytics event.** `[CHECKPOINT — due 2026-09-19]` reads the relationship table, and this release must not change what that table means.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.89.0 - Support Another Learner
 
 **Status: Released** (kicked off 2026-08-19 as *Regeneration Integrity*, **rescoped the same day**, widened to Phases 2 and 3, signed off 2026-08-19)
