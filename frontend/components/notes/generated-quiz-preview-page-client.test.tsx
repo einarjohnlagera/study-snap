@@ -173,7 +173,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Teacher Note" })).toBeInTheDocument();
     expect(await screen.findByText("What is the nucleus?")).toBeInTheDocument();
     expect(screen.getByText("Quiz Preview")).toBeInTheDocument();
-    expect(screen.getByText("Generated Quiz - Ready for export")).toBeInTheDocument();
+    expect(screen.getByText("Generated Quiz - Ready to share")).toBeInTheDocument();
     expect(screen.getByText("1 question")).toBeInTheDocument();
     expect(screen.getByText("✓ Correct")).toBeInTheDocument();
     expect(screen.getByText("The nucleus controls cell activity.")).toBeInTheDocument();

@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
+import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.LinkedLearnerGuardianConsentEntity;
@@ -35,7 +36,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import org.mockito.ArgumentCaptor;
+import java.util.Map;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +55,7 @@ class LinkedLearnerServiceTest {
     @Mock private LinkedLearnerGuardianConsentRepository consentRepository;
     @Mock private UserRepository userRepository;
     @Mock private OnboardingGuardService onboardingGuardService;
+    @Mock private AuthService authService;
     @Mock private EmailService emailService;
     @Mock private EmailTemplateService emailTemplateService;
 
@@ -62,6 +70,7 @@ class LinkedLearnerServiceTest {
                 consentRepository,
                 userRepository,
                 onboardingGuardService,
+                authService,
                 emailService,
                 emailTemplateService,
                 properties
@@ -113,6 +122,53 @@ class LinkedLearnerServiceTest {
 
         assertThat(known).isEqualTo(unknown);
         assertThat(inactiveResponse).isEqualTo(unknown);
+        // ⚠️ The three assertions above compare references to one shared constant, so they cannot
+        // fail while that constant exists — they say nothing about the row write in the same method.
+        // The observable difference an attacker actually uses is STATE, so assert that directly:
+        // a real account gets a row, an unknown or inactive address gets none.
+        verify(relationshipRepository, times(1)).insertPendingIfAbsent(
+                any(UUID.class), any(UUID.class), any(UUID.class), anyString(), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void inviterNameIsStrippedOfMarkupBeforeItReachesOutboundEmail() {
+        // The invitation is the only email putting one user's self-chosen text in front of ANOTHER
+        // user, and the template engine does not escape. Unstripped, this delivers attacker-authored
+        // HTML from NoteLib's own signed sending domain.
+        UserEntity caller = user("caller@example.com");
+        caller.setDisplayName("<a href=\"https://evil.example\">Confirm your NoteLib account</a>");
+        UserEntity counterparty = user("known@example.com");
+        LinkedLearnerRelationshipEntity pending =
+                relationship(caller, counterparty, LinkedLearnerSide.SUPPORTER);
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        when(userRepository.findByEmailIgnoreCase("known@example.com")).thenReturn(Optional.of(counterparty));
+        when(relationshipRepository.findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
+                any(UUID.class), any(UUID.class), anyList())).thenReturn(Optional.of(pending));
+        when(emailTemplateService.render(anyString(), anyMap())).thenReturn(
+                new EmailTemplateService.RenderedEmailTemplate("Subject", "HTML", "Text"));
+
+        service.invite(caller.getId(),
+                new InviteLinkedLearnerRequest("known@example.com", LinkedLearnerSide.SUPPORTER));
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(emailTemplateService).render(anyString(), captor.capture());
+        assertThat(captor.getValue().get("inviterName")).doesNotContain("<").doesNotContain(">");
+    }
+
+    @Test
+    void inviteRequiresEmailVerificationBeforeMailingAThirdParty() {
+        UUID callerUserId = UUID.randomUUID();
+        doThrow(new AppException("EMAIL_NOT_VERIFIED", "Verify your email before using this feature.",
+                org.springframework.http.HttpStatus.FORBIDDEN))
+                .when(authService).requireEmailVerified(callerUserId);
+
+        assertThatThrownBy(() -> service.invite(
+                callerUserId, new InviteLinkedLearnerRequest("someone@example.com", LinkedLearnerSide.SUPPORTER)))
+                .isInstanceOf(AppException.class);
+
+        verify(userRepository, never()).findByEmailIgnoreCase(anyString());
+        verify(relationshipRepository, never()).insertPendingIfAbsent(
+                any(UUID.class), any(UUID.class), any(UUID.class), anyString(), any(OffsetDateTime.class));
     }
 
     @Test

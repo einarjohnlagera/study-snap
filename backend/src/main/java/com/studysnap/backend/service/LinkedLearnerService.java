@@ -51,12 +51,17 @@ public class LinkedLearnerService {
     private final LinkedLearnerGuardianConsentRepository consentRepository;
     private final UserRepository userRepository;
     private final OnboardingGuardService onboardingGuardService;
+    private final AuthService authService;
     private final EmailService emailService;
     private final EmailTemplateService emailTemplateService;
     private final StudySnapProperties properties;
 
     @Transactional
     public SimpleMessageResponse invite(UUID callerUserId, InviteLinkedLearnerRequest request) {
+        // This endpoint emails a THIRD PARTY, so it must not be reachable from a throwaway
+        // unverified account. QuizShareLinkService already requires this on its send paths; the
+        // omission here made unsolicited mail-out cheap for an attacker.
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
         String normalizedEmail = normalizeEmail(request.email());
@@ -234,7 +239,13 @@ public class LinkedLearnerService {
                 callerRole,
                 relationship.getInitiatedBy(),
                 relationship.getStatus() == LinkedLearnerStatus.PENDING && invitedParty,
-                resolveDisplayName(counterparty),
+                // Disclose the counterparty's NAME only once the link has actually been accepted.
+                // Before that, an invite is an unverified assertion by the caller: echoing back the
+                // resolved display name turned "invite an address, read your own list" into a
+                // name-harvesting oracle over arbitrary emails, and a REVOKED row retained that name
+                // permanently with no way for the victim to remove it. The email is still returned
+                // because the caller supplied it themselves and learns nothing new from it.
+                relationship.getAcceptedAt() != null ? resolveDisplayName(counterparty) : null,
                 counterparty.getEmail(),
                 relationship.getStatus(),
                 relationship.getCreatedAt(),
@@ -258,7 +269,7 @@ public class LinkedLearnerService {
                     INVITATION_TEMPLATE,
                     Map.of(
                             "recipientName", resolveFirstName(counterparty),
-                            "inviterName", resolveDisplayName(caller),
+                            "inviterName", sanitizeForOutboundEmail(resolveDisplayName(caller)),
                             "invitationUrl", invitationUrl
                     )
             );
@@ -310,6 +321,34 @@ public class LinkedLearnerService {
 
     private String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * The invitation is the ONLY email in the product that puts one user's self-chosen text into a
+     * message addressed to a different user, and {@code EmailTemplateService.substitute} does not
+     * escape -- {@code Matcher.quoteReplacement} protects regex replacement semantics, not HTML.
+     * Without this, a display name (or an entirely unvalidated first/last name) could inject markup
+     * into HTML delivered from NoteLib's own SPF/DKIM-signed domain, which is a phishing primitive.
+     *
+     * <p>Angle brackets are stripped rather than entity-escaped because one parameter map renders
+     * BOTH the HTML and the plaintext body: escaping would leak {@code &amp;amp;} into the text
+     * version. Stripping is safe for a name, which has no legitimate use for {@code <} or {@code >}.
+     * Newlines and control characters go too, so the name cannot forge extra lines in the text body.
+     *
+     * <p>⚠️ Deliberately NOT applied inside {@code EmailTemplateService}: four existing templates
+     * pass markup on purpose ({@code unsubscribeFooterHtml}, {@code imageNoticeHtml},
+     * {@code studyPackList}, {@code weakConceptList}), so a blanket escape there would break them.
+     * An escape-by-default convention for that service is the durable fix and is recorded as a
+     * follow-up rather than attempted at signoff.
+     */
+    private String sanitizeForOutboundEmail(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replaceAll("[<>]", "")
+                .replaceAll("\\p{Cntrl}", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     private String resolveDisplayName(UserEntity user) {
