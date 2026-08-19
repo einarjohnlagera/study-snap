@@ -2,9 +2,9 @@
 
 ## v0.89.0 - Support Another Learner
 
-**Status: In Progress** (kicked off 2026-08-19 as *Regeneration Integrity*, **rescoped the same day**)
+**Status: In Progress** (kicked off 2026-08-19 as *Regeneration Integrity*, **rescoped the same day**, then **widened to Phases 2 and 3 on 2026-08-19** at owner request)
 
-Theme: a parent, tutor or sibling should be able to hand someone a quiz without pretending to be a teacher.
+Theme: a parent, tutor or sibling should be able to help someone learn — hand them a quiz, and see how they are doing.
 
 ### ⚠️ Why this replaced the release's original scope, stated precisely
 
@@ -47,6 +47,34 @@ Theme: a parent, tutor or sibling should be able to hand someone a quiz without 
 - **⚠️ No demand-signal capture in onboarding before 2026-09-11** — onboarding is under measurement against a 62.4% baseline and `[CHECKPOINT — due 2026-09-11]` owns that window.
 - **Notes stay private.** Nothing in this release exposes note content to anyone; a shared quiz carries questions, not the learner's notes.
 - **Item 3 changes no sweep behaviour** — eligibility, bounds and the `FAILED` transition are untouched. It writes one additional column.
+
+### Planned Scope — Phases 2 and 3, added 2026-08-19
+
+**⚠️ This is a large addition to a release that opened as a one-gate correction, and it was a deliberate owner call.** Phase 2 alone would have ended the release with still no progress view, repeating the gap Phase 1 left. Phases 2 and 3 ship together so the release actually ends with a supporter seeing what they came for.
+
+**⚠️ Phase 3 is the product's FIRST cross-user read.** Every read path in the product today is owner-scoped. This is an authorization model, not a set of charts, and it should be reviewed as one.
+
+#### Phase 2 — linked learners
+
+4. **A supporter↔learner relationship (backend, migration).** States: `PENDING`, `ACCEPTED`, `REVOKED`. **⚠️ Linking is invite + accept in BOTH directions, ratified 2026-08-19** — either party may invite, **the other must explicitly accept before any link exists**, and either may revoke at any time. Acceptance is the load-bearing half: without it, anyone could claim a supporting relationship over any account by knowing an email address.
+5. **Age at link time and guardian consent (backend + frontend).** **⚠️ Age is collected when a link is formed, NEVER at signup** — onboarding is under measurement against a 62.4% baseline until `[CHECKPOINT — due 2026-09-11]`, and a signup field would confound that read. Below the threshold, a guardian consent step is required.
+   > **⚠️ THE AGE THRESHOLD IS NOT DECIDED AND MUST NOT BE GUESSED.** The mechanism is ratified; the number is a legal question under the Philippine Data Privacy Act, owner-owned pending counsel. **Build it as configuration, not a literal.** If a default must exist to ship, use the **most protective** value so that later movement only ever relaxes it — and say in the config comment that it is a conservative engineering default, not a legal position.
+
+#### Phase 3 — progress sharing
+
+6. **Supporter-scoped progress read (backend).** A supporter with an `ACCEPTED` link sees the learner's **readiness, progress and quiz performance**. The data already exists owner-scoped — `mastery-snapshot` (`averageRecentScore`, `bestRecentScore`, `studyPacksReviewed`), `study-engagement`, collection progress and `ConceptHealth`. This adds a relationship-scoped path to it, not new metrics.
+7. **A supporter home surface (frontend).** **Q6 from the proposal:** someone who is purely a supporter and not a learner has a Dashboard with nothing on it *by construction*, and will read as broken. Give them a surface that shows the people they support.
+
+### Anti-drift — Phases 2 and 3
+
+- **⚠️ THE PRIVACY LINE IS RATIFIED AND ABSOLUTE: a supporter sees readiness, progress and quiz performance, and NEVER the learner's notes.** Not note content, not note bodies, not summaries. **This protects the product, not only the learner** — if learners suspect a supporter can read their notes they write less honestly, or stop, and note capture is the foundation the whole system sits on.
+  > **One thing to decide rather than drift into: Study Pack / note TITLES.** A progress row naming what was practised is arguably progress, but a title can carry content. **Decide explicitly before building, and write the decision down** — do not let it be settled by whichever DTO was convenient.
+- **⚠️ Every cross-user read must verify an `ACCEPTED` relationship, not merely that a row exists.** A `PENDING` or `REVOKED` link must grant nothing. **Revocation must cut the read immediately** — no cached view, no grace period.
+- **⚠️ A supporter VIEWING readiness must never write `ConceptHealth`.** It has moved only from genuine assessment since `v0.37.0` and that lock is not negotiable. A view that records a practice timestamp, touches `lastSessionCompletedAt`, or advances a streak would corrupt the learner's own signal using someone else's activity.
+- **⚠️ No sub-accounts.** A supported learner is a full, ordinary account with its own login and plan. No shared subscription, no pooled quota, no per-learner charge — the link is metadata and costs nothing.
+- **⚠️ Do NOT introduce a supporter `ProfileType`, and do not gate any of this on `ProfileType`.** That is the axis error Phase 1 corrected; `PARENT` stays unimplemented with zero users.
+- **⚠️ Do NOT add fields to signup or onboarding.** See item 5.
+- **No change to the five-mode quiz contract**, and no new mastery signal — Phase 3 reads existing data.
 
 ### Shipped
 
