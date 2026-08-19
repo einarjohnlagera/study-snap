@@ -48,7 +48,10 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.studysnap.backend.testutil.SqlCaptureStatementInspector")
+@SpringBootTest(properties = {
+        "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.studysnap.backend.testutil.SqlCaptureStatementInspector",
+        "spring.flyway.enabled=false"
+})
 @Transactional
 class NoteServicePublicLibraryPaginationIntegrationTest {
     private static final String NURSING_PROGRAM = "Nursing";
@@ -900,6 +903,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                     display_name varchar(100),
                     username varchar(30) not null,
                     bio varchar(200),
+                    birth_year smallint,
                     learner_level varchar(32),
                     course_program varchar(120),
                     study_goal text,

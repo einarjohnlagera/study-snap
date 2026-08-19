@@ -9,21 +9,16 @@ import com.studysnap.backend.dto.SharedQuizResultItem;
 import com.studysnap.backend.dto.SharedQuizResultsResponse;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
-import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.QuizShareLinkEntity;
-import com.studysnap.backend.entity.UserEntity;
-import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.GeneratedQuizNotFoundException;
 import com.studysnap.backend.exception.InvalidSharedQuizAnswersException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.QuizShareLinkNotAllowedException;
 import com.studysnap.backend.exception.QuizShareLinkNotFoundException;
 import com.studysnap.backend.exception.QuizShareLinkTokenGenerationException;
-import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuizShareLinkRepository;
-import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,7 +43,7 @@ public class QuizShareLinkService {
     private final QuizShareLinkRepository quizShareLinkRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
     private final NoteRepository noteRepository;
-    private final UserRepository userRepository;
+    private final OnboardingGuardService onboardingGuardService;
     private final QuizShareLimitService quizShareLimitService;
     private final UserUsageService userUsageService;
     private final AuthService authService;
@@ -58,7 +53,7 @@ public class QuizShareLinkService {
     @Transactional
     public QuizShareLinkResponse createShareLink(UUID generatedQuizId, UUID ownerUserId) {
         authService.requireEmailVerified(ownerUserId);
-        requireTeacherOrAdmin(ownerUserId);
+        onboardingGuardService.assertProfileComplete(ownerUserId);
         GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findByIdAndOwnerUserId(generatedQuizId, ownerUserId)
                 .orElseThrow(GeneratedQuizNotFoundException::new);
         QuizShareLinkEntity existing = quizShareLinkRepository
@@ -84,7 +79,7 @@ public class QuizShareLinkService {
 
     @Transactional(readOnly = true)
     public QuizShareLinkResponse getShareLinkByQuizId(UUID generatedQuizId, UUID ownerUserId) {
-        requireTeacherOrAdmin(ownerUserId);
+        onboardingGuardService.assertProfileComplete(ownerUserId);
         return quizShareLinkRepository
                 .findFirstByGeneratedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(generatedQuizId, ownerUserId)
                 .map(this::toResponse)
@@ -93,7 +88,7 @@ public class QuizShareLinkService {
 
     public QuizShareLinkResponse toggleShareLink(String token, UUID callerUserId) {
         authService.requireEmailVerified(callerUserId);
-        requireTeacherOrAdmin(callerUserId);
+        onboardingGuardService.assertProfileComplete(callerUserId);
         QuizShareLinkEntity link = quizShareLinkRepository.findByToken(token)
                 .orElseThrow(QuizShareLinkNotFoundException::new);
         if (!Objects.equals(link.getOwnerUserId(), callerUserId)) {
@@ -155,14 +150,6 @@ public class QuizShareLinkService {
             throw new QuizShareLinkNotFoundException();
         }
         return link;
-    }
-
-    private UserEntity requireTeacherOrAdmin(UUID userId) {
-        UserEntity user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
-        if (user.getProfileType() == ProfileType.TEACHER || user.getRole() == UserRole.ADMIN) {
-            return user;
-        }
-        throw new QuizShareLinkNotAllowedException();
     }
 
     private String generateUniqueToken() {

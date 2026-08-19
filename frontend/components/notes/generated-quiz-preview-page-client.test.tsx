@@ -1,6 +1,15 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { GeneratedQuizPreviewPageClient } from "./generated-quiz-preview-page-client";
-import { exportGeneratedQuizDocx, generateGeneratedQuiz, getGeneratedQuiz, getMe, getNote, trackAnalyticsEvent } from "@/lib/api";
+import {
+  createQuizShareLink,
+  exportGeneratedQuizDocx,
+  generateGeneratedQuiz,
+  getGeneratedQuiz,
+  getMe,
+  getNote,
+  getQuizShareLinkByQuizId,
+  trackAnalyticsEvent,
+} from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 
@@ -45,6 +54,10 @@ jest.mock("@/hooks/use-billing-usage-summary", () => ({
 
 describe("GeneratedQuizPreviewPageClient", () => {
   beforeEach(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: jest.fn().mockResolvedValue(undefined) },
+    });
     pushMock.mockReset();
     replaceMock.mockReset();
     (getNote as jest.Mock).mockReset();
@@ -53,6 +66,8 @@ describe("GeneratedQuizPreviewPageClient", () => {
     (generateGeneratedQuiz as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
     (exportGeneratedQuizDocx as jest.Mock).mockReset();
+    (getQuizShareLinkByQuizId as jest.Mock).mockReset();
+    (createQuizShareLink as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
 
@@ -120,6 +135,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
       ],
     });
     (exportGeneratedQuizDocx as jest.Mock).mockResolvedValue({ filename: "teacher-note-quiz.docx" });
+    (getQuizShareLinkByQuizId as jest.Mock).mockResolvedValue(null);
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
         plan: "FREE",
@@ -157,7 +173,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Teacher Note" })).toBeInTheDocument();
     expect(await screen.findByText("What is the nucleus?")).toBeInTheDocument();
     expect(screen.getByText("Quiz Preview")).toBeInTheDocument();
-    expect(screen.getByText("Generated Quiz - Ready for export")).toBeInTheDocument();
+    expect(screen.getByText("Generated Quiz - Ready to share")).toBeInTheDocument();
     expect(screen.getByText("1 question")).toBeInTheDocument();
     expect(screen.getByText("✓ Correct")).toBeInTheDocument();
     expect(screen.getByText("The nucleus controls cell activity.")).toBeInTheDocument();
@@ -223,16 +239,55 @@ describe("GeneratedQuizPreviewPageClient", () => {
     });
   });
 
-  it("hides DOCX export for non-teacher non-admin users", async () => {
+  it("lets a student create a share link while keeping DOCX export hidden", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-2",
       role: "USER",
       profileType: "STUDENT",
     });
+    (createQuizShareLink as jest.Mock).mockResolvedValue({
+      id: "link-1",
+      token: "token-1",
+      shareUrl: "https://notelib.app/quiz/token-1",
+      isActive: true,
+      createdAt: "2026-04-17T09:00:00Z",
+    });
 
     render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
 
     await screen.findByText("What is the nucleus?");
+    expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+    const shareHeading = screen.getByRole("heading", { name: "Share with Someone" });
+    const shareCard = shareHeading.closest("section, div");
+    expect(shareCard).not.toBeNull();
+    expect(within(shareCard as HTMLElement).queryByText(/students/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create Share Link" }));
+
+    await waitFor(() => {
+      expect(createQuizShareLink).toHaveBeenCalledWith("quiz-1");
+    });
+    expect(await screen.findByText("https://notelib.app/quiz/token-1")).toBeInTheDocument();
+  });
+
+  it("loads an existing share link for a student on mount", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-2",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    (getQuizShareLinkByQuizId as jest.Mock).mockResolvedValue({
+      id: "link-1",
+      token: "token-1",
+      shareUrl: "https://notelib.app/quiz/token-1",
+      isActive: true,
+      createdAt: "2026-04-17T09:00:00Z",
+    });
+
+    render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
+
+    expect(await screen.findByText("https://notelib.app/quiz/token-1")).toBeInTheDocument();
+    expect(getQuizShareLinkByQuizId).toHaveBeenCalledWith("quiz-1");
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
   });
 

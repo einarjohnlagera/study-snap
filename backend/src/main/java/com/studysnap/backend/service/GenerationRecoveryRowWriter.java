@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -56,6 +57,7 @@ public class GenerationRecoveryRowWriter {
                 .map(pool -> {
                     OffsetDateTime staleSince = pool.getGenerationStatusAt();
                     pool.setGenerationStatus(POOL_STATUS_FAILED);
+                    pool.setGenerationStatusAt(OffsetDateTime.now(ZoneOffset.UTC));
                     examQuestionPoolRepository.save(pool);
                     return staleSince;
                 });

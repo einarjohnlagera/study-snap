@@ -20,6 +20,7 @@ import {
   getFeedbackPromptContext,
   getCollectionGoal,
   getGoalSummary,
+  getLinkedLearners,
   getMe,
   getQuickReviewLastReviewedBatch,
   getTodayFocus,
@@ -28,6 +29,7 @@ import {
   type DashboardOverviewResponse,
   type GoalCollectionDetailResponse,
   type GoalNudgeResponse,
+  type LinkedLearnerResponse,
   type FeedbackPromptContextResponse,
   type MeResponse,
   type NoteListItemResponse,
@@ -52,6 +54,7 @@ import { FreePlanUpgradeCard } from "./free-plan-upgrade-card";
 import { DashboardActionCard } from "./dashboard-action-card";
 import { DashboardStrongestNotes } from "./dashboard-strongest-notes";
 import { DashboardCommunityNotesSection } from "./dashboard-community-notes-section";
+import { SupportedLearnersCard } from "./supported-learners-card";
 import { DashboardStudyPlanSection } from "./dashboard-study-plan-section";
 import { DashboardPrimaryCollectionHero, DashboardPrimaryCollectionHeroSkeleton } from "./dashboard-primary-collection-hero";
 import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/professional-interview-practice-card";
@@ -329,6 +332,7 @@ export default function DashboardPage() {
   const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
   const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null);
   const [feedbackPromptContext, setFeedbackPromptContext] = useState<FeedbackPromptContextResponse | null>(null);
+  const [supportedLearners, setSupportedLearners] = useState<LinkedLearnerResponse[]>([]);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -347,13 +351,14 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [notesResult, meResult, continueStudyingResult, todayFocusResult, overviewResult, feedbackContextResult] = await Promise.allSettled([
+      const [notesResult, meResult, continueStudyingResult, todayFocusResult, overviewResult, feedbackContextResult, linkedLearnersResult] = await Promise.allSettled([
         listNotes(DASHBOARD_NOTE_FETCH_LIMIT),
         getMe(),
         getContinueStudyingRecommendation(),
         getTodayFocus(),
         getDashboardOverview(),
         getFeedbackPromptContext(),
+        getLinkedLearners(),
       ]);
 
       if (notesResult.status !== "fulfilled") {
@@ -467,6 +472,9 @@ export default function DashboardPage() {
       setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
       setOverview(overviewResult.status === "fulfilled" ? overviewResult.value : null);
       setFeedbackPromptContext(feedbackContextResult.status === "fulfilled" ? feedbackContextResult.value : null);
+      setSupportedLearners(linkedLearnersResult.status === "fulfilled"
+        ? linkedLearnersResult.value.filter((link) => link.callerRole === "SUPPORTER" && link.status !== "REVOKED")
+        : []);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your notes.";
       setError(message);
@@ -749,6 +757,7 @@ export default function DashboardPage() {
               onboarded (the adoption succeeded server-side and they were never shown it). Reaching
               this branch means the guard already passed and the dashboard loaded. */}
           <DiscoveryIntentConsumer />
+          <SupportedLearnersCard links={supportedLearners} />
           {hasPrimaryCollection ? (
             primaryCollectionGoal ? (
               <DashboardPrimaryCollectionHero

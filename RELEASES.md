@@ -1,5 +1,118 @@
 # RELEASES.md - NoteLib
 
+## v0.89.0 - Support Another Learner
+
+**Status: Released** (kicked off 2026-08-19 as *Regeneration Integrity*, **rescoped the same day**, widened to Phases 2 and 3, signed off 2026-08-19)
+
+Theme: a parent, tutor or sibling should be able to help someone learn — hand them a quiz, and see how they are doing.
+
+### ⚠️ Why this replaced the release's original scope, stated precisely
+
+**The original scope was *Regeneration Integrity*, and its item 1 was a gate: reproduce the defect before fixing it.** That probe needs a human to create a note, run eight live regenerations, and read the results.
+
+**⚠️ It was deferred for want of owner time — the hypothesis was NOT tested and NOT killed.** This is *not* the `v0.87.0` case, where a probe ran and falsified the premise. Nothing was learned about regeneration; the release simply could not start. **Do not record this as evidence that regeneration is fine.** The Backlog Index row stays open at full strength, and the harness written for it is preserved at `docs/claude-plans/v0.89.0-regeneration-reproduction.md`, so the next attempt starts where this one stopped rather than re-deriving the procedure.
+
+### What the replacement is, and why it was ready
+
+**Support Another Learner** is owner-ratified direction (2026-08-14). Its gate was a **decision**, not effort: *"does Phase 1 already largely exist? Audit that before scoping."*
+
+**The audit ran 2026-08-19, and the answer is yes — Phase 1 is built, and one gate on the wrong axis is hiding it.**
+
+| Capability | Exists | Gate today |
+|---|---|---|
+| Generate a quiz **for someone else** | ✅ | **none** — any profile can |
+| Recipient takes it with **no account** | ✅ | `/quiz/share/**` is `permitAll` (`SecurityConfig:63`) |
+| Share-link plan metering | ✅ | FREE 3 / PLUS 10 / PRO unlimited |
+| **Create the share link** | ✅ | **`TEACHER` or `ADMIN` only** ← the blocker |
+| DOCX export / multi-version | ✅ | `TEACHER` or `ADMIN` |
+
+`QuizShareLinkService.requireTeacherOrAdmin` (`:160-166`) is the only thing between today and Phase 1. Everything downstream already works, anonymously, end to end.
+
+**⚠️ And it is exactly the axis error the ratified direction names.** `ProfileType` answers *"how do YOU learn?"*; it is being used here to answer *"may you help someone?"* A parent helping their child is a `STUDENT` or `BOARD_EXAM` profile, so **the only workaround today is to misrepresent your own learning profile** — which changes dashboard emphasis, quiz-mode visibility *and* generation behaviour. The workaround damages the helper's own product experience, which is why this is a defect rather than a missing feature.
+
+### Planned Scope
+
+1. **Open share-link creation to any onboarded user (backend).** Replace the `TEACHER`/`ADMIN` check in `QuizShareLinkService` with the existing onboarding guard. **No new quota and no new limit** — `QuizShareLimitService` already meters this per plan.
+2. **Frame it as helping someone else (frontend).** The capability is invisible to a non-teacher today because nothing surfaces it. Surface the share affordance wherever a generated quiz can already be created, in language about giving it to someone — not about teaching.
+3. **Make the recovery sweep write `generation_status_at` (backend).** Carried unchanged from the original scope. `GenerationRecoveryRowWriter.recoverPool:58-59` sets `POOL_STATUS_FAILED` without stamping, which makes the **bounds** half of `[CHECKPOINT — due 2026-09-01]` unanswerable — churn cannot be detected without a sweep timestamp.
+
+### Anti-drift
+
+- **⚠️ Phase 1 records NO relationship.** No linking, no invitation, no acceptance, no permissions model, and **no cross-user read**. Those are Phases 2 and 3, and Phase 3 is where the product's first cross-user authorization lives. A "linked learners" table in this release is out of scope and would pull authorization forward by two phases.
+- **⚠️ Do NOT introduce a supporter `ProfileType` value, and do NOT gate anything new on `ProfileType`.** That is the exact error being corrected. `PARENT` already exists as an unimplemented enum value with **zero users** — leave it alone; do not wire it up as the mechanism.
+- **⚠️ Consent, minors and Data Privacy Act obligations do not apply to Phase 1 and must not be built for it.** They matter from Phase 2, when a relationship is recorded. Phase 1 stores nothing about the recipient — they take the quiz anonymously.
+- **⚠️ Whose quota is already answered by the existing code and needs no decision:** the supporter generates on their own account, against their own quota and their own share-link limit. Do not build a shared or transferred quota.
+- **Keep DOCX export and multi-version exports `TEACHER`-gated.** Printable multi-version exam papers are classroom administration, not helping one person learn. Only the share link opens.
+- **⚠️ Do NOT justify this on retention.** The supporter's return loop is the progress view, which is Phase 3. Phase 1's value accrues to the **learner** receiving the material, so judging it by supporter return rate would kill a working feature with the wrong metric.
+- **⚠️ No demand-signal capture in onboarding before 2026-09-11** — onboarding is under measurement against a 62.4% baseline and `[CHECKPOINT — due 2026-09-11]` owns that window.
+- **Notes stay private.** Nothing in this release exposes note content to anyone; a shared quiz carries questions, not the learner's notes.
+- **Item 3 changes no sweep behaviour** — eligibility, bounds and the `FAILED` transition are untouched. It writes one additional column.
+
+### Planned Scope — Phases 2 and 3, added 2026-08-19
+
+**⚠️ This is a large addition to a release that opened as a one-gate correction, and it was a deliberate owner call.** Phase 2 alone would have ended the release with still no progress view, repeating the gap Phase 1 left. Phases 2 and 3 ship together so the release actually ends with a supporter seeing what they came for.
+
+**⚠️ Phase 3 is the product's FIRST cross-user read.** Every read path in the product today is owner-scoped. This is an authorization model, not a set of charts, and it should be reviewed as one.
+
+#### Phase 2 — linked learners
+
+4. **A supporter↔learner relationship (backend, migration).** States: `PENDING`, `ACCEPTED`, `REVOKED`. **⚠️ Linking is invite + accept in BOTH directions, ratified 2026-08-19** — either party may invite, **the other must explicitly accept before any link exists**, and either may revoke at any time. Acceptance is the load-bearing half: without it, anyone could claim a supporting relationship over any account by knowing an email address.
+5. **Age at link time and guardian consent (backend + frontend).** **⚠️ Age is collected when a link is formed, NEVER at signup** — onboarding is under measurement against a 62.4% baseline until `[CHECKPOINT — due 2026-09-11]`, and a signup field would confound that read. Below the threshold, a guardian consent step is required.
+   > **⚠️ THE AGE THRESHOLD IS NOT DECIDED AND MUST NOT BE GUESSED.** The mechanism is ratified; the number is a legal question under the Philippine Data Privacy Act, owner-owned pending counsel. **Build it as configuration, not a literal.** If a default must exist to ship, use the **most protective** value so that later movement only ever relaxes it — and say in the config comment that it is a conservative engineering default, not a legal position.
+
+#### Phase 3 — progress sharing
+
+6. **Supporter-scoped progress read (backend).** A supporter with an `ACCEPTED` link sees the learner's **readiness, progress and quiz performance**. The data already exists owner-scoped — `mastery-snapshot` (`averageRecentScore`, `bestRecentScore`, `studyPacksReviewed`), `study-engagement`, collection progress and `ConceptHealth`. This adds a relationship-scoped path to it, not new metrics.
+7. **A supporter home surface (frontend).** **Q6 from the proposal:** someone who is purely a supporter and not a learner has a Dashboard with nothing on it *by construction*, and will read as broken. Give them a surface that shows the people they support.
+
+### Anti-drift — Phases 2 and 3
+
+- **⚠️ THE PRIVACY LINE IS RATIFIED AND ABSOLUTE: a supporter sees readiness, progress and quiz performance, and NEVER the learner's notes.** Not note content, not note bodies, not summaries. **This protects the product, not only the learner** — if learners suspect a supporter can read their notes they write less honestly, or stop, and note capture is the foundation the whole system sits on.
+  > **One thing to decide rather than drift into: Study Pack / note TITLES.** A progress row naming what was practised is arguably progress, but a title can carry content. **Decide explicitly before building, and write the decision down** — do not let it be settled by whichever DTO was convenient.
+- **⚠️ Every cross-user read must verify an `ACCEPTED` relationship, not merely that a row exists.** A `PENDING` or `REVOKED` link must grant nothing. **Revocation must cut the read immediately** — no cached view, no grace period.
+- **⚠️ A supporter VIEWING readiness must never write `ConceptHealth`.** It has moved only from genuine assessment since `v0.37.0` and that lock is not negotiable. A view that records a practice timestamp, touches `lastSessionCompletedAt`, or advances a streak would corrupt the learner's own signal using someone else's activity.
+- **⚠️ No sub-accounts.** A supported learner is a full, ordinary account with its own login and plan. No shared subscription, no pooled quota, no per-learner charge — the link is metadata and costs nothing.
+- **⚠️ Do NOT introduce a supporter `ProfileType`, and do not gate any of this on `ProfileType`.** That is the axis error Phase 1 corrected; `PARENT` stays unimplemented with zero users.
+- **⚠️ Do NOT add fields to signup or onboarding.** See item 5.
+- **No change to the five-mode quiz contract**, and no new mastery signal — Phase 3 reads existing data.
+
+### Shipped
+
+- **Generated quiz sharing is available to every onboarded user.** Share-link create, fetch and toggle now use the shared onboarding guard instead of a `TEACHER`/`ADMIN` profile check, while email verification, owner scoping, anonymous recipient play and existing per-plan limits remain unchanged. Quiz Preview exposes the share card and loads existing links for any signed-in user with neutral helping-someone copy; DOCX and multi-version export remain `TEACHER`/`ADMIN`-only. The generation recovery sweep now stamps `generation_status_at` when it marks a stale question pool `FAILED`, preserving the timestamp's status-change meaning for the v0.86.0 checkpoint without changing sweep eligibility or transaction boundaries.
+- **Phase 2 linked learners records mutual, revocable learning-support relationships without opening any cross-user activity read.** Either side can invite by email, the other side must explicitly accept before the directional supporter→learner link reaches `ACCEPTED`, and either side can revoke `PENDING` or `ACCEPTED` links idempotently. Unknown and inactive invite targets receive the same generic API response as active accounts, live duplicates are prevented while revoked history permits a fresh invitation, and self-linking is blocked in both service and schema. Birth year is stored once on the learner only through the link flow; the guardian-consent threshold is configuration with a conservative engineering default pending counsel, and required consent is a separate persisted fact recording who attested and when. The relationship list exposes only counterparty identity, direction, status and dates — no readiness, progress, scores, notes, Study Packs, collections or `ConceptHealth`; those remain Phase 3.
+- **Phase 3 opens the first cross-user read through one relationship-scoped authorization path.** Every progress request addresses a relationship id, re-verifies that the caller is its supporter and that the link is exactly `ACCEPTED`, then reuses the existing owner-scoped quiz-performance, engagement, readiness and collection calculations with the authorized learner id. `PENDING`, `REVOKED`, wrong-direction, third-party and missing relationships disclose nothing; revocation cuts access on the next request. The response chooses aggregate counts and states only — no concept names, subjects, titles, notes, summaries or Study Pack prose — and the read performs no learner writes. Accepted supporters can open the view from Learning connections and from an additive Dashboard **People you support** section; pending and no-activity states are explicit, and learner/supporter accounts keep their own learning workspace without a mode switch.
+
+### Known limitations
+
+- **⚠️ The invite endpoint is enumeration-safe in its RESPONSE, but the link list is not.** `invite` correctly mirrors `PasswordResetService` — an unknown or inactive email returns the same generic success as a real one, and **no row is created** — and that is pinned by `unknownAndActiveEmailInvitesReturnIndistinguishableResponses`. **But a successful invite to a real account creates a `PENDING` row that appears in the inviter's own list, and an invite to an unknown address creates nothing.** So any authenticated user can test whether an email has an account by inviting it and reading their own list. The relationship-claiming hole the ratification cared about is closed — acceptance is still mandatory and nothing is visible to the invitee's side until they act — but **account-existence disclosure remains**, and it is the property the scope explicitly asked for.
+  **The proper fix is email-keyed invitations**: store the invitation against the typed address rather than a resolved user id, so the row exists either way and the observable state stops depending on account existence. That also buys the natural product behaviour of inviting someone who has not signed up yet. It is a design change beyond this phase and is deliberately not attempted here. **Cheap interim mitigation: rate-limit invites per caller**, which bounds enumeration without changing the model.
+- **The guardian consent attestation wording is a placeholder.** `attestation_version` exists on the consent record so counsel-provided copy can be versioned and the existing consents remain interpretable, but the shipped string is not legal wording and must not be treated as such.
+- **The consent circularity is recorded rather than solved.** A minor declares their own birth year, and the supporter — frequently the very guardian whose consent is required — is the party who attests it. The mechanism records who attested and when; it does not verify guardianship, and cannot with the data the product holds.
+
+### Pre-signoff pressure test — 2026-08-19
+
+**Full cold-context test, two agents on non-overlapping halves, and it was the most valuable one this project has run.** The gate fired on every clause. **Five blocking-class defects, all in code that shipped green through four merged PRs and the session's own per-PR audits.**
+
+**⚠️ The release's headline capability reached NOBODY.** `private-note-detail-page-client.tsx` kept the entire generate-quiz control inside `{isTeacherMode ? …}`, so a `STUDENT`/`BOARD_EXAM`/`PROFESSIONAL` user had no button calling `generateGeneratedQuiz`, could never reach `/notes/{id}/quiz`, and could never see the Share card. **The backend gate was opened correctly and delivered zero user-visible value to its entire target population.** The per-PR audit checked the service gate and the Quiz Preview card and never asked how a non-teacher reaches that page — which is precisely the whole-release blind spot the cold pass exists for.
+
+**⚠️ Stored HTML injection into outbound email.** The invitation is the **only** email placing one user's self-chosen text in front of a *different* user, and `EmailTemplateService` does not escape — `Matcher.quoteReplacement` protects regex semantics, not HTML. `firstName`/`lastName` carry no markup validation at all, so an attacker could deliver authored HTML from NoteLib's own SPF/DKIM-signed domain. Stripped at the send site, **not** inside `EmailTemplateService`, because four templates pass markup deliberately.
+
+**⚠️ Enumeration was materially worse than `v0.89.0`'s own Phase 2 audit recorded.** That audit said "account existence leaks." The list actually returned the counterparty's **display name and email** for a merely `PENDING` invite — name harvesting over arbitrary addresses — and `REVOKED` rows retained them permanently with no way for the victim to remove them. Names are now withheld until acceptance, and `invite` requires a verified email, which `QuizShareLinkService` already did and this endpoint omitted **while being the one that mails third parties**. **The enumeration test asserted three references to one constant and could not fail**; it now asserts the state difference an attacker uses.
+
+Also fixed: a failed progress load left the **previous learner's numbers** on screen under the new learner's heading (error card and stat grid are independent conditionals); the share-link 403 still said Teacher/Admin-only; and the feature doc's false claim that the invite endpoint is not an account-existence oracle.
+
+**Every fix is mutation-verified against a named test.** **The cross-user read — the thing most likely to go wrong — came back clean on both passes:** single authorization helper returning the learner id rather than a boolean, single consumer, direction-checked, exact-state-checked, counts-only projection, and no writes, verified from real method bodies rather than mock assertions.
+
+### Known limitations
+
+- **⚠️ Account existence is still observable, and the durable fix is named.** The invite *response* is enumeration-safe and no row is written for an unknown address, but a real account produces a `PENDING` row visible in the inviter's own list. Name harvesting is closed; existence disclosure is not. **The fix is email-keyed invitations** — store the invitation against the typed address so the row exists either way, which also unlocks inviting someone who has not signed up yet. Scoped as `v0.90.0`; **multi-recipient invites must NOT ship before it**, since a multi-email field turns a one-at-a-time probe into bulk enumeration.
+- **⚠️ `users.birth_year` is account-global and write-once, with no correction path.** A learner who declares an adult year — by mistake, or coached by a supporter who wants the consent step gone — permanently disables guardian consent for **every future supporter link**, not just the one being negotiated. The threshold maths is deliberately conservative (`currentYear - birthYear - 1` treats a possibly-17 learner as a minor), but the absence of a correction path is a real gap on a minors-consent contract.
+- **The consent circularity is recorded, not solved.** A minor declares their own birth year, and the supporter — frequently the guardian whose consent is required — is the party who attests. The mechanism records who attested and when; it cannot verify guardianship with the data the product holds. The attestation wording is a counsel placeholder, versioned via `attestation_version`.
+- **Supporter *view* frequency is unmeasurable by construction.** Phase 3 deliberately writes nothing on a read — no timestamps, no counters, no learner-attributed analytics — which is correct for the learner's signal integrity and means nothing records that a supporter looked. Adoption is measurable from the relationship table; engagement is not. A **supporter**-attributed event would be the fix, and the anti-drift permits it since it forbids only learner-attributed ones.
+- **The `v0.86.0` attribution read (d) cannot discriminate and should not be trusted as written.** `ExamQuestionPoolService` stamps on `GENERATING` and `PENDING` writes but **not** on its normal `FAILED` path, so a pool used after deploy and then failing normally also presents as "FAILED with a non-null stamp." The authoritative attribution source is the `generation.recovery completed pools=N` log line, not a stamp comparison.
+- **Docs not updated for the new surfaces:** `dashboard.md` has no section for the People-you-support card, `navigation.md` omits `/linked-learners` from the no-back-link list and the new nav item, `data-export.md` omits `birthYear`, `account-deletion.md` omits the three new cascade-deleted objects, and three `collections.md` lines still describe share links as teacher-gated. None is user-facing; all are recorded rather than silently carried.
+- **The new progress sub-page has no `BackLink`** and uses a raw `<Link>` with a forbidden "Back to" prefix, against `docs/ui-standards.md`.
+
 ## v0.88.0 - Section Authoring
 
 **Status: Released** (kicked off 2026-08-18, signed off 2026-08-19)

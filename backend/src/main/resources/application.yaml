@@ -138,6 +138,9 @@ studysnap:
     # A real Long/Board Exam start still works when this is off — its first use can
     # live-generate and then create a per-user pool for later sessions.
     exam-pool-prewarm-enabled: ${EXAM_POOL_PREWARM_ENABLED:false}
+  linked-learners:
+    # Conservative engineering default pending counsel; this is not a legal position.
+    guardian-consent-max-age: ${GUARDIAN_CONSENT_MAX_AGE:17}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}
     txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1}
