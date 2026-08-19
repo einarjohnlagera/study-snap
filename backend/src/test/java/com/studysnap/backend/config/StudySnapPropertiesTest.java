@@ -9,6 +9,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StudySnapPropertiesTest {
 
     @Test
+    void linkedLearnerGuardianConsentUsesConservativeConfigurableDefault() {
+        StudySnapProperties.LinkedLearners linkedLearners = new StudySnapProperties().getLinkedLearners();
+
+        assertThat(linkedLearners.getGuardianConsentMaxAge()).isEqualTo(17);
+        linkedLearners.setGuardianConsentMaxAge(15);
+        assertThat(linkedLearners.getGuardianConsentMaxAge()).isEqualTo(15);
+    }
+
+    @Test
     void limitMegabyteValuesConvertToBytes() {
         StudySnapProperties properties = new StudySnapProperties();
         properties.getLimits().setFileUploadMaxSize(10);

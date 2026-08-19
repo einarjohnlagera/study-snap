@@ -107,8 +107,9 @@ class AccountDataExportServiceTest {
                 eq(userId),
                 any(Pageable.class)
         );
-        assertThat(export.meta().schemaVersion()).isEqualTo("1.0");
+        assertThat(export.meta().schemaVersion()).isEqualTo("1.1");
         assertThat(export.account().email()).isEqualTo("note@example.com");
+        assertThat(export.account().birthYear()).isEqualTo(2001);
         assertThat(export.notes()).extracting(DataExportResponse.Note::id)
                 .containsExactly(publicNoteId, privateNoteId);
         assertThat(export.notes()).extracting(DataExportResponse.Note::visibility)
@@ -193,6 +194,7 @@ class AccountDataExportServiceTest {
         user.setCourseProgram("Nursing");
         user.setStudyGoal("Pass PNLE");
         user.setFocusSubjects(new String[]{"Anatomy"});
+        user.setBirthYear(2001);
         user.setEngagementMode(EngagementMode.FOCUSED);
         user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);

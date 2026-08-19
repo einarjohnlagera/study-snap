@@ -73,6 +73,7 @@ function isProtectedAppRoute(pathname: string): boolean {
     || pathname.startsWith("/notes")
     || pathname.startsWith("/profile")
     || pathname.startsWith("/settings")
+    || pathname.startsWith("/linked-learners")
     || pathname.startsWith("/study")
     || pathname.startsWith("/study-packs")
     || pathname.startsWith("/admin")
@@ -137,6 +138,9 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/settings")) {
     return "Settings";
   }
+  if (pathname.startsWith("/linked-learners")) {
+    return "Learning connections";
+  }
   if (pathname.startsWith("/onboarding")) {
     return "Onboarding";
   }
@@ -164,7 +168,7 @@ function getPageTitle(pathname: string): string {
 type NavLinkItem = {
   href: string;
   label: string;
-  action: "admin" | "campaigns" | "collections" | "dashboard" | "explore" | "help" | "library" | "profile" | "progress" | "settings";
+  action: "admin" | "campaigns" | "collections" | "dashboard" | "explore" | "help" | "library" | "profile" | "progress" | "settings" | "share";
 };
 
 const MAIN_NAV: NavLinkItem[] = [
@@ -401,6 +405,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   const secondaryNav = useMemo<NavLinkItem[]>(() => {
     const nav: NavLinkItem[] = [
       { href: "/profile", label: "Profile", action: "profile" },
+      { href: "/linked-learners", label: "Learning connections", action: "share" },
       { href: "/settings", label: "Settings", action: "settings" },
       { href: "/help", label: "Help", action: "help" },
     ];

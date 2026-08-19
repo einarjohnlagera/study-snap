@@ -1086,6 +1086,25 @@ export type SimpleMessageResponse = {
   message: string;
 };
 
+export type LinkedLearnerSide = "SUPPORTER" | "LEARNER";
+export type LinkedLearnerStatus = "PENDING" | "ACCEPTED" | "REVOKED";
+
+export type LinkedLearnerResponse = {
+  id: string;
+  callerRole: LinkedLearnerSide;
+  initiatedBy: LinkedLearnerSide;
+  incomingInvitation: boolean;
+  counterpartyDisplayName: string;
+  counterpartyEmail: string;
+  status: LinkedLearnerStatus;
+  createdAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  birthYearRequired: boolean;
+  guardianConsentRequired: boolean;
+  guardianConsentRecorded: boolean;
+};
+
 export type UnsubscribeCategory =
   | "MARKETING"
   | "WEEKLY_SUMMARY"
@@ -5313,4 +5332,89 @@ export async function copyNoteOnSignup(publicNoteId: string): Promise<{ noteId: 
     true,
   );
   return parseApiResponse<{ noteId: string }>(response, "Could not copy note.");
+}
+
+export async function inviteLinkedLearner(
+  email: string,
+  inviterRole: LinkedLearnerSide,
+): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    "/linked-learners/invite",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ email, inviterRole }),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not send the invitation.");
+}
+
+export async function getLinkedLearners(): Promise<LinkedLearnerResponse[]> {
+  const response = await fetchWithAuth(
+    "/linked-learners",
+    { headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerResponse[]>(response, "Could not load your connections.");
+}
+
+export async function acceptLinkedLearner(
+  relationshipId: string,
+  learnerBirthYear: number | null,
+  guardianConsentAttested: boolean,
+): Promise<LinkedLearnerResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/${relationshipId}/accept`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ learnerBirthYear, guardianConsentAttested }),
+    },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerResponse>(response, "Could not accept the invitation.");
+}
+
+export async function recordLinkedLearnerBirthYear(
+  relationshipId: string,
+  birthYear: number,
+): Promise<LinkedLearnerResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/${relationshipId}/birth-year`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ birthYear }),
+    },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerResponse>(response, "Could not save the birth year.");
+}
+
+export async function recordLinkedLearnerGuardianConsent(
+  relationshipId: string,
+): Promise<LinkedLearnerResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/${relationshipId}/guardian-consent`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ attested: true }),
+    },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerResponse>(response, "Could not record guardian consent.");
+}
+
+export async function revokeLinkedLearner(relationshipId: string): Promise<LinkedLearnerResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/${relationshipId}/revoke`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerResponse>(response, "Could not revoke the connection.");
 }

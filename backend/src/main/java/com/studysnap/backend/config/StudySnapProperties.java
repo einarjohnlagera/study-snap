@@ -20,6 +20,7 @@ public class StudySnapProperties {
     private final QuizGeneration quizGeneration = new QuizGeneration();
     private final QuickReview quickReview = new QuickReview();
     private final Pricing pricing = new Pricing();
+    private final LinkedLearners linkedLearners = new LinkedLearners();
     private final Limits limits = new Limits();
     private final Billing billing = new Billing();
     private final Email email = new Email();
@@ -272,6 +273,12 @@ public class StudySnapProperties {
         private Integer unlimitedToNull(int limit) {
             return limit <= 0 ? null : limit;
         }
+    }
+
+    @Getter
+    @Setter
+    public static class LinkedLearners {
+        private int guardianConsentMaxAge = 17;
     }
 
     @Getter

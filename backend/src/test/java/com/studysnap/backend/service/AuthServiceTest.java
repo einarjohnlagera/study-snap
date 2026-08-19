@@ -144,6 +144,7 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getDueConceptsDigestRemindersEnabled()).isTrue();
         assertThat(savedUser.getValue().getKnowledgeImpactDigestRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
+        assertThat(savedUser.getValue().getBirthYear()).isNull();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
         verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
@@ -1136,6 +1137,7 @@ class AuthServiceTest {
         user.setBio("Old bio");
         user.setLearnerLevel(LearnerLevel.COLLEGE);
         user.setCourseProgram("Biology");
+        user.setBirthYear(2001);
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
         user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
         user.setTokenVersion(0);
@@ -1180,6 +1182,7 @@ class AuthServiceTest {
         assertThat(user.getLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
         assertThat(user.getCourseProgram()).isEqualTo("Pharmacy");
         assertThat(user.getSchoolName()).isEqualTo("NoteLib Academy");
+        assertThat(user.getBirthYear()).isEqualTo(2001);
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), eq(false));
     }
 

@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AccountDataExportService {
-    private static final String SCHEMA_VERSION = "1.0";
+    private static final String SCHEMA_VERSION = "1.1";
     private static final int SESSION_EXPORT_BATCH_SIZE = 100;
 
     private final UserRepository userRepository;
@@ -78,6 +78,7 @@ public class AccountDataExportService {
                 user.getStudyGoal(),
                 toList(user.getFocusSubjects()),
                 user.getExamDate(),
+                user.getBirthYear(),
                 user.getCreatedAt()
         );
     }
