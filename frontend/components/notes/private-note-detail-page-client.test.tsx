@@ -562,7 +562,10 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
     const courseProgramInput = await screen.findByLabelText(/Course \/ Program\(s\)/);
+    const subjectInput = screen.getByLabelText("Subject");
     expect(courseProgramInput).toHaveValue("BS Nursing");
+    expect(subjectInput).toHaveAttribute("maxLength", "64");
+    expect(courseProgramInput).toHaveAttribute("maxLength", "120");
     fireEvent.click(screen.getByLabelText("Toggle course program suggestions"));
     expect(screen.getAllByRole("option").slice(0, 2).map((option) => option.textContent)).toEqual([
       "Nursing",

@@ -27,6 +27,7 @@ import com.studysnap.backend.exception.DraftNotFoundException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.OcrDisabledException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
+import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackListItemProjection;
@@ -40,6 +41,7 @@ import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import com.studysnap.backend.util.CreatedAtIdCursorUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
+import com.studysnap.backend.util.NoteMetadataBounds;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +80,7 @@ public class StudyPackService {
     private static final int MAX_TITLE_LENGTH = 180;
     private static final int MAX_TAG_LENGTH = 30;
     private static final int MAX_TAGS_PER_STUDY_PACK = 30;
+    private static final int GENERATED_SUBJECT_WORD_BOUNDARY_WINDOW = 8;
     private static final String STUDY_PACK = "study-pack";
     private static final String ERROR_NOTE_GENERATION_IN_PROGRESS = "NOTE_GENERATION_IN_PROGRESS";
     private static final String ERROR_NOTE_ALREADY_HAS_STUDY_PACK = "NOTE_ALREADY_HAS_STUDY_PACK";
@@ -434,7 +437,7 @@ public class StudyPackService {
         assertNoteEditable(entity.getNoteId(), ownerUserId);
 
         String normalizedTitle = normalizeEditableTitle(title);
-        String normalizedSubject = normalizeSubject(subject);
+        String normalizedSubject = normalizeUserSuppliedSubject(subject);
 
         StudyPackEntity targetEntity = entity;
         if (!Objects.equals(entity.getTitle(), normalizedTitle) || !Objects.equals(entity.getSubject(), normalizedSubject)) {
@@ -586,7 +589,7 @@ public class StudyPackService {
                 : null;
         entity.setSubject(noteSubject != null && !noteSubject.isBlank()
                 ? noteSubject
-                : normalizeSubject(generated.subject()));
+                : normalizeGeneratedSubject(generated.subject()));
         entity.setSourceText(sourceText);
         entity.setKeyConcepts(generated.keyConcepts());
         entity.setQuiz(generated.quiz());
@@ -762,7 +765,7 @@ public class StudyPackService {
         note.setId(UUID.randomUUID());
         note.setOwnerUserId(ownerUserId);
         note.setTitle(generated.title());
-        note.setSubject(normalizeSubject(generated.subject()));
+        note.setSubject(normalizeGeneratedSubject(generated.subject()));
         note.setCourseProgram(normalizeCourseProgram(courseProgram));
         note.setTags(resolveTags(generated.tags(), generated.title()));
         note.setContent(normalizedContent);
@@ -929,11 +932,38 @@ public class StudyPackService {
         return List.copyOf(normalizedByKey.values());
     }
 
-    private String normalizeSubject(String subject) {
+    private String normalizeUserSuppliedSubject(String subject) {
         String normalized = SubjectNormalizationUtils.normalizeForStorage(subject);
         if (normalized == null) {
             return null;
         }
+        if (normalized.length() > NoteMetadataBounds.SUBJECT_MAX_LENGTH) {
+            throw new SubjectTooLongException();
+        }
+        return resolveCanonicalSubject(normalized);
+    }
+
+    private String normalizeGeneratedSubject(String subject) {
+        String normalized = SubjectNormalizationUtils.normalizeForStorage(subject);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.length() > NoteMetadataBounds.SUBJECT_MAX_LENGTH) {
+            normalized = clampGeneratedSubject(normalized);
+        }
+        return resolveCanonicalSubject(normalized);
+    }
+
+    private String clampGeneratedSubject(String subject) {
+        int maxLength = NoteMetadataBounds.SUBJECT_MAX_LENGTH;
+        int lastSpace = subject.lastIndexOf(' ', maxLength);
+        if (lastSpace >= maxLength - GENERATED_SUBJECT_WORD_BOUNDARY_WINDOW) {
+            return subject.substring(0, lastSpace).trim();
+        }
+        return subject.substring(0, maxLength).trim();
+    }
+
+    private String resolveCanonicalSubject(String normalized) {
         String lookup = SubjectNormalizationUtils.normalizeForLookup(normalized);
         return noteRepository.findAllSubjectValues().stream()
                 .map(SubjectNormalizationUtils::normalizeForStorage)
@@ -1048,7 +1078,7 @@ public class StudyPackService {
     private void applyGeneratedMetadataToNote(NoteEntity note, GeneratedStudyPackContent generated) {
         boolean changed = false;
         if ((note.getSubject() == null || note.getSubject().isBlank()) && generated.subject() != null) {
-            note.setSubject(normalizeSubject(generated.subject()));
+            note.setSubject(normalizeGeneratedSubject(generated.subject()));
             changed = true;
         }
         String[] existingTags = note.getTags();
@@ -1069,7 +1099,7 @@ public class StudyPackService {
     ) {
         note.setTitle(normalizeEditableTitle(generated.title()));
         note.setTags(resolveTags(generated.tags(), generated.title()));
-        note.setSubject(normalizeSubject(preservedSubject));
+        note.setSubject(normalizeUserSuppliedSubject(preservedSubject));
         note.setUpdatedAt(OffsetDateTime.now());
         noteRepository.save(note);
     }

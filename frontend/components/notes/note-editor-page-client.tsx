@@ -169,6 +169,8 @@ export function NoteEditorPageClient({
   const [loadingNote, setLoadingNote] = useState(isEditMode);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [subjectError, setSubjectError] = useState<string | null>(null);
+  const [courseProgramError, setCourseProgramError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingNote, setIsGeneratingNote] = useState(false);
@@ -896,6 +898,8 @@ export function NoteEditorPageClient({
 
     setIsSaving(true);
     setFormError(null);
+    setSubjectError(null);
+    setCourseProgramError(null);
     setSaveStateLabel("Saving...");
     try {
       const saved = await upsertNote();
@@ -918,8 +922,14 @@ export function NoteEditorPageClient({
       router.push(`/notes/${saved.id}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not save note.";
-      setFormError(message);
-      showToast(message, "error");
+      if (message.includes("Subject must be 64 characters or less")) {
+        setSubjectError(message);
+      } else if (message.includes("Course/program must be 120 characters or less")) {
+        setCourseProgramError(message);
+      } else {
+        setFormError(message);
+        showToast(message, "error");
+      }
       setSaveStateLabel(null);
     } finally {
       setIsSaving(false);
@@ -958,6 +968,8 @@ export function NoteEditorPageClient({
 
     setIsGenerating(true);
     setFormError(null);
+    setSubjectError(null);
+    setCourseProgramError(null);
     try {
       const saved = await upsertNote();
       if (!saved) {
@@ -979,8 +991,14 @@ export function NoteEditorPageClient({
           void refreshUsageSummary();
           openLockedFeaturePaywall("study-pack-limit", "note_editor_generate_error");
         } else {
-          showToast(message, "error");
-          setFormError(message);
+          if (message.includes("Subject must be 64 characters or less")) {
+            setSubjectError(message);
+          } else if (message.includes("Course/program must be 120 characters or less")) {
+            setCourseProgramError(message);
+          } else {
+            showToast(message, "error");
+            setFormError(message);
+          }
         }
       }
     } finally {
@@ -1308,8 +1326,14 @@ export function NoteEditorPageClient({
         pageTitle={pageTitleLabel}
         note={draft}
         onTitleChange={(value) => setDraft((previous) => ({ ...previous, title: value }))}
-        onSubjectChange={(value) => setDraft((previous) => ({ ...previous, subject: value }))}
-        onCourseProgramChange={(value) => setDraft((previous) => ({ ...previous, courseProgram: value }))}
+        onSubjectChange={(value) => {
+          setSubjectError(null);
+          setDraft((previous) => ({ ...previous, subject: value }));
+        }}
+        onCourseProgramChange={(value) => {
+          setCourseProgramError(null);
+          setDraft((previous) => ({ ...previous, courseProgram: value }));
+        }}
         onDomainContextChange={(value: DomainContext | "") => {
           setDraft((previous) => ({ ...previous, domainContext: value }));
         }}
@@ -1337,6 +1361,8 @@ export function NoteEditorPageClient({
         showTagsSection
         studyPackMessage={studyPackMessage}
         formError={formError}
+        subjectError={subjectError}
+        courseProgramError={courseProgramError}
         importFile={importFile}
         importFileInputKey={importFileInputKey}
         importFlowState={importFlowState}

@@ -273,6 +273,8 @@ describe("NoteEditorPageClient", () => {
     expect(titleInput).not.toBeDisabled();
     expect(subjectInput).not.toBeDisabled();
     expect(courseProgramInput).not.toBeDisabled();
+    expect(subjectInput).toHaveAttribute("maxLength", "64");
+    expect(courseProgramInput).toHaveAttribute("maxLength", "120");
     expect(contentInput).not.toHaveAttribute("readonly");
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
     expect(screen.getByText("Select an existing subject or type your own.")).toBeInTheDocument();

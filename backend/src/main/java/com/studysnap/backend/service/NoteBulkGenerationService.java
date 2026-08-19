@@ -16,15 +16,20 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.BulkNoteGenerationQuotaExceededException;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
+import com.studysnap.backend.exception.CourseProgramTooLongException;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
 import com.studysnap.backend.exception.InvalidBulkGenerationRequestException;
 import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
+import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.exception.UnknownCourseProgramException;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.util.CourseProgramNormalizationUtils;
+import com.studysnap.backend.util.NoteMetadataBounds;
+import com.studysnap.backend.util.SubjectNormalizationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,17 +48,12 @@ public class NoteBulkGenerationService {
     private static final Logger log = LoggerFactory.getLogger(NoteBulkGenerationService.class);
     private static final int MIN_MAX_TOPICS = 1;
     private static final int MAX_TOPIC_LENGTH = 160;
-    private static final int MAX_SUBJECT_LENGTH = 160;
-    private static final int MAX_COURSE_PROGRAM_LENGTH = 160;
     private static final int MIN_THROTTLE_DELAY_MS = 0;
     private static final int MAX_THROTTLE_DELAY_MS = 5_000;
     private static final String EMPTY_BATCH_MESSAGE = "Add at least one topic.";
     private static final String COURSE_PROGRAM_REQUIRED_MESSAGE = "Course/program is required.";
     private static final String SUBJECT_REQUIRED_MESSAGE = "Subject is required.";
-    private static final String FIELD_TOO_LONG_MESSAGE_TEMPLATE = "%s must be %d characters or less.";
     private static final String MAX_TOPICS_MESSAGE_TEMPLATE = "You can bulk generate up to %d topics at once.";
-    private static final String COURSE_PROGRAM_FIELD = "Course/program";
-    private static final String SUBJECT_FIELD = "Subject";
     private final NoteGenerationService noteGenerationService;
     private final NoteService noteService;
     private final StudyPackService studyPackService;
@@ -419,8 +419,12 @@ public class NoteBulkGenerationService {
         if (request == null) {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
         }
-        String subject = requireText(request.subject(), SUBJECT_REQUIRED_MESSAGE);
-        assertMaxLength(subject, MAX_SUBJECT_LENGTH, SUBJECT_FIELD);
+        String subject = SubjectNormalizationUtils.normalizeForStorage(
+                requireText(request.subject(), SUBJECT_REQUIRED_MESSAGE)
+        );
+        if (subject.length() > NoteMetadataBounds.SUBJECT_MAX_LENGTH) {
+            throw new SubjectTooLongException();
+        }
         if (request.topics() == null || request.topics().isEmpty()) {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
         }
@@ -453,7 +457,10 @@ public class NoteBulkGenerationService {
                 ? null
                 : requireText(firstNonBlank(request.courseProgramText(), owner.getCourseProgram()), COURSE_PROGRAM_REQUIRED_MESSAGE);
         if (courseProgramText != null) {
-            assertMaxLength(courseProgramText, MAX_COURSE_PROGRAM_LENGTH, COURSE_PROGRAM_FIELD);
+            courseProgramText = CourseProgramNormalizationUtils.normalizeForStorage(courseProgramText);
+            if (courseProgramText.length() > NoteMetadataBounds.COURSE_PROGRAM_MAX_LENGTH) {
+                throw new CourseProgramTooLongException();
+            }
         }
         if (courseProgramIds.size() > 1 && domainContext == null) {
             throw new MultiProgramDomainContextRequiredException();
@@ -501,14 +508,6 @@ public class NoteBulkGenerationService {
 
     private String firstNonBlank(String primary, String fallback) {
         return primary != null && !primary.isBlank() ? primary : fallback;
-    }
-
-    private void assertMaxLength(String value, int maxLength, String fieldName) {
-        if (value.length() > maxLength) {
-            throw new InvalidBulkGenerationRequestException(
-                    FIELD_TOO_LONG_MESSAGE_TEMPLATE.formatted(fieldName, maxLength)
-            );
-        }
     }
 
     private NoteTargetProfileType mapProfileTypeToNoteTargetProfile(ProfileType profileType) {

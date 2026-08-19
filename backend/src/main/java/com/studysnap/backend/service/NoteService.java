@@ -34,9 +34,11 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidLibraryQueryException;
 import com.studysnap.backend.exception.InvalidPublicLibraryQueryException;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
+import com.studysnap.backend.exception.CourseProgramTooLongException;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
 import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.exception.UnknownCourseProgramException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.model.NoteListItemView;
@@ -74,6 +76,7 @@ import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import com.studysnap.backend.util.NoteCourseProgramShadowing;
+import com.studysnap.backend.util.NoteMetadataBounds;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.PageRequest;
@@ -325,7 +328,7 @@ public class NoteService {
         copy.setId(UUID.randomUUID());
         copy.setOwnerUserId(ownerUserId);
         copy.setTitle(source.getTitle());
-        copy.setSubject(resolveCanonicalSubject(source.getSubject()));
+        copy.setSubject(resolveCanonicalSubjectForCopy(source.getSubject()));
         copy.setCourseProgram(normalizeOptionalCourseProgram(source.getCourseProgram()));
         copy.setDomainContext(source.getDomainContext());
         copy.setLearnerLevel(source.getLearnerLevel());
@@ -1411,13 +1414,21 @@ public class NoteService {
     private String resolveRequestedCourseProgram(String requestedCourseProgram, UserEntity owner) {
         String normalizedRequested = normalizeOptionalCourseProgram(requestedCourseProgram);
         if (normalizedRequested != null) {
+            assertCourseProgramFitsStorage(normalizedRequested);
             return normalizedRequested;
         }
         String resolved = normalizeOptionalCourseProgram(owner.getCourseProgram());
         if (resolved == null) {
             throw new CourseProgramSelectionRequiredException();
         }
+        assertCourseProgramFitsStorage(resolved);
         return resolved;
+    }
+
+    private void assertCourseProgramFitsStorage(String courseProgram) {
+        if (courseProgram.length() > NoteMetadataBounds.COURSE_PROGRAM_MAX_LENGTH) {
+            throw new CourseProgramTooLongException();
+        }
     }
 
     private Set<UUID> validateCuratedProgramIds(List<UUID> requestedIds) {
@@ -1718,7 +1729,31 @@ public class NoteService {
         if (normalizedRequested == null) {
             return null;
         }
+        if (normalizedRequested.length() > NoteMetadataBounds.SUBJECT_MAX_LENGTH) {
+            throw new SubjectTooLongException();
+        }
+        return canonicalizeSubject(normalizedRequested);
+    }
 
+    /**
+     * Copy variant: clamps instead of throwing, mirroring the generated-subject path in
+     * {@code StudyPackService}. A copied note's subject is already within the column bound, but
+     * re-normalization can still grow it -- a bare hyphen expands to " - " -- and the person
+     * copying did not author that subject and cannot fix it. Failing their copy over someone
+     * else's metadata would be the same mistake as rejecting an over-long generated subject.
+     */
+    private String resolveCanonicalSubjectForCopy(String storedSubject) {
+        String normalized = SubjectNormalizationUtils.normalizeForStorage(storedSubject);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.length() > NoteMetadataBounds.SUBJECT_MAX_LENGTH) {
+            normalized = normalized.substring(0, NoteMetadataBounds.SUBJECT_MAX_LENGTH).trim();
+        }
+        return canonicalizeSubject(normalized);
+    }
+
+    private String canonicalizeSubject(String normalizedRequested) {
         String lookup = SubjectNormalizationUtils.normalizeForLookup(normalizedRequested);
         return noteRepository.findAllSubjectValues().stream()
                 .map(SubjectNormalizationUtils::normalizeForStorage)

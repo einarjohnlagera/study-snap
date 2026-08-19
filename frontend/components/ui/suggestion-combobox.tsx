@@ -28,6 +28,7 @@ type SuggestionComboboxProps = {
   toggleLabel?: string;
   customOptionLabel?: string;
   inlineDropdown?: boolean;
+  maxLength?: number;
 };
 
 function normalize(value: string): string {
@@ -58,6 +59,7 @@ export function SuggestionCombobox({
   toggleLabel = "Toggle suggestions",
   customOptionLabel = "Custom",
   inlineDropdown = false,
+  maxLength,
 }: Readonly<SuggestionComboboxProps>) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -189,6 +191,7 @@ export function SuggestionCombobox({
           value={activeInputValue}
           aria-label={ariaLabel}
           disabled={disabled}
+          maxLength={maxLength}
           onFocus={() => {
             setInputValue(displayValue);
             setOpen(true);

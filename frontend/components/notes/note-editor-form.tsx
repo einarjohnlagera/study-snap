@@ -65,6 +65,8 @@ type NoteEditorFormProps = {
     showTagsSection: boolean;
     studyPackMessage?: string | null;
     formError?: string | null;
+    subjectError?: string | null;
+    courseProgramError?: string | null;
     importFile: File | null;
     importFileInputKey: number;
     importFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
@@ -151,6 +153,8 @@ export function NoteEditorForm({
                                    showTagsSection,
                                    studyPackMessage,
                                    formError,
+                                   subjectError,
+                                   courseProgramError,
                                    importFile,
                                    importFileInputKey,
                                    importFlowState,
@@ -391,7 +395,9 @@ export function NoteEditorForm({
                     suggestions={subjectSuggestions}
                     onChange={onSubjectChange}
                     disabled={isCopying}
+                    maxLength={64}
                 />
+                {subjectError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{subjectError}</p> : null}
                 {/* Live region stays mounted so the advisory is announced when it appears, not just rendered. */}
                 <div aria-live="polite">
                     {showAuthoringMetadataFields && isSubjectSameAsDomainContext(note.subject, note.domainContext) ? (
@@ -462,6 +468,7 @@ export function NoteEditorForm({
                             context="note"
                         />
                     )}
+                    {courseProgramError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{courseProgramError}</p> : null}
                 </div>
             </div>
 

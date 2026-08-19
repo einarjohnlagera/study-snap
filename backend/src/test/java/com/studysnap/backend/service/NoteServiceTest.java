@@ -24,11 +24,13 @@ import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
+import com.studysnap.backend.exception.CourseProgramTooLongException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
+import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
@@ -300,6 +302,72 @@ class NoteServiceTest {
         assertThat(created.copiedFromPublic()).isFalse();
         verify(noteRepository).flush();
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.NOTE_CREATED), eq(saved.getId()), any());
+    }
+
+    @Test
+    void create_rejectsRawSubjectThatExceedsStorageWithNamedException() {
+        UUID ownerUserId = UUID.randomUUID();
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "x".repeat(65), "Nursing", null, null, List.of(), "content"
+        );
+
+        assertThatThrownBy(() -> noteService.create(request, ownerUserId))
+                .isInstanceOf(SubjectTooLongException.class)
+                .hasMessage("Subject must be 64 characters or less.");
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
+    void create_rejectsSubjectThatExceedsStorageOnlyAfterNormalization() {
+        UUID ownerUserId = UUID.randomUUID();
+        String rawSubject = "x".repeat(61) + "-y";
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", rawSubject, "Nursing", null, null, List.of(), "content"
+        );
+
+        assertThat(rawSubject).hasSize(63);
+        assertThatThrownBy(() -> noteService.create(request, ownerUserId))
+                .isInstanceOf(SubjectTooLongException.class);
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+    }
+
+    @Test
+    void create_acceptsAndPersistsSubjectAtStorageLimitUnchanged() {
+        UUID ownerUserId = UUID.randomUUID();
+        String subject = "x".repeat(64);
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", subject, "Nursing", null, null, List.of(), "content"
+        );
+
+        noteService.create(request, ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getSubject()).isEqualTo(subject);
+    }
+
+    @Test
+    void create_rejectsCourseProgramAboveStorageLimitAndAcceptsTheBoundary() {
+        UUID ownerUserId = UUID.randomUUID();
+        UpsertNoteRequest overlongRequest = new UpsertNoteRequest(
+                "Title", "Subject", "x".repeat(121), null, null, List.of(), "content"
+        );
+
+        assertThatThrownBy(() -> noteService.create(overlongRequest, ownerUserId))
+                .isInstanceOf(CourseProgramTooLongException.class)
+                .hasMessage("Course/program must be 120 characters or less.");
+
+        String boundaryCourseProgram = "y".repeat(120);
+        UpsertNoteRequest boundaryRequest = new UpsertNoteRequest(
+                "Title", "Subject", boundaryCourseProgram, null, null, List.of(), "content"
+        );
+        noteService.create(boundaryRequest, ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getCourseProgram()).isEqualTo(boundaryCourseProgram);
     }
 
     @Test
@@ -902,6 +970,26 @@ class NoteServiceTest {
         assertThat(copied.copiedFromUserId()).isNull();
         assertThat(copied.copiedFromPublic()).isFalse();
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+    }
+
+    @Test
+    void copyNote_clampsAStoredSubjectThatGrowsPastStorageInsteadOfFailingTheCopy() {
+        // The person copying did not author this subject and cannot fix it. Re-normalization can
+        // grow a stored value (a bare hyphen expands to " - "), so sharing the throwing path with
+        // note create/update would 400 someone's copy over another author's metadata.
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        NoteEntity source = buildNote(sourceNoteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "source content");
+        source.setTitle("Source title");
+        source.setSubject("x".repeat(61) + "-y");
+        source.setTargetProfileType(NoteTargetProfileType.STUDENT);
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+
+        noteService.copyNote(sourceNoteId.toString(), ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getSubject()).hasSizeLessThanOrEqualTo(64);
     }
 
     @Test
