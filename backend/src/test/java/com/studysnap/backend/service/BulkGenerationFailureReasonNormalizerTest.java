@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.BulkGenerationFailureReason;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.SubjectTooLongException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
@@ -26,6 +27,14 @@ class BulkGenerationFailureReasonNormalizerTest {
                 APP_ERROR_CODE,
                 APP_ERROR_MESSAGE
         ));
+    }
+
+    @Test
+    void normalize_recordsNamedSubjectBoundReasonInsteadOfUnexpectedError() {
+        BulkGenerationFailureReason result = normalizer.normalize("Topic", new SubjectTooLongException());
+
+        assertThat(result.code()).isEqualTo("SUBJECT_TOO_LONG");
+        assertThat(result.reason()).isEqualTo("Subject must be 64 characters or less.");
     }
 
     @Test

@@ -67,6 +67,7 @@ export function CourseProgramCombobox({
         toggleLabel="Toggle course program suggestions"
         customOptionLabel="Custom"
         inlineDropdown={inlineDropdown}
+        maxLength={120}
       />
       {errorText ? <p className="text-xs text-red-600 dark:text-red-400">{errorText}</p> : null}
     </div>

@@ -4,18 +4,20 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
+import com.studysnap.backend.util.NoteMetadataBounds;
+
 import java.util.List;
 import java.util.UUID;
 
 public record BulkGenerateNotesRequest(
         @NotBlank(message = "Subject is required.")
-        @Size(max = 160, message = "Subject must be 160 characters or less.")
+        @Size(max = NoteMetadataBounds.SUBJECT_MAX_LENGTH, message = NoteMetadataBounds.SUBJECT_TOO_LONG_MESSAGE)
         String subject,
         @NotEmpty(message = "Add at least one topic.")
         List<String> topics,
         boolean makePublic,
         List<UUID> courseProgramIds,
-        @Size(max = 160, message = "Course/program must be 160 characters or less.")
+        @Size(max = NoteMetadataBounds.COURSE_PROGRAM_MAX_LENGTH, message = NoteMetadataBounds.COURSE_PROGRAM_TOO_LONG_MESSAGE)
         String courseProgramText,
         String domainContext,
         String learnerLevel,

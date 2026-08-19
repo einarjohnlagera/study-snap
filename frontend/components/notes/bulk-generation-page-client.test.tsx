@@ -84,6 +84,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByText("Library tool")).toBeInTheDocument();
     expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Subject/)).toHaveAttribute("maxLength", "64");
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Authored Depth/)).toBeInTheDocument();
@@ -119,6 +120,25 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.queryByLabelText(/^Authored Depth/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(await screen.findByText(/Capped by your 7 topic notes left this cycle/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Course \/ Program/)).toHaveAttribute("maxLength", "120");
+  });
+
+  it("renders a normalized subject bound failure inline and preserves the input", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "student-1", role: "USER", profileType: "STUDENT" });
+    (bulkGenerateNotes as jest.Mock).mockRejectedValueOnce(
+      new Error("Subject must be 64 characters or less."),
+    );
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    const rawSubject = `${"x".repeat(61)}-y`;
+    const subjectInput = screen.getByLabelText(/^Subject/);
+    fireEvent.change(subjectInput, { target: { value: rawSubject } });
+    fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
+    fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Prenatal Care" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(await screen.findByText("Subject must be 64 characters or less.")).toBeInTheDocument();
+    expect(subjectInput).toHaveValue(rawSubject);
   });
 
   it.each(["BOARD_EXAM", "PROFESSIONAL"])(

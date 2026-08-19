@@ -103,6 +103,8 @@ export function BulkGenerationPageClient() {
   const [sectionLabel, setSectionLabel] = useState("");
   const [sectionTouched, setSectionTouched] = useState(false);
   const [sectionError, setSectionError] = useState<string | null>(null);
+  const [subjectError, setSubjectError] = useState<string | null>(null);
+  const [courseProgramError, setCourseProgramError] = useState<string | null>(null);
   const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(false);
   const [collectionsError, setCollectionsError] = useState<string | null>(null);
@@ -413,6 +415,8 @@ export function BulkGenerationPageClient() {
     setSubmitting(true);
     setError(null);
     setSectionError(null);
+    setSubjectError(null);
+    setCourseProgramError(null);
     try {
       const response = await bulkGenerateNotes(request);
       setBulkQueuedFlash(response.queuedTopics, response.resultId);
@@ -426,7 +430,11 @@ export function BulkGenerationPageClient() {
       // when a stale client over-queues; surface that message and refresh the quota.
       void refreshQuota();
       const message = submitError instanceof Error ? submitError.message : "Could not queue these notes.";
-      if (message.includes("Section must be 120 characters or less")) {
+      if (message.includes("Subject must be 64 characters or less")) {
+        setSubjectError(message);
+      } else if (message.includes("Course/program must be 120 characters or less")) {
+        setCourseProgramError(message);
+      } else if (message.includes("Section must be 120 characters or less")) {
         setSectionError(message);
       } else {
         setError(message);
@@ -487,8 +495,13 @@ export function BulkGenerationPageClient() {
               id="bulk-subject"
               value={subject}
               suggestions={subjectSuggestions}
-              onChange={handleSubjectChange}
+              onChange={(value) => {
+                setSubjectError(null);
+                handleSubjectChange(value);
+              }}
+              maxLength={64}
             />
+            {subjectError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{subjectError}</p> : null}
           </div>
 
           <div data-testid="bulk-metadata-grid" className="grid gap-4 empty:hidden sm:grid-cols-2">
@@ -578,8 +591,12 @@ export function BulkGenerationPageClient() {
                   id="bulk-course-program"
                   value={courseProgram}
                   suggestions={courseProgramSuggestions}
-                  onChange={setCourseProgram}
+                  onChange={(value) => {
+                    setCourseProgramError(null);
+                    setCourseProgram(value);
+                  }}
                 />
+                {courseProgramError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{courseProgramError}</p> : null}
               </div>
             )}
 

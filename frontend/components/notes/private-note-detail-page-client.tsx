@@ -490,6 +490,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
   const [metadataTagDraft, setMetadataTagDraft] = useState("");
   const [metadataDraft, setMetadataDraft] = useState<NoteMetadataDraft>(EMPTY_METADATA_DRAFT);
+  const [metadataSubjectError, setMetadataSubjectError] = useState<string | null>(null);
+  const [metadataCourseProgramError, setMetadataCourseProgramError] = useState<string | null>(null);
   const [applicableProgramCatalog, setApplicableProgramCatalog] = useState<CourseProgramCatalogItem[]>([]);
   const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
   const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
@@ -1467,6 +1469,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setApplicableProgramIds(savedApplicableProgramIds);
     setApplicableProgramsDirty(false);
     setMetadataTagDraft("");
+    setMetadataSubjectError(null);
+    setMetadataCourseProgramError(null);
     setIsInlineMetadataEditMode(false);
   };
 
@@ -1516,6 +1520,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       ? metadataDraft.learnerLevel || null
       : note.learnerLevel ?? null;
     setSavingMetadata(true);
+    setMetadataSubjectError(null);
+    setMetadataCourseProgramError(null);
     try {
       const updated = await updateNote(note.id, {
         title: normalizeMetadataInput(metadataDraft.title),
@@ -1549,8 +1555,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update note details.";
-      setToastTone("warning");
-      setToast(message);
+      if (message.includes("Subject must be 64 characters or less")) {
+        setMetadataSubjectError(message);
+      } else if (message.includes("Course/program must be 120 characters or less")) {
+        setMetadataCourseProgramError(message);
+      } else {
+        setToastTone("warning");
+        setToast(message);
+      }
     } finally {
       setSavingMetadata(false);
     }
@@ -2130,9 +2142,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     id="note-subject-inline"
                     value={metadataDraft.subject}
                     suggestions={subjectSuggestions}
-                    onChange={(value) => setMetadataDraft((previous) => ({ ...previous, subject: value }))}
+                    onChange={(value) => {
+                      setMetadataSubjectError(null);
+                      setMetadataDraft((previous) => ({ ...previous, subject: value }));
+                    }}
                     placeholder="Choose or type a subject"
+                    maxLength={64}
                   />
+                  {metadataSubjectError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{metadataSubjectError}</p> : null}
                   {/* Live region stays mounted so the advisory is announced when it appears, not just rendered. */}
                   <div aria-live="polite">
                     {canEditAuthoringMetadata
@@ -2168,10 +2185,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         id="note-course-program-inline"
                         value={metadataDraft.courseProgram}
                         suggestions={availableCourseProgramSuggestions}
-                        onChange={(value) => setMetadataDraft((previous) => ({ ...previous, courseProgram: value }))}
+                        onChange={(value) => {
+                          setMetadataCourseProgramError(null);
+                          setMetadataDraft((previous) => ({ ...previous, courseProgram: value }));
+                        }}
                         context="note"
                       />
                     )}
+                    {metadataCourseProgramError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{metadataCourseProgramError}</p> : null}
                   </div>
                 </div> : null}
                 {canEditAuthoringMetadata ? (

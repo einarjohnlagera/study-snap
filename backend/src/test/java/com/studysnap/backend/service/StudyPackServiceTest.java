@@ -31,6 +31,7 @@ import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.OcrDisabledException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
+import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackListItemProjection;
@@ -263,6 +264,25 @@ class StudyPackServiceTest {
     }
 
     @Test
+    void updateMetadata_rejectsSubjectExpandedPastStorageAfterNormalization() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+        studyPack.setTitle("Title");
+        studyPack.setSubject("Subject");
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        String rawSubject = "x".repeat(61) + "-y";
+
+        assertThatThrownBy(() -> studyPackService.updateMetadata(
+                studyPackId.toString(), userId, "Title", rawSubject
+        )).isInstanceOf(SubjectTooLongException.class);
+
+        verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+    }
+
+    @Test
     void createFromText_withDraftNote_marksNoteGenerated_andConsumesGenerationCredit() {
         UUID userId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -376,7 +396,26 @@ class StudyPackServiceTest {
         assertThat(noteCaptor.getValue().getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
     }
 
+    @Test
+    void createFromText_clampsOverlongGeneratedSubjectAndStillPersistsStudyPack() {
+        UUID userId = UUID.randomUUID();
+        String generatedSubject = "A generated grouping subject with several descriptive words near the storage boundary and beyond";
+        stubTextGeneration(userId, null, generatedSubject);
+
+        studyPackService.createFromText(new CreateStudyPackRequest("pasted notes", null), userId);
+
+        ArgumentCaptor<StudyPackEntity> studyPackCaptor = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(studyPackRepository).save(studyPackCaptor.capture());
+        assertThat(studyPackCaptor.getValue().getSubject())
+                .hasSizeLessThanOrEqualTo(64)
+                .isEqualTo("A generated grouping subject with several descriptive words near");
+    }
+
     private void stubTextGeneration(UUID userId, UserEntity owner) {
+        stubTextGeneration(userId, owner, "Biology");
+    }
+
+    private void stubTextGeneration(UUID userId, UserEntity owner, String generatedSubject) {
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
@@ -391,7 +430,7 @@ class StudyPackServiceTest {
                 .thenReturn(new GeneratedStudyPackContent(
                         "Generated title",
                         "Generated summary",
-                        "Biology",
+                        generatedSubject,
                         List.of("cells"),
                         List.of("Cell membrane"),
                         List.of(new QuizItem(

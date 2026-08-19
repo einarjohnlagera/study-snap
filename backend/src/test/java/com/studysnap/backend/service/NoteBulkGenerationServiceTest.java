@@ -26,6 +26,7 @@ import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
+import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.repository.BulkGenerationResultRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
@@ -141,6 +142,29 @@ class NoteBulkGenerationServiceTest {
 
         verify(userRepository, never()).findById(userId);
         verify(noteService, never()).create(any(UpsertNoteRequest.class), any(UUID.class));
+    }
+
+    @Test
+    void queueBatch_rejectsSubjectExpandedPastStorageBeforeDispatchOrQuotaUse() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        String rawSubject = "x".repeat(61) + "-y";
+        BulkGenerateNotesRequest request = new BulkGenerateNotesRequest(
+                rawSubject,
+                List.of("Prenatal Care"),
+                false,
+                List.of(CATALOG_PROGRAM_ID),
+                null,
+                null,
+                null
+        );
+
+        assertThatThrownBy(() -> service.queueBatch(request, userId, true))
+                .isInstanceOf(SubjectTooLongException.class);
+
+        verify(taskDispatcher, never()).execute(any(Runnable.class));
+        verify(noteService, never()).create(any(UpsertNoteRequest.class), any(UUID.class));
+        verify(mePlanService, never()).getNoteGenerationsRemaining(any(UUID.class));
     }
 
     @Test
@@ -645,6 +669,29 @@ class NoteBulkGenerationServiceTest {
                         "Invalid Overview",
                         TestLlmInvalidOutputException.CODE,
                         INVALID_OVERVIEW_MESSAGE
+                )
+        );
+    }
+
+    @Test
+    void queueBatch_persistsNamedSubjectBoundReasonInsteadOfUnexpectedError() {
+        UUID userId = UUID.randomUUID();
+        mockUser(userId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = request(List.of("Bounded Topic"), COURSE_PROGRAM, false);
+        StudyPackGenerationContext context = context(LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        when(generationContextResolver.resolveForBulkGeneration(
+                userId, List.of(CATALOG_PROGRAM_ID), null, SUBJECT, null, null
+        )).thenReturn(context);
+        when(llmStudyPackService.generateNoteFromTopic("Bounded Topic", context)).thenReturn("Generated content");
+        when(noteService.create(any(UpsertNoteRequest.class), eq(userId))).thenThrow(new SubjectTooLongException());
+
+        service.queueBatch(request, userId, false);
+
+        assertThat(savedReceipt().getFailedTopicReasons()).containsExactly(
+                new BulkGenerationFailureReason(
+                        "Bounded Topic",
+                        "SUBJECT_TOO_LONG",
+                        "Subject must be 64 characters or less."
                 )
         );
     }
