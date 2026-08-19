@@ -530,7 +530,7 @@ describe("StudyPlanBuilderPageClient", () => {
     ], { parentCollectionId: null, childCount: 0 }));
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Set sections from note subjects" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use subjects as sections" }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(/all 2 notes/i)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Set sections" }));
@@ -550,19 +550,20 @@ describe("StudyPlanBuilderPageClient", () => {
       { ...collectionItem("note-1", "Loose Note", 0), subject: " " },
     ], { parentCollectionId: null, childCount: 0 }));
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
-    expect(await screen.findByRole("button", { name: "Set sections from note subjects" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Use subjects as sections" })).toBeDisabled();
   });
 
-  it("keeps the set-sections button to a two-word visible label", async () => {
-    // Button copy is capped at two words; the longer phrasing lives in the accessible name and
-    // the confirmation dialog, not on the button face.
+  it("names the bulk shortcut by its source, not by the generic capability", async () => {
+    // "Set sections" would name the capability and read as THE way sections get set, when the
+    // general mechanism is the per-note combobox. Two visible words, per the button-label rule;
+    // the target lives in the accessible name and the confirmation dialog.
     (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
       { ...collectionItem("note-1", "Skeletal System", 0), subject: "Biology" },
     ], { parentCollectionId: null, childCount: 0 }));
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
-    const trigger = await screen.findByRole("button", { name: "Set sections from note subjects" });
-    expect(trigger).toHaveTextContent(/^Set sections$/);
+    const trigger = await screen.findByRole("button", { name: "Use subjects as sections" });
+    expect(trigger).toHaveTextContent(/^Use subjects$/);
   });
 
   it("starts sections expanded and collapses them at desktop widths", async () => {
