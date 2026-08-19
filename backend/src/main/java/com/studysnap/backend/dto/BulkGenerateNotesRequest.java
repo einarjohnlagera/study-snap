@@ -19,7 +19,9 @@ public record BulkGenerateNotesRequest(
         String courseProgramText,
         String domainContext,
         String learnerLevel,
-        UUID collectionId
+        UUID collectionId,
+        @Size(max = 120, message = "Section must be 120 characters or less.")
+        String sectionLabel
 ) {
     public BulkGenerateNotesRequest(
             String subject,
@@ -29,7 +31,7 @@ public record BulkGenerateNotesRequest(
             String domainContext,
             String learnerLevel
     ) {
-        this(subject, topics, makePublic, List.of(), courseProgramText, domainContext, learnerLevel, null);
+        this(subject, topics, makePublic, List.of(), courseProgramText, domainContext, learnerLevel, null, null);
     }
 
     public BulkGenerateNotesRequest(
@@ -42,6 +44,6 @@ public record BulkGenerateNotesRequest(
             String learnerLevel
     ) {
         this(subject, topics, makePublic, courseProgramIds, courseProgramText, domainContext,
-                learnerLevel, null);
+                learnerLevel, null, null);
     }
 }

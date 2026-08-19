@@ -32,6 +32,8 @@ Full assessment: `docs/claude-plans/subject-plan-sections-assessment.md` — two
 6. **"Set sections from note subjects" Builder action (frontend).** One button, no API and no migration: map each item's `label` from its already-exposed `subject` through the existing `persistLeafItems`. Provably safe on length — `notes.subject` is `VARCHAR(64)` against a 120-char label cap, so it can never 400.
 7. **Desktop section collapse (frontend).** `LeafSectionBlock`'s collapse is `sm:hidden` / `hidden sm:block` — it exists **only below 640px**, so on desktop, where the curator works, a 77-note plan is an uncollapsible 77-card page.
 
+8. **Request bounds exceed column bounds — an unrelated latent defect, scoped in (backend + frontend).** `BulkGenerateNotesRequest.subject` is `@Size(max = 160)` against `notes.subject VARCHAR(64)`; `courseProgramText` is `@Size(max = 160)` against `course_program VARCHAR(120)`; and `UpsertNoteRequest` / `UpdateStudyPackMetadataRequest` bound neither field **at all**. Nothing truncates on the way — not the DTO, not `SubjectNormalizationUtils`, and not the frontend, where `SubjectCombobox` passes no `maxLength` and `SuggestionCombobox` does not accept one.
+
 **Owed alongside, and cheap:** Builder/learner grouping parity (unsectioned bucket pinned last, non-editable, suppressed when it is the only group); naming the bucket **"Not in a section"**; the `CollectionLabels` teacher-terminology decision; removing the unreachable empty-section placeholder; and either one analytics event on section assignment **or** a restated bulk-Move deferral.
 
 ### Why items 6 and 7 are not optional polish
@@ -39,6 +41,17 @@ Full assessment: `docs/claude-plans/subject-plan-sections-assessment.md` — two
 - **A plan generated after item 5 ships:** every batch lands labelled, contiguous, in generation order. **Repair interactions: zero.** This is why multi-select is correctly deferred.
 - **Any batch that lands unsectioned** — notes generated before this release, notes added via the picker, a batch where the plan name was typed as the subject: per note the curator scrolls, opens the combobox, types, and waits on a 500 ms debounce → a whole-collection `PUT` → `refreshBuilder`, which re-fetches the collection **and the entire note library**, with every section disabled meanwhile. **~230 UI actions and 77 serialized, UI-blocking round trips for a 77-note plan. Item 6 collapses that to one.**
 - **Item 7 compounds item 5:** `addItems` appends at `max(position)+1`, so **section order *is* generation order** — repairing a wrong order means dragging a section header across exactly the page that cannot collapse.
+
+### Why item 8 rides this release
+
+**Verified empirically against the running PostgreSQL, not inferred:** inserting a 65-character subject returns `value too long for type character varying(64)`. Two properties make it worth fixing now rather than filing:
+
+- **Normalization *grows* the string, so annotations alone cannot fix it.** `normalizeForStorage` expands a bare `-` into ` – `, so a 63-character input with one hyphen normalizes to 65 and fails a `@Size(max = 64)` it had already passed. The bound must be enforced **after** normalization — a fix that only adds `@Size` looks right, passes a naive 65-character test, and still ships the bug.
+- **It presents today as exactly the gap `v0.87.0` existed to close.** A `DataIntegrityViolationException` is not an `AppException`, so under `v0.87.0`'s attribution rules the curator sees **every topic in the batch failing with `UNEXPECTED_ERROR`** and no reason. Making it a named exception turns a mystery batch failure into a message, and setting the request bound to the storage bound rejects it **before the LLM call bills against quota**.
+
+**⚠️ The fix is deliberately NOT uniform: user input rejects, generated output clamps.** `normalizeSubject` serves both. A learner cannot fix an over-long *LLM-generated* subject, and rejecting one would destroy a finished Study Pack after quota was already spent — the failure shape `v0.83.1` is on record for. Generated subjects are clamped to 64; user-supplied ones are rejected with a named `AppException` subclass.
+
+**⚠️ No migration, no column widening, no row rewritten.** Aligning down is correct: the bound has been 64 since `V11`, and the longest subject observed in the database is **44**, with none over 55. Widening is one-way. `notes.title` and `study_packs.title` are `text` and are not touched.
 
 ### Anti-drift
 
@@ -53,6 +66,8 @@ Full assessment: `docs/claude-plans/subject-plan-sections-assessment.md` — two
 - **"Remove" never means canonical note deletion**, and section deletion is not destructive to notes — they fall to the unsectioned bucket, and the copy should say so rather than warn.
 - **No runtime LLM for Sections, and no automatic taxonomy inference from note metadata.** Item 6 is an explicit, curator-triggered action over a field they already authored.
 - **Never surface the word "label" in UI copy.**
+- **⚠️ Item 8 is NOT a Sections change and must not be documented as one.** It ships in its own PR, sequenced first, and it does not belong in the Sections anti-drift block in `AGENTS.md` — filing it there would confuse the next reader about what the "no migration" model decision covered.
+
 
 ### Explicitly out
 
@@ -66,7 +81,13 @@ The Engineering Mathematics plan was already recovered by `docs/claude-plans/eng
 
 ### Shipped
 
-_(nothing yet)_
+- **Section-aware bulk generation (PR 1)** — bulk batches can carry an optional 120-character section assignment into the selected note-accepting plan. The visible field is pre-filled from subject but remains editable, stops tracking after curator input, is omitted without a target plan, and persists successful notes into the requested section without changing batch failure/idempotency behavior.
+- **Builder section authoring (PR 2)** — the Builder now creates sections through a debounced per-note combobox, reserves and trails the synthetic **Not in a section** bucket, confirms rename merges, supports one confirmed set-from-subjects pass, and collapses sections at desktop sizes. Profile-aware Section/Part copy, assignment analytics, the rename-card remount guard, case-variant snapping, and corrected learner/Builder documentation ship with it; no schema or hierarchy change was added.
+
+### Known limitations
+
+- **A custom section is not carried through a bulk retry.** `bulk_generation_result` has no column for it, so `retryBulkFailures` cannot repopulate the retry stash; the section field restores **empty** and the curator re-enters it if they want one. Closing this needs a receipt column, and this release ships no migration. ⚠️ `BulkGenerationRetryStash.sectionLabel` and its reader do exist and round-trip — the gap is that no production writer populates them, so the round-trip test passes without exercising the real path. **The audit's first version of this restored the section from the batch *subject* instead, which was a live defect rather than a limitation:** it would have sectioned every retried batch by subject, including batches whose curator deliberately left the section blank, inventing an assignment they never made. Fixed before merge and pinned by `does not invent a section when the retry stash carries none`, mutation-verified.
+- **The per-note section combobox's debounce depends on an unmemoized handler, and that is load-bearing rather than sloppy.** `handleLeafLabelChange` is recreated each render, so every parent re-render re-runs the debounce effect, clears the pending timer and re-captures fresh `leafItems` / `leafSections`. Because `persistLeafItems` calls `setMutationKind` before awaiting, a second card's pending write is re-armed against post-write state rather than the state captured before the first write — which matters because `validateSubmittedSetMatchesCurrent` compares the note **set**, not labels, and so would not reject a stale-label submission. **Memoizing the handler would remove that protection**, so it is deliberately left alone. The residual window (two debounces landing with no intervening render) is not known to be reachable and is recorded rather than closed.
 
 ## v0.87.0 - Failure Attribution
 

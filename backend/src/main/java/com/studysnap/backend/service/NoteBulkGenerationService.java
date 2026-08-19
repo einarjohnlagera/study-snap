@@ -246,7 +246,7 @@ public class NoteBulkGenerationService {
                     exception
             );
         } finally {
-            addCreatedNotesToCollection(batch.collectionId(), createdNoteIds, ownerUserId);
+            addCreatedNotesToCollection(batch.collectionId(), batch.sectionLabel(), createdNoteIds, ownerUserId);
             try {
                 bulkGenerationResultService.recordResult(
                         resultId,
@@ -369,7 +369,12 @@ public class NoteBulkGenerationService {
         return note.id();
     }
 
-    private void addCreatedNotesToCollection(UUID collectionId, List<String> noteIds, UUID ownerUserId) {
+    private void addCreatedNotesToCollection(
+            UUID collectionId,
+            String sectionLabel,
+            List<String> noteIds,
+            UUID ownerUserId
+    ) {
         if (collectionId == null || noteIds.isEmpty()) {
             return;
         }
@@ -379,7 +384,8 @@ public class NoteBulkGenerationService {
             noteCollectionService.addGeneratedItems(
                     collectionId,
                     ownerUserId,
-                    noteIds.stream().map(UUID::fromString).toList()
+                    noteIds.stream().map(UUID::fromString).toList(),
+                    sectionLabel
             );
         } catch (RuntimeException exception) {
             log.warn(
@@ -463,7 +469,8 @@ public class NoteBulkGenerationService {
                 request.makePublic(),
                 List.copyOf(items),
                 rejectedTopics,
-                request.collectionId()
+                request.collectionId(),
+                request.collectionId() == null ? null : normalizeOptionalText(request.sectionLabel())
         );
     }
 
@@ -539,7 +546,8 @@ public class NoteBulkGenerationService {
             boolean makePublic,
             List<BulkGenerationItem> items,
             int rejectedTopics,
-            UUID collectionId
+            UUID collectionId,
+            String sectionLabel
     ) {
     }
 }
