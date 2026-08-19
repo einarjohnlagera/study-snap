@@ -1105,6 +1105,27 @@ export type LinkedLearnerResponse = {
   guardianConsentRecorded: boolean;
 };
 
+export type LinkedLearnerProgressResponse = {
+  relationshipId: string;
+  learnerDisplayName: string;
+  quizPerformance: MasterySnapshotResponse;
+  engagement: StudyEngagementResponse;
+  readiness: {
+    totalConcepts: number;
+    masteredConcepts: number;
+    dueConcepts: number;
+    notStartedConcepts: number;
+    readinessPercentage: number;
+  };
+  collectionProgress: {
+    collectionCount: number;
+    totalItems: number;
+    readyItems: number;
+    practicedItems: number;
+  };
+  hasActivity: boolean;
+};
+
 export type UnsubscribeCategory =
   | "MARKETING"
   | "WEEKLY_SUMMARY"
@@ -5357,6 +5378,17 @@ export async function getLinkedLearners(): Promise<LinkedLearnerResponse[]> {
     true,
   );
   return parseApiResponse<LinkedLearnerResponse[]>(response, "Could not load your connections.");
+}
+
+export async function getLinkedLearnerProgress(
+  relationshipId: string,
+): Promise<LinkedLearnerProgressResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/${relationshipId}/progress`,
+    { headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerProgressResponse>(response, "Could not load this learner's progress.");
 }
 
 export async function acceptLinkedLearner(
