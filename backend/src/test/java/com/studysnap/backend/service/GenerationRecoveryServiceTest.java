@@ -13,6 +13,7 @@ import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -84,10 +85,16 @@ class GenerationRecoveryServiceTest {
     void recoverStaleExamQuestionPools_generatingPastBoundBecomesFailed() {
         ExamQuestionPoolEntity pool = pool(STATUS_GENERATING, OffsetDateTime.now().minusHours(2));
         stubPoolCandidate(pool);
+        OffsetDateTime sweepStartedAt = OffsetDateTime.now();
 
         GenerationRecoveryService.SurfaceRecoveryResult result = service.recoverStaleExamQuestionPools();
+        OffsetDateTime sweepFinishedAt = OffsetDateTime.now();
 
-        assertThat(pool.getGenerationStatus()).isEqualTo(STATUS_FAILED);
+        ArgumentCaptor<ExamQuestionPoolEntity> savedPoolCaptor = ArgumentCaptor.forClass(ExamQuestionPoolEntity.class);
+        verify(examQuestionPoolRepository).save(savedPoolCaptor.capture());
+        ExamQuestionPoolEntity persistedPool = savedPoolCaptor.getValue();
+        assertThat(persistedPool.getGenerationStatus()).isEqualTo(STATUS_FAILED);
+        assertThat(persistedPool.getGenerationStatusAt()).isBetween(sweepStartedAt, sweepFinishedAt);
         assertThat(result.recoveredCount()).isEqualTo(1);
         assertThat(result.maxRecoveredAge().toMinutes()).isGreaterThanOrEqualTo(119);
     }
@@ -162,13 +169,15 @@ class GenerationRecoveryServiceTest {
 
     @Test
     void recoverStaleExamQuestionPools_oldCreatedAtButRecentGenerationStatusAtIsNotSwept() {
-        ExamQuestionPoolEntity reusedPool = pool(STATUS_PENDING, OffsetDateTime.now().minusMinutes(5));
+        OffsetDateTime originalStatusAt = OffsetDateTime.now().minusMinutes(5);
+        ExamQuestionPoolEntity reusedPool = pool(STATUS_PENDING, originalStatusAt);
         reusedPool.setCreatedAt(OffsetDateTime.now().minusMonths(6));
         stubPoolCandidate(reusedPool);
 
         GenerationRecoveryService.SurfaceRecoveryResult result = service.recoverStaleExamQuestionPools();
 
         assertThat(reusedPool.getGenerationStatus()).isEqualTo(STATUS_PENDING);
+        assertThat(reusedPool.getGenerationStatusAt()).isEqualTo(originalStatusAt);
         assertThat(result.recoveredCount()).isZero();
         verify(examQuestionPoolRepository, never()).save(any());
     }

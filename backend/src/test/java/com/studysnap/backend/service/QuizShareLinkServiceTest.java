@@ -7,17 +7,13 @@ import com.studysnap.backend.dto.QuizShareLinkResponse;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.QuizShareLinkEntity;
-import com.studysnap.backend.entity.UserEntity;
-import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.QuizShareLinkLimitExceededException;
 import com.studysnap.backend.exception.QuizShareLinkNotAllowedException;
 import com.studysnap.backend.exception.QuizShareLinkNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuizShareLinkRepository;
-import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +32,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,13 +48,13 @@ class QuizShareLinkServiceTest {
     @Mock
     private NoteRepository noteRepository;
     @Mock
-    private UserRepository userRepository;
-    @Mock
     private QuizShareLimitService quizShareLimitService;
     @Mock
     private UserUsageService userUsageService;
     @Mock
     private AuthService authService;
+    @Mock
+    private OnboardingGuardService onboardingGuardService;
 
     private QuizShareLinkService quizShareLinkService;
 
@@ -66,7 +64,7 @@ class QuizShareLinkServiceTest {
                 quizShareLinkRepository,
                 generatedQuizRepository,
                 noteRepository,
-                userRepository,
+                onboardingGuardService,
                 quizShareLimitService,
                 userUsageService,
                 authService,
@@ -75,11 +73,10 @@ class QuizShareLinkServiceTest {
     }
 
     @Test
-    void createShareLinkPersistsTokenAndRecordsUsage() {
+    void nonTeacherCanCreateShareLinkAndRecordUsage() {
         UUID ownerUserId = UUID.randomUUID();
         UUID generatedQuizId = UUID.randomUUID();
         GeneratedQuizEntity generatedQuiz = buildGeneratedQuiz(generatedQuizId, ownerUserId, UUID.randomUUID());
-        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(buildTeacher(ownerUserId)));
         when(generatedQuizRepository.findByIdAndOwnerUserId(generatedQuizId, ownerUserId)).thenReturn(Optional.of(generatedQuiz));
         when(quizShareLinkRepository.findFirstByGeneratedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(generatedQuizId, ownerUserId))
                 .thenReturn(Optional.empty());
@@ -88,7 +85,9 @@ class QuizShareLinkServiceTest {
 
         QuizShareLinkResponse response = quizShareLinkService.createShareLink(generatedQuizId, ownerUserId);
 
-        verify(authService).requireEmailVerified(ownerUserId);
+        var orderedGuards = inOrder(authService, onboardingGuardService);
+        orderedGuards.verify(authService).requireEmailVerified(ownerUserId);
+        orderedGuards.verify(onboardingGuardService).assertProfileComplete(ownerUserId);
         verify(quizShareLimitService).assertShareLinkQuotaNotExceeded(ownerUserId);
         verify(userUsageService).incrementQuizShareLinkCreated(eq(ownerUserId), any(OffsetDateTime.class));
         assertThat(response.token()).hasSize(16);
@@ -106,7 +105,6 @@ class QuizShareLinkServiceTest {
         UUID ownerUserId = UUID.randomUUID();
         UUID generatedQuizId = UUID.randomUUID();
         GeneratedQuizEntity generatedQuiz = buildGeneratedQuiz(generatedQuizId, ownerUserId, UUID.randomUUID());
-        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(buildTeacher(ownerUserId)));
         when(generatedQuizRepository.findByIdAndOwnerUserId(generatedQuizId, ownerUserId)).thenReturn(Optional.of(generatedQuiz));
         when(quizShareLinkRepository.findFirstByGeneratedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(generatedQuizId, ownerUserId))
                 .thenReturn(Optional.empty());
@@ -127,7 +125,6 @@ class QuizShareLinkServiceTest {
         UUID generatedQuizId = UUID.randomUUID();
         QuizShareLinkEntity existing = buildLink(generatedQuizId, ownerUserId, TEST_TOKEN, true);
         GeneratedQuizEntity generatedQuiz = buildGeneratedQuiz(generatedQuizId, ownerUserId, UUID.randomUUID());
-        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(buildTeacher(ownerUserId)));
         when(generatedQuizRepository.findByIdAndOwnerUserId(generatedQuizId, ownerUserId)).thenReturn(Optional.of(generatedQuiz));
         when(quizShareLinkRepository.findFirstByGeneratedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(generatedQuizId, ownerUserId))
                 .thenReturn(Optional.of(existing));
@@ -153,11 +150,69 @@ class QuizShareLinkServiceTest {
     void toggleShareLinkRejectsNonOwner() {
         UUID callerUserId = UUID.randomUUID();
         QuizShareLinkEntity link = buildLink(UUID.randomUUID(), UUID.randomUUID(), TEST_TOKEN, true);
-        when(userRepository.findById(callerUserId)).thenReturn(Optional.of(buildTeacher(callerUserId)));
         when(quizShareLinkRepository.findByToken(TEST_TOKEN)).thenReturn(Optional.of(link));
 
         assertThatThrownBy(() -> quizShareLinkService.toggleShareLink(TEST_TOKEN, callerUserId))
                 .isInstanceOf(QuizShareLinkNotAllowedException.class);
+    }
+
+    @Test
+    void nonTeacherCanFetchOwnShareLink() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID generatedQuizId = UUID.randomUUID();
+        QuizShareLinkEntity link = buildLink(generatedQuizId, ownerUserId, TEST_TOKEN, true);
+        when(quizShareLinkRepository.findFirstByGeneratedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(
+                generatedQuizId,
+                ownerUserId
+        )).thenReturn(Optional.of(link));
+
+        QuizShareLinkResponse response = quizShareLinkService.getShareLinkByQuizId(generatedQuizId, ownerUserId);
+
+        verify(onboardingGuardService).assertProfileComplete(ownerUserId);
+        assertThat(response.token()).isEqualTo(TEST_TOKEN);
+        assertThat(response.isActive()).isTrue();
+    }
+
+    @Test
+    void nonTeacherCanToggleOwnShareLink() {
+        UUID ownerUserId = UUID.randomUUID();
+        QuizShareLinkEntity link = buildLink(UUID.randomUUID(), ownerUserId, TEST_TOKEN, true);
+        when(quizShareLinkRepository.findByToken(TEST_TOKEN)).thenReturn(Optional.of(link));
+        when(quizShareLinkRepository.save(link)).thenReturn(link);
+
+        QuizShareLinkResponse response = quizShareLinkService.toggleShareLink(TEST_TOKEN, ownerUserId);
+
+        var orderedGuards = inOrder(authService, onboardingGuardService);
+        orderedGuards.verify(authService).requireEmailVerified(ownerUserId);
+        orderedGuards.verify(onboardingGuardService).assertProfileComplete(ownerUserId);
+        assertThat(response.isActive()).isFalse();
+    }
+
+    @Test
+    void createShareLinkStillRequiresEmailVerification() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID generatedQuizId = UUID.randomUUID();
+        IllegalStateException emailVerificationFailure = new IllegalStateException("email verification required");
+        doThrow(emailVerificationFailure).when(authService).requireEmailVerified(ownerUserId);
+
+        assertThatThrownBy(() -> quizShareLinkService.createShareLink(generatedQuizId, ownerUserId))
+                .isSameAs(emailVerificationFailure);
+
+        verify(onboardingGuardService, never()).assertProfileComplete(any(UUID.class));
+        verify(generatedQuizRepository, never()).findByIdAndOwnerUserId(any(UUID.class), any(UUID.class));
+    }
+
+    @Test
+    void toggleShareLinkStillRequiresEmailVerification() {
+        UUID ownerUserId = UUID.randomUUID();
+        IllegalStateException emailVerificationFailure = new IllegalStateException("email verification required");
+        doThrow(emailVerificationFailure).when(authService).requireEmailVerified(ownerUserId);
+
+        assertThatThrownBy(() -> quizShareLinkService.toggleShareLink(TEST_TOKEN, ownerUserId))
+                .isSameAs(emailVerificationFailure);
+
+        verify(onboardingGuardService, never()).assertProfileComplete(any(UUID.class));
+        verify(quizShareLinkRepository, never()).findByToken(anyString());
     }
 
     @Test
@@ -203,11 +258,4 @@ class QuizShareLinkServiceTest {
         return link;
     }
 
-    private UserEntity buildTeacher(UUID userId) {
-        UserEntity user = new UserEntity();
-        user.setId(userId);
-        user.setProfileType(ProfileType.TEACHER);
-        user.setRole(UserRole.USER);
-        return user;
-    }
 }
