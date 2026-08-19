@@ -122,9 +122,49 @@ Only use a two-column card layout when both columns have roughly comparable cont
 
 ---
 
+## Button Labels
+
+**Visible button copy is one or two words.** A button says what it does; it does not explain itself.
+
+| Do | Don't |
+|---|---|
+| `Add notes` | `Add notes to this plan` |
+| `Set sections` | `Set sections from note subjects` |
+| `Remove` | `Remove this note from the plan` |
+
+**Shape:** verb, or verb + noun. Keep sibling buttons parallel — `Add notes` beside `Set sections`, not `Add notes` beside `Setting sections from subjects`.
+
+### Where the explanation goes instead
+
+Long labels are almost always a symptom of an explanation with nowhere to live. Put it in one of these, in order of preference:
+
+1. **The confirmation dialog**, if the action already has one. This is the best home for anything destructive or wide-reaching — it appears at the decision point and can be cancelled. Name the source and the blast radius there: *"Set sections from note subjects?" / "This will overwrite the current section assignment for all 77 notes in this plan."*
+2. **Supporting text already in the toolbar or card**, if one exists.
+3. **An `aria-label`** — see below. This is for assistive tech, not a substitute for either of the above.
+
+**Do not add a hover tooltip for this.** There is no generic tooltip primitive, and `components/ui/guidance-tip.tsx` is the *one-time* contextual tip governed by `pickActiveGuidance()` — do not repurpose it as a hover explainer.
+
+### When the short label loses necessary meaning
+
+Add an `aria-label` that **extends** the visible text rather than replacing it:
+
+```tsx
+<Button aria-label="Set sections from note subjects">Set sections</Button>
+```
+
+Two rules for this:
+
+- **The accessible name must contain the visible label** — WCAG 2.5.3 (*Label in Name*). `Set sections from note subjects` contains `Set sections`, so it passes; `Apply subject grouping` would not.
+- **Use it when a screen reader user would otherwise lose context they cannot recover.** They cannot see a confirmation dialog until they have already activated the button, so the accessible name is where that context belongs.
+
+It also disambiguates a trigger from its own dialog's confirm button when both would otherwise read the same.
+
+---
+
 ## Summary: before implementing any new page
 
 1. Does the page need a back link? → `<BackLink />` above the header, label = destination name only, no "Back to" prefix.
 2. Does the page have a header? → `<PageHeader eyebrow="..." title="..." description="..." />`.
 3. Does the section have a "view all" link? → different destination = header-inline blue; same content = below-card blue.
 4. Is this a nav item? → MAIN for learning, ACCOUNT for account management.
+5. Does it have buttons? → one or two words of visible copy; the explanation goes in the confirmation dialog, and an `aria-label` extends the visible label when meaning would otherwise be lost.
