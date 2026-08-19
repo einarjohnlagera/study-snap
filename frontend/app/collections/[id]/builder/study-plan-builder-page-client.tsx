@@ -1906,10 +1906,15 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
               <Button
                 type="button"
                 variant="outline"
+                // States the action and the source it pulls from. "Set sections" would name the
+                // generic capability and read as THE way sections get set, when the general
+                // mechanism is the per-note combobox below ("Choose or type a section"); this is
+                // one bulk shortcut. Needs no aria-label: the visible label already carries the
+                // intent, and it no longer collides with the dialog's own confirm button.
                 onClick={() => setSetSectionsConfirmOpen(true)}
                 disabled={mutationInProgress || !hasNonBlankLeafSubject}
               >
-                Set {labels.sectionSingular.toLowerCase()}s from note subjects
+                Group by subject
               </Button>
               <Button type="button" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
                 <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
