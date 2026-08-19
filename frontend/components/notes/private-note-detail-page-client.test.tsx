@@ -525,6 +525,30 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText("Medicine")).toBeInTheDocument();
   });
 
+  it("gives a non-teacher a route to create a quiz for someone else", async () => {
+    // v0.89.0 opened share-link creation to every onboarded user, but the control that PRODUCES a
+    // generated quiz lived only in the teacher branch — so the population the change was made for
+    // had no way to reach it and the backend fix reached nobody. A cold pressure test caught it at
+    // signoff. This pins the route open.
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByRole("button", { name: /Quiz for someone/i })).toBeInTheDocument();
+    // The learner's own practice entry points must still be there — this adds a route, it does not
+    // replace the practice row.
+    expect(screen.getByRole("button", { name: /Start Quick Review/i })).toBeInTheDocument();
+  });
+
   it("still gives a learner an editable Course / Program when the note is not shadowed", async () => {
     // The ordinary learner case, which lost coverage when the default mock started returning
     // courseProgramShadowed: true for every test. It also proves the #note-course-program-inline

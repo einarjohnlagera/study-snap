@@ -375,11 +375,11 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Quiz Preview</p>
                 <h1 className="text-2xl font-semibold sm:text-3xl">{noteTitle}</h1>
                 <p className="text-sm text-foreground/75">
-                  Review the generated quiz with answers and explanations before exporting it for class use.
+                  Review the generated quiz with answers and explanations before you share it.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full border border-blue-500/30 bg-blue-500/5 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
-                    Generated Quiz - Ready for export
+                    Generated Quiz - Ready to share
                   </span>
                   <span className="text-xs text-foreground/65">{generatedQuestionCountLabel}</span>
                 </div>
