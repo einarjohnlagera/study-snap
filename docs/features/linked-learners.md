@@ -20,7 +20,7 @@ Live duplicate rows for the same supporter → learner direction are prevented b
 
 ## Invitation privacy
 
-Invitations are addressed by normalized email. The API always returns the same generic response for an active account, an unknown email and an inactive account. This keeps the authenticated endpoint from becoming an account-existence oracle.
+Invitations are addressed by normalized email. The API always returns the same generic response for an active account, an unknown email and an inactive account. **⚠️ This is NOT a full anonymity boundary, and the doc previously overclaimed here.** The *response* is identical, but a real account also writes a `PENDING` row that then appears in the inviter's own list, so account existence remains observable to an authenticated caller. The counterparty's **display name is withheld until the link is actually accepted**, so the list no longer harvests names — but existence still leaks. The durable fix is email-keyed invitations; see the `v0.89.0` Known limitations in `RELEASES.md`.
 
 For a real active account, NoteLib stores the pending invitation before attempting email delivery. Delivery uses the shared email service and template mechanism. A delivery failure is logged and does not roll back the invitation; sending the same invitation again provides a retry path without creating a second live row.
 

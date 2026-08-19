@@ -37,6 +37,10 @@ export default function LinkedLearnerProgressPage() {
       })
       .catch((loadError: unknown) => {
         if (active) {
+          // Clear the previous learner's numbers. The error card and the stat grid are independent
+          // conditionals, so without this a failed load for learner B renders "unavailable" ABOVE
+          // learner A's still-mounted stats, under a header naming B.
+          setProgress(null);
           setError(loadError instanceof Error && loadError.message
             ? loadError.message
             : "This learner's progress is not available.");
