@@ -124,15 +124,27 @@ Only use a two-column card layout when both columns have roughly comparable cont
 
 ## Button Labels
 
-**Visible button copy is one or two words.** A button says what it does; it does not explain itself.
+**Prefer one or two words. Four is the hard cap.** A button says what it does; it does not explain itself.
 
 | Do | Don't |
 |---|---|
 | `Add notes` | `Add notes to this plan` |
-| `Set sections` | `Set sections from note subjects` |
+| `Group by subject` | `Set sections from note subjects` |
 | `Remove` | `Remove this note from the plan` |
 
-**Shape:** verb, or verb + noun. Keep sibling buttons parallel — `Add notes` beside `Set sections`, not `Add notes` beside `Setting sections from subjects`.
+**Shape:** verb, verb + noun, or verb + qualifier. Keep sibling buttons parallel — `Group by subject` beside `Add notes`, not beside `Setting sections from subjects`.
+
+### Why the cap is a layout rule, not a style preference
+
+**Mobile toolbars are the binding constraint.** Action buttons share a row with their siblings at roughly 390 CSS px, so a long label either pushes the primary action onto its own line or squeezes it. Toolbar containers use `flex-wrap`, so an over-long label **wraps rather than overflows** — nothing breaks. The cap is therefore about keeping the row intact and the primary action prominent, not about preventing damage.
+
+**Check any label over two words on a ~390px viewport before shipping it.** That is the test the cap exists to approximate.
+
+### Do not buy shortness with ambiguity
+
+Within the budget, the clearest label wins — a word spent on being unambiguous beats a word saved on being wrong.
+
+**Name the action, not the capability.** A bulk shortcut labelled with the generic capability reads as *the* way to do the thing and hides the general mechanism. `Set sections` failed this way: it named the capability, while the real way to set one note's section is the per-note combobox beside it. `Group notes` fails harder — it drops the qualifier that makes it a specific shortcut, and collides with the surrounding copy, which already says the notes are grouped. `Group by subject` costs a third word and states the intent exactly.
 
 ### Where the explanation goes instead
 
@@ -167,4 +179,4 @@ It also disambiguates a trigger from its own dialog's confirm button when both w
 2. Does the page have a header? → `<PageHeader eyebrow="..." title="..." description="..." />`.
 3. Does the section have a "view all" link? → different destination = header-inline blue; same content = below-card blue.
 4. Is this a nav item? → MAIN for learning, ACCOUNT for account management.
-5. Does it have buttons? → one or two words of visible copy; the explanation goes in the confirmation dialog, and an `aria-label` extends the visible label when meaning would otherwise be lost.
+5. Does it have buttons? → one or two words preferred and four the hard cap, naming the action rather than the capability; check anything longer than two words at ~390px; the explanation goes in the confirmation dialog, and an `aria-label` extends the visible label when meaning would otherwise be lost.
