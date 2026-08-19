@@ -2,30 +2,30 @@
 
 ## Goal
 
-Shareable Student Quiz Links let Teacher and Admin users distribute generated quizzes through a public `/quiz/{token}` URL. Students can take the quiz without creating an account, see server-validated results at the end, and then sign up to keep studying.
+Shareable Quiz Links let any onboarded user give a generated quiz to someone through a public `/quiz/{token}` URL. The recipient can take the quiz without creating an account, see server-validated results at the end, and then sign up to keep studying.
 
-## Teacher Flow
+## Sharing Flow
 
-Teachers generate a quiz from a note, review it on the quiz preview page, then use the `Share Quiz` section to create a student link.
+An onboarded user generates a quiz from a note, reviews it on the quiz preview page, then uses the `Share Quiz` section to create a public link for the person they are helping.
 
 Rules:
 
-- link generation is available only to Teacher-profile users and Admins
+- link generation is available to any onboarded user; it is not gated by profile type
 - share links are created from `GeneratedQuizEntity`
 - each link uses a 16-character URL-safe token stored in `quiz_share_links`
-- teachers can toggle a link on or off from the preview page
+- the quiz owner can toggle a link on or off from the preview page
 - inactive or missing links return `404` from the public quiz endpoint
 
-## Student Anonymous Play
+## Anonymous Recipient Play
 
-Students open `/quiz/{token}` without authentication.
+Recipients open `/quiz/{token}` without authentication.
 
 Rules:
 
 - the initial public quiz response includes `question`, `choices`, and `concept`
 - the initial response must not include `correctIndex` or `explanation`
 - no `QuickReviewSessionEntity` or score/session rows are created
-- answers stay client-side until the student submits the quiz
+- answers stay client-side until the recipient submits the quiz
 - `/api/quiz/share/{token}/results` accepts the answer indexes and returns the score, correct indexes, and explanations for review
 - the results screen prompts signup instead of persisting anonymous performance
 
@@ -39,14 +39,14 @@ Shareable quiz links are plan-gated per billing month:
 - Plus: `10` links / month
 - Pro: unlimited
 
-Runtime tracking uses `user_usage.quiz_share_links_created`. The teacher preview page should show a teacher-framed upgrade nudge when the quota is exhausted and must use `getUpgradeCtas(currentPlan, { profileType: "TEACHER" })`.
+Runtime tracking uses `user_usage.quiz_share_links_created`. The quiz preview page shows neutral upgrade guidance when the quota is exhausted and resolves its actions through `getUpgradeCtas(currentPlan)`.
 
 ## Deferred
 
 The following are intentionally out of scope for v0.16.0:
 
 - response tracking
-- teacher response summaries
+- recipient response summaries
 - anonymous or authenticated score persistence for shared-link plays
-- classroom roster or student identity collection
+- recipient identity collection
 - quiz-session history entries for shared-link plays

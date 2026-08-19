@@ -150,9 +150,10 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const noteTitle = note?.title?.trim() || "Untitled note";
   const authUser = getAuthUser();
   const canExportDocx = authUser?.role === "ADMIN" || authUser?.profileType === "TEACHER";
+  const canShareQuiz = Boolean(authUser);
 
   useEffect(() => {
-    if (!generatedQuiz?.id || !canExportDocx) {
+    if (!generatedQuiz?.id || !canShareQuiz) {
       return;
     }
     void getQuizShareLinkByQuizId(generatedQuiz.id).then((link) => {
@@ -160,7 +161,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
         setShareLink(link);
       }
     });
-  }, [canExportDocx, generatedQuiz?.id]);
+  }, [canShareQuiz, generatedQuiz?.id]);
 
   const generatedQuestionCount = generatedQuiz?.questions.length ?? 0;
   const generatedQuestionCountLabel = `${generatedQuestionCount} question${generatedQuestionCount === 1 ? "" : "s"}`;
@@ -183,8 +184,11 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const quizGenerationPaywallVariant: PaywallModalVariant = "quiz-generation-limit";
   const currentPlan = normalizePlan(authUser?.planType ?? usageSummary?.plan);
   const shareUpgradeCtas = useMemo(
-    () => getUpgradeCtas(currentPlan, { profileType: "TEACHER" }),
-    [currentPlan],
+    // Pass the REAL profile rather than dropping it. Hardcoding TEACHER forced teacher upgrade
+    // copy onto everyone, which is what this release fixes -- but omitting it entirely swings the
+    // other way and denies a genuine teacher their own copy. This is the house pattern.
+    () => getUpgradeCtas(currentPlan, { profileType: authUser?.profileType ?? null }),
+    [authUser?.profileType, currentPlan],
   );
   const primaryShareUpgradeCta = shareUpgradeCtas.primary;
   const secondaryShareUpgradeCta = shareUpgradeCtas.secondary;
@@ -446,16 +450,16 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
             />
           ) : null}
 
-          {canExportDocx ? (
+          {canShareQuiz ? (
             <Card className="space-y-4 p-4 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
                     Share Quiz
                   </p>
-                  <h2 className="text-lg font-semibold text-foreground">Share with Students</h2>
+                  <h2 className="text-lg font-semibold text-foreground">Share with Someone</h2>
                   <p className="max-w-2xl text-sm leading-6 text-foreground/75">
-                    Create a public quiz link students can open without an account. They answer in-browser and see their score before signing up.
+                    Create a public quiz link someone can open without an account. They answer in-browser and see their score before signing up.
                   </p>
                 </div>
                 {!shareLink ? (
@@ -468,7 +472,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                     disabled={!generatedQuiz.id}
                   >
                     <Link2 className="h-4 w-4" aria-hidden="true" />
-                    <span>Share with Students</span>
+                    <span>Create Share Link</span>
                   </Button>
                 ) : (
                   <Button
@@ -488,7 +492,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
                   <p className="text-sm font-semibold text-foreground">Monthly share link limit reached</p>
                   <p className="mt-1 text-sm leading-6 text-foreground/75">
-                    Shareable quiz links help distribute quizzes to a whole class. Upgrade for more monthly links.
+                    Shareable quiz links make it easy to help someone practice. Upgrade for more monthly links.
                   </p>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                     {primaryShareUpgradeCta ? (
@@ -534,7 +538,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                   </div>
                   {!shareLink.isActive ? (
                     <p className="text-xs text-foreground/60">
-                      Students who open this link will see that the quiz is no longer active.
+                      Anyone who opens this link will see that the quiz is no longer active.
                     </p>
                   ) : null}
                 </div>

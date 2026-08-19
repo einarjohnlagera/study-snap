@@ -50,7 +50,7 @@ Theme: a parent, tutor or sibling should be able to hand someone a quiz without 
 
 ### Shipped
 
-_(nothing yet)_
+- **Generated quiz sharing is available to every onboarded user.** Share-link create, fetch and toggle now use the shared onboarding guard instead of a `TEACHER`/`ADMIN` profile check, while email verification, owner scoping, anonymous recipient play and existing per-plan limits remain unchanged. Quiz Preview exposes the share card and loads existing links for any signed-in user with neutral helping-someone copy; DOCX and multi-version export remain `TEACHER`/`ADMIN`-only. The generation recovery sweep now stamps `generation_status_at` when it marks a stale question pool `FAILED`, preserving the timestamp's status-change meaning for the v0.86.0 checkpoint without changing sweep eligibility or transaction boundaries.
 
 ## v0.88.0 - Section Authoring
 
