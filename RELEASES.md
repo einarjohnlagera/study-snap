@@ -2,7 +2,7 @@
 
 ## v0.89.0 - Support Another Learner
 
-**Status: In Progress** (kicked off 2026-08-19 as *Regeneration Integrity*, **rescoped the same day**, then **widened to Phases 2 and 3 on 2026-08-19** at owner request)
+**Status: Released** (kicked off 2026-08-19 as *Regeneration Integrity*, **rescoped the same day**, widened to Phases 2 and 3, signed off 2026-08-19)
 
 Theme: a parent, tutor or sibling should be able to help someone learn — hand them a quiz, and see how they are doing.
 
@@ -88,6 +88,30 @@ Theme: a parent, tutor or sibling should be able to help someone learn — hand 
   **The proper fix is email-keyed invitations**: store the invitation against the typed address rather than a resolved user id, so the row exists either way and the observable state stops depending on account existence. That also buys the natural product behaviour of inviting someone who has not signed up yet. It is a design change beyond this phase and is deliberately not attempted here. **Cheap interim mitigation: rate-limit invites per caller**, which bounds enumeration without changing the model.
 - **The guardian consent attestation wording is a placeholder.** `attestation_version` exists on the consent record so counsel-provided copy can be versioned and the existing consents remain interpretable, but the shipped string is not legal wording and must not be treated as such.
 - **The consent circularity is recorded rather than solved.** A minor declares their own birth year, and the supporter — frequently the very guardian whose consent is required — is the party who attests it. The mechanism records who attested and when; it does not verify guardianship, and cannot with the data the product holds.
+
+### Pre-signoff pressure test — 2026-08-19
+
+**Full cold-context test, two agents on non-overlapping halves, and it was the most valuable one this project has run.** The gate fired on every clause. **Five blocking-class defects, all in code that shipped green through four merged PRs and the session's own per-PR audits.**
+
+**⚠️ The release's headline capability reached NOBODY.** `private-note-detail-page-client.tsx` kept the entire generate-quiz control inside `{isTeacherMode ? …}`, so a `STUDENT`/`BOARD_EXAM`/`PROFESSIONAL` user had no button calling `generateGeneratedQuiz`, could never reach `/notes/{id}/quiz`, and could never see the Share card. **The backend gate was opened correctly and delivered zero user-visible value to its entire target population.** The per-PR audit checked the service gate and the Quiz Preview card and never asked how a non-teacher reaches that page — which is precisely the whole-release blind spot the cold pass exists for.
+
+**⚠️ Stored HTML injection into outbound email.** The invitation is the **only** email placing one user's self-chosen text in front of a *different* user, and `EmailTemplateService` does not escape — `Matcher.quoteReplacement` protects regex semantics, not HTML. `firstName`/`lastName` carry no markup validation at all, so an attacker could deliver authored HTML from NoteLib's own SPF/DKIM-signed domain. Stripped at the send site, **not** inside `EmailTemplateService`, because four templates pass markup deliberately.
+
+**⚠️ Enumeration was materially worse than `v0.89.0`'s own Phase 2 audit recorded.** That audit said "account existence leaks." The list actually returned the counterparty's **display name and email** for a merely `PENDING` invite — name harvesting over arbitrary addresses — and `REVOKED` rows retained them permanently with no way for the victim to remove them. Names are now withheld until acceptance, and `invite` requires a verified email, which `QuizShareLinkService` already did and this endpoint omitted **while being the one that mails third parties**. **The enumeration test asserted three references to one constant and could not fail**; it now asserts the state difference an attacker uses.
+
+Also fixed: a failed progress load left the **previous learner's numbers** on screen under the new learner's heading (error card and stat grid are independent conditionals); the share-link 403 still said Teacher/Admin-only; and the feature doc's false claim that the invite endpoint is not an account-existence oracle.
+
+**Every fix is mutation-verified against a named test.** **The cross-user read — the thing most likely to go wrong — came back clean on both passes:** single authorization helper returning the learner id rather than a boolean, single consumer, direction-checked, exact-state-checked, counts-only projection, and no writes, verified from real method bodies rather than mock assertions.
+
+### Known limitations
+
+- **⚠️ Account existence is still observable, and the durable fix is named.** The invite *response* is enumeration-safe and no row is written for an unknown address, but a real account produces a `PENDING` row visible in the inviter's own list. Name harvesting is closed; existence disclosure is not. **The fix is email-keyed invitations** — store the invitation against the typed address so the row exists either way, which also unlocks inviting someone who has not signed up yet. Scoped as `v0.90.0`; **multi-recipient invites must NOT ship before it**, since a multi-email field turns a one-at-a-time probe into bulk enumeration.
+- **⚠️ `users.birth_year` is account-global and write-once, with no correction path.** A learner who declares an adult year — by mistake, or coached by a supporter who wants the consent step gone — permanently disables guardian consent for **every future supporter link**, not just the one being negotiated. The threshold maths is deliberately conservative (`currentYear - birthYear - 1` treats a possibly-17 learner as a minor), but the absence of a correction path is a real gap on a minors-consent contract.
+- **The consent circularity is recorded, not solved.** A minor declares their own birth year, and the supporter — frequently the guardian whose consent is required — is the party who attests. The mechanism records who attested and when; it cannot verify guardianship with the data the product holds. The attestation wording is a counsel placeholder, versioned via `attestation_version`.
+- **Supporter *view* frequency is unmeasurable by construction.** Phase 3 deliberately writes nothing on a read — no timestamps, no counters, no learner-attributed analytics — which is correct for the learner's signal integrity and means nothing records that a supporter looked. Adoption is measurable from the relationship table; engagement is not. A **supporter**-attributed event would be the fix, and the anti-drift permits it since it forbids only learner-attributed ones.
+- **The `v0.86.0` attribution read (d) cannot discriminate and should not be trusted as written.** `ExamQuestionPoolService` stamps on `GENERATING` and `PENDING` writes but **not** on its normal `FAILED` path, so a pool used after deploy and then failing normally also presents as "FAILED with a non-null stamp." The authoritative attribution source is the `generation.recovery completed pools=N` log line, not a stamp comparison.
+- **Docs not updated for the new surfaces:** `dashboard.md` has no section for the People-you-support card, `navigation.md` omits `/linked-learners` from the no-back-link list and the new nav item, `data-export.md` omits `birthYear`, `account-deletion.md` omits the three new cascade-deleted objects, and three `collections.md` lines still describe share links as teacher-gated. None is user-facing; all are recorded rather than silently carried.
+- **The new progress sub-page has no `BackLink`** and uses a raw `<Link>` with a forbidden "Back to" prefix, against `docs/ui-standards.md`.
 
 ## v0.88.0 - Section Authoring
 
