@@ -237,6 +237,7 @@ class NoteCollectionServiceTest {
 
         assertThat(result.items()).extracting(item -> item.noteId()).containsExactly(firstNoteId, secondNoteId);
         assertThat(result.items()).extracting(item -> item.position()).containsExactly(0, 1);
+        assertThat(result.items()).extracting(item -> item.label()).containsOnlyNulls();
     }
 
     @Test
@@ -3665,13 +3666,61 @@ class NoteCollectionServiceTest {
         when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
         stubDetailItemLoad(userId, List.of(survivingNoteId), List.of(surviving));
 
-        int added = service.addGeneratedItems(collectionId, userId, List.of(survivingNoteId, deletedNoteId));
+        int added = service.addGeneratedItems(
+                collectionId,
+                userId,
+                List.of(survivingNoteId, deletedNoteId),
+                WEEK_ONE_LABEL
+        );
 
         assertThat(added).isEqualTo(1);
         ArgumentCaptor<List<NoteCollectionItemEntity>> captor = ArgumentCaptor.forClass(List.class);
         verify(itemRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).extracting(NoteCollectionItemEntity::getNoteId)
                 .containsExactly(survivingNoteId);
+        assertThat(captor.getValue()).extracting(NoteCollectionItemEntity::getLabel)
+                .containsExactly(WEEK_ONE_LABEL);
+    }
+
+    @Test
+    void addGeneratedItems_withNullLabelKeepsItemsUnsectioned() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(noteId), List.of(note));
+
+        service.addGeneratedItems(collectionId, userId, List.of(noteId), null);
+
+        ArgumentCaptor<List<NoteCollectionItemEntity>> captor = ArgumentCaptor.forClass(List.class);
+        verify(itemRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).extracting(NoteCollectionItemEntity::getLabel).containsOnlyNulls();
+    }
+
+    @Test
+    void addGeneratedItems_withOverLongLabelThrowsExistingValidationMessage() {
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        String overLongLabel = REPEATED_CHARACTER.repeat(121);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(collectionRepository.countByParentCollectionId(collectionId)).thenReturn(0L);
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.addGeneratedItems(collectionId, userId, List.of(noteId), overLongLabel))
+                .isInstanceOf(InvalidCollectionRequestException.class)
+                .hasMessage("Collection item label must be 120 characters or fewer.");
+        verify(itemRepository, never()).saveAll(anyList());
     }
 
     @Test

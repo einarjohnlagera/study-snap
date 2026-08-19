@@ -84,6 +84,7 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByText("Library tool")).toBeInTheDocument();
     expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Course \/ Program/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Subject/)).toHaveAttribute("maxLength", "64");
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Authored Depth/)).toBeInTheDocument();
@@ -119,6 +120,25 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.queryByLabelText(/^Authored Depth/)).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(await screen.findByText(/Capped by your 7 topic notes left this cycle/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Course \/ Program/)).toHaveAttribute("maxLength", "120");
+  });
+
+  it("renders a normalized subject bound failure inline and preserves the input", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "student-1", role: "USER", profileType: "STUDENT" });
+    (bulkGenerateNotes as jest.Mock).mockRejectedValueOnce(
+      new Error("Subject must be 64 characters or less."),
+    );
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+    const rawSubject = `${"x".repeat(61)}-y`;
+    const subjectInput = screen.getByLabelText(/^Subject/);
+    fireEvent.change(subjectInput, { target: { value: rawSubject } });
+    fireEvent.change(screen.getByLabelText(/^Course \/ Program/), { target: { value: "Nursing" } });
+    fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Prenatal Care" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(await screen.findByText("Subject must be 64 characters or less.")).toBeInTheDocument();
+    expect(subjectInput).toHaveValue(rawSubject);
   });
 
   it.each(["BOARD_EXAM", "PROFESSIONAL"])(
@@ -368,6 +388,50 @@ describe("BulkGenerationPageClient", () => {
     ));
   });
 
+  it("prefills an editable section from subject only while it is untouched", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    render(<BulkGenerationPageClient />);
+
+    expect(screen.queryByLabelText(/^Section \(optional\)/)).not.toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText(/^Collection \(optional\)/), {
+      target: { value: "subject-plan-1" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Algebra" } });
+    const sectionInput = screen.getByLabelText(/^Section \(optional\)/);
+    expect(sectionInput).toHaveValue("Algebra");
+    expect(sectionInput).toHaveAttribute("maxlength", "120");
+
+    fireEvent.change(sectionInput, { target: { value: "Foundations" } });
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Engineering Mathematics" } });
+    expect(sectionInput).toHaveValue("Foundations");
+  });
+
+  it("submits the edited section only with a selected Review Set", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    (bulkGenerateNotes as jest.Mock).mockResolvedValue({
+      resultId: "result-1",
+      acceptedTopics: 1,
+      queuedTopics: 1,
+      rejectedTopics: 0,
+    });
+    render(<BulkGenerationPageClient />);
+    fireEvent.change(await screen.findByLabelText(/^Collection \(optional\)/), {
+      target: { value: "subject-plan-1" },
+    });
+    await fillAdminForm(["Quadratic Equations"]);
+    fireEvent.change(screen.getByLabelText(/^Section \(optional\)/), { target: { value: "Core Algebra" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => expect(bulkGenerateNotes).toHaveBeenCalledWith(
+      expect.objectContaining({ collectionId: "subject-plan-1", sectionLabel: "Core Algebra" }),
+    ));
+  });
+
   it("keeps generation usable when Review Sets fail to load", async () => {
     (listCollections as jest.Mock).mockRejectedValue(new Error("Could not load Collections."));
     (bulkGenerateNotes as jest.Mock).mockResolvedValue({
@@ -409,6 +473,73 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.getByLabelText(/^Topic 1$/)).toHaveValue("Prenatal Care");
     expect(screen.getByLabelText(/^Topic 2$/)).toHaveValue("Labor Stages");
     expect(globalThis.sessionStorage.getItem("notelib.bulk.retryTopics")).toBeNull();
+  });
+
+  it("restores a stashed section without resuming subject tracking", async () => {
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    setBulkGenerationRetryStash({
+      subject: "Algebra",
+      courseProgram: "Civil Engineering",
+      domainContext: null,
+      learnerLevel: null,
+      makePublic: false,
+      topics: ["Quadratic Equations"],
+      collectionId: "subject-plan-1",
+      sectionLabel: "Foundations",
+    });
+    render(<BulkGenerationPageClient />);
+
+    const sectionInput = await screen.findByLabelText(/^Section \(optional\)/);
+    expect(sectionInput).toHaveValue("Foundations");
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Calculus" } });
+    expect(sectionInput).toHaveValue("Foundations");
+  });
+
+  it("refuses a section that collides with the reserved bucket name", async () => {
+    // The bucket's display string doubles as the reserved name, so a batch must not be able to mint
+    // a real section that renders identically to it. The Builder already refuses this; bulk
+    // generation is the other authoring path and had no guard.
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    render(<BulkGenerationPageClient />);
+    await waitFor(() => expect(getMe).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: "Algebra" } });
+    fireEvent.change(screen.getByLabelText(/^Topic 1$/), { target: { value: "Quadratics" } });
+    fireEvent.change(await screen.findByLabelText(/Review Set|Study Plan|Collection/i), { target: { value: "subject-plan-1" } });
+    const sectionInput = await screen.findByLabelText(/^Section \(optional\)/);
+    fireEvent.change(sectionInput, { target: { value: "  NOT IN A SECTION  " } });
+    fireEvent.click(screen.getByRole("button", { name: /Generate/i }));
+
+    expect(await screen.findByText(/is reserved for notes without a section/i)).toBeInTheDocument();
+    expect(bulkGenerateNotes).not.toHaveBeenCalled();
+  });
+
+  it("does not invent a section when the retry stash carries none", async () => {
+    // The real retry path: retryBulkFailures cannot write sectionLabel, because
+    // bulk_generation_result has no column for it. Falling back to the subject here would
+    // section every retried batch by subject -- including one whose curator deliberately left
+    // the section blank -- which is an assignment they never made.
+    (listCollections as jest.Mock).mockResolvedValue([
+      { id: "subject-plan-1", title: "Civil Engineering Mathematics", resolvedLearnerLevel: null },
+    ]);
+    setBulkGenerationRetryStash({
+      subject: "Algebra",
+      courseProgram: "Civil Engineering",
+      domainContext: null,
+      learnerLevel: null,
+      makePublic: false,
+      topics: ["Quadratic Equations"],
+      collectionId: "subject-plan-1",
+    });
+    render(<BulkGenerationPageClient />);
+
+    const sectionInput = await screen.findByLabelText(/^Section \(optional\)/);
+    expect(sectionInput).toHaveValue("");
+    expect(screen.getByLabelText(/^Subject/)).toHaveValue("Algebra");
   });
 
   it("splits a multi-line paste into separate topic rows and strips list markers", async () => {

@@ -52,6 +52,24 @@ describe("bulk-generation-flash", () => {
     expect(consumeBulkGenerationRetryStash()).toBeNull();
   });
 
+  it("round-trips the optional section assignment", () => {
+    setBulkGenerationRetryStash({
+      subject: "Algebra",
+      courseProgram: "Civil Engineering",
+      domainContext: null,
+      learnerLevel: null,
+      makePublic: false,
+      topics: ["Quadratic Equations"],
+      collectionId: "plan-1",
+      sectionLabel: "Core Algebra",
+    });
+
+    expect(consumeBulkGenerationRetryStash()).toEqual(expect.objectContaining({
+      collectionId: "plan-1",
+      sectionLabel: "Core Algebra",
+    }));
+  });
+
   it("restores an old-shape retry stash while ignoring its retired audience key", () => {
     globalThis.sessionStorage.setItem("notelib.bulk.retryTopics", JSON.stringify({
       subject: "Maternal Health",

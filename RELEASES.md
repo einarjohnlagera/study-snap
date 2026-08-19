@@ -1,5 +1,114 @@
 # RELEASES.md - NoteLib
 
+## v0.88.0 - Section Authoring
+
+**Status: Released** (kicked off 2026-08-18, signed off 2026-08-19)
+
+Theme: a curator should be able to create a section, and notes should arrive already in one.
+
+### The finding that reframes this release: Sections already ship
+
+Full assessment: `docs/claude-plans/subject-plan-sections-assessment.md` — two cold-context agents on non-overlapping halves (backend model/API/adoption; frontend Builder/learner UX), then a cold UX pressure test that revised the scope twice.
+
+**Sections exist end to end today** — the per-item `note_collection_items.label` field, Builder rename/reorder/move-between/drag, learner rendering as collapsible cards with counts and a `N% · M due` readiness pill, and documentation in `docs/features/collections.md`. **The brief asked for Sections to be built. They do not need building.** What is missing is a way to create the *second* section, a guard on the first, and any path by which notes arrive pre-sectioned.
+
+**The incident that motivated this is reproduced and understood.** A fresh plan has every item at `label = null` → one derived section named `Ungrouped`. The Builder renders **every** section header as an editable input, `Ungrouped` included, with no special case (`study-plan-builder-page-client.tsx:541`). `handleRenameLeafSection` (`:1309-1319`) relabels every item whose derived section name equals the old one — with `oldName = "Ungrouped"` that is **every unlabeled item, in one `PUT`**. No `Ungrouped` bucket remains and no second section exists, so the per-note Move dropdown ("all sections except mine") is **empty, and a second section can never be created**. Confirmed empirically 2026-08-18: the Engineering Mathematics plan returned exactly one row, `Algebra, 77`. **The sibling learner surface guards exactly this** (`collection-detail-page-client.tsx:277` renders a non-editable span; `:3022` early-returns on rename) — same bug class, guarded in the file the curator does not reach and unguarded in the file they do.
+
+**And the workflow defect underneath it:** `BulkGenerateNotesRequest` has no section field, `addCreatedNotesToCollection` calls `addGeneratedItems` with no label, and `buildItems:1818` hard-sets `label = null`. **Every bulk batch lands unlabeled, so sectioning is only ever a manual post-pass** — the workflow that produced the 77 notes.
+
+### The model decision, and it is closed
+
+**Sections are derived from the existing per-item `label`. No migration, no new entity, no third collection level.** This was decided against an explicit `note_collection_sections` table on production evidence: the only three needs a label-only model cannot express are empty sections, curator-controlled section order independent of item position, and a distinguishable `Ungrouped` sentinel. The curator's own 77-note plan proved the workflow is **notes-first**, not skeleton-first — and once bulk generation assigns a section, generating the Algebra batch *creates* the Algebra section as a side effect, in curriculum order, with no skeleton and no empty state. **Empty sections, the one thing labels cannot express, are not needed.** The table stays available if independent section ordering or placeholders later prove themselves; it is not bought to fix a missing `if`.
+
+### Planned Scope
+
+**Principle: fix the inflow before building the repair tools.** Bulk selection, bulk move and parent-page section editing are all machinery for *reorganising notes that arrived in the wrong place*. If notes arrive already sectioned, the demand for repair drops — and how sharply is observable rather than assumable.
+
+1. **Guard the synthetic `Ungrouped` bucket (frontend).** Non-editable header, and reject it as a typed name. Without this the original incident recurs. *Blocking.*
+2. **Port the section combobox into the Builder (frontend).** Restores section creation — existing names as suggestions, free-type to create, clear to return to unsectioned. Two required details in Anti-drift below.
+3. **Merge confirmation on rename (frontend).** Mirrors the modal the learner surface already has for the identical operation.
+4. **`maxLength` 150 → 120 (frontend).** The Builder allows 150 against a 120-char backend and DDL cap; a 121–150 char name 400s with a rollback.
+5. **Section-aware bulk generation (backend + frontend).** An **editable** field pre-filled from the batch subject, threading a nullable label through `addGeneratedItems` / `addItems` / `buildItems`.
+6. **"Set sections from note subjects" Builder action (frontend).** One button, no API and no migration: map each item's `label` from its already-exposed `subject` through the existing `persistLeafItems`. Provably safe on length — `notes.subject` is `VARCHAR(64)` against a 120-char label cap, so it can never 400.
+7. **Desktop section collapse (frontend).** `LeafSectionBlock`'s collapse is `sm:hidden` / `hidden sm:block` — it exists **only below 640px**, so on desktop, where the curator works, a 77-note plan is an uncollapsible 77-card page.
+
+**Owed alongside, and cheap:** Builder/learner grouping parity (unsectioned bucket pinned last, non-editable, suppressed when it is the only group); naming the bucket **"Not in a section"**; the `CollectionLabels` teacher-terminology decision; removing the unreachable empty-section placeholder; and either one analytics event on section assignment **or** a restated bulk-Move deferral.
+
+### Why items 6 and 7 are not optional polish
+
+- **A plan generated after item 5 ships:** every batch lands labelled, contiguous, in generation order. **Repair interactions: zero.** This is why multi-select is correctly deferred.
+- **Any batch that lands unsectioned** — notes generated before this release, notes added via the picker, a batch where the plan name was typed as the subject: per note the curator scrolls, opens the combobox, types, and waits on a 500 ms debounce → a whole-collection `PUT` → `refreshBuilder`, which re-fetches the collection **and the entire note library**, with every section disabled meanwhile. **~230 UI actions and 77 serialized, UI-blocking round trips for a 77-note plan. Item 6 collapses that to one.**
+- **Item 7 compounds item 5:** `addItems` appends at `max(position)+1`, so **section order *is* generation order** — repairing a wrong order means dragging a section header across exactly the page that cannot collapse.
+
+### Why item 8 rides this release
+
+**Verified empirically against the running PostgreSQL, not inferred:** inserting a 65-character subject returns `value too long for type character varying(64)`. Two properties make it worth fixing now rather than filing:
+
+- **Normalization *grows* the string, so annotations alone cannot fix it.** `normalizeForStorage` expands a bare `-` into ` – `, so a 63-character input with one hyphen normalizes to 65 and fails a `@Size(max = 64)` it had already passed. The bound must be enforced **after** normalization — a fix that only adds `@Size` looks right, passes a naive 65-character test, and still ships the bug.
+- **It presents today as exactly the gap `v0.87.0` existed to close.** A `DataIntegrityViolationException` is not an `AppException`, so under `v0.87.0`'s attribution rules the curator sees **every topic in the batch failing with `UNEXPECTED_ERROR`** and no reason. Making it a named exception turns a mystery batch failure into a message, and setting the request bound to the storage bound rejects it **before the LLM call bills against quota**.
+
+**⚠️ The fix is deliberately NOT uniform: user input rejects, generated output clamps.** `normalizeSubject` serves both. A learner cannot fix an over-long *LLM-generated* subject, and rejecting one would destroy a finished Study Pack after quota was already spent — the failure shape `v0.83.1` is on record for. Generated subjects are clamped to 64; user-supplied ones are rejected with a named `AppException` subclass.
+
+**⚠️ No migration, no column widening, no row rewritten.** Aligning down is correct: the bound has been 64 since `V11`, and the longest subject observed in the database is **44**, with none over 55. Widening is one-way. `notes.title` and `study_packs.title` are `text` and are not touched.
+
+### Anti-drift
+
+- **⚠️ Items 2 and 3 are each correct alone and wrong together.** The ported combobox carries local `labelValue` state plus a debounced auto-save, and `LeafSortableNoteCard` is keyed by **note id**, which is stable across `refreshBuilder`. After item 3's rename mass-relabels a section, every card keeps its stale value, the effect sees a difference, and it schedules `onLabelChange(noteId, staleValue)` — **silently reverting the rename one note at a time.** Key the card `${noteId}:${item.label ?? ""}`, as `LeafSectionBlock` already keys `${section.id}:${section.name}`.
+- **⚠️ Snap a typed case-variant onto the existing option, in the combobox.** Picking is already typo-proof, but free-typing `algebra` beside `Algebra` mints a second section that renders **identically**, because grouping is case-sensitive while the learner header is `uppercase`. **Do NOT case-fold `buildLeafSections`** — that is the riskier change.
+- **⚠️ Item 5's section field is EDITABLE and merely pre-filled — never a hidden subject→section coupling.** A silent coupling leaves the curator no override and no way to prevent the degenerate "every batch is Engineering Mathematics" case this assessment already identified.
+- **⚠️ Do NOT re-add "section destination in Add Notes."** It was cut after the pressure test disproved its cost estimate: `handleAddLeafNotes` makes **no `setOrder` call** (it calls `addCollectionItems` then `refreshBuilder`), `AddNotesModal` has two call sites with different section vocabularies, and item 6 covers its cases for less.
+- **⚠️ Name the bucket "Not in a section", and do NOT rename it to "Other notes."** The sentinel doubles as the reserved name, so displaying a different string requires a **two-string** reserved guard or a curator can type the displayed name and mint a real section that renders identically — the exact collision that started this assessment.
+- **Note Collections stay exactly two levels: Goal → Subject Plan.** A section is not a `NoteCollection`.
+- **No new mastery signal.** `ConceptHealth` remains the readiness source; `GET /collections/{id}/note-concept-counts` already returns per-note counts, so section readiness is client-side summation only.
+- **Adoption stays snapshot-based** — source edits never sync into adopted copies. Labels and relative order already survive every adoption path, pinned by test at `NoteCollectionServiceTest.java:3036`.
+- **"Remove" never means canonical note deletion**, and section deletion is not destructive to notes — they fall to the unsectioned bucket, and the copy should say so rather than warn.
+- **No runtime LLM for Sections, and no automatic taxonomy inference from note metadata.** Item 6 is an explicit, curator-triggered action over a field they already authored.
+- **Never surface the word "label" in UI copy.**
+- **⚠️ Item 8 is NOT a Sections change and must not be documented as one.** It ships in its own PR, sequenced first, and it does not belong in the Sections anti-drift block in `AGENTS.md` — filing it there would confuse the next reader about what the "no migration" model decision covered.
+
+
+### Explicitly out
+
+`note_collection_sections` table; "Add Section" scaffolding; delete-section UI; multi-select and bulk Move; bulk Remove (needs its own endpoint — a client loop over `DELETE /{id}/items/{noteId}` is quadratic and non-atomic, since `removeItem` rewrites every position per call); move-to-another-Subject-Plan; multi-item drag (**recommended against, not merely deferred**); program-scoped picker; sections in the parent Build page; optimistic concurrency; the `AccountDataExportService` `label` gap; the ordering tiebreaker; picker pagination.
+
+### ⚠️ Guidance the release owes the curator — sequencing, not code
+
+**`persistAdoptedPlan:1398-1402` returns `alreadyAdoptedResponse` on any existing `sourcePlanId` — re-adopt is a hard no-op.** Anyone who adopts the CE Goal before it is sectioned keeps the unsectioned copy **permanently**, and under the snapshot rule that is correct behaviour, not a bug. **So: finish sectioning before publishing or promoting the Goal.**
+
+The Engineering Mathematics plan was already recovered by `docs/claude-plans/engineering-mathematics-section-recovery.sql` — nine sections restored from `notes.subject`. One Trigonometry note remains at position 76 and needs one drag.
+
+### Shipped
+
+- **Request-bound alignment (item 8 / PR 0)** — subject and course/program requests now match their `VARCHAR(64)` and `VARCHAR(120)` storage bounds and reject over-long user input before Bulk Generate queues work. Post-normalization guards use named 400 exceptions so hyphen expansion cannot reach an insert or degrade failure attribution to `UNEXPECTED_ERROR`; LLM-generated subjects instead clamp to 64 at a nearby word boundary so a secondary grouping value cannot discard a completed, billed Study Pack. All note-authoring subject inputs cap at 64 and course/program free-text inputs at 120; no schema, title, existing-row, or Sections behavior changed. **Found by the pre-commit audit:** the note-copy path shared the throwing resolver with note create/update, so a stored subject that grows on re-normalization would have 400'd the *copier* over metadata a different author wrote. Copy now clamps through its own resolver, mirroring the generated-subject split in `StudyPackService`; mutation-verified by `copyNote_clampsAStoredSubjectThatGrowsPastStorageInsteadOfFailingTheCopy`. No production row is currently at risk (longest observed subject is 44 characters, with no unspaced dashes), but the copier can never fix the value, so throwing at them was wrong regardless of probability.
+- **Section-aware bulk generation (PR 1)** — bulk batches can carry an optional 120-character section assignment into the selected note-accepting plan. The visible field is pre-filled from subject but remains editable, stops tracking after curator input, is omitted without a target plan, and persists successful notes into the requested section without changing batch failure/idempotency behavior.
+- **Builder section authoring (PR 2)** — the Builder now creates sections through a debounced per-note combobox, reserves and trails the synthetic **Not in a section** bucket, confirms rename merges, supports one confirmed set-from-subjects pass, and collapses sections at desktop sizes. Profile-aware Section/Part copy, assignment analytics, the rename-card remount guard, case-variant snapping, and corrected learner/Builder documentation ship with it; no schema or hierarchy change was added.
+
+### Pre-signoff pressure test — 2026-08-19
+
+**Full cold-context test, and the gate fired on two independent clauses:** one concept (Sections) spanning 3+ surfaces, *and* two PRs touching the same shared files (`study-plan-builder-page-client.tsx` in #1117/#1119; `BulkGenerateNotesRequest` and `NoteBulkGenerationService` in #1117/#1118). Two agents, non-overlapping halves, no inherited context, instructed to distrust every summary including the spawning session's. **It earned its cost: five defects, all in code that shipped green through `/audit-diff` and 3 merged PRs.**
+
+**Fixed before signoff:**
+
+- **⚠️ `Group by subject` bypassed the case-snap the release exists to enforce.** It mapped `item.subject?.trim()` with no whitespace collapse, no snap against existing sections, and no reserved-name filter — so `Cash  and Receivables` and `cash and receivables` became **two sections rendering identically**, the precise defect the combobox snap was written to prevent. Item 6 was added after that anti-drift rule and never consulted `leafSections`. Now routed through a canonical map seeded from existing sections, which also converges duplicates *within* one pass.
+- **⚠️ The reserved bucket name was authorable through bulk generation**, which had no guard on either side of the wire. **Its worst consequence was on the reachable learner surface:** a stored `Not in a section` rendered as a second card with the identical title, and because `getSectionReadinessKey` folded both into one key, **both cards displayed the same summed `N% · M due` — a wrong number, not a cosmetic collision.** Fixed at three levels: the sentinel now lives once in `collection-labels.ts` (a second copy is what makes the collision possible), Bulk Generate refuses it inline before queueing, and both reading surfaces fold any casing into the bucket. Grouping between real sections stays case-sensitive.
+- **⚠️ The per-note section control saved mid-keystroke and tore itself down.** The 500 ms timer fired while the curator was still typing: `persistLeafItems` flipped `disabled` (a disabled input loses focus) *and* the write changed the card key and moved the note to another section block. Typing `Week`, pausing, then ` 1` created a section named **`Week`** and dropped the rest — on the primary interaction of a 77-note plan. The save now waits until focus leaves the field.
+- **A reserved-name keystroke persisted a truncated label.** The control skipped `setLabelValue` on the reserved branch, leaving state one keystroke behind the display while the pending timer wrote that partial string as a real section.
+- **The Builder's combobox never received the `maxLength` this release added to `SuggestionCombobox`**, so a 130-character paste displayed 130 and saved 120.
+- **Unclamped course/program on the copy and generated paths** — the sibling line of the subject clamp this release shipped, left throwing where its neighbour clamps. **The first attempt at this fix was itself wrong** and caught before commit: clamping the shared helper would have made `assertCourseProgramFitsStorage` unreachable, silently *accepting* over-long request input. Split into a copy-only variant; both directions mutation-verified.
+
+**Every fix is mutation-verified** — each mutant killed by a named test, with no collateral failures. One guard (the sentinel fold) initially survived its mutation, proving the test was decorative; it was rewritten until it failed for the right reason.
+
+### Known limitations
+
+- **`COLLECTION_SECTION_ASSIGNED` still cannot fully answer its own checkpoint.** `source: "drag"` and a `noteCount` were added at signoff — without them, dragging a note between sections (the canonical one-at-a-time repair on a drag-first surface) fired nothing, and a one-note edit was indistinguishable from a 77-note bulk pass. **What remains unfixable without a receipt change: bulk generation's own section assignment is a server-side write and emits nothing**, so the event measures *repair* volume but cannot produce an "arrived sectioned vs. repaired" ratio. The checkpoint keys on absolute manual-assignment volume instead, and says so.
+- **`PUT /collections/{id}/items/order` is authoritative for labels and has no "omitted means unchanged" semantics.** Before this release nothing wrote labels, so a payload omitting them was a harmless no-op; now a reorder that fails to echo them would wipe every section in one write. **Both clients do echo them** (verified), so this is a contract hazard for a future client, not a live defect.
+- **`note_collections.course_program` has no bound and its endpoint has no `@Valid`** — a 200-character value is a 500. Pre-existing and outside this release's three columns; adding `@Valid` at signoff could reject requests that are accepted today, so it belongs in its own change.
+- **Two tests pass for the wrong reason and are recorded rather than rewritten.** The card-key test guarding this release's headline anti-drift rule cannot fail if that key regresses, because `LeafSectionBlock`'s own key already encodes the section name and remounts the subtree anyway — **the label component of the card key is redundant today**, and the real risk is someone later simplifying the section-block key and silently deleting the defence while the test stays green. The desktop-collapse test asserts the absence of a CSS class string in jsdom, which has no breakpoints.
+- **A custom section is not carried through a bulk retry.** `bulk_generation_result` has no column for it, so the field restores empty and the curator re-enters it; retried notes land unsectioned beside their sectioned siblings with no warning at retry time. Closing it needs a receipt column, and this release ships no migration. **The audit's first version of this restored the section from the batch *subject*, which was a live defect rather than a limitation** — it would have sectioned every retried batch by subject, including batches whose curator deliberately left it blank. Fixed before merge and pinned by a mutation-verified test.
+- **`Group by subject` does not reorder**, so positions stay interleaved until someone drags a section. Both surfaces group by label rather than contiguity, so display is correct — but any future consumer assuming contiguity would trip on it.
+- **TEACHER terminology splits on the bucket.** `sectionSingular` is `Part` for TEACHER and the Builder honours it everywhere, but the bucket is the shared constant `Not in a section`, producing *"'Not in a section' is reserved for notes without a part."* Deliberate: a profile-specific second spelling would reintroduce the multi-string collision the sentinel design exists to prevent.
+- **The per-note combobox's debounce depends on an unmemoized handler, and that is load-bearing.** Every parent re-render re-arms the timer against fresh state, which is what keeps a second card's pending write from being derived from pre-first-write state — `setOrder` compares the note **set**, not labels, so it would not reject a stale-label write. Memoizing the handler would remove that protection.
+
 ## v0.87.0 - Failure Attribution
 
 **Status: Released** (kicked off, rescoped and signed off 2026-08-18)

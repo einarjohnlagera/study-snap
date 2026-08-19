@@ -37,9 +37,10 @@ import {
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { DOMAIN_CONTEXT_OPTIONS, getDomainContextDescription } from "@/lib/domain-context";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
-import { getCollectionLabels } from "@/lib/collection-labels";
+import { getCollectionLabels, isReservedSectionName, UNGROUPED_SECTION_NAME } from "@/lib/collection-labels";
 
 export const MAX_BULK_GENERATION_TOPICS = 50;
+const SECTION_MAX_LENGTH = 120;
 
 type TopicRow = {
   id: number;
@@ -99,6 +100,11 @@ export function BulkGenerationPageClient() {
     [],
   );
   const [collectionId, setCollectionId] = useState("");
+  const [sectionLabel, setSectionLabel] = useState("");
+  const [sectionTouched, setSectionTouched] = useState(false);
+  const [sectionError, setSectionError] = useState<string | null>(null);
+  const [subjectError, setSubjectError] = useState<string | null>(null);
+  const [courseProgramError, setCourseProgramError] = useState<string | null>(null);
   const [collections, setCollections] = useState<NoteCollectionSummary[]>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(false);
   const [collectionsError, setCollectionsError] = useState<string | null>(null);
@@ -145,10 +151,17 @@ export function BulkGenerationPageClient() {
     // the batch they replaced.
     applyLearnerLevel((stash.learnerLevel ?? "") as LearnerLevel | "", "user");
     setCollectionId(stash.collectionId ?? "");
+    // Never fall back to the subject here. No producer writes sectionLabel today, so a
+    // subject fallback would section every retried batch by subject -- including batches whose
+    // curator deliberately left the section blank, inventing an assignment they never made.
+    // Restoring empty keeps the retry honest; an explicitly carried section suppresses subject
+    // tracking so editing the subject cannot overwrite it.
+    setSectionLabel(typeof stash.sectionLabel === "string" ? stash.sectionLabel.slice(0, SECTION_MAX_LENGTH) : "");
+    setSectionTouched(typeof stash.sectionLabel === "string");
     setMakePublic(stash.makePublic);
     setTopics(stash.topics.map((value, index) => ({ id: index + 1, value })));
     nextTopicId.current = stash.topics.length + 1;
-  }, []);
+  }, [applyLearnerLevel]);
 
   useEffect(() => {
     let active = true;
@@ -195,7 +208,7 @@ export function BulkGenerationPageClient() {
     return () => {
       active = false;
     };
-  }, [isAdmin, isTeacherOrAdmin]);
+  }, [applyLearnerLevel, isAdmin, isTeacherOrAdmin]);
 
   useEffect(() => {
     if (!isTeacherOrAdmin) {
@@ -263,6 +276,13 @@ export function BulkGenerationPageClient() {
     applyLearnerLevel(fromProfile, fromProfile ? "profile" : "none");
   };
 
+  const handleSubjectChange = (nextSubject: string) => {
+    setSubject(nextSubject);
+    if (!sectionTouched) {
+      setSectionLabel(nextSubject.slice(0, SECTION_MAX_LENGTH));
+    }
+  };
+
   useEffect(() => {
     if (!isTeacherOrAdmin || courseProgramIds.length > 0 || !courseProgram.trim()) {
       return;
@@ -274,6 +294,12 @@ export function BulkGenerationPageClient() {
   }, [courseProgram, courseProgramCatalog, courseProgramIds.length, isTeacherOrAdmin]);
 
   const validate = (): string | null => {
+    if (collectionId && sectionLabel.trim() && isReservedSectionName(sectionLabel)) {
+      // The bucket's display string doubles as the reserved name. Without this guard a batch could
+      // mint a real section that renders identically to the synthetic bucket -- the exact collision
+      // the Builder already refuses, reachable through the path this release added.
+      return `"${UNGROUPED_SECTION_NAME}" is reserved for notes without a ${collectionLabels.sectionSingular.toLowerCase()}.`;
+    }
     if (!subject.trim()) {
       return "Enter a subject for this batch.";
     }
@@ -387,12 +413,16 @@ export function BulkGenerationPageClient() {
             domainContext: domainContext || null,
             learnerLevel: learnerLevel || null,
             ...(collectionId ? { collectionId } : {}),
+            ...(collectionId && sectionLabel.trim() ? { sectionLabel: sectionLabel.trim() } : {}),
           }
         : { courseProgramText: courseProgram.trim() }),
     };
 
     setSubmitting(true);
     setError(null);
+    setSectionError(null);
+    setSubjectError(null);
+    setCourseProgramError(null);
     try {
       const response = await bulkGenerateNotes(request);
       setBulkQueuedFlash(response.queuedTopics, response.resultId);
@@ -405,7 +435,16 @@ export function BulkGenerationPageClient() {
       // The backend re-checks the note-generation quota at submit time and rejects
       // when a stale client over-queues; surface that message and refresh the quota.
       void refreshQuota();
-      setError(submitError instanceof Error ? submitError.message : "Could not queue these notes.");
+      const message = submitError instanceof Error ? submitError.message : "Could not queue these notes.";
+      if (message.includes("Subject must be 64 characters or less")) {
+        setSubjectError(message);
+      } else if (message.includes("Course/program must be 120 characters or less")) {
+        setCourseProgramError(message);
+      } else if (message.includes("Section must be 120 characters or less")) {
+        setSectionError(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -415,10 +454,17 @@ export function BulkGenerationPageClient() {
     event.preventDefault();
     const validationError = validate();
     if (validationError) {
-      setError(validationError);
+      // Route a section-field problem to the field, not the page banner -- the banner sits far from
+      // the input and does not tell the curator which control to fix.
+      if (collectionId && sectionLabel.trim() && isReservedSectionName(sectionLabel)) {
+        setSectionError(validationError);
+      } else {
+        setError(validationError);
+      }
       return;
     }
     setError(null);
+    setSectionError(null);
     if (studyPackShortfall > 0) {
       setStudyPackConfirmOpen(true);
       return;
@@ -462,8 +508,13 @@ export function BulkGenerationPageClient() {
               id="bulk-subject"
               value={subject}
               suggestions={subjectSuggestions}
-              onChange={setSubject}
+              onChange={(value) => {
+                setSubjectError(null);
+                handleSubjectChange(value);
+              }}
+              maxLength={64}
             />
+            {subjectError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{subjectError}</p> : null}
           </div>
 
           <div data-testid="bulk-metadata-grid" className="grid gap-4 empty:hidden sm:grid-cols-2">
@@ -501,6 +552,29 @@ export function BulkGenerationPageClient() {
                 ) : null}
               </div>
             ) : null}
+            {isTeacherOrAdmin && collectionId ? (
+              <div className="space-y-2">
+                <label htmlFor="bulk-section" className="text-sm font-medium text-foreground">
+                  {collectionLabels.sectionSingular} (optional)
+                </label>
+                <input
+                  id="bulk-section"
+                  value={sectionLabel}
+                  maxLength={SECTION_MAX_LENGTH}
+                  onChange={(event) => {
+                    setSectionTouched(true);
+                    setSectionError(null);
+                    setSectionLabel(event.target.value);
+                  }}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                  placeholder={`Add to a ${collectionLabels.sectionSingular.toLowerCase()}`}
+                />
+                <p className="text-xs text-foreground/60">
+                  Pre-filled from the subject. Edit it to choose where these notes appear.
+                </p>
+                {sectionError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{sectionError}</p> : null}
+              </div>
+            ) : null}
             {isTeacherOrAdmin ? (
               <div className="space-y-2">
                 <label htmlFor="bulk-course-program" className="text-sm font-medium text-foreground">
@@ -530,8 +604,12 @@ export function BulkGenerationPageClient() {
                   id="bulk-course-program"
                   value={courseProgram}
                   suggestions={courseProgramSuggestions}
-                  onChange={setCourseProgram}
+                  onChange={(value) => {
+                    setCourseProgramError(null);
+                    setCourseProgram(value);
+                  }}
                 />
+                {courseProgramError ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{courseProgramError}</p> : null}
               </div>
             )}
 

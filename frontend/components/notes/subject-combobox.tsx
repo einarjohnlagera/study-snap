@@ -10,6 +10,7 @@ type SubjectComboboxProps = {
   placeholder?: string;
   disabled?: boolean;
   helperText?: string;
+  maxLength?: number;
 };
 
 export function SubjectCombobox({
@@ -20,6 +21,7 @@ export function SubjectCombobox({
   placeholder = "Choose or type a subject",
   disabled = false,
   helperText = "Select an existing subject or type your own.",
+  maxLength,
 }: Readonly<SubjectComboboxProps>) {
   return (
     <SuggestionCombobox
@@ -30,6 +32,7 @@ export function SubjectCombobox({
       placeholder={placeholder}
       disabled={disabled}
       helperText={helperText}
+      maxLength={maxLength}
       allowCustom
       toggleLabel="Toggle subject suggestions"
       customOptionLabel="Custom"

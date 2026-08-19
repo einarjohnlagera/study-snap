@@ -20,7 +20,7 @@ import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { getAuthUser, type AuthUser } from "@/lib/auth";
-import { getCollectionLabels, getCollectionTerminalAction } from "@/lib/collection-labels";
+import { getCollectionLabels, getCollectionTerminalAction, UNGROUPED_SECTION_NAME } from "@/lib/collection-labels";
 import {
   canIncludeCollectionItemInPremiumExam,
   getCollectionPremiumExamReadyNoteIds,
@@ -113,7 +113,6 @@ type ContinuePlanAction = {
 
 const TITLE_MAX_LENGTH = 150;
 const LABEL_MAX_LENGTH = 120;
-const UNGROUPED_SECTION_NAME = "Ungrouped";
 const LARGE_VIEWPORT_MIN_WIDTH = 1024;
 const TODAY_FOCUS_EYEBROW = "Today's Focus";
 const CONTINUE_STUDYING_LABEL = "Continue Studying";
@@ -143,13 +142,21 @@ function normalizeSectionName(label: string | null | undefined): string {
   return label?.trim() ?? "";
 }
 
+function normalizeSectionComparison(value: string): string {
+  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
+}
+
 function getCollectionItemSections(items: NoteCollectionItem[]): { hasSections: boolean; sections: CollectionItemSection[]; sectionNames: string[] } {
   const groupedSections = new Map<string, CollectionItemSection>();
   const ungroupedItems: NoteCollectionItem[] = [];
 
   sortCollectionItemsByPosition(items).forEach((item) => {
     const sectionName = normalizeSectionName(item.label);
-    if (!sectionName) {
+    // A label matching the reserved bucket name in ANY casing belongs in the synthetic bucket. Without
+    // this it renders as a second card with the identical title, and because getSectionReadinessKey
+    // folds both into one key, BOTH cards show the same summed "N% · M due" -- a wrong number, not
+    // just a cosmetic collision.
+    if (!sectionName || normalizeSectionComparison(sectionName) === normalizeSectionComparison(UNGROUPED_SECTION_NAME)) {
       ungroupedItems.push(item);
       return;
     }
@@ -192,7 +199,11 @@ function getNoteMeta(item: Pick<NoteCollectionItem, "subject" | "courseProgram">
 }
 
 function getSectionReadinessKey(label: string | null | undefined): string {
-  return normalizeSectionName(label) || UNGROUPED_SECTION_NAME;
+  const name = normalizeSectionName(label);
+  if (!name || normalizeSectionComparison(name) === normalizeSectionComparison(UNGROUPED_SECTION_NAME)) {
+    return UNGROUPED_SECTION_NAME;
+  }
+  return name;
 }
 
 export function aggregateSectionReadiness(
@@ -3019,7 +3030,11 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     const trimmed = newName.trim();
     setEditingSectionId(null);
     setEditingSectionName("");
-    if (!trimmed || trimmed === section.name || trimmed === UNGROUPED_SECTION_NAME) return;
+    if (
+      !trimmed
+      || trimmed === section.name
+      || normalizeSectionComparison(trimmed) === normalizeSectionComparison(UNGROUPED_SECTION_NAME)
+    ) return;
     const targetExists = sectionNames.some((name) => name === trimmed && name !== section.name);
     if (targetExists) {
       setPendingSectionRename({ oldName: section.name, newName: trimmed });

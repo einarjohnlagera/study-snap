@@ -6,6 +6,7 @@ export type CollectionLabels = {
   plural: string;
   goalSingular: string;
   subjectSingular: string;
+  sectionSingular: string;
   primarySingular: string;
   companionSingular: string;
   navLabel: string;
@@ -31,6 +32,7 @@ const DEFAULT_LABELS: CollectionLabels = {
   plural: "Collections",
   goalSingular: "Goal",
   subjectSingular: "Collection",
+  sectionSingular: "Section",
   primarySingular: "Primary Collection",
   companionSingular: "Companion",
   navLabel: "Collections",
@@ -46,6 +48,7 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
     plural: "Lesson Plans",
     goalSingular: "Course",
     subjectSingular: "Unit",
+    sectionSingular: "Part",
     primarySingular: "Primary Lesson Plan",
     companionSingular: "Companion",
     navLabel: "Lesson Plans",
@@ -59,6 +62,7 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
     plural: "Study Plans",
     goalSingular: "Goal",
     subjectSingular: "Subject Plan",
+    sectionSingular: "Section",
     primarySingular: "Primary Study Plan",
     companionSingular: "Companion",
     navLabel: "Study Plans",
@@ -72,6 +76,7 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
     plural: "Review Sets",
     goalSingular: "Goal",
     subjectSingular: "Subject Plan",
+    sectionSingular: "Section",
     primarySingular: "Primary Review Set",
     companionSingular: "Companion",
     navLabel: "Review Sets",
@@ -111,4 +116,25 @@ export function getCollectionTerminalAction(profileType: ProfileType | null | un
     mode: premiumMode,
     label: PREMIUM_EXAM_LABELS[premiumMode],
   };
+}
+
+/**
+ * The one string that names the synthetic "no section" bucket. It is BOTH the displayed name and the
+ * reserved name, so every authoring surface must reject it rather than store it. Keeping it here, in
+ * one place, is what makes that guarantee possible -- a second copy would let a curator type the
+ * displayed name and mint a real section that renders identically to the bucket.
+ *
+ * Deliberately NOT profile-mapped: it names a state ("not in a section"), not a level, and a second
+ * profile-specific spelling would reintroduce exactly the multi-string problem it exists to avoid.
+ */
+export const UNGROUPED_SECTION_NAME = "Not in a section";
+
+/** Comparison form for section names: trimmed, whitespace-collapsed, lowercased. */
+export function normalizeSectionValue(value: string): string {
+  return value.trim().replaceAll(/\s+/g, " ").toLowerCase();
+}
+
+/** True when a user-supplied section name collides with the reserved bucket, in any casing. */
+export function isReservedSectionName(value: string): boolean {
+  return normalizeSectionValue(value) === normalizeSectionValue(UNGROUPED_SECTION_NAME);
 }

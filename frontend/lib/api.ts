@@ -145,6 +145,7 @@ export type BulkGenerateNotesRequest = {
   domainContext?: DomainContext | null;
   learnerLevel?: LearnerLevel | null;
   collectionId?: string | null;
+  sectionLabel?: string | null;
 };
 
 export type BulkGenerateNotesResponse = {
@@ -529,6 +530,7 @@ export type AnalyticsEventType =
   | "COURSE_PROGRAM_VALUE_SELECTED"
   | "NOTES_BULK_IMPORTED"
   | "COLLECTION_CREATED"
+  | "COLLECTION_SECTION_ASSIGNED"
   | "STUDY_PLAN_ADOPTED"
   | "STUDY_GOAL_ADOPTED"
   | "PLAN_READINESS_VIEWED"

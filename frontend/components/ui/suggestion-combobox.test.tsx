@@ -21,11 +21,26 @@ describe("SuggestionCombobox", () => {
     );
 
     const input = screen.getByRole("textbox");
+    expect(input).not.toHaveAttribute("maxLength");
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: "Marine Biology" } });
 
     expect(onChange).toHaveBeenLastCalledWith("Marine Biology");
     expect(screen.getByRole("button", { name: /Use "Marine Biology"/i })).toBeInTheDocument();
+  });
+
+  it("passes an optional max length to the text input", () => {
+    render(
+      <SuggestionCombobox
+        id="subject"
+        value=""
+        options={[]}
+        onChange={jest.fn()}
+        maxLength={64}
+      />,
+    );
+
+    expect(screen.getByRole("textbox")).toHaveAttribute("maxLength", "64");
   });
 
   it("shows labels for fixed options and returns the option value on selection", () => {
