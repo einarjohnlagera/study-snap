@@ -553,6 +553,18 @@ describe("StudyPlanBuilderPageClient", () => {
     expect(await screen.findByRole("button", { name: "Set sections from note subjects" })).toBeDisabled();
   });
 
+  it("keeps the set-sections button to a two-word visible label", async () => {
+    // Button copy is capped at two words; the longer phrasing lives in the accessible name and
+    // the confirmation dialog, not on the button face.
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), subject: "Biology" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    const trigger = await screen.findByRole("button", { name: "Set sections from note subjects" });
+    expect(trigger).toHaveTextContent(/^Set sections$/);
+  });
+
   it("starts sections expanded and collapses them at desktop widths", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
       { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },

@@ -1906,10 +1906,16 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
               <Button
                 type="button"
                 variant="outline"
+                // Visible copy stays two words per the button-label rule. The accessible name keeps
+                // the source, because a screen reader user cannot see the confirmation dialog that
+                // explains it until they have already activated this. It extends the visible label
+                // rather than replacing it, so WCAG 2.5.3 (Label in Name) still holds -- and it
+                // disambiguates this from the dialog's own "Set sections" confirm button.
+                aria-label={`Set ${labels.sectionSingular.toLowerCase()}s from note subjects`}
                 onClick={() => setSetSectionsConfirmOpen(true)}
                 disabled={mutationInProgress || !hasNonBlankLeafSubject}
               >
-                Set {labels.sectionSingular.toLowerCase()}s from note subjects
+                Set {labels.sectionSingular.toLowerCase()}s
               </Button>
               <Button type="button" onClick={() => setLeafAddNotesOpen(true)} disabled={mutationInProgress}>
                 <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
