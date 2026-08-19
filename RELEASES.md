@@ -1,44 +1,52 @@
 # RELEASES.md - NoteLib
 
-## v0.89.0 - Regeneration Integrity
+## v0.89.0 - Support Another Learner
 
-**Status: In Progress** (kicked off 2026-08-19)
+**Status: In Progress** (kicked off 2026-08-19 as *Regeneration Integrity*, **rescoped the same day**)
 
-Theme: regenerating a Study Pack should not silently take content away.
+Theme: a parent, tutor or sibling should be able to hand someone a quiz without pretending to be a teacher.
 
-### The defect
+### ⚠️ Why this replaced the release's original scope, stated precisely
 
-**A learner regenerates a Study Pack and the new summary is missing a comparison table or a Common Misconceptions block the previous version had.** There is no warning before, no indication after, and **no version history to recover from** — regeneration updates the pack in place, by design, so the prior content is simply gone.
+**The original scope was *Regeneration Integrity*, and its item 1 was a gate: reproduce the defect before fixing it.** That probe needs a human to create a note, run eight live regenerations, and read the results.
 
-Observed 2026-08-04 during the `R4` verification, on the `Strength of Materials` note. **One sample, cause unestablished.** Two explanations were already ruled out at observation time and must not be re-proposed without new evidence: it is **not domain drift** (the surviving prose stayed fully domain-specific) and it is **not a null level signal** (the note's own history falsifies it — the original pack also had `learner_level` NULL and *did* carry the table).
+**⚠️ It was deferred for want of owner time — the hypothesis was NOT tested and NOT killed.** This is *not* the `v0.87.0` case, where a probe ran and falsified the premise. Nothing was learned about regeneration; the release simply could not start. **Do not record this as evidence that regeneration is fine.** The Backlog Index row stays open at full strength, and the harness written for it is preserved at `docs/claude-plans/v0.89.0-regeneration-reproduction.md`, so the next attempt starts where this one stopped rather than re-deriving the procedure.
 
-### The leading hypothesis, and why the release does not assume it
+### What the replacement is, and why it was ready
 
-`prompts/study-pack-v1/developer.txt:35-36` makes both blocks **conditionally optional by design**:
+**Support Another Learner** is owner-ratified direction (2026-08-14). Its gate was a **decision**, not effort: *"does Phase 1 already largely exist? Audit that before scoping."*
 
-- *"if the notes cover multiple related concepts that can be meaningfully compared … include a compact markdown comparison table; **omit if not applicable**"*
-- *"if the notes contain concepts that are commonly misunderstood … end with a short **Common Misconceptions** paragraph; **omit if no clear misconceptions apply**"*
+**The audit ran 2026-08-19, and the answer is yes — Phase 1 is built, and one gate on the wrong axis is hiding it.**
 
-So on every regeneration the model **re-decides** whether each block applies, and nothing carries the prior answer forward. That is a plausible mechanism for exactly the observed loss — but it is a reading of a prompt, not a measurement.
+| Capability | Exists | Gate today |
+|---|---|---|
+| Generate a quiz **for someone else** | ✅ | **none** — any profile can |
+| Recipient takes it with **no account** | ✅ | `/quiz/share/**` is `permitAll` (`SecurityConfig:63`) |
+| Share-link plan metering | ✅ | FREE 3 / PLUS 10 / PRO unlimited |
+| **Create the share link** | ✅ | **`TEACHER` or `ADMIN` only** ← the blocker |
+| DOCX export / multi-version | ✅ | `TEACHER` or `ADMIN` |
+
+`QuizShareLinkService.requireTeacherOrAdmin` (`:160-166`) is the only thing between today and Phase 1. Everything downstream already works, anonymously, end to end.
+
+**⚠️ And it is exactly the axis error the ratified direction names.** `ProfileType` answers *"how do YOU learn?"*; it is being used here to answer *"may you help someone?"* A parent helping their child is a `STUDENT` or `BOARD_EXAM` profile, so **the only workaround today is to misrepresent your own learning profile** — which changes dashboard emphasis, quiz-mode visibility *and* generation behaviour. The workaround damages the helper's own product experience, which is why this is a defect rather than a missing feature.
 
 ### Planned Scope
 
-1. **⚠️ REPRODUCE FIRST, and this is a gate, not a formality.** Regenerate the same pack several times against the real API and record which optional blocks survive each round. **State the gate in advance: if the blocks do not drop across repeated regenerations, the hypothesis is wrong and this release rescopes** — exactly as `v0.87.0` did when a 14-topic probe came back 14/14 clean and killed its premise. Do not write a fix before this runs.
-2. **Fix, shaped by what step 1 finds.** Deliberately not pre-committed. The candidates, in rising cost: warn before regenerating and name what may change; carry the prior version's structural features into the regeneration prompt as a floor; or preserve the prior content so it is recoverable.
-3. **Make the recovery sweep write `generation_status_at` (backend).** `GenerationRecoveryRowWriter.recoverPool:58-59` sets `POOL_STATUS_FAILED` and saves without stamping — a fifth status-write site beside the four lifecycle sites that do stamp. Small, certain, and evidence-found.
+1. **Open share-link creation to any onboarded user (backend).** Replace the `TEACHER`/`ADMIN` check in `QuizShareLinkService` with the existing onboarding guard. **No new quota and no new limit** — `QuizShareLimitService` already meters this per plan.
+2. **Frame it as helping someone else (frontend).** The capability is invisible to a non-teacher today because nothing surfaces it. Surface the share affordance wherever a generated quiz can already be created, in language about giving it to someone — not about teaching.
+3. **Make the recovery sweep write `generation_status_at` (backend).** Carried unchanged from the original scope. `GenerationRecoveryRowWriter.recoverPool:58-59` sets `POOL_STATUS_FAILED` without stamping, which makes the **bounds** half of `[CHECKPOINT — due 2026-09-01]` unanswerable — churn cannot be detected without a sweep timestamp.
 
 ### Anti-drift
 
-- **⚠️ Do NOT re-propose domain drift or a null level signal as the cause.** Both were ruled out on the original sample, on evidence recorded in the Backlog Index. Re-deriving them wastes the release.
-- **⚠️ Regeneration stays IN-PLACE.** `CLAUDE.md`'s versioning rule is binding: regeneration updates the existing Study Pack so quiz and session history stay linked. **A fix that writes a new Study Pack row per version breaks that link** and is out of scope. If the answer turns out to be version history, it needs a separate archive and its own decision — not a second live pack.
-- **⚠️ Regeneration still requires explicit user confirmation.** No auto-regeneration, ever.
-- **⚠️ Do NOT make the optional blocks mandatory.** They are optional for a reason — forcing a comparison table onto material with nothing to compare produces a worse pack, not a safer one. The problem is *losing a block that applied*, not the blocks being conditional.
-- **No new bounds or validation on generated content.** `v0.87.0` is on record that changing validation while measuring failures destroys the read; the same logic applies here.
-- **Item 3 changes no sweep behaviour** — the eligibility filter, the bounds, and the FAILED transition all stay exactly as they are. It writes one additional column.
-
-### Why item 3 rides this release
-
-It is unrelated to regeneration and small enough to say so plainly. It ships now because **it blocks a question already on the calendar**: `[CHECKPOINT — due 2026-09-01]` has a bounds half — *are the bounds too tight?* — which reads as churn, pools repeatedly swept and rebuilt. With no sweep timestamp there is no way to distinguish a pool swept in August from one swept five minutes ago, so that read cannot run. Fixing it after the due date means the checkpoint answers with a confident guess instead of an honest unknown.
+- **⚠️ Phase 1 records NO relationship.** No linking, no invitation, no acceptance, no permissions model, and **no cross-user read**. Those are Phases 2 and 3, and Phase 3 is where the product's first cross-user authorization lives. A "linked learners" table in this release is out of scope and would pull authorization forward by two phases.
+- **⚠️ Do NOT introduce a supporter `ProfileType` value, and do NOT gate anything new on `ProfileType`.** That is the exact error being corrected. `PARENT` already exists as an unimplemented enum value with **zero users** — leave it alone; do not wire it up as the mechanism.
+- **⚠️ Consent, minors and Data Privacy Act obligations do not apply to Phase 1 and must not be built for it.** They matter from Phase 2, when a relationship is recorded. Phase 1 stores nothing about the recipient — they take the quiz anonymously.
+- **⚠️ Whose quota is already answered by the existing code and needs no decision:** the supporter generates on their own account, against their own quota and their own share-link limit. Do not build a shared or transferred quota.
+- **Keep DOCX export and multi-version exports `TEACHER`-gated.** Printable multi-version exam papers are classroom administration, not helping one person learn. Only the share link opens.
+- **⚠️ Do NOT justify this on retention.** The supporter's return loop is the progress view, which is Phase 3. Phase 1's value accrues to the **learner** receiving the material, so judging it by supporter return rate would kill a working feature with the wrong metric.
+- **⚠️ No demand-signal capture in onboarding before 2026-09-11** — onboarding is under measurement against a 62.4% baseline and `[CHECKPOINT — due 2026-09-11]` owns that window.
+- **Notes stay private.** Nothing in this release exposes note content to anyone; a shared quiz carries questions, not the learner's notes.
+- **Item 3 changes no sweep behaviour** — eligibility, bounds and the `FAILED` transition are untouched. It writes one additional column.
 
 ### Shipped
 
