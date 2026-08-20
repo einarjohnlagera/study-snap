@@ -126,6 +126,20 @@ If someone is purely a supporter and not a learner, their Dashboard has nothing 
 
 ---
 
+## 6b. Surfacing — ratified 2026-08-20
+
+Where the capability appears was decided after the phases shipped, following a product-UX consultation.
+
+- **It stays a CAPABILITY.** No profile mode, no opt-in toggle. A preference would re-introduce the mode this framing exists to remove, and it can disagree with reality — someone switches it on, never connects, and the surfaces stay cluttered.
+- **⚠️ Sharing and connecting are INDEPENDENT.** A shared-quiz recipient needs no account and no relationship, so quiz sharing is **not** gated on having an accepted connection. An earlier proposal coupled them; that was wrong.
+- **"Quiz for someone" does not belong in the practice row.** It is a support/share action, and beside Start Quick Review it risks becoming an avoidance path on the surface retention is decided. It lives in a secondary note action / share surface.
+- **Accepted connections gate supporter-specific surfaces only** — People You Support, and progress.
+- **Learning Connections stays independently discoverable**, so a first connection can always be formed.
+- **`/progress` stays the current learner's.** Supporter progress stays under Learning Connections / Dashboard; the two views carry different privacy contracts and merging them invites reaching for the owner-scoped DTO.
+- **⚠️ Invitations stay one-at-a-time by principle: the quiz LINK is the many-recipient mechanism, while a permission-bearing relationship should stay deliberate.**
+
+---
+
 ## 7. What this proposal does NOT change
 
 - **No new Profile Type**, and no change to how existing profile types behave.
