@@ -23,7 +23,7 @@ It is not:
 - an AI-synthesized document
 - a Study Pack
 - a quota bucket
-- a user- or teacher-shareable object in v1
+- a directly shareable object in v1; any onboarded user may create quiz share links, independent of `ProfileType`
 
 Admin-published collections are the v0.31.0 exception: an admin can publish a collection as an adoptable study plan over already-public notes. Learners do not study the source plan directly; adopting creates a private snapshot copy in their own library.
 
@@ -294,7 +294,7 @@ Profile-aware presentation is a frontend responsibility. The backend responses s
 
 | Profile | Frontend label | Primary terminal action |
 |---|---|---|
-| `TEACHER` | `Lesson Plan` | `Build Exam` → combined sectioned DOCX + shareable quiz links through Exam Builder |
+| `TEACHER` | `Lesson Plan` | `Build Exam` → combined sectioned DOCX through Exam Builder; quiz share links are available to every onboarded profile from Quiz Preview |
 | `STUDENT` | `Study Plan` | `Take the Long Exam` → Long Exam setup |
 | `BOARD_EXAM` | `Review Set` | `Take the Board Exam` → Board Exam setup |
 | `PROFESSIONAL` | `Collection` | `Start Interview Practice` → Interview Practice setup |
@@ -957,7 +957,7 @@ Deferred Prompt B slots:
 Do not add these under the collection CRUD spine unless explicitly scoped later:
 
 - profile-aware labels or CTAs in the backend
-- DOCX/shareable quiz-link generation directly from collections
+- DOCX generation directly from collections; quiz share links remain a profile-neutral Quiz Preview action rather than a collection-level action
 - collection-level AI synthesis
 - bulk generate across a collection
 - user/teacher-authored published or shared collections (admin-published plans shipped in v0.31.0; non-admin publishing stays deferred)

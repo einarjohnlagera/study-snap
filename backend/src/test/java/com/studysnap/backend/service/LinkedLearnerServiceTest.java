@@ -13,6 +13,9 @@ import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.LinkedLearnerNotAllowedException;
+import com.studysnap.backend.exception.InvalidLinkedLearnerBirthYearException;
+import com.studysnap.backend.exception.LinkedLearnerBirthYearCorrectionNotAllowedException;
+import com.studysnap.backend.exception.LinkedLearnerProgressNotFoundException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
@@ -22,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.Year;
@@ -331,6 +335,214 @@ class LinkedLearnerServiceTest {
     }
 
     @Test
+    void downwardCorrectionPausesUnconsentedAcceptedRelationshipAndClearsAcceptedAt() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 30);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        when(relationshipRepository.findByLearnerUserIdAndStatus(
+                learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of());
+
+        service.correctBirthYear(learner.getId(), Year.now().getValue() - 10);
+
+        assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.PENDING);
+        assertThat(relationship.getAcceptedAt()).isNull();
+        assertThat(learner.getBirthYearUpdatedAt()).isNotNull();
+        verify(relationshipRepository).saveAll(List.of(relationship));
+    }
+
+    @Test
+    void correctionPreviewCountsOnlyAcceptedRelationshipsWithoutConsent() {
+        UserEntity firstSupporter = user(SUPPORTER_EMAIL);
+        UserEntity secondSupporter = user("second-supporter@example.com");
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 30);
+        LinkedLearnerRelationshipEntity unconsented = acceptedRelationship(firstSupporter, learner);
+        LinkedLearnerRelationshipEntity consented = acceptedRelationship(secondSupporter, learner);
+        LinkedLearnerGuardianConsentEntity consent = new LinkedLearnerGuardianConsentEntity();
+        consent.setRelationshipId(consented.getId());
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        when(relationshipRepository.findByLearnerUserIdAndStatus(
+                learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of(unconsented, consented));
+        when(consentRepository.findByRelationshipId(unconsented.getId())).thenReturn(Optional.empty());
+        when(consentRepository.findByRelationshipId(consented.getId())).thenReturn(Optional.of(consent));
+
+        var preview = service.previewBirthYearCorrection(
+                learner.getId(), Year.now().getValue() - 10);
+
+        assertThat(preview.affectedConnectionCount()).isOne();
+        verify(userRepository, never()).save(any());
+        verify(relationshipRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void downwardCorrectionLeavesConsentedAcceptedRelationshipAccepted() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 30);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        LinkedLearnerGuardianConsentEntity consent = new LinkedLearnerGuardianConsentEntity();
+        consent.setRelationshipId(relationship.getId());
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        when(relationshipRepository.findByLearnerUserIdAndStatus(
+                learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.of(consent));
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of());
+
+        service.correctBirthYear(learner.getId(), Year.now().getValue() - 10);
+
+        assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
+        assertThat(relationship.getAcceptedAt()).isNotNull();
+        verify(relationshipRepository).saveAll(List.of());
+    }
+
+    @Test
+    void downwardCorrectionLeavesPendingAndRevokedRelationshipsUntouched() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 30);
+        LinkedLearnerRelationshipEntity pending = relationship(supporter, learner, LinkedLearnerSide.SUPPORTER);
+        LinkedLearnerRelationshipEntity revoked = relationship(supporter, learner, LinkedLearnerSide.LEARNER);
+        revoked.setStatus(LinkedLearnerStatus.REVOKED);
+        OffsetDateTime revokedAt = OffsetDateTime.now().minusDays(1);
+        revoked.setRevokedAt(revokedAt);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        when(relationshipRepository.findByLearnerUserIdAndStatus(
+                learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of());
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of());
+
+        service.correctBirthYear(learner.getId(), Year.now().getValue() - 10);
+
+        assertThat(pending.getStatus()).isEqualTo(LinkedLearnerStatus.PENDING);
+        assertThat(revoked.getStatus()).isEqualTo(LinkedLearnerStatus.REVOKED);
+        assertThat(revoked.getRevokedAt()).isEqualTo(revokedAt);
+    }
+
+    @Test
+    void upwardCorrectionChangesNoRelationship() {
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 10);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of());
+
+        service.correctBirthYear(learner.getId(), Year.now().getValue() - 30);
+
+        verify(relationshipRepository, never()).findByLearnerUserIdAndStatus(any(), any());
+        verify(relationshipRepository).saveAll(List.of());
+    }
+
+    @Test
+    void noOpCorrectionDoesNotTouchTimestampOrRelationships() {
+        UserEntity learner = user(LEARNER_EMAIL);
+        int birthYear = Year.now().getValue() - 20;
+        learner.setBirthYear(birthYear);
+        OffsetDateTime originalTimestamp = OffsetDateTime.now().minusDays(2);
+        learner.setBirthYearUpdatedAt(originalTimestamp);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of());
+
+        service.correctBirthYear(learner.getId(), birthYear);
+
+        assertThat(learner.getBirthYearUpdatedAt()).isEqualTo(originalTimestamp);
+        verify(userRepository, never()).save(any());
+        verify(relationshipRepository, never()).findByLearnerUserIdAndStatus(any(), any());
+        verify(relationshipRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void correctionUsesTheDatabasePlausibilityBounds() {
+        UUID learnerUserId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.correctBirthYear(learnerUserId, 1899))
+                .isInstanceOf(InvalidLinkedLearnerBirthYearException.class);
+        assertThatThrownBy(() -> service.correctBirthYear(learnerUserId, 10000))
+                .isInstanceOf(InvalidLinkedLearnerBirthYearException.class);
+
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void learnerWithNoCurrentLinksCanCorrectTheirOwnBirthYear() {
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(2000);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of());
+
+        service.correctBirthYear(learner.getId(), 2001);
+
+        assertThat(learner.getBirthYear()).isEqualTo(2001);
+        assertThat(learner.getBirthYearUpdatedAt()).isNotNull();
+    }
+
+    @Test
+    void correctionCannotBecomeAFirstDeclarationOutsideTheLinkFlow() {
+        UserEntity learner = user(LEARNER_EMAIL);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+
+        assertThatThrownBy(() -> service.correctBirthYear(learner.getId(), 2001))
+                .isInstanceOf(LinkedLearnerBirthYearCorrectionNotAllowedException.class);
+
+        assertThat(learner.getBirthYear()).isNull();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void downwardCorrectionCutsSupporterProgressReadOnTheNextAuthorizationCheck() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 30);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
+        when(relationshipRepository.findByLearnerUserIdAndStatus(
+                learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of());
+        LinkedLearnerReadAuthorizationService readAuthorizationService =
+                new LinkedLearnerReadAuthorizationService(relationshipRepository);
+
+        UUID authorizedLearnerId = readAuthorizationService.requireAcceptedLearnerId(
+                supporter.getId(), relationship.getId());
+        service.correctBirthYear(learner.getId(), Year.now().getValue() - 10);
+
+        assertThat(authorizedLearnerId).isEqualTo(learner.getId());
+        assertThatThrownBy(() -> readAuthorizationService.requireAcceptedLearnerId(
+                supporter.getId(), relationship.getId()))
+                .isInstanceOf(LinkedLearnerProgressNotFoundException.class);
+    }
+
+    @Test
+    void failedRelationshipWritePropagatesSoTheTransactionalCorrectionRollsBack() throws NoSuchMethodException {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 30);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        when(relationshipRepository.findByLearnerUserIdAndStatus(
+                learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        doThrow(new IllegalStateException("forced relationship write failure"))
+                .when(relationshipRepository).saveAll(any());
+
+        assertThatThrownBy(() -> service.correctBirthYear(
+                learner.getId(), Year.now().getValue() - 10))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(LinkedLearnerService.class
+                .getMethod("correctBirthYear", UUID.class, int.class)
+                .isAnnotationPresent(Transactional.class)).isTrue();
+    }
+
+    @Test
     void listResponseExposesNoLearnerActivityFields() {
         Set<String> componentNames = Arrays.stream(LinkedLearnerResponse.class.getRecordComponents())
                 .map(component -> component.getName().toLowerCase())
@@ -378,6 +590,14 @@ class LinkedLearnerServiceTest {
         relationship.setStatus(LinkedLearnerStatus.PENDING);
         relationship.setInitiatedBy(initiatedBy);
         relationship.setCreatedAt(OffsetDateTime.now());
+        return relationship;
+    }
+
+    private LinkedLearnerRelationshipEntity acceptedRelationship(UserEntity supporter, UserEntity learner) {
+        LinkedLearnerRelationshipEntity relationship = relationship(
+                supporter, learner, LinkedLearnerSide.SUPPORTER);
+        relationship.setStatus(LinkedLearnerStatus.ACCEPTED);
+        relationship.setAcceptedAt(OffsetDateTime.now().minusDays(1));
         return relationship;
     }
 }

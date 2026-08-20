@@ -19,7 +19,7 @@ NoteLib supports GDPR-style data portability through an authenticated account ex
 Included:
 
 - `meta`: `exportedAt`, `schemaVersion`
-- `account`: profile basics owned by the user, including email, first/last/display name, username, profile type, learner level, course/program, study goal, focus subjects, exam date, and account creation time
+- `account`: profile basics owned by the user, including email, first/last/display name, username, profile type, learner level, course/program, study goal, focus subjects, exam date, account-global `birthYear`, and account creation time
 - `notes[]`: owned public and private notes, including title, subject, note-level `domainContext`, note-level `learnerLevel`, content, visibility, copy source title, and timestamps; both new metadata fields may be `null`
 - `studyPacks[]`: owned Study Packs, including linked `noteId`, title, summary, key concepts, and quiz
 - `collections[]`: owned Study Plans/collections, with ordered owned note references by id and title
@@ -32,6 +32,7 @@ Excluded:
 - Analytics events
 - Financial and billing records, including payments, subscriptions, transactions, vouchers, and provider event data
 - Any data not owned by the requester
+- Linked-learner relationship and guardian-consent rows are not currently included. The export exposes the requester's current `birthYear`, but does not disclose counterparties or relationship-specific attestations.
 
 ## Design Decisions
 

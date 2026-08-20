@@ -40,4 +40,9 @@ public interface LinkedLearnerRelationshipRepository extends JpaRepository<Linke
             UUID supporterUserId,
             UUID learnerUserId
     );
+
+    List<LinkedLearnerRelationshipEntity> findByLearnerUserIdAndStatus(
+            UUID learnerUserId,
+            LinkedLearnerStatus status
+    );
 }

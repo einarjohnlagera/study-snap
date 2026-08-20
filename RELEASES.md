@@ -1,5 +1,54 @@
 # RELEASES.md - NoteLib
 
+## v0.89.1 - Birth Year Correction
+
+**Status: Released** (kicked off 2026-08-19, signed off 2026-08-20)
+
+Theme: a learner who mis-declared their age should be able to fix it, and the consent gate should hold when they do.
+
+### The defect
+
+**`users.birth_year` is account-global and write-once, with no correction path.** `LinkedLearnerService:203` is the only writer in the codebase, and all three read sites guard on `== null` (`:120`, `:158`, `:173`), so the first value ever recorded is permanent.
+
+A learner who declares an adult year — **by mistake, or coached by a supporter who wants the consent step gone** — permanently disables guardian consent for **every future supporter link they ever form**, not just the one being negotiated. `requiresGuardianConsent` reads that one frozen field forever.
+
+Found by the `v0.89.0` cold pressure test and recorded there as a Known Limitation rather than fixed in-scope. **On a minors-consent contract, an un-correctable self-declaration is the wrong shape.**
+
+### Planned Scope
+
+1. **A learner-only correction path (backend + frontend).** Only the learner may change their own birth year, matching `recordBirthYear`'s existing rule that a supporter can never declare it for them. Record when it last changed.
+2. **⚠️ Re-evaluate existing links on a DOWNWARD correction (backend).** This is the half that makes the fix mean something. If a learner corrects to a year that now requires guardian consent, every `ACCEPTED` link of theirs **without** a consent record reverts to `PENDING` until consent is attested. Leaving them active would mean an un-consented minor relationship — the exact state the gate exists to prevent, reached by a route the gate does not currently watch.
+3. **Tell both sides why access stopped (frontend).** A supporter whose access reverts must see that consent is now required, not a silent empty state. The learner must see which connections are paused and what unblocks them.
+4. **Close the six documentation gaps `v0.89.0` recorded** — `dashboard.md` (the People-you-support card), `navigation.md` (`/linked-learners` in the no-back-link list, and the new nav item), `data-export.md` (`birthYear`), `account-deletion.md` (the three new cascade-deleted objects), and the three `collections.md` lines still describing share links as teacher-gated.
+
+### Anti-drift
+
+- **⚠️ Do NOT move birth year into signup, onboarding or profile editing.** `v0.89.0` collects it **at link time only**, and has a test asserting signup and profile update leave it null. That is a deliberate minimal-collection posture, and onboarding additionally stays frozen until `[CHECKPOINT — due 2026-09-11]`. The correction lives on the **linked-learners** surface, where the obligation was incurred.
+- **⚠️ A downward correction must NOT revoke.** Reverting to `PENDING` preserves the relationship both people already agreed to; revoking would destroy it and require re-invitation. The gate is about consent, not about ending the connection.
+- **⚠️ Only the learner may correct their own year.** A supporter must never be able to change it — that would hand the consent gate to the party it exists to check.
+- **⚠️ Do NOT store a history of declared values.** Keep the current value plus when it last changed. This is a minor's personal data, and the consent record already carries `attested_at`, so "consent was attested while we believed they were older" is already reconstructable without retaining an age log.
+- **The threshold stays configuration** with its conservative default, and the number remains owner-owned pending counsel. This release does not decide it.
+- **No change to the authorization model, the privacy line, or the cross-user read.** Phase 3 is untouched; a supporter still sees readiness, progress and quiz performance and never notes.
+- **No new analytics event.** `[CHECKPOINT — due 2026-09-19]` reads the relationship table, and this release must not change what that table means.
+
+### Shipped
+
+- **Learners can correct their own account-global birth year from Learning connections.** `V121` adds nullable `users.birth_year_updated_at` without back-dating existing declarations; a server-owned preview uses the configured guardian-consent threshold to warn exactly how many active connections will pause. The account-level correction route has no relationship or target-user identifier, validates against the existing `1900..9999` database plausibility bound, stores no declaration history, and treats a same-value correction as a no-op without timestamp churn.
+- **Downward age corrections re-apply the guardian-consent gate atomically.** In the same transaction as the corrected year, every un-consented `ACCEPTED` relationship for that learner reverts to `PENDING` and clears `accepted_at`; consented, already-pending and revoked links remain unchanged, while corrections toward an older age rewrite no links. The existing exact-`ACCEPTED` authorization check cuts supporter progress access immediately, and Learning connections explains the consent pause to both parties using the existing consent-state fields.
+- **Closed the linked-learners documentation gaps carried from v0.89.0.** Dashboard, authenticated navigation, account export, account deletion and collection-sharing docs now match the shipped People-you-support card, Learning connections route/nav item, exported birth year, relationship/consent deletion behavior, and profile-neutral quiz sharing.
+
+### Known limitations
+
+- **The direction guard in `relationshipsPausedByCorrection` is redundant today, and would be wrong the moment the threshold moves.** `correctedBirthYear <= currentBirthYear` short-circuits before the consent check, but `!requiresGuardianConsent(corrected)` already covers every currently reachable case — which is why removing the guard fails no test. **The scenario where it bites is a threshold RAISE:** if `guardian-consent-max-age` is later increased, a learner whose year was previously adult becomes a minor with un-consented `ACCEPTED` links, and a correction between two now-minor years would skip pausing them. **⚠️ That number is owner-owned and pending counsel, so this becomes live the day it is set** — revisit this branch at that point rather than treating it as dead code.
+- **A correction can lower the `ACCEPTED` relationship count**, which is the metric `[CHECKPOINT — due 2026-09-19]` reads. The checkpoint row says so; anyone running that read must check a fall against consent pauses rather than treating it as the feature failing.
+- **No checkpoint is owed by this release, and that is a recorded decision rather than an omission.** It changes no measurement and deliberately does not change what `linked_learner_relationships` means. Recorded at kickoff so the next kickoff's scan does not read the absence as drift.
+
+### Pre-signoff check — 2026-08-20
+
+**Cheap path taken deliberately.** One PR, one concept, no pre-existing shared method touched by two PRs — none of the conditions for a full cold-context pressure test were met, and `v0.89.0` had just paid for one that found five blocking defects. A single `advisor()` call was used instead.
+
+It raised three gate items, and **two did not hold on inspection**: the `Shipped` bullets had landed (not left as the kickoff placeholder), and `linked-learners.md`'s Known-circularity section had already been corrected to describe the account-global effect and the correction path. The third was real — `docs/releases/v0.89.1.md` did not exist — and is written here.
+
 ## v0.89.0 - Support Another Learner
 
 **Status: Released** (kicked off 2026-08-19 as *Regeneration Integrity*, **rescoped the same day**, widened to Phases 2 and 3, signed off 2026-08-19)

@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
+import com.studysnap.backend.dto.LinkedLearnerBirthYearCorrectionPreviewResponse;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.LinkedLearnerGuardianConsentEntity;
@@ -12,6 +13,7 @@ import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.InvalidLinkedLearnerBirthYearException;
+import com.studysnap.backend.exception.LinkedLearnerBirthYearCorrectionNotAllowedException;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.exception.LinkedLearnerNotAllowedException;
@@ -43,6 +45,7 @@ public class LinkedLearnerService {
     private static final List<LinkedLearnerStatus> LIVE_STATUSES =
             List.of(LinkedLearnerStatus.PENDING, LinkedLearnerStatus.ACCEPTED);
     private static final int MINIMUM_BIRTH_YEAR = 1900;
+    private static final int MAXIMUM_PLAUSIBLE_BIRTH_YEAR = 9999;
     // PLACEHOLDER FOR COUNSEL: the attestation text and version are not a legal position.
     private static final String GUARDIAN_ATTESTATION_VERSION = "guardian-consent-placeholder-v1";
     private static final String INVITATION_TEMPLATE = "linked-learner-invitation";
@@ -96,11 +99,46 @@ public class LinkedLearnerService {
     @Transactional(readOnly = true)
     public List<LinkedLearnerResponse> list(UUID callerUserId) {
         onboardingGuardService.assertProfileComplete(callerUserId);
-        return relationshipRepository
-                .findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(callerUserId, callerUserId)
-                .stream()
-                .map(relationship -> toResponse(relationship, callerUserId))
-                .toList();
+        return listRelationships(callerUserId);
+    }
+
+    @Transactional(readOnly = true)
+    public LinkedLearnerBirthYearCorrectionPreviewResponse previewBirthYearCorrection(
+            UUID callerUserId,
+            int birthYear
+    ) {
+        onboardingGuardService.assertProfileComplete(callerUserId);
+        validateCorrectionBirthYear(birthYear);
+        UserEntity learner = requireUser(callerUserId);
+        requireRecordedBirthYear(learner);
+        return new LinkedLearnerBirthYearCorrectionPreviewResponse(
+                relationshipsPausedByCorrection(learner, birthYear).size());
+    }
+
+    @Transactional
+    public List<LinkedLearnerResponse> correctBirthYear(UUID callerUserId, int birthYear) {
+        onboardingGuardService.assertProfileComplete(callerUserId);
+        validateCorrectionBirthYear(birthYear);
+        UserEntity learner = requireUser(callerUserId);
+        requireRecordedBirthYear(learner);
+        if (Integer.valueOf(birthYear).equals(learner.getBirthYear())) {
+            return listRelationships(callerUserId);
+        }
+
+        List<LinkedLearnerRelationshipEntity> relationshipsToPause =
+                relationshipsPausedByCorrection(learner, birthYear);
+        OffsetDateTime now = OffsetDateTime.now();
+        learner.setBirthYear(birthYear);
+        learner.setBirthYearUpdatedAt(now);
+        learner.setUpdatedAt(now);
+        userRepository.save(learner);
+
+        relationshipsToPause.forEach(relationship -> {
+            relationship.setStatus(LinkedLearnerStatus.PENDING);
+            relationship.setAcceptedAt(null);
+        });
+        relationshipRepository.saveAll(relationshipsToPause);
+        return listRelationships(callerUserId);
     }
 
     @Transactional
@@ -203,6 +241,43 @@ public class LinkedLearnerService {
         learner.setBirthYear(birthYear);
         learner.setUpdatedAt(OffsetDateTime.now());
         userRepository.save(learner);
+    }
+
+    private void validateCorrectionBirthYear(int birthYear) {
+        if (birthYear < MINIMUM_BIRTH_YEAR || birthYear > MAXIMUM_PLAUSIBLE_BIRTH_YEAR) {
+            throw new InvalidLinkedLearnerBirthYearException();
+        }
+    }
+
+    private void requireRecordedBirthYear(UserEntity learner) {
+        if (learner.getBirthYear() == null) {
+            throw new LinkedLearnerBirthYearCorrectionNotAllowedException();
+        }
+    }
+
+    private List<LinkedLearnerRelationshipEntity> relationshipsPausedByCorrection(
+            UserEntity learner,
+            int correctedBirthYear
+    ) {
+        Integer currentBirthYear = learner.getBirthYear();
+        if (currentBirthYear == null
+                || correctedBirthYear <= currentBirthYear
+                || !requiresGuardianConsent(correctedBirthYear)) {
+            return List.of();
+        }
+        return relationshipRepository
+                .findByLearnerUserIdAndStatus(learner.getId(), LinkedLearnerStatus.ACCEPTED)
+                .stream()
+                .filter(relationship -> consentRepository.findByRelationshipId(relationship.getId()).isEmpty())
+                .toList();
+    }
+
+    private List<LinkedLearnerResponse> listRelationships(UUID callerUserId) {
+        return relationshipRepository
+                .findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(callerUserId, callerUserId)
+                .stream()
+                .map(relationship -> toResponse(relationship, callerUserId))
+                .toList();
     }
 
     private boolean requiresGuardianConsent(int birthYear) {
