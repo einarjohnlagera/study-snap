@@ -101,6 +101,9 @@ public class UserEntity {
     @Column(name = "birth_year")
     private Integer birthYear;
 
+    @Column(name = "birth_year_updated_at")
+    private OffsetDateTime birthYearUpdatedAt;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "review_days", columnDefinition = "text[]")
     private String[] reviewDays;

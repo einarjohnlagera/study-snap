@@ -35,7 +35,7 @@ Current public navigation order:
 All sub-pages use a `BackLink` component (`components/ui/back-link.tsx`) that renders `← {Destination}` using `ArrowLeft` icon + destination label text.
 
 Rules:
-- Back link appears on sub-pages only. Main pages (Dashboard, Library, profile-aware Collections, Explore, Progress, Public Library, **Exam Hub index (`/exam`)**, My Profile, Settings) have no default back link.
+- Back link appears on sub-pages only. Main pages (Dashboard, Library, profile-aware Collections, Explore, Progress, Public Library, **Exam Hub index (`/exam`)**, Learning connections (`/linked-learners`), My Profile, Settings) have no default back link.
 - **`/exam` was added to that list in `v0.83.2`, after it turned out to be the reason the bug survived.** The Exam Hub index carried a `BackLink` to `/public/library`, miscategorising a destination that is top-level in both the marketing `Navbar` and `PublicFooter` as a sub-page of the Public Library. This list omitted `/exam` entirely, so nothing contradicted the stray link. **The fix was removal, not repointing** — `/exam` is reached directly, not from anywhere in particular. Pinned by a test asserting the index renders no `Public Library` link.
 - Back link uses explicit routing (not `router.back()`), so the destination is always predictable.
 - Back link label is the destination page name only — no "Back to" prefix.
@@ -65,6 +65,9 @@ Authenticated desktop navigation order:
 - `Library`
 - `Explore`
 - `Progress`
+- `Learning connections`
+
+`Learning connections` points to `/linked-learners`. It is profile-neutral because supporting another learner is independent of how the caller learns; it is not shown only to Teacher or supporter profile types. The relationship-scoped progress page is a sub-page and returns explicitly to Learning connections.
 
 `Explore` points to `/explore`, where a segmented control reuses the existing Official Review Set catalog and Public Library rendering. The page is reachable anonymously and renders the same two-tab structure for visitors and members; it remains a main page with no back link. The Review Sets tab is labeled `Official {profile-aware plural}` via `getCollectionLabels` (e.g. `Official Review Sets`, `Official Study Plans`) — not the bare profile-aware label, since that would collide with the Collections nav item above for `BOARD_EXAM` profiles, whose Collections nav label is also `Review Sets`; the `Official` prefix disambiguates the two destinations (v0.67.1 fix). Anonymous visitors use the existing `STUDENT` vocabulary, so their label is deliberately `Official Study Plans` rather than the null-profile fallback `Official Collections`. The second tab is `Notes`. `/collections/published` and `/public/library` remain independent main pages with unchanged canonical routes and no default back links; they are no longer direct authenticated-nav items.
 

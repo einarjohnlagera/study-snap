@@ -3,8 +3,9 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.GuardianConsentRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
-import com.studysnap.backend.dto.LinkedLearnerResponse;
+import com.studysnap.backend.dto.LinkedLearnerBirthYearCorrectionPreviewResponse;
 import com.studysnap.backend.dto.LinkedLearnerProgressResponse;
+import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.RecordLinkedLearnerBirthYearRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -17,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,6 +45,22 @@ public class LinkedLearnerController {
     @GetMapping
     public List<LinkedLearnerResponse> list(@AuthenticationPrincipal AuthenticatedUser user) {
         return linkedLearnerService.list(user.userId());
+    }
+
+    @PostMapping("/birth-year/correction-preview")
+    public LinkedLearnerBirthYearCorrectionPreviewResponse previewBirthYearCorrection(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody RecordLinkedLearnerBirthYearRequest request
+    ) {
+        return linkedLearnerService.previewBirthYearCorrection(user.userId(), request.birthYear());
+    }
+
+    @PutMapping("/birth-year")
+    public List<LinkedLearnerResponse> correctBirthYear(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody RecordLinkedLearnerBirthYearRequest request
+    ) {
+        return linkedLearnerService.correctBirthYear(user.userId(), request.birthYear());
     }
 
     @GetMapping("/{relationshipId}/progress")

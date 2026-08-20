@@ -204,6 +204,8 @@ Recommended fields:
 - `public_profile_visible` (boolean, default true)
 - `country_code` (optional)
 - `profile_type` (nullable enum)
+- `birth_year` (nullable account-global current declaration; first collected only in the linked-learner flow)
+- `birth_year_updated_at` (nullable timestamp of the last correction; existing declarations are not back-dated and no value history is retained)
 - `role` (`USER` | `ADMIN`)
 - `status`
 - `token_version`
@@ -216,6 +218,11 @@ Recommended fields:
 - `created_at`
 - `updated_at`
 - `last_login_at` (nullable)
+
+Linked-learner consent data:
+
+- `linked_learner_relationships` stores the directional supporter → learner relationship and its `PENDING`, `ACCEPTED` or `REVOKED` state. Only `ACCEPTED` authorizes the relationship-scoped progress read.
+- `linked_learner_guardian_consents` stores one relationship-specific attestation fact. A correction that makes consent necessary moves an un-consented accepted relationship back to `PENDING` in the same transaction as the year update; it never deletes or fabricates consent.
 
 ## Feedback Images
 

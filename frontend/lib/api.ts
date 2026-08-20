@@ -1105,6 +1105,10 @@ export type LinkedLearnerResponse = {
   guardianConsentRecorded: boolean;
 };
 
+export type LinkedLearnerBirthYearCorrectionPreviewResponse = {
+  affectedConnectionCount: number;
+};
+
 export type LinkedLearnerProgressResponse = {
   relationshipId: string;
   learnerDisplayName: string;
@@ -5422,6 +5426,39 @@ export async function recordLinkedLearnerBirthYear(
     true,
   );
   return parseApiResponse<LinkedLearnerResponse>(response, "Could not save the birth year.");
+}
+
+export async function previewLinkedLearnerBirthYearCorrection(
+  birthYear: number,
+): Promise<LinkedLearnerBirthYearCorrectionPreviewResponse> {
+  const response = await fetchWithAuth(
+    "/linked-learners/birth-year/correction-preview",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ birthYear }),
+    },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerBirthYearCorrectionPreviewResponse>(
+    response,
+    "Could not check this birth year correction.",
+  );
+}
+
+export async function correctLinkedLearnerBirthYear(
+  birthYear: number,
+): Promise<LinkedLearnerResponse[]> {
+  const response = await fetchWithAuth(
+    "/linked-learners/birth-year",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ birthYear }),
+    },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerResponse[]>(response, "Could not correct your birth year.");
 }
 
 export async function recordLinkedLearnerGuardianConsent(

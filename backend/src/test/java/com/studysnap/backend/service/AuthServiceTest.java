@@ -145,6 +145,7 @@ class AuthServiceTest {
         assertThat(savedUser.getValue().getKnowledgeImpactDigestRemindersEnabled()).isFalse();
         assertThat(savedUser.getValue().getMarketingEmailsEnabled()).isFalse();
         assertThat(savedUser.getValue().getBirthYear()).isNull();
+        assertThat(savedUser.getValue().getBirthYearUpdatedAt()).isNull();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
         verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
@@ -1138,6 +1139,8 @@ class AuthServiceTest {
         user.setLearnerLevel(LearnerLevel.COLLEGE);
         user.setCourseProgram("Biology");
         user.setBirthYear(2001);
+        OffsetDateTime birthYearUpdatedAt = OffsetDateTime.now().minusDays(3);
+        user.setBirthYearUpdatedAt(birthYearUpdatedAt);
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
         user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
         user.setTokenVersion(0);
@@ -1183,6 +1186,7 @@ class AuthServiceTest {
         assertThat(user.getCourseProgram()).isEqualTo("Pharmacy");
         assertThat(user.getSchoolName()).isEqualTo("NoteLib Academy");
         assertThat(user.getBirthYear()).isEqualTo(2001);
+        assertThat(user.getBirthYearUpdatedAt()).isEqualTo(birthYearUpdatedAt);
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), eq(false));
     }
 

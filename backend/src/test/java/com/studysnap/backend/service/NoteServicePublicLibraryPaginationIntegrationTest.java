@@ -904,6 +904,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                     username varchar(30) not null,
                     bio varchar(200),
                     birth_year smallint,
+                    birth_year_updated_at timestamp with time zone,
                     learner_level varchar(32),
                     course_program varchar(120),
                     study_goal text,
