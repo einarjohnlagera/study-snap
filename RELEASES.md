@@ -1,5 +1,43 @@
 # RELEASES.md - NoteLib
 
+## v0.90.0 - Invitation Integrity
+
+**Status: In Progress** (kicked off 2026-08-20)
+
+Theme: put the share action where it belongs, and stop the invite endpoint from confirming who has an account.
+
+### ⚠️ Two of the four ratified surfacing points need NO work — verified, not assumed
+
+The surfacing decision was ratified 2026-08-20. Checking it against code before scoping found the product already complies with half of it:
+
+- **Supporter surfaces are already gated on an accepted connection.** `supported-learners-card.tsx:10` returns null with no links, and `:27-28` offers *View progress* only when `status === "ACCEPTED"`, showing *"Invitation pending"* otherwise.
+- **The nav item is already unconditional** (`app-shell.tsx:408`), which is what keeps the capability discoverable for someone with no relationship.
+
+**Do not "implement" either of these.** They are recorded here so the ratified list is not mistaken for a work list.
+
+### Planned Scope
+
+1. **Move "Quiz for someone" out of the Study Pack practice row (frontend).** It is a support/share action, not learner practice. Beside *Start Quick Review* it risks becoming an avoidance path on the surface retention is decided — a learner producing material instead of practising. It goes to the existing **note actions** menu, which already holds *Edit* and *Make a Copy*.
+   > **⚠️ It stays available to everyone, gated on nothing.** A shared-quiz recipient needs **no account and no relationship**, so sharing cannot depend on a connection existing. An earlier proposal in this project coupled them and was overturned; see the ratification.
+2. **Email-keyed invitations (backend + frontend).** Store the invitation against the **typed address** rather than a resolved user id.
+   - **⚠️ This is the security half.** Today an unknown address writes no row and a real one writes a `PENDING` row visible in the inviter's own list, so **any authenticated user can test whether an email has an account** by inviting it and reading their own list. The response is already generic; the observable state is not.
+   - It also unlocks **inviting someone who has not signed up yet** — which for a parent inviting a child is likely the common case, not an edge case.
+3. **Give the supporter progress sub-page a proper `BackLink` (frontend).** Recorded as a `v0.89.0` limitation: it currently has none on the success path, and where back navigation exists it uses a raw `<Link>` with a forbidden *"Back to"* prefix, against `docs/ui-standards.md`.
+
+### Anti-drift
+
+- **⚠️ Learning Connections stays a CAPABILITY.** No profile mode, no opt-in toggle, and **nothing gated on `ProfileType`**. `PARENT` stays unimplemented with zero users.
+- **⚠️ Quiz sharing is NOT gated on having a connection**, and this release must not quietly introduce such a gate while moving the button.
+- **⚠️ Invitations stay ONE-AT-A-TIME.** This is a principle, not a deferral: **sharing a quiz link is the many-recipient mechanism**, while forming an ongoing, permission-bearing relationship is personal and should stay deliberate. **Email-keyed invitations must NOT be used as a reason to add multi-recipient invites.**
+- **⚠️ `/progress` stays the current learner's.** Supporter progress remains under Learning Connections / Dashboard — the two carry different privacy contracts, and merging them invites reaching for the owner-scoped DTO.
+- **The privacy line is unchanged:** a supporter sees readiness, progress and quiz performance, never the learner's notes.
+- **No change to the authorization model or the cross-user read.** The single accepted-link helper stays the only route to another user's data.
+- **⚠️ Do not change what `linked_learner_relationships` means** — `[CHECKPOINT — due 2026-09-19]` reads it. An email-keyed invitation that has not resolved to an account is **not** an accepted connection and must not be counted as one.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.89.1 - Birth Year Correction
 
 **Status: Released** (kicked off 2026-08-19, signed off 2026-08-20)

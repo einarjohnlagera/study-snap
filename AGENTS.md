@@ -7,7 +7,9 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.89.1 - Birth Year Correction` (Released); previous: `v0.89.0 - Support Another Learner` (Released)
+- `v0.90.0 - Invitation Integrity` (In Progress); previous: `v0.89.1 - Birth Year Correction` (Released)
+
+**⚠️ `v0.90.0` — Invitation Integrity.** Moves *"Quiz for someone"* out of the Study Pack practice row into the note-actions menu — it is a support/share action, and beside *Start Quick Review* it risks becoming an avoidance path. **⚠️ It stays available to EVERYONE, gated on nothing: a shared-quiz recipient needs no account and no relationship**, and a proposal coupling sharing to a connection was overturned 2026-08-20. Also ships **email-keyed invitations** — store the invite against the typed address, not a resolved user id — which closes the account-existence oracle and lets someone invite a person who has not signed up. **⚠️ Invitations stay ONE-AT-A-TIME by principle; the quiz LINK is the many-recipient mechanism.** **⚠️ Learning Connections stays a CAPABILITY — no profile mode, no opt-in toggle, nothing on `ProfileType`.** **⚠️ Do not change what `linked_learner_relationships` means** — `[CHECKPOINT — due 2026-09-19]` reads it.
 
 **⚠️ `v0.89.1` — Birth Year Correction. `users.birth_year` is account-global and WRITE-ONCE**, so a learner who declares an adult year permanently disables guardian consent for **every future supporter link**. **⚠️ The load-bearing half is re-evaluating EXISTING links on a downward correction** — an `ACCEPTED` link without consent on a learner who turns out to be a minor is the state the gate exists to prevent. **⚠️ Revert to `PENDING`, never `REVOKED`.** **⚠️ Do NOT move birth year into signup, onboarding or profile editing** — collected at link time only, and a `v0.89.0` test asserts signup and profile leave it null. **⚠️ Only the learner may correct their own year.** **⚠️ No history of declared values** — minor's personal data. No change to the authorization model, the privacy line, or what `linked_learner_relationships` means.
 
