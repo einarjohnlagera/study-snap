@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.89.1 - Birth Year Correction` (In Progress); previous: `v0.89.0 - Support Another Learner` (Released)
+- `v0.89.1 - Birth Year Correction` (Released); previous: `v0.89.0 - Support Another Learner` (Released)
 
 **⚠️ `v0.89.1` — Birth Year Correction. `users.birth_year` is account-global and WRITE-ONCE**, so a learner who declares an adult year permanently disables guardian consent for **every future supporter link**. **⚠️ The load-bearing half is re-evaluating EXISTING links on a downward correction** — an `ACCEPTED` link without consent on a learner who turns out to be a minor is the state the gate exists to prevent. **⚠️ Revert to `PENDING`, never `REVOKED`.** **⚠️ Do NOT move birth year into signup, onboarding or profile editing** — collected at link time only, and a `v0.89.0` test asserts signup and profile leave it null. **⚠️ Only the learner may correct their own year.** **⚠️ No history of declared values** — minor's personal data. No change to the authorization model, the privacy line, or what `linked_learner_relationships` means.
 
