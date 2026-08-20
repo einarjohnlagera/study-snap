@@ -69,6 +69,10 @@ Successful public-note copy-on-signup users may arrive on Dashboard with a pendi
 
 ## Profile-specific priorities
 
+### People you support
+
+Dashboard adds a profile-neutral `People you support` card whenever `GET /linked-learners` returns non-revoked relationships where the caller is the supporter. Accepted connections link to the relationship-scoped progress view; pending connections state that acceptance or guardian consent is still required. The card links to `/linked-learners` for management and does not turn supporting someone into a `ProfileType`, replace the caller's own learning Dashboard, or expose learner notes.
+
 ### Student
 
 Dashboard should prioritize:

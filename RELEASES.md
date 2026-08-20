@@ -33,7 +33,9 @@ Found by the `v0.89.0` cold pressure test and recorded there as a Known Limitati
 
 ### Shipped
 
-_(nothing yet)_
+- **Learners can correct their own account-global birth year from Learning connections.** `V121` adds nullable `users.birth_year_updated_at` without back-dating existing declarations; a server-owned preview uses the configured guardian-consent threshold to warn exactly how many active connections will pause. The account-level correction route has no relationship or target-user identifier, validates against the existing `1900..9999` database plausibility bound, stores no declaration history, and treats a same-value correction as a no-op without timestamp churn.
+- **Downward age corrections re-apply the guardian-consent gate atomically.** In the same transaction as the corrected year, every un-consented `ACCEPTED` relationship for that learner reverts to `PENDING` and clears `accepted_at`; consented, already-pending and revoked links remain unchanged, while corrections toward an older age rewrite no links. The existing exact-`ACCEPTED` authorization check cuts supporter progress access immediately, and Learning connections explains the consent pause to both parties using the existing consent-state fields.
+- **Closed the linked-learners documentation gaps carried from v0.89.0.** Dashboard, authenticated navigation, account export, account deletion and collection-sharing docs now match the shipped People-you-support card, Learning connections route/nav item, exported birth year, relationship/consent deletion behavior, and profile-neutral quiz sharing.
 
 ## v0.89.0 - Support Another Learner
 

@@ -9,8 +9,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   acceptLinkedLearner,
+  correctLinkedLearnerBirthYear,
   getLinkedLearners,
   inviteLinkedLearner,
+  previewLinkedLearnerBirthYearCorrection,
   recordLinkedLearnerBirthYear,
   recordLinkedLearnerGuardianConsent,
   revokeLinkedLearner,
@@ -35,9 +37,12 @@ export default function LinkedLearnersPage() {
   const [email, setEmail] = useState("");
   const [inviterRole, setInviterRole] = useState<LinkedLearnerSide>("SUPPORTER");
   const [birthYears, setBirthYears] = useState<Record<string, string>>({});
+  const [correctedBirthYear, setCorrectedBirthYear] = useState("");
+  const [correctionWarningCount, setCorrectionWarningCount] = useState<number | null>(null);
   const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [correctingBirthYear, setCorrectingBirthYear] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -132,6 +137,44 @@ export default function LinkedLearnersPage() {
     }
   };
 
+  const applyBirthYearCorrection = async () => {
+    setCorrectingBirthYear(true);
+    setError(null);
+    try {
+      setLinks(await correctLinkedLearnerBirthYear(Number(correctedBirthYear)));
+      setCorrectionWarningCount(null);
+      setCorrectedBirthYear("");
+      setNotice("Your birth year was corrected. Connections that now need guardian consent have been paused.");
+    } catch (correctionError) {
+      setError(errorMessage(correctionError, "Could not correct your birth year."));
+    } finally {
+      setCorrectingBirthYear(false);
+    }
+  };
+
+  const handleBirthYearCorrection = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!correctedBirthYear.trim()) {
+      setError("Enter your corrected birth year.");
+      return;
+    }
+    setCorrectingBirthYear(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const preview = await previewLinkedLearnerBirthYearCorrection(Number(correctedBirthYear));
+      if (preview.affectedConnectionCount > 0) {
+        setCorrectionWarningCount(preview.affectedConnectionCount);
+        return;
+      }
+      await applyBirthYearCorrection();
+    } catch (correctionError) {
+      setError(errorMessage(correctionError, "Could not check this birth year correction."));
+    } finally {
+      setCorrectingBirthYear(false);
+    }
+  };
+
   const handleRevoke = async (link: LinkedLearnerResponse) => {
     const previous = links;
     setLinks((current) => current.map((item) => item.id === link.id
@@ -182,6 +225,34 @@ export default function LinkedLearnersPage() {
         </form>
       </Card>
 
+      {links.some((link) => link.callerRole === "LEARNER" && !link.birthYearRequired) ? (
+        <Card className="space-y-4 p-4 sm:p-6">
+          <div>
+            <h2 className="text-lg font-semibold">Correct your birth year</h2>
+            <p className="mt-1 text-sm text-foreground/70">This is your account-level birth year used for guardian consent across all learning connections.</p>
+          </div>
+          <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={handleBirthYearCorrection}>
+            <label className="block flex-1 space-y-1.5 text-sm font-medium">
+              Corrected birth year
+              <input className={INPUT_CLASSES} type="number" min="1900" max="9999" value={correctedBirthYear} onChange={(event) => { setCorrectedBirthYear(event.target.value); setCorrectionWarningCount(null); }} required />
+            </label>
+            <Button type="submit" variant="outline" loading={correctingBirthYear}>Review correction</Button>
+          </form>
+          {correctionWarningCount !== null ? (
+            <div role="alertdialog" aria-labelledby="birth-year-warning-title" className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+              <p id="birth-year-warning-title" className="font-medium">
+                {correctionWarningCount} connection(s) will pause until a guardian confirms.
+              </p>
+              <p>Those supporters will lose progress access immediately. Connections with guardian consent already recorded will stay active.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" onClick={() => void applyBirthYearCorrection()} loading={correctingBirthYear}>Apply correction</Button>
+                <Button type="button" variant="outline" onClick={() => setCorrectionWarningCount(null)} disabled={correctingBirthYear}>Cancel</Button>
+              </div>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+
       {notice ? <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">{notice}</p> : null}
       {error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
 
@@ -229,7 +300,8 @@ export default function LinkedLearnersPage() {
               ) : null}
 
               {pending && link.birthYearRequired && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">Waiting for the learner to record their birth year.</p> : null}
-              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "LEARNER" ? <p className="text-sm text-foreground/70">Waiting for the supporter to record guardian consent.</p> : null}
+              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "LEARNER" ? <p className="text-sm text-foreground/70">This connection is paused until the supporter records guardian consent.</p> : null}
+              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">Your progress access is paused because guardian consent is required. Record consent above to unblock the connection.</p> : null}
               {pending && link.guardianConsentRequired && link.guardianConsentRecorded ? <p className="text-sm text-foreground/70">Guardian consent has been recorded.</p> : null}
 
               <div className="flex flex-wrap gap-2">

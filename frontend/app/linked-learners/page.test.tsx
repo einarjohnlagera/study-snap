@@ -2,19 +2,23 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LinkedLearnersPage from "./page";
 import {
   acceptLinkedLearner,
+  correctLinkedLearnerBirthYear,
   getLinkedLearners,
   inviteLinkedLearner,
   recordLinkedLearnerGuardianConsent,
+  previewLinkedLearnerBirthYearCorrection,
   revokeLinkedLearner,
   type LinkedLearnerResponse,
 } from "@/lib/api";
 
 jest.mock("@/lib/api", () => ({
   acceptLinkedLearner: jest.fn(),
+  correctLinkedLearnerBirthYear: jest.fn(),
   getLinkedLearners: jest.fn(),
   inviteLinkedLearner: jest.fn(),
   recordLinkedLearnerBirthYear: jest.fn(),
   recordLinkedLearnerGuardianConsent: jest.fn(),
+  previewLinkedLearnerBirthYearCorrection: jest.fn(),
   revokeLinkedLearner: jest.fn(),
 }));
 
@@ -124,4 +128,63 @@ it("offers progress only to the supporter on an accepted connection", async () =
   );
   expect(screen.getAllByText("pending")).toHaveLength(1);
   expect(screen.getAllByRole("link", { name: "View progress" })).toHaveLength(1);
+});
+
+it("offers birth year correction only on the learner's own connection surface", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([
+    { ...baseLink, callerRole: "SUPPORTER", birthYearRequired: false },
+  ]);
+  const { unmount } = render(<LinkedLearnersPage />);
+
+  await screen.findByText("Your invitations and connections");
+  expect(screen.queryByRole("heading", { name: "Correct your birth year" })).not.toBeInTheDocument();
+
+  unmount();
+  jest.mocked(getLinkedLearners).mockResolvedValue([
+    { ...baseLink, callerRole: "LEARNER", birthYearRequired: false },
+  ]);
+  render(<LinkedLearnersPage />);
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Correct your birth year" })).toBeInTheDocument());
+});
+
+it("warns with the affected connection count before a downward correction", async () => {
+  const learnerLink = { ...baseLink, callerRole: "LEARNER" as const, birthYearRequired: false };
+  jest.mocked(getLinkedLearners).mockResolvedValue([learnerLink]);
+  jest.mocked(previewLinkedLearnerBirthYearCorrection).mockResolvedValue({ affectedConnectionCount: 2 });
+  jest.mocked(correctLinkedLearnerBirthYear).mockResolvedValue([
+    { ...learnerLink, status: "PENDING", guardianConsentRequired: true },
+  ]);
+  render(<LinkedLearnersPage />);
+
+  fireEvent.change(await screen.findByLabelText("Corrected birth year"), { target: { value: "2015" } });
+  fireEvent.click(screen.getByRole("button", { name: "Review correction" }));
+
+  expect(await screen.findByText("2 connection(s) will pause until a guardian confirms.")).toBeInTheDocument();
+  expect(correctLinkedLearnerBirthYear).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Apply correction" }));
+  await waitFor(() => expect(correctLinkedLearnerBirthYear).toHaveBeenCalledWith(2015));
+});
+
+it("explains paused guardian-consent connections to both sides", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([
+    {
+      ...baseLink,
+      id: "learner-paused",
+      callerRole: "LEARNER",
+      incomingInvitation: false,
+      guardianConsentRequired: true,
+    },
+    {
+      ...baseLink,
+      id: "supporter-paused",
+      callerRole: "SUPPORTER",
+      incomingInvitation: false,
+      guardianConsentRequired: true,
+    },
+  ]);
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByText("This connection is paused until the supporter records guardian consent.")).toBeInTheDocument();
+  expect(screen.getByText("Your progress access is paused because guardian consent is required. Record consent above to unblock the connection.")).toBeInTheDocument();
 });

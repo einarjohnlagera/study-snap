@@ -10,7 +10,7 @@ A supported learner remains a full, ordinary NoteLib account with their own logi
 
 | State | Meaning | Allowed actions |
 |---|---|---|
-| `PENDING` | One party invited and the other has not completed acceptance | Invited party may accept; either party may revoke; the learner may record a birth year; the supporter may record required guardian consent |
+| `PENDING` | One party invited and the other has not completed acceptance, or an accepted connection was paused after a birth-year correction made guardian consent necessary | Invited party may accept; either party may revoke; the learner may record a birth year; the supporter may record required guardian consent |
 | `ACCEPTED` | The invited party explicitly accepted after any required consent was recorded | Either party may revoke |
 | `REVOKED` | Either party ended or declined the relationship | Revoke remains idempotent; a new invitation may create a new row |
 
@@ -26,15 +26,23 @@ For a real active account, NoteLib stores the pending invitation before attempti
 
 ## Birth year and guardian consent
 
-Birth year is collected only while forming a link. It is nullable on `users`, is not part of signup, onboarding or profile editing, and is not requested again once recorded. NoteLib stores a year rather than an age that becomes stale or a full birthdate that collects unnecessary precision.
+Birth year is first collected only while forming a link. It is nullable on `users` and is not part of signup, onboarding or profile editing. It is account-global rather than relationship-scoped: the one current value drives the consent decision for every supporter connection the learner forms. NoteLib stores a year rather than an age that becomes stale or a full birthdate that collects unnecessary precision.
 
 The guardian-consent threshold comes from `studysnap.linked-learners.guardian-consent-max-age`. Its shipped default is deliberately conservative engineering configuration pending counsel and is not a legal position. Birth-year precision is handled protectively: if the learner could still be at or below the configured age in the current year, consent is required.
 
 Required consent is a separate persisted fact, not a boolean on the relationship. It records the relationship, learner, attesting supporter, timestamp and attestation version. User-facing attestation wording is explicitly marked as a placeholder for counsel.
 
+### Birth-year correction
+
+The learner may correct only their own account-level birth year from `/linked-learners`. The correction endpoint takes no relationship id or target user id, so a supporter cannot change a learner's declaration. Signup, onboarding and profile editing remain outside this path.
+
+Before applying a correction that would make guardian consent necessary, the UI previews the consequence using the configured threshold and warns with the number of active connections that will pause. In the same transaction as the year update, every `ACCEPTED` relationship where this account is the learner and no consent record exists reverts to `PENDING`, and its `accepted_at` is cleared. Existing consent records keep their relationships `ACCEPTED`; existing `PENDING` and `REVOKED` rows are untouched. Corrections toward an older age do not reactivate or otherwise rewrite relationships.
+
+The `PENDING` transition immediately cuts supporter progress access because the shared cross-user authorization path requires status to be exactly `ACCEPTED`. Both parties see that guardian consent is required and what action unblocks the connection. The current value and nullable `users.birth_year_updated_at` are the only correction data retained; NoteLib stores no declaration history, and inherited pre-correction rows are not back-dated.
+
 ### Known circularity
 
-The learner declares their own birth year, while a minor may not be able to consent on their own behalf, and the supporter is often the guardian giving consent. The implementation does not pretend this removes every trust or legal question. It records the learner's declaration and the supporter's attestation as separate facts so the limitation is visible and auditable; counsel still owns the threshold and final attestation wording.
+The learner declares their own account-global birth year, while a minor may not be able to consent on their own behalf, and the supporter is often the guardian giving consent. A mistaken or coached declaration therefore affects every future connection, not merely the link being formed. The learner-only correction path limits that risk and re-applies the gate to existing links, but the implementation does not pretend this removes every trust or legal question. It records the current learner declaration and each supporter's relationship-specific attestation as separate facts so the limitation is visible and auditable; counsel still owns the threshold and final attestation wording.
 
 For supporter-initiated invitations, the invited learner can provide their year during acceptance. For learner-initiated invitations, the learner can record it on the pending link before the invited supporter accepts. A link that requires consent remains `PENDING` until the consent record exists.
 

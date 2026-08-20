@@ -54,6 +54,9 @@ The sentinel cannot log in, does not receive retention or marketing email, and i
 | Study Packs attached to retained public notes | Reassign `owner_user_id` to the deleted-user sentinel so public notes remain readable and copyable. |
 | Private notes and non-retained Study Packs | Hard-delete. |
 | Drafts, generated quizzes, quick-review sessions, concept health, activity events, bulk-generation results, quiz share links, public-note likes, library filters, user usage, collections and collection items | Hard-delete. |
+| Linked-learner relationships where the user is supporter or learner | Cascade-delete with the user. |
+| Linked-learner guardian-consent records tied to those relationships or to the user as learner/attestor | Cascade-delete; no consent record survives without all referenced users and its relationship. |
+| The user's current birth year and nullable last-corrected timestamp | Delete with the user row; no declaration history exists. |
 | Auth providers, refresh tokens, verification tokens, password reset tokens, email logs, feedback, premium waitlist rows | Hard-delete. |
 | Payment transactions, subscriptions, voucher redemptions | Reassign `user_id` to the deleted-user sentinel and retain. Active subscriptions are marked canceled at purge time. |
 | Analytics events | Leave untouched. The `analytics_events.user_id` value may become orphaned and is retained for aggregate reporting. |
