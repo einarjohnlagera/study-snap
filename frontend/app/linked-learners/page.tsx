@@ -9,6 +9,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   acceptLinkedLearner,
+  acceptLinkedLearnerInvitation,
+  listLinkedLearnerInvitations,
+  revokeLinkedLearnerInvitation,
+  type LinkedLearnerInvitationResponse,
   correctLinkedLearnerBirthYear,
   getLinkedLearners,
   inviteLinkedLearner,
@@ -61,6 +65,56 @@ export default function LinkedLearnersPage() {
     void loadLinks();
   }, [loadLinks]);
 
+  const [invitations, setInvitations] = useState<LinkedLearnerInvitationResponse[]>([]);
+
+  const loadInvitations = useCallback(async () => {
+    try {
+      setInvitations(await listLinkedLearnerInvitations());
+    } catch {
+      // A failed invitation load must not blank the connections list beside it.
+      setInvitations([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadInvitations();
+  }, [loadInvitations]);
+
+  const handleAcceptInvitation = async (invitation: LinkedLearnerInvitationResponse) => {
+    setBusyId(invitation.id);
+    setError(null);
+    try {
+      const rawYear = birthYears[invitation.id]?.trim();
+      const birthYear = rawYear ? Number(rawYear) : null;
+      const updated = await acceptLinkedLearnerInvitation(
+        invitation.id, birthYear, consentChecked[invitation.id] === true);
+      if (updated.status === "PENDING" && updated.guardianConsentRequired && !updated.guardianConsentRecorded) {
+        setNotice("Guardian confirmation is needed before this connection becomes active.");
+      } else {
+        setNotice("Learning connection accepted.");
+      }
+      await Promise.all([loadLinks(), loadInvitations()]);
+    } catch (acceptError) {
+      setError(errorMessage(acceptError, "Could not accept the invitation."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleWithdrawInvitation = async (invitation: LinkedLearnerInvitationResponse) => {
+    setBusyId(invitation.id);
+    setError(null);
+    try {
+      await revokeLinkedLearnerInvitation(invitation.id);
+      setNotice("Invitation withdrawn.");
+      await loadInvitations();
+    } catch (revokeError) {
+      setError(errorMessage(revokeError, "Could not withdraw the invitation."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const replaceLink = (updated: LinkedLearnerResponse) => {
     setLinks((current) => current.map((link) => link.id === updated.id ? updated : link));
   };
@@ -74,7 +128,7 @@ export default function LinkedLearnersPage() {
       const response = await inviteLinkedLearner(email, inviterRole);
       setNotice(response.message);
       setEmail("");
-      await loadLinks();
+      await Promise.all([loadLinks(), loadInvitations()]);
     } catch (inviteError) {
       setError(errorMessage(inviteError, "Could not send the invitation."));
     } finally {
@@ -255,6 +309,72 @@ export default function LinkedLearnersPage() {
 
       {notice ? <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">{notice}</p> : null}
       {error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
+
+      {invitations.length > 0 ? (
+        <section className="space-y-3" aria-labelledby="invitations-heading">
+          <h2 id="invitations-heading" className="text-lg font-semibold">Pending invitations</h2>
+          <ul className="space-y-3">
+            {invitations.map((invitation) => (
+              <li key={invitation.id} className="rounded-xl border border-border p-4">
+                <p className="text-sm font-medium text-foreground">
+                  {invitation.incoming
+                    ? `${invitation.inviterName ?? "Someone"} invited you`
+                    : `You invited ${invitation.invitedEmail}`}
+                </p>
+                <p className="mt-1 text-xs text-foreground/60">
+                  {invitation.incoming
+                    ? (invitation.inviterRole === "SUPPORTER"
+                        ? "They would support your learning."
+                        : "They are asking you to support their learning.")
+                    : "Waiting for them to accept."}
+                </p>
+                {invitation.incoming ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <label className="text-xs text-foreground/70" htmlFor={`birth-year-${invitation.id}`}>
+                      Your birth year
+                    </label>
+                    <input
+                      id={`birth-year-${invitation.id}`}
+                      className="h-9 w-28 rounded-lg border border-border bg-background px-2 text-sm"
+                      value={birthYears[invitation.id] ?? ""}
+                      onChange={(event) => setBirthYears((current) => ({
+                        ...current, [invitation.id]: event.target.value,
+                      }))}
+                    />
+                    <label className="flex items-center gap-2 text-xs text-foreground/70">
+                      <input
+                        type="checkbox"
+                        checked={consentChecked[invitation.id] === true}
+                        onChange={(event) => setConsentChecked((current) => ({
+                          ...current, [invitation.id]: event.target.checked,
+                        }))}
+                      />
+                      A guardian confirms this connection
+                    </label>
+                    <Button
+                      type="button"
+                      disabled={busyId === invitation.id}
+                      onClick={() => void handleAcceptInvitation(invitation)}
+                    >
+                      Accept
+                    </Button>
+                  </div>
+                ) : null}
+                <div className="mt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busyId === invitation.id}
+                    onClick={() => void handleWithdrawInvitation(invitation)}
+                  >
+                    {invitation.incoming ? "Decline" : "Withdraw"}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="space-y-3" aria-labelledby="connections-heading">
         <h2 id="connections-heading" className="text-lg font-semibold">Your invitations and connections</h2>

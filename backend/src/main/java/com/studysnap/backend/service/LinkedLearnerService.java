@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
 import com.studysnap.backend.dto.LinkedLearnerBirthYearCorrectionPreviewResponse;
+import com.studysnap.backend.dto.LinkedLearnerInvitationResponse;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.LinkedLearnerGuardianConsentEntity;
@@ -21,6 +22,8 @@ import com.studysnap.backend.exception.LinkedLearnerNotFoundException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
+import com.studysnap.backend.entity.LinkedLearnerInvitationEntity;
+import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +54,7 @@ public class LinkedLearnerService {
     private static final String INVITATION_TEMPLATE = "linked-learner-invitation";
 
     private final LinkedLearnerRelationshipRepository relationshipRepository;
+    private final LinkedLearnerInvitationRepository invitationRepository;
     private final LinkedLearnerGuardianConsentRepository consentRepository;
     private final UserRepository userRepository;
     private final OnboardingGuardService onboardingGuardService;
@@ -68,32 +72,70 @@ public class LinkedLearnerService {
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
         String normalizedEmail = normalizeEmail(request.email());
-        UserEntity counterparty = userRepository.findByEmailIgnoreCase(normalizedEmail)
-                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
-                .orElse(null);
-        if (counterparty == null) {
-            return genericInviteResponse();
-        }
-        if (callerUserId.equals(counterparty.getId())) {
+
+        // ⚠️ Self-invite is refused BEFORE any account lookup, and deliberately so: the caller
+        // already knows their own address exists, so this reveals nothing, while checking it after
+        // a lookup would make the refusal itself depend on account state.
+        if (normalizedEmail.equalsIgnoreCase(normalizeEmail(caller.getEmail()))) {
             throw new LinkedLearnerSelfLinkException();
         }
 
-        UUID supporterUserId = request.inviterRole() == LinkedLearnerSide.SUPPORTER
-                ? callerUserId : counterparty.getId();
-        UUID learnerUserId = request.inviterRole() == LinkedLearnerSide.LEARNER
-                ? callerUserId : counterparty.getId();
-        relationshipRepository.insertPendingIfAbsent(
-                UUID.randomUUID(), supporterUserId, learnerUserId,
+        // ⚠️ THE ROW IS WRITTEN WHETHER OR NOT THE ADDRESS HAS AN ACCOUNT. That is the whole point:
+        // previously an unknown address wrote nothing while a real one wrote a PENDING relationship
+        // visible in the inviter's own list, so "invite an address, read your list" was an
+        // account-existence oracle. There is now no branch on existence to observe.
+        invitationRepository.insertPendingIfAbsent(
+                UUID.randomUUID(), callerUserId, normalizedEmail,
                 request.inviterRole().name(), OffsetDateTime.now());
 
-        LinkedLearnerRelationshipEntity relationship = relationshipRepository
-                .findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
-                        supporterUserId, learnerUserId, LIVE_STATUSES)
+        LinkedLearnerInvitationEntity invitation = invitationRepository
+                .findFirstByInviterUserIdAndInvitedEmailAndStatus(
+                        callerUserId, normalizedEmail, LinkedLearnerStatus.PENDING)
                 .orElseThrow(LinkedLearnerNotFoundException::new);
-        if (relationship.getStatus() == LinkedLearnerStatus.PENDING) {
-            sendInvitationEmail(caller, counterparty, relationship);
-        }
+
+        // The email goes to the typed address either way. A recipient with no account follows the
+        // link, signs up, and finds the invitation waiting — which is how a parent invites a child.
+        sendInvitationEmail(caller, normalizedEmail, invitation);
         return genericInviteResponse();
+    }
+
+    /**
+     * Pending invitations in both directions. Kept separate from {@link #list} because an invitation
+     * is not a connection: merging them would invite a future reader to count invitations as
+     * relationships, which is exactly what the open checkpoint must not have happen.
+     */
+    @Transactional(readOnly = true)
+    public List<LinkedLearnerInvitationResponse> listInvitations(UUID callerUserId) {
+        onboardingGuardService.assertProfileComplete(callerUserId);
+        UserEntity caller = requireUser(callerUserId);
+        String callerEmail = normalizeEmail(caller.getEmail());
+
+        List<LinkedLearnerInvitationResponse> outgoing = invitationRepository
+                .findByInviterUserIdAndStatus(callerUserId, LinkedLearnerStatus.PENDING)
+                .stream()
+                .map(invitation -> new LinkedLearnerInvitationResponse(
+                        invitation.getId(), false, invitation.getInviterRole(),
+                        invitation.getInvitedEmail(),
+                        // ⚠️ No name for an outgoing invitation. The inviter typed the address and
+                        // must learn nothing further from it, or the list harvests names again.
+                        null,
+                        invitation.getCreatedAt()))
+                .toList();
+
+        List<LinkedLearnerInvitationResponse> incoming = invitationRepository
+                .findByInvitedEmailAndStatus(callerEmail, LinkedLearnerStatus.PENDING)
+                .stream()
+                .filter(invitation -> !callerUserId.equals(invitation.getInviterUserId()))
+                .map(invitation -> new LinkedLearnerInvitationResponse(
+                        invitation.getId(), true, invitation.getInviterRole(),
+                        invitation.getInvitedEmail(),
+                        // The recipient DOES need to know who is asking in order to decide.
+                        userRepository.findById(invitation.getInviterUserId())
+                                .map(this::resolveDisplayName).orElse(null),
+                        invitation.getCreatedAt()))
+                .toList();
+
+        return java.util.stream.Stream.concat(outgoing.stream(), incoming.stream()).toList();
     }
 
     @Transactional(readOnly = true)
@@ -139,6 +181,79 @@ public class LinkedLearnerService {
         });
         relationshipRepository.saveAll(relationshipsToPause);
         return listRelationships(callerUserId);
+    }
+
+    /**
+     * Accept an email-keyed invitation. This is the ONLY path that creates a relationship row, which
+     * is what keeps {@code linked_learner_relationships} meaning what the open checkpoint counts —
+     * an unresolved invitation is not a connection.
+     *
+     * <p>⚠️ The caller must own the invited ADDRESS, not merely hold the invitation id. The id is a
+     * UUID and unguessable in practice, but authorising on possession of an identifier rather than
+     * on identity is the shape that becomes a hole the moment an id leaks into a log or a referrer.
+     *
+     * <p>Relationship creation then delegates to {@link #accept}, so the guardian-consent gate,
+     * the birth-year capture and the PENDING-until-consent rule are reused rather than reimplemented.
+     */
+    @Transactional
+    public LinkedLearnerResponse acceptInvitation(
+            UUID invitationId,
+            UUID callerUserId,
+            AcceptLinkedLearnerRequest request
+    ) {
+        onboardingGuardService.assertProfileComplete(callerUserId);
+        UserEntity caller = requireUser(callerUserId);
+        LinkedLearnerInvitationEntity invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(LinkedLearnerNotFoundException::new);
+        if (!normalizeEmail(caller.getEmail()).equalsIgnoreCase(invitation.getInvitedEmail())) {
+            throw new LinkedLearnerNotAllowedException();
+        }
+        if (invitation.getStatus() != LinkedLearnerStatus.PENDING) {
+            throw new LinkedLearnerInvalidStateException();
+        }
+        if (callerUserId.equals(invitation.getInviterUserId())) {
+            throw new LinkedLearnerSelfLinkException();
+        }
+
+        UUID supporterUserId = invitation.getInviterRole() == LinkedLearnerSide.SUPPORTER
+                ? invitation.getInviterUserId() : callerUserId;
+        UUID learnerUserId = invitation.getInviterRole() == LinkedLearnerSide.LEARNER
+                ? invitation.getInviterUserId() : callerUserId;
+
+        OffsetDateTime now = OffsetDateTime.now();
+        relationshipRepository.insertPendingIfAbsent(
+                UUID.randomUUID(), supporterUserId, learnerUserId,
+                invitation.getInviterRole().name(), now);
+        LinkedLearnerRelationshipEntity relationship = relationshipRepository
+                .findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
+                        supporterUserId, learnerUserId, LIVE_STATUSES)
+                .orElseThrow(LinkedLearnerNotFoundException::new);
+
+        invitation.setStatus(LinkedLearnerStatus.ACCEPTED);
+        invitation.setAcceptedAt(now);
+        invitationRepository.save(invitation);
+
+        return accept(relationship.getId(), callerUserId, request);
+    }
+
+    /** Revoke a still-unaccepted invitation. Either the inviter or the invited address may do it. */
+    @Transactional
+    public SimpleMessageResponse revokeInvitation(UUID invitationId, UUID callerUserId) {
+        onboardingGuardService.assertProfileComplete(callerUserId);
+        UserEntity caller = requireUser(callerUserId);
+        LinkedLearnerInvitationEntity invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(LinkedLearnerNotFoundException::new);
+        boolean isInviter = callerUserId.equals(invitation.getInviterUserId());
+        boolean isInvited = normalizeEmail(caller.getEmail()).equalsIgnoreCase(invitation.getInvitedEmail());
+        if (!isInviter && !isInvited) {
+            throw new LinkedLearnerNotAllowedException();
+        }
+        if (invitation.getStatus() == LinkedLearnerStatus.PENDING) {
+            invitation.setStatus(LinkedLearnerStatus.REVOKED);
+            invitation.setRevokedAt(OffsetDateTime.now());
+            invitationRepository.save(invitation);
+        }
+        return genericInviteResponse();
     }
 
     @Transactional
@@ -334,8 +449,8 @@ public class LinkedLearnerService {
 
     private void sendInvitationEmail(
             UserEntity caller,
-            UserEntity counterparty,
-            LinkedLearnerRelationshipEntity relationship
+            String invitedEmail,
+            LinkedLearnerInvitationEntity invitation
     ) {
         try {
             String baseUrl = properties.getBilling().getFrontendBaseUrl();
@@ -343,19 +458,23 @@ public class LinkedLearnerService {
             EmailTemplateService.RenderedEmailTemplate rendered = emailTemplateService.render(
                     INVITATION_TEMPLATE,
                     Map.of(
-                            "recipientName", resolveFirstName(counterparty),
+                            // ⚠️ Addressed generically. The recipient may have no account, and even
+                            // when they do, personalising from their profile would make the EMAIL
+                            // differ by account existence -- reopening, in the recipient's inbox,
+                            // the same oracle the row-always-written change just closed.
+                            "recipientName", "there",
                             "inviterName", sanitizeForOutboundEmail(resolveDisplayName(caller)),
                             "invitationUrl", invitationUrl
                     )
             );
             boolean sent = emailService.sendEmail(new EmailMessage(
-                    counterparty.getEmail(), rendered.subject(), rendered.htmlBody(), rendered.textBody()));
+                    invitedEmail, rendered.subject(), rendered.htmlBody(), rendered.textBody()));
             if (!sent) {
-                log.warn("linked.learner.invitation.email not-sent relationshipId={}", relationship.getId());
+                log.warn("linked.learner.invitation.email not-sent invitationId={}", invitation.getId());
             }
         } catch (RuntimeException ex) {
-            log.warn("linked.learner.invitation.email failed relationshipId={} message={}",
-                    relationship.getId(), ex.getMessage());
+            log.warn("linked.learner.invitation.email failed invitationId={} message={}",
+                    invitation.getId(), ex.getMessage());
         }
     }
 

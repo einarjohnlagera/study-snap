@@ -18,6 +18,9 @@ import com.studysnap.backend.exception.LinkedLearnerBirthYearCorrectionNotAllowe
 import com.studysnap.backend.exception.LinkedLearnerProgressNotFoundException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
+import com.studysnap.backend.entity.LinkedLearnerInvitationEntity;
+import static org.mockito.ArgumentMatchers.eq;
+import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +59,7 @@ class LinkedLearnerServiceTest {
     private static final String LEARNER_EMAIL = "learner@example.com";
 
     @Mock private LinkedLearnerRelationshipRepository relationshipRepository;
+    @Mock private LinkedLearnerInvitationRepository invitationRepository;
     @Mock private LinkedLearnerGuardianConsentRepository consentRepository;
     @Mock private UserRepository userRepository;
     @Mock private OnboardingGuardService onboardingGuardService;
@@ -71,6 +75,7 @@ class LinkedLearnerServiceTest {
         properties = new StudySnapProperties();
         service = new LinkedLearnerService(
                 relationshipRepository,
+                invitationRepository,
                 consentRepository,
                 userRepository,
                 onboardingGuardService,
@@ -101,37 +106,29 @@ class LinkedLearnerServiceTest {
     }
 
     @Test
-    void unknownAndActiveEmailInvitesReturnIndistinguishableResponses() {
+    void unknownAndKnownEmailInvitesAreIndistinguishableInResponseAndInState() {
         UserEntity caller = user("caller@example.com");
-        UserEntity counterparty = user("known@example.com");
-        UserEntity inactive = user("inactive@example.com");
-        inactive.setStatus(UserStatus.SUSPENDED);
-        LinkedLearnerRelationshipEntity relationship = relationship(caller, counterparty, LinkedLearnerSide.SUPPORTER);
         when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
-        when(userRepository.findByEmailIgnoreCase("unknown@example.com")).thenReturn(Optional.empty());
-        when(userRepository.findByEmailIgnoreCase("known@example.com")).thenReturn(Optional.of(counterparty));
-        when(userRepository.findByEmailIgnoreCase("inactive@example.com")).thenReturn(Optional.of(inactive));
-        when(relationshipRepository.findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
-                caller.getId(), counterparty.getId(), List.of(LinkedLearnerStatus.PENDING, LinkedLearnerStatus.ACCEPTED)))
-                .thenReturn(Optional.of(relationship));
-        when(emailTemplateService.render(anyString(), any())).thenReturn(
+        when(invitationRepository.findFirstByInviterUserIdAndInvitedEmailAndStatus(
+                any(UUID.class), anyString(), eq(LinkedLearnerStatus.PENDING)))
+                .thenReturn(Optional.of(invitation(caller.getId(), "x@example.com")));
+        when(emailTemplateService.render(anyString(), anyMap())).thenReturn(
                 new EmailTemplateService.RenderedEmailTemplate("Subject", "HTML", "Text"));
 
         SimpleMessageResponse unknown = service.invite(
                 caller.getId(), new InviteLinkedLearnerRequest("unknown@example.com", LinkedLearnerSide.SUPPORTER));
         SimpleMessageResponse known = service.invite(
                 caller.getId(), new InviteLinkedLearnerRequest("known@example.com", LinkedLearnerSide.SUPPORTER));
-        SimpleMessageResponse inactiveResponse = service.invite(
-                caller.getId(), new InviteLinkedLearnerRequest("inactive@example.com", LinkedLearnerSide.SUPPORTER));
 
         assertThat(known).isEqualTo(unknown);
-        assertThat(inactiveResponse).isEqualTo(unknown);
-        // ⚠️ The three assertions above compare references to one shared constant, so they cannot
-        // fail while that constant exists — they say nothing about the row write in the same method.
-        // The observable difference an attacker actually uses is STATE, so assert that directly:
-        // a real account gets a row, an unknown or inactive address gets none.
-        verify(relationshipRepository, times(1)).insertPendingIfAbsent(
-                any(UUID.class), any(UUID.class), any(UUID.class), anyString(), any(OffsetDateTime.class));
+        // ⚠️ THIS is the assertion that matters, and the one the previous version could not make.
+        // Comparing responses compares references to a shared constant and cannot fail. The
+        // observable difference an attacker used was STATE: a real address wrote a row, an unknown
+        // one wrote nothing. Now BOTH write one, so there is no branch on existence to observe.
+        verify(invitationRepository, times(2)).insertPendingIfAbsent(
+                any(UUID.class), eq(caller.getId()), anyString(), anyString(), any(OffsetDateTime.class));
+        // And the account table is never consulted on this path at all.
+        verify(userRepository, never()).findByEmailIgnoreCase(anyString());
     }
 
     @Test
@@ -145,9 +142,9 @@ class LinkedLearnerServiceTest {
         LinkedLearnerRelationshipEntity pending =
                 relationship(caller, counterparty, LinkedLearnerSide.SUPPORTER);
         when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
-        when(userRepository.findByEmailIgnoreCase("known@example.com")).thenReturn(Optional.of(counterparty));
-        when(relationshipRepository.findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
-                any(UUID.class), any(UUID.class), anyList())).thenReturn(Optional.of(pending));
+        when(invitationRepository.findFirstByInviterUserIdAndInvitedEmailAndStatus(
+                any(UUID.class), anyString(), eq(LinkedLearnerStatus.PENDING)))
+                .thenReturn(Optional.of(invitation(caller.getId(), "known@example.com")));
         when(emailTemplateService.render(anyString(), anyMap())).thenReturn(
                 new EmailTemplateService.RenderedEmailTemplate("Subject", "HTML", "Text"));
 
@@ -205,16 +202,20 @@ class LinkedLearnerServiceTest {
     }
 
     @Test
-    void selfLinkingIsRefused() {
+    void selfLinkingIsRefusedOnTheAddressBeforeAnyAccountLookup() {
         UserEntity caller = user("same@example.com");
         when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
-        when(userRepository.findByEmailIgnoreCase("same@example.com")).thenReturn(Optional.of(caller));
         InviteLinkedLearnerRequest request = new InviteLinkedLearnerRequest(
                 "same@example.com", LinkedLearnerSide.SUPPORTER);
 
         assertThatThrownBy(() -> service.invite(caller.getId(), request))
                 .isInstanceOf(LinkedLearnerSelfLinkException.class);
-        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any());
+
+        // ⚠️ Refused WITHOUT consulting the account table. The caller already knows their own
+        // address exists, so this reveals nothing — but deciding it after a lookup would make the
+        // refusal itself depend on account state, which is the property being protected.
+        verify(userRepository, never()).findByEmailIgnoreCase(anyString());
+        verify(invitationRepository, never()).insertPendingIfAbsent(any(), any(), anyString(), anyString(), any());
     }
 
     @Test
@@ -566,6 +567,17 @@ class LinkedLearnerServiceTest {
         when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
         when(userRepository.findById(supporter.getId())).thenReturn(Optional.of(supporter));
         when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+    }
+
+    private LinkedLearnerInvitationEntity invitation(UUID inviterUserId, String email) {
+        LinkedLearnerInvitationEntity invitation = new LinkedLearnerInvitationEntity();
+        invitation.setId(UUID.randomUUID());
+        invitation.setInviterUserId(inviterUserId);
+        invitation.setInvitedEmail(email);
+        invitation.setInviterRole(LinkedLearnerSide.SUPPORTER);
+        invitation.setStatus(LinkedLearnerStatus.PENDING);
+        invitation.setCreatedAt(OffsetDateTime.now());
+        return invitation;
     }
 
     private UserEntity user(String email) {
