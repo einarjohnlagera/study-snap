@@ -73,3 +73,19 @@ We think the teacher product is intact. **But we may be too close to it**, havin
 - Answer in prose. We do not need mockups, though ASCII sketches are welcome if placement is the crux.
 - **Disagreeing with us is the point.** We have already argued ourselves into option B; the value of this consultation is whether it survives someone who has not.
 - If you need a fact about the product that is not here, say what it is and why it changes your answer rather than assuming.
+
+---
+
+## ✅ ANSWERED — owner decision, 2026-08-20
+
+**Option A rejected. Option B modified into C.** Recorded here so this prompt is not re-read as an open question.
+
+1. **Learning Connections stays a CAPABILITY — never a profile mode, never an opt-in toggle.** A preference would re-introduce the mode the capability framing exists to remove.
+2. **"Quiz for someone" leaves the Study Pack practice row entirely.** It is a support/share action, not learner practice, and it does not belong beside Start Quick Review.
+3. **⚠️ Quiz sharing is NOT gated on having an accepted connection.** This corrects option B, which coupled two independent things: **a shared-quiz recipient needs no account and no relationship**, so sharing cannot depend on one existing. The action moves to a secondary **note action / share** surface instead.
+4. **Learning Connections stays independently discoverable**, so someone with no relationship can still find out about both sharing quizzes and forming connections.
+5. **Accepted connections gate supporter-specific surfaces only** — People You Support, and progress. They never determine whether quiz sharing exists.
+6. **`/progress` stays focused on the current learner.** Supporter progress remains under Learning Connections / Dashboard, because the two views carry different privacy contracts.
+7. **Connection invitations stay one-at-a-time, and this is a principle rather than a deferral: sharing a quiz link IS the many-recipient mechanism; forming an ongoing, permission-bearing relationship is personal and should stay deliberate.**
+
+**The separately-recorded security work still stands on its own merits:** email-keyed invitations close the account-existence oracle regardless of whether multi-recipient invites are ever built.
