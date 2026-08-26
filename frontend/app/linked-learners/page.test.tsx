@@ -216,18 +216,25 @@ it("shows an incoming invitation and accepts it through the invitation endpoint"
   await waitFor(() => expect(acceptLinkedLearnerInvitation).toHaveBeenCalledWith("inv-1", null, false));
 });
 
-it("does not disclose a name on an outgoing invitation", async () => {
+it("renders no name on an outgoing invitation even when the API supplies one", async () => {
   // The inviter typed the address and must learn nothing further from it — echoing back a resolved
   // display name is what made the list a name-harvesting oracle.
+  //
+  // ⚠️ THIS TEST USED TO MOCK `inviterName: null` AND ASSERT THE EMAIL RENDERED, which proved
+  // nothing: it mocked the very absence it claimed to verify, and would have passed unchanged if
+  // the component rendered every name it was handed. Supplying a name here makes the assertion
+  // real — the OUTGOING row must not display it regardless of what the response carries. The
+  // server-side guarantee that no name is sent is covered separately in LinkedLearnerServiceTest.
   (getLinkedLearners as jest.Mock).mockResolvedValue([]);
   (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
     id: "inv-2", incoming: false, inviterRole: "SUPPORTER",
-    invitedEmail: "someone@example.com", inviterName: null, createdAt: "2026-08-20T00:00:00Z",
+    invitedEmail: "someone@example.com", inviterName: "Should Never Render", createdAt: "2026-08-20T00:00:00Z",
   }]);
 
   render(<LinkedLearnersPage />);
 
   expect(await screen.findByText(/You invited someone@example.com/i)).toBeInTheDocument();
+  expect(screen.queryByText(/Should Never Render/)).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
 });
