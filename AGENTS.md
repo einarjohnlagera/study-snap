@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.90.0 - Invitation Integrity` (In Progress); previous: `v0.89.1 - Birth Year Correction` (Released)
+- `v0.90.0 - Invitation Integrity` (Released); previous: `v0.89.1 - Birth Year Correction` (Released)
 
 **⚠️ `v0.90.0` — Invitation Integrity.** Moves *"Quiz for someone"* out of the Study Pack practice row into the note-actions menu — it is a support/share action, and beside *Start Quick Review* it risks becoming an avoidance path. **⚠️ It stays available to EVERYONE, gated on nothing: a shared-quiz recipient needs no account and no relationship**, and a proposal coupling sharing to a connection was overturned 2026-08-20. Also ships **email-keyed invitations** — store the invite against the typed address, not a resolved user id — which closes the account-existence oracle and lets someone invite a person who has not signed up. **⚠️ Invitations stay ONE-AT-A-TIME by principle; the quiz LINK is the many-recipient mechanism.** **⚠️ Learning Connections stays a CAPABILITY — no profile mode, no opt-in toggle, nothing on `ProfileType`.** **⚠️ Do not change what `linked_learner_relationships` means** — `[CHECKPOINT — due 2026-09-19]` reads it.
 

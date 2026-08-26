@@ -2,7 +2,7 @@
 
 ## v0.90.0 - Invitation Integrity
 
-**Status: In Progress** (kicked off 2026-08-20)
+**Status: Released** (kicked off 2026-08-20, signed off 2026-08-26)
 
 Theme: put the share action where it belongs, and stop the invite endpoint from confirming who has an account.
 
@@ -10,7 +10,7 @@ Theme: put the share action where it belongs, and stop the invite endpoint from 
 
 The surfacing decision was ratified 2026-08-20. Checking it against code before scoping found the product already complies with half of it:
 
-- **Supporter surfaces are already gated on an accepted connection.** `supported-learners-card.tsx:10` returns null with no links, and `:27-28` offers *View progress* only when `status === "ACCEPTED"`, showing *"Invitation pending"* otherwise.
+- **Supporter surfaces are already gated on an accepted connection.** `supported-learners-card.tsx:10` returns null with no links, and *View progress* is offered only when `status === "ACCEPTED"`. **⚠️ This describes the state at KICKOFF and the line numbers no longer resolve** — the release went on to replace the *"Invitation pending"* copy it quotes, because a `PENDING` relationship stopped meaning "unaccepted". The gating claim still holds; the quoted copy does not. Retained as the kickoff record rather than silently rewritten.
 - **The nav item is already unconditional** (`app-shell.tsx:408`), which is what keeps the capability discoverable for someone with no relationship.
 
 **Do not "implement" either of these.** They are recorded here so the ratified list is not mistaken for a work list.
