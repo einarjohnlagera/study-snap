@@ -1,6 +1,7 @@
 import { ResponsiveActionLink } from "@/components/ui/action-button";
 import { Card } from "@/components/ui/card";
 import type { LinkedLearnerResponse } from "@/lib/api";
+import { describeSupportedLearnerStatus } from "@/lib/linked-learner-status";
 
 export function SupportedLearnersCard({
   links,
@@ -16,21 +17,22 @@ export function SupportedLearnersCard({
         <p className="mt-1 text-sm text-foreground/70">See readiness and study activity without access to personal notes or study material.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        {links.map((link) => (
-          <Card key={link.id} className="space-y-3 p-4 sm:p-5">
-            <div>
-              <h3 className="font-semibold">{link.counterpartyDisplayName}</h3>
-              <p className="mt-1 text-sm text-foreground/65">
-                {link.status === "ACCEPTED" ? "Learning connection active" : "Invitation pending"}
-              </p>
-            </div>
-            {link.status === "ACCEPTED" ? (
-              <ResponsiveActionLink href={`/linked-learners/${link.id}/progress`} action="progress" label="View progress" />
-            ) : (
-              <p className="text-sm text-foreground/70">Progress becomes available after the invitation is accepted.</p>
-            )}
-          </Card>
-        ))}
+        {links.map((link) => {
+          const status = describeSupportedLearnerStatus(link);
+          return (
+            <Card key={link.id} className="space-y-3 p-4 sm:p-5">
+              <div>
+                <h3 className="font-semibold">{link.counterpartyDisplayName}</h3>
+                <p className="mt-1 text-sm text-foreground/65">{status.headline}</p>
+              </div>
+              {link.status === "ACCEPTED" ? (
+                <ResponsiveActionLink href={`/linked-learners/${link.id}/progress`} action="progress" label="View progress" />
+              ) : (
+                <p className="text-sm text-foreground/70">{status.detail}</p>
+              )}
+            </Card>
+          );
+        })}
       </div>
       <ResponsiveActionLink href="/linked-learners" action="share" label="Manage learning connections" variant="outline" />
     </section>

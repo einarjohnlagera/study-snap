@@ -7,7 +7,9 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.89.1 - Birth Year Correction` (Released); previous: `v0.89.0 - Support Another Learner` (Released)
+- `v0.90.0 - Invitation Integrity` (Released); previous: `v0.89.1 - Birth Year Correction` (Released)
+
+**⚠️ `v0.90.0` — Invitation Integrity.** Moves *"Quiz for someone"* out of the Study Pack practice row into the note-actions menu — it is a support/share action, and beside *Start Quick Review* it risks becoming an avoidance path. **⚠️ It stays available to EVERYONE, gated on nothing: a shared-quiz recipient needs no account and no relationship**, and a proposal coupling sharing to a connection was overturned 2026-08-20. Also ships **email-keyed invitations** — store the invite against the typed address, not a resolved user id — which closes the account-existence oracle and lets someone invite a person who has not signed up. **⚠️ Invitations stay ONE-AT-A-TIME by principle; the quiz LINK is the many-recipient mechanism.** **⚠️ Learning Connections stays a CAPABILITY — no profile mode, no opt-in toggle, nothing on `ProfileType`.** **⚠️ Do not change what `linked_learner_relationships` means** — `[CHECKPOINT — due 2026-09-19]` reads it.
 
 **⚠️ `v0.89.1` — Birth Year Correction. `users.birth_year` is account-global and WRITE-ONCE**, so a learner who declares an adult year permanently disables guardian consent for **every future supporter link**. **⚠️ The load-bearing half is re-evaluating EXISTING links on a downward correction** — an `ACCEPTED` link without consent on a learner who turns out to be a minor is the state the gate exists to prevent. **⚠️ Revert to `PENDING`, never `REVOKED`.** **⚠️ Do NOT move birth year into signup, onboarding or profile editing** — collected at link time only, and a `v0.89.0` test asserts signup and profile leave it null. **⚠️ Only the learner may correct their own year.** **⚠️ No history of declared values** — minor's personal data. No change to the authorization model, the privacy line, or what `linked_learner_relationships` means.
 
@@ -66,6 +68,19 @@ Use these skills before writing prompts, before starting new features, and after
   - `- add + More tag selection via shared mobile sheet / desktop modal`
   - `- preserve real-time title-and-tag search plus existing note navigation`
   - `- update Library docs and release notes for progressive tag disclosure`
+
+### Migration Execution Rule
+
+**Never run a migration file by hand against a database you did not create for that purpose.** Verifying migration SQL against a real PostgreSQL instance is legitimate and encouraged — it has caught real defects — but it belongs in a throwaway database, and the throwaway must be unmistakable **at the point of every command**, not merely at creation.
+
+**Why this is structural rather than a matter of care.** Applying a migration by hand produces a schema Flyway has no record of: the objects all exist, `flyway_schema_history` has no row for that version and no failed row either, and the next real startup dies with `relation "…" already exists`. The state is indistinguishable from a corrupted history, and the only clean repair is to drop what was created and let Flyway apply it properly.
+
+**Reproduced 2026-08-26 (`v0.90.0`).** `linked_learner_invitations` existed complete — eight columns, three indexes, three CHECK constraints, the FK and PK — with no `V122` history row, and the backend would not start. Every probe command in that session named a scratch database explicitly and the cause was still not attributable afterwards, which is the point: **a convention that depends on reading each command correctly is not a guard.** The repair was a `DROP` (the table was empty and unreferenced, verified before acting) rather than hand-inserting a history row, because a fabricated history entry is only safe if the schema happens to match and is invisible when it does not.
+
+- Confirm the target database in the same command that does the work, and prefer a name that cannot be mistaken for a real one.
+- Drop the scratch database when finished.
+- **Never** hand-apply a migration to "unblock" a failing startup — that recreates the same mismatch one version further along.
+- Production applies migrations solely through the application, so it is not exposed to this; the risk is entirely to local and shared development databases.
 
 ## Backend Code Quality Rules
 

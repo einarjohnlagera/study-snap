@@ -9,11 +9,13 @@ import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.springframework.http.HttpStatus;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -26,6 +28,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.mockito.Mockito.doThrow;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -37,6 +41,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class LinkedLearnerProgressServiceTest {
     @Mock private LinkedLearnerReadAuthorizationService authorizationService;
+    @Mock private AuthService authService;
     @Mock private DashboardService dashboardService;
     @Mock private ProgressReportService progressReportService;
     @Mock private NoteCollectionService noteCollectionService;
@@ -48,11 +53,30 @@ class LinkedLearnerProgressServiceTest {
     void setUp() {
         progressService = new LinkedLearnerProgressService(
                 authorizationService,
+                authService,
                 dashboardService,
                 progressReportService,
                 noteCollectionService,
                 userRepository
         );
+    }
+
+    @Test
+    void anUnverifiedCallerCannotReadLearnerProgress() {
+        // ⚠️ Defence in depth, and it is FREE rather than merely cheap. The sizing query run
+        // 2026-08-26 returned zero live relationships of any status, so nothing is broken by
+        // adding this; and emailVerifiedAt is monotonic — no call site clears it — so no verified
+        // supporter can ever lose access to a connection they already hold.
+        UUID callerUserId = UUID.randomUUID();
+        doThrow(new AppException("EMAIL_NOT_VERIFIED", "Verify your email.", HttpStatus.FORBIDDEN))
+                .when(authService).requireEmailVerified(callerUserId);
+
+        assertThatThrownBy(() -> progressService.getProgress(callerUserId, UUID.randomUUID()))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("code", "EMAIL_NOT_VERIFIED");
+
+        // The authorization helper is never even consulted, so the gate is a gate.
+        verify(authorizationService, never()).requireAcceptedLearnerId(any(), any());
     }
 
     @Test

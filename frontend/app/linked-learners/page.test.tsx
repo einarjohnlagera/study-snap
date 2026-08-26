@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LinkedLearnersPage from "./page";
 import {
   acceptLinkedLearner,
+  acceptLinkedLearnerInvitation,
+  listLinkedLearnerInvitations,
   correctLinkedLearnerBirthYear,
   getLinkedLearners,
   inviteLinkedLearner,
@@ -20,6 +22,9 @@ jest.mock("@/lib/api", () => ({
   recordLinkedLearnerGuardianConsent: jest.fn(),
   previewLinkedLearnerBirthYearCorrection: jest.fn(),
   revokeLinkedLearner: jest.fn(),
+  listLinkedLearnerInvitations: jest.fn(),
+  acceptLinkedLearnerInvitation: jest.fn(),
+  revokeLinkedLearnerInvitation: jest.fn(),
 }));
 
 const baseLink: LinkedLearnerResponse = {
@@ -39,6 +44,7 @@ const baseLink: LinkedLearnerResponse = {
 };
 
 beforeEach(() => {
+  (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([]);
   jest.clearAllMocks();
   jest.mocked(getLinkedLearners).mockResolvedValue([]);
 });
@@ -52,13 +58,13 @@ it("invites in either direction", async () => {
   fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "mentor@example.com" } });
   fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
 
-  await waitFor(() => expect(inviteLinkedLearner).toHaveBeenCalledWith("mentor@example.com", "LEARNER"));
+  await waitFor(() => expect(inviteLinkedLearner).toHaveBeenCalledWith("mentor@example.com", "LEARNER", null));
 
   fireEvent.click(screen.getByRole("button", { name: /i will support them/i }));
   fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "learner@example.com" } });
   fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
 
-  await waitFor(() => expect(inviteLinkedLearner).toHaveBeenCalledWith("learner@example.com", "SUPPORTER"));
+  await waitFor(() => expect(inviteLinkedLearner).toHaveBeenCalledWith("learner@example.com", "SUPPORTER", null));
 });
 
 it("accepts an incoming invitation", async () => {
@@ -187,4 +193,64 @@ it("explains paused guardian-consent connections to both sides", async () => {
 
   expect(await screen.findByText("This connection is paused until the supporter records guardian consent.")).toBeInTheDocument();
   expect(screen.getByText("Your progress access is paused because guardian consent is required. Record consent above to unblock the connection.")).toBeInTheDocument();
+});
+
+it("shows an incoming invitation and accepts it through the invitation endpoint", async () => {
+  // ⚠️ Invitations are email-keyed and separate from connections: a row exists whether or not the
+  // address had an account, which is what closed the account-existence oracle. Accepting one is the
+  // ONLY path that creates a relationship.
+  (getLinkedLearners as jest.Mock).mockResolvedValue([]);
+  (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
+    id: "inv-1", incoming: true, inviterRole: "SUPPORTER",
+    invitedEmail: "me@example.com", inviterName: "Aunt May", createdAt: "2026-08-20T00:00:00Z",
+  }]);
+  (acceptLinkedLearnerInvitation as jest.Mock).mockResolvedValue({
+    ...baseLink, status: "ACCEPTED", guardianConsentRequired: false, guardianConsentRecorded: false,
+  });
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByText(/Aunt May invited you/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+  await waitFor(() => expect(acceptLinkedLearnerInvitation).toHaveBeenCalledWith("inv-1", null, false));
+});
+
+it("renders no name on an outgoing invitation even when the API supplies one", async () => {
+  // The inviter typed the address and must learn nothing further from it — echoing back a resolved
+  // display name is what made the list a name-harvesting oracle.
+  //
+  // ⚠️ THIS TEST USED TO MOCK `inviterName: null` AND ASSERT THE EMAIL RENDERED, which proved
+  // nothing: it mocked the very absence it claimed to verify, and would have passed unchanged if
+  // the component rendered every name it was handed. Supplying a name here makes the assertion
+  // real — the OUTGOING row must not display it regardless of what the response carries. The
+  // server-side guarantee that no name is sent is covered separately in LinkedLearnerServiceTest.
+  (getLinkedLearners as jest.Mock).mockResolvedValue([]);
+  (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
+    id: "inv-2", incoming: false, inviterRole: "SUPPORTER",
+    invitedEmail: "someone@example.com", inviterName: "Should Never Render", createdAt: "2026-08-20T00:00:00Z",
+  }]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByText(/You invited someone@example.com/i)).toBeInTheDocument();
+  expect(screen.queryByText(/Should Never Render/)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
+});
+
+it("offers birth-year correction after a learner-initiated invite, before anyone has accepted", async () => {
+  // ⚠️ REGRESSION GUARD. invite() writes the write-once account-global birth year and creates NO
+  // relationship row, so gating this card on `links` alone hid it for the whole life of an
+  // unaccepted invitation — while RELEASES.md and the feature doc both name the learner-only
+  // correction path as the mitigation for exactly that write. Service permitted it; UI hid it.
+  (getLinkedLearners as jest.Mock).mockResolvedValue([]);
+  (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
+    id: "inv-9", incoming: false, inviterRole: "LEARNER",
+    invitedEmail: "supporter@example.com", inviterName: null, createdAt: "2026-08-26T00:00:00Z",
+  }]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByRole("heading", { name: "Correct your birth year" })).toBeInTheDocument();
 });

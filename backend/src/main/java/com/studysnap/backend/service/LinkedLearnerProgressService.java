@@ -22,6 +22,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LinkedLearnerProgressService {
     private final LinkedLearnerReadAuthorizationService authorizationService;
+    private final AuthService authService;
     private final DashboardService dashboardService;
     private final ProgressReportService progressReportService;
     private final NoteCollectionService noteCollectionService;
@@ -29,6 +30,13 @@ public class LinkedLearnerProgressService {
 
     @Transactional(readOnly = true)
     public LinkedLearnerProgressResponse getProgress(UUID callerUserId, UUID relationshipId) {
+        // ⚠️ Defence in depth on the product's ONLY cross-user read. Every path that grants an
+        // ACCEPTED relationship is gated on a verified email, so this is redundant TODAY — it is
+        // here so that a future grant path which loses its gate does not silently open the read
+        // too. The cost is genuinely zero rather than merely small: emailVerifiedAt is monotonic
+        // (no call site ever clears it, and an address change re-stamps it only after the new
+        // address is confirmed), so no verified supporter can lose access by holding a stale flag.
+        authService.requireEmailVerified(callerUserId);
         UUID learnerUserId = authorizationService.requireAcceptedLearnerId(callerUserId, relationshipId);
         UserEntity learner = userRepository.findById(learnerUserId)
                 .orElseThrow(LinkedLearnerProgressNotFoundException::new);

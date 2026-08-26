@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { BackLink } from "@/components/ui/back-link";
 import { PageHeader } from "@/components/page-header";
-import { ResponsiveActionLink } from "@/components/ui/action-button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -56,6 +55,7 @@ export default function LinkedLearnerProgressPage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6">
+      <BackLink href="/linked-learners" label="Learning connections" />
       <PageHeader
         eyebrow="Learning support"
         title={progress ? `${progress.learnerDisplayName}'s progress` : "Learner progress"}
@@ -73,7 +73,6 @@ export default function LinkedLearnerProgressPage() {
         <Card className="space-y-4 p-5">
           <h2 className="text-lg font-semibold">Progress unavailable</h2>
           <p role="alert" className="text-sm text-foreground/70">{error}</p>
-          <ResponsiveActionLink href="/linked-learners" action="back" label="Back to learning connections" />
         </Card>
       ) : null}
 
@@ -83,7 +82,6 @@ export default function LinkedLearnerProgressPage() {
           <p className="text-sm text-foreground/70">
             {progress.learnerDisplayName} has not completed enough study activity to show progress here yet.
           </p>
-          <Link className="text-sm font-medium text-primary hover:underline" href="/linked-learners">Back to learning connections</Link>
         </Card>
       ) : null}
 

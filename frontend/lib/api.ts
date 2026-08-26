@@ -5362,13 +5362,15 @@ export async function copyNoteOnSignup(publicNoteId: string): Promise<{ noteId: 
 export async function inviteLinkedLearner(
   email: string,
   inviterRole: LinkedLearnerSide,
+  /** Required only when the inviter IS the learner and has no year recorded yet. */
+  learnerBirthYear: number | null = null,
 ): Promise<SimpleMessageResponse> {
   const response = await fetchWithAuth(
     "/linked-learners/invite",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ email, inviterRole }),
+      body: JSON.stringify({ email, inviterRole, learnerBirthYear }),
     },
     true,
   );
@@ -5393,6 +5395,51 @@ export async function getLinkedLearnerProgress(
     true,
   );
   return parseApiResponse<LinkedLearnerProgressResponse>(response, "Could not load this learner's progress.");
+}
+
+export type LinkedLearnerInvitationResponse = {
+  id: string;
+  incoming: boolean;
+  inviterRole: "SUPPORTER" | "LEARNER";
+  invitedEmail: string;
+  /** Null for an outgoing invitation: the inviter typed the address and must learn nothing more. */
+  inviterName: string | null;
+  createdAt: string;
+};
+
+export async function listLinkedLearnerInvitations(): Promise<LinkedLearnerInvitationResponse[]> {
+  const response = await fetchWithAuth(
+    "/linked-learners/invitations",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerInvitationResponse[]>(response, "Could not load invitations.");
+}
+
+export async function acceptLinkedLearnerInvitation(
+  invitationId: string,
+  learnerBirthYear: number | null,
+  guardianConsentAttested: boolean,
+): Promise<LinkedLearnerResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/invitations/${invitationId}/accept`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ learnerBirthYear, guardianConsentAttested }),
+    },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerResponse>(response, "Could not accept the invitation.");
+}
+
+export async function revokeLinkedLearnerInvitation(invitationId: string): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/invitations/${invitationId}/revoke`,
+    { method: "POST", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not withdraw the invitation.");
 }
 
 export async function acceptLinkedLearner(

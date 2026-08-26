@@ -71,7 +71,7 @@ Successful public-note copy-on-signup users may arrive on Dashboard with a pendi
 
 ### People you support
 
-Dashboard adds a profile-neutral `People you support` card whenever `GET /linked-learners` returns non-revoked relationships where the caller is the supporter. Accepted connections link to the relationship-scoped progress view; pending connections state that acceptance or guardian consent is still required. The card links to `/linked-learners` for management and does not turn supporting someone into a `ProfileType`, replace the caller's own learning Dashboard, or expose learner notes.
+Dashboard adds a profile-neutral `People you support` card whenever `GET /linked-learners` returns non-revoked relationships where the caller is the supporter. Accepted connections link to the relationship-scoped progress view; pending connections **name the actual blocker** — the learner's birth year, guardian consent outstanding, or consent recorded and activation still finishing. **⚠️ Since `V122` a `PENDING` relationship does NOT mean the invitation is unaccepted** (a relationship row is only created at acceptance), so the card must never say acceptance is still required. A `PENDING` row carrying no blocker at all can only be a legacy pre-`V122` row, and gets deliberately neutral copy. The vocabulary lives in `frontend/lib/linked-learner-status.ts`, shared with the Learning Connections page so the two cannot drift. The card links to `/linked-learners` for management and does not turn supporting someone into a `ProfileType`, replace the caller's own learning Dashboard, or expose learner notes.
 
 ### Student
 

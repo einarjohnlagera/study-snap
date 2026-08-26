@@ -52,7 +52,7 @@ This prevents Codex from guessing product rules it should be reading instead.
 
 ## Do Not Commit Prompt Files
 
-Save every completed prompt to `docs/codex-prompts/<version>-<feature>.md` — but never `git add` or commit that file. It's local planning material for handing work to Codex, not a shipped artifact. `docs/codex-prompts/` is intentionally **not** gitignored, so the file shows up as untracked in your git client for easy review — the rule is enforced by discipline, not tooling. This holds even at the later `/audit-diff` commit step: stage and commit the Codex-delivered code and doc changes by name, but leave the prompt file itself untracked (never `git add -A`/`git add .` in this repo, which would sweep it in).
+Save every completed prompt to `docs/codex-prompts/<version>-<feature>.md` — but never `git add` or commit that file. It's local planning material for handing work to Codex, not a shipped artifact. **`docs/codex-prompts/` IS gitignored** (`.gitignore:13`), so the rule is enforced by tooling as well as discipline. *(Corrected 2026-08-26: this section previously said the directory was "intentionally **not** gitignored" and that discipline was the only guard. It has been ignored for as long as the entry has existed, so a prompt file will not appear as untracked in your git client.)* This holds even at the later `/audit-diff` commit step: stage and commit the Codex-delivered code and doc changes by name, but leave the prompt file itself untracked (never `git add -A`/`git add .` in this repo, which would sweep it in).
 
 ---
 

@@ -279,6 +279,25 @@ public class StudySnapProperties {
     @Setter
     public static class LinkedLearners {
         private int guardianConsentMaxAge = 17;
+
+        /**
+         * How long an invitation stays acceptable. An invitation is a standing offer to whoever
+         * controls an ADDRESS, so it must lapse; a reassigned mailbox would otherwise inherit it.
+         */
+        private int invitationTtlDays = 30;
+
+        /** Total invitations one account may send per window, capping mail volume. */
+        private int invitesPerWindow = 20;
+
+        /**
+         * Invitations one account may send TO THE SAME ADDRESS per window. Separate from the
+         * volume cap because re-posting an address re-sends mail, so a volume-only limit still
+         * permits hammering a single victim.
+         */
+        private int invitesPerAddressPerWindow = 3;
+
+        /** Window for both invitation limits, in hours. */
+        private int inviteRateLimitWindowHours = 24;
     }
 
     @Getter

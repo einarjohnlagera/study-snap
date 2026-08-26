@@ -1,11 +1,13 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
+import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,26 +92,31 @@ class LinkedLearnerBirthYearCorrectionTransactionTest {
                 Timestamp.from(acceptedAt.toInstant()));
 
         when(userRepository.findById(learnerUserId)).thenAnswer(invocation -> Optional.of(readUser()));
-        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> {
-            UserEntity user = invocation.getArgument(0);
-            jdbcTemplate.update("""
-                            update correction_users
-                            set birth_year = ?, birth_year_updated_at = ?, updated_at = ?
-                            where id = ?
-                            """,
-                    user.getBirthYear(), user.getBirthYearUpdatedAt(), user.getUpdatedAt(), user.getId());
-            return user;
-        });
+        // correctBirthYear now takes a PESSIMISTIC_WRITE read on the learner before deciding.
+        when(userRepository.findByIdForUpdate(learnerUserId))
+                .thenAnswer(invocation -> Optional.of(readUser()));
+        // The correction now reads the year as a scalar under the lock and writes it with a
+        // targeted update, so neither the entity read nor save() is on this path any more.
+        when(userRepository.findBirthYearById(learnerUserId))
+                .thenAnswer(invocation -> Optional.ofNullable(jdbcTemplate.queryForObject(
+                        "select birth_year from correction_users where id = ?", Integer.class, learnerUserId)));
+        when(userRepository.writeBirthYear(any(UUID.class), any(), any())).thenAnswer(invocation ->
+                jdbcTemplate.update("""
+                                update correction_users
+                                set birth_year = ?, birth_year_updated_at = ?, updated_at = ?
+                                where id = ?
+                                """,
+                        (Object) invocation.getArgument(1), (Object) invocation.getArgument(2),
+                        (Object) invocation.getArgument(2), (Object) invocation.getArgument(0)));
         when(relationshipRepository.findByLearnerUserIdAndStatus(
                 learnerUserId, LinkedLearnerStatus.ACCEPTED)).thenAnswer(invocation -> List.of(readRelationship()));
         when(consentRepository.findByRelationshipId(relationshipId)).thenReturn(Optional.empty());
-        when(relationshipRepository.saveAll(any())).thenAnswer(invocation -> {
-            List<LinkedLearnerRelationshipEntity> relationships = invocation.getArgument(0);
-            LinkedLearnerRelationshipEntity relationship = relationships.getFirst();
-            jdbcTemplate.update("""
-                            update correction_relationships set status = ?, accepted_at = ? where id = ?
-                            """,
-                    relationship.getStatus().name(), relationship.getAcceptedAt(), relationship.getId());
+        // The pause is a CONDITIONAL update now, not saveAll. Same shape of proof: write the row,
+        // then fail, and assert the whole transaction unwound — including the birth year.
+        when(relationshipRepository.pauseAcceptedForConsent(relationshipId)).thenAnswer(invocation -> {
+            jdbcTemplate.update(
+                    "update correction_relationships set status = ?, accepted_at = null where id = ?",
+                    LinkedLearnerStatus.PENDING.name(), relationshipId);
             throw new IllegalStateException("forced failure after relationship write");
         });
     }
@@ -209,13 +216,15 @@ class LinkedLearnerBirthYearCorrectionTransactionTest {
         ) {
             return new LinkedLearnerService(
                     relationshipRepository,
+                    mock(LinkedLearnerInvitationRepository.class),
                     consentRepository,
                     userRepository,
                     mock(OnboardingGuardService.class),
                     mock(AuthService.class),
                     mock(EmailService.class),
                     mock(EmailTemplateService.class),
-                    new StudySnapProperties());
+                    new StudySnapProperties(),
+                    mock(InvitationRateLimitService.class));
         }
     }
 }

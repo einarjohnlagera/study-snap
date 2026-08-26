@@ -10,6 +10,8 @@ public record InviteLinkedLearnerRequest(
         @Email(message = "Enter a valid email address.")
         String email,
         @NotNull(message = "Choose whether you are the supporter or learner.")
-        LinkedLearnerSide inviterRole
+        LinkedLearnerSide inviterRole,
+        /** Required only when the inviter IS the learner and has no year recorded yet. */
+        Integer learnerBirthYear
 ) {
 }

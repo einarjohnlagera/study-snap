@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
 import com.studysnap.backend.dto.LinkedLearnerBirthYearCorrectionPreviewResponse;
+import com.studysnap.backend.dto.LinkedLearnerInvitationResponse;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.LinkedLearnerGuardianConsentEntity;
@@ -11,16 +12,19 @@ import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
-import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.InvalidLinkedLearnerBirthYearException;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearCorrectionNotAllowedException;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.exception.LinkedLearnerNotAllowedException;
 import com.studysnap.backend.exception.LinkedLearnerNotFoundException;
+import com.studysnap.backend.exception.LinkedLearnerInvitationExpiredException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
+import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
+import com.studysnap.backend.entity.LinkedLearnerInvitationEntity;
+import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +44,10 @@ import java.util.UUID;
 @Slf4j
 public class LinkedLearnerService {
     public static final String GENERIC_INVITE_MESSAGE =
-            "If this email belongs to an active NoteLib account, they will receive an invitation.";
+            // ⚠️ CONSTANT, and identical for every address — that is what keeps it from being an
+            // account-existence oracle. It must also not claim an account is required: since V122
+            // an invitation waits against the ADDRESS, which is the point of the feature.
+            "Invitation sent. If they do not have a NoteLib account yet, it will be waiting when they sign up.";
 
     private static final List<LinkedLearnerStatus> LIVE_STATUSES =
             List.of(LinkedLearnerStatus.PENDING, LinkedLearnerStatus.ACCEPTED);
@@ -51,6 +58,7 @@ public class LinkedLearnerService {
     private static final String INVITATION_TEMPLATE = "linked-learner-invitation";
 
     private final LinkedLearnerRelationshipRepository relationshipRepository;
+    private final LinkedLearnerInvitationRepository invitationRepository;
     private final LinkedLearnerGuardianConsentRepository consentRepository;
     private final UserRepository userRepository;
     private final OnboardingGuardService onboardingGuardService;
@@ -58,6 +66,7 @@ public class LinkedLearnerService {
     private final EmailService emailService;
     private final EmailTemplateService emailTemplateService;
     private final StudySnapProperties properties;
+    private final InvitationRateLimitService invitationRateLimitService;
 
     @Transactional
     public SimpleMessageResponse invite(UUID callerUserId, InviteLinkedLearnerRequest request) {
@@ -68,32 +77,108 @@ public class LinkedLearnerService {
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
         String normalizedEmail = normalizeEmail(request.email());
-        UserEntity counterparty = userRepository.findByEmailIgnoreCase(normalizedEmail)
-                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
-                .orElse(null);
-        if (counterparty == null) {
-            return genericInviteResponse();
-        }
-        if (callerUserId.equals(counterparty.getId())) {
+
+        // ⚠️ Self-invite is refused BEFORE any account lookup, and deliberately so: the caller
+        // already knows their own address exists, so this reveals nothing, while checking it after
+        // a lookup would make the refusal itself depend on account state.
+        if (normalizedEmail.equalsIgnoreCase(normalizeEmail(caller.getEmail()))) {
             throw new LinkedLearnerSelfLinkException();
         }
 
-        UUID supporterUserId = request.inviterRole() == LinkedLearnerSide.SUPPORTER
-                ? callerUserId : counterparty.getId();
-        UUID learnerUserId = request.inviterRole() == LinkedLearnerSide.LEARNER
-                ? callerUserId : counterparty.getId();
-        relationshipRepository.insertPendingIfAbsent(
-                UUID.randomUUID(), supporterUserId, learnerUserId,
-                request.inviterRole().name(), OffsetDateTime.now());
-
-        LinkedLearnerRelationshipEntity relationship = relationshipRepository
-                .findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
-                        supporterUserId, learnerUserId, LIVE_STATUSES)
-                .orElseThrow(LinkedLearnerNotFoundException::new);
-        if (relationship.getStatus() == LinkedLearnerStatus.PENDING) {
-            sendInvitationEmail(caller, counterparty, relationship);
+        // ⚠️ When the INVITER is the learner, their birth year must be captured now. The supporter
+        // accepts later, and the consent gate requires the learner's own year — but only the learner
+        // may declare it, and before acceptance there is no relationship id for the existing
+        // record-birth-year route to address. Without this the invitation is permanently
+        // un-acceptable: the supporter's accept throws forever with no recovery path.
+        if (request.inviterRole() == LinkedLearnerSide.LEARNER) {
+            // ⚠️ THE NULL CHECK MUST HAPPEN INSIDE THE LOCK. Reading caller.getBirthYear() from the
+            // entity loaded above and then locking would let a concurrent accept/record commit a
+            // MINOR year in between, which this write would overwrite with the adult year the
+            // inviter typed — permanently, since the value is account-global and write-once, and
+            // invite has no pass that re-evaluates existing links.
+            if (lockAndReadBirthYear(callerUserId) == null) {
+                if (request.learnerBirthYear() == null) {
+                    throw new LinkedLearnerBirthYearRequiredException();
+                }
+                persistBirthYear(callerUserId, request.learnerBirthYear());
+            }
         }
+
+        // ⚠️ Metered HERE: after the verified-email gate, before anything is written or sent, and
+        // keyed only on caller + address. It must never depend on whether the address has an
+        // account — branching on that is precisely the oracle V122 closed.
+        invitationRateLimitService.assertInviteAllowed(callerUserId, normalizedEmail);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime expiresAt = now.plusDays(properties.getLinkedLearners().getInvitationTtlDays());
+
+        // ⚠️ THE ROW IS WRITTEN WHETHER OR NOT THE ADDRESS HAS AN ACCOUNT. That is the whole point:
+        // previously an unknown address wrote nothing while a real one wrote a PENDING relationship
+        // visible in the inviter's own list, so "invite an address, read your list" was an
+        // account-existence oracle. There is now no branch on existence to observe.
+        invitationRepository.insertPendingIfAbsent(
+                UUID.randomUUID(), callerUserId, normalizedEmail,
+                request.inviterRole().name(), now, expiresAt);
+
+        // The insert no-ops when a live row already exists. If that row has LAPSED it would
+        // otherwise block this address forever through the partial unique index, so re-arm it —
+        // extending expiry only, never createdAt, which records the first invitation.
+        invitationRepository.reArmExpired(
+                callerUserId, normalizedEmail, request.inviterRole().name(), expiresAt, now);
+
+        LinkedLearnerInvitationEntity invitation = invitationRepository
+                .findFirstByInviterUserIdAndInvitedEmailAndStatus(
+                        callerUserId, normalizedEmail, LinkedLearnerStatus.PENDING)
+                .orElseThrow(LinkedLearnerNotFoundException::new);
+
+        // The email goes to the typed address either way. A recipient with no account follows the
+        // link, signs up, and finds the invitation waiting — which is how a parent invites a child.
+        sendInvitationEmail(caller, normalizedEmail, invitation);
         return genericInviteResponse();
+    }
+
+    /**
+     * Pending invitations in both directions. Kept separate from {@link #list} because an invitation
+     * is not a connection: merging them would invite a future reader to count invitations as
+     * relationships, which is exactly what the open checkpoint must not have happen.
+     */
+    @Transactional(readOnly = true)
+    public List<LinkedLearnerInvitationResponse> listInvitations(UUID callerUserId) {
+        // Incoming invitations are matched on the caller's address, so an unverified account must
+        // not be able to read invitations sent to an address it has merely claimed.
+        authService.requireEmailVerified(callerUserId);
+        onboardingGuardService.assertProfileComplete(callerUserId);
+        UserEntity caller = requireUser(callerUserId);
+        String callerEmail = normalizeEmail(caller.getEmail());
+
+        List<LinkedLearnerInvitationResponse> outgoing = invitationRepository
+                .findByInviterUserIdAndStatusAndExpiresAtAfter(
+                        callerUserId, LinkedLearnerStatus.PENDING, OffsetDateTime.now())
+                .stream()
+                .map(invitation -> new LinkedLearnerInvitationResponse(
+                        invitation.getId(), false, invitation.getInviterRole(),
+                        invitation.getInvitedEmail(),
+                        // ⚠️ No name for an outgoing invitation. The inviter typed the address and
+                        // must learn nothing further from it, or the list harvests names again.
+                        null,
+                        invitation.getCreatedAt()))
+                .toList();
+
+        List<LinkedLearnerInvitationResponse> incoming = invitationRepository
+                .findByInvitedEmailAndStatusAndExpiresAtAfter(
+                        callerEmail, LinkedLearnerStatus.PENDING, OffsetDateTime.now())
+                .stream()
+                .filter(invitation -> !callerUserId.equals(invitation.getInviterUserId()))
+                .map(invitation -> new LinkedLearnerInvitationResponse(
+                        invitation.getId(), true, invitation.getInviterRole(),
+                        invitation.getInvitedEmail(),
+                        // The recipient DOES need to know who is asking in order to decide.
+                        userRepository.findById(invitation.getInviterUserId())
+                                .map(this::resolveDisplayName).orElse(null),
+                        invitation.getCreatedAt()))
+                .toList();
+
+        return java.util.stream.Stream.concat(outgoing.stream(), incoming.stream()).toList();
     }
 
     @Transactional(readOnly = true)
@@ -109,36 +194,137 @@ public class LinkedLearnerService {
     ) {
         onboardingGuardService.assertProfileComplete(callerUserId);
         validateCorrectionBirthYear(birthYear);
-        UserEntity learner = requireUser(callerUserId);
-        requireRecordedBirthYear(learner);
+        // ⚠️ Deliberately UNLOCKED: this is an advisory preview on a read-only path, and taking a
+        // write lock here would block acceptance behind someone merely looking at the warning text.
+        // A preview that is momentarily stale is acceptable; correctBirthYear re-reads under the
+        // lock before acting on anything.
+        Integer currentBirthYear = userRepository.findBirthYearById(callerUserId).orElse(null);
+        requireRecordedBirthYear(currentBirthYear);
         return new LinkedLearnerBirthYearCorrectionPreviewResponse(
-                relationshipsPausedByCorrection(learner, birthYear).size());
+                relationshipsPausedByCorrection(callerUserId, currentBirthYear, birthYear).size());
     }
 
     @Transactional
     public List<LinkedLearnerResponse> correctBirthYear(UUID callerUserId, int birthYear) {
         onboardingGuardService.assertProfileComplete(callerUserId);
         validateCorrectionBirthYear(birthYear);
-        UserEntity learner = requireUser(callerUserId);
-        requireRecordedBirthYear(learner);
-        if (Integer.valueOf(birthYear).equals(learner.getBirthYear())) {
+        // ⚠️ Same lock as accept(), taken FIRST. Holding it to commit is what guarantees an
+        // acceptance that committed just before us is VISIBLE below and therefore paused, and that
+        // one arriving after us reads the corrected year instead of the value we replaced.
+        Integer currentBirthYear = lockAndReadBirthYear(callerUserId);
+        requireRecordedBirthYear(currentBirthYear);
+        if (Integer.valueOf(birthYear).equals(currentBirthYear)) {
             return listRelationships(callerUserId);
         }
 
         List<LinkedLearnerRelationshipEntity> relationshipsToPause =
-                relationshipsPausedByCorrection(learner, birthYear);
+                relationshipsPausedByCorrection(callerUserId, currentBirthYear, birthYear);
         OffsetDateTime now = OffsetDateTime.now();
-        learner.setBirthYear(birthYear);
-        learner.setBirthYearUpdatedAt(now);
-        learner.setUpdatedAt(now);
-        userRepository.save(learner);
+        userRepository.writeBirthYear(callerUserId, birthYear, now);
 
-        relationshipsToPause.forEach(relationship -> {
-            relationship.setStatus(LinkedLearnerStatus.PENDING);
-            relationship.setAcceptedAt(null);
-        });
-        relationshipRepository.saveAll(relationshipsToPause);
+        // ⚠️ Conditional per row rather than saveAll: a revoke committing between the select above
+        // and this write would otherwise be overwritten back to PENDING, resurrecting a connection
+        // the learner had just ended.
+        relationshipsToPause.forEach(
+                relationship -> relationshipRepository.pauseAcceptedForConsent(relationship.getId()));
         return listRelationships(callerUserId);
+    }
+
+    /**
+     * Accept an email-keyed invitation. This is the ONLY path that creates a relationship row, which
+     * is what keeps {@code linked_learner_relationships} meaning what the open checkpoint counts —
+     * an unresolved invitation is not a connection.
+     *
+     * <p>⚠️ The caller must own the invited ADDRESS, not merely hold the invitation id. The id is a
+     * UUID and unguessable in practice, but authorising on possession of an identifier rather than
+     * on identity is the shape that becomes a hole the moment an id leaks into a log or a referrer.
+     *
+     * <p>Relationship creation then delegates to {@link #accept}, so the guardian-consent gate,
+     * the birth-year capture and the PENDING-until-consent rule are reused rather than reimplemented.
+     */
+    @Transactional
+    public LinkedLearnerResponse acceptInvitation(
+            UUID invitationId,
+            UUID callerUserId,
+            AcceptLinkedLearnerRequest request
+    ) {
+        // ⚠️ VERIFIED EMAIL IS THE WHOLE AUTHORIZATION HERE, and its absence was a hole created by
+        // email-keying itself. Acceptance authorises on owning the invited ADDRESS — but an invited
+        // address may have no account yet, which is the point. Without this gate anyone who knows
+        // the address could register it, skip the inbox (signup returns a token and login never
+        // checks verification), accept, and become a SUPPORTER with a cross-user progress read.
+        // assertProfileComplete does NOT cover this: it passes for a brand-new account, because it
+        // only fires when profileType is null AND onboarding is already complete.
+        authService.requireEmailVerified(callerUserId);
+        onboardingGuardService.assertProfileComplete(callerUserId);
+        UserEntity caller = requireUser(callerUserId);
+        LinkedLearnerInvitationEntity invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(LinkedLearnerNotFoundException::new);
+        if (!normalizeEmail(caller.getEmail()).equalsIgnoreCase(invitation.getInvitedEmail())) {
+            throw new LinkedLearnerNotAllowedException();
+        }
+        if (invitation.getStatus() != LinkedLearnerStatus.PENDING) {
+            throw new LinkedLearnerInvalidStateException();
+        }
+        if (callerUserId.equals(invitation.getInviterUserId())) {
+            throw new LinkedLearnerSelfLinkException();
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        if (!invitation.getExpiresAt().isAfter(now)) {
+            throw new LinkedLearnerInvitationExpiredException();
+        }
+
+        // Read what the relationship needs BEFORE the update. The conditional update is a native
+        // query, so the managed entity keeps its load-time status afterwards; taking these now
+        // means nothing downstream depends on a stale row, rather than depending on it harmlessly.
+        LinkedLearnerSide inviterRole = invitation.getInviterRole();
+        UUID inviterUserId = invitation.getInviterUserId();
+
+        // ⚠️ CLAIM THE INVITATION FIRST, and only build the relationship if this call won. Without
+        // it, an accept racing a revoke could create a relationship — a live cross-user read —
+        // behind an invitation the other party had just revoked.
+        //
+        // ⚠️ Note the ACTUAL mechanism, because it is not what a bare "0 rows means someone else
+        // won" reading suggests: this runs inside a transaction, so a concurrent revoke BLOCKS on
+        // the row lock this update takes rather than observing PENDING and racing it. The
+        // zero-rows branch is the guard for the already-terminal case (an invitation accepted or
+        // revoked in an earlier, committed transaction). Both are handled; they are different paths.
+        if (invitationRepository.markAcceptedIfPending(invitation.getId(), now, now) == 0) {
+            throw new LinkedLearnerInvalidStateException();
+        }
+
+        UUID supporterUserId = inviterRole == LinkedLearnerSide.SUPPORTER ? inviterUserId : callerUserId;
+        UUID learnerUserId = inviterRole == LinkedLearnerSide.LEARNER ? inviterUserId : callerUserId;
+
+        relationshipRepository.insertPendingIfAbsent(
+                UUID.randomUUID(), supporterUserId, learnerUserId,
+                inviterRole.name(), now);
+        LinkedLearnerRelationshipEntity relationship = relationshipRepository
+                .findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
+                        supporterUserId, learnerUserId, LIVE_STATUSES)
+                .orElseThrow(LinkedLearnerNotFoundException::new);
+
+        return accept(relationship.getId(), callerUserId, request);
+    }
+
+    /** Revoke a still-unaccepted invitation. Either the inviter or the invited address may do it. */
+    @Transactional
+    public SimpleMessageResponse revokeInvitation(UUID invitationId, UUID callerUserId) {
+        authService.requireEmailVerified(callerUserId);
+        onboardingGuardService.assertProfileComplete(callerUserId);
+        UserEntity caller = requireUser(callerUserId);
+        LinkedLearnerInvitationEntity invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(LinkedLearnerNotFoundException::new);
+        boolean isInviter = callerUserId.equals(invitation.getInviterUserId());
+        boolean isInvited = normalizeEmail(caller.getEmail()).equalsIgnoreCase(invitation.getInvitedEmail());
+        if (!isInviter && !isInvited) {
+            throw new LinkedLearnerNotAllowedException();
+        }
+        // Conditional, and idempotent by design: 0 rows means it was already accepted or revoked,
+        // which is not an error for a revoke. The generic response keeps those indistinguishable.
+        invitationRepository.markRevokedIfPending(invitation.getId(), OffsetDateTime.now());
+        return genericInviteResponse();
     }
 
     @Transactional
@@ -147,6 +333,12 @@ public class LinkedLearnerService {
             UUID callerUserId,
             AcceptLinkedLearnerRequest request
     ) {
+        // ⚠️ VERIFIED EMAIL IS THE AUTHORIZATION. Invitations are keyed to an ADDRESS, so
+        // control of that address is the only thing proving the caller is the invited party.
+        // Signup issues a token without inbox access. Gate every path that GRANTS or WIDENS
+        // access; revoke() and correctBirthYear() stay ungated because they CUT access and
+        // gating them would disable the v0.89.1 safety mechanism.
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         LinkedLearnerRelationshipEntity relationship = requireRelationship(relationshipId);
         requireInvitedParty(relationship, callerUserId);
@@ -154,15 +346,24 @@ public class LinkedLearnerService {
             throw new LinkedLearnerInvalidStateException();
         }
 
-        UserEntity learner = requireUser(relationship.getLearnerUserId());
-        if (learner.getBirthYear() == null) {
-            if (!callerUserId.equals(learner.getId()) || request.learnerBirthYear() == null) {
+        // ⚠️ LOCK THE LEARNER BEFORE READING THE BIRTH YEAR. The consent decision is made from
+        // this value, and correctBirthYear can move it into the minor range concurrently. Reading
+        // it unlocked let acceptance decide "no consent needed" on an adult year, a correction
+        // commit a minor year, and acceptance then finish ACCEPTED — a minor with a live supporter
+        // connection and no consent record. Locking serializes the two in BOTH orders: if we win,
+        // correctBirthYear's own lock makes it observe this acceptance and pause it; if it wins,
+        // this read returns the corrected year and consent is required below.
+        UUID learnerUserId = relationship.getLearnerUserId();
+        Integer birthYear = lockAndReadBirthYear(learnerUserId);
+        if (birthYear == null) {
+            if (!callerUserId.equals(learnerUserId) || request.learnerBirthYear() == null) {
                 throw new LinkedLearnerBirthYearRequiredException();
             }
-            persistBirthYear(learner, request.learnerBirthYear());
+            birthYear = request.learnerBirthYear();
+            persistBirthYear(learnerUserId, birthYear);
         }
 
-        boolean consentRequired = requiresGuardianConsent(learner.getBirthYear());
+        boolean consentRequired = requiresGuardianConsent(birthYear);
         boolean consentRecorded = consentRepository.findByRelationshipId(relationshipId).isPresent();
         if (consentRequired && !consentRecorded && request.guardianConsentAttested()
                 && callerUserId.equals(relationship.getSupporterUserId())) {
@@ -173,11 +374,16 @@ public class LinkedLearnerService {
             return toResponse(relationship, callerUserId);
         }
 
+        // ⚠️ Conditional, so a revoke that committed while we were deciding is not overwritten.
+        // Zero rows means the relationship is no longer PENDING — revoked by the other party, or
+        // accepted elsewhere — and we must NOT report success from the entity we loaded.
         OffsetDateTime now = OffsetDateTime.now();
-        relationship.setStatus(LinkedLearnerStatus.ACCEPTED);
-        relationship.setAcceptedAt(now);
-        relationship.setRevokedAt(null);
-        return toResponse(relationshipRepository.save(relationship), callerUserId);
+        if (relationshipRepository.markAcceptedIfPending(relationshipId, now) == 0) {
+            throw new LinkedLearnerInvalidStateException();
+        }
+        // The conditional update cleared the persistence context, so re-read rather than trust the
+        // detached copy — status is exactly the field that changed.
+        return toResponse(requireRelationship(relationshipId), callerUserId);
     }
 
     @Transactional
@@ -186,21 +392,24 @@ public class LinkedLearnerService {
             UUID callerUserId,
             int birthYear
     ) {
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         LinkedLearnerRelationshipEntity relationship = requireRelationship(relationshipId);
         requirePending(relationship);
         if (!callerUserId.equals(relationship.getLearnerUserId())) {
             throw new LinkedLearnerNotAllowedException();
         }
-        UserEntity learner = requireUser(callerUserId);
-        if (learner.getBirthYear() == null) {
-            persistBirthYear(learner, birthYear);
+        // Every writer of users.birth_year takes the same lock; skipping one would reopen the
+        // correction race through that path instead of closing it.
+        if (lockAndReadBirthYear(callerUserId) == null) {
+            persistBirthYear(callerUserId, birthYear);
         }
         return toResponse(relationship, callerUserId);
     }
 
     @Transactional
     public LinkedLearnerResponse recordGuardianConsent(UUID relationshipId, UUID callerUserId) {
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         LinkedLearnerRelationshipEntity relationship = requireRelationship(relationshipId);
         requirePending(relationship);
@@ -228,19 +437,43 @@ public class LinkedLearnerService {
         if (relationship.getStatus() == LinkedLearnerStatus.REVOKED) {
             return toResponse(relationship, callerUserId);
         }
-        relationship.setStatus(LinkedLearnerStatus.REVOKED);
-        relationship.setRevokedAt(OffsetDateTime.now());
-        return toResponse(relationshipRepository.save(relationship), callerUserId);
+        // ⚠️ Conditional on BOTH live statuses, so revocation still wins when an acceptance
+        // committed first. Zero rows means it was already REVOKED, which is not an error — revoke
+        // is idempotent — so report the persisted state rather than the stale one.
+        relationshipRepository.markRevokedIfLive(relationshipId, OffsetDateTime.now());
+        return toResponse(requireRelationship(relationshipId), callerUserId);
     }
 
-    private void persistBirthYear(UserEntity learner, int birthYear) {
+    /**
+     * The single way to load a learner whose birth year a consent decision depends on. Only ONE row
+     * is ever locked, and it is always the learner's, so no lock cycle exists and no deadlock is
+     * possible between these paths.
+     */
+    /**
+     * Take the learner's row lock and return the birth year THE ROW ACTUALLY HOLDS.
+     *
+     * <p>⚠️ The two steps are separate on purpose, and collapsing them back into one entity read
+     * reintroduces the defect. {@code findByIdForUpdate} acquires the lock correctly, but if the
+     * user is already managed — and it always is, because the verified-email check and the
+     * onboarding guard both load it first — Hibernate hands back the cached instance and throws
+     * away the state it just read. The consent decision would then be made from the PRE-LOCK value:
+     * acceptance reads an adult year, a correction into the minor range commits, and acceptance
+     * still finishes ACCEPTED. The scalar read cannot come from the identity map, so it is the
+     * value the lock actually protects.
+     */
+    private Integer lockAndReadBirthYear(UUID learnerUserId) {
+        userRepository.findByIdForUpdate(learnerUserId).orElseThrow(UserNotFoundException::new);
+        return userRepository.findBirthYearById(learnerUserId).orElse(null);
+    }
+
+    private void persistBirthYear(UUID learnerUserId, int birthYear) {
         int currentYear = Year.now().getValue();
         if (birthYear < MINIMUM_BIRTH_YEAR || birthYear > currentYear) {
             throw new InvalidLinkedLearnerBirthYearException();
         }
-        learner.setBirthYear(birthYear);
-        learner.setUpdatedAt(OffsetDateTime.now());
-        userRepository.save(learner);
+        // Targeted update rather than save() on a loaded entity: UserEntity has no @DynamicUpdate,
+        // so writing a snapshot taken before a blocking lock wait would rewrite every column.
+        userRepository.writeBirthYear(learnerUserId, birthYear, OffsetDateTime.now());
     }
 
     private void validateCorrectionBirthYear(int birthYear) {
@@ -249,24 +482,24 @@ public class LinkedLearnerService {
         }
     }
 
-    private void requireRecordedBirthYear(UserEntity learner) {
-        if (learner.getBirthYear() == null) {
+    private void requireRecordedBirthYear(Integer birthYear) {
+        if (birthYear == null) {
             throw new LinkedLearnerBirthYearCorrectionNotAllowedException();
         }
     }
 
     private List<LinkedLearnerRelationshipEntity> relationshipsPausedByCorrection(
-            UserEntity learner,
+            UUID learnerUserId,
+            Integer currentBirthYear,
             int correctedBirthYear
     ) {
-        Integer currentBirthYear = learner.getBirthYear();
         if (currentBirthYear == null
                 || correctedBirthYear <= currentBirthYear
                 || !requiresGuardianConsent(correctedBirthYear)) {
             return List.of();
         }
         return relationshipRepository
-                .findByLearnerUserIdAndStatus(learner.getId(), LinkedLearnerStatus.ACCEPTED)
+                .findByLearnerUserIdAndStatus(learnerUserId, LinkedLearnerStatus.ACCEPTED)
                 .stream()
                 .filter(relationship -> consentRepository.findByRelationshipId(relationship.getId()).isEmpty())
                 .toList();
@@ -314,13 +547,13 @@ public class LinkedLearnerService {
                 callerRole,
                 relationship.getInitiatedBy(),
                 relationship.getStatus() == LinkedLearnerStatus.PENDING && invitedParty,
-                // Disclose the counterparty's NAME only once the link has actually been accepted.
-                // Before that, an invite is an unverified assertion by the caller: echoing back the
-                // resolved display name turned "invite an address, read your own list" into a
-                // name-harvesting oracle over arbitrary emails, and a REVOKED row retained that name
-                // permanently with no way for the victim to remove it. The email is still returned
-                // because the caller supplied it themselves and learns nothing new from it.
-                relationship.getAcceptedAt() != null ? resolveDisplayName(counterparty) : null,
+                // The name-harvesting oracle this once guarded against is closed at the source:
+                // since v0.90.0 inviting an address creates NO relationship row, so a row existing
+                // at all means the invited party accepted and both sides agreed to the link. Gating
+                // on acceptedAt is now actively wrong -- a consent-pending link and a link re-paused
+                // by correctBirthYear() both carry a null acceptedAt, which rendered a blank name
+                // above the email on a real, mutually-agreed connection.
+                resolveDisplayName(counterparty),
                 counterparty.getEmail(),
                 relationship.getStatus(),
                 relationship.getCreatedAt(),
@@ -334,8 +567,8 @@ public class LinkedLearnerService {
 
     private void sendInvitationEmail(
             UserEntity caller,
-            UserEntity counterparty,
-            LinkedLearnerRelationshipEntity relationship
+            String invitedEmail,
+            LinkedLearnerInvitationEntity invitation
     ) {
         try {
             String baseUrl = properties.getBilling().getFrontendBaseUrl();
@@ -343,19 +576,23 @@ public class LinkedLearnerService {
             EmailTemplateService.RenderedEmailTemplate rendered = emailTemplateService.render(
                     INVITATION_TEMPLATE,
                     Map.of(
-                            "recipientName", resolveFirstName(counterparty),
+                            // ⚠️ Addressed generically. The recipient may have no account, and even
+                            // when they do, personalising from their profile would make the EMAIL
+                            // differ by account existence -- reopening, in the recipient's inbox,
+                            // the same oracle the row-always-written change just closed.
+                            "recipientName", "there",
                             "inviterName", sanitizeForOutboundEmail(resolveDisplayName(caller)),
                             "invitationUrl", invitationUrl
                     )
             );
             boolean sent = emailService.sendEmail(new EmailMessage(
-                    counterparty.getEmail(), rendered.subject(), rendered.htmlBody(), rendered.textBody()));
+                    invitedEmail, rendered.subject(), rendered.htmlBody(), rendered.textBody()));
             if (!sent) {
-                log.warn("linked.learner.invitation.email not-sent relationshipId={}", relationship.getId());
+                log.warn("linked.learner.invitation.email not-sent invitationId={}", invitation.getId());
             }
         } catch (RuntimeException ex) {
-            log.warn("linked.learner.invitation.email failed relationshipId={} message={}",
-                    relationship.getId(), ex.getMessage());
+            log.warn("linked.learner.invitation.email failed invitationId={} message={}",
+                    invitation.getId(), ex.getMessage());
         }
     }
 
@@ -435,8 +672,4 @@ public class LinkedLearnerService {
         return fullName.isBlank() ? user.getEmail() : fullName;
     }
 
-    private String resolveFirstName(UserEntity user) {
-        return user.getFirstName() == null || user.getFirstName().isBlank()
-                ? "there" : user.getFirstName().trim();
-    }
 }

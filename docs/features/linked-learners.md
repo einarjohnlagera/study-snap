@@ -10,19 +10,59 @@ A supported learner remains a full, ordinary NoteLib account with their own logi
 
 | State | Meaning | Allowed actions |
 |---|---|---|
-| `PENDING` | One party invited and the other has not completed acceptance, or an accepted connection was paused after a birth-year correction made guardian consent necessary | Invited party may accept; either party may revoke; the learner may record a birth year; the supporter may record required guardian consent |
+| `PENDING` | A relationship exists but is not yet active: the invitation was accepted and required guardian consent is still outstanding, or an accepted connection was paused after a birth-year correction made consent necessary | Either party may revoke; the learner may record a birth year; the supporter may record required guardian consent |
 | `ACCEPTED` | The invited party explicitly accepted after any required consent was recorded | Either party may revoke |
 | `REVOKED` | Either party ended or declined the relationship | Revoke remains idempotent; a new invitation may create a new row |
 
 Either party can initiate. `initiated_by` records whether the supporter or learner sent the invitation, and only the opposite side can accept it. Knowing an account's email address is therefore never enough to create an accepted relationship.
 
-Live duplicate rows for the same supporter → learner direction are prevented by a partial unique index covering `PENDING` and `ACCEPTED`. `REVOKED` history does not block a fresh invitation. A database check and a service guard both prevent self-linking.
+**⚠️ Since `v0.90.0` a relationship row is created only at acceptance.** An unaccepted invitation lives in `linked_learner_invitations`, not here, so a `PENDING` relationship no longer means "awaiting acceptance" — it means accepted but not yet active. `[CHECKPOINT — due 2026-09-19]` reads this table, and an unresolved invitation is not a connection of any kind.
+
+**⚠️ Rows written BEFORE `V122` still carry the old meaning, and nothing marks them.** A pre-migration `PENDING` row genuinely is awaiting acceptance. Any surface describing a pending connection must therefore stay neutral when no birth-year or consent blocker is present — that combination is the legacy case, and asserting either meaning would be wrong for one of the two populations. `frontend/lib/linked-learner-status.ts` owns that vocabulary for both the Dashboard card and the Learning Connections page, so the two cannot drift apart.
+
+### Concurrent transitions
+
+Relationship state is safe under concurrent requests, and the mechanism is deliberate rather than incidental:
+
+- **The birth-year decision holds a pessimistic write lock on the learner** (`findByIdForUpdate`). Acceptance reads the birth year under that lock, so a correction into the consent range cannot land between the read and the write. Both orderings are safe: if acceptance wins, the correction then observes the new `ACCEPTED` row and pauses it; if the correction wins, acceptance reads the corrected year and requires consent. **Every writer of `users.birth_year` takes this lock** — invite, accept, record and correct — because leaving one out reopens the window through that path.
+- **Status transitions are conditional updates**, never read-modify-save. Acceptance applies only while the row is still `PENDING`; revocation applies while it is `PENDING` **or** `ACCEPTED`, so revoking still wins when an acceptance committed first; and the correction's pause applies only while the row is `ACCEPTED`, so a revoke committing mid-correction is not resurrected.
+- Only one row is ever locked, and it is always the learner's, so no lock cycle exists.
+
+These five interleavings are pinned by `LinkedLearnerConcurrencyTest`, which runs two real transactions on two threads, takes the **real** row lock, and asserts the persisted row rather than a returned DTO. **⚠️ Its harness must model two things at once — the lock AND Hibernate returning a stale managed entity.** Each earlier version modelled one and silently lost the other, in both directions; a harness that skips the lock leaves this whole mechanism uncovered while still reporting green.
+
+Live duplicate rows for the same supporter → learner direction are prevented by a partial unique index covering `PENDING` and `ACCEPTED`. `REVOKED` history does not block a fresh invitation. A database check and a service guard both prevent self-linking. Invitations carry their own partial unique index over inviter and address, active only while the invitation is `PENDING`.
 
 ## Invitation privacy
 
-Invitations are addressed by normalized email. The API always returns the same generic response for an active account, an unknown email and an inactive account. **⚠️ This is NOT a full anonymity boundary, and the doc previously overclaimed here.** The *response* is identical, but a real account also writes a `PENDING` row that then appears in the inviter's own list, so account existence remains observable to an authenticated caller. The counterparty's **display name is withheld until the link is actually accepted**, so the list no longer harvests names — but existence still leaks. The durable fix is email-keyed invitations; see the `v0.89.0` Known limitations in `RELEASES.md`.
+Invitations are **keyed to the normalized email address, never to a resolved user id**. `v0.90.0` closed the account-existence oracle this section previously documented as open: an invitation row is now written for **any** syntactically valid address, whether or not an account exists behind it, so an unknown address and a real one produce the same generic response *and* the same observable state in the inviter's own list. Nothing about the invitee is looked up at invite time.
 
-For a real active account, NoteLib stores the pending invitation before attempting email delivery. Delivery uses the shared email service and template mechanism. A delivery failure is logged and does not roll back the invitation; sending the same invitation again provides a retry path without creating a second live row.
+This also unlocks inviting someone who has not signed up. The invitation waits against the address; whoever later proves control of that address can accept it.
+
+NoteLib stores the invitation before attempting email delivery. Delivery uses the shared email service and template mechanism. A delivery failure is logged and does not roll back the invitation; sending the same invitation again provides a retry path without creating a second live row.
+
+The **invitation** list never carries a counterparty name — the inviter typed the address and learns nothing further from it. **Relationship** rows do carry the name, and since `v0.90.0` that is safe by construction rather than by withholding: a relationship exists only once the invited party accepted, so both sides have agreed to the link. Withholding it until `accepted_at` was set became actively wrong when `PENDING` changed meaning, since a consent-pending connection legitimately has a null `accepted_at`.
+
+### Verified email is the authorization
+
+Because an invitation is addressed to a string rather than to an account, **proving control of that address is the whole basis for acting on it**. Accepting an invitation, listing invitations, revoking one, accepting a relationship, recording a birth year and recording guardian consent all require a verified email. Signup issues a session token without inbox access, so without this gate anyone who guessed or knew an invited address could register it and inherit the invitation.
+
+Two paths are deliberately **left ungated**, because they cut or narrow access rather than granting it, and blocking them would disable a safety mechanism: **revoking a relationship**, and the learner's own **birth-year correction**.
+
+### Expiry
+
+An invitation is a standing offer to whoever controls an address, so it lapses. `expires_at` is set from `studysnap.linked-learners.invitation-ttl-days` (default 30) and is a real column, not `created_at` plus an interval — re-arming a lapsed invitation must not reset when the address was **first** invited, which `created_at` records and the list displays.
+
+Expiry is enforced in three places, not one: the recipient's incoming lookup, the inviter's outgoing list, and acceptance itself. Filtering only at acceptance would leave an expired invitation listed and actionable. Re-inviting a lapsed address **re-arms** it rather than failing, because the live-row unique index would otherwise block that address permanently.
+
+### Rate limiting
+
+Invites are metered on **two** keys: total per inviter, and per inviter **and address**. The second exists because re-posting an address re-sends mail, so a volume-only cap still permits repeatedly mailing one victim. Both come from `studysnap.linked-learners.*` configuration.
+
+**⚠️ The meter runs after the verified-email gate and before anything is written or sent, and is keyed only on caller and address.** It must never depend on whether the address has an account — a limit that behaves differently for real and unknown addresses would reopen the oracle `V122` closed.
+
+### Concurrency
+
+Invitation status transitions are **conditional updates** (`... where status = 'PENDING'`), not read-modify-write, and acceptance **claims the invitation before creating the relationship**. Two callers racing — an accept against a revoke — would otherwise both observe `PENDING`, and the accept would build a relationship, a live cross-user read, behind an invitation the other party had just revoked. A claim that affects zero rows aborts. Revocation is idempotent: zero rows means it was already accepted or revoked, which is not an error.
 
 ## Birth year and guardian consent
 
@@ -44,7 +84,9 @@ The `PENDING` transition immediately cuts supporter progress access because the 
 
 The learner declares their own account-global birth year, while a minor may not be able to consent on their own behalf, and the supporter is often the guardian giving consent. A mistaken or coached declaration therefore affects every future connection, not merely the link being formed. The learner-only correction path limits that risk and re-applies the gate to existing links, but the implementation does not pretend this removes every trust or legal question. It records the current learner declaration and each supporter's relationship-specific attestation as separate facts so the limitation is visible and auditable; counsel still owns the threshold and final attestation wording.
 
-For supporter-initiated invitations, the invited learner can provide their year during acceptance. For learner-initiated invitations, the learner can record it on the pending link before the invited supporter accepts. A link that requires consent remains `PENDING` until the consent record exists.
+For supporter-initiated invitations, the invited learner provides their year during acceptance. For **learner-initiated** invitations the year is captured **at invite time**, from the learner themselves, because no relationship exists yet for them to record it against and only the learner may declare it — without this the supporter's acceptance would need a year nobody could supply, which was a permanent dead end before `v0.90.0`. A link that requires consent is created in `PENDING` and stays there until the consent record exists.
+
+**⚠️ Invite-time capture widens the `v0.89.1` circularity above**, since a write-once account-global year can now be declared before any counterparty exists. The learner-only correction path remains the mitigation.
 
 ## Relationship-list privacy boundary
 
@@ -63,6 +105,8 @@ Notes remain private. The link is free metadata and does not pool, transfer or c
 ## Phase 3 supporter progress read
 
 The progress route is addressed only as `/linked-learners/{relationshipId}/progress`. It never accepts a learner user id. One shared authorization helper loads that relationship, verifies that the caller is its supporter, verifies that its status is exactly `ACCEPTED`, and returns the authorized learner id used by the aggregate services. A learner cannot use the route to read their supporter. A third party, a `PENDING` link, a `REVOKED` link and a missing relationship receive no data; revoked and missing relationships use the same not-found response.
+
+The caller must also have a **verified email**. That is redundant while every path granting an `ACCEPTED` relationship is itself gated, and it is deliberate: it means a future grant path that loses its gate cannot silently open this read too. It costs nothing, because `email_verified_at` is monotonic — nothing clears it, and an address change re-stamps it only once the new address is confirmed.
 
 Every request performs that authorization again. Revocation therefore cuts access immediately, with no cached view or grace period. The read is transactionally read-only and reuses the existing owner-scoped Dashboard, Progress and collection calculations with the authorized learner id. It creates no session, changes no `ConceptHealth`, progress timestamp, streak or engagement counter, and attributes no learner analytics event.
 
@@ -84,4 +128,4 @@ The absolute exclusion remains: supporters never receive note bodies, note conte
 
 ## Dashboard presentation
 
-The Dashboard adds a **People you support** section for accounts with live supporter-side relationships. Accepted links lead to the relationship-scoped progress view; pending links explain that acceptance is still required. This section is additive: a person who is both a learner and a supporter sees their own learning workspace and the people they support together, without a mode switch or a profile-type distinction. A supporter with no notes of their own therefore still has a useful home surface.
+The Dashboard adds a **People you support** section for accounts with live supporter-side relationships. Accepted links lead to the relationship-scoped progress view; pending links name the actual blocker — the learner's birth year, guardian consent outstanding, or consent recorded and activation finishing — and never claim acceptance is still required, which since `V122` is false for every row written after the migration. This section is additive: a person who is both a learner and a supporter sees their own learning workspace and the people they support together, without a mode switch or a profile-type distinction. A supporter with no notes of their own therefore still has a useful home surface.

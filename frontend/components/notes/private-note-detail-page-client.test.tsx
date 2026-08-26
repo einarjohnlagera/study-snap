@@ -525,7 +525,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText("Medicine")).toBeInTheDocument();
   });
 
-  it("gives a non-teacher a route to create a quiz for someone else", async () => {
+  it("keeps a non-teacher route to quiz creation, in the note actions menu not the practice row", async () => {
     // v0.89.0 opened share-link creation to every onboarded user, but the control that PRODUCES a
     // generated quiz lived only in the teacher branch — so the population the change was made for
     // had no way to reach it and the backend fix reached nobody. A cold pressure test caught it at
@@ -543,10 +543,16 @@ describe("PrivateNoteDetailPageClient", () => {
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    expect(await screen.findByRole("button", { name: /Quiz for someone/i })).toBeInTheDocument();
-    // The learner's own practice entry points must still be there — this adds a route, it does not
-    // replace the practice row.
+    // Ratified 2026-08-20: the action lives in the note-actions menu, NOT the practice row —
+    // it is a support/share action, and beside Start Quick Review it risked becoming an avoidance
+    // path. The route must still exist for a non-teacher; only its placement moved.
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    expect(await screen.findByRole("menuitem", { name: /Quiz for someone/i })).toBeInTheDocument();
+    // ⚠️ It is gated on NOTHING — no connection, no profile. A shared-quiz recipient needs neither
+    // an account nor a relationship, so sharing must never depend on one existing.
     expect(screen.getByRole("button", { name: /Start Quick Review/i })).toBeInTheDocument();
+    // And it must NOT be back in the practice row.
+    expect(screen.queryByRole("button", { name: /^Quiz for someone$/i })).not.toBeInTheDocument();
   });
 
   it("still gives a learner an editable Course / Program when the note is not shadowed", async () => {

@@ -41,6 +41,27 @@ Shareable quiz links are plan-gated per billing month:
 
 Runtime tracking uses `user_usage.quiz_share_links_created`. The quiz preview page shows neutral upgrade guidance when the quota is exhausted and resolves its actions through `getUpgradeCtas(currentPlan)`.
 
+### ⚠️ Generating the quiz is metered separately from sharing it
+
+**Two different meters apply, and exhausting either one blocks a different step.** The limits above cover creating the *link*. Producing the quiz that a link points at is a real LLM call and is metered on its own:
+
+- **It draws down the Challenge Quiz allowance.** `GeneratedQuizService.assertQuizCreditAvailable` reads `user_usage.challenge_quiz_generations` against `resolveMonthlyChallengeQuizLimit` — **Free `20` / Plus `100` / Pro `200`** per month — and `incrementChallengeQuizGeneration` increments that same counter on success. **⚠️ Making a quiz for someone therefore consumes the same monthly allowance as the user's own Challenge Quiz generations**, and the shared counter is invisible in the naming on both surfaces. Exhausting it raises `MonthlyQuizCreditLimitReachedException`.
+- **It consumes an AI rate-limit slot** under its own scope, `"generated-quiz"` (`GeneratedQuizService:53`), which is separate from the share-link quota and from other AI scopes.
+
+**⚠️ This is plumbing, not a product decision.** Nothing in the pricing surface tells a user that helping someone spends their Challenge Quiz allowance, and no separate counter exists for it. Documented here because the behaviour is otherwise only discoverable by reading `GeneratedQuizService`. Recorded 2026-08-27; the behaviour predates `v0.90.0` and was not changed by it.
+
+**Question count is a separate axis again.** `resolveQuestionCount` returns the default `10` for every non-`TEACHER` profile regardless of plan; only a `TEACHER` may choose another count, and a `TEACHER` on `FREE` is refused any non-default value with `QuestionCountNotAllowedForPlanException`.
+
+### The shared quiz is generated, never reused
+
+The quiz behind a share link is a **fresh LLM generation** stored in `GeneratedQuizEntity`. It is not the Study Pack quiz that Quick Review administers (`note.quiz`), not the Challenge Quiz bank, and not an exam question pool.
+
+That separation is deliberate and load-bearing in both directions:
+
+- the shared quiz carries its own **Target Level** and question count, so it can be aimed at the recipient's depth rather than the owner's;
+- regeneration passes the previous shared quiz's questions as `disallowedQuestions`, so giving the same person a second quiz yields new questions;
+- **⚠️ reusing `note.quiz` would hand the recipient the exact questions the owner is assessed on** — the answer-key exposure `v0.74.0` locked the Quiz tab to prevent. Do not "optimise" this path by reading from the Study Pack quiz.
+
 ## Deferred
 
 The following are intentionally out of scope for v0.16.0:

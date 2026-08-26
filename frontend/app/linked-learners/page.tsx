@@ -7,8 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LINKED_LEARNER_STATUS_COPY } from "@/lib/linked-learner-status";
 import {
   acceptLinkedLearner,
+  acceptLinkedLearnerInvitation,
+  listLinkedLearnerInvitations,
+  revokeLinkedLearnerInvitation,
+  type LinkedLearnerInvitationResponse,
   correctLinkedLearnerBirthYear,
   getLinkedLearners,
   inviteLinkedLearner,
@@ -61,6 +66,59 @@ export default function LinkedLearnersPage() {
     void loadLinks();
   }, [loadLinks]);
 
+  const [invitations, setInvitations] = useState<LinkedLearnerInvitationResponse[]>([]);
+  // Captured up front only when the inviter IS the learner: the supporter accepts later, and the
+  // consent gate needs the learner's own year, which only the learner may declare.
+  const [inviteBirthYear, setInviteBirthYear] = useState("");
+
+  const loadInvitations = useCallback(async () => {
+    try {
+      setInvitations(await listLinkedLearnerInvitations());
+    } catch {
+      // A failed invitation load must not blank the connections list beside it.
+      setInvitations([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadInvitations();
+  }, [loadInvitations]);
+
+  const handleAcceptInvitation = async (invitation: LinkedLearnerInvitationResponse) => {
+    setBusyId(invitation.id);
+    setError(null);
+    try {
+      const rawYear = birthYears[invitation.id]?.trim();
+      const birthYear = rawYear ? Number(rawYear) : null;
+      const updated = await acceptLinkedLearnerInvitation(
+        invitation.id, birthYear, consentChecked[invitation.id] === true);
+      if (updated.status === "PENDING" && updated.guardianConsentRequired && !updated.guardianConsentRecorded) {
+        setNotice("Guardian confirmation is needed before this connection becomes active.");
+      } else {
+        setNotice("Learning connection accepted.");
+      }
+      await Promise.all([loadLinks(), loadInvitations()]);
+    } catch (acceptError) {
+      setError(errorMessage(acceptError, "Could not accept the invitation."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleWithdrawInvitation = async (invitation: LinkedLearnerInvitationResponse) => {
+    setBusyId(invitation.id);
+    setError(null);
+    try {
+      await revokeLinkedLearnerInvitation(invitation.id);
+      setNotice("Invitation withdrawn.");
+      await loadInvitations();
+    } catch (revokeError) {
+      setError(errorMessage(revokeError, "Could not withdraw the invitation."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const replaceLink = (updated: LinkedLearnerResponse) => {
     setLinks((current) => current.map((link) => link.id === updated.id ? updated : link));
   };
@@ -71,10 +129,12 @@ export default function LinkedLearnersPage() {
     setError(null);
     setNotice(null);
     try {
-      const response = await inviteLinkedLearner(email, inviterRole);
+      const response = await inviteLinkedLearner(
+        email, inviterRole,
+        inviterRole === "LEARNER" && inviteBirthYear.trim() ? Number(inviteBirthYear.trim()) : null);
       setNotice(response.message);
       setEmail("");
-      await loadLinks();
+      await Promise.all([loadLinks(), loadInvitations()]);
     } catch (inviteError) {
       setError(errorMessage(inviteError, "Could not send the invitation."));
     } finally {
@@ -204,7 +264,7 @@ export default function LinkedLearnersPage() {
       <Card className="space-y-4 p-4 sm:p-6">
         <div>
           <h2 className="text-lg font-semibold">Send an invitation</h2>
-          <p className="mt-1 text-sm text-foreground/70">The other person needs their own NoteLib account and must accept before the connection becomes active.</p>
+          <p className="mt-1 text-sm text-foreground/70">The other person must accept before the connection becomes active. They do not need a NoteLib account yet — if they do not have one, the invitation waits for them to sign up.</p>
         </div>
         <form className="space-y-4" onSubmit={handleInvite}>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -221,11 +281,34 @@ export default function LinkedLearnersPage() {
             Their email
             <input className={INPUT_CLASSES} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
           </label>
+        {inviterRole === "LEARNER" ? (
+          <div className="space-y-1">
+            <label className="text-sm font-medium" htmlFor="invite-birth-year">Your birth year</label>
+            <input
+              id="invite-birth-year"
+              className="h-11 w-40 rounded-lg border border-border bg-background px-3 text-sm"
+              value={inviteBirthYear}
+              onChange={(event) => setInviteBirthYear(event.target.value)}
+            />
+            <p className="text-xs text-foreground/60">
+              Needed now so the person you invite can accept. If you are under the guardian-consent
+              age, a guardian confirms before the connection becomes active.
+            </p>
+          </div>
+        ) : null}
           <Button type="submit" loading={inviting} loadingText="Sending invitation…">Send invitation</Button>
         </form>
       </Card>
 
-      {links.some((link) => link.callerRole === "LEARNER" && !link.birthYearRequired) ? (
+      {/*
+        ⚠️ An outgoing LEARNER invitation counts, not just an existing relationship. `invite` writes
+        the write-once account-global birth year and creates NO relationship row, so gating on
+        `links` alone hid this card for the entire life of an unaccepted invitation — up to the full
+        TTL, or forever if it is never accepted. That is precisely the flow v0.90.0 added, and the
+        release documents the learner-only correction path as the mitigation for it.
+      */}
+      {(links.some((link) => link.callerRole === "LEARNER" && !link.birthYearRequired)
+        || invitations.some((invitation) => !invitation.incoming && invitation.inviterRole === "LEARNER")) ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <div>
             <h2 className="text-lg font-semibold">Correct your birth year</h2>
@@ -255,6 +338,72 @@ export default function LinkedLearnersPage() {
 
       {notice ? <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">{notice}</p> : null}
       {error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
+
+      {invitations.length > 0 ? (
+        <section className="space-y-3" aria-labelledby="invitations-heading">
+          <h2 id="invitations-heading" className="text-lg font-semibold">Pending invitations</h2>
+          <ul className="space-y-3">
+            {invitations.map((invitation) => (
+              <li key={invitation.id} className="rounded-xl border border-border p-4">
+                <p className="text-sm font-medium text-foreground">
+                  {invitation.incoming
+                    ? `${invitation.inviterName ?? "Someone"} invited you`
+                    : `You invited ${invitation.invitedEmail}`}
+                </p>
+                <p className="mt-1 text-xs text-foreground/60">
+                  {invitation.incoming
+                    ? (invitation.inviterRole === "SUPPORTER"
+                        ? "They would support your learning."
+                        : "They are asking you to support their learning.")
+                    : "Waiting for them to accept."}
+                </p>
+                {invitation.incoming ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <label className="text-xs text-foreground/70" htmlFor={`birth-year-${invitation.id}`}>
+                      Your birth year
+                    </label>
+                    <input
+                      id={`birth-year-${invitation.id}`}
+                      className="h-9 w-28 rounded-lg border border-border bg-background px-2 text-sm"
+                      value={birthYears[invitation.id] ?? ""}
+                      onChange={(event) => setBirthYears((current) => ({
+                        ...current, [invitation.id]: event.target.value,
+                      }))}
+                    />
+                    <label className="flex items-center gap-2 text-xs text-foreground/70">
+                      <input
+                        type="checkbox"
+                        checked={consentChecked[invitation.id] === true}
+                        onChange={(event) => setConsentChecked((current) => ({
+                          ...current, [invitation.id]: event.target.checked,
+                        }))}
+                      />
+                      A guardian confirms this connection
+                    </label>
+                    <Button
+                      type="button"
+                      disabled={busyId === invitation.id}
+                      onClick={() => void handleAcceptInvitation(invitation)}
+                    >
+                      Accept
+                    </Button>
+                  </div>
+                ) : null}
+                <div className="mt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busyId === invitation.id}
+                    onClick={() => void handleWithdrawInvitation(invitation)}
+                  >
+                    {invitation.incoming ? "Decline" : "Withdraw"}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="space-y-3" aria-labelledby="connections-heading">
         <h2 id="connections-heading" className="text-lg font-semibold">Your invitations and connections</h2>
@@ -299,10 +448,10 @@ export default function LinkedLearnersPage() {
                 </div>
               ) : null}
 
-              {pending && link.birthYearRequired && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">Waiting for the learner to record their birth year.</p> : null}
-              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "LEARNER" ? <p className="text-sm text-foreground/70">This connection is paused until the supporter records guardian consent.</p> : null}
-              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">Your progress access is paused because guardian consent is required. Record consent above to unblock the connection.</p> : null}
-              {pending && link.guardianConsentRequired && link.guardianConsentRecorded ? <p className="text-sm text-foreground/70">Guardian consent has been recorded.</p> : null}
+              {pending && link.birthYearRequired && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.waitingForLearnerBirthYear}</p> : null}
+              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "LEARNER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.pausedForConsentLearnerView}</p> : null}
+              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.pausedForConsentSupporterView}</p> : null}
+              {pending && link.guardianConsentRequired && link.guardianConsentRecorded ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.consentRecorded}</p> : null}
 
               <div className="flex flex-wrap gap-2">
                 {link.status === "ACCEPTED" && link.callerRole === "SUPPORTER" ? (
