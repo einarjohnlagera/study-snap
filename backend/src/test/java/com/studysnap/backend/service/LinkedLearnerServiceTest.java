@@ -574,6 +574,76 @@ class LinkedLearnerServiceTest {
 
 
     @Test
+    void acceptingARelationshipRequiresAVerifiedEmail() {
+        // ⚠️ v0.89.x wrote PENDING relationship rows by resolving an email to any ACTIVE account,
+        // WITHOUT requiring that invitee to be verified. Those rows are live in production, and
+        // accept() is the transition that turns one into a readable cross-user connection — so
+        // gating only the new invitation endpoints would have left the old path wide open.
+        UserEntity caller = user("legacy-invitee@example.com");
+        doThrow(new AppException("EMAIL_NOT_VERIFIED", "Verify your email.", HttpStatus.FORBIDDEN))
+                .when(authService).requireEmailVerified(caller.getId());
+
+        assertThatThrownBy(() -> service.accept(
+                UUID.randomUUID(), caller.getId(), new AcceptLinkedLearnerRequest(null, false)))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("code", "EMAIL_NOT_VERIFIED");
+
+        verify(relationshipRepository, never()).findById(any(UUID.class));
+        verify(relationshipRepository, never()).save(any(LinkedLearnerRelationshipEntity.class));
+    }
+
+    @Test
+    void recordingGuardianConsentRequiresAVerifiedEmail() {
+        // Consent is a persisted legal attestation and a precondition to ACCEPTED; an unproven
+        // identity must not be able to write one on a minor's behalf.
+        UserEntity caller = user("supporter@example.com");
+        doThrow(new AppException("EMAIL_NOT_VERIFIED", "Verify your email.", HttpStatus.FORBIDDEN))
+                .when(authService).requireEmailVerified(caller.getId());
+
+        assertThatThrownBy(() -> service.recordGuardianConsent(UUID.randomUUID(), caller.getId()))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("code", "EMAIL_NOT_VERIFIED");
+
+        verify(consentRepository, never()).save(any());
+    }
+
+    @Test
+    void recordingABirthYearRequiresAVerifiedEmail() {
+        UserEntity caller = user("learner@example.com");
+        doThrow(new AppException("EMAIL_NOT_VERIFIED", "Verify your email.", HttpStatus.FORBIDDEN))
+                .when(authService).requireEmailVerified(caller.getId());
+
+        assertThatThrownBy(() -> service.recordBirthYear(UUID.randomUUID(), caller.getId(), 2010))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("code", "EMAIL_NOT_VERIFIED");
+
+        verify(userRepository, never()).save(any(UserEntity.class));
+    }
+
+    @Test
+    void revokingAndCorrectingABirthYearStayOpenToAnUnverifiedCaller() {
+        // ⚠️ DELIBERATE ASYMMETRY, and the reason the gate is not applied uniformly: these two paths
+        // CUT access. Blocking revoke would trap someone in a connection they want out of, and
+        // blocking correctBirthYear would disable the v0.89.1 mechanism that re-pauses links when a
+        // learner corrects downward into the consent range. Gating them would harm the person the
+        // gate exists to protect.
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user("minor@example.com");
+        learner.setBirthYear(2000);
+        LinkedLearnerRelationshipEntity relationship =
+                relationship(supporter, learner, LinkedLearnerSide.SUPPORTER);
+        relationship.setStatus(LinkedLearnerStatus.ACCEPTED);
+        stubRelationshipUsers(relationship, supporter, learner);
+        when(relationshipRepository.save(any(LinkedLearnerRelationshipEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.revoke(relationship.getId(), learner.getId());
+
+        assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.REVOKED);
+        verify(authService, never()).requireEmailVerified(learner.getId());
+    }
+
+    @Test
     void acceptingAnInvitationRequiresAVerifiedEmail() {
         // ⚠️ The hole email-keying itself created. An invited address may have no account yet — that
         // is the point — so without this gate anyone knowing the address could register it, skip the
@@ -582,9 +652,12 @@ class LinkedLearnerServiceTest {
         doThrow(new AppException("EMAIL_NOT_VERIFIED", "Verify your email.", HttpStatus.FORBIDDEN))
                 .when(authService).requireEmailVerified(caller.getId());
 
+        // ⚠️ Assert the CODE, not the type. UserNotFoundException also extends AppException, so an
+        // isInstanceOf(AppException.class) assertion passes even when the gate is removed entirely.
         assertThatThrownBy(() -> service.acceptInvitation(
                 UUID.randomUUID(), caller.getId(), new AcceptLinkedLearnerRequest(null, false)))
-                .isInstanceOf(AppException.class);
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("code", "EMAIL_NOT_VERIFIED");
 
         // ⚠️ Not even the user lookup runs: the gate short-circuits before anything else, which is
         // what makes it a gate rather than a check somewhere in the middle.

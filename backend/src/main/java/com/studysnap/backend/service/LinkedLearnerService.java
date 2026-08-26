@@ -12,7 +12,6 @@ import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
-import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.InvalidLinkedLearnerBirthYearException;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearCorrectionNotAllowedException;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
@@ -286,6 +285,12 @@ public class LinkedLearnerService {
             UUID callerUserId,
             AcceptLinkedLearnerRequest request
     ) {
+        // ⚠️ VERIFIED EMAIL IS THE AUTHORIZATION. Invitations are keyed to an ADDRESS, so
+        // control of that address is the only thing proving the caller is the invited party.
+        // Signup issues a token without inbox access. Gate every path that GRANTS or WIDENS
+        // access; revoke() and correctBirthYear() stay ungated because they CUT access and
+        // gating them would disable the v0.89.1 safety mechanism.
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         LinkedLearnerRelationshipEntity relationship = requireRelationship(relationshipId);
         requireInvitedParty(relationship, callerUserId);
@@ -325,6 +330,7 @@ public class LinkedLearnerService {
             UUID callerUserId,
             int birthYear
     ) {
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         LinkedLearnerRelationshipEntity relationship = requireRelationship(relationshipId);
         requirePending(relationship);
@@ -340,6 +346,7 @@ public class LinkedLearnerService {
 
     @Transactional
     public LinkedLearnerResponse recordGuardianConsent(UUID relationshipId, UUID callerUserId) {
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         LinkedLearnerRelationshipEntity relationship = requireRelationship(relationshipId);
         requirePending(relationship);
@@ -453,13 +460,13 @@ public class LinkedLearnerService {
                 callerRole,
                 relationship.getInitiatedBy(),
                 relationship.getStatus() == LinkedLearnerStatus.PENDING && invitedParty,
-                // Disclose the counterparty's NAME only once the link has actually been accepted.
-                // Before that, an invite is an unverified assertion by the caller: echoing back the
-                // resolved display name turned "invite an address, read your own list" into a
-                // name-harvesting oracle over arbitrary emails, and a REVOKED row retained that name
-                // permanently with no way for the victim to remove it. The email is still returned
-                // because the caller supplied it themselves and learns nothing new from it.
-                relationship.getAcceptedAt() != null ? resolveDisplayName(counterparty) : null,
+                // The name-harvesting oracle this once guarded against is closed at the source:
+                // since v0.90.0 inviting an address creates NO relationship row, so a row existing
+                // at all means the invited party accepted and both sides agreed to the link. Gating
+                // on acceptedAt is now actively wrong -- a consent-pending link and a link re-paused
+                // by correctBirthYear() both carry a null acceptedAt, which rendered a blank name
+                // above the email on a real, mutually-agreed connection.
+                resolveDisplayName(counterparty),
                 counterparty.getEmail(),
                 relationship.getStatus(),
                 relationship.getCreatedAt(),
@@ -578,8 +585,4 @@ public class LinkedLearnerService {
         return fullName.isBlank() ? user.getEmail() : fullName;
     }
 
-    private String resolveFirstName(UserEntity user) {
-        return user.getFirstName() == null || user.getFirstName().isBlank()
-                ? "there" : user.getFirstName().trim();
-    }
 }
