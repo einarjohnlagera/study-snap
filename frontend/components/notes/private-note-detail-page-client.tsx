@@ -2067,6 +2067,35 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         >
                           <ResponsiveActionContent action="copy" label={copying ? "Copying..." : "Make a Copy"} showTextOnMobile iconClassName="h-4 w-4" />
                         </button>
+                        {/* Ratified 2026-08-20: this is a SUPPORT/SHARE action, not learner practice.
+                            It sat beside Start Quick Review, where it risked becoming an avoidance
+                            path — producing material instead of practising — on the surface retention
+                            is decided. ⚠️ It is gated on NOTHING: a shared-quiz recipient needs no
+                            account and no relationship, so sharing must not depend on a connection
+                            existing. A proposal coupling the two was overturned. */}
+                        {!isTeacherMode && isStudyPackReady ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                            onClick={() => {
+                              setNoteActionsMenuOpen(false);
+                              if (note?.generatedQuiz) {
+                                handleViewTeacherQuiz();
+                              } else {
+                                openGenerateQuizModal();
+                              }
+                            }}
+                            disabled={!isEmailVerified || generatingTeacherQuiz}
+                          >
+                            <ResponsiveActionContent
+                              action="share"
+                              label={note?.generatedQuiz ? "View quiz for someone" : "Quiz for someone"}
+                              showTextOnMobile
+                              iconClassName="h-4 w-4"
+                            />
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           role="menuitem"
@@ -2447,29 +2476,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       {profileType === "PROFESSIONAL" && currentPlan === "PRO" ? (
                         <ResponsiveActionButton type="button" variant="outline" onClick={() => router.push(`/notes/${routeId}/interview-practice`)} action="interviewPractice" label="Interview Practice" />
                       ) : null}
-                      {/* v0.89.0 opened share-link creation to every onboarded user, but the control
-                          that PRODUCES a generated quiz lived only in the teacher branch — so the
-                          population the change was made for had no route to it and the backend fix
-                          reached nobody. The buttons above are the learner's own practice; this one
-                          is deliberately outline-variant and separately labelled because it makes
-                          material for someone ELSE. */}
-                      {note?.generatedQuiz ? (
-                        <Button type="button" variant="outline" className="gap-2" onClick={handleViewTeacherQuiz}>
-                          <Eye className="h-4 w-4" aria-hidden="true" />
-                          <span>View Quiz</span>
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="gap-2"
-                          onClick={openGenerateQuizModal}
-                          disabled={!isEmailVerified || generatingTeacherQuiz}
-                        >
-                          <Sparkles className="h-4 w-4" aria-hidden="true" />
-                          <span>Quiz for someone</span>
-                        </Button>
-                      )}
                     </>
                   )}
                   {!isTeacherMode && !isGeneratingStudyPack && !canGenerateStudyPack ? (

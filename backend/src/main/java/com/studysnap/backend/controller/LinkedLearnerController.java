@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.GuardianConsentRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
 import com.studysnap.backend.dto.LinkedLearnerBirthYearCorrectionPreviewResponse;
 import com.studysnap.backend.dto.LinkedLearnerProgressResponse;
+import com.studysnap.backend.dto.LinkedLearnerInvitationResponse;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.RecordLinkedLearnerBirthYearRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
@@ -40,6 +41,28 @@ public class LinkedLearnerController {
             @Valid @RequestBody InviteLinkedLearnerRequest request
     ) {
         return linkedLearnerService.invite(user.userId(), request);
+    }
+
+    @GetMapping("/invitations")
+    public List<LinkedLearnerInvitationResponse> listInvitations(@AuthenticationPrincipal AuthenticatedUser user) {
+        return linkedLearnerService.listInvitations(user.userId());
+    }
+
+    @PostMapping("/invitations/{invitationId}/accept")
+    public LinkedLearnerResponse acceptInvitation(
+            @PathVariable UUID invitationId,
+            @Valid @RequestBody AcceptLinkedLearnerRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return linkedLearnerService.acceptInvitation(invitationId, user.userId(), request);
+    }
+
+    @PostMapping("/invitations/{invitationId}/revoke")
+    public SimpleMessageResponse revokeInvitation(
+            @PathVariable UUID invitationId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return linkedLearnerService.revokeInvitation(invitationId, user.userId());
     }
 
     @GetMapping

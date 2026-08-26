@@ -6,6 +6,7 @@ import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
+import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -209,6 +210,7 @@ class LinkedLearnerBirthYearCorrectionTransactionTest {
         ) {
             return new LinkedLearnerService(
                     relationshipRepository,
+                    mock(LinkedLearnerInvitationRepository.class),
                     consentRepository,
                     userRepository,
                     mock(OnboardingGuardService.class),

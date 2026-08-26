@@ -10,19 +10,31 @@ A supported learner remains a full, ordinary NoteLib account with their own logi
 
 | State | Meaning | Allowed actions |
 |---|---|---|
-| `PENDING` | One party invited and the other has not completed acceptance, or an accepted connection was paused after a birth-year correction made guardian consent necessary | Invited party may accept; either party may revoke; the learner may record a birth year; the supporter may record required guardian consent |
+| `PENDING` | A relationship exists but is not yet active: the invitation was accepted and required guardian consent is still outstanding, or an accepted connection was paused after a birth-year correction made consent necessary | Either party may revoke; the learner may record a birth year; the supporter may record required guardian consent |
 | `ACCEPTED` | The invited party explicitly accepted after any required consent was recorded | Either party may revoke |
 | `REVOKED` | Either party ended or declined the relationship | Revoke remains idempotent; a new invitation may create a new row |
 
 Either party can initiate. `initiated_by` records whether the supporter or learner sent the invitation, and only the opposite side can accept it. Knowing an account's email address is therefore never enough to create an accepted relationship.
 
-Live duplicate rows for the same supporter → learner direction are prevented by a partial unique index covering `PENDING` and `ACCEPTED`. `REVOKED` history does not block a fresh invitation. A database check and a service guard both prevent self-linking.
+**⚠️ Since `v0.90.0` a relationship row is created only at acceptance.** An unaccepted invitation lives in `linked_learner_invitations`, not here, so a `PENDING` relationship no longer means "awaiting acceptance" — it means accepted but not yet active. `[CHECKPOINT — due 2026-09-19]` reads this table, and an unresolved invitation is not a connection of any kind.
+
+Live duplicate rows for the same supporter → learner direction are prevented by a partial unique index covering `PENDING` and `ACCEPTED`. `REVOKED` history does not block a fresh invitation. A database check and a service guard both prevent self-linking. Invitations carry their own partial unique index over inviter and address, active only while the invitation is `PENDING`.
 
 ## Invitation privacy
 
-Invitations are addressed by normalized email. The API always returns the same generic response for an active account, an unknown email and an inactive account. **⚠️ This is NOT a full anonymity boundary, and the doc previously overclaimed here.** The *response* is identical, but a real account also writes a `PENDING` row that then appears in the inviter's own list, so account existence remains observable to an authenticated caller. The counterparty's **display name is withheld until the link is actually accepted**, so the list no longer harvests names — but existence still leaks. The durable fix is email-keyed invitations; see the `v0.89.0` Known limitations in `RELEASES.md`.
+Invitations are **keyed to the normalized email address, never to a resolved user id**. `v0.90.0` closed the account-existence oracle this section previously documented as open: an invitation row is now written for **any** syntactically valid address, whether or not an account exists behind it, so an unknown address and a real one produce the same generic response *and* the same observable state in the inviter's own list. Nothing about the invitee is looked up at invite time.
 
-For a real active account, NoteLib stores the pending invitation before attempting email delivery. Delivery uses the shared email service and template mechanism. A delivery failure is logged and does not roll back the invitation; sending the same invitation again provides a retry path without creating a second live row.
+This also unlocks inviting someone who has not signed up. The invitation waits against the address; whoever later proves control of that address can accept it.
+
+NoteLib stores the invitation before attempting email delivery. Delivery uses the shared email service and template mechanism. A delivery failure is logged and does not roll back the invitation; sending the same invitation again provides a retry path without creating a second live row.
+
+The counterparty's display name is withheld until the link is actually accepted, so neither the invitation list nor the relationship list harvests names.
+
+### Verified email is the authorization
+
+Because an invitation is addressed to a string rather than to an account, **proving control of that address is the whole basis for acting on it**. Accepting an invitation, listing invitations, revoking one, accepting a relationship, recording a birth year and recording guardian consent all require a verified email. Signup issues a session token without inbox access, so without this gate anyone who guessed or knew an invited address could register it and inherit the invitation.
+
+Two paths are deliberately **left ungated**, because they cut or narrow access rather than granting it, and blocking them would disable a safety mechanism: **revoking a relationship**, and the learner's own **birth-year correction**.
 
 ## Birth year and guardian consent
 
@@ -44,7 +56,9 @@ The `PENDING` transition immediately cuts supporter progress access because the 
 
 The learner declares their own account-global birth year, while a minor may not be able to consent on their own behalf, and the supporter is often the guardian giving consent. A mistaken or coached declaration therefore affects every future connection, not merely the link being formed. The learner-only correction path limits that risk and re-applies the gate to existing links, but the implementation does not pretend this removes every trust or legal question. It records the current learner declaration and each supporter's relationship-specific attestation as separate facts so the limitation is visible and auditable; counsel still owns the threshold and final attestation wording.
 
-For supporter-initiated invitations, the invited learner can provide their year during acceptance. For learner-initiated invitations, the learner can record it on the pending link before the invited supporter accepts. A link that requires consent remains `PENDING` until the consent record exists.
+For supporter-initiated invitations, the invited learner provides their year during acceptance. For **learner-initiated** invitations the year is captured **at invite time**, from the learner themselves, because no relationship exists yet for them to record it against and only the learner may declare it — without this the supporter's acceptance would need a year nobody could supply, which was a permanent dead end before `v0.90.0`. A link that requires consent is created in `PENDING` and stays there until the consent record exists.
+
+**⚠️ Invite-time capture widens the `v0.89.1` circularity above**, since a write-once account-global year can now be declared before any counterparty exists. The learner-only correction path remains the mitigation.
 
 ## Relationship-list privacy boundary
 
