@@ -264,7 +264,7 @@ export default function LinkedLearnersPage() {
       <Card className="space-y-4 p-4 sm:p-6">
         <div>
           <h2 className="text-lg font-semibold">Send an invitation</h2>
-          <p className="mt-1 text-sm text-foreground/70">The other person needs their own NoteLib account and must accept before the connection becomes active.</p>
+          <p className="mt-1 text-sm text-foreground/70">The other person must accept before the connection becomes active. They do not need a NoteLib account yet — if they do not have one, the invitation waits for them to sign up.</p>
         </div>
         <form className="space-y-4" onSubmit={handleInvite}>
           <div className="grid gap-2 sm:grid-cols-2">

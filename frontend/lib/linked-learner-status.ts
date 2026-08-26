@@ -11,8 +11,10 @@ import type { LinkedLearnerResponse } from "@/lib/api";
  * the copy that shipped.
  *
  * ⚠️ Rows written before the V122 migration DO carry the old meaning, with nothing marking them.
- * That is what `UNRESOLVED` is for: neutral copy that is true either way, rather than a confident
- * claim that would be wrong for one of the two populations.
+ * `UNRESOLVED` gives them neutral copy that is true either way. **It is not the ONLY branch such a
+ * row can reach** — a legacy row whose learner never declared a year matches `BIRTH_YEAR_REQUIRED`
+ * first. That copy is still accurate rather than misleading, because a legacy acceptance does
+ * require the year before it can complete; it simply names the nearer of two blockers.
  */
 export type LinkedLearnerPendingReason =
   | "BIRTH_YEAR_REQUIRED"
@@ -61,8 +63,8 @@ export function describeSupportedLearnerStatus(link: LinkedLearnerResponse): {
         detail: "Progress becomes available once the connection finishes activating.",
       };
     default:
-      // ⚠️ Neutral on purpose. This is the only branch a legacy pre-V122 row can reach, and it
-      // must not assert either meaning of PENDING.
+      // ⚠️ Neutral on purpose: this branch must not assert either meaning of PENDING, because a
+      // legacy pre-V122 row with no blocker really is still awaiting acceptance.
       return {
         headline: "Connection not active yet",
         detail: "Open Learning Connections to see what this connection is waiting on.",

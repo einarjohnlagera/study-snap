@@ -87,14 +87,18 @@ public class LinkedLearnerService {
         // may declare it, and before acceptance there is no relationship id for the existing
         // record-birth-year route to address. Without this the invitation is permanently
         // un-acceptable: the supporter's accept throws forever with no recovery path.
-        if (request.inviterRole() == LinkedLearnerSide.LEARNER && caller.getBirthYear() == null) {
-            if (request.learnerBirthYear() == null) {
-                throw new LinkedLearnerBirthYearRequiredException();
+        if (request.inviterRole() == LinkedLearnerSide.LEARNER) {
+            // ⚠️ THE NULL CHECK MUST HAPPEN INSIDE THE LOCK. Reading caller.getBirthYear() from the
+            // entity loaded above and then locking would let a concurrent accept/record commit a
+            // MINOR year in between, which this write would overwrite with the adult year the
+            // inviter typed — permanently, since the value is account-global and write-once, and
+            // invite has no pass that re-evaluates existing links.
+            if (lockAndReadBirthYear(callerUserId) == null) {
+                if (request.learnerBirthYear() == null) {
+                    throw new LinkedLearnerBirthYearRequiredException();
+                }
+                persistBirthYear(callerUserId, request.learnerBirthYear());
             }
-            // ⚠️ This is the FOURTH writer of users.birth_year, and it takes the same lock as the
-            // other three. Locking only the two sides of the observed race would leave the window
-            // open through whichever writer was skipped.
-            persistBirthYear(lockLearnerForBirthYearDecision(callerUserId), request.learnerBirthYear());
         }
 
         // ⚠️ Metered HERE: after the verified-email gate, before anything is written or sent, and
@@ -187,10 +191,14 @@ public class LinkedLearnerService {
     ) {
         onboardingGuardService.assertProfileComplete(callerUserId);
         validateCorrectionBirthYear(birthYear);
-        UserEntity learner = requireUser(callerUserId);
-        requireRecordedBirthYear(learner);
+        // ⚠️ Deliberately UNLOCKED: this is an advisory preview on a read-only path, and taking a
+        // write lock here would block acceptance behind someone merely looking at the warning text.
+        // A preview that is momentarily stale is acceptable; correctBirthYear re-reads under the
+        // lock before acting on anything.
+        Integer currentBirthYear = userRepository.findBirthYearById(callerUserId).orElse(null);
+        requireRecordedBirthYear(currentBirthYear);
         return new LinkedLearnerBirthYearCorrectionPreviewResponse(
-                relationshipsPausedByCorrection(learner, birthYear).size());
+                relationshipsPausedByCorrection(callerUserId, currentBirthYear, birthYear).size());
     }
 
     @Transactional
@@ -200,19 +208,16 @@ public class LinkedLearnerService {
         // ⚠️ Same lock as accept(), taken FIRST. Holding it to commit is what guarantees an
         // acceptance that committed just before us is VISIBLE below and therefore paused, and that
         // one arriving after us reads the corrected year instead of the value we replaced.
-        UserEntity learner = lockLearnerForBirthYearDecision(callerUserId);
-        requireRecordedBirthYear(learner);
-        if (Integer.valueOf(birthYear).equals(learner.getBirthYear())) {
+        Integer currentBirthYear = lockAndReadBirthYear(callerUserId);
+        requireRecordedBirthYear(currentBirthYear);
+        if (Integer.valueOf(birthYear).equals(currentBirthYear)) {
             return listRelationships(callerUserId);
         }
 
         List<LinkedLearnerRelationshipEntity> relationshipsToPause =
-                relationshipsPausedByCorrection(learner, birthYear);
+                relationshipsPausedByCorrection(callerUserId, currentBirthYear, birthYear);
         OffsetDateTime now = OffsetDateTime.now();
-        learner.setBirthYear(birthYear);
-        learner.setBirthYearUpdatedAt(now);
-        learner.setUpdatedAt(now);
-        userRepository.save(learner);
+        userRepository.writeBirthYear(callerUserId, birthYear, now);
 
         // ⚠️ Conditional per row rather than saveAll: a revoke committing between the select above
         // and this write would otherwise be overwritten back to PENDING, resurrecting a connection
@@ -345,15 +350,17 @@ public class LinkedLearnerService {
         // connection and no consent record. Locking serializes the two in BOTH orders: if we win,
         // correctBirthYear's own lock makes it observe this acceptance and pause it; if it wins,
         // this read returns the corrected year and consent is required below.
-        UserEntity learner = lockLearnerForBirthYearDecision(relationship.getLearnerUserId());
-        if (learner.getBirthYear() == null) {
-            if (!callerUserId.equals(learner.getId()) || request.learnerBirthYear() == null) {
+        UUID learnerUserId = relationship.getLearnerUserId();
+        Integer birthYear = lockAndReadBirthYear(learnerUserId);
+        if (birthYear == null) {
+            if (!callerUserId.equals(learnerUserId) || request.learnerBirthYear() == null) {
                 throw new LinkedLearnerBirthYearRequiredException();
             }
-            persistBirthYear(learner, request.learnerBirthYear());
+            birthYear = request.learnerBirthYear();
+            persistBirthYear(learnerUserId, birthYear);
         }
 
-        boolean consentRequired = requiresGuardianConsent(learner.getBirthYear());
+        boolean consentRequired = requiresGuardianConsent(birthYear);
         boolean consentRecorded = consentRepository.findByRelationshipId(relationshipId).isPresent();
         if (consentRequired && !consentRecorded && request.guardianConsentAttested()
                 && callerUserId.equals(relationship.getSupporterUserId())) {
@@ -391,9 +398,8 @@ public class LinkedLearnerService {
         }
         // Every writer of users.birth_year takes the same lock; skipping one would reopen the
         // correction race through that path instead of closing it.
-        UserEntity learner = lockLearnerForBirthYearDecision(callerUserId);
-        if (learner.getBirthYear() == null) {
-            persistBirthYear(learner, birthYear);
+        if (lockAndReadBirthYear(callerUserId) == null) {
+            persistBirthYear(callerUserId, birthYear);
         }
         return toResponse(relationship, callerUserId);
     }
@@ -440,19 +446,31 @@ public class LinkedLearnerService {
      * is ever locked, and it is always the learner's, so no lock cycle exists and no deadlock is
      * possible between these paths.
      */
-    private UserEntity lockLearnerForBirthYearDecision(UUID learnerUserId) {
-        return userRepository.findByIdForUpdate(learnerUserId)
-                .orElseThrow(UserNotFoundException::new);
+    /**
+     * Take the learner's row lock and return the birth year THE ROW ACTUALLY HOLDS.
+     *
+     * <p>⚠️ The two steps are separate on purpose, and collapsing them back into one entity read
+     * reintroduces the defect. {@code findByIdForUpdate} acquires the lock correctly, but if the
+     * user is already managed — and it always is, because the verified-email check and the
+     * onboarding guard both load it first — Hibernate hands back the cached instance and throws
+     * away the state it just read. The consent decision would then be made from the PRE-LOCK value:
+     * acceptance reads an adult year, a correction into the minor range commits, and acceptance
+     * still finishes ACCEPTED. The scalar read cannot come from the identity map, so it is the
+     * value the lock actually protects.
+     */
+    private Integer lockAndReadBirthYear(UUID learnerUserId) {
+        userRepository.findByIdForUpdate(learnerUserId).orElseThrow(UserNotFoundException::new);
+        return userRepository.findBirthYearById(learnerUserId).orElse(null);
     }
 
-    private void persistBirthYear(UserEntity learner, int birthYear) {
+    private void persistBirthYear(UUID learnerUserId, int birthYear) {
         int currentYear = Year.now().getValue();
         if (birthYear < MINIMUM_BIRTH_YEAR || birthYear > currentYear) {
             throw new InvalidLinkedLearnerBirthYearException();
         }
-        learner.setBirthYear(birthYear);
-        learner.setUpdatedAt(OffsetDateTime.now());
-        userRepository.save(learner);
+        // Targeted update rather than save() on a loaded entity: UserEntity has no @DynamicUpdate,
+        // so writing a snapshot taken before a blocking lock wait would rewrite every column.
+        userRepository.writeBirthYear(learnerUserId, birthYear, OffsetDateTime.now());
     }
 
     private void validateCorrectionBirthYear(int birthYear) {
@@ -461,24 +479,24 @@ public class LinkedLearnerService {
         }
     }
 
-    private void requireRecordedBirthYear(UserEntity learner) {
-        if (learner.getBirthYear() == null) {
+    private void requireRecordedBirthYear(Integer birthYear) {
+        if (birthYear == null) {
             throw new LinkedLearnerBirthYearCorrectionNotAllowedException();
         }
     }
 
     private List<LinkedLearnerRelationshipEntity> relationshipsPausedByCorrection(
-            UserEntity learner,
+            UUID learnerUserId,
+            Integer currentBirthYear,
             int correctedBirthYear
     ) {
-        Integer currentBirthYear = learner.getBirthYear();
         if (currentBirthYear == null
                 || correctedBirthYear <= currentBirthYear
                 || !requiresGuardianConsent(correctedBirthYear)) {
             return List.of();
         }
         return relationshipRepository
-                .findByLearnerUserIdAndStatus(learner.getId(), LinkedLearnerStatus.ACCEPTED)
+                .findByLearnerUserIdAndStatus(learnerUserId, LinkedLearnerStatus.ACCEPTED)
                 .stream()
                 .filter(relationship -> consentRepository.findByRelationshipId(relationship.getId()).isEmpty())
                 .toList();
