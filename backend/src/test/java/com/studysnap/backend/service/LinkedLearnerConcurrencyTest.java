@@ -42,7 +42,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * The four interleavings that a Mockito-only test cannot prove.
+ * The five interleavings that a Mockito-only test cannot prove.
  *
  * <p>⚠️ WHY THIS EXISTS. Two release-blocking races were found in {@code v0.90.0} while every unit
  * test was green, because a mocked repository has no isolation, no locks and no second transaction.
@@ -135,10 +135,10 @@ class LinkedLearnerConcurrencyTest {
         Thread acceptance = run(acceptError, () -> newTransaction.executeWithoutResult(status ->
                 service.accept(relationshipId, supporterId, new AcceptLinkedLearnerRequest(null, false))));
         acceptance.start();
-        // ⚠️ No yield, no sleep. This test is correct in EITHER ordering: if the acceptance reaches
-        // the learner lock first it blocks until the correction commits and then reads the
-        // corrected year; if it arrives later it reads the same committed value. Nothing here
-        // depends on winning a race, which is why it does not flake.
+        // ⚠️ No yield, no sleep, and no race to win. The acceptance is not started until the
+        // correction already holds the lock (the await above), so it can only reach the lock
+        // afterwards — it either blocks until the correction commits, or arrives after it has.
+        // Either way it reads the committed corrected year, which is why this does not flake.
         releaseCorrection.countDown();
 
         correction.join(10_000);
@@ -158,13 +158,16 @@ class LinkedLearnerConcurrencyTest {
         seedRelationship(LinkedLearnerStatus.PENDING);
         CountDownLatch acceptanceHoldsLock = new CountDownLatch(1);
         CountDownLatch releaseAcceptance = new CountDownLatch(1);
+        AtomicReference<Boolean> acceptanceWasReleased = new AtomicReference<>();
 
         // Acceptance pauses while holding the learner lock, having already read the ADULT year.
         Thread[] acceptanceThread = new Thread[1];
         when(consentRepository.findByRelationshipId(relationshipId)).thenAnswer(invocation -> {
             if (Thread.currentThread() == acceptanceThread[0]) {
                 acceptanceHoldsLock.countDown();
-                releaseAcceptance.await(5, TimeUnit.SECONDS);
+                // Recorded and asserted below: a timeout here would let the test assert persisted
+                // state mid-flight and pass without the interleaving ever happening.
+                acceptanceWasReleased.set(releaseAcceptance.await(5, TimeUnit.SECONDS));
             }
             return Optional.empty();
         });
@@ -185,6 +188,7 @@ class LinkedLearnerConcurrencyTest {
 
         acceptance.join(10_000);
         correction.join(10_000);
+        assertThat(acceptanceWasReleased.get()).as("the acceptance must resume by release, not timeout").isTrue();
         assertThat(acceptError.get()).isNull();
         assertThat(correctionError.get()).isNull();
 
@@ -369,13 +373,21 @@ class LinkedLearnerConcurrencyTest {
 
     /**
      * ⚠️ Display-only reads are served from memory ON PURPOSE. H2 locks more coarsely than
-     * PostgreSQL, so an unrelated plain SELECT on the users table blocks behind a FOR UPDATE and
-     * manufactures a deadlock that production does not have — PostgreSQL readers never block on a
-     * row lock. Serving entity lookups from memory removes that artifact AND models Hibernate's
-     * identity map: this object never carries a birth year, so any code deciding consent from the
-     * ENTITY reads null and fails, rather than passing by accident.
+     * Hibernate's identity map: this object never carries a birth year, so any code deciding
+     * consent from the ENTITY reads null and fails, rather than passing by accident.
+     *
+     * <p>⚠️ This comment previously ALSO claimed that H2 blocks a plain SELECT behind a FOR UPDATE
+     * and so manufactures a deadlock production does not have. That was measured and is FALSE:
+     * against H2 2.4.240, a plain SELECT on a row held under FOR UPDATE returns in ~0 ms. A second
+     * FOR UPDATE does block, which is the property the class javadoc relies on. The rationale above
+     * is the real one and stands on its own; the deadlock story was never true.
      */
-    private UserEntity cachedUser(UUID id) {
+    /**
+     * A birth-year-free stand-in for a managed entity. ⚠️ It does NOT cache: each call builds a new
+     * instance, so Hibernate's instance identity is deliberately not modelled — only the property
+     * that matters here, that the entity cannot supply a birth year.
+     */
+    private UserEntity blankManagedUser(UUID id) {
         UserEntity user = new UserEntity();
         user.setId(id);
         user.setEmail(id + "@example.com");
@@ -399,7 +411,7 @@ class LinkedLearnerConcurrencyTest {
      */
     private UserEntity lockUser(UUID id) {
         jdbcTemplate.queryForObject("select id from users where id = ? for update", UUID.class, (Object) id);
-        return cachedUser(id);
+        return blankManagedUser(id);
     }
 
     /**
@@ -422,10 +434,10 @@ class LinkedLearnerConcurrencyTest {
         // these tests passed against code that still had the bug. In production `findById` returns
         // a MANAGED entity and `findByIdForUpdate` hands that same stale instance back, so an
         // entity-based read after locking sees the PRE-LOCK value. Here `findById` deliberately
-        // returns a cached object carrying NO birth year: any code that decides from the entity
+        // returns an object carrying NO birth year: any code that decides from the entity
         // gets null and fails loudly, instead of accidentally reading the right answer.
         when(userRepository.findById(any(UUID.class)))
-                .thenAnswer(invocation -> Optional.of(cachedUser(invocation.getArgument(0))));
+                .thenAnswer(invocation -> Optional.of(blankManagedUser(invocation.getArgument(0))));
         when(userRepository.findByIdForUpdate(any(UUID.class)))
                 .thenAnswer(invocation -> Optional.of(lockUser(invocation.getArgument(0))));
         // ...while the SCALAR read goes to the database, which is the whole point of the fix.
