@@ -66,6 +66,9 @@ export default function LinkedLearnersPage() {
   }, [loadLinks]);
 
   const [invitations, setInvitations] = useState<LinkedLearnerInvitationResponse[]>([]);
+  // Captured up front only when the inviter IS the learner: the supporter accepts later, and the
+  // consent gate needs the learner's own year, which only the learner may declare.
+  const [inviteBirthYear, setInviteBirthYear] = useState("");
 
   const loadInvitations = useCallback(async () => {
     try {
@@ -125,7 +128,9 @@ export default function LinkedLearnersPage() {
     setError(null);
     setNotice(null);
     try {
-      const response = await inviteLinkedLearner(email, inviterRole);
+      const response = await inviteLinkedLearner(
+        email, inviterRole,
+        inviterRole === "LEARNER" && inviteBirthYear.trim() ? Number(inviteBirthYear.trim()) : null);
       setNotice(response.message);
       setEmail("");
       await Promise.all([loadLinks(), loadInvitations()]);
@@ -275,6 +280,21 @@ export default function LinkedLearnersPage() {
             Their email
             <input className={INPUT_CLASSES} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
           </label>
+        {inviterRole === "LEARNER" ? (
+          <div className="space-y-1">
+            <label className="text-sm font-medium" htmlFor="invite-birth-year">Your birth year</label>
+            <input
+              id="invite-birth-year"
+              className="h-11 w-40 rounded-lg border border-border bg-background px-3 text-sm"
+              value={inviteBirthYear}
+              onChange={(event) => setInviteBirthYear(event.target.value)}
+            />
+            <p className="text-xs text-foreground/60">
+              Needed now so the person you invite can accept. If you are under the guardian-consent
+              age, a guardian confirms before the connection becomes active.
+            </p>
+          </div>
+        ) : null}
           <Button type="submit" loading={inviting} loadingText="Sending invitation…">Send invitation</Button>
         </form>
       </Card>

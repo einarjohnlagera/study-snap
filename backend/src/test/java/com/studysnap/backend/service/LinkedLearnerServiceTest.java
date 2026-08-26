@@ -3,6 +3,9 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
+import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
+import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
+import org.springframework.http.HttpStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
@@ -116,9 +119,9 @@ class LinkedLearnerServiceTest {
                 new EmailTemplateService.RenderedEmailTemplate("Subject", "HTML", "Text"));
 
         SimpleMessageResponse unknown = service.invite(
-                caller.getId(), new InviteLinkedLearnerRequest("unknown@example.com", LinkedLearnerSide.SUPPORTER));
+                caller.getId(), new InviteLinkedLearnerRequest("unknown@example.com", LinkedLearnerSide.SUPPORTER, null));
         SimpleMessageResponse known = service.invite(
-                caller.getId(), new InviteLinkedLearnerRequest("known@example.com", LinkedLearnerSide.SUPPORTER));
+                caller.getId(), new InviteLinkedLearnerRequest("known@example.com", LinkedLearnerSide.SUPPORTER, null));
 
         assertThat(known).isEqualTo(unknown);
         // ⚠️ THIS is the assertion that matters, and the one the previous version could not make.
@@ -149,7 +152,7 @@ class LinkedLearnerServiceTest {
                 new EmailTemplateService.RenderedEmailTemplate("Subject", "HTML", "Text"));
 
         service.invite(caller.getId(),
-                new InviteLinkedLearnerRequest("known@example.com", LinkedLearnerSide.SUPPORTER));
+                new InviteLinkedLearnerRequest("known@example.com", LinkedLearnerSide.SUPPORTER, null));
 
         ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
         verify(emailTemplateService).render(anyString(), captor.capture());
@@ -164,7 +167,7 @@ class LinkedLearnerServiceTest {
                 .when(authService).requireEmailVerified(callerUserId);
 
         assertThatThrownBy(() -> service.invite(
-                callerUserId, new InviteLinkedLearnerRequest("someone@example.com", LinkedLearnerSide.SUPPORTER)))
+                callerUserId, new InviteLinkedLearnerRequest("someone@example.com", LinkedLearnerSide.SUPPORTER, null)))
                 .isInstanceOf(AppException.class);
 
         verify(userRepository, never()).findByEmailIgnoreCase(anyString());
@@ -206,7 +209,7 @@ class LinkedLearnerServiceTest {
         UserEntity caller = user("same@example.com");
         when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
         InviteLinkedLearnerRequest request = new InviteLinkedLearnerRequest(
-                "same@example.com", LinkedLearnerSide.SUPPORTER);
+                "same@example.com", LinkedLearnerSide.SUPPORTER, null);
 
         assertThatThrownBy(() -> service.invite(caller.getId(), request))
                 .isInstanceOf(LinkedLearnerSelfLinkException.class);
@@ -567,6 +570,87 @@ class LinkedLearnerServiceTest {
         when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
         when(userRepository.findById(supporter.getId())).thenReturn(Optional.of(supporter));
         when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+    }
+
+
+    @Test
+    void acceptingAnInvitationRequiresAVerifiedEmail() {
+        // ⚠️ The hole email-keying itself created. An invited address may have no account yet — that
+        // is the point — so without this gate anyone knowing the address could register it, skip the
+        // inbox, accept, and become a SUPPORTER with a cross-user progress read.
+        UserEntity caller = user("invited@example.com");
+        doThrow(new AppException("EMAIL_NOT_VERIFIED", "Verify your email.", HttpStatus.FORBIDDEN))
+                .when(authService).requireEmailVerified(caller.getId());
+
+        assertThatThrownBy(() -> service.acceptInvitation(
+                UUID.randomUUID(), caller.getId(), new AcceptLinkedLearnerRequest(null, false)))
+                .isInstanceOf(AppException.class);
+
+        // ⚠️ Not even the user lookup runs: the gate short-circuits before anything else, which is
+        // what makes it a gate rather than a check somewhere in the middle.
+        verify(userRepository, never()).findById(any(UUID.class));
+        verify(invitationRepository, never()).findById(any(UUID.class));
+        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any());
+    }
+
+    @Test
+    void acceptingAnInvitationAddressedToSomeoneElseIsRefused() {
+        UserEntity caller = user("attacker@example.com");
+        LinkedLearnerInvitationEntity invitation = invitation(UUID.randomUUID(), "victim@example.com");
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        when(invitationRepository.findById(invitation.getId())).thenReturn(Optional.of(invitation));
+
+        assertThatThrownBy(() -> service.acceptInvitation(
+                invitation.getId(), caller.getId(), new AcceptLinkedLearnerRequest(null, false)))
+                .isInstanceOf(LinkedLearnerNotAllowedException.class);
+
+        // ⚠️ Authorises on owning the ADDRESS, not on holding the id.
+        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any());
+    }
+
+    @Test
+    void anAlreadyAcceptedInvitationCannotBeAcceptedAgain() {
+        UserEntity caller = user("invited@example.com");
+        LinkedLearnerInvitationEntity invitation = invitation(UUID.randomUUID(), "invited@example.com");
+        invitation.setStatus(LinkedLearnerStatus.ACCEPTED);
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        when(invitationRepository.findById(invitation.getId())).thenReturn(Optional.of(invitation));
+
+        assertThatThrownBy(() -> service.acceptInvitation(
+                invitation.getId(), caller.getId(), new AcceptLinkedLearnerRequest(null, false)))
+                .isInstanceOf(LinkedLearnerInvalidStateException.class);
+        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any());
+    }
+
+    @Test
+    void aLearnerInitiatedInviteCapturesTheLearnersOwnYearSoTheSupporterCanAccept() {
+        // Without this the invitation is permanently un-acceptable: the supporter accepts, the
+        // consent gate needs the LEARNER's year, only the learner may declare it, and before
+        // acceptance there is no relationship id for the record-birth-year route to address.
+        UserEntity caller = user("learner@example.com");
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        when(invitationRepository.findFirstByInviterUserIdAndInvitedEmailAndStatus(
+                any(UUID.class), anyString(), eq(LinkedLearnerStatus.PENDING)))
+                .thenReturn(Optional.of(invitation(caller.getId(), "supporter@example.com")));
+        when(emailTemplateService.render(anyString(), anyMap())).thenReturn(
+                new EmailTemplateService.RenderedEmailTemplate("Subject", "HTML", "Text"));
+
+        service.invite(caller.getId(), new InviteLinkedLearnerRequest(
+                "supporter@example.com", LinkedLearnerSide.LEARNER, 2000));
+
+        assertThat(caller.getBirthYear()).isEqualTo(2000);
+    }
+
+    @Test
+    void aLearnerInitiatedInviteWithoutAYearIsRefusedRatherThanCreatingADeadEnd() {
+        UserEntity caller = user("learner@example.com");
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+
+        assertThatThrownBy(() -> service.invite(caller.getId(), new InviteLinkedLearnerRequest(
+                "supporter@example.com", LinkedLearnerSide.LEARNER, null)))
+                .isInstanceOf(LinkedLearnerBirthYearRequiredException.class);
+
+        verify(invitationRepository, never()).insertPendingIfAbsent(any(), any(), anyString(), anyString(), any());
     }
 
     private LinkedLearnerInvitationEntity invitation(UUID inviterUserId, String email) {

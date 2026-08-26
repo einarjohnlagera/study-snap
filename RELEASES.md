@@ -34,6 +34,13 @@ The surfacing decision was ratified 2026-08-20. Checking it against code before 
 - **No change to the authorization model or the cross-user read.** The single accepted-link helper stays the only route to another user's data.
 - **⚠️ Do not change what `linked_learner_relationships` means** — `[CHECKPOINT — due 2026-09-19]` reads it. An email-keyed invitation that has not resolved to an account is **not** an accepted connection and must not be counted as one.
 
+### Known limitations
+
+- **⚠️ `POST /linked-learners/invite` is an unmetered mail path to arbitrary addresses, and this is an inherent cost of email-keying rather than an oversight.** Dropping the account lookup also dropped the `UserStatus.ACTIVE` filter, so suspended accounts receive mail again, and re-posting the same address re-sends indefinitely. **The filter cannot be restored without reopening the oracle** — branching on account state is exactly what was removed. **The correct mitigation is a rate limit on the endpoint, which this release does not ship.** Recorded rather than half-fixed.
+- **⚠️ `linked_learner_relationships` changed meaning for `PENDING`, though not for `ACCEPTED`.** It previously meant "invited, awaiting acceptance"; it now means only "accepted but blocked on guardian consent" or "paused by a birth-year correction". `[CHECKPOINT — due 2026-09-19]` counts `ACCEPTED` and therefore survives — but rows written before `V122` carry the old meaning with nothing marking them, so a `PENDING` read across the migration boundary is not comparable.
+- **Invitation accept/revoke has no optimistic locking.** `LinkedLearnerInvitationEntity` carries no `@Version` and neither path locks, so a revoke racing an accept can lose the status write and leave an accepted relationship from a revoked invitation. Narrow, but the accept path is the one that grants a cross-user read.
+- **The frontend "no name on an outgoing invitation" test is tautological** — it mocks the null it asserts. The property lives server-side and is covered there instead.
+
 ### Shipped
 
 _(nothing yet)_

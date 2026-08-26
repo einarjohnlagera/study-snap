@@ -58,13 +58,13 @@ it("invites in either direction", async () => {
   fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "mentor@example.com" } });
   fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
 
-  await waitFor(() => expect(inviteLinkedLearner).toHaveBeenCalledWith("mentor@example.com", "LEARNER"));
+  await waitFor(() => expect(inviteLinkedLearner).toHaveBeenCalledWith("mentor@example.com", "LEARNER", null));
 
   fireEvent.click(screen.getByRole("button", { name: /i will support them/i }));
   fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "learner@example.com" } });
   fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
 
-  await waitFor(() => expect(inviteLinkedLearner).toHaveBeenCalledWith("learner@example.com", "SUPPORTER"));
+  await waitFor(() => expect(inviteLinkedLearner).toHaveBeenCalledWith("learner@example.com", "SUPPORTER", null));
 });
 
 it("accepts an incoming invitation", async () => {

@@ -80,6 +80,18 @@ public class LinkedLearnerService {
             throw new LinkedLearnerSelfLinkException();
         }
 
+        // ⚠️ When the INVITER is the learner, their birth year must be captured now. The supporter
+        // accepts later, and the consent gate requires the learner's own year — but only the learner
+        // may declare it, and before acceptance there is no relationship id for the existing
+        // record-birth-year route to address. Without this the invitation is permanently
+        // un-acceptable: the supporter's accept throws forever with no recovery path.
+        if (request.inviterRole() == LinkedLearnerSide.LEARNER && caller.getBirthYear() == null) {
+            if (request.learnerBirthYear() == null) {
+                throw new LinkedLearnerBirthYearRequiredException();
+            }
+            persistBirthYear(caller, request.learnerBirthYear());
+        }
+
         // ⚠️ THE ROW IS WRITTEN WHETHER OR NOT THE ADDRESS HAS AN ACCOUNT. That is the whole point:
         // previously an unknown address wrote nothing while a real one wrote a PENDING relationship
         // visible in the inviter's own list, so "invite an address, read your list" was an
@@ -106,6 +118,9 @@ public class LinkedLearnerService {
      */
     @Transactional(readOnly = true)
     public List<LinkedLearnerInvitationResponse> listInvitations(UUID callerUserId) {
+        // Incoming invitations are matched on the caller's address, so an unverified account must
+        // not be able to read invitations sent to an address it has merely claimed.
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
         String callerEmail = normalizeEmail(caller.getEmail());
@@ -201,6 +216,14 @@ public class LinkedLearnerService {
             UUID callerUserId,
             AcceptLinkedLearnerRequest request
     ) {
+        // ⚠️ VERIFIED EMAIL IS THE WHOLE AUTHORIZATION HERE, and its absence was a hole created by
+        // email-keying itself. Acceptance authorises on owning the invited ADDRESS — but an invited
+        // address may have no account yet, which is the point. Without this gate anyone who knows
+        // the address could register it, skip the inbox (signup returns a token and login never
+        // checks verification), accept, and become a SUPPORTER with a cross-user progress read.
+        // assertProfileComplete does NOT cover this: it passes for a brand-new account, because it
+        // only fires when profileType is null AND onboarding is already complete.
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
         LinkedLearnerInvitationEntity invitation = invitationRepository.findById(invitationId)
@@ -239,6 +262,7 @@ public class LinkedLearnerService {
     /** Revoke a still-unaccepted invitation. Either the inviter or the invited address may do it. */
     @Transactional
     public SimpleMessageResponse revokeInvitation(UUID invitationId, UUID callerUserId) {
+        authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
         LinkedLearnerInvitationEntity invitation = invitationRepository.findById(invitationId)

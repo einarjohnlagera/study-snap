@@ -5362,13 +5362,15 @@ export async function copyNoteOnSignup(publicNoteId: string): Promise<{ noteId: 
 export async function inviteLinkedLearner(
   email: string,
   inviterRole: LinkedLearnerSide,
+  /** Required only when the inviter IS the learner and has no year recorded yet. */
+  learnerBirthYear: number | null = null,
 ): Promise<SimpleMessageResponse> {
   const response = await fetchWithAuth(
     "/linked-learners/invite",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ email, inviterRole }),
+      body: JSON.stringify({ email, inviterRole, learnerBirthYear }),
     },
     true,
   );
