@@ -95,16 +95,19 @@ class LinkedLearnerBirthYearCorrectionTransactionTest {
         // correctBirthYear now takes a PESSIMISTIC_WRITE read on the learner before deciding.
         when(userRepository.findByIdForUpdate(learnerUserId))
                 .thenAnswer(invocation -> Optional.of(readUser()));
-        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> {
-            UserEntity user = invocation.getArgument(0);
-            jdbcTemplate.update("""
-                            update correction_users
-                            set birth_year = ?, birth_year_updated_at = ?, updated_at = ?
-                            where id = ?
-                            """,
-                    user.getBirthYear(), user.getBirthYearUpdatedAt(), user.getUpdatedAt(), user.getId());
-            return user;
-        });
+        // The correction now reads the year as a scalar under the lock and writes it with a
+        // targeted update, so neither the entity read nor save() is on this path any more.
+        when(userRepository.findBirthYearById(learnerUserId))
+                .thenAnswer(invocation -> Optional.ofNullable(jdbcTemplate.queryForObject(
+                        "select birth_year from correction_users where id = ?", Integer.class, learnerUserId)));
+        when(userRepository.writeBirthYear(any(UUID.class), any(), any())).thenAnswer(invocation ->
+                jdbcTemplate.update("""
+                                update correction_users
+                                set birth_year = ?, birth_year_updated_at = ?, updated_at = ?
+                                where id = ?
+                                """,
+                        (Object) invocation.getArgument(1), (Object) invocation.getArgument(2),
+                        (Object) invocation.getArgument(2), (Object) invocation.getArgument(0)));
         when(relationshipRepository.findByLearnerUserIdAndStatus(
                 learnerUserId, LinkedLearnerStatus.ACCEPTED)).thenAnswer(invocation -> List.of(readRelationship()));
         when(consentRepository.findByRelationshipId(relationshipId)).thenReturn(Optional.empty());

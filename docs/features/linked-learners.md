@@ -28,7 +28,7 @@ Relationship state is safe under concurrent requests, and the mechanism is delib
 - **Status transitions are conditional updates**, never read-modify-save. Acceptance applies only while the row is still `PENDING`; revocation applies while it is `PENDING` **or** `ACCEPTED`, so revoking still wins when an acceptance committed first; and the correction's pause applies only while the row is `ACCEPTED`, so a revoke committing mid-correction is not resurrected.
 - Only one row is ever locked, and it is always the learner's, so no lock cycle exists.
 
-These four interleavings are pinned by `LinkedLearnerConcurrencyTest`, which runs two real transactions on two threads and asserts the persisted row rather than a returned DTO.
+These five interleavings are pinned by `LinkedLearnerConcurrencyTest`, which runs two real transactions on two threads and asserts the persisted row rather than a returned DTO.
 
 Live duplicate rows for the same supporter → learner direction are prevented by a partial unique index covering `PENDING` and `ACCEPTED`. `REVOKED` history does not block a fresh invitation. A database check and a service guard both prevent self-linking. Invitations carry their own partial unique index over inviter and address, active only while the invitation is `PENDING`.
 
@@ -40,7 +40,7 @@ This also unlocks inviting someone who has not signed up. The invitation waits a
 
 NoteLib stores the invitation before attempting email delivery. Delivery uses the shared email service and template mechanism. A delivery failure is logged and does not roll back the invitation; sending the same invitation again provides a retry path without creating a second live row.
 
-The counterparty's display name is withheld until the link is actually accepted, so neither the invitation list nor the relationship list harvests names.
+The **invitation** list never carries a counterparty name — the inviter typed the address and learns nothing further from it. **Relationship** rows do carry the name, and since `v0.90.0` that is safe by construction rather than by withholding: a relationship exists only once the invited party accepted, so both sides have agreed to the link. Withholding it until `accepted_at` was set became actively wrong when `PENDING` changed meaning, since a consent-pending connection legitimately has a null `accepted_at`.
 
 ### Verified email is the authorization
 
@@ -128,4 +128,4 @@ The absolute exclusion remains: supporters never receive note bodies, note conte
 
 ## Dashboard presentation
 
-The Dashboard adds a **People you support** section for accounts with live supporter-side relationships. Accepted links lead to the relationship-scoped progress view; pending links explain that acceptance is still required. This section is additive: a person who is both a learner and a supporter sees their own learning workspace and the people they support together, without a mode switch or a profile-type distinction. A supporter with no notes of their own therefore still has a useful home surface.
+The Dashboard adds a **People you support** section for accounts with live supporter-side relationships. Accepted links lead to the relationship-scoped progress view; pending links name the actual blocker — the learner's birth year, guardian consent outstanding, or consent recorded and activation finishing — and never claim acceptance is still required, which since `V122` is false for every row written after the migration. This section is additive: a person who is both a learner and a supporter sees their own learning workspace and the people they support together, without a mode switch or a profile-type distinction. A supporter with no notes of their own therefore still has a useful home surface.

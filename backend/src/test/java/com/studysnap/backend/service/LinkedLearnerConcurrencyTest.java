@@ -307,15 +307,6 @@ class LinkedLearnerConcurrencyTest {
         return thread;
     }
 
-    private Throwable catchThrowableOf(Runnable body) {
-        try {
-            body.run();
-            return null;
-        } catch (Throwable t) {
-            return t;
-        }
-    }
-
     private void seedRelationship(LinkedLearnerStatus status) {
         jdbcTemplate.update(
                 "insert into linked_learner_relationships values (?, ?, ?, ?, null, null)",
@@ -369,8 +360,9 @@ class LinkedLearnerConcurrencyTest {
      * ⚠️ Display-only reads are served from memory ON PURPOSE. H2 locks more coarsely than
      * PostgreSQL, so an unrelated plain SELECT on the users table blocks behind a FOR UPDATE and
      * manufactures a deadlock that production does not have — PostgreSQL readers never block on a
-     * row lock. Serving the counterparty lookup from memory removes that harness artifact while
-     * leaving the lock under test (findByIdForUpdate) hitting the real database.
+     * row lock. Serving entity lookups from memory removes that artifact AND models Hibernate's
+     * identity map: this object never carries a birth year, so any code deciding consent from the
+     * ENTITY reads null and fails, rather than passing by accident.
      */
     private UserEntity cachedUser(UUID id) {
         UserEntity user = new UserEntity();
@@ -410,17 +402,26 @@ class LinkedLearnerConcurrencyTest {
     }
 
     private void wireRepositories() {
+        // ⚠️ THIS MODELS THE PRODUCTION HAZARD, and the previous version did not — which is why
+        // these tests passed against code that still had the bug. In production `findById` returns
+        // a MANAGED entity and `findByIdForUpdate` hands that same stale instance back, so an
+        // entity-based read after locking sees the PRE-LOCK value. Here `findById` deliberately
+        // returns a cached object carrying NO birth year: any code that decides from the entity
+        // gets null and fails loudly, instead of accidentally reading the right answer.
         when(userRepository.findById(any(UUID.class)))
                 .thenAnswer(invocation -> Optional.of(cachedUser(invocation.getArgument(0))));
         when(userRepository.findByIdForUpdate(any(UUID.class)))
-                .thenAnswer(invocation -> Optional.of(readUser(invocation.getArgument(0), true)));
-        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> {
-            UserEntity user = invocation.getArgument(0);
-            jdbcTemplate.update(
-                    "update users set birth_year = ?, birth_year_updated_at = ?, updated_at = ? where id = ?",
-                    user.getBirthYear(), user.getBirthYearUpdatedAt(), user.getUpdatedAt(), user.getId());
-            return user;
-        });
+                .thenAnswer(invocation -> Optional.of(cachedUser(invocation.getArgument(0))));
+        // ...while the SCALAR read goes to the database, which is the whole point of the fix.
+        when(userRepository.findBirthYearById(any(UUID.class)))
+                .thenAnswer(invocation -> Optional.ofNullable(jdbcTemplate.queryForObject(
+                        "select birth_year from users where id = ?",
+                        Integer.class, (Object) invocation.getArgument(0))));
+        when(userRepository.writeBirthYear(any(UUID.class), any(), any()))
+                .thenAnswer(invocation -> jdbcTemplate.update(
+                        "update users set birth_year = ?, birth_year_updated_at = ?, updated_at = ? where id = ?",
+                        (Object) invocation.getArgument(1), (Object) invocation.getArgument(2),
+                        (Object) invocation.getArgument(2), (Object) invocation.getArgument(0)));
         when(relationshipRepository.findById(any(UUID.class)))
                 .thenAnswer(invocation -> Optional.of(toRelationship(invocation.getArgument(0))));
         when(relationshipRepository.findByLearnerUserIdAndStatus(any(UUID.class), any()))

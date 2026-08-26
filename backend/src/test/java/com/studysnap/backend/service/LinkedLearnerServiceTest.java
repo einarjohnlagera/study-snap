@@ -99,6 +99,22 @@ class LinkedLearnerServiceTest {
         // to exercise a path it never reaches.
         lenient().when(userRepository.findByIdForUpdate(any(UUID.class)))
                 .thenAnswer(invocation -> userRepository.findById(invocation.getArgument(0)));
+        // The consent decision reads the birth year as a SCALAR, never off the entity — see
+        // UserRepository.findBirthYearById for why. Route it to the same fixture so a test that
+        // sets a birth year on its user still exercises the real path.
+        lenient().when(userRepository.findBirthYearById(any(UUID.class)))
+                .thenAnswer(invocation -> userRepository.findById(invocation.<UUID>getArgument(0))
+                        .map(UserEntity::getBirthYear));
+        lenient().when(userRepository.writeBirthYear(any(UUID.class), any(), any()))
+                .thenAnswer(invocation -> {
+                    UUID id = invocation.getArgument(0);
+                    return userRepository.findById(id).map(user -> {
+                        user.setBirthYear(invocation.getArgument(1));
+                        user.setBirthYearUpdatedAt(invocation.getArgument(2));
+                        user.setUpdatedAt(invocation.getArgument(2));
+                        return 1;
+                    }).orElse(0);
+                });
 
         // ⚠️ Model the CONDITIONAL transitions like the database: apply the guard, mutate on
         // success, report rows affected. A mock that always returns 0 and never mutates would make
