@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
@@ -69,6 +70,7 @@ class LinkedLearnerServiceTest {
     @Mock private AuthService authService;
     @Mock private EmailService emailService;
     @Mock private EmailTemplateService emailTemplateService;
+    @Mock private InvitationRateLimitService invitationRateLimitService;
 
     private StudySnapProperties properties;
     private LinkedLearnerService service;
@@ -85,7 +87,8 @@ class LinkedLearnerServiceTest {
                 authService,
                 emailService,
                 emailTemplateService,
-                properties
+                properties,
+                invitationRateLimitService
         );
     }
 
@@ -129,7 +132,8 @@ class LinkedLearnerServiceTest {
         // observable difference an attacker used was STATE: a real address wrote a row, an unknown
         // one wrote nothing. Now BOTH write one, so there is no branch on existence to observe.
         verify(invitationRepository, times(2)).insertPendingIfAbsent(
-                any(UUID.class), eq(caller.getId()), anyString(), anyString(), any(OffsetDateTime.class));
+                any(UUID.class), eq(caller.getId()), anyString(), anyString(),
+                any(OffsetDateTime.class), any(OffsetDateTime.class));
         // And the account table is never consulted on this path at all.
         verify(userRepository, never()).findByEmailIgnoreCase(anyString());
     }
@@ -218,7 +222,7 @@ class LinkedLearnerServiceTest {
         // address exists, so this reveals nothing — but deciding it after a lookup would make the
         // refusal itself depend on account state, which is the property being protected.
         verify(userRepository, never()).findByEmailIgnoreCase(anyString());
-        verify(invitationRepository, never()).insertPendingIfAbsent(any(), any(), anyString(), anyString(), any());
+        verify(invitationRepository, never()).insertPendingIfAbsent(any(), any(), anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -574,6 +578,109 @@ class LinkedLearnerServiceTest {
 
 
     @Test
+    void theInviteRateLimitIsCheckedBeforeAnythingIsWrittenOrSent() {
+        // ⚠️ ORACLE GUARD, not just a limit test. The meter must sit at a point whose behaviour
+        // cannot differ by whether the address has an account -- if a future change moves an
+        // account lookup ahead of it, "which addresses get refused" becomes the same existence
+        // oracle V122 closed. Pinning "nothing is written, nothing is sent" pins that ordering.
+        UserEntity caller = user("caller@example.com");
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        doThrow(new AppException("TOO_MANY_INVITATIONS", "Too many.", HttpStatus.TOO_MANY_REQUESTS))
+                .when(invitationRateLimitService).assertInviteAllowed(any(UUID.class), anyString());
+
+        assertThatThrownBy(() -> service.invite(caller.getId(),
+                new InviteLinkedLearnerRequest("target@example.com", LinkedLearnerSide.SUPPORTER, null)))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("code", "TOO_MANY_INVITATIONS");
+
+        verify(invitationRepository, never()).insertPendingIfAbsent(
+                any(), any(), anyString(), anyString(), any(), any());
+        verify(emailService, never()).sendEmail(any());
+    }
+
+    @Test
+    void anExpiredInvitationIsRefusedRatherThanAccepted() {
+        // An invitation is a standing offer to whoever controls an ADDRESS. Without a bound, a
+        // reassigned mailbox inherits the ability to accept a connection meant for someone else.
+        UserEntity caller = user("invited@example.com");
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        LinkedLearnerInvitationEntity expired = invitation(UUID.randomUUID(), "invited@example.com");
+        expired.setExpiresAt(OffsetDateTime.now().minusDays(1));
+        when(invitationRepository.findById(expired.getId())).thenReturn(Optional.of(expired));
+
+        assertThatThrownBy(() -> service.acceptInvitation(
+                expired.getId(), caller.getId(), new AcceptLinkedLearnerRequest(null, false)))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("code", "LINKED_LEARNER_INVITATION_EXPIRED");
+
+        // ⚠️ No relationship, which is the point: expiry must cut the path to a cross-user read.
+        verify(relationshipRepository, never()).insertPendingIfAbsent(
+                any(), any(), any(), anyString(), any());
+    }
+
+    @Test
+    void acceptanceClaimsTheInvitationBeforeCreatingTheRelationship() {
+        // ⚠️ Ordering is the assertion. A revoke racing an accept would otherwise both read PENDING;
+        // the accept would then build a relationship -- a live cross-user read -- behind an
+        // invitation the other party had just revoked. Losing the CLAIM must abort before that.
+        UserEntity caller = user("invited@example.com");
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        LinkedLearnerInvitationEntity live = invitation(UUID.randomUUID(), "invited@example.com");
+        live.setExpiresAt(OffsetDateTime.now().plusDays(7));
+        when(invitationRepository.findById(live.getId())).thenReturn(Optional.of(live));
+        // 0 rows == somebody else moved it first.
+        when(invitationRepository.markAcceptedIfPending(any(UUID.class), any(), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.acceptInvitation(
+                live.getId(), caller.getId(), new AcceptLinkedLearnerRequest(null, false)))
+                .isInstanceOf(LinkedLearnerInvalidStateException.class);
+
+        verify(relationshipRepository, never()).insertPendingIfAbsent(
+                any(), any(), any(), anyString(), any());
+    }
+
+    @Test
+    void reInvitingPassesAFreshExpiryAndNeverTouchesWhenTheAddressWasFirstInvited() {
+        // insertPendingIfAbsent no-ops while a PENDING row exists, so a lapsed invitation would
+        // otherwise block that address forever through the partial unique index.
+        //
+        // ⚠️ SCOPE OF THIS TEST, stated because an earlier version overstated it: the repository is
+        // mocked, so the live-vs-expired discrimination — the `expires_at <= :now` guard — lives in
+        // SQL and CANNOT be exercised here. That guard is covered by the migration probe against
+        // real PostgreSQL, not by this test. What IS asserted here is the contract the service
+        // controls: a fresh expiry is computed from the configured TTL, and createdAt is never
+        // among the arguments, so re-arming cannot reset when the address was first invited.
+        UserEntity caller = user("caller@example.com");
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        when(invitationRepository.findFirstByInviterUserIdAndInvitedEmailAndStatus(
+                any(UUID.class), anyString(), eq(LinkedLearnerStatus.PENDING)))
+                .thenReturn(Optional.of(invitation(caller.getId(), "target@example.com")));
+        when(emailTemplateService.render(anyString(), anyMap())).thenReturn(
+                new EmailTemplateService.RenderedEmailTemplate("Subject", "HTML", "Text"));
+        properties.getLinkedLearners().setInvitationTtlDays(30);
+        OffsetDateTime before = OffsetDateTime.now();
+
+        service.invite(caller.getId(),
+                new InviteLinkedLearnerRequest("target@example.com", LinkedLearnerSide.SUPPORTER, null));
+
+        ArgumentCaptor<OffsetDateTime> expiresAt = ArgumentCaptor.forClass(OffsetDateTime.class);
+        ArgumentCaptor<OffsetDateTime> now = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(invitationRepository).reArmExpired(
+                eq(caller.getId()), eq("target@example.com"), expiresAt.capture(), now.capture());
+
+        // The new expiry is a full TTL ahead of the comparison instant — not a copy of it, and not
+        // derived from the existing row, either of which would leave the invitation lapsed.
+        assertThat(expiresAt.getValue()).isAfter(now.getValue().plusDays(29));
+        assertThat(now.getValue()).isAfterOrEqualTo(before);
+
+        // And the same fresh expiry is what a NEW invitation would be written with, so a re-armed
+        // row and a first-time row get the same lifetime rather than two different rules.
+        verify(invitationRepository).insertPendingIfAbsent(
+                any(UUID.class), eq(caller.getId()), eq("target@example.com"), anyString(),
+                any(OffsetDateTime.class), eq(expiresAt.getValue()));
+    }
+
+    @Test
     void acceptingARelationshipRequiresAVerifiedEmail() {
         // ⚠️ v0.89.x wrote PENDING relationship rows by resolving an email to any ACTIVE account,
         // WITHOUT requiring that invitee to be verified. Those rows are live in production, and
@@ -723,7 +830,7 @@ class LinkedLearnerServiceTest {
                 "supporter@example.com", LinkedLearnerSide.LEARNER, null)))
                 .isInstanceOf(LinkedLearnerBirthYearRequiredException.class);
 
-        verify(invitationRepository, never()).insertPendingIfAbsent(any(), any(), anyString(), anyString(), any());
+        verify(invitationRepository, never()).insertPendingIfAbsent(any(), any(), anyString(), anyString(), any(), any());
     }
 
     private LinkedLearnerInvitationEntity invitation(UUID inviterUserId, String email) {

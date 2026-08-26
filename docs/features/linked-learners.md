@@ -36,6 +36,22 @@ Because an invitation is addressed to a string rather than to an account, **prov
 
 Two paths are deliberately **left ungated**, because they cut or narrow access rather than granting it, and blocking them would disable a safety mechanism: **revoking a relationship**, and the learner's own **birth-year correction**.
 
+### Expiry
+
+An invitation is a standing offer to whoever controls an address, so it lapses. `expires_at` is set from `studysnap.linked-learners.invitation-ttl-days` (default 30) and is a real column, not `created_at` plus an interval — re-arming a lapsed invitation must not reset when the address was **first** invited, which `created_at` records and the list displays.
+
+Expiry is enforced in three places, not one: the recipient's incoming lookup, the inviter's outgoing list, and acceptance itself. Filtering only at acceptance would leave an expired invitation listed and actionable. Re-inviting a lapsed address **re-arms** it rather than failing, because the live-row unique index would otherwise block that address permanently.
+
+### Rate limiting
+
+Invites are metered on **two** keys: total per inviter, and per inviter **and address**. The second exists because re-posting an address re-sends mail, so a volume-only cap still permits repeatedly mailing one victim. Both come from `studysnap.linked-learners.*` configuration.
+
+**⚠️ The meter runs after the verified-email gate and before anything is written or sent, and is keyed only on caller and address.** It must never depend on whether the address has an account — a limit that behaves differently for real and unknown addresses would reopen the oracle `V122` closed.
+
+### Concurrency
+
+Invitation status transitions are **conditional updates** (`... where status = 'PENDING'`), not read-modify-write, and acceptance **claims the invitation before creating the relationship**. Two callers racing — an accept against a revoke — would otherwise both observe `PENDING`, and the accept would build a relationship, a live cross-user read, behind an invitation the other party had just revoked. A claim that affects zero rows aborts. Revocation is idempotent: zero rows means it was already accepted or revoked, which is not an error.
+
 ## Birth year and guardian consent
 
 Birth year is first collected only while forming a link. It is nullable on `users` and is not part of signup, onboarding or profile editing. It is account-global rather than relationship-scoped: the one current value drives the consent decision for every supporter connection the learner forms. NoteLib stores a year rather than an age that becomes stale or a full birthdate that collects unnecessary precision.

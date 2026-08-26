@@ -18,7 +18,9 @@ import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.exception.LinkedLearnerNotAllowedException;
 import com.studysnap.backend.exception.LinkedLearnerNotFoundException;
+import com.studysnap.backend.exception.LinkedLearnerInvitationExpiredException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
+import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
 import com.studysnap.backend.entity.LinkedLearnerInvitationEntity;
@@ -61,6 +63,7 @@ public class LinkedLearnerService {
     private final EmailService emailService;
     private final EmailTemplateService emailTemplateService;
     private final StudySnapProperties properties;
+    private final InvitationRateLimitService invitationRateLimitService;
 
     @Transactional
     public SimpleMessageResponse invite(UUID callerUserId, InviteLinkedLearnerRequest request) {
@@ -91,13 +94,26 @@ public class LinkedLearnerService {
             persistBirthYear(caller, request.learnerBirthYear());
         }
 
+        // ⚠️ Metered HERE: after the verified-email gate, before anything is written or sent, and
+        // keyed only on caller + address. It must never depend on whether the address has an
+        // account — branching on that is precisely the oracle V122 closed.
+        invitationRateLimitService.assertInviteAllowed(callerUserId, normalizedEmail);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime expiresAt = now.plusDays(properties.getLinkedLearners().getInvitationTtlDays());
+
         // ⚠️ THE ROW IS WRITTEN WHETHER OR NOT THE ADDRESS HAS AN ACCOUNT. That is the whole point:
         // previously an unknown address wrote nothing while a real one wrote a PENDING relationship
         // visible in the inviter's own list, so "invite an address, read your list" was an
         // account-existence oracle. There is now no branch on existence to observe.
         invitationRepository.insertPendingIfAbsent(
                 UUID.randomUUID(), callerUserId, normalizedEmail,
-                request.inviterRole().name(), OffsetDateTime.now());
+                request.inviterRole().name(), now, expiresAt);
+
+        // The insert no-ops when a live row already exists. If that row has LAPSED it would
+        // otherwise block this address forever through the partial unique index, so re-arm it —
+        // extending expiry only, never createdAt, which records the first invitation.
+        invitationRepository.reArmExpired(callerUserId, normalizedEmail, expiresAt, now);
 
         LinkedLearnerInvitationEntity invitation = invitationRepository
                 .findFirstByInviterUserIdAndInvitedEmailAndStatus(
@@ -125,7 +141,8 @@ public class LinkedLearnerService {
         String callerEmail = normalizeEmail(caller.getEmail());
 
         List<LinkedLearnerInvitationResponse> outgoing = invitationRepository
-                .findByInviterUserIdAndStatus(callerUserId, LinkedLearnerStatus.PENDING)
+                .findByInviterUserIdAndStatusAndExpiresAtAfter(
+                        callerUserId, LinkedLearnerStatus.PENDING, OffsetDateTime.now())
                 .stream()
                 .map(invitation -> new LinkedLearnerInvitationResponse(
                         invitation.getId(), false, invitation.getInviterRole(),
@@ -137,7 +154,8 @@ public class LinkedLearnerService {
                 .toList();
 
         List<LinkedLearnerInvitationResponse> incoming = invitationRepository
-                .findByInvitedEmailAndStatus(callerEmail, LinkedLearnerStatus.PENDING)
+                .findByInvitedEmailAndStatusAndExpiresAtAfter(
+                        callerEmail, LinkedLearnerStatus.PENDING, OffsetDateTime.now())
                 .stream()
                 .filter(invitation -> !callerUserId.equals(invitation.getInviterUserId()))
                 .map(invitation -> new LinkedLearnerInvitationResponse(
@@ -237,23 +255,40 @@ public class LinkedLearnerService {
             throw new LinkedLearnerSelfLinkException();
         }
 
-        UUID supporterUserId = invitation.getInviterRole() == LinkedLearnerSide.SUPPORTER
-                ? invitation.getInviterUserId() : callerUserId;
-        UUID learnerUserId = invitation.getInviterRole() == LinkedLearnerSide.LEARNER
-                ? invitation.getInviterUserId() : callerUserId;
-
         OffsetDateTime now = OffsetDateTime.now();
+        if (!invitation.getExpiresAt().isAfter(now)) {
+            throw new LinkedLearnerInvitationExpiredException();
+        }
+
+        // Read what the relationship needs BEFORE the update. The conditional update is a native
+        // query, so the managed entity keeps its load-time status afterwards; taking these now
+        // means nothing downstream depends on a stale row, rather than depending on it harmlessly.
+        LinkedLearnerSide inviterRole = invitation.getInviterRole();
+        UUID inviterUserId = invitation.getInviterUserId();
+
+        // ⚠️ CLAIM THE INVITATION FIRST, and only build the relationship if this call won. Without
+        // it, an accept racing a revoke could create a relationship — a live cross-user read —
+        // behind an invitation the other party had just revoked.
+        //
+        // ⚠️ Note the ACTUAL mechanism, because it is not what a bare "0 rows means someone else
+        // won" reading suggests: this runs inside a transaction, so a concurrent revoke BLOCKS on
+        // the row lock this update takes rather than observing PENDING and racing it. The
+        // zero-rows branch is the guard for the already-terminal case (an invitation accepted or
+        // revoked in an earlier, committed transaction). Both are handled; they are different paths.
+        if (invitationRepository.markAcceptedIfPending(invitation.getId(), now, now) == 0) {
+            throw new LinkedLearnerInvalidStateException();
+        }
+
+        UUID supporterUserId = inviterRole == LinkedLearnerSide.SUPPORTER ? inviterUserId : callerUserId;
+        UUID learnerUserId = inviterRole == LinkedLearnerSide.LEARNER ? inviterUserId : callerUserId;
+
         relationshipRepository.insertPendingIfAbsent(
                 UUID.randomUUID(), supporterUserId, learnerUserId,
-                invitation.getInviterRole().name(), now);
+                inviterRole.name(), now);
         LinkedLearnerRelationshipEntity relationship = relationshipRepository
                 .findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
                         supporterUserId, learnerUserId, LIVE_STATUSES)
                 .orElseThrow(LinkedLearnerNotFoundException::new);
-
-        invitation.setStatus(LinkedLearnerStatus.ACCEPTED);
-        invitation.setAcceptedAt(now);
-        invitationRepository.save(invitation);
 
         return accept(relationship.getId(), callerUserId, request);
     }
@@ -271,11 +306,9 @@ public class LinkedLearnerService {
         if (!isInviter && !isInvited) {
             throw new LinkedLearnerNotAllowedException();
         }
-        if (invitation.getStatus() == LinkedLearnerStatus.PENDING) {
-            invitation.setStatus(LinkedLearnerStatus.REVOKED);
-            invitation.setRevokedAt(OffsetDateTime.now());
-            invitationRepository.save(invitation);
-        }
+        // Conditional, and idempotent by design: 0 rows means it was already accepted or revoked,
+        // which is not an error for a revoke. The generic response keeps those indistinguishable.
+        invitationRepository.markRevokedIfPending(invitation.getId(), OffsetDateTime.now());
         return genericInviteResponse();
     }
 

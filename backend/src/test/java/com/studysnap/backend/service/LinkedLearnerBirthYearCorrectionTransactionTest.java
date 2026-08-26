@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
@@ -217,7 +218,8 @@ class LinkedLearnerBirthYearCorrectionTransactionTest {
                     mock(AuthService.class),
                     mock(EmailService.class),
                     mock(EmailTemplateService.class),
-                    new StudySnapProperties());
+                    new StudySnapProperties(),
+                    mock(InvitationRateLimitService.class));
         }
     }
 }

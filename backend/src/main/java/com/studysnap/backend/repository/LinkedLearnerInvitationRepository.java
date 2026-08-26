@@ -21,8 +21,8 @@ public interface LinkedLearnerInvitationRepository extends JpaRepository<LinkedL
     @Modifying
     @Query(value = """
             insert into linked_learner_invitations
-                (id, inviter_user_id, invited_email, inviter_role, status, created_at)
-            values (:id, :inviterUserId, :invitedEmail, :inviterRole, 'PENDING', :createdAt)
+                (id, inviter_user_id, invited_email, inviter_role, status, created_at, expires_at)
+            values (:id, :inviterUserId, :invitedEmail, :inviterRole, 'PENDING', :createdAt, :expiresAt)
             on conflict do nothing
             """, nativeQuery = true)
     void insertPendingIfAbsent(
@@ -30,14 +30,70 @@ public interface LinkedLearnerInvitationRepository extends JpaRepository<LinkedL
             @Param("inviterUserId") UUID inviterUserId,
             @Param("invitedEmail") String invitedEmail,
             @Param("inviterRole") String inviterRole,
-            @Param("createdAt") OffsetDateTime createdAt
+            @Param("createdAt") OffsetDateTime createdAt,
+            @Param("expiresAt") OffsetDateTime expiresAt
     );
+
+    /**
+     * Re-arm an invitation that lapsed, so an expired offer does not permanently block re-inviting
+     * the same address through the partial unique index. createdAt is deliberately NOT touched: it
+     * records when the address was first invited and the list displays it.
+     */
+    @Modifying
+    @Query(value = """
+            update linked_learner_invitations
+               set expires_at = :expiresAt
+             where inviter_user_id = :inviterUserId
+               and invited_email = :invitedEmail
+               and status = 'PENDING'
+               and expires_at <= :now
+            """, nativeQuery = true)
+    int reArmExpired(
+            @Param("inviterUserId") UUID inviterUserId,
+            @Param("invitedEmail") String invitedEmail,
+            @Param("expiresAt") OffsetDateTime expiresAt,
+            @Param("now") OffsetDateTime now
+    );
+
+    /**
+     * Status transitions as CONDITIONAL updates rather than read-modify-write. Two callers racing
+     * (an accept against a revoke) would otherwise both read PENDING and both write, losing one
+     * decision — and the accept path is the one that grants a cross-user read, so the lost write
+     * could leave an accepted relationship behind a revoked invitation. Returns rows affected;
+     * 0 means somebody else moved it first.
+     */
+    @Modifying
+    @Query(value = """
+            update linked_learner_invitations
+               set status = 'ACCEPTED', accepted_at = :acceptedAt
+             where id = :id and status = 'PENDING' and expires_at > :now
+            """, nativeQuery = true)
+    int markAcceptedIfPending(
+            @Param("id") UUID id,
+            @Param("acceptedAt") OffsetDateTime acceptedAt,
+            @Param("now") OffsetDateTime now
+    );
+
+    @Modifying
+    @Query(value = """
+            update linked_learner_invitations
+               set status = 'REVOKED', revoked_at = :revokedAt
+             where id = :id and status = 'PENDING'
+            """, nativeQuery = true)
+    int markRevokedIfPending(@Param("id") UUID id, @Param("revokedAt") OffsetDateTime revokedAt);
 
     Optional<LinkedLearnerInvitationEntity> findFirstByInviterUserIdAndInvitedEmailAndStatus(
             UUID inviterUserId, String invitedEmail, LinkedLearnerStatus status);
 
-    List<LinkedLearnerInvitationEntity> findByInviterUserIdAndStatus(UUID inviterUserId, LinkedLearnerStatus status);
+    List<LinkedLearnerInvitationEntity> findByInviterUserIdAndStatusAndExpiresAtAfter(
+            UUID inviterUserId, LinkedLearnerStatus status, OffsetDateTime now);
 
-    /** Incoming lookup by address, so an invitation can predate the recipient's account. */
-    List<LinkedLearnerInvitationEntity> findByInvitedEmailAndStatus(String invitedEmail, LinkedLearnerStatus status);
+    /**
+     * Incoming lookup by address, so an invitation can predate the recipient's account.
+     * ⚠️ Filters on expiry too. Rejecting an expired invitation only at accept time would leave it
+     * listed and actionable in the recipient's UI, which is the same class of gap as gating one
+     * entry point and missing its sibling.
+     */
+    List<LinkedLearnerInvitationEntity> findByInvitedEmailAndStatusAndExpiresAtAfter(
+            String invitedEmail, LinkedLearnerStatus status, OffsetDateTime now);
 }
