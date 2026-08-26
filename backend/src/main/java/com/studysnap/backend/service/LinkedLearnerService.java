@@ -260,22 +260,31 @@ public class LinkedLearnerService {
             throw new LinkedLearnerInvitationExpiredException();
         }
 
-        // ⚠️ CLAIM THE INVITATION FIRST, as a conditional update, and only build the relationship if
-        // this call is the one that won. Read-modify-write here would let an accept racing a revoke
-        // both observe PENDING; the accept would then create a relationship — a live cross-user
-        // read — behind an invitation the other party had just revoked.
+        // Read what the relationship needs BEFORE the update. The conditional update is a native
+        // query, so the managed entity keeps its load-time status afterwards; taking these now
+        // means nothing downstream depends on a stale row, rather than depending on it harmlessly.
+        LinkedLearnerSide inviterRole = invitation.getInviterRole();
+        UUID inviterUserId = invitation.getInviterUserId();
+
+        // ⚠️ CLAIM THE INVITATION FIRST, and only build the relationship if this call won. Without
+        // it, an accept racing a revoke could create a relationship — a live cross-user read —
+        // behind an invitation the other party had just revoked.
+        //
+        // ⚠️ Note the ACTUAL mechanism, because it is not what a bare "0 rows means someone else
+        // won" reading suggests: this runs inside a transaction, so a concurrent revoke BLOCKS on
+        // the row lock this update takes rather than observing PENDING and racing it. The
+        // zero-rows branch is the guard for the already-terminal case (an invitation accepted or
+        // revoked in an earlier, committed transaction). Both are handled; they are different paths.
         if (invitationRepository.markAcceptedIfPending(invitation.getId(), now, now) == 0) {
             throw new LinkedLearnerInvalidStateException();
         }
 
-        UUID supporterUserId = invitation.getInviterRole() == LinkedLearnerSide.SUPPORTER
-                ? invitation.getInviterUserId() : callerUserId;
-        UUID learnerUserId = invitation.getInviterRole() == LinkedLearnerSide.LEARNER
-                ? invitation.getInviterUserId() : callerUserId;
+        UUID supporterUserId = inviterRole == LinkedLearnerSide.SUPPORTER ? inviterUserId : callerUserId;
+        UUID learnerUserId = inviterRole == LinkedLearnerSide.LEARNER ? inviterUserId : callerUserId;
 
         relationshipRepository.insertPendingIfAbsent(
                 UUID.randomUUID(), supporterUserId, learnerUserId,
-                invitation.getInviterRole().name(), now);
+                inviterRole.name(), now);
         LinkedLearnerRelationshipEntity relationship = relationshipRepository
                 .findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
                         supporterUserId, learnerUserId, LIVE_STATUSES)

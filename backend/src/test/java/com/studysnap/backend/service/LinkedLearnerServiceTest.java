@@ -640,9 +640,16 @@ class LinkedLearnerServiceTest {
     }
 
     @Test
-    void reInvitingAnExpiredAddressReArmsItWithoutResettingWhenItWasFirstInvited() {
+    void reInvitingPassesAFreshExpiryAndNeverTouchesWhenTheAddressWasFirstInvited() {
         // insertPendingIfAbsent no-ops while a PENDING row exists, so a lapsed invitation would
         // otherwise block that address forever through the partial unique index.
+        //
+        // ⚠️ SCOPE OF THIS TEST, stated because an earlier version overstated it: the repository is
+        // mocked, so the live-vs-expired discrimination — the `expires_at <= :now` guard — lives in
+        // SQL and CANNOT be exercised here. That guard is covered by the migration probe against
+        // real PostgreSQL, not by this test. What IS asserted here is the contract the service
+        // controls: a fresh expiry is computed from the configured TTL, and createdAt is never
+        // among the arguments, so re-arming cannot reset when the address was first invited.
         UserEntity caller = user("caller@example.com");
         when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
         when(invitationRepository.findFirstByInviterUserIdAndInvitedEmailAndStatus(
@@ -650,14 +657,27 @@ class LinkedLearnerServiceTest {
                 .thenReturn(Optional.of(invitation(caller.getId(), "target@example.com")));
         when(emailTemplateService.render(anyString(), anyMap())).thenReturn(
                 new EmailTemplateService.RenderedEmailTemplate("Subject", "HTML", "Text"));
+        properties.getLinkedLearners().setInvitationTtlDays(30);
+        OffsetDateTime before = OffsetDateTime.now();
 
         service.invite(caller.getId(),
                 new InviteLinkedLearnerRequest("target@example.com", LinkedLearnerSide.SUPPORTER, null));
 
-        // ⚠️ Only expiry is extended. createdAt orders an index, is displayed, and is the sole
-        // record of when the address was FIRST invited -- re-arming must not reset it.
+        ArgumentCaptor<OffsetDateTime> expiresAt = ArgumentCaptor.forClass(OffsetDateTime.class);
+        ArgumentCaptor<OffsetDateTime> now = ArgumentCaptor.forClass(OffsetDateTime.class);
         verify(invitationRepository).reArmExpired(
-                eq(caller.getId()), eq("target@example.com"), any(OffsetDateTime.class), any(OffsetDateTime.class));
+                eq(caller.getId()), eq("target@example.com"), expiresAt.capture(), now.capture());
+
+        // The new expiry is a full TTL ahead of the comparison instant — not a copy of it, and not
+        // derived from the existing row, either of which would leave the invitation lapsed.
+        assertThat(expiresAt.getValue()).isAfter(now.getValue().plusDays(29));
+        assertThat(now.getValue()).isAfterOrEqualTo(before);
+
+        // And the same fresh expiry is what a NEW invitation would be written with, so a re-armed
+        // row and a first-time row get the same lifetime rather than two different rules.
+        verify(invitationRepository).insertPendingIfAbsent(
+                any(UUID.class), eq(caller.getId()), eq("target@example.com"), anyString(),
+                any(OffsetDateTime.class), eq(expiresAt.getValue()));
     }
 
     @Test
