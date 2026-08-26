@@ -135,7 +135,10 @@ class LinkedLearnerConcurrencyTest {
         Thread acceptance = run(acceptError, () -> newTransaction.executeWithoutResult(status ->
                 service.accept(relationshipId, supporterId, new AcceptLinkedLearnerRequest(null, false))));
         acceptance.start();
-        Thread.yield();
+        // ⚠️ No yield, no sleep. This test is correct in EITHER ordering: if the acceptance reaches
+        // the learner lock first it blocks until the correction commits and then reads the
+        // corrected year; if it arrives later it reads the same committed value. Nothing here
+        // depends on winning a race, which is why it does not flake.
         releaseCorrection.countDown();
 
         correction.join(10_000);
@@ -157,9 +160,12 @@ class LinkedLearnerConcurrencyTest {
         CountDownLatch releaseAcceptance = new CountDownLatch(1);
 
         // Acceptance pauses while holding the learner lock, having already read the ADULT year.
+        Thread[] acceptanceThread = new Thread[1];
         when(consentRepository.findByRelationshipId(relationshipId)).thenAnswer(invocation -> {
-            acceptanceHoldsLock.countDown();
-            releaseAcceptance.await(5, TimeUnit.SECONDS);
+            if (Thread.currentThread() == acceptanceThread[0]) {
+                acceptanceHoldsLock.countDown();
+                releaseAcceptance.await(5, TimeUnit.SECONDS);
+            }
             return Optional.empty();
         });
 
@@ -168,13 +174,13 @@ class LinkedLearnerConcurrencyTest {
 
         Thread acceptance = run(acceptError, () -> newTransaction.executeWithoutResult(status ->
                 service.accept(relationshipId, supporterId, new AcceptLinkedLearnerRequest(null, false))));
+        acceptanceThread[0] = acceptance;
         acceptance.start();
         assertThat(acceptanceHoldsLock.await(5, TimeUnit.SECONDS)).isTrue();
 
         Thread correction = run(correctionError,
                 () -> newTransaction.executeWithoutResult(status -> service.correctBirthYear(learnerId, MINOR_YEAR)));
         correction.start();
-        Thread.yield();
         releaseAcceptance.countDown();
 
         acceptance.join(10_000);
@@ -182,8 +188,13 @@ class LinkedLearnerConcurrencyTest {
         assertThat(acceptError.get()).isNull();
         assertThat(correctionError.get()).isNull();
 
-        // ⚠️ The acceptance legitimately succeeded on the year it read. The correction must then
-        // OBSERVE it and pause it — which is only true because the correction waited for the lock.
+        // ⚠️ CORRECT IN EITHER ORDERING, deliberately — and that is what makes it deterministic
+        // rather than a race. If the correction reaches the learner lock first it blocks until the
+        // acceptance commits, then observes the ACCEPTED row and pauses it. If it arrives after the
+        // acceptance has already committed, it observes the same row and pauses it just the same.
+        // The LOCK is what removes the third possibility: without it the correction could read the
+        // relationship list mid-flight, find nothing to pause, and leave a minor ACCEPTED — which
+        // is exactly what happened while this harness was stubbed to skip the lock.
         assertThat(persistedBirthYear()).isEqualTo(MINOR_YEAR);
         assertThat(persistedStatus()).isEqualTo(LinkedLearnerStatus.PENDING.name());
         assertThat(persistedAcceptedAt()).isNull();
@@ -371,19 +382,24 @@ class LinkedLearnerConcurrencyTest {
         return user;
     }
 
-    private UserEntity readUser(UUID id, boolean forUpdate) {
-        // ⚠️ REAL "for update" — this is the lock the production code relies on. Issuing it through
-        // the same transaction-bound connection is what makes the blocking in these tests genuine.
-        String sql = "select * from users where id = ?" + (forUpdate ? " for update" : "");
-        return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> {
-            UserEntity user = new UserEntity();
-            user.setId(rs.getObject("id", UUID.class));
-            user.setBirthYear(rs.getObject("birth_year", Integer.class));
-            user.setBirthYearUpdatedAt(rs.getObject("birth_year_updated_at", OffsetDateTime.class));
-            user.setUpdatedAt(rs.getObject("updated_at", OffsetDateTime.class));
-            user.setEmail(id + "@example.com");
-            return user;
-        }, id);
+    /**
+     * Model BOTH production properties of {@code findByIdForUpdate} at once, which is the thing the
+     * previous two versions of this harness each got half right.
+     *
+     * <p>It must (a) genuinely take the row lock, because serialization is the mechanism under
+     * test, and (b) return an entity WITHOUT a birth year, because Hibernate hands back the managed
+     * instance rather than the state it just read — so any code deciding consent from the entity
+     * must fail loudly here rather than accidentally reading the right answer.
+     *
+     * <p>⚠️ An earlier version issued the lock but returned a birth-year-carrying entity, hiding
+     * the stale-read bug. Its replacement returned a blank entity but issued NO SQL, silently
+     * removing the lock and leaving the release's central safety mechanism with zero coverage —
+     * the tests then raced and failed about one run in three. Both properties, or neither test
+     * means anything.
+     */
+    private UserEntity lockUser(UUID id) {
+        jdbcTemplate.queryForObject("select id from users where id = ? for update", UUID.class, (Object) id);
+        return cachedUser(id);
     }
 
     /**
@@ -411,7 +427,7 @@ class LinkedLearnerConcurrencyTest {
         when(userRepository.findById(any(UUID.class)))
                 .thenAnswer(invocation -> Optional.of(cachedUser(invocation.getArgument(0))));
         when(userRepository.findByIdForUpdate(any(UUID.class)))
-                .thenAnswer(invocation -> Optional.of(cachedUser(invocation.getArgument(0))));
+                .thenAnswer(invocation -> Optional.of(lockUser(invocation.getArgument(0))));
         // ...while the SCALAR read goes to the database, which is the whole point of the fix.
         when(userRepository.findBirthYearById(any(UUID.class)))
                 .thenAnswer(invocation -> Optional.ofNullable(jdbcTemplate.queryForObject(

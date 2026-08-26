@@ -44,7 +44,10 @@ import java.util.UUID;
 @Slf4j
 public class LinkedLearnerService {
     public static final String GENERIC_INVITE_MESSAGE =
-            "If this email belongs to an active NoteLib account, they will receive an invitation.";
+            // ⚠️ CONSTANT, and identical for every address — that is what keeps it from being an
+            // account-existence oracle. It must also not claim an account is required: since V122
+            // an invitation waits against the ADDRESS, which is the point of the feature.
+            "Invitation sent. If they do not have a NoteLib account yet, it will be waiting when they sign up.";
 
     private static final List<LinkedLearnerStatus> LIVE_STATUSES =
             List.of(LinkedLearnerStatus.PENDING, LinkedLearnerStatus.ACCEPTED);
