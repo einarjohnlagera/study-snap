@@ -19,10 +19,16 @@
 -- redundant while every grant path is gated, and there precisely so that a future grant path which
 -- loses its gate does not silently open the product's only cross-user read as well.
 --
--- Written 2026-08-26 during the second cold audit of `feat/invitation-integrity`. UNRUN.
--- Run this BEFORE signoff; it decides one open question and nothing else.
+-- =====================================================================================
+-- SUPERSEDED BELOW — the original pre-committed rule, retained for the record only.
+-- ⚠️ Everything from here to the first query describes the state BEFORE the read. It is history,
+-- not instruction: the query HAS been run (see the header above) and the gate HAS been added.
+-- Do not act on the "UNRUN" / "leave ungated" wording that follows.
+-- =====================================================================================
 --
--- THE QUESTION
+-- Written 2026-08-26 during the second cold audit of `feat/invitation-integrity`.
+--
+-- THE QUESTION (as posed before the read)
 -- v0.90.0 gates every path that GRANTS or WIDENS access on a verified email, so any relationship
 -- reaching ACCEPTED from now on implies a verified supporter. `getProgress` itself is deliberately
 -- left ungated (see the v0.90.0 Known limitations in RELEASES.md).
@@ -32,7 +38,8 @@
 -- row was accepted by an account that never verified, that supporter can read learner progress
 -- today without ever having proved inbox control.
 --
--- ⚠️ DECISION RULE, pre-committed before the read:
+-- ⚠️ DECISION RULE, pre-committed before the read (NOT followed — see the header for why the
+--    premise turned out false):
 --   0 rows      -> leave `getProgress` ungated. Gating it would break working connections to close
 --                  a window that does not exist. Record the number and move on.
 --   >0 rows     -> add `authService.requireEmailVerified(callerUserId)` to

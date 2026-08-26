@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LINKED_LEARNER_STATUS_COPY } from "@/lib/linked-learner-status";
 import {
   acceptLinkedLearner,
   acceptLinkedLearnerInvitation,
@@ -439,10 +440,10 @@ export default function LinkedLearnersPage() {
                 </div>
               ) : null}
 
-              {pending && link.birthYearRequired && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">Waiting for the learner to record their birth year.</p> : null}
-              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "LEARNER" ? <p className="text-sm text-foreground/70">This connection is paused until the supporter records guardian consent.</p> : null}
-              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">Your progress access is paused because guardian consent is required. Record consent above to unblock the connection.</p> : null}
-              {pending && link.guardianConsentRequired && link.guardianConsentRecorded ? <p className="text-sm text-foreground/70">Guardian consent has been recorded.</p> : null}
+              {pending && link.birthYearRequired && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.waitingForLearnerBirthYear}</p> : null}
+              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "LEARNER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.pausedForConsentLearnerView}</p> : null}
+              {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.pausedForConsentSupporterView}</p> : null}
+              {pending && link.guardianConsentRequired && link.guardianConsentRecorded ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.consentRecorded}</p> : null}
 
               <div className="flex flex-wrap gap-2">
                 {link.status === "ACCEPTED" && link.callerRole === "SUPPORTER" ? (

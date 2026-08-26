@@ -38,11 +38,20 @@ public interface LinkedLearnerInvitationRepository extends JpaRepository<LinkedL
      * Re-arm an invitation that lapsed, so an expired offer does not permanently block re-inviting
      * the same address through the partial unique index. createdAt is deliberately NOT touched: it
      * records when the address was first invited and the list displays it.
+     *
+     * <p>⚠️ The ROLE is re-applied from the new request, not preserved. insertPendingIfAbsent
+     * no-ops against the live-row index, so without this an address first invited as SUPPORTER and
+     * later re-invited as LEARNER would reactivate the OLD direction — and acceptance would then
+     * build the opposite relationship to the one the inviter just asked for.
+     *
+     * <p>The {@code expires_at <= :now} guard is what keeps an UNEXPIRED duplicate idempotent:
+     * repeating the endpoint on a live invitation re-sends mail and changes no stored row.
      */
     @Modifying
     @Query(value = """
             update linked_learner_invitations
-               set expires_at = :expiresAt
+               set expires_at = :expiresAt,
+                   inviter_role = :inviterRole
              where inviter_user_id = :inviterUserId
                and invited_email = :invitedEmail
                and status = 'PENDING'
@@ -51,6 +60,7 @@ public interface LinkedLearnerInvitationRepository extends JpaRepository<LinkedL
     int reArmExpired(
             @Param("inviterUserId") UUID inviterUserId,
             @Param("invitedEmail") String invitedEmail,
+            @Param("inviterRole") String inviterRole,
             @Param("expiresAt") OffsetDateTime expiresAt,
             @Param("now") OffsetDateTime now
     );

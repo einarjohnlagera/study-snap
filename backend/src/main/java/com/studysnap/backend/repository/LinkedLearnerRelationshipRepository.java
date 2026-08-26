@@ -45,4 +45,50 @@ public interface LinkedLearnerRelationshipRepository extends JpaRepository<Linke
             UUID learnerUserId,
             LinkedLearnerStatus status
     );
+
+    /**
+     * Status transitions as CONDITIONAL updates. Read-modify-save loses a decision when two
+     * requests observe the same row: an accept racing a revoke would both see PENDING, and
+     * whichever flushed last would win — so a revoked connection could be resurrected as ACCEPTED,
+     * with a live cross-user read behind it.
+     *
+     * <p>⚠️ {@code clearAutomatically} is required, not decorative: the caller holds this row in the
+     * persistence context at its OLD status, and status is precisely what these change. Without the
+     * clear, a re-read inside the same transaction returns the stale cached entity and the caller
+     * reports an outcome that never happened. {@code flushAutomatically} keeps pending writes
+     * (a birth year persisted moments earlier) from being discarded by that clear.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update linked_learner_relationships
+               set status = 'ACCEPTED', accepted_at = :acceptedAt, revoked_at = null
+             where id = :id and status = 'PENDING'
+            """, nativeQuery = true)
+    int markAcceptedIfPending(@Param("id") UUID id, @Param("acceptedAt") java.time.OffsetDateTime acceptedAt);
+
+    /**
+     * ⚠️ Guarded on BOTH live statuses, not just PENDING. Revocation has to win even when an accept
+     * committed first — otherwise "revocation cuts the read immediately" is false for exactly the
+     * interleaving that matters.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update linked_learner_relationships
+               set status = 'REVOKED', revoked_at = :revokedAt
+             where id = :id and status in ('PENDING', 'ACCEPTED')
+            """, nativeQuery = true)
+    int markRevokedIfLive(@Param("id") UUID id, @Param("revokedAt") java.time.OffsetDateTime revokedAt);
+
+    /**
+     * Pause an accepted connection that a birth-year correction has made consent-requiring.
+     * Conditional on ACCEPTED so a revoke committing between the select and this write is not
+     * overwritten back to PENDING, which would resurrect a relationship the learner just ended.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update linked_learner_relationships
+               set status = 'PENDING', accepted_at = null
+             where id = :id and status = 'ACCEPTED'
+            """, nativeQuery = true)
+    int pauseAcceptedForConsent(@Param("id") UUID id);
 }

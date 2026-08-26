@@ -18,6 +18,18 @@ Either party can initiate. `initiated_by` records whether the supporter or learn
 
 **⚠️ Since `v0.90.0` a relationship row is created only at acceptance.** An unaccepted invitation lives in `linked_learner_invitations`, not here, so a `PENDING` relationship no longer means "awaiting acceptance" — it means accepted but not yet active. `[CHECKPOINT — due 2026-09-19]` reads this table, and an unresolved invitation is not a connection of any kind.
 
+**⚠️ Rows written BEFORE `V122` still carry the old meaning, and nothing marks them.** A pre-migration `PENDING` row genuinely is awaiting acceptance. Any surface describing a pending connection must therefore stay neutral when no birth-year or consent blocker is present — that combination is the legacy case, and asserting either meaning would be wrong for one of the two populations. `frontend/lib/linked-learner-status.ts` owns that vocabulary for both the Dashboard card and the Learning Connections page, so the two cannot drift apart.
+
+### Concurrent transitions
+
+Relationship state is safe under concurrent requests, and the mechanism is deliberate rather than incidental:
+
+- **The birth-year decision holds a pessimistic write lock on the learner** (`findByIdForUpdate`). Acceptance reads the birth year under that lock, so a correction into the consent range cannot land between the read and the write. Both orderings are safe: if acceptance wins, the correction then observes the new `ACCEPTED` row and pauses it; if the correction wins, acceptance reads the corrected year and requires consent. **Every writer of `users.birth_year` takes this lock** — invite, accept, record and correct — because leaving one out reopens the window through that path.
+- **Status transitions are conditional updates**, never read-modify-save. Acceptance applies only while the row is still `PENDING`; revocation applies while it is `PENDING` **or** `ACCEPTED`, so revoking still wins when an acceptance committed first; and the correction's pause applies only while the row is `ACCEPTED`, so a revoke committing mid-correction is not resurrected.
+- Only one row is ever locked, and it is always the learner's, so no lock cycle exists.
+
+These four interleavings are pinned by `LinkedLearnerConcurrencyTest`, which runs two real transactions on two threads and asserts the persisted row rather than a returned DTO.
+
 Live duplicate rows for the same supporter → learner direction are prevented by a partial unique index covering `PENDING` and `ACCEPTED`. `REVOKED` history does not block a fresh invitation. A database check and a service guard both prevent self-linking. Invitations carry their own partial unique index over inviter and address, active only while the invitation is `PENDING`.
 
 ## Invitation privacy

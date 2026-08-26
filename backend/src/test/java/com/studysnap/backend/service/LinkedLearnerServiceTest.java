@@ -52,6 +52,7 @@ import java.util.Map;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -72,6 +73,9 @@ class LinkedLearnerServiceTest {
     @Mock private EmailTemplateService emailTemplateService;
     @Mock private InvitationRateLimitService invitationRateLimitService;
 
+    /** Every relationship a test builds, so the conditional-transition stubs can act like a DB. */
+    private final java.util.Map<UUID, LinkedLearnerRelationshipEntity> relationshipsById = new java.util.HashMap<>();
+
     private StudySnapProperties properties;
     private LinkedLearnerService service;
 
@@ -90,6 +94,50 @@ class LinkedLearnerServiceTest {
                 properties,
                 invitationRateLimitService
         );
+        // The birth-year decision loads the learner through a PESSIMISTIC_WRITE read. Route it to
+        // whatever findById is stubbed with, so a test cannot stub only one of the two and appear
+        // to exercise a path it never reaches.
+        lenient().when(userRepository.findByIdForUpdate(any(UUID.class)))
+                .thenAnswer(invocation -> userRepository.findById(invocation.getArgument(0)));
+
+        // ⚠️ Model the CONDITIONAL transitions like the database: apply the guard, mutate on
+        // success, report rows affected. A mock that always returns 0 and never mutates would make
+        // every final-status assertion below assert the fixture instead of the code.
+        //
+        // ⚠️ This models transitions ONLY — not isolation, locking, or concurrent transactions.
+        // Those are proven in LinkedLearnerConcurrencyTest against a real transaction manager,
+        // because a Mockito stub cannot prove them and must not be mistaken for proof.
+        lenient().when(relationshipRepository.markAcceptedIfPending(any(UUID.class), any()))
+                .thenAnswer(invocation -> transition(invocation.getArgument(0),
+                        LinkedLearnerStatus.PENDING, LinkedLearnerStatus.ACCEPTED, invocation.getArgument(1)));
+        lenient().when(relationshipRepository.markRevokedIfLive(any(UUID.class), any()))
+                .thenAnswer(invocation -> {
+                    LinkedLearnerRelationshipEntity row = relationshipsById.get(invocation.getArgument(0));
+                    if (row == null || row.getStatus() == LinkedLearnerStatus.REVOKED) {
+                        return 0;
+                    }
+                    row.setStatus(LinkedLearnerStatus.REVOKED);
+                    row.setRevokedAt(invocation.getArgument(1));
+                    return 1;
+                });
+        lenient().when(relationshipRepository.pauseAcceptedForConsent(any(UUID.class)))
+                .thenAnswer(invocation -> transition(invocation.getArgument(0),
+                        LinkedLearnerStatus.ACCEPTED, LinkedLearnerStatus.PENDING, null));
+        lenient().when(relationshipRepository.findById(any(UUID.class)))
+                .thenAnswer(invocation -> Optional.ofNullable(relationshipsById.get(invocation.getArgument(0))));
+    }
+
+    private int transition(UUID id, LinkedLearnerStatus from, LinkedLearnerStatus to, OffsetDateTime acceptedAt) {
+        LinkedLearnerRelationshipEntity row = relationshipsById.get(id);
+        if (row == null || row.getStatus() != from) {
+            return 0;
+        }
+        row.setStatus(to);
+        row.setAcceptedAt(to == LinkedLearnerStatus.ACCEPTED ? acceptedAt : null);
+        if (to == LinkedLearnerStatus.ACCEPTED) {
+            row.setRevokedAt(null);
+        }
+        return 1;
     }
 
     @Test
@@ -100,7 +148,6 @@ class LinkedLearnerServiceTest {
         LinkedLearnerRelationshipEntity relationship = relationship(supporter, learner, LinkedLearnerSide.SUPPORTER);
         stubRelationshipUsers(relationship, supporter, learner);
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
-        when(relationshipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         LinkedLearnerResponse response = service.accept(
                 relationship.getId(), learner.getId(), new AcceptLinkedLearnerRequest(null, false));
@@ -108,7 +155,7 @@ class LinkedLearnerServiceTest {
         assertThat(response.status()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
         assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
         assertThat(relationship.getAcceptedAt()).isNotNull();
-        verify(relationshipRepository).save(relationship);
+        verify(relationshipRepository).markAcceptedIfPending(eq(relationship.getId()), any());
     }
 
     @Test
@@ -191,7 +238,7 @@ class LinkedLearnerServiceTest {
                 relationship.getId(), supporter.getId(), new AcceptLinkedLearnerRequest(null, false)))
                 .isInstanceOf(LinkedLearnerNotAllowedException.class);
         assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.PENDING);
-        verify(relationshipRepository, never()).save(any());
+        verify(relationshipRepository, never()).markAcceptedIfPending(any(UUID.class), any());
     }
 
     @Test
@@ -232,14 +279,13 @@ class LinkedLearnerServiceTest {
         LinkedLearnerRelationshipEntity relationship = relationship(supporter, learner, LinkedLearnerSide.SUPPORTER);
         stubRelationshipUsers(relationship, supporter, learner);
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
-        when(relationshipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         LinkedLearnerResponse revoked = service.revoke(relationship.getId(), learner.getId());
         LinkedLearnerResponse repeated = service.revoke(relationship.getId(), supporter.getId());
 
         assertThat(revoked.status()).isEqualTo(LinkedLearnerStatus.REVOKED);
         assertThat(repeated.status()).isEqualTo(LinkedLearnerStatus.REVOKED);
-        verify(relationshipRepository).save(relationship);
+        verify(relationshipRepository).markRevokedIfLive(eq(relationship.getId()), any());
     }
 
     @Test
@@ -253,7 +299,6 @@ class LinkedLearnerServiceTest {
         when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
         when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
-        when(relationshipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         LinkedLearnerResponse response = service.revoke(relationship.getId(), supporter.getId());
 
@@ -276,7 +321,7 @@ class LinkedLearnerServiceTest {
         assertThat(response.status()).isEqualTo(LinkedLearnerStatus.PENDING);
         assertThat(response.guardianConsentRequired()).isTrue();
         assertThat(response.guardianConsentRecorded()).isFalse();
-        verify(relationshipRepository, never()).save(any());
+        verify(relationshipRepository, never()).markAcceptedIfPending(any(UUID.class), any());
     }
 
     @Test
@@ -289,14 +334,13 @@ class LinkedLearnerServiceTest {
         consent.setRelationshipId(relationship.getId());
         stubRelationshipUsers(relationship, supporter, learner);
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.of(consent));
-        when(relationshipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         LinkedLearnerResponse response = service.accept(
                 relationship.getId(), learner.getId(), new AcceptLinkedLearnerRequest(null, false));
 
         assertThat(response.status()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
         assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
-        verify(relationshipRepository).save(relationship);
+        verify(relationshipRepository).markAcceptedIfPending(eq(relationship.getId()), any());
     }
 
     @Test
@@ -307,7 +351,6 @@ class LinkedLearnerServiceTest {
         LinkedLearnerRelationshipEntity relationship = relationship(supporter, learner, LinkedLearnerSide.SUPPORTER);
         stubRelationshipUsers(relationship, supporter, learner);
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
-        when(relationshipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         properties.getLinkedLearners().setGuardianConsentMaxAge(17);
 
         LinkedLearnerResponse accepted = service.accept(
@@ -360,7 +403,7 @@ class LinkedLearnerServiceTest {
         assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.PENDING);
         assertThat(relationship.getAcceptedAt()).isNull();
         assertThat(learner.getBirthYearUpdatedAt()).isNotNull();
-        verify(relationshipRepository).saveAll(List.of(relationship));
+        verify(relationshipRepository).pauseAcceptedForConsent(relationship.getId());
     }
 
     @Test
@@ -384,7 +427,7 @@ class LinkedLearnerServiceTest {
 
         assertThat(preview.affectedConnectionCount()).isOne();
         verify(userRepository, never()).save(any());
-        verify(relationshipRepository, never()).saveAll(any());
+        verify(relationshipRepository, never()).pauseAcceptedForConsent(any(UUID.class));
     }
 
     @Test
@@ -406,7 +449,7 @@ class LinkedLearnerServiceTest {
 
         assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
         assertThat(relationship.getAcceptedAt()).isNotNull();
-        verify(relationshipRepository).saveAll(List.of());
+        verify(relationshipRepository, never()).pauseAcceptedForConsent(any(UUID.class));
     }
 
     @Test
@@ -443,7 +486,7 @@ class LinkedLearnerServiceTest {
         service.correctBirthYear(learner.getId(), Year.now().getValue() - 30);
 
         verify(relationshipRepository, never()).findByLearnerUserIdAndStatus(any(), any());
-        verify(relationshipRepository).saveAll(List.of());
+        verify(relationshipRepository, never()).pauseAcceptedForConsent(any(UUID.class));
     }
 
     @Test
@@ -462,7 +505,7 @@ class LinkedLearnerServiceTest {
         assertThat(learner.getBirthYearUpdatedAt()).isEqualTo(originalTimestamp);
         verify(userRepository, never()).save(any());
         verify(relationshipRepository, never()).findByLearnerUserIdAndStatus(any(), any());
-        verify(relationshipRepository, never()).saveAll(any());
+        verify(relationshipRepository, never()).pauseAcceptedForConsent(any(UUID.class));
     }
 
     @Test
@@ -540,7 +583,7 @@ class LinkedLearnerServiceTest {
                 learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of(relationship));
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
         doThrow(new IllegalStateException("forced relationship write failure"))
-                .when(relationshipRepository).saveAll(any());
+                .when(relationshipRepository).pauseAcceptedForConsent(any(UUID.class));
 
         assertThatThrownBy(() -> service.correctBirthYear(
                 learner.getId(), Year.now().getValue() - 10))
@@ -566,14 +609,24 @@ class LinkedLearnerServiceTest {
                         || name.contains("concepthealth"));
     }
 
+    /**
+     * The birth-year decision now loads the learner through a PESSIMISTIC_WRITE read, so a test
+     * that stubs only findById exercises none of it. Stub both, from one place, so a future test
+     * cannot half-stub it and appear to pass.
+     */
+    private void stubUser(UserEntity user) {
+        lenient().when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+    }
+
     private void stubRelationshipUsers(
             LinkedLearnerRelationshipEntity relationship,
             UserEntity supporter,
             UserEntity learner
     ) {
-        when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
-        when(userRepository.findById(supporter.getId())).thenReturn(Optional.of(supporter));
-        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+        lenient().when(relationshipRepository.findById(relationship.getId()))
+                .thenReturn(Optional.of(relationship));
+        stubUser(supporter);
+        stubUser(learner);
     }
 
 
@@ -665,8 +718,11 @@ class LinkedLearnerServiceTest {
 
         ArgumentCaptor<OffsetDateTime> expiresAt = ArgumentCaptor.forClass(OffsetDateTime.class);
         ArgumentCaptor<OffsetDateTime> now = ArgumentCaptor.forClass(OffsetDateTime.class);
+        // ⚠️ EXACT role, not anyString(): the whole defect was re-arm reactivating the OLD
+        // direction, so an assertion that tolerates any role cannot see the bug it is named for.
         verify(invitationRepository).reArmExpired(
-                eq(caller.getId()), eq("target@example.com"), expiresAt.capture(), now.capture());
+                eq(caller.getId()), eq("target@example.com"), eq("SUPPORTER"),
+                expiresAt.capture(), now.capture());
 
         // The new expiry is a full TTL ahead of the comparison instant — not a copy of it, and not
         // derived from the existing row, either of which would leave the invitation lapsed.
@@ -676,7 +732,7 @@ class LinkedLearnerServiceTest {
         // And the same fresh expiry is what a NEW invitation would be written with, so a re-armed
         // row and a first-time row get the same lifetime rather than two different rules.
         verify(invitationRepository).insertPendingIfAbsent(
-                any(UUID.class), eq(caller.getId()), eq("target@example.com"), anyString(),
+                any(UUID.class), eq(caller.getId()), eq("target@example.com"), eq("SUPPORTER"),
                 any(OffsetDateTime.class), eq(expiresAt.getValue()));
     }
 
@@ -696,7 +752,7 @@ class LinkedLearnerServiceTest {
                 .hasFieldOrPropertyWithValue("code", "EMAIL_NOT_VERIFIED");
 
         verify(relationshipRepository, never()).findById(any(UUID.class));
-        verify(relationshipRepository, never()).save(any(LinkedLearnerRelationshipEntity.class));
+        verify(relationshipRepository, never()).markAcceptedIfPending(any(UUID.class), any());
     }
 
     @Test
@@ -728,12 +784,9 @@ class LinkedLearnerServiceTest {
     }
 
     @Test
-    void revokingAndCorrectingABirthYearStayOpenToAnUnverifiedCaller() {
-        // ⚠️ DELIBERATE ASYMMETRY, and the reason the gate is not applied uniformly: these two paths
-        // CUT access. Blocking revoke would trap someone in a connection they want out of, and
-        // blocking correctBirthYear would disable the v0.89.1 mechanism that re-pauses links when a
-        // learner corrects downward into the consent range. Gating them would harm the person the
-        // gate exists to protect.
+    void revokingStaysOpenToAnUnverifiedCaller() {
+        // ⚠️ DELIBERATE ASYMMETRY. Revoke CUTS access; gating it would trap someone in a connection
+        // they want out of, which harms the person the verified-email gate exists to protect.
         UserEntity supporter = user(SUPPORTER_EMAIL);
         UserEntity learner = user("minor@example.com");
         learner.setBirthYear(2000);
@@ -741,12 +794,35 @@ class LinkedLearnerServiceTest {
                 relationship(supporter, learner, LinkedLearnerSide.SUPPORTER);
         relationship.setStatus(LinkedLearnerStatus.ACCEPTED);
         stubRelationshipUsers(relationship, supporter, learner);
-        when(relationshipRepository.save(any(LinkedLearnerRelationshipEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
 
         service.revoke(relationship.getId(), learner.getId());
 
         assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.REVOKED);
+        verify(authService, never()).requireEmailVerified(learner.getId());
+    }
+
+    @Test
+    void correctingABirthYearStaysOpenToAnUnverifiedCaller() {
+        // ⚠️ SPLIT OUT because the combined test NEVER CALLED correctBirthYear — it was named for
+        // two behaviours and exercised one, so the correction half would have passed even with a
+        // verification gate bolted onto it. Gating correction would disable the v0.89.1 mechanism
+        // that re-pauses links when a learner corrects downward into the consent range.
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user("minor@example.com");
+        learner.setBirthYear(2000);
+        LinkedLearnerRelationshipEntity relationship =
+                relationship(supporter, learner, LinkedLearnerSide.SUPPORTER);
+        relationship.setStatus(LinkedLearnerStatus.ACCEPTED);
+        stubRelationshipUsers(relationship, supporter, learner);
+        when(relationshipRepository.findByLearnerUserIdAndStatus(learner.getId(), LinkedLearnerStatus.ACCEPTED))
+                .thenReturn(List.of(relationship));
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of(relationship));
+
+        service.correctBirthYear(learner.getId(), Year.now().getValue() - 10);
+
+        assertThat(learner.getBirthYear()).isEqualTo(Year.now().getValue() - 10);
+        assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.PENDING);
         verify(authService, never()).requireEmailVerified(learner.getId());
     }
 
@@ -866,6 +942,7 @@ class LinkedLearnerServiceTest {
         relationship.setStatus(LinkedLearnerStatus.PENDING);
         relationship.setInitiatedBy(initiatedBy);
         relationship.setCreatedAt(OffsetDateTime.now());
+        relationshipsById.put(relationship.getId(), relationship);
         return relationship;
     }
 

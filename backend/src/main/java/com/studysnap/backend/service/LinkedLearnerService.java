@@ -91,7 +91,10 @@ public class LinkedLearnerService {
             if (request.learnerBirthYear() == null) {
                 throw new LinkedLearnerBirthYearRequiredException();
             }
-            persistBirthYear(caller, request.learnerBirthYear());
+            // ⚠️ This is the FOURTH writer of users.birth_year, and it takes the same lock as the
+            // other three. Locking only the two sides of the observed race would leave the window
+            // open through whichever writer was skipped.
+            persistBirthYear(lockLearnerForBirthYearDecision(callerUserId), request.learnerBirthYear());
         }
 
         // ⚠️ Metered HERE: after the verified-email gate, before anything is written or sent, and
@@ -113,7 +116,8 @@ public class LinkedLearnerService {
         // The insert no-ops when a live row already exists. If that row has LAPSED it would
         // otherwise block this address forever through the partial unique index, so re-arm it —
         // extending expiry only, never createdAt, which records the first invitation.
-        invitationRepository.reArmExpired(callerUserId, normalizedEmail, expiresAt, now);
+        invitationRepository.reArmExpired(
+                callerUserId, normalizedEmail, request.inviterRole().name(), expiresAt, now);
 
         LinkedLearnerInvitationEntity invitation = invitationRepository
                 .findFirstByInviterUserIdAndInvitedEmailAndStatus(
@@ -193,7 +197,10 @@ public class LinkedLearnerService {
     public List<LinkedLearnerResponse> correctBirthYear(UUID callerUserId, int birthYear) {
         onboardingGuardService.assertProfileComplete(callerUserId);
         validateCorrectionBirthYear(birthYear);
-        UserEntity learner = requireUser(callerUserId);
+        // ⚠️ Same lock as accept(), taken FIRST. Holding it to commit is what guarantees an
+        // acceptance that committed just before us is VISIBLE below and therefore paused, and that
+        // one arriving after us reads the corrected year instead of the value we replaced.
+        UserEntity learner = lockLearnerForBirthYearDecision(callerUserId);
         requireRecordedBirthYear(learner);
         if (Integer.valueOf(birthYear).equals(learner.getBirthYear())) {
             return listRelationships(callerUserId);
@@ -207,11 +214,11 @@ public class LinkedLearnerService {
         learner.setUpdatedAt(now);
         userRepository.save(learner);
 
-        relationshipsToPause.forEach(relationship -> {
-            relationship.setStatus(LinkedLearnerStatus.PENDING);
-            relationship.setAcceptedAt(null);
-        });
-        relationshipRepository.saveAll(relationshipsToPause);
+        // ⚠️ Conditional per row rather than saveAll: a revoke committing between the select above
+        // and this write would otherwise be overwritten back to PENDING, resurrecting a connection
+        // the learner had just ended.
+        relationshipsToPause.forEach(
+                relationship -> relationshipRepository.pauseAcceptedForConsent(relationship.getId()));
         return listRelationships(callerUserId);
     }
 
@@ -331,7 +338,14 @@ public class LinkedLearnerService {
             throw new LinkedLearnerInvalidStateException();
         }
 
-        UserEntity learner = requireUser(relationship.getLearnerUserId());
+        // ⚠️ LOCK THE LEARNER BEFORE READING THE BIRTH YEAR. The consent decision is made from
+        // this value, and correctBirthYear can move it into the minor range concurrently. Reading
+        // it unlocked let acceptance decide "no consent needed" on an adult year, a correction
+        // commit a minor year, and acceptance then finish ACCEPTED — a minor with a live supporter
+        // connection and no consent record. Locking serializes the two in BOTH orders: if we win,
+        // correctBirthYear's own lock makes it observe this acceptance and pause it; if it wins,
+        // this read returns the corrected year and consent is required below.
+        UserEntity learner = lockLearnerForBirthYearDecision(relationship.getLearnerUserId());
         if (learner.getBirthYear() == null) {
             if (!callerUserId.equals(learner.getId()) || request.learnerBirthYear() == null) {
                 throw new LinkedLearnerBirthYearRequiredException();
@@ -350,11 +364,16 @@ public class LinkedLearnerService {
             return toResponse(relationship, callerUserId);
         }
 
+        // ⚠️ Conditional, so a revoke that committed while we were deciding is not overwritten.
+        // Zero rows means the relationship is no longer PENDING — revoked by the other party, or
+        // accepted elsewhere — and we must NOT report success from the entity we loaded.
         OffsetDateTime now = OffsetDateTime.now();
-        relationship.setStatus(LinkedLearnerStatus.ACCEPTED);
-        relationship.setAcceptedAt(now);
-        relationship.setRevokedAt(null);
-        return toResponse(relationshipRepository.save(relationship), callerUserId);
+        if (relationshipRepository.markAcceptedIfPending(relationshipId, now) == 0) {
+            throw new LinkedLearnerInvalidStateException();
+        }
+        // The conditional update cleared the persistence context, so re-read rather than trust the
+        // detached copy — status is exactly the field that changed.
+        return toResponse(requireRelationship(relationshipId), callerUserId);
     }
 
     @Transactional
@@ -370,7 +389,9 @@ public class LinkedLearnerService {
         if (!callerUserId.equals(relationship.getLearnerUserId())) {
             throw new LinkedLearnerNotAllowedException();
         }
-        UserEntity learner = requireUser(callerUserId);
+        // Every writer of users.birth_year takes the same lock; skipping one would reopen the
+        // correction race through that path instead of closing it.
+        UserEntity learner = lockLearnerForBirthYearDecision(callerUserId);
         if (learner.getBirthYear() == null) {
             persistBirthYear(learner, birthYear);
         }
@@ -407,9 +428,21 @@ public class LinkedLearnerService {
         if (relationship.getStatus() == LinkedLearnerStatus.REVOKED) {
             return toResponse(relationship, callerUserId);
         }
-        relationship.setStatus(LinkedLearnerStatus.REVOKED);
-        relationship.setRevokedAt(OffsetDateTime.now());
-        return toResponse(relationshipRepository.save(relationship), callerUserId);
+        // ⚠️ Conditional on BOTH live statuses, so revocation still wins when an acceptance
+        // committed first. Zero rows means it was already REVOKED, which is not an error — revoke
+        // is idempotent — so report the persisted state rather than the stale one.
+        relationshipRepository.markRevokedIfLive(relationshipId, OffsetDateTime.now());
+        return toResponse(requireRelationship(relationshipId), callerUserId);
+    }
+
+    /**
+     * The single way to load a learner whose birth year a consent decision depends on. Only ONE row
+     * is ever locked, and it is always the learner's, so no lock cycle exists and no deadlock is
+     * possible between these paths.
+     */
+    private UserEntity lockLearnerForBirthYearDecision(UUID learnerUserId) {
+        return userRepository.findByIdForUpdate(learnerUserId)
+                .orElseThrow(UserNotFoundException::new);
     }
 
     private void persistBirthYear(UserEntity learner, int birthYear) {
