@@ -34,6 +34,11 @@ The surfacing decision was ratified 2026-08-20. Checking it against code before 
 - **No change to the authorization model or the cross-user read.** The single accepted-link helper stays the only route to another user's data.
 - **⚠️ Do not change what `linked_learner_relationships` means** — `[CHECKPOINT — due 2026-09-19]` reads it. An email-keyed invitation that has not resolved to an account is **not** an accepted connection and must not be counted as one.
 
+### Process deviations
+
+- **⚠️ `1e52c651` (the cross-user progress-read gate) was committed DIRECTLY to `releases/v0.90.0`, with no branch and no PR.** The project rule is that anything touching code goes through a branch and PR regardless of size; only release-management and small doc fixes may land directly on a release branch. **The cause is worth recording because it is repeatable:** merging PR #1133 moved the working checkout from the feature branch to the release branch, and the branch was not re-checked before the next `git add`. Checking once at the start of a work session is not sufficient — a merge can move the checkout underneath you.
+- **It was left in place rather than reverted and re-applied.** The change is small, tested and mutation-verified, and reverting it to re-land through a PR immediately before signoff would have added churn and risk to a release branch for a bookkeeping benefit. Recorded here instead, so the deviation is visible rather than silent.
+
 ### Known limitations
 
 - **⚠️ Suspended accounts still receive invitation mail.** Dropping the account lookup also dropped the `UserStatus.ACTIVE` filter, and **it cannot be restored without reopening the oracle** — branching on account state is exactly what was removed. The volume problem is now metered (see Shipped), but *who* may be mailed is no longer checkable by design. `JwtAuthenticationFilter` still rejects suspended accounts at login, so this is a mail-delivery cost, not an access one.
