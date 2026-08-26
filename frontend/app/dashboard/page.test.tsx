@@ -329,7 +329,60 @@ describe("DashboardPage profile variants", () => {
       "href",
       "/linked-learners/accepted-link/progress",
     );
-    expect(screen.getByText("Progress becomes available after the invitation is accepted.")).toBeInTheDocument();
+    // ⚠️ This PENDING row carries no birth-year or consent blocker, which since V122 can only be a
+    // LEGACY pre-migration row. The copy must stay neutral: claiming the invitation still needs
+    // accepting is false for every row written after the migration.
+    expect(screen.getByText("Connection not active yet")).toBeInTheDocument();
+    expect(screen.queryByText(/invitation pending/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Progress becomes available after the invitation is accepted."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("names the actual reason a supported connection is pending, per blocker", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Sup",
+      displayName: "Sup",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      profileType: "STUDENT",
+    });
+    (listNotes as jest.Mock).mockResolvedValue([]);
+    (getDashboardOverview as jest.Mock).mockResolvedValue({ ...overview, totalNoteCount: 0 });
+    const pendingLink = (id: string, name: string, overrides: Record<string, unknown>) => ({
+      id,
+      callerRole: "SUPPORTER",
+      initiatedBy: "SUPPORTER",
+      incomingInvitation: false,
+      counterpartyDisplayName: name,
+      counterpartyEmail: `${id}@example.com`,
+      status: "PENDING",
+      createdAt: "2026-08-19T00:00:00Z",
+      acceptedAt: null,
+      revokedAt: null,
+      birthYearRequired: false,
+      guardianConsentRequired: false,
+      guardianConsentRecorded: false,
+      ...overrides,
+    });
+    (getLinkedLearners as jest.Mock).mockResolvedValue([
+      pendingLink("year-link", "Year Learner", { birthYearRequired: true }),
+      pendingLink("consent-link", "Consent Learner", { guardianConsentRequired: true }),
+      pendingLink("recorded-link", "Recorded Learner", {
+        guardianConsentRequired: true,
+        guardianConsentRecorded: true,
+      }),
+    ]);
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("heading", { name: "People you support" })).toBeInTheDocument();
+    expect(screen.getByText("Waiting on the learner's birth year")).toBeInTheDocument();
+    expect(screen.getByText("Paused — guardian consent required")).toBeInTheDocument();
+    expect(screen.getByText("Guardian consent recorded")).toBeInTheDocument();
+    // ⚠️ None of these are waiting to be accepted — acceptance already happened.
+    expect(screen.queryByText(/invitation pending/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View progress" })).not.toBeInTheDocument();
   });
 
   it("renders the student dashboard with review-first sections", async () => {

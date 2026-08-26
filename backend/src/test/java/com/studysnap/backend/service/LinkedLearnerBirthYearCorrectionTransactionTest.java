@@ -92,6 +92,9 @@ class LinkedLearnerBirthYearCorrectionTransactionTest {
                 Timestamp.from(acceptedAt.toInstant()));
 
         when(userRepository.findById(learnerUserId)).thenAnswer(invocation -> Optional.of(readUser()));
+        // correctBirthYear now takes a PESSIMISTIC_WRITE read on the learner before deciding.
+        when(userRepository.findByIdForUpdate(learnerUserId))
+                .thenAnswer(invocation -> Optional.of(readUser()));
         when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> {
             UserEntity user = invocation.getArgument(0);
             jdbcTemplate.update("""
@@ -105,13 +108,12 @@ class LinkedLearnerBirthYearCorrectionTransactionTest {
         when(relationshipRepository.findByLearnerUserIdAndStatus(
                 learnerUserId, LinkedLearnerStatus.ACCEPTED)).thenAnswer(invocation -> List.of(readRelationship()));
         when(consentRepository.findByRelationshipId(relationshipId)).thenReturn(Optional.empty());
-        when(relationshipRepository.saveAll(any())).thenAnswer(invocation -> {
-            List<LinkedLearnerRelationshipEntity> relationships = invocation.getArgument(0);
-            LinkedLearnerRelationshipEntity relationship = relationships.getFirst();
-            jdbcTemplate.update("""
-                            update correction_relationships set status = ?, accepted_at = ? where id = ?
-                            """,
-                    relationship.getStatus().name(), relationship.getAcceptedAt(), relationship.getId());
+        // The pause is a CONDITIONAL update now, not saveAll. Same shape of proof: write the row,
+        // then fail, and assert the whole transaction unwound — including the birth year.
+        when(relationshipRepository.pauseAcceptedForConsent(relationshipId)).thenAnswer(invocation -> {
+            jdbcTemplate.update(
+                    "update correction_relationships set status = ?, accepted_at = null where id = ?",
+                    LinkedLearnerStatus.PENDING.name(), relationshipId);
             throw new IllegalStateException("forced failure after relationship write");
         });
     }
