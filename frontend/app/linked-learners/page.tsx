@@ -300,7 +300,15 @@ export default function LinkedLearnersPage() {
         </form>
       </Card>
 
-      {links.some((link) => link.callerRole === "LEARNER" && !link.birthYearRequired) ? (
+      {/*
+        ⚠️ An outgoing LEARNER invitation counts, not just an existing relationship. `invite` writes
+        the write-once account-global birth year and creates NO relationship row, so gating on
+        `links` alone hid this card for the entire life of an unaccepted invitation — up to the full
+        TTL, or forever if it is never accepted. That is precisely the flow v0.90.0 added, and the
+        release documents the learner-only correction path as the mitigation for it.
+      */}
+      {(links.some((link) => link.callerRole === "LEARNER" && !link.birthYearRequired)
+        || invitations.some((invitation) => !invitation.incoming && invitation.inviterRole === "LEARNER")) ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <div>
             <h2 className="text-lg font-semibold">Correct your birth year</h2>

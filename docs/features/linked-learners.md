@@ -28,7 +28,7 @@ Relationship state is safe under concurrent requests, and the mechanism is delib
 - **Status transitions are conditional updates**, never read-modify-save. Acceptance applies only while the row is still `PENDING`; revocation applies while it is `PENDING` **or** `ACCEPTED`, so revoking still wins when an acceptance committed first; and the correction's pause applies only while the row is `ACCEPTED`, so a revoke committing mid-correction is not resurrected.
 - Only one row is ever locked, and it is always the learner's, so no lock cycle exists.
 
-These five interleavings are pinned by `LinkedLearnerConcurrencyTest`, which runs two real transactions on two threads and asserts the persisted row rather than a returned DTO.
+These five interleavings are pinned by `LinkedLearnerConcurrencyTest`, which runs two real transactions on two threads, takes the **real** row lock, and asserts the persisted row rather than a returned DTO. **⚠️ Its harness must model two things at once — the lock AND Hibernate returning a stale managed entity.** Each earlier version modelled one and silently lost the other, in both directions; a harness that skips the lock leaves this whole mechanism uncovered while still reporting green.
 
 Live duplicate rows for the same supporter → learner direction are prevented by a partial unique index covering `PENDING` and `ACCEPTED`. `REVOKED` history does not block a fresh invitation. A database check and a service guard both prevent self-linking. Invitations carry their own partial unique index over inviter and address, active only while the invitation is `PENDING`.
 

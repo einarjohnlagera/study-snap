@@ -238,3 +238,19 @@ it("renders no name on an outgoing invitation even when the API supplies one", a
   expect(screen.getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
 });
+
+it("offers birth-year correction after a learner-initiated invite, before anyone has accepted", async () => {
+  // ⚠️ REGRESSION GUARD. invite() writes the write-once account-global birth year and creates NO
+  // relationship row, so gating this card on `links` alone hid it for the whole life of an
+  // unaccepted invitation — while RELEASES.md and the feature doc both name the learner-only
+  // correction path as the mitigation for exactly that write. Service permitted it; UI hid it.
+  (getLinkedLearners as jest.Mock).mockResolvedValue([]);
+  (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
+    id: "inv-9", incoming: false, inviterRole: "LEARNER",
+    invitedEmail: "supporter@example.com", inviterName: null, createdAt: "2026-08-26T00:00:00Z",
+  }]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByRole("heading", { name: "Correct your birth year" })).toBeInTheDocument();
+});
