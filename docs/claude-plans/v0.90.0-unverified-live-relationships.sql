@@ -1,5 +1,24 @@
 -- v0.90.0 — does the cross-user progress read need a verified-email gate?
 --
+-- ✅ RUN 2026-08-26. ALL THREE READS RETURNED ZERO ROWS.
+--
+-- ⚠️ Read 3 is the one that carries the meaning: it has no WHERE clause, so an empty result means
+-- linked_learner_relationships is EMPTY. Not "no unverified supporters among many relationships" —
+-- no relationships at all, of any status. Learning Connections shipped in v0.89.0 on 2026-08-19 and
+-- had formed zero connections seven days later. That is an early observation, not the verdict:
+-- [CHECKPOINT — due 2026-09-19] owns that question on a 30-day window.
+--
+-- DECISION TAKEN, and it DEPARTS from the pre-committed rule below — deliberately, and the reason
+-- is that the rule's factual premise turned out to be false. The rule said "0 rows -> leave the
+-- read ungated" BECAUSE gating would break working connections. Checking that premise: there are no
+-- connections to break, and emailVerifiedAt is MONOTONIC — no call site anywhere sets it to null,
+-- and an address change re-stamps it only after the new address is confirmed. So the cost of
+-- gating is zero today AND zero prospectively, which is not what the rule assumed.
+--
+-- The gate was therefore ADDED to LinkedLearnerProgressService.getProgress as defence in depth:
+-- redundant while every grant path is gated, and there precisely so that a future grant path which
+-- loses its gate does not silently open the product's only cross-user read as well.
+--
 -- Written 2026-08-26 during the second cold audit of `feat/invitation-integrity`. UNRUN.
 -- Run this BEFORE signoff; it decides one open question and nothing else.
 --

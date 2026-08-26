@@ -94,6 +94,8 @@ Notes remain private. The link is free metadata and does not pool, transfer or c
 
 The progress route is addressed only as `/linked-learners/{relationshipId}/progress`. It never accepts a learner user id. One shared authorization helper loads that relationship, verifies that the caller is its supporter, verifies that its status is exactly `ACCEPTED`, and returns the authorized learner id used by the aggregate services. A learner cannot use the route to read their supporter. A third party, a `PENDING` link, a `REVOKED` link and a missing relationship receive no data; revoked and missing relationships use the same not-found response.
 
+The caller must also have a **verified email**. That is redundant while every path granting an `ACCEPTED` relationship is itself gated, and it is deliberate: it means a future grant path that loses its gate cannot silently open this read too. It costs nothing, because `email_verified_at` is monotonic — nothing clears it, and an address change re-stamps it only once the new address is confirmed.
+
 Every request performs that authorization again. Revocation therefore cuts access immediately, with no cached view or grace period. The read is transactionally read-only and reuses the existing owner-scoped Dashboard, Progress and collection calculations with the authorized learner id. It creates no session, changes no `ConceptHealth`, progress timestamp, streak or engagement counter, and attributes no learner analytics event.
 
 ### What a supporter can see
