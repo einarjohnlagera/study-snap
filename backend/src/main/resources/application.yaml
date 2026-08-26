@@ -141,6 +141,12 @@ studysnap:
   linked-learners:
     # Conservative engineering default pending counsel; this is not a legal position.
     guardian-consent-max-age: ${GUARDIAN_CONSENT_MAX_AGE:17}
+    # An email-keyed invitation is a standing offer to whoever controls the address, so it lapses.
+    invitation-ttl-days: ${INVITATION_TTL_DAYS:30}
+    # Two keys on purpose: volume, and per-address so one victim cannot be hammered.
+    invites-per-window: ${INVITES_PER_WINDOW:20}
+    invites-per-address-per-window: ${INVITES_PER_ADDRESS_PER_WINDOW:3}
+    invite-rate-limit-window-hours: ${INVITE_RATE_LIMIT_WINDOW_HOURS:24}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}
     txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1}

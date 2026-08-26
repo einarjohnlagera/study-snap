@@ -48,6 +48,13 @@ public class LinkedLearnerInvitationEntity {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    /**
+     * When this invitation stops being acceptable. Explicit rather than derived from createdAt,
+     * because re-arming an expired invitation must not reset when the address was first invited.
+     */
+    @Column(name = "expires_at", nullable = false)
+    private OffsetDateTime expiresAt;
+
     @Column(name = "accepted_at")
     private OffsetDateTime acceptedAt;
 
