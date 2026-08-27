@@ -4,6 +4,15 @@ import com.studysnap.backend.entity.PlanType;
 
 import java.time.OffsetDateTime;
 
+/**
+ * Plan, limits and usage for the current user.
+ *
+ * <p>⚠️ The shorter convenience constructors on {@code Limits}, {@code Usage} and {@code Remaining}
+ * are TEST-ONLY fixtures. They pass {@code 0} for the quiz-share-link fields, and {@code 0} on a
+ * LIMIT reads as "no share links allowed" rather than "unknown" — a false disclosure, which is worse
+ * than a missing one on the very surface this DTO exists to make legible. Production must use the
+ * canonical constructors, as {@code MePlanService} does.
+ */
 public record MePlanResponse(
         PlanType plan,
         UsageCycle usageCycle,
