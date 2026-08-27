@@ -2137,7 +2137,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         type="button"
                         className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${visibilityChip(visibility)}`}
                         onClick={() => setVisibilityMenuOpen((open) => !open)}
-                        aria-haspopup="menu"
+                        // ⚠️ No aria-haspopup="menu" here. The panel below is a disclosure holding a
+                        // heading and a CHECKBOX LIST, and a checkbox list cannot live in a role="menu".
+                        // The wiring was dropped rather than completed: adding role="menu" would break the
+                        // checkboxes' semantics. aria-expanded alone is the correct contract. The note-actions
+                        // button further down is a real menu and keeps its aria-haspopup.
                         aria-expanded={visibilityMenuOpen}
                         disabled={togglingVisibility || !canManageVisibility}
                       >

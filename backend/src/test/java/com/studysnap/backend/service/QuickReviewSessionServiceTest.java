@@ -347,6 +347,51 @@ class QuickReviewSessionServiceTest {
     }
 
     @Test
+    void anAuthorizationFAULTDeniesTheRecipientRatherThanBeingTreatedAsNoPack() {
+        // ⚠️ Fail CLOSED where access is DECIDED. The surrounding recheck deliberately tolerates a pack it
+        // cannot READ — completing a session whose pack was deleted or corrupted has always succeeded, and
+        // the caller owns the session either way. But a fault raised while deciding whether a NON-OWNER may
+        // read shared material is not evidence of access; treating it as "no pack" let the recipient's write
+        // complete anyway. Same class as the v0.89.1 consent gate: unknown is not permission.
+        UUID recipientUserId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, recipientUserId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, ownerUserId, 0);
+        FeatureGateService featureGateService = new FeatureGateService(subscriptionService, new StudySnapProperties());
+        QuickReviewSessionService sharedSessionService = new QuickReviewSessionService(
+                quickReviewSessionRepository,
+                studyPackRepository,
+                activityEventRepository,
+                activityTrackingService,
+                analyticsService,
+                subscriptionService,
+                featureGateService,
+                conceptHealthService,
+                studyPackQuizMasteryService,
+                noteShareService
+        );
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, recipientUserId))
+                .thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, recipientUserId))
+                .thenReturn(Optional.empty());
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+        // NOT an AppException — a driver-level fault, which used to be logged and waved through.
+        org.mockito.Mockito.doThrow(new IllegalStateException("driver fault"))
+                .when(noteShareService).requireSharedStudyPackAccess(recipientUserId, studyPackId);
+
+        QuickReviewSessionCompleteRequest request =
+                new QuickReviewSessionCompleteRequest(1, 1, 0, 60, null);
+        String sessionIdRaw = sessionId.toString();
+
+        assertThatThrownBy(() -> sharedSessionService.completeSession(sessionIdRaw, recipientUserId, request))
+                .isInstanceOf(SharedNoteNotFoundException.class);
+
+        verifyNoInteractions(conceptHealthService);
+    }
+
+    @Test
     void completeSharedSessionWritesLearningStateForTheRecipientOnly() {
         UUID recipientUserId = UUID.randomUUID();
         UUID ownerUserId = UUID.randomUUID();

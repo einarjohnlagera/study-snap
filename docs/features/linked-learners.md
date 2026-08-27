@@ -175,6 +175,18 @@ answer rather than being hidden.
 
 ## Phase 3 supporter progress read
 
+**The owner-facing share listing is relationship-aware.** `GET /notes/{id}/shares` returns only live shares whose
+relationship is still `ACCEPTED`, matching what `PUT` will accept. Filtering on `revoked_at` alone kept a lapsed
+connection listed and made a round-tripped list fail validation. **⚠️ The diff source inside `PUT` stays
+unfiltered** — it must see the true live set, or removing a lapsed recipient would never revoke their row and
+re-adding them would collide on `ux_note_shares_live`.
+
+**Authorization faults deny; unreadable material does not.** A recipient's mid-session access recheck tolerates a
+Study Pack it cannot *read* — completing a session whose pack was deleted or corrupted has always succeeded, and
+the caller owns the session regardless. But a fault raised while *deciding* whether a non-owner may read shared
+material is not evidence of access, so it denies. Unknown is not permission, the same rule the `v0.89.1` consent
+gate applies.
+
 The progress route is addressed only as `/linked-learners/{relationshipId}/progress`. It never accepts a learner user id. One shared authorization helper loads that relationship, verifies that the caller is its supporter, verifies that its status is exactly `ACCEPTED`, and returns the authorized learner id used by the aggregate services. A learner cannot use the route to read their supporter. A third party, a `PENDING` link, a `REVOKED` link and a missing relationship receive no data; revoked and missing relationships use the same not-found response.
 
 The caller must also have a **verified email**. That is redundant while every path granting an `ACCEPTED` relationship is itself gated, and it is deliberate: it means a future grant path that loses its gate cannot silently open this read too. It costs nothing, because `email_verified_at` is monotonic — nothing clears it, and an address change re-stamps it only once the new address is confirmed.

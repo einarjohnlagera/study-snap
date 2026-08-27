@@ -177,6 +177,26 @@ owner after a survey of carried limitations; the pre-declared cold-agent pressur
   shows both meters and warns when links are exhausted without blocking generation; enforcement remains solely
   at link creation and no quota or counter changed.
 
+- **Folded items 6–10: the Help Center, two carried `v0.91.0` limitations, and a defect this release created.**
+  **⚠️ `learning-connections-guide.tsx:8` told the next agent that activity sharing "is NOT built" — Phase 2 had
+  just built it.** That instruction outlived the feature by one release and would have kept the capability
+  undocumented; it lives in a `.tsx` file, so the `docs/features/` re-read pass could never have caught it. The
+  guide now has an activity-sharing section (Phase 2 shipped into the same discoverability hole `v0.91.0` named),
+  and its share-link numbers come from `pricing-config.ts` instead of being retyped.
+- **`GET /notes/{id}/shares` no longer lists a recipient who can no longer read.** It now requires the
+  relationship to be `ACCEPTED`, matching `PUT`. **⚠️ The diff source inside `PUT` was deliberately left
+  unfiltered and is now commented as such** — filtering it would hide a lapsed row from the revoke set, so
+  removing that recipient would never revoke them and re-adding them would collide on `ux_note_shares_live`.
+- **`recheckMaterialAccess` fails CLOSED where access is decided.** The fix is asymmetric, and that is the whole
+  point: a fault *reading* a pack is still tolerated (completing a session whose pack was deleted has always
+  succeeded, and the caller owns the session), while a fault raised *inside the authorization call* now denies.
+  Same rule as `requireGrant`'s unknown-birth-year branch this release. **⚠️ Escalated to the owner rather than
+  folded silently**, because narrowing that catch trades one failure for another.
+- **The note-access dropdown's `aria-haspopup="menu"` wiring was dropped, not completed.** The panel holds a
+  checkbox list, which cannot live in a `role="menu"`; `aria-expanded` alone is the correct contract. The
+  note-actions button beside it is a real menu and keeps its `aria-haspopup`.
+
+
 ### Known limitations
 
 - **⚠️ The grant table's idempotency and re-arm behaviour is verified EMPIRICALLY, not by an automated test.**
@@ -277,7 +297,8 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
 **Found by the cold-context pre-signoff pressure test (two agents, 2026-08-27). Everything below was verified
 against code; the blocking finding and six others were FIXED in the signoff, and these are what remains.**
 
-- **⚠️ `GET /notes/{id}/shares` can list a recipient who can no longer read the note.** The listing filters on
+- **~~⚠️ `GET /notes/{id}/shares` can list a recipient who can no longer read the note.~~ CLOSED in `v0.92.0`
+  (folded item 7).** The listing filtered on
   `revoked_at IS NULL` only, with no join to relationship status, while `PUT` requires every id to be `ACCEPTED`.
   If a connection lapses to `PENDING` (a birth-year correction) or `REVOKED`, the share row stays live and the
   owner still sees that person listed. **The over-reporting direction is the safe one** — it claims more sharing
@@ -294,14 +315,14 @@ against code; the blocking finding and six others were FIXED in the signoff, and
   share and the `ACCEPTED` relationship but not those cross-references. **Not exploitable today**: every path
   that creates or reassigns a pack keeps `study_packs.owner_user_id` consistent with `notes.owner_user_id`. It
   is recorded because that consistency is an assumption, not an enforced constraint.
-- **⚠️ `recheckMaterialAccess` fails OPEN on a non-`AppException` fault.** Its broad catch exists so a corrupt
+- **~~⚠️ `recheckMaterialAccess` fails OPEN on a non-`AppException` fault.~~ CLOSED in `v0.92.0` (folded item 9).** Its broad catch exists so a corrupt
   or unreadable pack cannot strand a learner's own session, and every deliberate denial extends `AppException`
   and is rethrown — verified by walking the whole call chain. But a driver-level fault or an unmappable
   relationship status raised *inside* the authorization call would be logged and treated as "no pack", and the
   recipient's write would complete.
-- **The Help Center's plan numbers are hardcoded copy.** The share-link limits in the Helping Someone Learn
+- **~~The Help Center's plan numbers are hardcoded copy.~~ CLOSED in `v0.92.0` (folded item 6).** The share-link limits in the Helping Someone Learn
   section duplicate values that live in `pricing-config.ts`. Correct today; they will drift.
-- **The note-access dropdown declares `aria-haspopup="menu"` without `role="menu"` on the panel.** Pre-existing,
+- **~~The note-access dropdown declares `aria-haspopup="menu"` without `role="menu"` on the panel.~~ CLOSED in `v0.92.0` (folded item 8).** Pre-existing,
   newly aggravated: this release put a checkbox list inside that panel, and a checkbox list cannot live in a
   menu. The wiring should be dropped rather than completed.
 

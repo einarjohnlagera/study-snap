@@ -15,6 +15,29 @@ import java.util.UUID;
 public interface NoteShareRepository extends JpaRepository<NoteShareEntity, UUID> {
     List<NoteShareEntity> findByNoteIdAndRevokedAtIsNullOrderByCreatedAtAsc(UUID noteId);
 
+    /**
+     * Live shares whose relationship is still {@code ACCEPTED}.
+     *
+     * <p>⚠️ The plain live-row lookup above is NOT enough for the owner-facing listing. It filters on
+     * {@code revoked_at IS NULL} only, while {@code PUT /notes/&#123;id&#125;/shares} requires every id to be
+     * {@code ACCEPTED} — so a connection that lapsed to {@code PENDING} (a `v0.89.1` birth-year correction) or
+     * {@code REVOKED} stayed listed, and round-tripping that list back through {@code PUT} was rejected. The
+     * recipient's own reads were already denied, so this over-reported rather than leaking; the defect is that
+     * the two endpoints disagreed about a valid share set.
+     */
+    @Query("""
+            select share from NoteShareEntity share
+             where share.noteId = :noteId
+               and share.revokedAt is null
+               and exists (
+                   select 1 from LinkedLearnerRelationshipEntity relationship
+                    where relationship.id = share.relationshipId
+                      and relationship.status = com.studysnap.backend.entity.LinkedLearnerStatus.ACCEPTED
+               )
+             order by share.createdAt asc
+            """)
+    List<NoteShareEntity> findLiveAcceptedByNoteIdOrderByCreatedAtAsc(@Param("noteId") UUID noteId);
+
     Optional<NoteShareEntity> findFirstByNoteIdAndGranteeUserIdAndRevokedAtIsNull(
             UUID noteId,
             UUID granteeUserId

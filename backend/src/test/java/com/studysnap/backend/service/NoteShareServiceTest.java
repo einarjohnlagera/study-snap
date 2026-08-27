@@ -71,6 +71,32 @@ class NoteShareServiceTest {
     }
 
     @Test
+    void listSharesHidesARecipientWhoseRelationshipIsNoLongerAccepted() {
+        // ⚠️ The listing must agree with PUT about what a valid share is. It filtered on revoked_at
+        // alone, so a connection that lapsed to PENDING (a v0.89.1 birth-year correction) or REVOKED
+        // stayed listed — and round-tripping that list through PUT was then rejected. The recipient's
+        // own reads were already denied, so this over-reported rather than leaked.
+        when(noteRepository.findByIdAndOwnerUserId(NOTE_ID, OWNER_ID)).thenReturn(Optional.of(note()));
+        when(noteShareRepository.findLiveAcceptedByNoteIdOrderByCreatedAtAsc(NOTE_ID))
+                .thenReturn(List.of());
+
+        assertThat(service.listShares(OWNER_ID, NOTE_ID.toString())).isEmpty();
+        // The unfiltered lookup must not be what the owner-facing listing reads.
+        verify(noteShareRepository, never()).findByNoteIdAndRevokedAtIsNullOrderByCreatedAtAsc(NOTE_ID);
+    }
+
+    @Test
+    void listSharesReturnsARecipientWhoseRelationshipIsStillAccepted() {
+        when(noteRepository.findByIdAndOwnerUserId(NOTE_ID, OWNER_ID)).thenReturn(Optional.of(note()));
+        when(noteShareRepository.findLiveAcceptedByNoteIdOrderByCreatedAtAsc(NOTE_ID))
+                .thenReturn(List.of(share()));
+        when(userRepository.findAllById(Set.of(GRANTEE_ID)))
+                .thenReturn(List.of(user(GRANTEE_ID, "Maria Santos", "maria@example.com")));
+
+        assertThat(service.listShares(OWNER_ID, NOTE_ID.toString())).hasSize(1);
+    }
+
+    @Test
     void replaceSharesIsIdempotentForTheSameDesiredState() {
         NoteEntity note = note();
         NoteShareEntity share = share();
@@ -78,7 +104,11 @@ class NoteShareServiceTest {
         UserEntity grantee = user(GRANTEE_ID, "Maria Santos", "maria@example.com");
         when(noteRepository.findByIdAndOwnerUserId(NOTE_ID, OWNER_ID)).thenReturn(Optional.of(note));
         when(relationshipRepository.findAllById(Set.of(RELATIONSHIP_ID))).thenReturn(List.of(relationship));
+        // The diff source stays unfiltered on purpose — it must see the TRUE live set so a lapsed row
+        // can still be revoked. The RESPONSE is relationship-aware, hence both stubs.
         when(noteShareRepository.findByNoteIdAndRevokedAtIsNullOrderByCreatedAtAsc(NOTE_ID))
+                .thenReturn(List.of(share));
+        when(noteShareRepository.findLiveAcceptedByNoteIdOrderByCreatedAtAsc(NOTE_ID))
                 .thenReturn(List.of(share));
         when(userRepository.findAllById(Set.of(GRANTEE_ID))).thenReturn(List.of(grantee));
 
