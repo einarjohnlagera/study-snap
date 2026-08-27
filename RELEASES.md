@@ -1,5 +1,151 @@
 # RELEASES.md - NoteLib
 
+## v0.93.0 - Progress Refinement
+
+**Status: In progress** (kicked off 2026-08-27)
+
+Theme: an accepted connection stops implying that someone can see your progress — the learner decides, per
+scope and per direction, and the product's only cross-user read finally asks.
+
+### Why this release exists
+
+**Phase 3 of the ratified Learning Connections direction** (`docs/claude-plans/learning-connections-phase-plan.md`,
+§13). `v0.92.0` shipped the permission substrate and used exactly one of its two scopes. Phase 3 uses the other.
+
+**⚠️ The justification is a finding `v0.92.0`'s own cold-agent pressure test recorded and was FORBIDDEN to fix**,
+because that release's anti-drift list reserved the helper for this one:
+
+> `LinkedLearnerProgressService.getProgress` gates on `requireAcceptedLearnerId` alone — **no grant check** — and
+> returns `dashboardService.getStudyEngagement(learnerUserId)` verbatim: the **identical four fields**
+> (`engagementMode`, `currentStreak`, `longestStreak`, `studyDaysThisWeek`) that `v0.92.0` put behind a grant, plus
+> a superset (mastery snapshot, readiness counts, collection progress). So a learner who never enables *Share my
+> study activity*, or who disables it, still has their streak and study days visible to a supporter via
+> `/progress`.
+
+Re-verified against code at this kickoff: `LinkedLearnerReadAuthorizationService:20-25` is one `ACCEPTED` check
+plus one `caller == supporter` check, and that is the entire gate on the product's only cross-user read. **The
+Phase 2 activity toggle is therefore a real control that does not bound what a supporter sees.** This release
+closes it. That defect is **not** a `v0.92.0` regression — `LinkedLearnerProgressService` is unchanged `v0.89.0`
+code — and it is the strongest argument for doing Phase 3 next rather than any other candidate.
+
+### Planned Scope
+
+- **1. `PROGRESS` grants in use (backend).** `PUT /linked-learners/{relationshipId}/grants/progress`, with
+  `LinkedLearnerGrantService` scope-parameterized behind both paths. `LinkedLearnerResponse` gains
+  `progressSharedByMe` / `progressSharedWithMe`, mirroring the activity pair. **⚠️ NO MIGRATION** — `V125` already
+  ships `scope IN ('ACTIVITY','PROGRESS')`, which is the whole reason Phase 2 shipped both values.
+  **⚠️ `PUT /grants/activity` is a live contract and must keep working** — progress is a sibling, not a rename.
+- **2. `requireAcceptedLearnerId` reimplemented over `requireGrant(caller, relationshipId, PROGRESS)` (backend).**
+  The one change `v0.92.0`'s anti-drift list explicitly reserved for this release.
+  **⚠️ THE READ STAYS UNIDIRECTIONAL, AND THIS IS THE TRAP IN THE REIMPLEMENTATION.** `requireGrant` returns
+  `resolveOtherParty(...)` — which is the **supporter** when the caller is a learner. A thin passthrough would
+  therefore not *raise* the directionality question, it would silently *answer* it: `getProgress` would feed that
+  id into `getMasterySnapshot`, `getProgressReport` and `noteCollectionService.list`, so **a learner holding a
+  `PROGRESS` grant would read their supporter's mastery**, with `resolveDisplayName(learner)` mislabelling the
+  payload. §4's per-direction table describes the **grant row** — which `V125` already stores per direction,
+  correctly — and says nothing about the endpoint serving both directions. **Keep the caller-is-supporter
+  assertion explicit in the reimplemented helper**; do not let `requireGrant`'s symmetry decide it. The test that
+  pins this: a learner calling `/progress` on their own relationship gets 404, grant or no grant.
+- **3. Permission UI (frontend + backend). ⚠️ DECIDED AT KICKOFF: the progress toggle renders on the LEARNER
+  side only, and the endpoint enforces it.** Item 2 keeps the read unidirectional, so a `PROGRESS` grant written
+  `supporter → learner` is a row **nothing can ever consume** — it would render a toggle that shares nothing, and
+  make the learner's DTO report `progressSharedWithMe: true` for a link that 404s on click. A dead toggle is worse
+  than an absent one. So: **granting `PROGRESS` requires the caller to be the relationship's learner**; a
+  supporter's attempt is rejected, and the table never holds an unconsumable progress row. *Activity is mutual;
+  progress runs learner → supporter* — that asymmetry is the release's legible sentence, not an oversight.
+  With that enforced, **`progressSharedWithMe` can only ever be true for a supporter**, so ***View progress* gates
+  on `progressSharedWithMe` alone** and needs no `callerRole` clause — role stops being the access rule on this
+  surface without leaving a residual role check for the next agent to delete or misread. The learner's panel gains
+  the caller-owned *Share my study progress* toggle; the supporter's gains the read-only counterparty line.
+- **4. Phase 3 analytics — a progress grant → view funnel (backend + frontend).**
+  `CONNECTION_PROGRESS_SHARED`, `CONNECTION_PROGRESS_SHARE_REVOKED`, `CONNECTION_PROGRESS_VIEWED`, mirroring
+  Phase 2's three events and its rules: enum first, relationship-scoped, idempotent no-ops and denied reads emit
+  nothing, and an analytics fault can never fail or roll back the product action.
+- **5. Two carried `v0.92.0` limitations — and the first is now BLOCKING, not inert (backend).**
+  `toResponse` computes both grant fields filtering on `revoked_at IS NULL` with **no relationship-status
+  filter**. `v0.92.0` recorded it as inert on two premises, and **Phase 3 breaks both**: the DTO becomes what the
+  UI derives access from (item 3), and the reachable case is not the terminal `REVOKED` but **`PENDING`** —
+  `setActivityGrant`'s own comment documents that a `v0.89.1` birth-year correction pauses `ACCEPTED → PENDING`
+  and that **the live grant row survives the pause by design**. So a paused relationship reports sharing today.
+  **⚠️ DECIDED AT KICKOFF, because the filter has a DIRECTION and adding it blindly just inverts the lie.** The
+  row surviving a pause is load-bearing and documented — withdrawal must never require a status the learner does
+  not control — so filtering both fields on `ACCEPTED` would make a learner's own toggle read OFF while the row is
+  live, and sharing would then silently resume on re-acceptance. The two fields mean different things and get
+  different rules: **`*SharedByMe` reflects the ROW** (it is the caller's own standing act of sharing, and it is
+  what will resume), while **`*SharedWithMe` reflects ACTUAL ACCESS and filters on `ACCEPTED`** — it is the field
+  the view affordance gates on, so it must answer what the server would answer. **A paused relationship renders as
+  paused, not as off**, reusing the existing `PENDING` status copy rather than a new state.
+  Second: `setActivityGrant` reads the relationship with a plain `findById` and no row lock, unlike `accept()`
+  and `correctBirthYear()`; give the grant write the same locking read.
+- **6. Help Center — the Phase 3 instruction that is about to expire (frontend). ⚠️ PRE-DECLARED AT KICKOFF.**
+  `learning-connections-guide.tsx:8` currently instructs, verbatim, that per-scope `PROGRESS` permissions *"are
+  still Phase 3 and are NOT built: do not describe a setting that decides what a connection can see beyond
+  choosing who to share a note with and whether to share your activity."* This release builds exactly that.
+  **This is the same defect `v0.92.0` created and then fixed as its own item 6** — a doc-comment in a `.tsx` file
+  that outlives the feature by one release, which the `docs/features/` re-read pass structurally cannot catch.
+  Naming it at kickoff is how it is prevented from happening twice.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ THE BREAKING SEMANTIC, STATED PLAINLY: after this release an `ACCEPTED` relationship no longer implies
+  progress access.** That is the point of the release, not a side effect. Every surface, doc and test that assumes
+  acceptance is sufficient must be found and corrected.
+- **⚠️ NO BACKFILL MIGRATION granting `PROGRESS` to existing `ACCEPTED` relationships.**
+  `linked_learner_relationships` was empty in production on 2026-08-26, so a backfill would be free — it is
+  forbidden anyway, because it converts an implicit rule into explicit consent nobody gave. §9 of the plan makes
+  the same point in reverse: acting now is what avoids that debt.
+- **⚠️ NO MIGRATION AT ALL, and no new scope value.** `V125` ships both.
+- **⚠️ PROGRESS CONTENT IS UNCHANGED.** Mastery snapshot, readiness counts, quiz performance and collection
+  progress stay exactly as `v0.89.0` shipped them. This release **permissions an existing payload**; it does not
+  widen it, narrow it, or add a field. Phase 5's items stay out (below).
+- **⚠️ The read is UNIDIRECTIONAL — see scope item 2.** Bidirectional progress is a new capability needing its own
+  decision, not a free consequence of `requireGrant`'s symmetry.
+- **⚠️ Preserve the endpoint's error contract.** `requireGrant` throws `LinkedLearnerNotFoundException`
+  (`LINKED_LEARNER_NOT_FOUND`) while the progress path throws `LinkedLearnerProgressNotFoundException`
+  (`LINKED_LEARNER_PROGRESS_NOT_FOUND`). Both are 404, but the **code differs**, and a frontend keyed on it must
+  not silently change behaviour.
+- **⚠️ Keep `getProgress`'s outer `requireEmailVerified` call AND its comment.** `requireGrant` also verifies, but
+  that outer call carries a documented defence-in-depth rationale — deleting it as duplication would delete the
+  reasoning, not just the line.
+- **⚠️ Guardian consent stays re-asserted inside the grant check**, and it is asymmetric by design: it gates the
+  learner's data. A consent lapse must cut progress as well as activity.
+- **⚠️ Every read re-verifies `ACCEPTED`** — no cache, no grace. A relationship revoke, a grant revoke, and a
+  `v0.89.1` birth-year correction (`ACCEPTED` → `PENDING`) must each cut progress access immediately.
+- **⚠️ Absence of a live grant means NO ACCESS.** Unchanged from Phase 2; now applied to the older read.
+- **⚠️ Sharing is DIRECTIONAL and never reciprocal by default.** Activity ON does not imply progress ON, and a
+  grant in one direction never implies its mirror. **Activity is mutual; progress is learner → supporter only**
+  (scope item 3), so the representable states per relationship are activity-by-me, activity-with-me, and progress
+  in the one direction the read can consume — each independent, each rendering correctly on both sides.
+- **⚠️ THE PRIVACY LINE IS UNCHANGED AND ABSOLUTE: a supporter sees readiness, progress and quiz performance,
+  NEVER the learner's notes.**
+- **⚠️ No relationship-type column** (`GUARDIAN | TUTOR | PARTNER`) — permissions define the relationship.
+- **⚠️ No new profile type and nothing gated on `ProfileType`.**
+- **⚠️ Do NOT change what `linked_learner_relationships`, `_invitations` or `_guardian_consents` mean** —
+  `[CHECKPOINT — due 2026-09-19]` and `[CHECKPOINT — due 2026-10-13]` read those tables.
+- **⚠️ `NoteVisibility` stays `PRIVATE | PUBLIC`.**
+- **⚠️ No endpoint accepts a learner user id.** Authorization keys on the relationship, never on a supplied id.
+- **⚠️ Explicitly OUT OF SCOPE, each needing its own decision (Phase 5): mastery comparison between people,
+  scores, leaderboards, activity rings, social feed, reactions, public people search.** Phase 4 (shareable
+  invitation links, supporter onboarding, connection management) is the next release, not this one.
+- **⚠️ PHASES ARE SEQUENCED, NOT EVIDENCE-GATED (owner, 2026-08-27).** Adoption may still be zero. That is not a
+  reason to gate Phase 3 — the owner has ruled on this three times — but it is a reason not to describe Phase 3's
+  value as proven.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: FULL cold-agent test.** Decided now, on a shape already known: this release touches
+  shared authorization code, uses the permission substrate a previous release built, and **flips the product's
+  only cross-user read from a role check to a permission check**. Agents start cold, spawned with no inherited
+  context, and are told to read the real code rather than any summary written by the session spawning them.
+- **The `### Planned Scope` heading above is permanent.** Delivery appends to `### Shipped` beneath it and must
+  never rename or overwrite the scope list. At signoff the completeness gate reads the list **from this file**.
+- **A `[CHECKPOINT]` row is owed at signoff**, and its content is pre-declared: Phase 3 changes the progress
+  surface **inside `[CHECKPOINT — due 2026-09-26]`'s window**, so that row needs the deploy-split caveat §14
+  required for `2026-09-19` — noted before the read runs, not discovered afterwards.
+
+### Shipped
+
+
 ## v0.92.0 - Activity Sharing
 
 **Status: Released** (kicked off and signed off 2026-08-27)
