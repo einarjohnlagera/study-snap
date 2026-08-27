@@ -16,6 +16,7 @@ import { CourseProgramsViewer } from "@/components/metadata/course-programs-view
 import { ApplicableProgramsProvenance } from "@/components/metadata/applicable-programs-provenance";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
+import { NoteRecipientPicker } from "@/components/notes/note-recipient-picker";
 import { NoteDetailSummaryCard } from "@/components/notes/note-detail-summary-card";
 import { ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
@@ -59,6 +60,7 @@ import {
   getChallengeQuizPerformanceSummary,
   getMyStudyPack,
   getNote,
+  getNoteShares,
   getNoteApplicablePrograms,
   getQuickReviewPerformanceSummary,
   isEmailNotVerifiedError,
@@ -66,6 +68,7 @@ import {
   listCoursePrograms,
   listRecentQuizSessions,
   listSubjects,
+  replaceNoteShares,
   trackAnalyticsEvent,
   startQuickReviewSession,
   updateNote,
@@ -76,6 +79,7 @@ import {
   type DomainContext,
   type LearnerLevel,
   type NoteResponse,
+  type NoteShareResponse,
   type NoteStudyPackStatus,
   type NoteVisibility,
   type SubjectProgressEntry,
@@ -445,6 +449,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [deleting, setDeleting] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [togglingVisibility, setTogglingVisibility] = useState(false);
+  const [noteShares, setNoteShares] = useState<NoteShareResponse[]>([]);
+  const [sharesLoadState, setSharesLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [updatingShares, setUpdatingShares] = useState(false);
+  const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
+  const [showPrivateRevokeConfirm, setShowPrivateRevokeConfirm] = useState(false);
   const [savingMetadata, setSavingMetadata] = useState(false);
 
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
@@ -546,6 +555,19 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     latestSearchQueryRef.current = searchParams.toString();
   }, [searchParams]);
 
+  const loadShares = useCallback(async () => {
+    if (!normalizedRouteId) {
+      return;
+    }
+    setSharesLoadState("loading");
+    try {
+      setNoteShares(await getNoteShares(normalizedRouteId));
+      setSharesLoadState("ready");
+    } catch {
+      setSharesLoadState("error");
+    }
+  }, [normalizedRouteId]);
+
   const loadDetail = useCallback(async () => {
     if (!normalizedRouteId) {
       setError("Note not found.");
@@ -561,6 +583,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     try {
       const loadedNote = await getNote(normalizedRouteId);
       setNote(loadedNote);
+      void loadShares();
       // Re-arm the ref when returning to a still-generating note so the polling effect
       // can trigger the suggestion modal once the Study Pack completes.
       if (loadedNote.studyPackStatus === "GENERATING" && globalThis.sessionStorage?.getItem(`notelib-awaiting-suggestion:${loadedNote.id}`) === "1") {
@@ -601,7 +624,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setLoading(false);
     }
-  }, [maybeShowGeneratedMetadataSuggestion, normalizedRouteId, pathname, profileType, router]);
+  }, [loadShares, maybeShowGeneratedMetadataSuggestion, normalizedRouteId, pathname, profileType, router]);
 
   useEffect(() => {
     void loadDetail();
@@ -985,6 +1008,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, [courseProgramLabel, selectedProgramNames]);
   const visibility = (note?.visibility ?? "PRIVATE");
   const isPublic = visibility === "PUBLIC";
+  const accessLabel = isPublic ? "Public" : noteShares.length > 0 ? "Shared" : "Private";
+  const accessAction = isPublic ? "public" : noteShares.length > 0 ? "share" : "private";
+  const revokeSharesDescription = noteShares.length === 1
+    ? `${noteShares[0]?.granteeDisplayName ?? "This person"} will lose access to this note.`
+    : `${noteShares[0]?.granteeDisplayName ?? "This person"} and ${Math.max(0, noteShares.length - 1)} others will lose access to this note.`;
   const canManageVisibility = isEmailVerified || isPublic;
   const hasAdaptiveTargets = (challengeSummary?.latestWeakConcepts?.length ?? 0) > 0;
   const hasCopyAttribution = Boolean(note?.copiedFromUserId && note?.copiedFromNoteId);
@@ -1429,6 +1457,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const handleSelectVisibility = (nextVisibility: NoteVisibility) => {
     if (nextVisibility === visibility || togglingVisibility) {
+      if (nextVisibility === "PRIVATE" && noteShares.length > 0) {
+        setVisibilityMenuOpen(false);
+        setShowPrivateRevokeConfirm(true);
+        return;
+      }
       setVisibilityMenuOpen(false);
       return;
     }
@@ -1442,7 +1475,65 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setShowMakePublicConfirm(true);
       return;
     }
+    if (noteShares.length > 0) {
+      setVisibilityMenuOpen(false);
+      setShowPrivateRevokeConfirm(true);
+      return;
+    }
     void performVisibilityUpdate("PRIVATE");
+  };
+
+  const handleSelectShareWithConnections = async () => {
+    if (sharesLoadState !== "ready" || togglingVisibility) {
+      return;
+    }
+    if (visibility === "PUBLIC") {
+      const updated = await performVisibilityUpdate("PRIVATE", { silentSuccessToast: true });
+      if (!updated) {
+        return;
+      }
+    }
+    setRecipientPickerOpen(true);
+    setVisibilityMenuOpen(true);
+  };
+
+  const handleRecipientSelectionChange = async (relationshipIds: string[]) => {
+    if (!note || updatingShares) {
+      return;
+    }
+    setUpdatingShares(true);
+    try {
+      const persisted = await replaceNoteShares(note.id, relationshipIds);
+      setNoteShares(persisted);
+      setToast(persisted.length > 0 ? "Note sharing updated." : "This note is private again.");
+    } catch {
+      setToast("Sharing did not change. Please try again.");
+      setToastTone("warning");
+    } finally {
+      setUpdatingShares(false);
+    }
+  };
+
+  const handleRevokeAllShares = async () => {
+    if (!note || updatingShares) {
+      return;
+    }
+    setUpdatingShares(true);
+    try {
+      const persisted = await replaceNoteShares(note.id, []);
+      setNoteShares(persisted);
+      if (visibility !== "PRIVATE") {
+        await performVisibilityUpdate("PRIVATE", { silentSuccessToast: true });
+      }
+      setShowPrivateRevokeConfirm(false);
+      setRecipientPickerOpen(false);
+      setToast("This note is now private. Shared access was removed.");
+    } catch {
+      setToast("Sharing did not change. Please try again.");
+      setToastTone("warning");
+    } finally {
+      setUpdatingShares(false);
+    }
   };
 
   const handleEdit = () => {
@@ -1985,7 +2076,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </span>
                   {isInlineMetadataEditMode ? (
                     <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${visibilityChip(visibility)}`}>
-                      <ResponsiveActionContent action={visibility === "PUBLIC" ? "public" : "private"} label={visibility === "PUBLIC" ? "Public" : "Private"} showTextOnMobile iconClassName="h-3.5 w-3.5" />
+                      <ResponsiveActionContent action={accessAction} label={accessLabel} showTextOnMobile iconClassName="h-3.5 w-3.5" />
                     </span>
                   ) : (
                     <div className="relative" ref={visibilityMenuRef}>
@@ -1997,11 +2088,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         aria-expanded={visibilityMenuOpen}
                         disabled={togglingVisibility || !canManageVisibility}
                       >
-                        <ResponsiveActionContent action={visibility === "PUBLIC" ? "public" : "private"} label={visibility === "PUBLIC" ? "Public" : "Private"} showTextOnMobile iconClassName="h-3.5 w-3.5" />
+                        <ResponsiveActionContent action={accessAction} label={accessLabel} showTextOnMobile iconClassName="h-3.5 w-3.5" />
                         <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                       {visibilityMenuOpen ? (
                         <div className="motion-dropdown-panel absolute left-0 top-8 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
+                          <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-foreground/55">
+                            Who can access this note?
+                          </p>
                           <button
                             type="button"
                             className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-highlight active:bg-highlight-strong"
@@ -2010,8 +2104,38 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                             <p className="text-sm font-medium">
                               <ResponsiveActionContent action="private" label="Private" showTextOnMobile />
                             </p>
-                            <p className="text-xs text-foreground/70">Only visible in Library</p>
+                            <p className="text-xs text-foreground/70">Only you</p>
                           </button>
+                          <button
+                            type="button"
+                            className={`w-full rounded px-3 py-2 text-left transition-colors hover:bg-highlight active:bg-highlight-strong ${sharesLoadState !== "ready" ? "cursor-not-allowed opacity-60" : ""}`}
+                            onClick={() => void handleSelectShareWithConnections()}
+                            disabled={sharesLoadState !== "ready"}
+                          >
+                            <p className="text-sm font-medium">
+                              <ResponsiveActionContent action="share" label="Share with connections" showTextOnMobile />
+                            </p>
+                            <p className="text-xs text-foreground/70">Choose people</p>
+                          </button>
+                          {recipientPickerOpen && sharesLoadState === "ready" ? (
+                            <NoteRecipientPicker
+                              selectedRelationshipIds={noteShares.map((share) => share.relationshipId)}
+                              disabled={updatingShares}
+                              onChange={(relationshipIds) => void handleRecipientSelectionChange(relationshipIds)}
+                            />
+                          ) : null}
+                          {sharesLoadState === "error" ? (
+                            <div className="space-y-2 px-3 py-2">
+                              <p className="text-xs text-red-700 dark:text-red-300">Sharing is unavailable right now.</p>
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
+                                onClick={() => void loadShares()}
+                              >
+                                Retry
+                              </button>
+                            </div>
+                          ) : null}
                           <button
                             type="button"
                             className={`w-full rounded px-3 py-2 text-left transition-colors hover:bg-highlight active:bg-highlight-strong ${!isEmailVerified ? "cursor-not-allowed opacity-60" : ""}`}
@@ -2021,7 +2145,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                             <p className="text-sm font-medium">
                               <ResponsiveActionContent action="public" label="Public" showTextOnMobile />
                             </p>
-                            <p className="text-xs text-foreground/70">Visible in Public Library</p>
+                            <p className="text-xs text-foreground/70">Discoverable in Explore</p>
                           </button>
                         </div>
                       ) : null}
@@ -2832,9 +2956,35 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       />
 
       <AppModal
+        isOpen={showPrivateRevokeConfirm}
+        title="Make this note private?"
+        description={revokeSharesDescription}
+        onClose={() => {
+          if (!updatingShares) {
+            setShowPrivateRevokeConfirm(false);
+          }
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowPrivateRevokeConfirm(false)}
+              disabled={updatingShares}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void handleRevokeAllShares()} disabled={updatingShares}>
+              {updatingShares ? "Updating..." : "Make Private"}
+            </Button>
+          </div>
+        )}
+      />
+
+      <AppModal
         isOpen={showSharePrivateConfirm}
         title="This note is private"
-        description="You need to make this note public before sharing. Anyone with the link will be able to view and copy this note."
+        description="To share privately, choose Share with connections. Publishing is a separate option that lets anyone with the link view and copy this note."
         onClose={() => {
           if (!sharing) {
             setShowSharePrivateConfirm(false);
@@ -2850,8 +3000,19 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             >
               Cancel
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowSharePrivateConfirm(false);
+                void handleSelectShareWithConnections();
+              }}
+              disabled={sharing || sharesLoadState !== "ready"}
+            >
+              Share with connections
+            </Button>
             <Button type="button" onClick={() => void handleMakePublicAndShare()} disabled={sharing}>
-              {sharing ? "Updating..." : "Make Public & Share"}
+              {sharing ? "Updating..." : "Publish & Share Link"}
             </Button>
           </div>
         )}

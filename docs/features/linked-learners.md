@@ -126,6 +126,16 @@ Phase 3 deliberately chooses **counts and states only**. It does not expose conc
 
 The absolute exclusion remains: supporters never receive note bodies, note content, summaries, Study Pack prose or other learning material.
 
+## Shared learning material
+
+An accepted Learning Connection creates the capacity to share; it shares nothing automatically and grants nothing reciprocally. Controlled material access is stored per note and grantee in `note_shares`, including the owner id and the exact `relationship_id` that authorized the grant. The note remains `PRIVATE`; no relationship or share row changes `NoteVisibility`, and no shared note enters Explore.
+
+Every recipient request re-derives access in this order: a live share exists for the note and caller, its relationship exists and is exactly `ACCEPTED`, and the note or Study Pack still exists. There is no cache or grace period. Revoking the share, revoking the relationship, or a birth-year correction that returns the relationship to `PENDING` cuts access on the next request. All denials use the same not-found response and no endpoint accepts an owner or learner user id.
+
+The owner writes a complete desired relationship-id set transactionally. Any missing, unrelated, pending, or revoked relationship rejects the whole request before a row changes. Omitted live shares receive `revoked_at`; re-sharing inserts a new historical row. Sending the unchanged set writes nothing and emits no duplicate analytics.
+
+Recipient note and Study Pack responses are separate allowlist DTOs containing learning material and owner display provenance only. They never carry the owner's `ConceptHealth`, mastery, weak concepts, attempts, scores, sessions, streaks, or progress timestamps. Opening a recipient Study Pack never records `OPENED_STUDY_PACK` for the owner. Genuine practice creates sessions and updates `ConceptHealth` for the recipient user id; the owner's state is neither read nor written.
+
 ## Dashboard presentation
 
 The Dashboard adds a **People you support** section for accounts with live supporter-side relationships. Accepted links lead to the relationship-scoped progress view; pending links name the actual blocker — the learner's birth year, guardian consent outstanding, or consent recorded and activation finishing — and never claim acceptance is still required, which since `V122` is false for every row written after the migration. This section is additive: a person who is both a learner and a supporter sees their own learning workspace and the people they support together, without a mode switch or a profile-type distinction. A supporter with no notes of their own therefore still has a useful home surface.

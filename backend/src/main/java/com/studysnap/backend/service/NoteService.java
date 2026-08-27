@@ -61,6 +61,7 @@ import com.studysnap.backend.repository.NoteLibrarySubjectProjection;
 import com.studysnap.backend.repository.NoteLibrarySubjectView;
 import com.studysnap.backend.repository.NoteLibraryValueCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteShareRepository;
 import com.studysnap.backend.repository.NoteStatusProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicLibraryCandidateProjection;
@@ -144,6 +145,7 @@ public class NoteService {
     };
 
     private final NoteRepository noteRepository;
+    private final NoteShareRepository noteShareRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
     private final PublicNoteLikeRepository publicNoteLikeRepository;
     private final StudyPackRepository studyPackRepository;
@@ -159,6 +161,7 @@ public class NoteService {
     private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
+
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
@@ -281,15 +284,27 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public String getOwnedStudyPackIdOrThrow(String noteIdRaw, UUID ownerUserId) {
-        NoteResponse note = getById(noteIdRaw, ownerUserId);
-        if (note.studyPackId() == null || NoteStudyPackStatusResolver.DRAFT.equals(note.studyPackStatus())) {
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(noteIdRaw, NoteNotFoundException::new);
+        NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
+                .orElseGet(() -> {
+                    if (!hasAuthorizedShare(noteId, ownerUserId)) {
+                        throw new NoteNotFoundException();
+                    }
+                    return noteRepository.findById(noteId).orElseThrow(NoteNotFoundException::new);
+                });
+        StudyPackEntity studyPack = findLinkedStudyPack(entity.getId());
+        if (studyPack == null || studyPack.getStatus() != StudyPackStatus.DONE) {
             throw new AppException(
                     "NOTE_STUDY_PACK_NOT_READY",
                     "Generate a Study Pack for this note first.",
                     HttpStatus.CONFLICT
             );
         }
-        return note.studyPackId();
+        return studyPack.getId().toString();
+    }
+
+    private boolean hasAuthorizedShare(UUID noteId, UUID granteeUserId) {
+        return noteShareRepository.existsLiveAuthorizedShare(noteId, granteeUserId);
     }
 
     public NoteResponse copyNote(String id, UUID ownerUserId) {
@@ -302,7 +317,8 @@ public class NoteService {
         NoteEntity source = noteRepository.findById(noteId)
                 .orElseThrow(NoteNotFoundException::new);
         boolean isOwner = source.getOwnerUserId() != null && source.getOwnerUserId().equals(ownerUserId);
-        if (!isOwner && resolveVisibility(source) != NoteVisibility.PUBLIC) {
+        boolean hasLiveShare = !isOwner && hasAuthorizedShare(noteId, ownerUserId);
+        if (!isOwner && resolveVisibility(source) != NoteVisibility.PUBLIC && !hasLiveShare) {
             throw new NoteNotFoundException();
         }
         if (!isOwner) {
@@ -349,7 +365,7 @@ public class NoteService {
             copy.setCopiedFromNoteId(source.getId());
             copy.setCopiedFromUserId(source.getOwnerUserId());
             copy.setCopiedFromTitle(source.getTitle());
-            copy.setCopiedFromPublic(Boolean.TRUE);
+            copy.setCopiedFromPublic(resolveVisibility(source) == NoteVisibility.PUBLIC);
             copy.setCopiedAt(OffsetDateTime.now());
             if (includeStudyPack) {
                 sourceStudyPack = studyPackRepository.findByNoteId(source.getId()).orElse(null);
@@ -371,7 +387,10 @@ public class NoteService {
         StudyPackEntity copiedStudyPack = null;
         if (!isOwner) {
             copiedStudyPack = copySourceStudyPack(sourceStudyPack, saved);
-            analyticsService.trackEvent(ownerUserId, AnalyticsEventType.PUBLIC_NOTE_COPIED, source.getId(), buildMetadata(
+            AnalyticsEventType copyEventType = hasLiveShare
+                    ? AnalyticsEventType.SHARED_NOTE_COPIED
+                    : AnalyticsEventType.PUBLIC_NOTE_COPIED;
+            analyticsService.trackEvent(ownerUserId, copyEventType, source.getId(), buildMetadata(
                     "copiedNoteId", saved.getId().toString(),
                     "sourceOwnerUserId", source.getOwnerUserId() == null ? null : source.getOwnerUserId().toString()
             ));

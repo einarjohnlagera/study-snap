@@ -805,6 +805,7 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 .thenReturn(Map.of());
         return new NoteService(
                 noteRepository,
+                org.mockito.Mockito.mock(com.studysnap.backend.repository.NoteShareRepository.class),
                 analyticsEventRepository,
                 publicNoteLikeRepository,
                 studyPackRepository,

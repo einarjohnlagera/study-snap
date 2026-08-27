@@ -225,6 +225,7 @@ class NoteServiceStatusProjectionIntegrationTest {
     private NoteService createNoteService() {
         return new NoteService(
                 noteRepository,
+                org.mockito.Mockito.mock(com.studysnap.backend.repository.NoteShareRepository.class),
                 mock(AnalyticsEventRepository.class),
                 mock(PublicNoteLikeRepository.class),
                 studyPackRepository,

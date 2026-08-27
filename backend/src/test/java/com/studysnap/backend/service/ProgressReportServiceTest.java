@@ -61,7 +61,7 @@ class ProgressReportServiceTest {
 
     @BeforeEach
     void setUp() {
-        ConceptHealthService conceptHealthService = new ConceptHealthService(null, null, null, null);
+        ConceptHealthService conceptHealthService = new ConceptHealthService(null, null, null, null,org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class));
         progressReportService = new ProgressReportService(
                 studyPackRepository,
                 conceptHealthRepository,

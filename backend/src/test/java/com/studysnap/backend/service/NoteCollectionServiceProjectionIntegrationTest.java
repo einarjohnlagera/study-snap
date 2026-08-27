@@ -726,7 +726,7 @@ class NoteCollectionServiceProjectionIntegrationTest {
         private OffsetDateTime failingDueCheckAt;
 
         StubConceptHealthService() {
-            super(null, null, null, null);
+            super(null, null, null, null, null);
         }
 
         void reset() {

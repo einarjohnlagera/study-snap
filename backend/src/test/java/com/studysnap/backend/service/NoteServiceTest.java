@@ -38,6 +38,7 @@ import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteShareRepository;
 import com.studysnap.backend.repository.NoteStatusProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
@@ -90,6 +91,8 @@ class NoteServiceTest {
     @Mock
     private GeneratedQuizRepository generatedQuizRepository;
     @Mock
+    private NoteShareRepository noteShareRepository;
+    @Mock
     private UserRepository userRepository;
     @Mock
     private QuizSessionHistoryService quizSessionHistoryService;
@@ -119,6 +122,7 @@ class NoteServiceTest {
         noteFixtures.clear();
         noteService = new NoteService(
                 noteRepository,
+                noteShareRepository,
                 analyticsEventRepository,
                 publicNoteLikeRepository,
                 studyPackRepository,
@@ -970,6 +974,43 @@ class NoteServiceTest {
         assertThat(copied.copiedFromUserId()).isNull();
         assertThat(copied.copiedFromPublic()).isFalse();
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+    }
+
+    @Test
+    void copySharedPrivateNoteCreatesAnIndependentPrivateCopy() {
+        UUID recipientUserId = UUID.randomUUID();
+        UUID sourceOwnerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        NoteEntity source = buildNote(
+                sourceNoteId,
+                sourceOwnerUserId,
+                NoteStatus.GENERATED,
+                NoteVisibility.PRIVATE,
+                "source content"
+        );
+        source.setTitle("Shared source");
+        StudyPackEntity sourceStudyPack = buildSourceStudyPack(sourceNoteId);
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+        when(noteShareRepository.existsLiveAuthorizedShare(sourceNoteId, recipientUserId)).thenReturn(true);
+        when(studyPackRepository.findByNoteId(sourceNoteId)).thenReturn(Optional.of(sourceStudyPack));
+
+        NoteResponse copied = noteService.copyNote(sourceNoteId.toString(), recipientUserId);
+
+        ArgumentCaptor<NoteEntity> noteCaptor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(noteCaptor.capture());
+        NoteEntity saved = noteCaptor.getValue();
+        assertThat(saved.getOwnerUserId()).isEqualTo(recipientUserId);
+        assertThat(saved.getVisibility()).isEqualTo(NoteVisibility.PRIVATE);
+        assertThat(saved.getCopiedFromNoteId()).isEqualTo(sourceNoteId);
+        assertThat(saved.getCopiedFromUserId()).isEqualTo(sourceOwnerUserId);
+        assertThat(saved.getCopiedFromPublic()).isFalse();
+        assertThat(copied.studyPackStatus()).isEqualTo("STUDY_PACK_READY");
+        verify(analyticsService).trackEvent(
+                eq(recipientUserId),
+                eq(AnalyticsEventType.SHARED_NOTE_COPIED),
+                eq(sourceNoteId),
+                any()
+        );
     }
 
     @Test

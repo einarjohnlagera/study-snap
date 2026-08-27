@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.exception.SharedNoteNotFoundException;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
@@ -75,6 +76,8 @@ class QuickReviewSessionServiceTest {
     private ConceptHealthService conceptHealthService;
     @Mock
     private StudyPackQuizMasteryService studyPackQuizMasteryService;
+    @Mock
+    private NoteShareService noteShareService;
 
     private QuickReviewSessionService quickReviewSessionService;
 
@@ -91,7 +94,8 @@ class QuickReviewSessionServiceTest {
                 featureGateService,
                 conceptHealthService,
                 studyPackQuizMasteryService
-        );
+        ,
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class));
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(any(UUID.class), any(UUID.class), any()))
@@ -298,6 +302,101 @@ class QuickReviewSessionServiceTest {
         );
         assertThat(response.twiceMissedConcepts()).containsExactly("Needs Practice");
         assertThat(session.getVerifiedCorrectAnswers()).isEqualTo(2);
+    }
+
+    @Test
+    void revokedShareDeniesTheRecipientMidSession() {
+        // ⚠️ The test that had never run. Before v0.91.0's constructor cleanup, every construction of this
+        // service passed a null NoteShareService, so recheckMaterialAccess was a silent no-op across the
+        // whole suite — a revoked recipient could have kept answering and nothing would have failed.
+        UUID recipientUserId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, recipientUserId, studyPackId);
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, ownerUserId, 0);
+        FeatureGateService featureGateService = new FeatureGateService(subscriptionService, new StudySnapProperties());
+        QuickReviewSessionService sharedSessionService = new QuickReviewSessionService(
+                quickReviewSessionRepository,
+                studyPackRepository,
+                activityEventRepository,
+                activityTrackingService,
+                analyticsService,
+                subscriptionService,
+                featureGateService,
+                conceptHealthService,
+                studyPackQuizMasteryService,
+                noteShareService
+        );
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, recipientUserId))
+                .thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, recipientUserId))
+                .thenReturn(Optional.empty());
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+        org.mockito.Mockito.doThrow(new SharedNoteNotFoundException())
+                .when(noteShareService).requireSharedStudyPackAccess(recipientUserId, studyPackId);
+
+        QuickReviewSessionCompleteRequest request =
+                new QuickReviewSessionCompleteRequest(1, 1, 0, 60, null);
+        String sessionIdRaw = sessionId.toString();
+
+        assertThatThrownBy(() -> sharedSessionService.completeSession(sessionIdRaw, recipientUserId, request))
+                .isInstanceOf(SharedNoteNotFoundException.class);
+
+        verifyNoInteractions(conceptHealthService);
+    }
+
+    @Test
+    void completeSharedSessionWritesLearningStateForTheRecipientOnly() {
+        UUID recipientUserId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, recipientUserId, studyPackId);
+        session.setSessionState(Map.of("selectedChoices", Map.of("0", "A")));
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, ownerUserId, 0);
+        studyPack.setQuiz(List.of(
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Shared concept", "Explanation")
+        ));
+        FeatureGateService featureGateService = new FeatureGateService(subscriptionService, new StudySnapProperties());
+        QuickReviewSessionService sharedSessionService = new QuickReviewSessionService(
+                quickReviewSessionRepository,
+                studyPackRepository,
+                activityEventRepository,
+                activityTrackingService,
+                analyticsService,
+                subscriptionService,
+                featureGateService,
+                conceptHealthService,
+                studyPackQuizMasteryService,
+                noteShareService
+        );
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, recipientUserId))
+                .thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, recipientUserId))
+                .thenReturn(Optional.empty());
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+
+        sharedSessionService.completeSession(
+                sessionId.toString(),
+                recipientUserId,
+                new QuickReviewSessionCompleteRequest(1, 1, 0, 60, null)
+        );
+
+        verify(noteShareService, org.mockito.Mockito.atLeastOnce())
+                .requireSharedStudyPackAccess(recipientUserId, studyPackId);
+        verify(conceptHealthService).recordCorrectAnswers(
+                eq(recipientUserId), eq(studyPackId), eq(List.of("Shared concept")), any(OffsetDateTime.class)
+        );
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(ownerUserId), eq(studyPackId), any(), any(OffsetDateTime.class)
+        );
+        verify(activityTrackingService).recordActivity(
+                recipientUserId, ActivityType.COMPLETED_QUICK_REVIEW, studyPackId
+        );
+        verify(activityTrackingService, never()).recordActivity(
+                eq(ownerUserId), any(ActivityType.class), eq(studyPackId)
+        );
     }
 
     @Test
@@ -676,6 +775,10 @@ class QuickReviewSessionServiceTest {
         );
 
         verifyNoInteractions(conceptHealthService);
+        // Still 3, unchanged by v0.91.0 — and pinning the exact count is the point. Sharing added an
+        // authorization read on every mutating call, which briefly doubled this to 6; completeSession now
+        // resolves material access once and carries the result instead of re-reading the same pack row for
+        // the concept breakdown. A 4th read appearing here means that resolution was duplicated again.
         verify(studyPackRepository, times(3)).findByIdAndOwnerUserId(studyPackId, userId);
     }
 

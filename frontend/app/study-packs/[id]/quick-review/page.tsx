@@ -37,6 +37,8 @@ import {
   getMe,
   getMyStudyPack,
   getNote,
+  getSharedNote,
+  getSharedStudyPack,
   getPostSessionNextStep,
   saveQuickReviewConfidence,
   startQuickReviewSession,
@@ -226,6 +228,10 @@ export default function QuickReviewPage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const queryString = useMemo(() => searchParams.toString(), [searchParams]);
+  const isSharedSource = useMemo(
+    () => new URLSearchParams(queryString).get("source") === "shared",
+    [queryString],
+  );
   const isDueConceptsDigestVisit = useMemo(
     () => new URLSearchParams(queryString).get("source") === "due-concepts-digest",
     [queryString],
@@ -321,7 +327,47 @@ export default function QuickReviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const detail = await getNote(noteId);
+      let detail: NoteResponse;
+      if (isSharedSource) {
+        const sharedNote = await getSharedNote(noteId);
+        if (!sharedNote.studyPackId) {
+          throw new Error("This shared note does not have a Study Pack yet.");
+        }
+        const sharedPack = await getSharedStudyPack(sharedNote.studyPackId);
+        detail = {
+          id: sharedNote.id,
+          title: sharedNote.title,
+          subject: sharedNote.subject,
+          courseProgram: sharedNote.courseProgram,
+          domainContext: null,
+          learnerLevel: sharedNote.learnerLevel,
+          tags: sharedNote.tags,
+          content: sharedNote.content,
+          visibility: "PRIVATE",
+          createdAt: sharedNote.sharedAt,
+          updatedAt: sharedNote.sharedAt,
+          copiedFromNoteId: null,
+          copiedFromUserId: null,
+          copiedFromTitle: null,
+          copiedFromPublic: false,
+          copiedAt: null,
+          studyPackId: sharedPack.id,
+          studyPackStatus: "STUDY_PACK_READY",
+          summary: sharedPack.summary,
+          keyConcepts: sharedPack.keyConcepts,
+          quiz: sharedPack.quiz,
+          quizMastered: false,
+          quizMasteredAt: null,
+          generatedQuiz: null,
+          lastUsedTargetLearnerLevel: null,
+          quizCount: sharedPack.quiz.length,
+          quickReviewAvailable: sharedPack.quiz.length > 0,
+          challengeQuizAvailable: false,
+          adaptivePracticeAvailable: false,
+        };
+      } else {
+        detail = await getNote(noteId);
+      }
       if (detail.studyPackStatus !== "STUDY_PACK_READY") {
         setNote(detail);
         loadedNoteIdRef.current = noteId;
@@ -360,7 +406,7 @@ export default function QuickReviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [noteId, pathname, queryString, resetQuickReviewState, router]);
+  }, [isSharedSource, noteId, pathname, queryString, resetQuickReviewState, router]);
 
   useEffect(() => {
     void loadNote();
@@ -477,7 +523,10 @@ export default function QuickReviewPage() {
   );
   const isStruggling = !isPerfectScore && (displayedWeakConcepts.length > 0 || scorePercentage < 80);
   const showChallengeGuidedCta = !isStruggling;
-  const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const noteDetailHref = useMemo(
+    () => note ? (isSharedSource ? `/shared/notes/${note.id}` : `/notes/${note.id}`) : "/library",
+    [isSharedSource, note],
+  );
   const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
   const hasNextStepGuidance = nextStepResponse !== null || weeklyPacingWeeksRemaining !== null;
   const hasCompanionExcerpt = hasCompanionResultBridgeExcerpt(primaryCollectionCompanion);
