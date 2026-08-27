@@ -29,6 +29,8 @@ Implementation status: v0.91.0 Phase 1 is **Released**. **v0.92.0 opens Phase 2 
 
 **⚠️ `v0.83.0` removes Target Audience from authoring and Public Library discovery but does NOT drop `notes.target_profile_type`.** The column is `V117`'s input and `[CHECKPOINT — due 2026-09-16]` cannot run without it; the drop waits on that report. No migration ships in `v0.83.0`. Target Audience must never become a runtime depth fallback.
 
+**⚠️ In a NATIVE query, never test a named parameter for null without casting it.** PostgreSQL types native-query parameters itself, and a bare `:param is null` gives it nothing to infer from — it fails the entire statement at **parse** time with `could not determine data type of parameter $n`, so the endpoint 500s on every call, not just a paged one. Write `cast(:param as timestamptz) is null`. **JPQL is unaffected** (Hibernate types those parameters), which is why the same shape is safe in JPQL repositories. **⚠️ H2 accepts the uncast form, so the test suite cannot catch this** — it shipped undetected in `v0.91.0` and 500'd the *Shared with you* Library section against real PostgreSQL until a user reported it. `NativeQueryParameterTypingTest` now fails the build on the pattern; do not weaken it, and verify native-query changes against real PostgreSQL rather than against the suite.
+
 When working on a feature, always check the corresponding document under `docs/features/`.
 
 Active release guardrail:

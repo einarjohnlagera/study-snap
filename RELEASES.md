@@ -88,6 +88,17 @@ owner after a survey of carried limitations; the pre-declared cold-agent pressur
   trades one failure for another. Owner selected fail-closed 2026-08-27. **Deliberate denials already extend
   `AppException` and are rethrown**, so the change must affect only the infrastructure-fault path and must not
   convert a learner's own unreadable pack into a lockout.
+- **11. `GET /notes/shared-with-me` 500s on every call (backend).** **⚠️ A LIVE PRODUCTION DEFECT SHIPPED BY
+  `v0.91.0`, reported from a running app during this release** — not a `v0.92.0` regression, and not one of that
+  release's recorded Known Limitations, because nothing detected it. The native cursor query tests
+  `:cursorCreatedAt is null` on a bare parameter; PostgreSQL types native-query parameters itself, cannot infer
+  one from an `IS NULL` test, and **fails the whole statement at parse time** (`could not determine data type of
+  parameter $2`). It therefore 500s on the FIRST page, not only on a paged request, so the *Shared with you*
+  Library section has never worked against PostgreSQL. **⚠️ H2 accepts the uncast form, so the 1,744-test suite
+  passed throughout** — the same blind spot that produced `v0.83.1`. JPQL is unaffected (Hibernate types those
+  parameters), which is why the identical `:param is null` shape is safe elsewhere in the codebase. Added
+  mid-release 2026-08-27 on an owner bug report.
+
 - **10. Phase 2 analytics — a grant → momentum-view funnel (backend + frontend).** Raised at prompt time, left
   unanswered, and **re-raised before signoff rather than allowed to lapse**; owner selected it 2026-08-27.
   New `AnalyticsEventType` values added to the enum before firing, per `AGENTS.md`. **⚠️ Instrumentation only —
@@ -199,6 +210,16 @@ owner after a survey of carried limitations; the pre-declared cold-agent pressur
 - **The note-access dropdown's `aria-haspopup="menu"` wiring was dropped, not completed.** The panel holds a
   checkbox list, which cannot live in a `role="menu"`; `aria-expanded` alone is the correct contract. The
   note-actions button beside it is a real menu and keeps its `aria-haspopup`.
+
+
+- **⚠️ Fixed a live `v0.91.0` production 500: *Shared with you* never worked against PostgreSQL.** The native
+  cursor query's `:cursorCreatedAt is null` left the parameter untyped, so PostgreSQL rejected the statement at
+  parse time and the endpoint failed on every call including the first page. The cursor parameters are now
+  explicitly cast. **Reproduced and verified against real PostgreSQL 16 before and after the fix** — the error was
+  reproduced verbatim, then the fixed form was checked for correct pagination across a null cursor and a real one,
+  not merely for parsing. **⚠️ A new source-level guard (`NativeQueryParameterTypingTest`) fails the build on ANY
+  native query testing an uncast named parameter for null**, because H2 accepts the broken form and no behavioural
+  test in this suite can catch the defect class. Mutation-verified against the original code.
 
 
 ### Known limitations
