@@ -2,9 +2,42 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **a question that may already have been settled — read before reopening one**.
-> Last updated: v0.89.1 - 2026-08-20 (IN PROGRESS; `v0.89.0` is the last released version). **Stamp had gone four releases stale (v0.85.0) — restamped with the decisions most likely to be re-proposed.** **⚠️ `v0.89.0` shipped Learning Connections as a CAPABILITY, not a profile type** — a parent, tutor, sibling or mentor can make a quiz for someone, connect with them, and see their progress. **`ProfileType` answers "how do YOU learn?", not "may you help someone?"**, so the old design forced a parent to claim to be a Teacher — changing their own dashboard and practice options — just to help their child. **⚠️ Do NOT re-gate any of this on `ProfileType`; `PARENT` stays unimplemented with zero users.** **⚠️ THE PRIVACY LINE IS RATIFIED AND ABSOLUTE: a supporter sees readiness, progress and quiz performance, NEVER the learner's notes** — this protects the core loop, because learners who suspect notes are visible write less honestly. Teachers still exclusively keep DOCX export, multi-version exports, question-count control and the Exam Builder; only the single-quiz share link opened up. **Ratified 2026-08-19 (Q4):** connections are **invite + accept in BOTH directions, revocable either side**, and **acceptance is load-bearing** — without it anyone could claim a supporting relationship over any account by knowing an email address. **Ratified 2026-08-19 (Q5):** age is collected **at link time, never at signup**, with guardian consent below a threshold that is **configuration, and whose NUMBER remains owner-owned pending counsel** — do not let a shipped default be read as a legal position. **Rejected and recorded:** `learnerLevel` as an age proxy (breaks both ways), adults-only-first (excludes the motivating parent-child case), and a supporter `ProfileType`. Previously v0.85.0 - 2026-08-18. Adds the **Domain Context Catalog** decline (2026-08-17), which is the single most likely thing to be re-proposed from this span. Previously v0.73.0 - 2026-08-12.
+> Last updated: v0.90.0 - 2026-08-27 (Released). **Adds the three Linked Learners surfacing verdicts taken 2026-08-27 — read them before re-proposing any of the four.** Previously v0.89.1 - 2026-08-20. **Stamp had gone four releases stale (v0.85.0) — restamped with the decisions most likely to be re-proposed.** **⚠️ `v0.89.0` shipped Learning Connections as a CAPABILITY, not a profile type** — a parent, tutor, sibling or mentor can make a quiz for someone, connect with them, and see their progress. **`ProfileType` answers "how do YOU learn?", not "may you help someone?"**, so the old design forced a parent to claim to be a Teacher — changing their own dashboard and practice options — just to help their child. **⚠️ Do NOT re-gate any of this on `ProfileType`; `PARENT` stays unimplemented with zero users.** **⚠️ THE PRIVACY LINE IS RATIFIED AND ABSOLUTE: a supporter sees readiness, progress and quiz performance, NEVER the learner's notes** — this protects the core loop, because learners who suspect notes are visible write less honestly. Teachers still exclusively keep DOCX export, multi-version exports, question-count control and the Exam Builder; only the single-quiz share link opened up. **Ratified 2026-08-19 (Q4):** connections are **invite + accept in BOTH directions, revocable either side**, and **acceptance is load-bearing** — without it anyone could claim a supporting relationship over any account by knowing an email address. **Ratified 2026-08-19 (Q5):** age is collected **at link time, never at signup**, with guardian consent below a threshold that is **configuration, and whose NUMBER remains owner-owned pending counsel** — do not let a shipped default be read as a legal position. **Rejected and recorded:** `learnerLevel` as an age proxy (breaks both ways), adults-only-first (excludes the motivating parent-child case), and a supporter `ProfileType`. Previously v0.85.0 - 2026-08-18. Adds the **Domain Context Catalog** decline (2026-08-17), which is the single most likely thing to be re-proposed from this span. Previously v0.73.0 - 2026-08-12.
 
 ---
+
+## Linked Learners surfacing — four proposals audited 2026-08-27, three settled
+
+Raised by the owner after `v0.90.0` merged, audited against real code the same day. Full brief:
+`docs/claude-plans/linked-learners-surfacing-product-ux-consultation-prompt.md`.
+
+**1. "Spend quiz quota when generating a quiz for someone" — ALREADY THE BEHAVIOUR.** It has always drawn down the
+user's own Challenge Quiz allowance (Free 20 / Plus 100 / Pro 200). Nothing to build; what is missing is disclosure,
+plus the fact that the stricter share-link cap (Free 3) is enforced only at link creation, after the LLM cost is paid.
+See `QUIZ_AND_PRACTICE_CONTEXT.md`.
+
+**2. "The quiz preview looks like the Teacher surface" — an ADMIN artifact, not a product problem.** `canExportDocx`
+is `role === "ADMIN" || profileType === "TEACHER"`; `canShareQuiz` is plain `Boolean(authUser)`. An ordinary student
+or parent account sees no classroom vocabulary on that page. **The Teacher profile type is not being diluted by
+Phase 1.**
+
+**3. "Surface 'Quiz for someone' only when a connection exists" — DECIDED AGAINST, and the reason is not caution.**
+Gating it makes forming a connection the **price** of sharing a quiz, so any invitations that follow are
+instrumental rather than demand — manufacturing a false pass on `[CHECKPOINT — due 2026-09-19]`, whose entire
+question is whether anyone forms a connection, three weeks before it is read. **This is "do not break the
+instrument", not "wait for measurement before shipping."** It would also gate on a state no user has ever reached,
+dropping reach to zero. The ratified reason still stands independently: a shared-quiz recipient needs no account and
+no relationship. **If what is wanted is the removed practice-row button back, that is a separable PLACEMENT question**
+— the argument that moved it was that beside *Start Quick Review* it read as an avoidance path, which says nothing
+about who should see it.
+
+**4. "Apple Health-style sharing so learners can compete" — the dashboard already ships; competition is blocked on
+COMPARABILITY, not privacy.** The supporter progress view has existed since `v0.89.0` and simply never renders with
+zero relationships. Reciprocal linking is already permitted at every layer (per-direction uniqueness; no
+opposite-direction guard) and surfaced at none. **But every aggregate is computed over the learner's OWN notes and
+packs, so there is no shared denominator — a leaderboard would rank library composition, not effort**, and a learner
+with three easy notes would outrank one grinding a 77-note board review. Minors and social comparison are a
+secondary concern behind that. **Self-comparison over time is safe and already exists as My Progress.**
 
 ## Domain Context Catalog — DECLINED 2026-08-17, on production evidence
 
