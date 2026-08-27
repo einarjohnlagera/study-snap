@@ -1,6 +1,16 @@
 # Consultation prompt — where does "Shared with you" belong in the Library?
 
-**Status:** open question, no decision taken. Raised by the owner 2026-08-27 from a live screenshot.
+**Status:** ⚠️ **DECIDED by the owner 2026-08-27, BEFORE this was sent.** Retained as the reasoning of record —
+**do not re-send it.** The decision, and the retirement condition attached to it, are in `ROADMAP.md`'s Backlog
+Index row *"Where does Shared with you belong in the Library? — DECIDED"*.
+
+**⚠️ The verdict corrected this brief's central hypothesis.** §2 argues the defect is a *terminal signal* problem
+and not a distance problem, and that announcing the section would therefore be enough. **The ruling is that it is
+BOTH** — so the answer is a compact `Shared with you · N` **jump affordance** in the existing upper Library
+controls (navigation), **not an announcement banner**, with the section staying below the complete owned-notes
+flow, never interleaved with owned pagination, and rendering nothing — reserving no space — at zero count.
+
+Raised by the owner 2026-08-27 from a live screenshot.
 **Audience:** an external GPT session acting as long-term PM/UX strategist for NoteLib.
 **How to use:** paste `docs/gpt-contexts/GPT_CONTEXT.md` (core brief) first, then
 `docs/gpt-contexts/SURFACES_AND_FEATURES_CONTEXT.md` (the Library surface module), then this file.

@@ -2,7 +2,7 @@
 
 ## v0.92.0 - Activity Sharing
 
-**Status: In Progress** (kicked off 2026-08-27)
+**Status: Released** (kicked off and signed off 2026-08-27)
 
 Theme: let a connection see that you are studying — only if you decide to show them — and tell people what a quiz
 costs before they spend it.
@@ -88,6 +88,12 @@ owner after a survey of carried limitations; the pre-declared cold-agent pressur
   trades one failure for another. Owner selected fail-closed 2026-08-27. **Deliberate denials already extend
   `AppException` and are rethrown**, so the change must affect only the infrastructure-fault path and must not
   convert a learner's own unreadable pack into a lockout.
+- **10. Phase 2 analytics — a grant → momentum-view funnel (backend + frontend).** Raised at prompt time, left
+  unanswered, and **re-raised before signoff rather than allowed to lapse**; owner selected it 2026-08-27.
+  New `AnalyticsEventType` values added to the enum before firing, per `AGENTS.md`. **⚠️ Instrumentation only —
+  it must not change any grant, read or authorization behaviour**, and it measures Phase 2's own loop, not
+  Phase 5's motivation questions, which stay undecided.
+
 - **11. `GET /notes/shared-with-me` 500s on every call (backend).** **⚠️ A LIVE PRODUCTION DEFECT SHIPPED BY
   `v0.91.0`, reported from a running app during this release** — not a `v0.92.0` regression, and not one of that
   release's recorded Known Limitations, because nothing detected it. The native cursor query tests
@@ -98,12 +104,6 @@ owner after a survey of carried limitations; the pre-declared cold-agent pressur
   passed throughout** — the same blind spot that produced `v0.83.1`. JPQL is unaffected (Hibernate types those
   parameters), which is why the identical `:param is null` shape is safe elsewhere in the codebase. Added
   mid-release 2026-08-27 on an owner bug report.
-
-- **10. Phase 2 analytics — a grant → momentum-view funnel (backend + frontend).** Raised at prompt time, left
-  unanswered, and **re-raised before signoff rather than allowed to lapse**; owner selected it 2026-08-27.
-  New `AnalyticsEventType` values added to the enum before firing, per `AGENTS.md`. **⚠️ Instrumentation only —
-  it must not change any grant, read or authorization behaviour**, and it measures Phase 2's own loop, not
-  Phase 5's motivation questions, which stay undecided.
 
 ### Anti-drift — locked rules for this release
 
@@ -221,6 +221,48 @@ owner after a survey of carried limitations; the pre-declared cold-agent pressur
   native query testing an uncast named parameter for null**, because H2 accepts the broken form and no behavioural
   test in this suite can catch the defect class. Mutation-verified against the original code.
 
+
+
+**⚠️ Found by the pre-signoff cold-agent pressure test (three agents, 2026-08-27), pre-declared at kickoff.
+Everything below was verified against code; what could be fixed in scope was fixed, and this is what remains.**
+
+- **⚠️ THE ACTIVITY GRANT DOES NOT BOUND WHAT A SUPPORTER SEES, and that is the most important thing to know
+  about this release.** `LinkedLearnerProgressService.getProgress` gates on `requireAcceptedLearnerId` alone — **no
+  grant check** — and returns `dashboardService.getStudyEngagement(learnerUserId)` verbatim: the **identical four
+  fields** (`engagementMode`, `currentStreak`, `longestStreak`, `studyDaysThisWeek`) that this release put behind a
+  grant, plus a superset (mastery snapshot, readiness counts, collection progress). So a learner who never enables
+  *Share my study activity*, or who disables it, still has their streak and study days visible to a supporter via
+  `/progress`. **The control is real in the learner→supporter direction and decorative in the supporter→learner
+  one.** **⚠️ This is NOT a `v0.92.0` regression** — `LinkedLearnerProgressService` is unchanged `v0.89.0` code —
+  and fixing it is **explicitly forbidden by this release's own anti-drift rule**, which reserves
+  `requireAcceptedLearnerId` for Phase 3's reimplementation over `requireGrant(..., PROGRESS)`. **Phase 3 is where
+  this closes, and it is now the strongest argument for doing Phase 3 next.** The release notes and feature docs
+  were checked and do not claim a learner controls what a supporter sees.
+- **A relationship revoke leaves its grant rows live, so the DTO can misreport sharing state.** Nothing outside
+  `LinkedLearnerGrantService` calls `revokeLive`, and `toResponse` computes both grant fields filtering only on
+  `revoked_at IS NULL` with no relationship-status filter — so a `REVOKED` relationship still reports
+  `activitySharedByMe: true`. **Inert today**: `REVOKED` is terminal (no transition returns to `PENDING` or
+  `ACCEPTED`), every read re-checks `ACCEPTED`, and the UI hides the panel on non-`ACCEPTED` rows. It is recorded
+  because a future consumer of that field inherits the wrong value.
+- **`requireGrant`'s `toUserId` cross-check is unreachable.** `fromUserId` is already derived as the other party,
+  `ux_linked_learner_grants_live` makes `(relationship_id, from_user_id, scope)` unique among live rows, and
+  `to_user_id` is written from the same derivation — so the `.filter(...)` cannot meaningfully execute, and a
+  mutation removing it kills no test. Kept as a documented assertion rather than deleted; recorded so nobody writes
+  a test for an unreachable branch.
+- **A grant write can race a relationship revoke.** `setActivityGrant` reads the relationship with a plain
+  `findById` and no row lock, unlike `accept()` and `correctBirthYear()`. Under READ COMMITTED the interleaving is
+  possible: the grant reads `ACCEPTED`, the revoke commits, the grant inserts a live row against a now-`REVOKED`
+  relationship. **No access leaks** — `REVOKED` is terminal and every read re-verifies `ACCEPTED` — so the row is
+  permanently inert.
+- **Two pre-existing test-harness weaknesses, out of scope but load-bearing.** `QuickReviewSessionServiceTest`
+  leniently delegates `findByIdAndUserIdAndSessionMode(any, any, any)` to `findByIdAndUserId`, discarding the mode
+  argument, so **no test in that class exercises the `QUICK_REVIEW` mode filter**. And `UsageMetric` in Settings
+  takes no `description` prop, so the *AI quizzes* explanatory line renders on the Dashboard card only.
+- **The momentum panel's `aria-label` on a role-less `<div>` is inert**, and its disclosure button has
+  `aria-expanded` without `aria-controls`. Cosmetic for sighted users; the labels do not reach assistive tech.
+- **Quota vocabulary is unified on the meters but not at the moment the cap is hit.** The paywall headline says
+  *"quiz generation limit"* and the server message *"monthly quiz credit limit"*, while the meter now says *AI
+  quizzes* — so a user who watches that meter run out is then told about two differently-named limits.
 
 ### Known limitations
 

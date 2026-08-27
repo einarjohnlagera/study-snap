@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.92.0 - Activity Sharing` (In Progress); previous: `v0.91.0 - Shared Learning Material` (Released)
+- `v0.92.0 - Activity Sharing` (Released); previous: `v0.91.0 - Shared Learning Material` (Released)
 
 Implementation status: v0.91.0 Phase 1 is **Released**. **v0.92.0 opens Phase 2 — Activity Sharing — so Phase 2 IS in scope**, alongside the quota-legibility item carried out of v0.91.0. Keep all work inside the Phase 2 boundary: **Phases 3–5 remain out of scope and must not be stubbed**, and the `PROGRESS` scope ships as a column value Phase 2 never reads.
 
