@@ -79,11 +79,14 @@ function BirthYearInput({
   };
 
   return (
-    <div className="relative">
+    // ⚠️ Sized to its content, not to the card. A birth year is exactly four digits, and a full-width
+    // input both looks wrong beside the email field and pushes the steppers so far from the digits that
+    // they read as unrelated furniture.
+    <div className="relative w-32">
       <input
         id={id}
         ref={inputRef}
-        className={`${INPUT_CLASSES} pr-10`}
+        className={`${INPUT_CLASSES} pr-9 tabular-nums`}
         value={value}
         onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 4))}
         inputMode="numeric"
