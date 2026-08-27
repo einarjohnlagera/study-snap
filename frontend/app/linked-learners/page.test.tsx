@@ -13,6 +13,7 @@ import {
   previewLinkedLearnerBirthYearCorrection,
   revokeLinkedLearner,
   setLinkedLearnerActivityGrant,
+  setLinkedLearnerProgressGrant,
   type LinkedLearnerResponse,
 } from "@/lib/api";
 
@@ -29,6 +30,7 @@ jest.mock("@/lib/api", () => ({
   acceptLinkedLearnerInvitation: jest.fn(),
   revokeLinkedLearnerInvitation: jest.fn(),
   setLinkedLearnerActivityGrant: jest.fn(),
+  setLinkedLearnerProgressGrant: jest.fn(),
   getLinkedLearnerActivity: jest.fn(),
   ApiRequestError: class ApiRequestError extends Error {
     status: number;
@@ -55,6 +57,8 @@ const baseLink: LinkedLearnerResponse = {
   guardianConsentRecorded: false,
   activitySharedByMe: false,
   activitySharedWithMe: false,
+  progressSharedByMe: false,
+  progressSharedWithMe: false,
 };
 
 beforeEach(() => {
@@ -133,10 +137,11 @@ it("rolls an optimistic revoke back when the API fails", async () => {
   expect(screen.getByText("accepted")).toBeInTheDocument();
 });
 
-it("offers progress only to the supporter on an accepted connection", async () => {
+it("offers progress only when the counterparty has granted progress access", async () => {
   jest.mocked(getLinkedLearners).mockResolvedValue([
-    { ...baseLink, id: "accepted-support", callerRole: "SUPPORTER", status: "ACCEPTED", incomingInvitation: false },
-    { ...baseLink, id: "pending-support", callerRole: "SUPPORTER", status: "PENDING", incomingInvitation: false },
+    { ...baseLink, id: "accepted-support", callerRole: "SUPPORTER", status: "ACCEPTED", incomingInvitation: false, progressSharedWithMe: true },
+    { ...baseLink, id: "accepted-without-grant", callerRole: "SUPPORTER", status: "ACCEPTED", incomingInvitation: false },
+    { ...baseLink, id: "pending-support", callerRole: "SUPPORTER", status: "PENDING", incomingInvitation: false, progressSharedWithMe: false },
     { ...baseLink, id: "accepted-learning", callerRole: "LEARNER", status: "ACCEPTED", incomingInvitation: false },
   ]);
 
@@ -150,7 +155,7 @@ it("offers progress only to the supporter on an accepted connection", async () =
   expect(screen.getAllByRole("link", { name: "View progress" })).toHaveLength(1);
 });
 
-it("renders the two activity directions independently from both callers", async () => {
+it("renders activity in both directions and progress control only for the learner", async () => {
   const accepted = {
     ...baseLink,
     status: "ACCEPTED" as const,
@@ -162,12 +167,14 @@ it("renders the two activity directions independently from both callers", async 
     counterpartyDisplayName: "Alex",
     activitySharedByMe: false,
     activitySharedWithMe: true,
+    progressSharedByMe: true,
   }]);
   const first = render(<LinkedLearnersPage />);
 
   expect(await screen.findByRole("switch", { name: "Share my study activity with Alex" })).not.toBeChecked();
   expect(screen.getByText("Alex shares their study activity with you")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "View momentum" })).toBeInTheDocument();
+  expect(screen.getByRole("switch", { name: "Share my study progress with Alex" })).toBeChecked();
 
   first.unmount();
   jest.mocked(getLinkedLearners).mockResolvedValue([{
@@ -176,12 +183,15 @@ it("renders the two activity directions independently from both callers", async 
     counterpartyDisplayName: "Blair",
     activitySharedByMe: true,
     activitySharedWithMe: false,
+    progressSharedWithMe: true,
   }]);
   render(<LinkedLearnersPage />);
 
   expect(await screen.findByRole("switch", { name: "Share my study activity with Blair" })).toBeChecked();
   expect(screen.getByText("Blair does not share their study activity with you")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "View momentum" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("switch", { name: /share my study progress/i })).not.toBeInTheDocument();
+  expect(screen.getByText("Blair shares their study progress with you")).toBeInTheDocument();
 });
 
 it("keeps the server-confirmed activity toggle state when the write fails", async () => {
@@ -199,6 +209,45 @@ it("keeps the server-confirmed activity toggle state when the write fails", asyn
 
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Network failed"));
   expect(toggle).not.toBeChecked();
+});
+
+it("keeps the server-confirmed progress toggle state when the write fails", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    callerRole: "LEARNER",
+    status: "ACCEPTED",
+    incomingInvitation: false,
+    progressSharedByMe: false,
+  }]);
+  jest.mocked(setLinkedLearnerProgressGrant).mockRejectedValue(new Error("Network failed"));
+  render(<LinkedLearnersPage />);
+
+  const toggle = await screen.findByRole("switch", { name: /share my study progress/i });
+  fireEvent.click(toggle);
+
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Network failed"));
+  expect(toggle).not.toBeChecked();
+});
+
+it("lets a learner withdraw live grants while a paused connection explains the pause", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    callerRole: "LEARNER",
+    status: "PENDING",
+    incomingInvitation: false,
+    activitySharedByMe: true,
+    progressSharedByMe: true,
+  }]);
+  jest.mocked(setLinkedLearnerProgressGrant).mockResolvedValue({ granted: false });
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByText(/Access is paused while this connection is pending/i)).toBeInTheDocument();
+  const progressToggle = screen.getByRole("switch", { name: /share my study progress/i });
+  expect(progressToggle).toBeEnabled();
+  fireEvent.click(progressToggle);
+
+  await waitFor(() => expect(setLinkedLearnerProgressGrant).toHaveBeenCalledWith("link-1", false));
+  expect(screen.queryByRole("link", { name: "View progress" })).not.toBeInTheDocument();
 });
 
 it("renders zero momentum honestly instead of hiding it", async () => {

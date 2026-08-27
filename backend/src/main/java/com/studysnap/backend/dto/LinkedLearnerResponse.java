@@ -21,6 +21,8 @@ public record LinkedLearnerResponse(
         boolean guardianConsentRequired,
         boolean guardianConsentRecorded,
         boolean activitySharedByMe,
-        boolean activitySharedWithMe
+        boolean activitySharedWithMe,
+        boolean progressSharedByMe,
+        boolean progressSharedWithMe
 ) {
 }

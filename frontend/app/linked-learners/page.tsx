@@ -26,6 +26,7 @@ import {
   recordLinkedLearnerGuardianConsent,
   revokeLinkedLearner,
   setLinkedLearnerActivityGrant,
+  setLinkedLearnerProgressGrant,
   type LinkedLearnerActivityResponse,
   type LinkedLearnerResponse,
   type LinkedLearnerSide,
@@ -141,18 +142,21 @@ function engagementModeLabel(mode: LinkedLearnerActivityResponse["engagementMode
   return "Focused";
 }
 
-function ActivitySharingPanel({
+function SharingPanel({
   link,
-  onGrantUpdated,
+  onActivityGrantUpdated,
+  onProgressGrantUpdated,
   onAccessEnded,
   onFailure,
 }: Readonly<{
   link: LinkedLearnerResponse;
-  onGrantUpdated: (granted: boolean) => void;
+  onActivityGrantUpdated: (granted: boolean) => void;
+  onProgressGrantUpdated: (granted: boolean) => void;
   onAccessEnded: () => Promise<void>;
   onFailure: (message: string) => void;
 }>) {
-  const [saving, setSaving] = useState(false);
+  const [activitySaving, setActivitySaving] = useState(false);
+  const [progressSaving, setProgressSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [activity, setActivity] = useState<LinkedLearnerActivityResponse | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
@@ -178,18 +182,33 @@ function ActivitySharingPanel({
   }, [link.id, onAccessEnded]);
 
   const handleToggle = async (granted: boolean) => {
-    setSaving(true);
+    setActivitySaving(true);
     try {
       const response = await setLinkedLearnerActivityGrant(link.id, granted);
-      onGrantUpdated(response.granted);
+      onActivityGrantUpdated(response.granted);
     } catch (saveError) {
       // The rendered value remains the last server-confirmed value. For a privacy control, a
       // failed write must never leave an optimistic state displayed as if it were persisted.
       onFailure(errorMessage(saveError, "Could not update activity sharing. Your previous setting was restored."));
     } finally {
-      setSaving(false);
+      setActivitySaving(false);
     }
   };
+
+  const handleProgressToggle = async (granted: boolean) => {
+    setProgressSaving(true);
+    try {
+      const response = await setLinkedLearnerProgressGrant(link.id, granted);
+      onProgressGrantUpdated(response.granted);
+    } catch (saveError) {
+      // Keep the controlled toggle on the last value the server confirmed.
+      onFailure(errorMessage(saveError, "Could not update progress sharing. Your previous setting was restored."));
+    } finally {
+      setProgressSaving(false);
+    }
+  };
+
+  const paused = link.status === "PENDING";
 
   const toggleActivityView = () => {
     const nextExpanded = !expanded;
@@ -211,6 +230,11 @@ function ActivitySharingPanel({
 
   return (
     <div className="space-y-3 rounded-lg border border-border p-3 sm:p-4">
+      {paused ? (
+        <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+          Access is paused while this connection is pending. Existing sharing choices resume when the connection is active; you can still turn yours off now.
+        </p>
+      ) : null}
       <div className="flex items-center justify-between gap-4">
         <label htmlFor={`activity-sharing-${link.id}`} className="text-sm font-medium">
           Share my study activity with {link.counterpartyDisplayName}
@@ -220,13 +244,39 @@ function ActivitySharingPanel({
           checked={link.activitySharedByMe}
           onChange={(granted) => void handleToggle(granted)}
           ariaLabel={`Share my study activity with ${link.counterpartyDisplayName}`}
-          disabled={saving}
+          disabled={activitySaving || (paused && !link.activitySharedByMe)}
         />
       </div>
+      {link.callerRole === "LEARNER" ? (
+        <div className="flex items-center justify-between gap-4 border-t border-border pt-3">
+          <label htmlFor={`progress-sharing-${link.id}`} className="text-sm font-medium">
+            Share my study progress with {link.counterpartyDisplayName}
+          </label>
+          <Toggle
+            id={`progress-sharing-${link.id}`}
+            checked={link.progressSharedByMe}
+            onChange={(granted) => void handleProgressToggle(granted)}
+            ariaLabel={`Share my study progress with ${link.counterpartyDisplayName}`}
+            disabled={progressSaving || (paused && !link.progressSharedByMe)}
+          />
+        </div>
+      ) : (
+        <div className="border-t border-border pt-3">
+          <p className="text-sm text-foreground/70">
+            {paused
+              ? `${link.counterpartyDisplayName}'s progress access is paused`
+              : link.progressSharedWithMe
+                ? `${link.counterpartyDisplayName} shares their study progress with you`
+                : `${link.counterpartyDisplayName} does not share their study progress with you`}
+          </p>
+        </div>
+      )}
       <div className="border-t border-border pt-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-foreground/70">
-            {link.activitySharedWithMe
+            {paused
+              ? `${link.counterpartyDisplayName}'s activity access is paused`
+              : link.activitySharedWithMe
               ? `${link.counterpartyDisplayName} shares their study activity with you`
               : `${link.counterpartyDisplayName} does not share their study activity with you`}
           </p>
@@ -828,20 +878,21 @@ export default function LinkedLearnersPage() {
               {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.pausedForConsentSupporterView}</p> : null}
               {pending && link.guardianConsentRequired && link.guardianConsentRecorded ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.consentRecorded}</p> : null}
 
-              {link.status === "ACCEPTED" ? (
-                <ActivitySharingPanel
+              {link.status === "ACCEPTED" || link.status === "PENDING" ? (
+                <SharingPanel
                   link={link}
                   // ⚠️ Field-level merge, not `{ ...link }` — `link` is the snapshot from the render that
                   // created this handler, so writing the whole object back would revert any field a
                   // concurrent loadLinks() had refreshed (status, the other direction's grant, consent).
-                  onGrantUpdated={(granted) => updateLinkFields(link.id, { activitySharedByMe: granted })}
+                  onActivityGrantUpdated={(granted) => updateLinkFields(link.id, { activitySharedByMe: granted })}
+                  onProgressGrantUpdated={(granted) => updateLinkFields(link.id, { progressSharedByMe: granted })}
                   onAccessEnded={loadLinks}
                   onFailure={(message) => setError(message)}
                 />
               ) : null}
 
               <div className="flex flex-wrap gap-2">
-                {link.status === "ACCEPTED" && link.callerRole === "SUPPORTER" ? (
+                {link.progressSharedWithMe ? (
                   <ResponsiveActionLink href={`/linked-learners/${link.id}/progress`} action="progress" label="View progress" />
                 ) : null}
                 {canAccept ? <Button type="button" onClick={() => void handleAccept(link)} loading={busyId === link.id} disabled={(link.birthYearRequired && (link.callerRole !== "LEARNER" || !birthYears[link.id]?.trim())) || (supporterCanConsent && consentChecked[link.id] !== true)}>Accept invitation</Button> : null}

@@ -25,11 +25,19 @@ public interface LinkedLearnerGrantRepository extends JpaRepository<LinkedLearne
             LinkedLearnerGrantScope scope
     );
 
+    List<LinkedLearnerGrantEntity> findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+            Collection<UUID> relationshipIds,
+            Collection<LinkedLearnerGrantScope> scopes
+    );
+
     @Modifying
     @Query(value = """
             INSERT INTO linked_learner_grants
                 (id, relationship_id, from_user_id, to_user_id, scope, granted_at)
-            VALUES (:id, :relationshipId, :fromUserId, :toUserId, :scope, :grantedAt)
+            SELECT :id, :relationshipId, :fromUserId, :toUserId, :scope, :grantedAt
+              FROM linked_learner_relationships relationship
+             WHERE relationship.id = :relationshipId
+               AND relationship.status = 'ACCEPTED'
             ON CONFLICT (relationship_id, from_user_id, scope)
                 WHERE revoked_at IS NULL
             DO NOTHING

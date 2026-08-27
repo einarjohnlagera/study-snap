@@ -60,6 +60,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class LinkedLearnerServiceTest {
@@ -582,7 +583,9 @@ class LinkedLearnerServiceTest {
         when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
                 learner.getId(), learner.getId())).thenReturn(List.of());
         LinkedLearnerReadAuthorizationService readAuthorizationService =
-                new LinkedLearnerReadAuthorizationService(relationshipRepository);
+                new LinkedLearnerReadAuthorizationService(
+                        relationshipRepository,
+                        progressGrantAuthorization(relationship));
 
         UUID authorizedLearnerId = readAuthorizationService.requireAcceptedLearnerId(
                 supporter.getId(), relationship.getId());
@@ -592,6 +595,22 @@ class LinkedLearnerServiceTest {
         assertThatThrownBy(() -> readAuthorizationService.requireAcceptedLearnerId(
                 supporter.getId(), relationship.getId()))
                 .isInstanceOf(LinkedLearnerProgressNotFoundException.class);
+    }
+
+    private LinkedLearnerGrantAuthorizationService progressGrantAuthorization(
+            LinkedLearnerRelationshipEntity relationship
+    ) {
+        LinkedLearnerGrantAuthorizationService authorizationService =
+                mock(LinkedLearnerGrantAuthorizationService.class);
+        when(authorizationService.requireGrant(
+                relationship.getSupporterUserId(), relationship.getId(), LinkedLearnerGrantScope.PROGRESS))
+                .thenAnswer(invocation -> {
+                    if (relationship.getStatus() != LinkedLearnerStatus.ACCEPTED) {
+                        throw new com.studysnap.backend.exception.LinkedLearnerNotFoundException();
+                    }
+                    return relationship.getLearnerUserId();
+                });
+        return authorizationService;
     }
 
     @Test
@@ -616,14 +635,13 @@ class LinkedLearnerServiceTest {
     }
 
     @Test
-    void listResponseExposesNoLearnerActivityFields() {
+    void listResponseExposesPermissionFlagsButNoLearnerProgressPayload() {
         Set<String> componentNames = Arrays.stream(LinkedLearnerResponse.class.getRecordComponents())
                 .map(component -> component.getName().toLowerCase())
                 .collect(Collectors.toSet());
 
         assertThat(componentNames).noneMatch(name ->
-                name.contains("progress")
-                        || name.contains("readiness")
+                name.contains("readiness")
                         || name.contains("score")
                         || name.contains("quiz")
                         || name.contains("note")
@@ -632,7 +650,7 @@ class LinkedLearnerServiceTest {
     }
 
     @Test
-    void listComputesTheAsymmetricActivityFieldsIndependentlyForBothCallers() {
+    void listComputesBothScopesAndDirectionsIndependentlyForBothCallers() {
         UserEntity supporter = user(SUPPORTER_EMAIL);
         UserEntity learner = user(LEARNER_EMAIL);
         learner.setBirthYear(Year.now().getValue() - 30);
@@ -644,25 +662,88 @@ class LinkedLearnerServiceTest {
         learnerToSupporter.setToUserId(supporter.getId());
         learnerToSupporter.setScope(LinkedLearnerGrantScope.ACTIVITY);
         learnerToSupporter.setGrantedAt(OffsetDateTime.now());
+        LinkedLearnerGrantEntity learnerProgressToSupporter = new LinkedLearnerGrantEntity();
+        learnerProgressToSupporter.setId(UUID.randomUUID());
+        learnerProgressToSupporter.setRelationshipId(relationship.getId());
+        learnerProgressToSupporter.setFromUserId(learner.getId());
+        learnerProgressToSupporter.setToUserId(supporter.getId());
+        learnerProgressToSupporter.setScope(LinkedLearnerGrantScope.PROGRESS);
+        learnerProgressToSupporter.setGrantedAt(OffsetDateTime.now());
         stubUser(supporter);
         stubUser(learner);
         when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
                 learner.getId(), learner.getId())).thenReturn(List.of(relationship));
-        when(grantRepository.findByRelationshipIdInAndScopeAndRevokedAtIsNull(
-                Set.of(relationship.getId()), LinkedLearnerGrantScope.ACTIVITY))
-                .thenReturn(List.of(learnerToSupporter));
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                Set.of(relationship.getId()), List.of(
+                        LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS)))
+                .thenReturn(List.of(learnerToSupporter, learnerProgressToSupporter));
 
         LinkedLearnerResponse supporterView = service.list(supporter.getId()).getFirst();
         LinkedLearnerResponse learnerView = service.list(learner.getId()).getFirst();
 
         assertThat(supporterView.activitySharedByMe()).isFalse();
         assertThat(supporterView.activitySharedWithMe()).isTrue();
+        assertThat(supporterView.progressSharedByMe()).isFalse();
+        assertThat(supporterView.progressSharedWithMe()).isTrue();
         assertThat(learnerView.activitySharedByMe()).isTrue();
         assertThat(learnerView.activitySharedWithMe()).isFalse();
-        verify(grantRepository, times(2)).findByRelationshipIdInAndScopeAndRevokedAtIsNull(
-                Set.of(relationship.getId()), LinkedLearnerGrantScope.ACTIVITY);
+        assertThat(learnerView.progressSharedByMe()).isTrue();
+        assertThat(learnerView.progressSharedWithMe()).isFalse();
+        verify(grantRepository, times(2)).findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                Set.of(relationship.getId()), List.of(
+                        LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS));
+    }
+
+    @Test
+    void pendingRelationshipKeepsRowsVisibleByMeButReportsNoAccessWithMeForBothScopes() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 10);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        relationship.setStatus(LinkedLearnerStatus.PENDING);
+        LinkedLearnerGrantEntity activity = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.ACTIVITY);
+        LinkedLearnerGrantEntity progress = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.PROGRESS);
+        stubUser(supporter);
+        stubUser(learner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                Set.of(relationship.getId()), List.of(
+                        LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS)))
+                .thenReturn(List.of(activity, progress));
+
+        LinkedLearnerResponse learnerView = service.list(learner.getId()).getFirst();
+        LinkedLearnerResponse supporterView = service.list(supporter.getId()).getFirst();
+
+        assertThat(learnerView.activitySharedByMe()).isTrue();
+        assertThat(learnerView.progressSharedByMe()).isTrue();
+        assertThat(learnerView.activitySharedWithMe()).isFalse();
+        assertThat(learnerView.progressSharedWithMe()).isFalse();
+        assertThat(supporterView.activitySharedWithMe()).isFalse();
+        assertThat(supporterView.progressSharedWithMe()).isFalse();
+    }
+
+    private LinkedLearnerGrantEntity grant(
+            LinkedLearnerRelationshipEntity relationship,
+            UUID fromUserId,
+            UUID toUserId,
+            LinkedLearnerGrantScope scope
+    ) {
+        LinkedLearnerGrantEntity grant = new LinkedLearnerGrantEntity();
+        grant.setId(UUID.randomUUID());
+        grant.setRelationshipId(relationship.getId());
+        grant.setFromUserId(fromUserId);
+        grant.setToUserId(toUserId);
+        grant.setScope(scope);
+        grant.setGrantedAt(OffsetDateTime.now());
+        return grant;
     }
 
     /**

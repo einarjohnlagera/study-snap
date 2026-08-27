@@ -1,9 +1,11 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
+import com.studysnap.backend.entity.LinkedLearnerGrantScope;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.exception.LinkedLearnerProgressNotFoundException;
+import com.studysnap.backend.exception.LinkedLearnerNotFoundException;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,23 +20,31 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class LinkedLearnerReadAuthorizationServiceTest {
     @Mock
     private LinkedLearnerRelationshipRepository relationshipRepository;
+    @Mock
+    private LinkedLearnerGrantAuthorizationService grantAuthorizationService;
 
     private LinkedLearnerReadAuthorizationService authorizationService;
 
     @BeforeEach
     void setUp() {
-        authorizationService = new LinkedLearnerReadAuthorizationService(relationshipRepository);
+        authorizationService = new LinkedLearnerReadAuthorizationService(
+                relationshipRepository, grantAuthorizationService);
     }
 
     @Test
-    void acceptedRelationshipReturnsLearnerIdOnlyForSupporter() {
+    void liveProgressGrantReturnsLearnerIdOnlyForSupporter() {
         LinkedLearnerRelationshipEntity relationship = relationship(LinkedLearnerStatus.ACCEPTED);
         when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
+        when(grantAuthorizationService.requireGrant(
+                relationship.getSupporterUserId(), relationship.getId(), LinkedLearnerGrantScope.PROGRESS))
+                .thenReturn(relationship.getLearnerUserId());
 
         UUID learnerUserId = authorizationService.requireAcceptedLearnerId(
                 relationship.getSupporterUserId(), relationship.getId());
@@ -43,9 +53,26 @@ class LinkedLearnerReadAuthorizationServiceTest {
     }
 
     @Test
+    void acceptedRelationshipWithoutProgressGrantIsDeniedWithProgressErrorContract() {
+        LinkedLearnerRelationshipEntity relationship = relationship(LinkedLearnerStatus.ACCEPTED);
+        when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
+        when(grantAuthorizationService.requireGrant(
+                relationship.getSupporterUserId(), relationship.getId(), LinkedLearnerGrantScope.PROGRESS))
+                .thenThrow(new LinkedLearnerNotFoundException());
+
+        assertThatThrownBy(() -> authorizationService.requireAcceptedLearnerId(
+                relationship.getSupporterUserId(), relationship.getId()))
+                .isInstanceOf(LinkedLearnerProgressNotFoundException.class)
+                .hasFieldOrPropertyWithValue("code", "LINKED_LEARNER_PROGRESS_NOT_FOUND");
+    }
+
+    @Test
     void pendingRelationshipGrantsNothing() {
         LinkedLearnerRelationshipEntity relationship = relationship(LinkedLearnerStatus.PENDING);
         when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
+        when(grantAuthorizationService.requireGrant(
+                relationship.getSupporterUserId(), relationship.getId(), LinkedLearnerGrantScope.PROGRESS))
+                .thenThrow(new LinkedLearnerNotFoundException());
 
         assertThatThrownBy(() -> authorizationService.requireAcceptedLearnerId(
                 relationship.getSupporterUserId(), relationship.getId()))
@@ -58,6 +85,9 @@ class LinkedLearnerReadAuthorizationServiceTest {
         UUID missingRelationshipId = UUID.randomUUID();
         when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
         when(relationshipRepository.findById(missingRelationshipId)).thenReturn(Optional.empty());
+        when(grantAuthorizationService.requireGrant(
+                relationship.getSupporterUserId(), relationship.getId(), LinkedLearnerGrantScope.PROGRESS))
+                .thenThrow(new LinkedLearnerNotFoundException());
 
         LinkedLearnerProgressNotFoundException revoked = captureNotFound(
                 relationship.getSupporterUserId(), relationship.getId());
@@ -70,13 +100,15 @@ class LinkedLearnerReadAuthorizationServiceTest {
     }
 
     @Test
-    void learnerCannotReadSupporterThroughRelationship() {
+    void learnerCannotReadSupporterEvenWithAReverseDirectionProgressGrant() {
         LinkedLearnerRelationshipEntity relationship = relationship(LinkedLearnerStatus.ACCEPTED);
         when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
 
         assertThatThrownBy(() -> authorizationService.requireAcceptedLearnerId(
                 relationship.getLearnerUserId(), relationship.getId()))
                 .isInstanceOf(LinkedLearnerProgressNotFoundException.class);
+        verify(grantAuthorizationService, never()).requireGrant(
+                relationship.getLearnerUserId(), relationship.getId(), LinkedLearnerGrantScope.PROGRESS);
     }
 
     @Test
@@ -94,6 +126,10 @@ class LinkedLearnerReadAuthorizationServiceTest {
     void revocationCutsAccessOnTheNextRead() {
         LinkedLearnerRelationshipEntity relationship = relationship(LinkedLearnerStatus.ACCEPTED);
         when(relationshipRepository.findById(relationship.getId())).thenReturn(Optional.of(relationship));
+        when(grantAuthorizationService.requireGrant(
+                relationship.getSupporterUserId(), relationship.getId(), LinkedLearnerGrantScope.PROGRESS))
+                .thenReturn(relationship.getLearnerUserId())
+                .thenThrow(new LinkedLearnerNotFoundException());
 
         UUID learnerUserId = authorizationService.requireAcceptedLearnerId(
                 relationship.getSupporterUserId(), relationship.getId());

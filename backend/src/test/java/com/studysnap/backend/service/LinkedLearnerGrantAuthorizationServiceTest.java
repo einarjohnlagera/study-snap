@@ -109,14 +109,15 @@ class LinkedLearnerGrantAuthorizationServiceTest {
         when(guardianConsentPolicy.requiresGuardianConsent(2015)).thenReturn(true);
         when(consentRepository.findByRelationshipId(RELATIONSHIP_ID)).thenReturn(Optional.empty());
         when(grantRepository.findFirstByRelationshipIdAndFromUserIdAndScopeAndRevokedAtIsNull(
-                RELATIONSHIP_ID, LEARNER_ID, LinkedLearnerGrantScope.ACTIVITY))
-                .thenReturn(Optional.of(grant(LEARNER_ID, SUPPORTER_ID)));
+                RELATIONSHIP_ID, LEARNER_ID, LinkedLearnerGrantScope.PROGRESS))
+                .thenReturn(Optional.of(grant(
+                        LEARNER_ID, SUPPORTER_ID, LinkedLearnerGrantScope.PROGRESS)));
         when(grantRepository.findFirstByRelationshipIdAndFromUserIdAndScopeAndRevokedAtIsNull(
                 RELATIONSHIP_ID, SUPPORTER_ID, LinkedLearnerGrantScope.ACTIVITY))
                 .thenReturn(Optional.of(grant(SUPPORTER_ID, LEARNER_ID)));
 
         assertThatThrownBy(() -> service.requireGrant(
-                SUPPORTER_ID, RELATIONSHIP_ID, LinkedLearnerGrantScope.ACTIVITY))
+                SUPPORTER_ID, RELATIONSHIP_ID, LinkedLearnerGrantScope.PROGRESS))
                 .isInstanceOf(LinkedLearnerNotFoundException.class);
         assertThat(service.requireGrant(LEARNER_ID, RELATIONSHIP_ID, LinkedLearnerGrantScope.ACTIVITY))
                 .isEqualTo(SUPPORTER_ID);
@@ -139,12 +140,20 @@ class LinkedLearnerGrantAuthorizationServiceTest {
     }
 
     private LinkedLearnerGrantEntity grant(UUID fromUserId, UUID toUserId) {
+        return grant(fromUserId, toUserId, LinkedLearnerGrantScope.ACTIVITY);
+    }
+
+    private LinkedLearnerGrantEntity grant(
+            UUID fromUserId,
+            UUID toUserId,
+            LinkedLearnerGrantScope scope
+    ) {
         LinkedLearnerGrantEntity grant = new LinkedLearnerGrantEntity();
         grant.setId(UUID.randomUUID());
         grant.setRelationshipId(RELATIONSHIP_ID);
         grant.setFromUserId(fromUserId);
         grant.setToUserId(toUserId);
-        grant.setScope(LinkedLearnerGrantScope.ACTIVITY);
+        grant.setScope(scope);
         grant.setGrantedAt(OffsetDateTime.now());
         return grant;
     }
