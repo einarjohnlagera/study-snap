@@ -44,6 +44,10 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
   input, so there is one year-input idiom rather than two. **⚠️ No default year is pre-filled** — the value is
   account-global and effectively write-once, so a default would be a declaration nobody made — and **a blank
   year is still not a client-side error**, because only the server knows whether this account already has one.
+- **A Memorization error message was invisible.** The grade-failure text used `text-destructive`, which is not a
+  token in this theme's `@theme inline` block, so Tailwind generated no rule and the message rendered in the
+  default body colour — readable, but not signalling failure. It now uses the product's red scale and carries
+  `role="alert"` so it is announced.
 - **The Help Center covers helping someone learn.** None of its 14 sections mentioned it, and *Export &
   Sharing* documented PDF export without ever naming shareable quiz links — so after the landing page was
   corrected, the public surface told the truth while the in-app surface still said nothing. A new
