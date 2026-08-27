@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Download, FileText, Globe } from "lucide-react";
+import { ArrowRight, Download, FileText, Globe, Users } from "lucide-react";
 
 type Section = {
   icon: React.ElementType;
@@ -10,6 +10,16 @@ type Section = {
 };
 
 const SECTIONS: Section[] = [
+  {
+    icon: Users,
+    title: "Sharing with a person, not a file",
+    description: "Exports below are files you download. To put material in someone else's hands inside NoteLib, you have two options that do not involve a download at all.",
+    bullets: [
+      "Quiz for someone — a link anyone can open and answer without an account",
+      "Share with connections — give specific people your note and its Study Pack, while it stays out of Explore",
+      "Both are covered in the Helping Someone Learn section of this Help Center",
+    ],
+  },
   {
     icon: Download,
     title: "Exporting a quiz session",
