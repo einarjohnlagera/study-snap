@@ -66,6 +66,21 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
   deleted**: nothing fires it and it is gone from the frontend's firing vocabulary, but the enum value stays
   because those rows are the product's only pre-launch interest baseline for this capability.
 
+### ⚠️ Planned scope that did NOT ship
+
+- **Quota legibility — folded into this release on 2026-08-27 and never built.** The meter is labelled
+  *Challenge Quiz* everywhere while being spent by *Quiz for someone*, and the Free share-link cap (3) is
+  asserted **only at link creation** — after the LLM cost for the 4th, 5th and 6th quiz is already paid. The
+  Codex prompt was written (`docs/codex-prompts/v0.91.0-quota-legibility.md`, gitignored) and never sent. **Owner decision 2026-08-27: it ships in `v0.92.0`**, and must be written into that release's Planned Scope at
+  kickoff rather than carried in conversation, which is how it went missing here.
+- **⚠️ How it escaped the signoff gate, recorded so the gate can be repaired rather than re-trusted.** This
+  section is titled *Planned Scope* at kickoff; the delivery overwrote it with *Shipped*, so at signoff there was
+  **no scope list in the file to re-read**. The gate was run against a remembered list instead — which is the
+  exact `v0.73.0` failure it was written to prevent. Compounding it, the two items folded in mid-release were
+  never appended to any scope list, so neither the file nor the check could see them. **Two rules follow: scope
+  added mid-release must be appended to the release's own scope list at the moment it is agreed, and the
+  completeness gate must read that list from the file — a gate satisfied from memory is not a gate.**
+
 ### Known limitations
 
 **Found by the cold-context pre-signoff pressure test (two agents, 2026-08-27). Everything below was verified
