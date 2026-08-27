@@ -176,6 +176,10 @@ owner after a survey of carried limitations; the pre-declared cold-agent pressur
   limit, usage and remaining count, including Pro's existing unlimited representation. The generation dialog
   shows both meters and warns when links are exhausted without blocking generation; enforcement remains solely
   at link creation and no quota or counter changed.
+- **Phase 2's grant-to-view loop is now measurable.** First-time activity grants, real grant revocations and
+  successful momentum reads emit relationship-scoped analytics events; idempotent no-ops and denied reads emit
+  nothing. Grant metadata carries only the caller's relationship role, view metadata is empty, and analytics
+  failure cannot fail or roll back the product action. No learner activity type or learning-state write was added.
 
 - **Folded items 6–10: the Help Center, two carried `v0.91.0` limitations, and a defect this release created.**
   **⚠️ `learning-connections-guide.tsx:8` told the next agent that activity sharing "is NOT built" — Phase 2 had

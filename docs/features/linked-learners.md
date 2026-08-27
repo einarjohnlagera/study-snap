@@ -173,6 +173,20 @@ deliberately excludes `OPENED_STUDY_PACK` through the existing `MEANINGFUL_STUDY
 writes no activity event, `ConceptHealth`, progress timestamp or user state. Zeroes render as an honest empty
 answer rather than being hidden.
 
+### Activity-sharing analytics
+
+Phase 2's grant-to-view loop uses three product-analytics events, separate from learner activity tracking:
+
+- `CONNECTION_ACTIVITY_SHARED` fires only when enabling sharing inserts a new live grant;
+- `CONNECTION_ACTIVITY_SHARE_REVOKED` fires only when disabling sharing revokes a live grant;
+- `CONNECTION_ACTIVITY_VIEWED` fires only after an authorized momentum response is successfully assembled.
+
+The relationship id is the analytics entity id. Grant events carry only the caller's relationship role
+(`SUPPORTER` or `LEARNER`); view metadata is empty. Repeating an already-applied grant setting emits nothing,
+and denied or failed momentum reads emit nothing. Analytics publication is best-effort and cannot fail the grant
+transition or momentum response. These events contain no streak, study-day, score, mastery, concept, title or
+other learning-content field, and they do not create `UserActivityEventEntity` rows or change learning state.
+
 ## Phase 3 supporter progress read
 
 **The owner-facing share listing is relationship-aware.** `GET /notes/{id}/shares` returns only live shares whose
