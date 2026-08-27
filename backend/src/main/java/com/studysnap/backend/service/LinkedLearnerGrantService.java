@@ -39,9 +39,18 @@ public class LinkedLearnerGrantService {
         authService.requireEmailVerified(callerUserId);
         LinkedLearnerRelationshipEntity relationship = relationshipRepository.findById(relationshipId)
                 .orElseThrow(LinkedLearnerNotFoundException::new);
-        if (relationship.getStatus() != LinkedLearnerStatus.ACCEPTED) {
+        // ⚠️ ASYMMETRIC BY DESIGN: granting requires ACCEPTED, WITHDRAWING never does.
+        // Gating both on ACCEPTED locked a learner out of turning sharing OFF at exactly the moment it
+        // matters most: a downward birth-year correction pauses the relationship to PENDING
+        // (`pauseAcceptedForConsent`), the live grant row SURVIVES the pause, and re-acceptance makes
+        // momentum readable again with no fresh act of sharing. Withdrawing consent must never require
+        // the counterparty's cooperation or a status the learner does not control. Granting still
+        // requires ACCEPTED, because widening access on a paused relationship is the thing the pause
+        // exists to prevent.
+        if (granted && relationship.getStatus() != LinkedLearnerStatus.ACCEPTED) {
             throw new LinkedLearnerNotFoundException();
         }
+        // Membership is required on BOTH branches — a non-party may not touch the row either way.
         UUID toUserId = resolveOtherParty(relationship, callerUserId);
 
         int affectedRows;

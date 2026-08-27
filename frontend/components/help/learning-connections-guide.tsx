@@ -75,10 +75,10 @@ const SECTIONS: Section[] = [
     icon: Activity,
     title: "Show someone you are studying",
     description:
-      "On an accepted connection, turn on Share my study activity. They can then see your streak and how many days you studied this week — and nothing else. It is off until you turn it on.",
+      "On an accepted connection, turn on Share my study activity. They can then see your current streak, your longest streak, how many days you studied this week, and your study mode — and nothing else. It is off until you turn it on.",
     bullets: [
       "Connecting on its own shares nothing — this is a separate choice",
-      "It works one way at a time: sharing yours does not make theirs visible to you, and either of you can turn it off",
+      "It works one way at a time: sharing yours does not make theirs visible to you. Whoever turned sharing on can turn it off, and either of you can end the connection",
       "They see streaks and study days, never your scores, your notes or what you studied",
       "Turning it off, or ending the connection, cuts their view immediately",
     ],

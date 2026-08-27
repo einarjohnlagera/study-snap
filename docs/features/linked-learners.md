@@ -2,7 +2,9 @@
 
 ## Scope
 
-Linked Learners records a directional supporter → learner relationship only after mutual agreement. Phase 2 established the relationship; Phase 3 lets the supporter read a deliberately narrow progress projection after the relationship is accepted.
+Linked Learners records a directional supporter → learner relationship only after mutual agreement. The relationship layer and the supporter progress read both shipped in `v0.89.0`; controlled note sharing shipped in `v0.91.0` and directional activity sharing in `v0.92.0`.
+
+**⚠️ PHASE NUMBERING — read this before using the word "Phase" anywhere in this file.** Two schemes exist and this document has already mixed them. The **canonical** scheme is the ratified Learning Connections plan (`docs/claude-plans/learning-connections-phase-plan.md`, and `ROADMAP.md`): **Phase 1 = shared learning material (`v0.91.0`, shipped), Phase 2 = activity sharing (`v0.92.0`, shipped), Phase 3 = per-scope `PROGRESS` grants (NOT built).** A superseded `v0.89.0`-era scheme numbered the *rollout of the relationship layer itself* and called the supporter progress read "Phase 3" — under the canonical scheme that read is simply shipped `v0.89.0` behaviour and is **not** Phase 3. **⚠️ `PROGRESS`-scope grants are NOT built. The supporter progress read IS built.** Those are different things and the old numbering makes them look like the same one.
 
 A supported learner remains a full, ordinary NoteLib account with their own login, plan and quota. A supporter may also be a learner. The relationship is separate from `ProfileType`; no supporter profile type exists or is required.
 
@@ -187,7 +189,9 @@ and denied or failed momentum reads emit nothing. Analytics publication is best-
 transition or momentum response. These events contain no streak, study-day, score, mastery, concept, title or
 other learning-content field, and they do not create `UserActivityEventEntity` rows or change learning state.
 
-## Phase 3 supporter progress read
+## Supporter progress read (shipped in `v0.89.0`)
+
+**⚠️ Formerly headed "Phase 3" under the superseded numbering — see the phase-numbering note above. This read is SHIPPED. Phase 3 in the canonical scheme is per-scope `PROGRESS` grants, which are NOT built.**
 
 **The owner-facing share listing is relationship-aware.** `GET /notes/{id}/shares` returns only live shares whose
 relationship is still `ACCEPTED`, matching what `PUT` will accept. Filtering on `revoked_at` alone kept a lapsed

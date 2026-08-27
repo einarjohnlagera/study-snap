@@ -222,6 +222,71 @@ it("renders zero momentum honestly instead of hiding it", async () => {
   expect(screen.getByText("Focused")).toBeInTheDocument();
 });
 
+it("refetches momentum on every expand so revoked data is never re-rendered from memory", async () => {
+  // ⚠️ The privacy defect this pins: access is re-derived server-side on every request, which is what
+  // makes a revoke cut immediately. Serving a cached payload on re-expand defeats that CLIENT-side —
+  // collapse, the owner revokes, re-expand, and withdrawn momentum renders with no request issued, so
+  // no 403 arrives and the access-ended path never runs.
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    status: "ACCEPTED",
+    incomingInvitation: false,
+    activitySharedWithMe: true,
+  }]);
+  jest.mocked(getLinkedLearnerActivity).mockResolvedValue({
+    displayName: "Pat Supporter",
+    engagementMode: "CONSISTENCY",
+    currentStreak: 7,
+    longestStreak: 9,
+    studyDaysThisWeek: 4,
+  });
+  render(<LinkedLearnersPage />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "View momentum" }));
+  expect(await screen.findByText("7 days")).toBeInTheDocument();
+  expect(getLinkedLearnerActivity).toHaveBeenCalledTimes(1);
+
+  // Collapse: the payload must not survive.
+  fireEvent.click(screen.getByRole("button", { name: "Hide momentum" }));
+  expect(screen.queryByText("7 days")).not.toBeInTheDocument();
+
+  // Re-expand must hit the server again rather than re-rendering what it already had.
+  fireEvent.click(screen.getByRole("button", { name: "View momentum" }));
+  await waitFor(() => expect(getLinkedLearnerActivity).toHaveBeenCalledTimes(2));
+});
+
+it("does not strand an open momentum panel when the grant is withdrawn", async () => {
+  // The control that closes the panel lives inside the activitySharedWithMe branch, so a refresh
+  // flipping the grant false must take the panel with it — not leave it open and undismissable.
+  jest.mocked(getLinkedLearners)
+    .mockResolvedValueOnce([{
+      ...baseLink, status: "ACCEPTED", incomingInvitation: false, activitySharedWithMe: true,
+    }])
+    .mockResolvedValue([{
+      ...baseLink, status: "ACCEPTED", incomingInvitation: false, activitySharedWithMe: false,
+    }]);
+  jest.mocked(getLinkedLearnerActivity).mockResolvedValue({
+    displayName: "Pat Supporter",
+    engagementMode: "CONSISTENCY",
+    currentStreak: 7,
+    longestStreak: 9,
+    studyDaysThisWeek: 4,
+  });
+  render(<LinkedLearnersPage />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "View momentum" }));
+  expect(await screen.findByText("7 days")).toBeInTheDocument();
+
+  // A 403 on a later read is the access-ended path; it must clear the panel.
+  jest.mocked(getLinkedLearnerActivity).mockRejectedValue(
+    Object.assign(new Error("gone"), { status: 403, name: "ApiRequestError" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Hide momentum" }));
+  fireEvent.click(screen.getByRole("button", { name: "View momentum" }));
+
+  await waitFor(() => expect(screen.queryByText("7 days")).not.toBeInTheDocument());
+});
+
 it("shows momentum load failures inline and retries them", async () => {
   jest.mocked(getLinkedLearners).mockResolvedValue([{
     ...baseLink,
