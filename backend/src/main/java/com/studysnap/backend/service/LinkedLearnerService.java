@@ -8,6 +8,8 @@ import com.studysnap.backend.dto.LinkedLearnerInvitationResponse;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.LinkedLearnerGuardianConsentEntity;
+import com.studysnap.backend.entity.LinkedLearnerGrantEntity;
+import com.studysnap.backend.entity.LinkedLearnerGrantScope;
 import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
@@ -23,6 +25,7 @@ import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
+import com.studysnap.backend.repository.LinkedLearnerGrantRepository;
 import com.studysnap.backend.entity.LinkedLearnerInvitationEntity;
 import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
@@ -37,7 +40,9 @@ import java.time.Year;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -60,12 +65,14 @@ public class LinkedLearnerService {
     private final LinkedLearnerRelationshipRepository relationshipRepository;
     private final LinkedLearnerInvitationRepository invitationRepository;
     private final LinkedLearnerGuardianConsentRepository consentRepository;
+    private final LinkedLearnerGrantRepository grantRepository;
     private final UserRepository userRepository;
     private final OnboardingGuardService onboardingGuardService;
     private final AuthService authService;
     private final EmailService emailService;
     private final EmailTemplateService emailTemplateService;
     private final StudySnapProperties properties;
+    private final GuardianConsentPolicy guardianConsentPolicy;
     private final InvitationRateLimitService invitationRateLimitService;
 
     @Transactional
@@ -363,7 +370,7 @@ public class LinkedLearnerService {
             persistBirthYear(learnerUserId, birthYear);
         }
 
-        boolean consentRequired = requiresGuardianConsent(birthYear);
+        boolean consentRequired = guardianConsentPolicy.requiresGuardianConsent(birthYear);
         boolean consentRecorded = consentRepository.findByRelationshipId(relationshipId).isPresent();
         if (consentRequired && !consentRecorded && request.guardianConsentAttested()
                 && callerUserId.equals(relationship.getSupporterUserId())) {
@@ -420,7 +427,7 @@ public class LinkedLearnerService {
         if (learner.getBirthYear() == null) {
             throw new LinkedLearnerBirthYearRequiredException();
         }
-        if (!requiresGuardianConsent(learner.getBirthYear())) {
+        if (!guardianConsentPolicy.requiresGuardianConsent(learner.getBirthYear())) {
             throw new LinkedLearnerNotAllowedException();
         }
         if (consentRepository.findByRelationshipId(relationshipId).isEmpty()) {
@@ -495,7 +502,7 @@ public class LinkedLearnerService {
     ) {
         if (currentBirthYear == null
                 || correctedBirthYear <= currentBirthYear
-                || !requiresGuardianConsent(correctedBirthYear)) {
+                || !guardianConsentPolicy.requiresGuardianConsent(correctedBirthYear)) {
             return List.of();
         }
         return relationshipRepository
@@ -506,16 +513,26 @@ public class LinkedLearnerService {
     }
 
     private List<LinkedLearnerResponse> listRelationships(UUID callerUserId) {
-        return relationshipRepository
-                .findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(callerUserId, callerUserId)
-                .stream()
-                .map(relationship -> toResponse(relationship, callerUserId))
+        List<LinkedLearnerRelationshipEntity> relationships = relationshipRepository
+                .findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(callerUserId, callerUserId);
+        Set<UUID> relationshipIds = relationships.stream()
+                .map(LinkedLearnerRelationshipEntity::getId)
+                .collect(Collectors.toSet());
+        Map<UUID, Set<UUID>> sharedFromUserIdsByRelationship = relationshipIds.isEmpty()
+                ? Map.of()
+                : grantRepository.findByRelationshipIdInAndScopeAndRevokedAtIsNull(
+                                relationshipIds, LinkedLearnerGrantScope.ACTIVITY)
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                LinkedLearnerGrantEntity::getRelationshipId,
+                                Collectors.mapping(LinkedLearnerGrantEntity::getFromUserId, Collectors.toSet())
+                        ));
+        return relationships.stream()
+                .map(relationship -> toResponse(
+                        relationship,
+                        callerUserId,
+                        sharedFromUserIdsByRelationship.getOrDefault(relationship.getId(), Set.of())))
                 .toList();
-    }
-
-    private boolean requiresGuardianConsent(int birthYear) {
-        int youngestPossibleAge = Year.now().getValue() - birthYear - 1;
-        return youngestPossibleAge <= properties.getLinkedLearners().getGuardianConsentMaxAge();
     }
 
     private void recordConsent(LinkedLearnerRelationshipEntity relationship, UUID supporterUserId) {
@@ -530,6 +547,20 @@ public class LinkedLearnerService {
     }
 
     private LinkedLearnerResponse toResponse(LinkedLearnerRelationshipEntity relationship, UUID callerUserId) {
+        Set<UUID> sharedFromUserIds = grantRepository
+                .findByRelationshipIdInAndScopeAndRevokedAtIsNull(
+                        Set.of(relationship.getId()), LinkedLearnerGrantScope.ACTIVITY)
+                .stream()
+                .map(LinkedLearnerGrantEntity::getFromUserId)
+                .collect(Collectors.toSet());
+        return toResponse(relationship, callerUserId, sharedFromUserIds);
+    }
+
+    private LinkedLearnerResponse toResponse(
+            LinkedLearnerRelationshipEntity relationship,
+            UUID callerUserId,
+            Set<UUID> sharedFromUserIds
+    ) {
         LinkedLearnerSide callerRole = callerUserId.equals(relationship.getSupporterUserId())
                 ? LinkedLearnerSide.SUPPORTER : LinkedLearnerSide.LEARNER;
         requireParty(relationship, callerUserId);
@@ -538,7 +569,7 @@ public class LinkedLearnerService {
         UserEntity counterparty = requireUser(counterpartyId);
         UserEntity learner = callerRole == LinkedLearnerSide.LEARNER ? requireUser(callerUserId) : counterparty;
         boolean consentRequired = learner.getBirthYear() != null
-                && requiresGuardianConsent(learner.getBirthYear());
+                && guardianConsentPolicy.requiresGuardianConsent(learner.getBirthYear());
         boolean consentRecorded = consentRepository.findByRelationshipId(relationship.getId()).isPresent();
         boolean invitedParty = relationship.getInitiatedBy() != callerRole;
 
@@ -561,7 +592,9 @@ public class LinkedLearnerService {
                 relationship.getRevokedAt(),
                 learner.getBirthYear() == null,
                 consentRequired,
-                consentRecorded
+                consentRecorded,
+                sharedFromUserIds.contains(callerUserId),
+                sharedFromUserIds.contains(counterpartyId)
         );
     }
 

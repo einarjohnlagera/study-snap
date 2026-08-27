@@ -1107,6 +1107,16 @@ export type LinkedLearnerResponse = {
   birthYearRequired: boolean;
   guardianConsentRequired: boolean;
   guardianConsentRecorded: boolean;
+  activitySharedByMe: boolean;
+  activitySharedWithMe: boolean;
+};
+
+export type LinkedLearnerActivityResponse = {
+  displayName: string;
+  engagementMode: "FOCUSED" | "CONSISTENCY" | "STREAK";
+  currentStreak: number;
+  longestStreak: number;
+  studyDaysThisWeek: number;
 };
 
 export type LinkedLearnerBirthYearCorrectionPreviewResponse = {
@@ -5514,6 +5524,33 @@ export async function getLinkedLearnerProgress(
     true,
   );
   return parseApiResponse<LinkedLearnerProgressResponse>(response, "Could not load this learner's progress.");
+}
+
+export async function setLinkedLearnerActivityGrant(
+  relationshipId: string,
+  granted: boolean,
+): Promise<{ granted: boolean }> {
+  const response = await fetchWithAuth(
+    `/linked-learners/${relationshipId}/grants/activity`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ granted }),
+    },
+    true,
+  );
+  return parseApiResponse<{ granted: boolean }>(response, "Could not update activity sharing.");
+}
+
+export async function getLinkedLearnerActivity(
+  relationshipId: string,
+): Promise<LinkedLearnerActivityResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/${relationshipId}/activity`,
+    { headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerActivityResponse>(response, "Could not load study activity.");
 }
 
 export type LinkedLearnerInvitationResponse = {

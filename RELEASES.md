@@ -109,7 +109,19 @@ in the file at signoff, or the gate is not a gate.**
 
 ### Shipped
 
-_(nothing yet)_
+- **Phase 2 activity-grant substrate shipped.** `V125` adds directional, revocable
+  `linked_learner_grants` rows with both `ACTIVITY` and future `PROGRESS` scope values, a live-row partial unique
+  index, and idempotent caller-owned writes. Only `ACTIVITY` is used in this release. The shared
+  guardian-consent age decision now lives in one configuration-backed policy.
+- **Activity access is explicit, directional and re-authorized on every read.** The grant check requires an
+  `ACCEPTED` relationship, caller membership, a live counterparty-to-caller grant, guardian consent only when
+  the learner owns the shared data, and a verified caller. Revoking a grant or relationship, and a birth-year
+  correction that pauses the relationship, cut access immediately.
+- **Learning Connections now shows both sharing directions and a narrow momentum view.** Each accepted card has
+  a caller-owned “Share my study activity” toggle plus a separate read-only counterparty state. Momentum reuses
+  existing engagement mode, streak and meaningful-study-day data, renders zero activity honestly, and exposes
+  no progress, mastery, score, content title or authored free text. Failed privacy writes retain the last
+  server-confirmed toggle state; ended access collapses the view and refreshes the connection.
 
 ## v0.91.0 - Shared Learning Material
 
