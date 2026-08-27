@@ -20,6 +20,7 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.SharedNoteNotFoundException;
 import com.studysnap.backend.exception.QuickReviewSessionNotFoundException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
@@ -560,8 +561,34 @@ public class QuickReviewSessionService {
         if (existing.isEmpty()) {
             return Optional.empty();
         }
-        noteShareService.requireSharedStudyPackAccess(userId, studyPackId);
+        requireSharedStudyPackAccessFailingClosed(userId, studyPackId);
         return existing;
+    }
+
+    /**
+     * The authorization call, failing CLOSED on any fault.
+     *
+     * <p>⚠️ This is the half of {@code recheckMaterialAccess}'s broad catch that must NOT be tolerant, and
+     * separating the two is the whole point. A fault reading the pack row is not a denial and is still waved
+     * through by the caller — completing a session whose pack has since been deleted or corrupted has always
+     * succeeded, and the caller owns the session either way. But a fault raised while DECIDING whether a
+     * non-owner may read shared material is not evidence of access, and treating it as "no pack" let the
+     * recipient's write complete anyway. Same class as the `v0.89.1` consent gate: unknown is not permission.
+     */
+    private void requireSharedStudyPackAccessFailingClosed(UUID userId, UUID studyPackId) {
+        try {
+            noteShareService.requireSharedStudyPackAccess(userId, studyPackId);
+        } catch (AppException denied) {
+            throw denied;
+        } catch (RuntimeException authorizationFault) {
+            log.warn(
+                    "action=require_shared_study_pack_access outcome=fault_denied userId={} studyPackId={}",
+                    userId,
+                    studyPackId,
+                    authorizationFault
+            );
+            throw new SharedNoteNotFoundException();
+        }
     }
 
     @Transactional(readOnly = true)

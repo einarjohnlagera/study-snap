@@ -1,13 +1,19 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, LineChart, Link2, Lock, Send } from "lucide-react";
+import { Activity, ArrowRight, BookOpen, LineChart, Link2, Lock, Send } from "lucide-react";
+import { pricingConfig } from "@/lib/pricing-config";
 
 /**
- * ⚠️ Every claim here must be live. This guide covers what shipped in v0.89.0–v0.91.0 only:
- * quiz links, connections, the supporter progress view, and shared notes.
+ * ⚠️ Every claim here must be live. This guide covers what shipped in v0.89.0–v0.92.0: quiz links,
+ * connections, the supporter progress view, shared notes, and directional activity sharing.
  *
- * <p>Activity sharing and per-scope progress permissions are Phases 2 and 3 and are NOT built —
- * do not describe them here, and do not imply a guardian mode, a supporter profile type, or any
- * setting that decides what a connection can see beyond choosing who to share a note with.
+ * <p>⚠️ Activity sharing IS built as of v0.92.0 (Phase 2) — this comment previously said it was not,
+ * and that instruction outlived the feature by one release. Per-scope PROGRESS permissions are still
+ * Phase 3 and are NOT built: do not describe a setting that decides what a connection can see beyond
+ * choosing who to share a note with and whether to share your activity. Do not imply a guardian mode
+ * or a supporter profile type.
+ *
+ * <p>⚠️ Plan numbers are imported from pricing-config, never retyped. They were hardcoded here until
+ * v0.92.0 and would have drifted the moment a limit changed.
  */
 type Section = {
   icon: React.ElementType;
@@ -26,7 +32,7 @@ const SECTIONS: Section[] = [
     bullets: [
       "Best for one-off help — a parent quizzing a child before a test, a friend checking a classmate",
       "Making the quiz spends a quiz generation from your monthly allowance",
-      "Free plans can have 3 share links a month, Plus 10, Pro unlimited",
+      `Free plans can have ${pricingConfig.free.quizShareLinksPerMonth} share links a month, Plus ${pricingConfig.plus.quizShareLinksPerMonth}, Pro unlimited`,
     ],
     cta: { label: "Open Library", href: "/library" },
   },
@@ -64,6 +70,19 @@ const SECTIONS: Section[] = [
       "Looking at their progress never changes it",
     ],
     cta: { label: "Open Dashboard", href: "/dashboard" },
+  },
+  {
+    icon: Activity,
+    title: "Show someone you are studying",
+    description:
+      "On an accepted connection, turn on Share my study activity. They can then see your streak and how many days you studied this week — and nothing else. It is off until you turn it on.",
+    bullets: [
+      "Connecting on its own shares nothing — this is a separate choice",
+      "It works one way at a time: sharing yours does not make theirs visible to you, and either of you can turn it off",
+      "They see streaks and study days, never your scores, your notes or what you studied",
+      "Turning it off, or ending the connection, cuts their view immediately",
+    ],
+    cta: { label: "Learning connections", href: "/linked-learners" },
   },
   {
     icon: Lock,
