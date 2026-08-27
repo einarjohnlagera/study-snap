@@ -60,4 +60,45 @@ class LinkedLearnerActivityServiceTest {
         verify(dashboardService).getStudyEngagement(ownerId);
         verifyNoMoreInteractions(dashboardService);
     }
+
+    @Test
+    void activityReadWritesNothingForEitherParty() {
+        UUID callerId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID relationshipId = UUID.randomUUID();
+        UserEntity owner = new UserEntity();
+        owner.setId(ownerId);
+        owner.setDisplayName("Learner Name");
+        when(authorizationService.requireGrant(callerId, relationshipId, LinkedLearnerGrantScope.ACTIVITY))
+                .thenReturn(ownerId);
+        when(userRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+        when(dashboardService.getStudyEngagement(ownerId))
+                .thenReturn(new StudyEngagementResponse(EngagementMode.FOCUSED, 0, 0, 0));
+
+        service.getActivity(callerId, relationshipId);
+
+        // Viewing someone's momentum is not an activity. Pinned by exhausting EVERY collaborator:
+        // authorization is a read, the only user-repository call is findById, and getStudyEngagement
+        // is the sole DashboardService call. `verifyNoMoreInteractions` across all three means a save,
+        // a recordActivity or a ConceptHealth touch added here later fails this test rather than
+        // silently writing the owner's activity for someone else's page view.
+        verify(authorizationService).requireGrant(callerId, relationshipId, LinkedLearnerGrantScope.ACTIVITY);
+        verify(userRepository).findById(ownerId);
+        verify(dashboardService).getStudyEngagement(ownerId);
+        verifyNoMoreInteractions(authorizationService, userRepository, dashboardService);
+    }
+
+    @Test
+    void activityServiceHoldsNoWriteCapableCollaborator() {
+        // Structural guard rather than a behavioural one: the service cannot write activity or
+        // ConceptHealth because it is not wired to anything that could. A future field that could
+        // fails here at the moment it is added, which no behavioural test would catch until someone
+        // actually called it.
+        Set<String> collaborators = new HashSet<>();
+        for (java.lang.reflect.Field field : LinkedLearnerActivityService.class.getDeclaredFields()) {
+            collaborators.add(field.getType().getSimpleName());
+        }
+        assertThat(collaborators).containsExactlyInAnyOrder(
+                "LinkedLearnerGrantAuthorizationService", "DashboardService", "UserRepository");
+    }
 }
