@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionLink } from "@/components/ui/action-button";
@@ -26,6 +27,96 @@ import {
 } from "@/lib/api";
 
 const INPUT_CLASSES = "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary";
+
+const MIN_BIRTH_YEAR = 1900;
+
+/** Single source for the range message, so live feedback and submit validation cannot diverge. */
+function birthYearRangeError(rawYear: string): string | null {
+  const currentYear = new Date().getFullYear();
+  const year = Number(rawYear);
+  if (!Number.isFinite(year) || year < MIN_BIRTH_YEAR || year > currentYear) {
+    return `Enter a year between ${MIN_BIRTH_YEAR} and ${currentYear}.`;
+  }
+  return null;
+}
+
+/**
+ * Birth-year input with a stepper.
+ *
+ * <p>⚠️ The steppers are DISABLED until four digits are present, and they seed nothing. Stepping up from an
+ * empty field would have to start somewhere, and any starting year is a declaration the person did not make —
+ * the same reason this field has no default. `users.birth_year` is account-global and effectively write-once,
+ * driving guardian consent for every connection the account will ever form.
+ *
+ * <p>⚠️ Not `type="number"`. Its spin buttons come with scroll-wheel editing, which can silently change a
+ * value this consequential while someone scrolls the page. These buttons step only on a deliberate click, and
+ * clamp inside the same range the server enforces, so the stepper can never produce an invalid year.
+ */
+function BirthYearInput({
+  id,
+  value,
+  onChange,
+  inputRef,
+  invalid,
+  describedBy,
+  required,
+}: Readonly<{
+  id: string;
+  value: string;
+  onChange: (next: string) => void;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+  invalid?: boolean;
+  describedBy?: string;
+  required?: boolean;
+}>) {
+  const maxYear = new Date().getFullYear();
+  const stepDisabled = value.trim().length !== 4;
+
+  const step = (delta: number) => {
+    const parsed = Number(value.trim());
+    if (!Number.isFinite(parsed)) return;
+    onChange(String(Math.min(Math.max(parsed + delta, MIN_BIRTH_YEAR), maxYear)));
+  };
+
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        ref={inputRef}
+        className={`${INPUT_CLASSES} pr-10`}
+        value={value}
+        onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 4))}
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={4}
+        placeholder="YYYY"
+        required={required}
+        aria-invalid={invalid ? true : undefined}
+        aria-describedby={describedBy}
+      />
+      <div className="absolute inset-y-0 right-1 flex flex-col justify-center">
+        <button
+          type="button"
+          aria-label="Increase birth year"
+          disabled={stepDisabled}
+          onClick={() => step(1)}
+          className="flex h-4 w-6 items-center justify-center rounded text-foreground/50 transition-colors hover:bg-highlight hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+        >
+          <ChevronUp className="h-3 w-3" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Decrease birth year"
+          disabled={stepDisabled}
+          onClick={() => step(-1)}
+          className="flex h-4 w-6 items-center justify-center rounded text-foreground/50 transition-colors hover:bg-highlight hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+        >
+          <ChevronDown className="h-3 w-3" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function formatDate(value: string | null) {
   if (!value) return null;
@@ -152,7 +243,6 @@ export default function LinkedLearnersPage() {
 
     if (inviterRole === "LEARNER") {
       const rawYear = inviteBirthYear.trim();
-      const currentYear = new Date().getFullYear();
       // ⚠️ Blank is NOT a client-side error. The year is required only when this account has none
       // recorded yet, and the client cannot know that before the first connection exists — the server
       // owns that decision and its message surfaces in the form's error banner. Validating a blank here
@@ -162,12 +252,9 @@ export default function LinkedLearnersPage() {
       } else if (rawYear.length !== 4) {
         nextErrors.birthYear = "Enter all four digits, like 2011.";
       } else {
-        const year = Number(rawYear);
         // Mirrors the server bound (MINIMUM_BIRTH_YEAR..current year) so a rejection is explained here
         // rather than arriving as a generic failure after the request.
-        if (year < 1900 || year > currentYear) {
-          nextErrors.birthYear = `Enter a year between 1900 and ${currentYear}.`;
-        }
+        nextErrors.birthYear = birthYearRangeError(rawYear);
       }
     }
 
@@ -366,26 +453,23 @@ export default function LinkedLearnersPage() {
           {inviterRole === "LEARNER" ? (
             <label className="block space-y-1.5 text-sm font-medium" htmlFor="invite-birth-year">
               Your birth year
-              <input
+              <BirthYearInput
                 id="invite-birth-year"
-                ref={birthYearInputRef}
-                className={INPUT_CLASSES}
                 value={inviteBirthYear}
-                onChange={(event) => {
-                  // Digits only, four at most. inputMode gives phones a number pad without the
-                  // desktop side effects of type="number" — scroll-wheel edits and spin buttons,
-                  // both wrong for a value someone declares once and cannot casually change.
-                  setInviteBirthYear(event.target.value.replace(/\D/g, "").slice(0, 4));
-                  setFieldErrors((previous) => ({ ...previous, birthYear: null }));
-                }}
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={4}
-                placeholder="YYYY"
-                aria-invalid={fieldErrors.birthYear ? true : undefined}
-                aria-describedby={
+                inputRef={birthYearInputRef}
+                invalid={Boolean(fieldErrors.birthYear)}
+                describedBy={
                   fieldErrors.birthYear ? "invite-birth-year-error" : "invite-birth-year-help"
                 }
+                onChange={(next) => {
+                  setInviteBirthYear(next);
+                  // Live, but only once the year is complete — flagging "19" mid-typing would be noise.
+                  // Waiting for submit was the gap: a plainly impossible year sat there looking accepted.
+                  setFieldErrors((previous) => ({
+                    ...previous,
+                    birthYear: next.length === 4 ? birthYearRangeError(next) : null,
+                  }));
+                }}
               />
               {fieldErrors.birthYear ? (
                 <p id="invite-birth-year-error" role="alert" className="text-xs font-normal text-red-700 dark:text-red-300">
@@ -419,20 +503,14 @@ export default function LinkedLearnersPage() {
           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={handleBirthYearCorrection}>
             <label className="block flex-1 space-y-1.5 text-sm font-medium">
               Corrected birth year
-              <input
-                className={INPUT_CLASSES}
+              <BirthYearInput
+                id="corrected-birth-year"
                 value={correctedBirthYear}
-                onChange={(event) => {
-                  // Same treatment as the invite field: one year-input idiom on this page, not two.
-                  // type="number" let a scroll wheel silently edit a value that pauses live connections.
-                  setCorrectedBirthYear(event.target.value.replace(/\D/g, "").slice(0, 4));
+                required
+                onChange={(next) => {
+                  setCorrectedBirthYear(next);
                   setCorrectionWarningCount(null);
                 }}
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={4}
-                placeholder="YYYY"
-                required
               />
             </label>
             <Button type="submit" variant="outline" loading={correctingBirthYear}>Review correction</Button>

@@ -288,3 +288,54 @@ it("reports a missing email inline instead of submitting", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent(/Enter the email address/);
   expect(inviteLinkedLearner).not.toHaveBeenCalled();
 });
+
+it("steps the birth year only within the range the server accepts, and never seeds a value", async () => {
+  // ⚠️ The steppers must stay inert while the field is empty. Stepping up from blank would have to start
+  // somewhere, and any starting year is a declaration the person did not make — the same reason this field
+  // has no default. birth_year is account-global and effectively write-once.
+  render(<LinkedLearnersPage />);
+  await screen.findByText("No invitations or connections yet.");
+  fireEvent.click(screen.getByRole("button", { name: /they will support me/i }));
+
+  const birthYear = screen.getByLabelText(/Your birth year/i) as HTMLInputElement;
+  const up = screen.getByRole("button", { name: "Increase birth year" });
+  const down = screen.getByRole("button", { name: "Decrease birth year" });
+
+  expect(up).toBeDisabled();
+  expect(down).toBeDisabled();
+  fireEvent.click(up);
+  expect(birthYear.value).toBe("");
+
+  fireEvent.change(birthYear, { target: { value: "2011" } });
+  fireEvent.click(up);
+  expect(birthYear.value).toBe("2012");
+  fireEvent.click(down);
+  expect(birthYear.value).toBe("2011");
+
+  // Clamps at the lower bound rather than stepping below what the server accepts.
+  fireEvent.change(birthYear, { target: { value: "1900" } });
+  fireEvent.click(down);
+  expect(birthYear.value).toBe("1900");
+
+  // Clamps at the current year rather than stepping into the future.
+  const currentYear = new Date().getFullYear();
+  fireEvent.change(birthYear, { target: { value: String(currentYear) } });
+  fireEvent.click(up);
+  expect(birthYear.value).toBe(String(currentYear));
+});
+
+it("flags an impossible year as it is typed, not only on submit", async () => {
+  render(<LinkedLearnersPage />);
+  await screen.findByText("No invitations or connections yet.");
+  fireEvent.click(screen.getByRole("button", { name: /they will support me/i }));
+
+  const birthYear = screen.getByLabelText(/Your birth year/i);
+  fireEvent.change(birthYear, { target: { value: "12" } });
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+  fireEvent.change(birthYear, { target: { value: "1234" } });
+  expect(await screen.findByRole("alert")).toHaveTextContent(/Enter a year between 1900 and/);
+
+  fireEvent.change(birthYear, { target: { value: "2011" } });
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});

@@ -36,8 +36,11 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
   letters, sat at a different height and width from the email field above it, and feedback arrived as the
   browser's native *"Please fill out this field"* bubble — which names no field and matches nothing else in the
   product. The form is now `noValidate` with **inline, field-level errors** that move focus to the offending
-  input, the birth-year field takes **digits only, four at most**, and its range is checked against the same
-  1900–current-year bound the server enforces. The correction field on the same page now uses the identical
+  input, and the birth-year field takes **digits only, four at most**, with a **stepper** for ±1 adjustments that
+  clamps to the server's own 1900–current-year bound. That range is now checked **as the fourth digit is typed**
+  rather than only on submit, so an impossible year cannot sit in the field looking accepted. **⚠️ The steppers
+  are inert until four digits exist and seed nothing** — stepping from empty would have to start somewhere, and
+  any starting year is a declaration nobody made. The correction field on the same page now uses the identical
   input, so there is one year-input idiom rather than two. **⚠️ No default year is pre-filled** — the value is
   account-global and effectively write-once, so a default would be a declaration nobody made — and **a blank
   year is still not a client-side error**, because only the server knows whether this account already has one.

@@ -50,10 +50,16 @@ to it. A toast is the wrong surface here because it reports an outcome away from
 disabled submit button is wrong because it cannot say *which* field is incomplete.
 
 The birth-year input accepts **digits only, four at most** (`inputMode="numeric"`, not `type="number"` — a scroll
-wheel must not silently edit a value this consequential). Its range is validated client-side against
-1900–current year, mirroring `persistBirthYear`, so a rejection is explained at the field rather than arriving as
-a generic failure. The correction field on the same page uses the identical treatment; there is deliberately only
-one year-input idiom here.
+wheel must not silently edit a value this consequential), and carries a **stepper** for ±1 adjustments. Its range
+is validated against 1900–current year, mirroring `persistBirthYear`, and that check runs **as the fourth digit is
+typed**, not only on submit, so an impossible year cannot sit in the field looking accepted. Both the live check
+and the submit check call `birthYearRangeError`, so they cannot diverge. The correction field on the same page
+uses the identical control; there is deliberately only one year-input idiom here.
+
+**⚠️ The steppers are disabled until four digits are present, and they seed nothing.** Stepping up from an empty
+field would have to start somewhere, and any starting year is a declaration the person did not make — the same
+reason the field has no default. They also clamp to the server's range, so the stepper can never produce an
+invalid year.
 
 **⚠️ A blank birth year is NOT a client-side error, and must not become one.** The year is required only when the
 account has none recorded yet, and the client cannot know that before a connection exists — the server owns that
