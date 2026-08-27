@@ -42,6 +42,36 @@ NoteLib stores the invitation before attempting email delivery. Delivery uses th
 
 The **invitation** list never carries a counterparty name — the inviter typed the address and learns nothing further from it. **Relationship** rows do carry the name, and since `v0.90.0` that is safe by construction rather than by withholding: a relationship exists only once the invited party accepted, so both sides have agreed to the link. Withholding it until `accepted_at` was set became actively wrong when `PENDING` changed meaning, since a consent-pending connection legitimately has a null `accepted_at`.
 
+### Invite form validation
+
+The invite form owns its validation (`noValidate`); the browser's native constraint bubble is never used. Errors
+are **field-level and inline** — `aria-invalid` plus `aria-describedby` on the offending input, and focus moves
+to it. A toast is the wrong surface here because it reports an outcome away from the field that caused it, and a
+disabled submit button is wrong because it cannot say *which* field is incomplete.
+
+The birth-year input accepts **digits only, four at most** (`inputMode="numeric"`, not `type="number"` — a scroll
+wheel must not silently edit a value this consequential), and carries a **stepper** for ±1 adjustments. Its range
+is validated against 1900–current year, mirroring `persistBirthYear`, and that check runs **as the fourth digit is
+typed**, not only on submit, so an impossible year cannot sit in the field looking accepted. Both the live check
+and the submit check call `birthYearRangeError`, so they cannot diverge. The correction field on the same page
+uses the identical control; there is deliberately only one year-input idiom here.
+
+**⚠️ The steppers are disabled until four digits are present, and they seed nothing.** Stepping up from an empty
+field would have to start somewhere, and any starting year is a declaration the person did not make — the same
+reason the field has no default. They also clamp to the server's range, so the stepper can never produce an
+invalid year.
+
+**⚠️ A blank birth year is NOT a client-side error, and must not become one.** The year is required only when the
+account has none recorded yet, and the client cannot know that before a connection exists — the server owns that
+decision. Blocking a blank would lock out a returning learner who declared their year on an earlier connection,
+and `page.test.tsx` pins the learner-initiated invite that sends `null`.
+
+**⚠️ There is deliberately NO default birth year, and one must not be added.** The value is account-global and
+effectively write-once, driving guardian consent for every connection the account will ever form. A pre-filled
+year is a declaration nobody made: defaulting young puts every adult under the consent threshold, defaulting old
+disables the gate the threshold exists for, and either way tabbing past the field asserts an age. Collecting it
+at link time rather than at signup is pointless if the field answers itself.
+
 ### Verified email is the authorization
 
 Because an invitation is addressed to a string rather than to an account, **proving control of that address is the whole basis for acting on it**. Accepting an invitation, listing invitations, revoking one, accepting a relationship, recording a birth year and recording guardian consent all require a verified email. Signup issues a session token without inbox access, so without this gate anyone who guessed or knew an invited address could register it and inherit the invitation.

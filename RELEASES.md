@@ -32,6 +32,18 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
 - **Copy to my Library (backend + frontend).** Widens the existing copy rule to `isOwner || PUBLIC || live share`.
 - **Five analytics events.** Shared, revoked, note opened, pack opened, copied — the funnel that no table can
   express.
+- **The invitation form validates itself instead of deferring to the browser.** The birth-year field accepted
+  letters, sat at a different height and width from the email field above it, and feedback arrived as the
+  browser's native *"Please fill out this field"* bubble — which names no field and matches nothing else in the
+  product. The form is now `noValidate` with **inline, field-level errors** that move focus to the offending
+  input, and the birth-year field takes **digits only, four at most**, with a **stepper** for ±1 adjustments that
+  clamps to the server's own 1900–current-year bound. That range is now checked **as the fourth digit is typed**
+  rather than only on submit, so an impossible year cannot sit in the field looking accepted. **⚠️ The steppers
+  are inert until four digits exist and seed nothing** — stepping from empty would have to start somewhere, and
+  any starting year is a declaration nobody made. The correction field on the same page now uses the identical
+  input, so there is one year-input idiom rather than two. **⚠️ No default year is pre-filled** — the value is
+  account-global and effectively write-once, so a default would be a declaration nobody made — and **a blank
+  year is still not a client-side error**, because only the server knows whether this account already has one.
 - **A Memorization error message was invisible.** The grade-failure text used `text-destructive`, which is not a
   token in this theme's `@theme inline` block, so Tailwind generated no rule and the message rendered in the
   default body colour — readable, but not signalling failure. It now uses the product's red scale and carries
