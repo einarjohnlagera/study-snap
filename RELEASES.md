@@ -1,5 +1,75 @@
 # RELEASES.md - NoteLib
 
+## v0.91.0 - Shared Learning Material
+
+**Status: In Progress** (kicked off 2026-08-27)
+
+Theme: give someone a note without publishing it to the world.
+
+### Why this release exists
+
+**Sharing a note today means making it PUBLIC.** `NoteVisibility` has exactly two values, and the note-detail
+Share action on a private note opens a confirmation that says, verbatim: *"This note is private. You need to make
+this note public before sharing. Anyone with the link will be able to view and copy this note."* A parent who wants
+to give their child one Study Pack must publish it into Explore for everyone. **Controlled sharing is the missing
+middle state**, and it is Phase 1 of the ratified Learning Connections direction (owner, 2026-08-27).
+
+Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-plan.md`.
+
+### Planned Scope
+
+- **`note_shares` grant table (migration).** Per note × per grantee, carrying `relationship_id` so revocation is a
+  single predicate. Rows are revoked, never deleted, so re-sharing re-arms rather than colliding with the live-row
+  unique index.
+- **Share / unshare API (backend).** Owner-only read and desired-state write on a note's shares, plus the
+  recipient's `shared-with-me` list.
+- **Recipient note and Study Pack reads (backend).** New authorized methods — **not** the owner-scoped `getById`
+  paths — so a recipient can open shared material and enter the normal practice loop.
+- **"Who can access this note?" control (frontend).** Three options replacing the two-state visibility menu, with a
+  recipient picker listing accepted connections only, never pre-checked.
+- **"Shared with you" Library section (frontend).** Distinct from owned notes, hidden entirely when empty, with
+  `Shared by {name}` provenance.
+- **Copy to my Library (backend + frontend).** Widens the existing copy rule to `isOwner || PUBLIC || live share`.
+- **Five analytics events.** Shared, revoked, note opened, pack opened, copied — the funnel that no table can
+  express.
+
+### Anti-drift — locked for this release
+
+- **⚠️ `NoteVisibility` STAYS `PRIVATE | PUBLIC`. Do NOT add a `SHARED` enum value.** Three reasons, all verified:
+  every read path is `findByIdAndOwnerUserId`, so the enum grants nobody anything and would be a label asserting
+  what a table actually decides; `AccountPurgeService.deletePrivateArtifacts` **retains `PUBLIC` and deletes
+  `PRIVATE`**, so a `SHARED` note matches neither branch and would **survive the purge of a deleted account while
+  staying readable by its recipients**; and the enum has **42 usages across 24 files**, each needing a decision. A
+  shared note stays `PRIVATE`, so it is excluded from Explore and included in purge **by default**.
+- **⚠️ The three-way choice is DERIVED, never stored.** "Share with connections" is the state where a live
+  `note_shares` row exists on a `PRIVATE` note.
+- **⚠️ Selecting *Private* REVOKES every live share** (owner decision, 2026-08-27), with the confirmation naming the
+  count. Selecting *Public* revokes nothing — public is strictly broader, and recipients keep their provenance.
+- **⚠️ Connecting shares NOTHING.** A relationship creates the capacity to grant. No note, activity or progress is
+  ever shared automatically, and sharing is never assumed reciprocal.
+- **⚠️ The owner's learning state is NEVER exposed with shared material** — no mastery, weak concepts, quiz
+  attempts, scores or practice history. Assert the recipient DTO's *shape*, not merely its values.
+- **⚠️ The recipient Study Pack read must NOT call `recordActivity` with the owner's id.** `StudyPackService.getById`
+  writes `OPENED_STUDY_PACK` today; reusing it would attribute a recipient's page view to the owner.
+- **⚠️ Every read re-verifies the relationship is `ACCEPTED`.** No cache, no grace period. A revoke, and a
+  `v0.89.1` birth-year correction that reverts a link to `PENDING`, both cut material access immediately.
+- **⚠️ No endpoint accepts a learner user id.** Address by note id; resolve the caller from the principal.
+- **⚠️ No new profile type, and nothing gated on `ProfileType`.** No Guardian, no Parent implementation, no Teacher
+  re-gating.
+- **⚠️ Shared notes are NOT mixed into the owned Library**, and shared notes cannot join a Study Plan without being
+  copied first — `NoteCollectionService.addItems` validates ownership and keeps it.
+- **⚠️ "Quiz for someone" does NOT move back beside Quick Review or Challenge Quiz**, and neither lightweight
+  sharing path (anonymous quiz links, Study Pack share tokens) is removed, merged or reframed as a connection
+  feature.
+- **⚠️ `linked_learner_relationships` and `linked_learner_invitations` keep their shape and meaning** —
+  `[CHECKPOINT — due 2026-09-19]` and `[CHECKPOINT — due 2026-10-13]` both read them.
+- No activity sharing, no progress permission model, no leaderboard, no rings, no public people search, no social
+  feed. Those are Phases 2–5.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.90.0 - Invitation Integrity
 
 **Status: Released** (kicked off 2026-08-20, signed off 2026-08-26)
