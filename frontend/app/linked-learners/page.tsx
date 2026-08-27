@@ -194,8 +194,18 @@ function ActivitySharingPanel({
   const toggleActivityView = () => {
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
-    if (nextExpanded && activity === null && activityError === null) {
+    if (nextExpanded) {
+      // ⚠️ ALWAYS refetch on expand — never re-render momentum from memory.
+      // Access is re-derived server-side on every request, and that is what makes a revoke cut
+      // immediately. Serving a cached `activity` on re-expand defeats it CLIENT-side: collapse,
+      // the owner revokes, re-expand, and withdrawn data renders with no request issued, so no
+      // 403 arrives and the access-ended path never runs. On a privacy control the cheap read is
+      // the correct trade.
       void loadActivity();
+    } else {
+      // Drop the payload on collapse so it cannot outlive the grant that authorized it.
+      setActivity(null);
+      setActivityError(null);
     }
   };
 
@@ -232,7 +242,10 @@ function ActivitySharingPanel({
           ) : null}
         </div>
 
-        {expanded ? (
+        {/* ⚠️ Gated on the grant as well as on `expanded`: the control that closes this panel lives
+            inside the `activitySharedWithMe` branch, so a refresh that flips the grant false would
+            otherwise strand an open panel on screen with no way to dismiss it. */}
+        {expanded && link.activitySharedWithMe ? (
           <div className="mt-3 rounded-lg bg-muted/50 p-3" aria-label={`${link.counterpartyDisplayName}'s momentum`}>
             {activityLoading ? <Skeleton className="h-20 w-full" /> : null}
             {!activityLoading && activityError ? (
@@ -353,6 +366,18 @@ export default function LinkedLearnersPage() {
 
   const replaceLink = (updated: LinkedLearnerResponse) => {
     setLinks((current) => current.map((link) => link.id === updated.id ? updated : link));
+  };
+
+  /**
+   * Merge specific fields into one link, inside the state updater.
+   *
+   * <p>⚠️ Use this rather than `replaceLink({ ...link, field })` whenever the caller is an event
+   * handler. `link` there is the snapshot from the render that created the handler, so spreading it
+   * writes back every OTHER field as it looked at click time — silently reverting anything a
+   * concurrent `loadLinks()` refreshed in between (status, the counterparty's grant, consent state).
+   */
+  const updateLinkFields = (id: string, fields: Partial<LinkedLearnerResponse>) => {
+    setLinks((current) => current.map((link) => link.id === id ? { ...link, ...fields } : link));
   };
 
   /**
@@ -806,7 +831,10 @@ export default function LinkedLearnersPage() {
               {link.status === "ACCEPTED" ? (
                 <ActivitySharingPanel
                   link={link}
-                  onGrantUpdated={(granted) => replaceLink({ ...link, activitySharedByMe: granted })}
+                  // ⚠️ Field-level merge, not `{ ...link }` — `link` is the snapshot from the render that
+                  // created this handler, so writing the whole object back would revert any field a
+                  // concurrent loadLinks() had refreshed (status, the other direction's grant, consent).
+                  onGrantUpdated={(granted) => updateLinkFields(link.id, { activitySharedByMe: granted })}
                   onAccessEnded={loadLinks}
                   onFailure={(message) => setError(message)}
                 />

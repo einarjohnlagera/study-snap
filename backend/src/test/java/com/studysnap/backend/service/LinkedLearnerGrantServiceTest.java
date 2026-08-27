@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import com.studysnap.backend.exception.LinkedLearnerNotFoundException;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -41,6 +42,7 @@ class LinkedLearnerGrantServiceTest {
     private LinkedLearnerGrantService service;
     private UUID callerId;
     private UUID relationshipId;
+    private LinkedLearnerRelationshipEntity relationship;
 
     @BeforeEach
     void setUp() {
@@ -48,12 +50,57 @@ class LinkedLearnerGrantServiceTest {
                 relationshipRepository, grantRepository, authService, analyticsService);
         callerId = UUID.randomUUID();
         relationshipId = UUID.randomUUID();
-        LinkedLearnerRelationshipEntity relationship = new LinkedLearnerRelationshipEntity();
+        relationship = new LinkedLearnerRelationshipEntity();
         relationship.setId(relationshipId);
         relationship.setSupporterUserId(callerId);
         relationship.setLearnerUserId(UUID.randomUUID());
         relationship.setStatus(LinkedLearnerStatus.ACCEPTED);
         when(relationshipRepository.findById(relationshipId)).thenReturn(Optional.of(relationship));
+    }
+
+    @Test
+    void grantingIsRefusedOnAPausedRelationshipButWITHDRAWINGIsNot() {
+        // ⚠️ The asymmetry is the point. A downward birth-year correction pauses ACCEPTED → PENDING and
+        // the live grant row survives the pause, so gating BOTH branches on ACCEPTED locked the learner
+        // out of turning sharing OFF at exactly the moment the privacy question became urgent — and
+        // re-acceptance would then restore readability with no fresh act of sharing.
+        relationship.setStatus(LinkedLearnerStatus.PENDING);
+
+        assertThatThrownBy(() -> service.setActivityGrant(callerId, relationshipId, true))
+                .isInstanceOf(LinkedLearnerNotFoundException.class);
+
+        when(grantRepository.revokeLive(eq(relationshipId), eq(callerId), any(), any())).thenReturn(1);
+        assertThat(service.setActivityGrant(callerId, relationshipId, false).granted()).isFalse();
+        verify(grantRepository).revokeLive(eq(relationshipId), eq(callerId), any(), any());
+    }
+
+    @Test
+    void aNonPartyCallerCannotTouchTheGrantInEitherDirection() {
+        // Membership is checked on BOTH branches; knowing a relationship id must never be enough.
+        UUID stranger = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.setActivityGrant(stranger, relationshipId, true))
+                .isInstanceOf(LinkedLearnerNotFoundException.class);
+        assertThatThrownBy(() -> service.setActivityGrant(stranger, relationshipId, false))
+                .isInstanceOf(LinkedLearnerNotFoundException.class);
+        verifyNoMoreInteractions(grantRepository);
+    }
+
+    @Test
+    void theLEARNERSideOfTheGrantWriteResolvesTheSupporterAsRecipient() {
+        // Every other test in this class has the SUPPORTER as caller, so the learner-side write path
+        // had no coverage at all — and a resolveOtherParty that ignored the caller would have produced
+        // from_user_id == to_user_id, violating ck_linked_learner_grants_not_self at the database.
+        UUID learnerId = relationship.getLearnerUserId();
+        UUID supporterId = relationship.getSupporterUserId();
+        when(grantRepository.insertLiveIfAbsent(
+                any(), eq(relationshipId), eq(learnerId), eq(supporterId), eq("ACTIVITY"), any()))
+                .thenReturn(1);
+
+        assertThat(service.setActivityGrant(learnerId, relationshipId, true).granted()).isTrue();
+
+        verify(grantRepository).insertLiveIfAbsent(
+                any(), eq(relationshipId), eq(learnerId), eq(supporterId), eq("ACTIVITY"), any());
     }
 
     @Test

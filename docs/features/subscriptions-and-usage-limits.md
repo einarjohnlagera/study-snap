@@ -21,7 +21,7 @@ Do not derive plan access from:
 
 Challenge Quiz has no manual difficulty selector (removed v0.60.1) on any plan; difficulty is fully automatic from the last Quick Review score.
 
-The generation allowance is user-facing as **“AI quizzes”**, described as **“Challenge Quiz sessions and quizzes you make for someone.”** The Challenge Quiz mode keeps its product name; only usage-meter and pricing labels use the broader quota name. Both jobs continue to spend the single `challenge_quiz_generations` counter.
+The generation allowance is user-facing as **“AI quizzes”** on every usage meter, the pricing page and the quiz-generation dialog. **⚠️ The explanatory line “Challenge Quiz sessions and quizzes you make for someone” appears on the Dashboard usage card ONLY** — `UsageMetric` in Settings takes no description prop, so the Settings meter shows the bare label. Do not restate the description as appearing everywhere the label does. The Challenge Quiz mode keeps its product name; only usage-meter and pricing labels use the broader quota name. Both jobs continue to spend the single `challenge_quiz_generations` counter.
 
 ### Free
 
