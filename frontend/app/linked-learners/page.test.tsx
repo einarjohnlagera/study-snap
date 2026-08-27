@@ -254,3 +254,37 @@ it("offers birth-year correction after a learner-initiated invite, before anyone
 
   expect(await screen.findByRole("heading", { name: "Correct your birth year" })).toBeInTheDocument();
 });
+
+it("keeps letters out of the birth-year field and validates the year in the form, not in a browser bubble", async () => {
+  // ⚠️ The field accepted "fasdf" and relied on the browser's native `required` bubble for feedback —
+  // which named no field, matched nothing else in the product, and appeared beside a value the input
+  // should never have held. The form now owns its validation (`noValidate`) and reports it inline.
+  render(<LinkedLearnersPage />);
+  await screen.findByText("No invitations or connections yet.");
+
+  fireEvent.click(screen.getByRole("button", { name: /they will support me/i }));
+  const birthYear = screen.getByLabelText(/Your birth year/i) as HTMLInputElement;
+
+  fireEvent.change(birthYear, { target: { value: "fasdf" } });
+  expect(birthYear.value).toBe("");
+
+  fireEvent.change(birthYear, { target: { value: "20a1b1x" } });
+  expect(birthYear.value).toBe("2011");
+
+  fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "mentor@example.com" } });
+  fireEvent.change(birthYear, { target: { value: "1800" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/Enter a year between 1900 and/);
+  expect(inviteLinkedLearner).not.toHaveBeenCalled();
+});
+
+it("reports a missing email inline instead of submitting", async () => {
+  render(<LinkedLearnersPage />);
+  await screen.findByText("No invitations or connections yet.");
+
+  fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/Enter the email address/);
+  expect(inviteLinkedLearner).not.toHaveBeenCalled();
+});

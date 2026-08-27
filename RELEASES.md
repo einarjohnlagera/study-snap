@@ -32,6 +32,15 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
 - **Copy to my Library (backend + frontend).** Widens the existing copy rule to `isOwner || PUBLIC || live share`.
 - **Five analytics events.** Shared, revoked, note opened, pack opened, copied — the funnel that no table can
   express.
+- **The invitation form validates itself instead of deferring to the browser.** The birth-year field accepted
+  letters, sat at a different height and width from the email field above it, and feedback arrived as the
+  browser's native *"Please fill out this field"* bubble — which names no field and matches nothing else in the
+  product. The form is now `noValidate` with **inline, field-level errors** that move focus to the offending
+  input, the birth-year field takes **digits only, four at most**, and its range is checked against the same
+  1900–current-year bound the server enforces. The correction field on the same page now uses the identical
+  input, so there is one year-input idiom rather than two. **⚠️ No default year is pre-filled** — the value is
+  account-global and effectively write-once, so a default would be a declaration nobody made — and **a blank
+  year is still not a client-side error**, because only the server knows whether this account already has one.
 - **The Help Center covers helping someone learn.** None of its 14 sections mentioned it, and *Export &
   Sharing* documented PDF export without ever naming shareable quiz links — so after the landing page was
   corrected, the public surface told the truth while the in-app surface still said nothing. A new
