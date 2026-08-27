@@ -38,6 +38,22 @@ Rules:
 - Premium exam paywalls fire from Start CTAs after setup/prescreen, not from card click.
 - Study Plan premium-exam launches carry `collectionId` and scope additional-note pickers to quiz-ready notes in that plan.
 
+### Shared quizzes ("Quiz for someone") — TWO meters, and they are ordered against the user
+
+Verified against real code 2026-08-27, because the metering is invisible in the naming on both surfaces.
+
+- **Generating a quiz for someone already spends the user's own Challenge Quiz allowance.** It reads
+  `user_usage.challenge_quiz_generations` against the monthly limit (**Free 20 / Plus 100 / Pro 200**) and increments
+  the same counter on success. **There is no fairness gap to close — this has always been the behaviour.** What is
+  missing is disclosure: the counter is labelled *Challenge Quiz* on the usage card, the plan API and pricing, so a
+  parent who never takes a Challenge Quiz cannot tell what they are spending.
+- **Creating the share LINK is metered separately** at **Free 3 / Plus 10 / Pro unlimited**, and its assertion has
+  **exactly one call site — link creation.** It is never consulted during generation, so a Free user can pay the LLM
+  cost for a 4th, 5th and 6th quiz and only then discover none of them can be shared. **The cheaper limit is enforced
+  last.**
+- The shared quiz is a **fresh generation**, never the Study Pack quiz Quick Review administers — reusing that would
+  hand the recipient the answer key `v0.74.0` locked the Quiz tab to protect.
+
 ### Question formats (a separate axis from modes)
 
 Within the five modes, individual questions carry a `questionFormat`: `MCQ`, `TRUE_FALSE`, `MULTI_SELECT`, `MATCHING`, plus two free-text formats:

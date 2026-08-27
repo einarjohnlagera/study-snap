@@ -1,6 +1,19 @@
 # NoteLib Marketing Strategy
 
-Last Updated: June 2026
+Last Updated: June 2026 (blocker note added 2026-08-27)
+
+---
+
+> **⚠️ BLOCKER, added 2026-08-27 — read before planning any campaign for Learning Connections / "help someone
+> study".** The feature shipped across `v0.89.0`–`v0.90.0`, but **the landing page still renders a "For Parents &
+> Guardians" section badged *Coming Soon* with an "I'm interested" waitlist button** — describing the supporter
+> progress view that is already live. Any Facebook traffic sent for this lands on a page saying the feature does not
+> exist. **Correct that section before the campaign, not after.** Note also that **`/help` is behind authentication**,
+> so it cannot serve acquisition — it reaches existing signed-in users only, and currently has no supporter guide and
+> no mention of shareable quiz links. The acquisition chain is **FB → landing page → signup**; help is a retention
+> surface. One further framing question the campaign has to answer: **a connection needs TWO people**, so decide
+> whether the ad sells to the supporter ("see how your child is doing") or to the learner ("let someone help you") —
+> the shareable quiz link, which needs no account on the recipient's side, is the natural wedge for the second person.
 
 ---
 
