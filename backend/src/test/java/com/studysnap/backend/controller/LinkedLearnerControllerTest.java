@@ -5,6 +5,8 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.LinkedLearnerProgressService;
 import com.studysnap.backend.service.LinkedLearnerService;
+import com.studysnap.backend.service.LinkedLearnerActivityService;
+import com.studysnap.backend.service.LinkedLearnerGrantService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,12 +26,20 @@ class LinkedLearnerControllerTest {
 
     @Mock
     private LinkedLearnerProgressService linkedLearnerProgressService;
+    @Mock
+    private LinkedLearnerGrantService linkedLearnerGrantService;
+    @Mock
+    private LinkedLearnerActivityService linkedLearnerActivityService;
 
     private LinkedLearnerController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new LinkedLearnerController(linkedLearnerService, linkedLearnerProgressService);
+        controller = new LinkedLearnerController(
+                linkedLearnerService,
+                linkedLearnerProgressService,
+                linkedLearnerGrantService,
+                linkedLearnerActivityService);
     }
 
     @Test

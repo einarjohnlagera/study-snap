@@ -524,12 +524,14 @@ class LinkedLearnerConcurrencyTest {
                     relationshipRepository,
                     invitationRepository,
                     consentRepository,
+                    mock(com.studysnap.backend.repository.LinkedLearnerGrantRepository.class),
                     userRepository,
                     mock(OnboardingGuardService.class),
                     mock(AuthService.class),
                     mock(EmailService.class),
                     mock(EmailTemplateService.class),
                     new StudySnapProperties(),
+                    new GuardianConsentPolicy(new StudySnapProperties()),
                     mock(InvitationRateLimitService.class));
         }
     }

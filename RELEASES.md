@@ -109,7 +109,43 @@ in the file at signoff, or the gate is not a gate.**
 
 ### Shipped
 
-_(nothing yet)_
+- **Phase 2 activity-grant substrate shipped.** `V125` adds directional, revocable
+  `linked_learner_grants` rows with both `ACTIVITY` and future `PROGRESS` scope values, a live-row partial unique
+  index, and idempotent caller-owned writes. Only `ACTIVITY` is used in this release. The shared
+  guardian-consent age decision now lives in one configuration-backed policy.
+- **Activity access is explicit, directional and re-authorized on every read.** The grant check requires an
+  `ACCEPTED` relationship, caller membership, a live counterparty-to-caller grant, guardian consent only when
+  the learner owns the shared data, and a verified caller. Revoking a grant or relationship, and a birth-year
+  correction that pauses the relationship, cut access immediately.
+- **⚠️ The guardian-consent branch FAILS CLOSED on an unknown birth year — fixed at the `/audit-diff`, not as
+  delivered.** As written it required a non-null year before evaluating consent, so a null waved the read
+  through. Acceptance records the year, so an `ACCEPTED` relationship always carries one and this denies nobody
+  today — **which is exactly why it must not fail open**: the only route to a null here is a future grant path
+  that produced `ACCEPTED` without a year, the precise state this defence-in-depth check exists to catch, and
+  waving it through would silently reopen `v0.89.1`'s gate. Same class as the `v0.91.0` `recheckMaterialAccess`
+  limitation. **⚠️ Two pre-existing grant tests were passing THROUGH the hole** — both stubbed a null birth year
+  on an `ACCEPTED` relationship, a state acceptance cannot produce; their fixtures now model a recorded year.
+  The fix is mutation-verified: reverting it fails `learnerDataWithAnUnknownBirthYearIsDeniedRatherThanWaved`
+  and only that test.
+- **Learning Connections now shows both sharing directions and a narrow momentum view.** Each accepted card has
+  a caller-owned “Share my study activity” toggle plus a separate read-only counterparty state. Momentum reuses
+  existing engagement mode, streak and meaningful-study-day data, renders zero activity honestly, and exposes
+  no progress, mastery, score, content title or authored free text. Failed privacy writes retain the last
+  server-confirmed toggle state; ended access collapses the view and refreshes the connection.
+
+### Known limitations
+
+- **⚠️ The grant table's idempotency and re-arm behaviour is verified EMPIRICALLY, not by an automated test.**
+  `insertLiveIfAbsent` is native `ON CONFLICT (relationship_id, from_user_id, scope) WHERE revoked_at IS NULL
+  DO NOTHING`, and its only automated coverage is a Mockito test that stubs the repository — so that test
+  **cannot** exercise the SQL or the partial unique index. The repo has no Testcontainers and H2 supports
+  neither partial indexes nor conflict-target inference over one, so the existing `LinkedLearnerInvitationReArmTest`
+  pattern (which hand-builds an H2 table with **no** index) cannot cover it either. Verified instead against the
+  real PostgreSQL 16 instance on 2026-08-27, the way `v0.83.1` verified its `NOT NULL` insert: a duplicate grant
+  no-ops at one row; revoke-then-re-grant yields two rows with one live; the opposite direction coexists as a
+  second live row; and both CHECK constraints reject a self-grant and an unknown scope. **The behaviour is
+  correct — what is missing is a regression guard**, so a future edit to that statement would not be caught by
+  the suite.
 
 ## v0.91.0 - Shared Learning Material
 

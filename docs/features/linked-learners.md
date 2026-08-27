@@ -130,10 +130,48 @@ The caller's link list contains only:
 - relationship status;
 - created, accepted and revoked dates;
 - workflow flags needed to finish birth-year and consent steps.
+- two independent activity-grant states: activity shared by the caller and activity shared by the counterparty.
 
 The relationship list itself contains no readiness, progress, score, quiz performance, note, Study Pack, collection or `ConceptHealth` data.
 
 Notes remain private. The link is free metadata and does not pool, transfer or change subscription or generation quota.
+
+## Directional activity sharing
+
+Accepting a Learning Connection grants no activity access. It creates only the capacity for either person to
+opt in to sharing their own activity. Grants are directional: A sharing with B never writes, implies or enables
+B sharing with A. The connection response therefore carries two separately computed fields,
+`activitySharedByMe` and `activitySharedWithMe`; neither is derived from the other.
+
+Each person can change only the grant whose `from_user_id` is their authenticated user id. Relationship and
+counterparty ids are derived from the loaded relationship, never supplied by the request. Turning sharing off
+sets `revoked_at`; it never deletes history, and turning it back on inserts a new row. Both operations are
+idempotent. The schema also permits `PROGRESS`, but Phase 2 never writes or reads that scope; it exists solely so
+Phase 3 does not require a second grant-table migration.
+
+Every momentum read reloads the relationship and requires it to be exactly `ACCEPTED`, then requires the live
+counterparty-to-caller `ACTIVITY` grant. There is no cache or grace period, so revoking either the grant or the
+relationship cuts the next read. A birth-year correction that pauses `ACCEPTED` to `PENDING` cuts it through the
+same status predicate.
+
+Guardian consent is deliberately asymmetric. It is re-asserted only when the shared data belongs to the
+relationship's learner. Reading a consent-requiring learner's activity needs the relationship consent row;
+reading the supporter's own shared activity does not, even when the counterparty learner requires consent. This
+is defence in depth over the `PENDING` gate, not a second age rule: one shared `GuardianConsentPolicy` owns the
+configuration-backed age decision.
+
+**That defence fails CLOSED.** If the learner's data is requested and their birth year is unknown, the read is
+denied rather than waved through. Acceptance records the year, so an `ACCEPTED` relationship always carries one
+and this denies nobody today — which is precisely why it must not fail open. The only way to reach it with a
+null year is a future grant path that produced `ACCEPTED` without one, and that is the exact state the check
+exists to catch; treating "unknown age" as "no consent needed" would let such a path silently reopen the
+`v0.89.1` gate.
+
+The momentum response is a read-only projection of activity NoteLib already records: display name, engagement
+mode, current streak, longest streak and meaningful study days this week. It adds no activity type or score,
+deliberately excludes `OPENED_STUDY_PACK` through the existing `MEANINGFUL_STUDY_ACTIVITIES` definition, and
+writes no activity event, `ConceptHealth`, progress timestamp or user state. Zeroes render as an honest empty
+answer rather than being hidden.
 
 ## Phase 3 supporter progress read
 

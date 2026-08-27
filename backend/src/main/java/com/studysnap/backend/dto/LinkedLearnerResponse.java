@@ -19,6 +19,8 @@ public record LinkedLearnerResponse(
         OffsetDateTime revokedAt,
         boolean birthYearRequired,
         boolean guardianConsentRequired,
-        boolean guardianConsentRecorded
+        boolean guardianConsentRecorded,
+        boolean activitySharedByMe,
+        boolean activitySharedWithMe
 ) {
 }
