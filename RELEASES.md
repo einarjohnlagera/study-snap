@@ -75,8 +75,15 @@ code — and it is the strongest argument for doing Phase 3 next rather than any
   what will resume), while **`*SharedWithMe` reflects ACTUAL ACCESS and filters on `ACCEPTED`** — it is the field
   the view affordance gates on, so it must answer what the server would answer. **A paused relationship renders as
   paused, not as off**, reusing the existing `PENDING` status copy rather than a new state.
-  Second: `setActivityGrant` reads the relationship with a plain `findById` and no row lock, unlike `accept()`
-  and `correctBirthYear()`; give the grant write the same locking read.
+  Second: `setActivityGrant` reads the relationship with a plain `findById`, decides it is `ACCEPTED`, then
+  inserts — so a revoke committing in between leaves a live grant row on a relationship that is not.
+  **⚠️ The fix is this repo's CONDITIONAL-WRITE idiom, not a lock, and the distinction was checked rather than
+  assumed:** `accept()` locks the *learner user row* (for the birth-year read, a different hazard) and guards
+  its status transition with `markAcceptedIfPending`; `markRevokedIfLive` and `pauseAcceptedForConsent` do the
+  same. **There is no relationship-row lock anywhere in this codebase**, and `linked-learners.md` states the
+  rule outright — *"status transitions are conditional updates, never read-modify-save."* Make the live-grant
+  insert conditional on the relationship still being `ACCEPTED` at write time. Withdrawal stays unconditional
+  on status, per the asymmetry above.
 - **6. Help Center — the Phase 3 instruction that is about to expire (frontend). ⚠️ PRE-DECLARED AT KICKOFF.**
   `learning-connections-guide.tsx:8` currently instructs, verbatim, that per-scope `PROGRESS` permissions *"are
   still Phase 3 and are NOT built: do not describe a setting that decides what a connection can see beyond
