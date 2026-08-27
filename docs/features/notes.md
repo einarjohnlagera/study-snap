@@ -30,10 +30,25 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 - `domainContext` is the authoritative authoring-domain signal for generation; fallback is note `courseProgram`, then profile `courseProgram`
 - note-level `learnerLevel` is the authoritative educational-depth signal; fallback is profile `learnerLevel`, then `COLLEGE`
 - AI-generated subject must be a reusable academic label with **no topic suffix** — strip anything after `–`, `:`, or `-` before saving (e.g. `Biology – Cell Division` → `Biology`)
-- The share modal/gate is the **same everywhere**: public content → share modal directly; private content → confirm-to-make-public modal first; do not invent content-specific flows
+- Public link sharing remains available, but a private note now points owners toward **Share with connections** as the controlled alternative; publishing and named-recipient sharing are separate choices and neither replaces the lightweight public-link flow.
 - **Official author** is determined by `UserRole.ADMIN` only — `isOfficialAuthor(user)` returns `user != null && user.getRole() == UserRole.ADMIN`; the old email-based `isNoteLibOfficialAccount()` method has been removed; do not recreate it
 - **Public author name** resolution order: admin user's `displayName` if set → `"NoteLib"` fallback for admin with no displayName → non-admin user's `displayName` → `firstName` → `"Anonymous learner"`
 - Target Audience is absent from note request/response DTOs and every authoring/display surface. `NoteService.create` still derives `NoteEntity.targetProfileType` from the owner's profile solely to satisfy the retained database evidence column; `resolveTargetProfileTypeForUpdate` preserves the stored value, and `copyNote` carries the source value.
+
+## Visibility and controlled sharing
+
+`NoteVisibility` has exactly two stored values: `PRIVATE` and `PUBLIC`. The note-detail control presents a derived third choice, **Share with connections**, when a `PRIVATE` note has at least one live `note_shares` grant. `SHARED` is deliberately not an enum value: access is granted by the per-recipient row rather than a label, owner-scoped note and Study Pack reads would not honor an enum by themselves, and account purge retains `PUBLIC` while deleting `PRIVATE`, so a third stored value would fall through both branches and could survive its owner's deletion.
+
+An owner replaces the full desired set of accepted relationship ids through `PUT /notes/{id}/shares`. The write validates every id before changing anything, revokes omitted live rows, inserts a new row when a previously revoked recipient is re-shared, and is idempotent when the set is unchanged. **⚠️ The revoke is orchestrated by the client, not by `updateVisibility`** — and it cannot be moved server-side,
+because opening the recipient picker on a `PUBLIC` note also writes `PRIVATE`, so the server cannot infer intent
+from the value. Two consequences follow and must not be undone: **Private is unavailable until the share list has
+loaded** (acting on an unresolved list would set the note private, skip the confirmation and leave every grant
+live while the chip read "Private"), and the access chip reads **Checking access…** rather than "Private" while
+that list is unknown. Selecting **Private** then revokes every live share after naming the affected count;
+choosing **Share with connections** on a public note asks before unpublishing, because that removes the note from
+Explore and kills existing public links; selecting **Public** changes only visibility and preserves grants and recipient provenance.
+
+Recipient reads use dedicated `SharedNoteResponse` and `SharedStudyPackResponse` records. They never reuse owner DTOs or expose mastery, readiness, weak concepts, attempts, scores, sessions, streaks, or progress timestamps. A shared copy is a normal owned `PRIVATE` note with provenance and remains in the recipient's Library after access is revoked. The source itself cannot be added to a Study Plan because collection writes remain owner-scoped.
 
 ## Note metadata
 

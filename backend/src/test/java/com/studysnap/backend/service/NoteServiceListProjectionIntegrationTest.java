@@ -404,6 +404,7 @@ class NoteServiceListProjectionIntegrationTest {
                 .thenReturn(com.studysnap.backend.service.model.StudyPackQuizMastery.notMastered());
         return new NoteService(
                 noteRepository,
+                org.mockito.Mockito.mock(com.studysnap.backend.repository.NoteShareRepository.class),
                 analyticsEventRepository,
                 publicNoteLikeRepository,
                 studyPackRepository,

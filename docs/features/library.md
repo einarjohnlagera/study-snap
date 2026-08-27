@@ -42,6 +42,12 @@ Library contains:
 - `PUBLIC` notes owned by the current user
 - Draft and Study Pack Ready notes
 
+## Shared with you
+
+The private Library renders a separate **Shared with you** section below the owned-note area. It is cursor-paged newest first and hidden entirely when the recipient has no currently readable shares. Shared material is never merged into the owned results, filters, selection mode, or Study Plan actions.
+
+Each card shows the note title, `Shared by {ownerDisplayName}` provenance, whether its Study Pack is ready, and one **Study** action leading to the read-only recipient route. A relationship that leaves `ACCEPTED`, a revoked note grant, or a deleted source removes the material from this list on the next request. Recipients copy a note into their own Library before planning it.
+
 Shared note-card layout:
 
 - subtle `courseProgram` line when available

@@ -84,7 +84,8 @@ class QuickReviewConceptHealthIntegrationTest {
                 studyPackRepository,
                 subscriptionService,
                 featureGateService
-        );
+        ,
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class));
         quickReviewSessionService = new QuickReviewSessionService(
                 quickReviewSessionRepository,
                 studyPackRepository,
@@ -95,7 +96,8 @@ class QuickReviewConceptHealthIntegrationTest {
                 featureGateService,
                 conceptHealthService,
                 mock(StudyPackQuizMasteryService.class)
-        );
+        ,
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PRO);

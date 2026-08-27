@@ -37,6 +37,8 @@ import {
   getMe,
   getMyStudyPack,
   getNote,
+  getSharedNote,
+  getSharedStudyPack,
   getPostSessionNextStep,
   saveQuickReviewConfidence,
   startQuickReviewSession,
@@ -226,6 +228,10 @@ export default function QuickReviewPage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const queryString = useMemo(() => searchParams.toString(), [searchParams]);
+  const isSharedSource = useMemo(
+    () => new URLSearchParams(queryString).get("source") === "shared",
+    [queryString],
+  );
   const isDueConceptsDigestVisit = useMemo(
     () => new URLSearchParams(queryString).get("source") === "due-concepts-digest",
     [queryString],
@@ -321,7 +327,47 @@ export default function QuickReviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const detail = await getNote(noteId);
+      let detail: NoteResponse;
+      if (isSharedSource) {
+        const sharedNote = await getSharedNote(noteId);
+        if (!sharedNote.studyPackId) {
+          throw new Error("This shared note does not have a Study Pack yet.");
+        }
+        const sharedPack = await getSharedStudyPack(sharedNote.studyPackId);
+        detail = {
+          id: sharedNote.id,
+          title: sharedNote.title,
+          subject: sharedNote.subject,
+          courseProgram: sharedNote.courseProgram,
+          domainContext: null,
+          learnerLevel: sharedNote.learnerLevel,
+          tags: sharedNote.tags,
+          content: sharedNote.content,
+          visibility: "PRIVATE",
+          createdAt: sharedNote.sharedAt,
+          updatedAt: sharedNote.sharedAt,
+          copiedFromNoteId: null,
+          copiedFromUserId: null,
+          copiedFromTitle: null,
+          copiedFromPublic: false,
+          copiedAt: null,
+          studyPackId: sharedPack.id,
+          studyPackStatus: "STUDY_PACK_READY",
+          summary: sharedPack.summary,
+          keyConcepts: sharedPack.keyConcepts,
+          quiz: sharedPack.quiz,
+          quizMastered: false,
+          quizMasteredAt: null,
+          generatedQuiz: null,
+          lastUsedTargetLearnerLevel: null,
+          quizCount: sharedPack.quiz.length,
+          quickReviewAvailable: sharedPack.quiz.length > 0,
+          challengeQuizAvailable: false,
+          adaptivePracticeAvailable: false,
+        };
+      } else {
+        detail = await getNote(noteId);
+      }
       if (detail.studyPackStatus !== "STUDY_PACK_READY") {
         setNote(detail);
         loadedNoteIdRef.current = noteId;
@@ -360,7 +406,7 @@ export default function QuickReviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [noteId, pathname, queryString, resetQuickReviewState, router]);
+  }, [isSharedSource, noteId, pathname, queryString, resetQuickReviewState, router]);
 
   useEffect(() => {
     void loadNote();
@@ -477,7 +523,10 @@ export default function QuickReviewPage() {
   );
   const isStruggling = !isPerfectScore && (displayedWeakConcepts.length > 0 || scorePercentage < 80);
   const showChallengeGuidedCta = !isStruggling;
-  const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const noteDetailHref = useMemo(
+    () => note ? (isSharedSource ? `/shared/notes/${note.id}` : `/notes/${note.id}`) : "/library",
+    [isSharedSource, note],
+  );
   const currentPlan = usageSummary?.plan ?? viewerPlanType ?? "FREE";
   const hasNextStepGuidance = nextStepResponse !== null || weeklyPacingWeeksRemaining !== null;
   const hasCompanionExcerpt = hasCompanionResultBridgeExcerpt(primaryCollectionCompanion);
@@ -1219,7 +1268,9 @@ export default function QuickReviewPage() {
                           normalizeConceptKey(keyConcept) === normalizeConceptKey(concept)
                         )) ? (
                           <Link
-                            href={`/notes/${note.id}?tab=key-concepts#${buildConceptAnchorId(concept)}`}
+                            href={isSharedSource
+                              ? `/shared/notes/${note.id}`
+                              : `/notes/${note.id}?tab=key-concepts#${buildConceptAnchorId(concept)}`}
                             className="font-medium text-amber-700 underline underline-offset-4 dark:text-amber-300"
                           >
                             {concept}
@@ -1238,14 +1289,18 @@ export default function QuickReviewPage() {
                 once the learner is doing well, otherwise back to the notes. Adaptive Practice is
                 deliberately absent — Quick Review no longer routes into it (EXAM_MODES.md).
               */}
-              {showChallengeGuidedCta ? (
+              {showChallengeGuidedCta && !isSharedSource ? (
                 <Link href={`/notes/${note.id}/challenge-quiz`} className="block">
                   <Button type="button" className="w-full">
                     Take Another Challenge
                   </Button>
                 </Link>
               ) : (
-                <Link href={`/notes/${note.id}`} className="block">
+                // ⚠️ noteDetailHref, not `/notes/${note.id}`. On shared material the note belongs to
+                // someone else, so the owner-scoped route 404s with "does not belong to your account".
+                // This fallback renders precisely when the next-step fetch failed — and it always fails
+                // for a recipient, because PostSessionNextStepService resolves the pack owner-scoped.
+                <Link href={noteDetailHref} className="block">
                   <Button type="button" className="w-full">
                     Review the Notes
                   </Button>

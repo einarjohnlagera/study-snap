@@ -80,11 +80,12 @@ public class QuickReviewSessionService {
     private final FeatureGateService featureGateService;
     private final ConceptHealthService conceptHealthService;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
+    private final NoteShareService noteShareService;
+
 
     public QuickReviewSessionStartResponse startSession(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
-        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)
-                .orElseThrow(StudyPackNotFoundException::new);
+        StudyPackEntity studyPack = findAccessibleStudyPack(studyPackId, userId, true);
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
@@ -127,8 +128,7 @@ public class QuickReviewSessionService {
     @Transactional(readOnly = true)
     public QuickReviewSessionStartResponse getInProgressSession(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
-        studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                .orElseThrow(StudyPackNotFoundException::new);
+        findAccessibleStudyPack(studyPackId, userId, false);
 
         return quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
@@ -153,6 +153,7 @@ public class QuickReviewSessionService {
                         QuickReviewSessionMode.QUICK_REVIEW
                 )
                 .orElseThrow(QuickReviewSessionNotFoundException::new);
+        recheckMaterialAccess(session.getStudyPackId(), userId);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new AppException(
@@ -179,6 +180,10 @@ public class QuickReviewSessionService {
                         QuickReviewSessionMode.QUICK_REVIEW
                 )
                 .orElseThrow(QuickReviewSessionNotFoundException::new);
+        // Resolve material access ONCE and carry the result down. Authorization still happens on every
+        // call — it is what cuts a revoked recipient off mid-session — but re-reading the same pack row
+        // later in the same request bought nothing and multiplied reads on the busiest write path.
+        Optional<StudyPackEntity> accessibleStudyPack = recheckMaterialAccess(session.getStudyPackId(), userId);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new AppException(
@@ -220,8 +225,7 @@ public class QuickReviewSessionService {
         List<ChallengeQuizConceptStatResponse> conceptBreakdown = List.of();
         Optional<StudyPackQuizMastery> masteryBeforeCompletion = Optional.empty();
         try {
-            studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId)
-                    .orElse(null);
+            studyPack = accessibleStudyPack.orElse(null);
             if (studyPack != null && studyPack.getQuiz() != null && !studyPack.getQuiz().isEmpty()) {
                 masteryBeforeCompletion = studyPackQuizMasteryService.tryResolve(userId, studyPack);
                 conceptBreakdown = QuizSessionReviewUtils.computeConceptBreakdownForStoredSelections(
@@ -351,6 +355,7 @@ public class QuickReviewSessionService {
                         QuickReviewSessionMode.QUICK_REVIEW
                 )
                 .orElseThrow(QuickReviewSessionNotFoundException::new);
+        recheckMaterialAccess(session.getStudyPackId(), userId);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             return new SimpleMessageResponse(QUICK_REVIEW_SESSION_ALREADY_ENDED_MESSAGE);
@@ -374,6 +379,7 @@ public class QuickReviewSessionService {
                         QuickReviewSessionMode.QUICK_REVIEW
                 )
                 .orElseThrow(QuickReviewSessionNotFoundException::new);
+        recheckMaterialAccess(session.getStudyPackId(), userId);
 
         if (session.getStatus() != QuickReviewSessionStatus.COMPLETED) {
             throw new AppException(
@@ -392,8 +398,7 @@ public class QuickReviewSessionService {
     @Transactional(readOnly = true)
     public QuizSessionReviewResponse getSessionReview(String studyPackIdRaw, String sessionIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
-        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                .orElseThrow(StudyPackNotFoundException::new);
+        StudyPackEntity studyPack = findAccessibleStudyPack(studyPackId, userId, false);
         UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, QuickReviewSessionNotFoundException::new);
         QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
                         sessionId,
@@ -448,8 +453,7 @@ public class QuickReviewSessionService {
     @Transactional(readOnly = true)
     public List<QuickReviewSessionResponse> listRecentSessions(String studyPackIdRaw, UUID userId, int limit) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
-        studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                .orElseThrow(StudyPackNotFoundException::new);
+        findAccessibleStudyPack(studyPackId, userId, false);
 
         int normalizedLimit = Math.clamp(limit, 1, 10);
         PlanType planType = subscriptionService.resolvePlan(userId);
@@ -466,8 +470,7 @@ public class QuickReviewSessionService {
     @Transactional(readOnly = true)
     public QuickReviewPerformanceSummaryResponse getPerformanceSummary(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
-        studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                .orElseThrow(StudyPackNotFoundException::new);
+        findAccessibleStudyPack(studyPackId, userId, false);
 
         long attempts = quickReviewSessionRepository.countByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNull(
                 userId,
@@ -498,6 +501,67 @@ public class QuickReviewSessionService {
                 latest == null ? null : latest.getScorePercentage(),
                 latest == null ? null : latest.getCompletedAt()
         );
+    }
+
+    private StudyPackEntity findAccessibleStudyPack(UUID studyPackId, UUID userId, boolean forUpdate) {
+        Optional<StudyPackEntity> owned = forUpdate
+                ? studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)
+                : studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId);
+        if (owned.isPresent()) {
+            return owned.get();
+        }
+        // Not the owner: the pack may still be SHARED with this caller. Authorizing here re-verifies the
+        // relationship is ACCEPTED on every call, which is what makes a revoke — or a birth-year correction
+        // that reverts the link to PENDING — cut practice access on the very next request.
+        noteShareService.requireSharedStudyPackAccess(userId, studyPackId);
+        return studyPackRepository.findById(studyPackId).orElseThrow(StudyPackNotFoundException::new);
+    }
+
+    private Optional<StudyPackEntity> recheckMaterialAccess(UUID studyPackId, UUID userId) {
+        // ⚠️ Unconditional by design. Access is re-derived on EVERY call, never cached for the life of a
+        // session — a recipient whose share or relationship is revoked mid-session must not be able to keep
+        // answering. Guarding this behind a nullable dependency would silently turn it into a no-op, which
+        // is exactly what it did before: every pre-existing test constructed this service with a null
+        // NoteShareService, so the recheck never ran in the suite at all.
+        try {
+            return findVisibleStudyPack(studyPackId, userId);
+        } catch (AppException denied) {
+            // An authorization RESULT. Must propagate — swallowing it is the whole failure mode this guards.
+            throw denied;
+        } catch (RuntimeException readFault) {
+            // An infrastructure fault reading the pack (a corrupt row, an unparseable state) is NOT a denial.
+            // Completion has always tolerated a pack it cannot read, and the caller owns the session either
+            // way, so failing here would strand a learner's own session over something unrelated to sharing.
+            log.warn(
+                    "action=recheck_material_access outcome=read_failed userId={} studyPackId={}",
+                    userId,
+                    studyPackId,
+                    readFault
+            );
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Owner-or-recipient lookup that stays tolerant of a MISSING pack.
+     *
+     * <p>⚠️ The empty case must not throw. Completing or forfeiting a session whose Study Pack has since
+     * been deleted has always succeeded — the caller owns the SESSION, which was loaded separately, and the
+     * pack is only needed to derive the concept breakdown. Denying it here would strand the learner's own
+     * session for a reason that has nothing to do with sharing. A pack that EXISTS but is not owned is the
+     * only case that needs a share, and that is the case this enforces.
+     */
+    private Optional<StudyPackEntity> findVisibleStudyPack(UUID studyPackId, UUID userId) {
+        Optional<StudyPackEntity> owned = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId);
+        if (owned.isPresent()) {
+            return owned;
+        }
+        Optional<StudyPackEntity> existing = studyPackRepository.findById(studyPackId);
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+        noteShareService.requireSharedStudyPackAccess(userId, studyPackId);
+        return existing;
     }
 
     @Transactional(readOnly = true)

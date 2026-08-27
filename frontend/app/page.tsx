@@ -13,7 +13,7 @@ import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-track
 import { TrackedLink } from "@/components/analytics/tracked-link";
 import { SimplePricingSection } from "@/components/billing/pricing-plans-section";
 import { BrandFullLogo } from "@/components/branding/brand-assets";
-import { GuardianInterestSection } from "@/components/landing/guardian-interest-section";
+import { LearningConnectionsSection } from "@/components/landing/learning-connections-section";
 import { ProfileLearningSection } from "@/components/landing/profile-learning-section";
 import { ProductScreenshotFrame } from "@/components/public/product-screenshot-frame";
 import { PublicFooter } from "@/components/public/public-footer";
@@ -516,7 +516,7 @@ export default async function Home() {
       <DifferentiationSection />
       <PricingPreviewSection />
       <FaqSection />
-      <GuardianInterestSection />
+      <LearningConnectionsSection />
       <FinalCtaSection />
       <PublicFooter />
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden">

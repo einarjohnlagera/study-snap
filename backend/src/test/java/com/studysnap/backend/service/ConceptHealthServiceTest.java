@@ -62,7 +62,8 @@ class ConceptHealthServiceTest {
             studyPackRepository,
             subscriptionService,
             featureGateService
-        );
+        ,
+            org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class));
     }
 
     @Test

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Award, BarChart2, BookOpen, Brain, Briefcase, Compass, Download, FileText, GraduationCap, Layers, Lightbulb, MessageCircle, Sparkles, User } from "lucide-react";
+import { ArrowRight, Award, BarChart2, BookOpen, Brain, Briefcase, Compass, Download, FileText, GraduationCap, Layers, Lightbulb, MessageCircle, Sparkles, User, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -12,6 +12,7 @@ import { CreatingNotesGuide } from "@/components/help/creating-notes-guide";
 import { BulkGenerateGuide } from "@/components/help/bulk-generate-guide";
 import { StudyPlansGuide } from "@/components/help/study-plans-guide";
 import { LearningCompanionGuide } from "@/components/help/learning-companion-guide";
+import { LearningConnectionsGuide } from "@/components/help/learning-connections-guide";
 import { StudyPacksGuide } from "@/components/help/study-packs-guide";
 import { ExportSharingGuide } from "@/components/help/export-sharing-guide";
 import { BoardExamGuide } from "@/components/help/board-exam-guide";
@@ -99,6 +100,12 @@ const HELP_CARDS: HelpCard[] = [
     description: "Download quiz sessions as PDFs and share notes publicly.",
   },
   {
+    id: "learning-connections",
+    icon: Users,
+    title: "Helping Someone Learn",
+    description: "Send a quiz, share a note and its Study Pack, and follow how someone you support is doing.",
+  },
+  {
     id: "student-guide",
     icon: User,
     title: "Student Guide",
@@ -173,6 +180,8 @@ function GuideContent({
       return <ExamHubsGuide />;
     case "export-sharing":
       return <ExportSharingGuide />;
+    case "learning-connections":
+      return <LearningConnectionsGuide />;
     case "board-exam-guide":
       return <BoardExamGuide showSwitchProfileCta={showSwitchProfileCta} />;
     case "student-guide":

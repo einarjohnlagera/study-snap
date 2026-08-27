@@ -75,7 +75,35 @@ The count is fetched through the server-side public-notes helper with the existi
 5. Target Users
 6. Pricing Preview
 7. FAQ
-8. Final CTA
+8. Learning Connections
+9. Final CTA
+
+## Learning Connections Section
+
+Sits between the FAQ and the Final CTA. It is the only public surface that describes helping someone else
+learn, which makes its accuracy load-bearing.
+
+**⚠️ It replaced a "Coming Soon" teaser that outlived the feature by three releases.** The section advertised
+a waitlist for supporter progress — shipped in `v0.89.0` — and fired `GUARDIAN_INTEREST` on an
+"I'm interested" click. So the one public mention of this capability told visitors it did not exist, and
+collected an interest click instead of a signup. That event is retired: nothing fires it, it is gone from the
+frontend's firing vocabulary, and the Java enum value is kept only because the historical rows are the
+product's sole pre-launch interest baseline.
+
+Rules:
+
+- **Every claim must be live.** The section currently promises three things, all shipping: share a note and
+  its Study Pack with someone you choose; see their readiness, study frequency and practice once they accept;
+  and never see their notes. **Do not add a claim for a later phase** — activity sharing and per-scope
+  progress permissions are not built.
+- **Relationship-neutral copy.** Marketing may lead with the parent case because it is the clearest real-world
+  pain point, but the product gates nothing on who someone is to you. Name several relationships — parents,
+  tutors, siblings, study partners — and never imply a guardian mode, a supporter profile, or any account type
+  that does not exist.
+- **Outcome before feature.** No "social learning" framing, and no permissions, connections or sharing
+  vocabulary in the headline copy.
+- Its CTA reuses `LANDING_CTA_CLICKED` with `placement: "learning_connections_section"`. **No new event** —
+  the landing page already has one CTA event and a placement dimension.
 
 ## Learning Loop Section
 

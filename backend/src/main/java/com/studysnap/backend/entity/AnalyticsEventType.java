@@ -58,6 +58,11 @@ public enum AnalyticsEventType {
     PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED,
     PUBLIC_NOTE_FLASHCARDS_CLICKED,
     PUBLIC_NOTE_SHARED,
+    NOTE_SHARED_WITH_CONNECTION,
+    NOTE_SHARE_REVOKED,
+    SHARED_NOTE_OPENED,
+    SHARED_STUDY_PACK_OPENED,
+    SHARED_NOTE_COPIED,
     PUBLIC_PROFILE_SHARED,
     KNOWLEDGE_IMPACT_DASHBOARD_VIEWED,
     EXAM_HUB_VIEWED,
@@ -119,5 +124,17 @@ public enum AnalyticsEventType {
     ONBOARDING_V2_CTA_GO_TO_SAVED_NOTE,
     ONBOARDING_V2_BACK_NAVIGATED,
     ONBOARDING_V2_ABANDONED,
+    /**
+     * ⚠️ RETIRED as of v0.91.0 — no longer fired, and deliberately NOT removed.
+     *
+     * <p>It backed an "I'm interested" button on a landing section that advertised supporter progress as
+     * "Coming Soon" for three releases after it had actually shipped. The section is now a live feature
+     * section, so nothing fires this any more and it is gone from the frontend's firing vocabulary.
+     *
+     * <p>The value stays because the rows do: this is the product's only PRE-LAUNCH interest signal for
+     * Learning Connections, and it is worth reading as a baseline beside post-launch behaviour. Read it for
+     * what it is — clicks on a Coming Soon teaser, with no dedup and no address captured, so it bounds
+     * curiosity rather than measuring demand. Do not re-fire it and do not repurpose its meaning.
+     */
     GUARDIAN_INTEREST
 }

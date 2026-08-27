@@ -583,6 +583,11 @@ export type AnalyticsEventType =
   | "PUBLIC_NOTE_QUIZ_YOURSELF_CLICKED"
   | "PUBLIC_NOTE_FLASHCARDS_CLICKED"
   | "PUBLIC_NOTE_SHARED"
+  | "NOTE_SHARED_WITH_CONNECTION"
+  | "NOTE_SHARE_REVOKED"
+  | "SHARED_NOTE_OPENED"
+  | "SHARED_STUDY_PACK_OPENED"
+  | "SHARED_NOTE_COPIED"
   | "PUBLIC_PROFILE_SHARED"
   | "KNOWLEDGE_IMPACT_DASHBOARD_VIEWED"
   | "EXAM_HUB_VIEWED"
@@ -616,7 +621,6 @@ export type AnalyticsEventType =
   | "SIGNUP"
   | "LANDING_PAGE_VIEWED"
   | "LANDING_CTA_CLICKED"
-  | "GUARDIAN_INTEREST"
   | "DEMO_OPENED"
   | "SIGNUP_STARTED"
   | "SIGNUP_COMPLETED"
@@ -1706,6 +1710,54 @@ export type AdminNoteApplicableProgramsPage = {
 
 export type NoteStudyPackStatus = "DRAFT" | "GENERATING" | "FAILED" | "STUDY_PACK_READY";
 export type NoteVisibility = "PRIVATE" | "PUBLIC";
+
+export type NoteShareResponse = {
+  relationshipId: string;
+  granteeDisplayName: string;
+  granteeEmail: string;
+  createdAt: string;
+};
+
+export type SharedNoteListItemResponse = {
+  noteId: string;
+  title: string | null;
+  subject: string | null;
+  ownerDisplayName: string;
+  studyPackReady: boolean;
+  sharedAt: string;
+};
+
+export type SharedNotesPageResponse = {
+  items: SharedNoteListItemResponse[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export type SharedNoteResponse = {
+  id: string;
+  title: string | null;
+  content: string;
+  subject: string | null;
+  courseProgram: string | null;
+  learnerLevel: LearnerLevel | null;
+  tags: string[];
+  status: string;
+  ownerDisplayName: string;
+  sharedAt: string;
+  studyPackId: string | null;
+  canCopy: boolean;
+};
+
+export type SharedStudyPackResponse = {
+  id: string;
+  noteId: string;
+  title: string;
+  summary: string;
+  fullNotes: string | null;
+  keyConcepts: string[];
+  quiz: QuizItem[];
+  ownerDisplayName: string;
+};
 export type SubjectSuggestionScope = "mine" | "public";
 export type CourseProgramSuggestionScope = "mine" | "public";
 
@@ -4297,6 +4349,73 @@ export async function getNote(noteId: string): Promise<NoteResponse> {
     true,
   );
   return parseApiResponse<NoteResponse>(response, "Could not load note.");
+}
+
+export async function getNoteShares(noteId: string): Promise<NoteShareResponse[]> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/shares`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<NoteShareResponse[]>(response, "Could not load note sharing.");
+}
+
+export async function replaceNoteShares(
+  noteId: string,
+  relationshipIds: string[],
+): Promise<NoteShareResponse[]> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/shares`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ relationshipIds }),
+    },
+    true,
+  );
+  return parseApiResponse<NoteShareResponse[]>(response, "Could not update note sharing.");
+}
+
+export async function listSharedWithMe(
+  options: { limit?: number; cursor?: string | null } = {},
+): Promise<SharedNotesPageResponse> {
+  const params = new URLSearchParams();
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.cursor) params.set("cursor", options.cursor);
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  const response = await fetchWithAuth(
+    `/notes/shared-with-me${query}`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<SharedNotesPageResponse>(response, "Could not load notes shared with you.");
+}
+
+export async function getSharedNote(noteId: string): Promise<SharedNoteResponse> {
+  const response = await fetchWithAuth(
+    `/notes/shared/${noteId}`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<SharedNoteResponse>(response, "This note is no longer shared with you.");
+}
+
+export async function getSharedStudyPack(studyPackId: string): Promise<SharedStudyPackResponse> {
+  const response = await fetchWithAuth(
+    `/study-packs/shared/${studyPackId}`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<SharedStudyPackResponse>(response, "This note is no longer shared with you.");
+}
+
+export async function copySharedNote(noteId: string): Promise<NoteResponse> {
+  const response = await fetchWithAuth(
+    `/notes/shared/${noteId}/copy`,
+    { method: "POST", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<NoteResponse>(response, "Could not copy this shared note.");
 }
 
 export async function getGeneratedQuiz(noteId: string): Promise<GeneratedQuizResponse> {

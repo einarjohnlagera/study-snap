@@ -128,6 +128,7 @@ class NoteControllerTest {
                 authService,
                 bulkGenerationResultService,
                 noteService,
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class),
                 noteBulkImportService,
                 noteBulkGenerationService,
                 noteGenerationService,

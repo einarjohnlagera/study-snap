@@ -1,5 +1,166 @@
 # RELEASES.md - NoteLib
 
+## v0.91.0 - Shared Learning Material
+
+**Status: Released** (kicked off and signed off 2026-08-27)
+
+Theme: give someone a note without publishing it to the world.
+
+### Why this release exists
+
+**Sharing a note today means making it PUBLIC.** `NoteVisibility` has exactly two values, and the note-detail
+Share action on a private note opens a confirmation that says, verbatim: *"This note is private. You need to make
+this note public before sharing. Anyone with the link will be able to view and copy this note."* A parent who wants
+to give their child one Study Pack must publish it into Explore for everyone. **Controlled sharing is the missing
+middle state**, and it is Phase 1 of the ratified Learning Connections direction (owner, 2026-08-27).
+
+Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-plan.md`.
+
+### Shipped
+
+- **`note_shares` grant table (migration).** Per note × per grantee, carrying `relationship_id` so revocation is a
+  single predicate. Rows are revoked, never deleted; re-sharing inserts a new live row while the prior revoked row
+  remains as history, which the partial live-row unique index permits.
+- **Share / unshare API (backend).** Owner-only read and desired-state write on a note's shares, plus the
+  recipient's `shared-with-me` list.
+- **Recipient note and Study Pack reads (backend).** New authorized methods — **not** the owner-scoped `getById`
+  paths — so a recipient can open shared material and enter the normal practice loop.
+- **"Who can access this note?" control (frontend).** Three options replacing the two-state visibility menu, with a
+  recipient picker listing accepted connections only, never pre-checked.
+- **"Shared with you" Library section (frontend).** Distinct from owned notes, hidden entirely when empty, with
+  `Shared by {name}` provenance.
+- **Copy to my Library (backend + frontend).** Widens the existing copy rule to `isOwner || PUBLIC || live share`.
+- **Five analytics events.** Shared, revoked, note opened, pack opened, copied — the funnel that no table can
+  express.
+- **The invitation form validates itself instead of deferring to the browser.** The birth-year field accepted
+  letters, sat at a different height and width from the email field above it, and feedback arrived as the
+  browser's native *"Please fill out this field"* bubble — which names no field and matches nothing else in the
+  product. The form is now `noValidate` with **inline, field-level errors** that move focus to the offending
+  input, and the birth-year field takes **digits only, four at most**, with a **stepper** for ±1 adjustments that
+  clamps to the server's own 1900–current-year bound. That range is now checked **as the fourth digit is typed**
+  rather than only on submit, so an impossible year cannot sit in the field looking accepted. **⚠️ The steppers
+  are inert until four digits exist and seed nothing** — stepping from empty would have to start somewhere, and
+  any starting year is a declaration nobody made. The correction field on the same page now uses the identical
+  input, so there is one year-input idiom rather than two. **⚠️ No default year is pre-filled** — the value is
+  account-global and effectively write-once, so a default would be a declaration nobody made — and **a blank
+  year is still not a client-side error**, because only the server knows whether this account already has one.
+- **A Memorization error message was invisible.** The grade-failure text used `text-destructive`, which is not a
+  token in this theme's `@theme inline` block, so Tailwind generated no rule and the message rendered in the
+  default body colour — readable, but not signalling failure. It now uses the product's red scale and carries
+  `role="alert"` so it is announced.
+- **The Help Center covers helping someone learn.** None of its 14 sections mentioned it, and *Export &
+  Sharing* documented PDF export without ever naming shareable quiz links — so after the landing page was
+  corrected, the public surface told the truth while the in-app surface still said nothing. A new
+  **Helping Someone Learn** section covers the no-account quiz link, inviting and connecting, sharing a note
+  and its Study Pack, following a connection's progress, and the two privacy boundaries. *Export & Sharing*
+  now opens by distinguishing files you download from putting material in a person's hands. **⚠️ Every claim
+  in that section is live** — activity sharing and per-scope progress permissions are Phases 2 and 3 and are
+  deliberately absent.
+- **The landing page stopped advertising this as "Coming Soon".** The only public surface mentioning supporter
+  features carried a *Coming Soon* badge and an "I'm interested" waitlist button describing the progress view
+  that shipped in `v0.89.0` — so for three releases it told visitors the capability did not exist and collected
+  a click instead of a signup. It is now a live feature section: share a note and its Study Pack, see readiness
+  and study activity once they accept, and never see their notes. **Relationship-neutral** — parents, tutors,
+  siblings and study partners are named, and nothing implies a guardian mode or supporter profile. Its CTA
+  reuses `LANDING_CTA_CLICKED` with a placement, so no new event ships. `GUARDIAN_INTEREST` is **retired, not
+  deleted**: nothing fires it and it is gone from the frontend's firing vocabulary, but the enum value stays
+  because those rows are the product's only pre-launch interest baseline for this capability.
+
+### Known limitations
+
+**Found by the cold-context pre-signoff pressure test (two agents, 2026-08-27). Everything below was verified
+against code; the blocking finding and six others were FIXED in the signoff, and these are what remains.**
+
+- **⚠️ `GET /notes/{id}/shares` can list a recipient who can no longer read the note.** The listing filters on
+  `revoked_at IS NULL` only, with no join to relationship status, while `PUT` requires every id to be `ACCEPTED`.
+  If a connection lapses to `PENDING` (a birth-year correction) or `REVOKED`, the share row stays live and the
+  owner still sees that person listed. **The over-reporting direction is the safe one** — it claims more sharing
+  than exists, never less, and the recipient's reads are already denied. The cost is that the two endpoints
+  disagree about a valid share set, so a round-tripped list can be rejected until the stale id is dropped.
+- **⚠️ Concurrency on the sharing paths surfaces as a 500 rather than a retry or a 409.** Two simultaneous
+  desired-state updates on the same note, and two simultaneous Quick Review starts by the same recipient, can
+  each violate a unique index. **Both fail safe** — the transaction rolls back and no state is corrupted — but
+  the caller sees a server error. Related: the recipient branch of `findAccessibleStudyPack` does not take the
+  pessimistic row lock the owner branch takes, so a recipient's concurrent session start is not serialised.
+- **⚠️ The two Study Pack access resolvers differ in strictness, and the looser one guards the write paths.**
+  `getSharedStudyPack` cross-checks that the share, the pack and the note agree on owner and note id;
+  `requireSharedStudyPackAccess` — which guards concept health and every Quick Review path — checks the live
+  share and the `ACCEPTED` relationship but not those cross-references. **Not exploitable today**: every path
+  that creates or reassigns a pack keeps `study_packs.owner_user_id` consistent with `notes.owner_user_id`. It
+  is recorded because that consistency is an assumption, not an enforced constraint.
+- **⚠️ `recheckMaterialAccess` fails OPEN on a non-`AppException` fault.** Its broad catch exists so a corrupt
+  or unreadable pack cannot strand a learner's own session, and every deliberate denial extends `AppException`
+  and is rethrown — verified by walking the whole call chain. But a driver-level fault or an unmappable
+  relationship status raised *inside* the authorization call would be logged and treated as "no pack", and the
+  recipient's write would complete.
+- **The Help Center's plan numbers are hardcoded copy.** The share-link limits in the Helping Someone Learn
+  section duplicate values that live in `pricing-config.ts`. Correct today; they will drift.
+- **The note-access dropdown declares `aria-haspopup="menu"` without `role="menu"` on the panel.** Pre-existing,
+  newly aggravated: this release put a checkbox list inside that panel, and a checkbox list cannot live in a
+  menu. The wiring should be dropped rather than completed.
+
+**Fixed during signoff, listed because each was live in a merged PR:** selecting *Private* while the share list
+had failed to load set the note private, skipped the confirmation and left every grant live while the chip read
+"Private"; choosing *Share with connections* on a public note unpublished it with no confirmation; the Quick
+Review results screen sent recipients to owner-scoped note URLs that 404; "Copy to my Library" minted unlimited
+duplicates from a shared note; two live relationships between the same pair made a legitimate share request 500;
+the birth-year correction form still used the browser's native validation bubble and had lost its range check;
+and two of the four year inputs on the connections page were still raw, one with no digit filter or bounds.
+
+- **⚠️ Material access is re-derived on every mutating call, and must stay that way.** Nothing is cached for
+  the life of a session, which is what makes a revoked share, a revoked relationship, or a `v0.89.1` birth-year
+  correction cut practice access on the very next request. **Query cost is unchanged:** the authorization read
+  briefly doubled Quick Review completion from 3 Study Pack reads to 6, and `completeSession` now resolves
+  access once and carries the result rather than re-reading the same row for the concept breakdown. A test
+  pins the count at 3 so a duplicated resolution cannot creep back in unnoticed.
+- **⚠️ A recheck that had never executed.** As delivered, every pre-existing construction of
+  `QuickReviewSessionService`, `ConceptHealthService`, `NoteService` and both touched controllers passed `null`
+  for the new sharing dependency through a hand-written legacy constructor, with `!= null` guards at the call
+  sites. Production wiring was correct — Spring selects the `@Autowired` all-args constructor — but **the guard
+  made the mid-session access recheck a silent no-op across all 1,723 backend tests**, the `v0.86.0` "passing
+  for the wrong reason" class, and `recheckMaterialAccess` failed *open* rather than closed. The legacy
+  constructors and null guards were removed during audit, and `revokedShareDeniesTheRecipientMidSession` now
+  pins the behaviour (mutation-verified: making the recheck inert fails that test and nothing else).
+- **⚠️ Completion tolerates a Study Pack it cannot read, and that is deliberate.** `findVisibleStudyPack`
+  returns empty rather than denying when the pack does not exist, and `recheckMaterialAccess` logs rather than
+  denies on an infrastructure read fault while still propagating every `AppException`. The caller owns the
+  *session*, which is loaded separately, so failing these cases would strand a learner's own session for a
+  reason unrelated to sharing. Every throw in the authorization chain was verified to be an `AppException`
+  subclass, so no denial can be swallowed by that catch.
+
+### Anti-drift — locked for this release
+
+- **⚠️ `NoteVisibility` STAYS `PRIVATE | PUBLIC`. Do NOT add a `SHARED` enum value.** Three reasons, all verified:
+  every read path is `findByIdAndOwnerUserId`, so the enum grants nobody anything and would be a label asserting
+  what a table actually decides; `AccountPurgeService.deletePrivateArtifacts` **retains `PUBLIC` and deletes
+  `PRIVATE`**, so a `SHARED` note matches neither branch and would **survive the purge of a deleted account while
+  staying readable by its recipients**; and the enum has **42 usages across 24 files**, each needing a decision. A
+  shared note stays `PRIVATE`, so it is excluded from Explore and included in purge **by default**.
+- **⚠️ The three-way choice is DERIVED, never stored.** "Share with connections" is the state where a live
+  `note_shares` row exists on a `PRIVATE` note.
+- **⚠️ Selecting *Private* REVOKES every live share** (owner decision, 2026-08-27), with the confirmation naming the
+  count. Selecting *Public* revokes nothing — public is strictly broader, and recipients keep their provenance.
+- **⚠️ Connecting shares NOTHING.** A relationship creates the capacity to grant. No note, activity or progress is
+  ever shared automatically, and sharing is never assumed reciprocal.
+- **⚠️ The owner's learning state is NEVER exposed with shared material** — no mastery, weak concepts, quiz
+  attempts, scores or practice history. Assert the recipient DTO's *shape*, not merely its values.
+- **⚠️ The recipient Study Pack read must NOT call `recordActivity` with the owner's id.** `StudyPackService.getById`
+  writes `OPENED_STUDY_PACK` today; reusing it would attribute a recipient's page view to the owner.
+- **⚠️ Every read re-verifies the relationship is `ACCEPTED`.** No cache, no grace period. A revoke, and a
+  `v0.89.1` birth-year correction that reverts a link to `PENDING`, both cut material access immediately.
+- **⚠️ No endpoint accepts a learner user id.** Address by note id; resolve the caller from the principal.
+- **⚠️ No new profile type, and nothing gated on `ProfileType`.** No Guardian, no Parent implementation, no Teacher
+  re-gating.
+- **⚠️ Shared notes are NOT mixed into the owned Library**, and shared notes cannot join a Study Plan without being
+  copied first — `NoteCollectionService.addItems` validates ownership and keeps it.
+- **⚠️ "Quiz for someone" does NOT move back beside Quick Review or Challenge Quiz**, and neither lightweight
+  sharing path (anonymous quiz links, Study Pack share tokens) is removed, merged or reframed as a connection
+  feature.
+- **⚠️ `linked_learner_relationships` and `linked_learner_invitations` keep their shape and meaning** —
+  `[CHECKPOINT — due 2026-09-19]` and `[CHECKPOINT — due 2026-10-13]` both read them.
+- No activity sharing, no progress permission model, no leaderboard, no rings, no public people search, no social
+  feed. Those are Phases 2–5.
+
 ## v0.90.0 - Invitation Integrity
 
 **Status: Released** (kicked off 2026-08-20, signed off 2026-08-26)
