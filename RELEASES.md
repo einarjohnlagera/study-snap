@@ -32,6 +32,10 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
 - **Copy to my Library (backend + frontend).** Widens the existing copy rule to `isOwner || PUBLIC || live share`.
 - **Five analytics events.** Shared, revoked, note opened, pack opened, copied — the funnel that no table can
   express.
+- **A Memorization error message was invisible.** The grade-failure text used `text-destructive`, which is not a
+  token in this theme's `@theme inline` block, so Tailwind generated no rule and the message rendered in the
+  default body colour — readable, but not signalling failure. It now uses the product's red scale and carries
+  `role="alert"` so it is announced.
 - **The Help Center covers helping someone learn.** None of its 14 sections mentioned it, and *Export &
   Sharing* documented PDF export without ever naming shareable quiz links — so after the landing page was
   corrected, the public surface told the truth while the in-app surface still said nothing. A new

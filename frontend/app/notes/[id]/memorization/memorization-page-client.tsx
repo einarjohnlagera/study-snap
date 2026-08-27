@@ -325,7 +325,7 @@ export function MemorizationPageClient({ noteId }: Readonly<{ noteId: string }>)
                       ))}
                     </div>
                     {gradeError ? (
-                      <p className="text-center text-sm font-medium text-destructive">{gradeError}</p>
+                      <p role="alert" className="text-center text-sm font-medium text-red-700 dark:text-red-300">{gradeError}</p>
                     ) : null}
                   </div>
                 ) : null}
