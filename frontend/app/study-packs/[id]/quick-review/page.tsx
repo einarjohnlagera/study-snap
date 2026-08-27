@@ -1268,7 +1268,9 @@ export default function QuickReviewPage() {
                           normalizeConceptKey(keyConcept) === normalizeConceptKey(concept)
                         )) ? (
                           <Link
-                            href={`/notes/${note.id}?tab=key-concepts#${buildConceptAnchorId(concept)}`}
+                            href={isSharedSource
+                              ? `/shared/notes/${note.id}`
+                              : `/notes/${note.id}?tab=key-concepts#${buildConceptAnchorId(concept)}`}
                             className="font-medium text-amber-700 underline underline-offset-4 dark:text-amber-300"
                           >
                             {concept}
@@ -1287,14 +1289,18 @@ export default function QuickReviewPage() {
                 once the learner is doing well, otherwise back to the notes. Adaptive Practice is
                 deliberately absent — Quick Review no longer routes into it (EXAM_MODES.md).
               */}
-              {showChallengeGuidedCta ? (
+              {showChallengeGuidedCta && !isSharedSource ? (
                 <Link href={`/notes/${note.id}/challenge-quiz`} className="block">
                   <Button type="button" className="w-full">
                     Take Another Challenge
                   </Button>
                 </Link>
               ) : (
-                <Link href={`/notes/${note.id}`} className="block">
+                // ⚠️ noteDetailHref, not `/notes/${note.id}`. On shared material the note belongs to
+                // someone else, so the owner-scoped route 404s with "does not belong to your account".
+                // This fallback renders precisely when the next-step fetch failed — and it always fails
+                // for a recipient, because PostSessionNextStepService resolves the pack owner-scoped.
+                <Link href={noteDetailHref} className="block">
                   <Button type="button" className="w-full">
                     Review the Notes
                   </Button>

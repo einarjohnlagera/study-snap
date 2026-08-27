@@ -1150,6 +1150,30 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(updateNoteVisibility).not.toHaveBeenCalled();
   });
 
+  it("refuses to go Private while the share list is unknown, instead of silently keeping the grants live", async () => {
+    // ⚠️ BLOCKING REGRESSION GUARD. Revocation is orchestrated client-side — the server cannot infer intent
+    // from the visibility value, since opening the recipient picker on a public note also sets PRIVATE. So
+    // with `noteShares` still [] after a FAILED shares load, selecting Private used to set the note private,
+    // skip the confirmation, leave every grant live, and report success. The chip read "Private" while three
+    // people could still read the note, and shipped copy in the Help Center says access is removed.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, visibility: "PRIVATE" });
+    (getNoteShares as jest.Mock).mockRejectedValue(new Error("network"));
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    // The chip must not claim "Private" on an unresolved list.
+    const accessButton = await screen.findByRole("button", { name: /Checking access/ });
+    fireEvent.click(accessButton);
+
+    const privateOption = screen.getByRole("button", { name: /Private/ });
+    expect(privateOption).toBeDisabled();
+    fireEvent.click(privateOption);
+
+    await waitFor(() => expect(updateNoteVisibility).not.toHaveBeenCalled());
+    expect(replaceNoteShares).not.toHaveBeenCalled();
+  });
+
   it("publishes without revoking persisted connection shares", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({ ...baseNote, visibility: "PRIVATE" });

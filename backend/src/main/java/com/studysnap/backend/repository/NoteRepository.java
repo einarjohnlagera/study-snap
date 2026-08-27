@@ -56,6 +56,16 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID>, NoteLib
 
     long countByStatusAndGenerationEnqueuedAtIsNull(NoteStatus status);
     Optional<NoteEntity> findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(UUID ownerUserId, UUID copiedFromNoteId);
+
+    /**
+     * Copy-dedup lookup that ignores {@code copiedFromPublic}.
+     *
+     * <p>⚠️ The {@code ...CopiedFromPublicTrue} variant above cannot dedup a copy taken from a SHARED note:
+     * a shared note is `PRIVATE`, so the flag is written {@code false} and the guard never matches, leaving
+     * "Copy to my Library" able to mint unlimited duplicates on repeat presses. Only non-owner copies ever
+     * populate {@code copied_from_note_id}, so widening the lookup changes nothing for the public path.
+     */
+    Optional<NoteEntity> findFirstByOwnerUserIdAndCopiedFromNoteId(UUID ownerUserId, UUID copiedFromNoteId);
     Page<NoteEntity> findByOwnerUserId(UUID ownerUserId, Pageable pageable);
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
     long countByOwnerUserId(UUID ownerUserId);

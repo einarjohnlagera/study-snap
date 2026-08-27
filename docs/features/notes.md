@@ -39,7 +39,14 @@ Notes are the primary user-authored workspace in NoteLib. Users organize note me
 
 `NoteVisibility` has exactly two stored values: `PRIVATE` and `PUBLIC`. The note-detail control presents a derived third choice, **Share with connections**, when a `PRIVATE` note has at least one live `note_shares` grant. `SHARED` is deliberately not an enum value: access is granted by the per-recipient row rather than a label, owner-scoped note and Study Pack reads would not honor an enum by themselves, and account purge retains `PUBLIC` while deleting `PRIVATE`, so a third stored value would fall through both branches and could survive its owner's deletion.
 
-An owner replaces the full desired set of accepted relationship ids through `PUT /notes/{id}/shares`. The write validates every id before changing anything, revokes omitted live rows, inserts a new row when a previously revoked recipient is re-shared, and is idempotent when the set is unchanged. Selecting **Private** revokes every live share after naming the affected count; selecting **Public** changes only visibility and preserves grants and recipient provenance.
+An owner replaces the full desired set of accepted relationship ids through `PUT /notes/{id}/shares`. The write validates every id before changing anything, revokes omitted live rows, inserts a new row when a previously revoked recipient is re-shared, and is idempotent when the set is unchanged. **⚠️ The revoke is orchestrated by the client, not by `updateVisibility`** — and it cannot be moved server-side,
+because opening the recipient picker on a `PUBLIC` note also writes `PRIVATE`, so the server cannot infer intent
+from the value. Two consequences follow and must not be undone: **Private is unavailable until the share list has
+loaded** (acting on an unresolved list would set the note private, skip the confirmation and leave every grant
+live while the chip read "Private"), and the access chip reads **Checking access…** rather than "Private" while
+that list is unknown. Selecting **Private** then revokes every live share after naming the affected count;
+choosing **Share with connections** on a public note asks before unpublishing, because that removes the note from
+Explore and kills existing public links; selecting **Public** changes only visibility and preserves grants and recipient provenance.
 
 Recipient reads use dedicated `SharedNoteResponse` and `SharedStudyPackResponse` records. They never reuse owner DTOs or expose mastery, readiness, weak concepts, attempts, scores, sessions, streaks, or progress timestamps. A shared copy is a normal owned `PRIVATE` note with provenance and remains in the recipient's Library after access is revoked. The source itself cannot be added to a Study Plan because collection writes remain owner-scoped.
 

@@ -1200,7 +1200,7 @@ class NoteServiceTest {
         existingStudyPack.setSummary("Existing summary");
 
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
-        when(noteRepository.findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(ownerUserId, sourceNoteId))
+        when(noteRepository.findFirstByOwnerUserIdAndCopiedFromNoteId(ownerUserId, sourceNoteId))
                 .thenReturn(Optional.of(existingCopy));
         when(studyPackRepository.findByNoteId(existingCopyId)).thenReturn(Optional.of(existingStudyPack));
 
@@ -1227,7 +1227,7 @@ class NoteServiceTest {
         StudyPackEntity sourceStudyPack = buildSourceStudyPack(sourceNoteId);
 
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
-        when(noteRepository.findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(ownerUserId, sourceNoteId))
+        when(noteRepository.findFirstByOwnerUserIdAndCopiedFromNoteId(ownerUserId, sourceNoteId))
                 .thenReturn(Optional.of(existingCopy));
         when(studyPackRepository.findByNoteId(existingCopyId)).thenReturn(Optional.empty());
         when(studyPackRepository.findByNoteId(sourceNoteId)).thenReturn(Optional.of(sourceStudyPack));
@@ -1265,7 +1265,7 @@ class NoteServiceTest {
         existingCopy.setCopiedFromPublic(Boolean.TRUE);
 
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
-        when(noteRepository.findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(ownerUserId, sourceNoteId))
+        when(noteRepository.findFirstByOwnerUserIdAndCopiedFromNoteId(ownerUserId, sourceNoteId))
                 .thenReturn(Optional.of(existingCopy));
         when(studyPackRepository.findByNoteId(existingCopyId)).thenReturn(Optional.empty());
 

@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.91.0 - Shared Learning Material` (In Progress); previous: `v0.90.0 - Invitation Integrity` (Released)
+- `v0.91.0 - Shared Learning Material` (Released); previous: `v0.90.0 - Invitation Integrity` (Released)
 
 Implementation status: v0.91.0 Phase 1 is built pending release sign-off. Keep all follow-up work inside the ratified Phase 1 boundary; Phases 2–5 remain out of scope and must not be stubbed.
 

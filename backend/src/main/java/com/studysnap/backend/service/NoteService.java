@@ -322,8 +322,11 @@ public class NoteService {
             throw new NoteNotFoundException();
         }
         if (!isOwner) {
+            // Not the CopiedFromPublicTrue variant: a shared note is PRIVATE, so its copies carry
+            // copiedFromPublic=false and that guard would never match, letting repeat presses mint
+            // unlimited duplicates. Only non-owner copies set copied_from_note_id at all.
             Optional<NoteEntity> existingCopy = noteRepository
-                    .findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(ownerUserId, source.getId());
+                    .findFirstByOwnerUserIdAndCopiedFromNoteId(ownerUserId, source.getId());
             if (existingCopy.isPresent()) {
                 NoteEntity existing = existingCopy.get();
                 StudyPackEntity existingStudyPack = findLinkedStudyPack(existing.getId());

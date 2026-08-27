@@ -2,7 +2,7 @@
 
 ## v0.91.0 - Shared Learning Material
 
-**Status: In Progress** (kicked off 2026-08-27)
+**Status: Released** (kicked off and signed off 2026-08-27)
 
 Theme: give someone a note without publishing it to the world.
 
@@ -67,6 +67,45 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
   because those rows are the product's only pre-launch interest baseline for this capability.
 
 ### Known limitations
+
+**Found by the cold-context pre-signoff pressure test (two agents, 2026-08-27). Everything below was verified
+against code; the blocking finding and six others were FIXED in the signoff, and these are what remains.**
+
+- **⚠️ `GET /notes/{id}/shares` can list a recipient who can no longer read the note.** The listing filters on
+  `revoked_at IS NULL` only, with no join to relationship status, while `PUT` requires every id to be `ACCEPTED`.
+  If a connection lapses to `PENDING` (a birth-year correction) or `REVOKED`, the share row stays live and the
+  owner still sees that person listed. **The over-reporting direction is the safe one** — it claims more sharing
+  than exists, never less, and the recipient's reads are already denied. The cost is that the two endpoints
+  disagree about a valid share set, so a round-tripped list can be rejected until the stale id is dropped.
+- **⚠️ Concurrency on the sharing paths surfaces as a 500 rather than a retry or a 409.** Two simultaneous
+  desired-state updates on the same note, and two simultaneous Quick Review starts by the same recipient, can
+  each violate a unique index. **Both fail safe** — the transaction rolls back and no state is corrupted — but
+  the caller sees a server error. Related: the recipient branch of `findAccessibleStudyPack` does not take the
+  pessimistic row lock the owner branch takes, so a recipient's concurrent session start is not serialised.
+- **⚠️ The two Study Pack access resolvers differ in strictness, and the looser one guards the write paths.**
+  `getSharedStudyPack` cross-checks that the share, the pack and the note agree on owner and note id;
+  `requireSharedStudyPackAccess` — which guards concept health and every Quick Review path — checks the live
+  share and the `ACCEPTED` relationship but not those cross-references. **Not exploitable today**: every path
+  that creates or reassigns a pack keeps `study_packs.owner_user_id` consistent with `notes.owner_user_id`. It
+  is recorded because that consistency is an assumption, not an enforced constraint.
+- **⚠️ `recheckMaterialAccess` fails OPEN on a non-`AppException` fault.** Its broad catch exists so a corrupt
+  or unreadable pack cannot strand a learner's own session, and every deliberate denial extends `AppException`
+  and is rethrown — verified by walking the whole call chain. But a driver-level fault or an unmappable
+  relationship status raised *inside* the authorization call would be logged and treated as "no pack", and the
+  recipient's write would complete.
+- **The Help Center's plan numbers are hardcoded copy.** The share-link limits in the Helping Someone Learn
+  section duplicate values that live in `pricing-config.ts`. Correct today; they will drift.
+- **The note-access dropdown declares `aria-haspopup="menu"` without `role="menu"` on the panel.** Pre-existing,
+  newly aggravated: this release put a checkbox list inside that panel, and a checkbox list cannot live in a
+  menu. The wiring should be dropped rather than completed.
+
+**Fixed during signoff, listed because each was live in a merged PR:** selecting *Private* while the share list
+had failed to load set the note private, skipped the confirmation and left every grant live while the chip read
+"Private"; choosing *Share with connections* on a public note unpublished it with no confirmation; the Quick
+Review results screen sent recipients to owner-scoped note URLs that 404; "Copy to my Library" minted unlimited
+duplicates from a shared note; two live relationships between the same pair made a legitimate share request 500;
+the birth-year correction form still used the browser's native validation bubble and had lost its range check;
+and two of the four year inputs on the connections page were still raw, one with no digit filter or bounds.
 
 - **⚠️ Material access is re-derived on every mutating call, and must stay that way.** Nothing is cached for
   the life of a session, which is what makes a revoked share, a revoked relationship, or a `v0.89.1` birth-year

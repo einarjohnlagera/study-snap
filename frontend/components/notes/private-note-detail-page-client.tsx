@@ -459,6 +459,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
   const [noteActionsMenuOpen, setNoteActionsMenuOpen] = useState(false);
   const [showMakePublicConfirm, setShowMakePublicConfirm] = useState(false);
+  const [showUnpublishForSharingConfirm, setShowUnpublishForSharingConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
@@ -1008,11 +1009,25 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, [courseProgramLabel, selectedProgramNames]);
   const visibility = (note?.visibility ?? "PRIVATE");
   const isPublic = visibility === "PUBLIC";
-  const accessLabel = isPublic ? "Public" : noteShares.length > 0 ? "Shared" : "Private";
+  // ⚠️ Derived from a list that may not have loaded. Asserting "Private" before it has is a lie when the
+  // note is in fact shared with three people, so an unresolved list gets its own label rather than the
+  // most reassuring one.
+  const sharesKnown = sharesLoadState === "ready";
+  const accessLabel = isPublic
+    ? "Public"
+    : !sharesKnown
+      ? "Checking access…"
+      : noteShares.length > 0
+        ? "Shared"
+        : "Private";
   const accessAction = isPublic ? "public" : noteShares.length > 0 ? "share" : "private";
-  const revokeSharesDescription = noteShares.length === 1
-    ? `${noteShares[0]?.granteeDisplayName ?? "This person"} will lose access to this note.`
-    : `${noteShares[0]?.granteeDisplayName ?? "This person"} and ${Math.max(0, noteShares.length - 1)} others will lose access to this note.`;
+  // Names who loses access, and gets the plural right: "and 1 other", not "and 1 others". This copy is the
+  // owner's only statement of how many people are affected, so an off count undermines the confirmation.
+  const revokeSharesOthers = Math.max(0, noteShares.length - 1);
+  const revokeSharesLead = noteShares[0]?.granteeDisplayName ?? "This person";
+  const revokeSharesDescription = noteShares.length <= 1
+    ? `${revokeSharesLead} will lose access to this note.`
+    : `${revokeSharesLead} and ${revokeSharesOthers} ${revokeSharesOthers === 1 ? "other" : "others"} will lose access to this note.`;
   const canManageVisibility = isEmailVerified || isPublic;
   const hasAdaptiveTargets = (challengeSummary?.latestWeakConcepts?.length ?? 0) > 0;
   const hasCopyAttribution = Boolean(note?.copiedFromUserId && note?.copiedFromNoteId);
@@ -1456,6 +1471,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   };
 
   const handleSelectVisibility = (nextVisibility: NoteVisibility) => {
+    // ⚠️ Going Private is the action that REVOKES live shares, and the revoke is orchestrated here rather
+    // than by the server — the server cannot infer intent from the value, because opening the recipient
+    // picker on a public note also sets PRIVATE. So this must never run on an unknown share list: with
+    // `noteShares` still [] after a failed or pending load, it would set the note Private, skip the
+    // confirmation, leave every grant live, and report success. Refused here as well as in the disabled
+    // attribute, since a menu item is reachable by other means.
+    if (nextVisibility === "PRIVATE" && sharesLoadState !== "ready") {
+      setVisibilityMenuOpen(false);
+      setToast("Still checking who has access to this note. Try again in a moment.");
+      return;
+    }
     if (nextVisibility === visibility || togglingVisibility) {
       if (nextVisibility === "PRIVATE" && noteShares.length > 0) {
         setVisibilityMenuOpen(false);
@@ -1483,18 +1509,41 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     void performVisibilityUpdate("PRIVATE");
   };
 
+  // Reset when the menu closes, not only after a revoke — otherwise dismissing the dropdown leaves the
+  // picker flagged open and it re-expands the next time the menu is opened.
+  useEffect(() => {
+    if (!visibilityMenuOpen) {
+      setRecipientPickerOpen(false);
+    }
+  }, [visibilityMenuOpen]);
+
+  const openRecipientPicker = () => {
+    setRecipientPickerOpen(true);
+    setVisibilityMenuOpen(true);
+  };
+
   const handleSelectShareWithConnections = async () => {
     if (sharesLoadState !== "ready" || togglingVisibility) {
       return;
     }
+    // ⚠️ Choosing "Share with connections" on a PUBLIC note unpublishes it — sharing is a private state,
+    // so the note leaves Explore and every public link to it dies. That is a bigger consequence than the
+    // click implies, and the opposite direction already asks, so ask here too. Doing it silently meant an
+    // owner could unpublish a note merely by opening the picker to see who was on it.
     if (visibility === "PUBLIC") {
-      const updated = await performVisibilityUpdate("PRIVATE", { silentSuccessToast: true });
-      if (!updated) {
-        return;
-      }
+      setVisibilityMenuOpen(false);
+      setShowUnpublishForSharingConfirm(true);
+      return;
     }
-    setRecipientPickerOpen(true);
-    setVisibilityMenuOpen(true);
+    openRecipientPicker();
+  };
+
+  const handleConfirmUnpublishForSharing = async () => {
+    const updated = await performVisibilityUpdate("PRIVATE", { silentSuccessToast: true });
+    setShowUnpublishForSharingConfirm(false);
+    if (updated) {
+      openRecipientPicker();
+    }
   };
 
   const handleRecipientSelectionChange = async (relationshipIds: string[]) => {
@@ -2098,13 +2147,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                           </p>
                           <button
                             type="button"
-                            className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-highlight active:bg-highlight-strong"
+                            className={`motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-highlight active:bg-highlight-strong ${sharesLoadState !== "ready" ? "cursor-not-allowed opacity-60" : ""}`}
                             onClick={() => handleSelectVisibility("PRIVATE")}
+                            disabled={sharesLoadState !== "ready"}
                           >
                             <p className="text-sm font-medium">
                               <ResponsiveActionContent action="private" label="Private" showTextOnMobile />
                             </p>
-                            <p className="text-xs text-foreground/70">Only you</p>
+                            <p className="text-xs text-foreground/70">
+                              {sharesLoadState === "ready" ? "Only you" : "Checking who has access…"}
+                            </p>
                           </button>
                           <button
                             type="button"
@@ -2950,6 +3002,36 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               disabled={togglingVisibility}
             >
               {togglingVisibility ? "Updating..." : "Make Public"}
+            </Button>
+          </div>
+        )}
+      />
+
+      <AppModal
+        isOpen={showUnpublishForSharingConfirm}
+        title="Remove this note from the Public Library?"
+        description="Sharing with connections keeps a note private, so this note will leave Explore and existing public links to it will stop working. You can make it public again at any time."
+        onClose={() => {
+          if (!togglingVisibility) {
+            setShowUnpublishForSharingConfirm(false);
+          }
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowUnpublishForSharingConfirm(false)}
+              disabled={togglingVisibility}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleConfirmUnpublishForSharing()}
+              disabled={togglingVisibility}
+            >
+              {togglingVisibility ? "Updating..." : "Unpublish and choose people"}
             </Button>
           </div>
         )}

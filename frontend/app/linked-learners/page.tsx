@@ -138,6 +138,7 @@ export default function LinkedLearnersPage() {
   const [birthYears, setBirthYears] = useState<Record<string, string>>({});
   const [correctedBirthYear, setCorrectedBirthYear] = useState("");
   const [correctionWarningCount, setCorrectionWarningCount] = useState<number | null>(null);
+  const [correctionYearError, setCorrectionYearError] = useState<string | null>(null);
   const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
@@ -369,10 +370,23 @@ export default function LinkedLearnersPage() {
 
   const handleBirthYearCorrection = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!correctedBirthYear.trim()) {
-      setError("Enter your corrected birth year.");
+    // Field-level, matching the invite form. The page-level banner is for request outcomes, not for
+    // telling someone the value under their cursor is wrong.
+    const rawYear = correctedBirthYear.trim();
+    if (!rawYear) {
+      setCorrectionYearError("Enter your corrected birth year.");
       return;
     }
+    if (rawYear.length !== 4) {
+      setCorrectionYearError("Enter all four digits, like 2011.");
+      return;
+    }
+    const rangeError = birthYearRangeError(rawYear);
+    if (rangeError) {
+      setCorrectionYearError(rangeError);
+      return;
+    }
+    setCorrectionYearError(null);
     setCorrectingBirthYear(true);
     setError(null);
     setNotice(null);
@@ -503,18 +517,25 @@ export default function LinkedLearnersPage() {
             <h2 className="text-lg font-semibold">Correct your birth year</h2>
             <p className="mt-1 text-sm text-foreground/70">This is your account-level birth year used for guardian consent across all learning connections.</p>
           </div>
-          <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={handleBirthYearCorrection}>
+          <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={handleBirthYearCorrection} noValidate>
             <label className="block flex-1 space-y-1.5 text-sm font-medium">
               Corrected birth year
               <BirthYearInput
                 id="corrected-birth-year"
                 value={correctedBirthYear}
-                required
+                invalid={Boolean(correctionYearError)}
+                describedBy={correctionYearError ? "corrected-birth-year-error" : undefined}
                 onChange={(next) => {
                   setCorrectedBirthYear(next);
                   setCorrectionWarningCount(null);
+                  setCorrectionYearError(next.length === 4 ? birthYearRangeError(next) : null);
                 }}
               />
+              {correctionYearError ? (
+                <p id="corrected-birth-year-error" role="alert" className="text-xs font-normal text-red-700 dark:text-red-300">
+                  {correctionYearError}
+                </p>
+              ) : null}
             </label>
             <Button type="submit" variant="outline" loading={correctingBirthYear}>Review correction</Button>
           </form>
@@ -559,12 +580,11 @@ export default function LinkedLearnersPage() {
                     <label className="text-xs text-foreground/70" htmlFor={`birth-year-${invitation.id}`}>
                       Your birth year
                     </label>
-                    <input
+                    <BirthYearInput
                       id={`birth-year-${invitation.id}`}
-                      className="h-9 w-28 rounded-lg border border-border bg-background px-2 text-sm"
                       value={birthYears[invitation.id] ?? ""}
-                      onChange={(event) => setBirthYears((current) => ({
-                        ...current, [invitation.id]: event.target.value,
+                      onChange={(next) => setBirthYears((current) => ({
+                        ...current, [invitation.id]: next,
                       }))}
                     />
                     <label className="flex items-center gap-2 text-xs text-foreground/70">
@@ -626,7 +646,11 @@ export default function LinkedLearnersPage() {
                 <div className="space-y-2 rounded-lg border border-border p-3">
                   <label className="block space-y-1.5 text-sm font-medium">
                     Your birth year
-                    <input className={INPUT_CLASSES} type="number" min="1900" max={new Date().getFullYear()} value={birthYears[link.id] ?? ""} onChange={(event) => setBirthYears((current) => ({ ...current, [link.id]: event.target.value }))} />
+                    <BirthYearInput
+                      id={`birth-year-link-${link.id}`}
+                      value={birthYears[link.id] ?? ""}
+                      onChange={(next) => setBirthYears((current) => ({ ...current, [link.id]: next }))}
+                    />
                   </label>
                   {!canAccept ? <Button type="button" variant="outline" onClick={() => void handleBirthYear(link)} loading={busyId === link.id}>Save birth year</Button> : null}
                   <p className="text-xs text-foreground/60">We collect the year only, for the consent decision on this connection. It is not part of signup or your public profile.</p>

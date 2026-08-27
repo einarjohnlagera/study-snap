@@ -54,7 +54,10 @@ wheel must not silently edit a value this consequential), and carries a **steppe
 is validated against 1900–current year, mirroring `persistBirthYear`, and that check runs **as the fourth digit is
 typed**, not only on submit, so an impossible year cannot sit in the field looking accepted. Both the live check
 and the submit check call `birthYearRangeError`, so they cannot diverge. The correction field on the same page
-uses the identical control; there is deliberately only one year-input idiom here.
+uses the identical control, as do the two acceptance forms (accepting an invitation, and accepting a
+relationship) — **all four year inputs on this page are the same component**, and a fifth must not be
+hand-rolled. When this was first written only two of the four had been converted; a cold-context audit at the
+`v0.91.0` signoff found the other two still raw, one of them with no digit filter and no bounds at all.
 
 **⚠️ The steppers are disabled until four digits are present, and they seed nothing.** Stepping up from an empty
 field would have to start somewhere, and any starting year is a declaration the person did not make — the same

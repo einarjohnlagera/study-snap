@@ -98,9 +98,18 @@ public class NoteShareService {
         List<UUID> relationshipIdsToRevoke = currentRelationshipIds.stream()
                 .filter(relationshipId -> !desiredRelationshipIds.contains(relationshipId))
                 .toList();
+        // ⚠️ Collapse by GRANTEE, not by relationship id. Two people can hold a live relationship in BOTH
+        // directions — the live-row index on linked_learner_relationships is directional — so the caller's
+        // own connection list can contain two rows resolving to the same person. Adding both would insert
+        // two live rows for (note, grantee) and violate ux_note_shares_live, turning a legitimate request
+        // into a 500 with no way for the owner to tell the two identical-looking entries apart.
+        Set<UUID> granteesAlreadyLive = liveShares.stream()
+                .map(NoteShareEntity::getGranteeUserId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         List<LinkedLearnerRelationshipEntity> relationshipsToAdd = desiredRelationshipIds.stream()
                 .filter(relationshipId -> !currentRelationshipIds.contains(relationshipId))
                 .map(desiredRelationships::get)
+                .filter(relationship -> granteesAlreadyLive.add(resolveGranteeUserId(callerUserId, relationship)))
                 .toList();
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
@@ -300,15 +309,19 @@ public class NoteShareService {
                 && secondUserId.equals(relationship.getSupporterUserId()));
     }
 
+    private static UUID resolveGranteeUserId(UUID ownerUserId, LinkedLearnerRelationshipEntity relationship) {
+        return ownerUserId.equals(relationship.getSupporterUserId())
+                ? relationship.getLearnerUserId()
+                : relationship.getSupporterUserId();
+    }
+
     private NoteShareEntity newShare(
             NoteEntity note,
             UUID ownerUserId,
             LinkedLearnerRelationshipEntity relationship,
             OffsetDateTime createdAt
     ) {
-        UUID granteeUserId = ownerUserId.equals(relationship.getSupporterUserId())
-                ? relationship.getLearnerUserId()
-                : relationship.getSupporterUserId();
+        UUID granteeUserId = resolveGranteeUserId(ownerUserId, relationship);
         NoteShareEntity share = new NoteShareEntity();
         share.setId(UUID.randomUUID());
         share.setNoteId(note.getId());

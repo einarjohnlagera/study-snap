@@ -726,7 +726,8 @@ export default function LibraryPage() {
       return;
     }
     setSharedLoadingMore(true);
-    try {
+    setSharedError(null);
+      try {
       const page = await listSharedWithMe({ limit: LIBRARY_PAGE_SIZE, cursor: sharedNextCursor });
       setSharedItems((previous) => {
         const knownIds = new Set(previous.map((item) => item.noteId));
