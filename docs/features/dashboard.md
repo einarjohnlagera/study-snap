@@ -27,6 +27,7 @@ Dashboard is a guidance surface, not a management screen. It should help users d
 - Continue Studying must use the `resumeType` label from the backend directly — do not infer mode labels on the frontend
 - Focus Areas shows `Revisit Note` for Free/Plus users when Adaptive Practice is gated; only show the upgrade prompt when no source note is resolvable
 - The Community Notes section (v0.21.0) uses `GET /notes/public?courseProgram=<value>&size=4` directly — no new dashboard backend endpoint
+- Learning Connection momentum reuses `DashboardService.getStudyEngagement(userId)` as a permissioned projection. Do not copy `countStudyDaysThisWeek`, add a measurement, or make the cross-user read write Dashboard activity.
 
 ## Primary Review Set hero
 

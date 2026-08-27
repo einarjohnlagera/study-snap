@@ -217,18 +217,21 @@ describe("PrivateNoteDetailPageClient", () => {
       limits: {
         studyPacksPerMonth: 10,
         challengeQuizzesPerMonth: 5,
+        quizShareLinksPerMonth: 3,
         adaptivePracticePerMonth: 0,
         ocrPerMonth: 20,
       },
       usage: {
         studyPacksUsed: 2,
         challengeQuizzesUsed: 0,
+        quizShareLinksUsed: 1,
         adaptivePracticeUsed: 0,
         ocrUsed: 0,
       },
       remaining: {
         studyPacksRemaining: 8,
         challengeQuizzesRemaining: 5,
+        quizShareLinksRemaining: 2,
         adaptivePracticeRemaining: 0,
         ocrRemaining: 20,
       },
@@ -1541,6 +1544,8 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText("Higher counts cover more material. Plus unlocks 20 and 30 questions.")).toBeInTheDocument();
     expect(screen.getByText("Target Level")).toBeInTheDocument();
     expect(screen.getByText("From your profile: College")).toBeInTheDocument();
+    expect(screen.getByText("AI quizzes left this month")).toBeInTheDocument();
+    expect(screen.getByText("Share links left this month")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Generate Quiz" }).at(-1) as HTMLButtonElement);
 
@@ -1974,6 +1979,140 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(await screen.findByText("You've reached your quiz generation limit")).toBeInTheDocument();
     expect(generateGeneratedQuiz).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("warns before generation when share links are exhausted without blocking quiz creation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 20,
+        quizShareLinksPerMonth: 3,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 4,
+        quizShareLinksUsed: 3,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 8,
+        challengeQuizzesRemaining: 16,
+        quizShareLinksRemaining: 0,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Quiz" }));
+    expect(screen.getByText("16")).toBeInTheDocument();
+    expect(screen.getByText("You can still make and export this quiz, but you can't create another share link until your quota resets. Upgrade to Plus.")).toBeInTheDocument();
+    const generateButton = screen.getAllByRole("button", { name: "Generate Quiz" }).at(-1) as HTMLButtonElement;
+    expect(generateButton).toBeEnabled();
+    fireEvent.click(generateButton);
+
+    await waitFor(() => {
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 10, "COLLEGE");
+    });
+  });
+
+  it("keeps quiz generation available when plan usage cannot load", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getMyPlan as jest.Mock).mockRejectedValue(new Error("network"));
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Quiz" }));
+    expect(screen.queryByLabelText("Quiz allowances")).not.toBeInTheDocument();
+    const generateButton = screen.getAllByRole("button", { name: "Generate Quiz" }).at(-1) as HTMLButtonElement;
+    expect(generateButton).toBeEnabled();
+    fireEvent.click(generateButton);
+
+    await waitFor(() => {
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1", 10, "COLLEGE");
+    });
+  });
+
+  it("renders unlimited share links for Pro before quiz generation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "PRO",
+      limits: {
+        studyPacksPerMonth: 100,
+        challengeQuizzesPerMonth: 200,
+        quizShareLinksPerMonth: null,
+        adaptivePracticePerMonth: 30,
+        ocrPerMonth: 100,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 4,
+        quizShareLinksUsed: 12,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 98,
+        challengeQuizzesRemaining: 196,
+        quizShareLinksRemaining: null,
+        adaptivePracticeRemaining: 30,
+        ocrRemaining: 100,
+      },
+      features: {
+        adaptivePracticeAvailable: true,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Quiz" }));
+    expect(screen.getByText("Unlimited")).toBeInTheDocument();
   });
 
   it("renders teacher note detail with View Quiz and regenerate confirmation", async () => {

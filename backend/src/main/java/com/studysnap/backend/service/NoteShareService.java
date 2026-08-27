@@ -67,7 +67,7 @@ public class NoteShareService {
         requireEligibleCaller(callerUserId);
         UUID noteId = parseNoteId(noteIdRaw);
         requireOwnedNote(noteId, callerUserId);
-        return toShareResponses(noteShareRepository.findByNoteIdAndRevokedAtIsNullOrderByCreatedAtAsc(noteId));
+        return toShareResponses(noteShareRepository.findLiveAcceptedByNoteIdOrderByCreatedAtAsc(noteId));
     }
 
     @Transactional
@@ -90,6 +90,10 @@ public class NoteShareService {
             throw new InvalidNoteShareRequestException();
         }
 
+        // ⚠️ Deliberately NOT relationship-aware. This is the diff SOURCE and must see the TRUE
+        // live set, lapsed relationships included. Filtering to ACCEPTED here would hide a lapsed row
+        // from currentRelationshipIds, so removing that recipient would never revoke it — and re-adding
+        // them would then collide with the still-live row on ux_note_shares_live.
         List<NoteShareEntity> liveShares = noteShareRepository
                 .findByNoteIdAndRevokedAtIsNullOrderByCreatedAtAsc(noteId);
         Set<UUID> currentRelationshipIds = liveShares.stream()
@@ -142,7 +146,7 @@ public class NoteShareService {
                     Map.of(RECIPIENT_COUNT_METADATA, revokedCount)
             );
         }
-        return toShareResponses(noteShareRepository.findByNoteIdAndRevokedAtIsNullOrderByCreatedAtAsc(noteId));
+        return toShareResponses(noteShareRepository.findLiveAcceptedByNoteIdOrderByCreatedAtAsc(noteId));
     }
 
     @Transactional(readOnly = true)

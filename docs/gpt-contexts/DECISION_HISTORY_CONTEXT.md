@@ -2,7 +2,64 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **a question that may already have been settled — read before reopening one**.
-> Last updated: v0.90.0 - 2026-08-27 (Released). **Adds the three Linked Learners surfacing verdicts taken 2026-08-27 — read them before re-proposing any of the four.** Previously v0.89.1 - 2026-08-20. **Stamp had gone four releases stale (v0.85.0) — restamped with the decisions most likely to be re-proposed.** **⚠️ `v0.89.0` shipped Learning Connections as a CAPABILITY, not a profile type** — a parent, tutor, sibling or mentor can make a quiz for someone, connect with them, and see their progress. **`ProfileType` answers "how do YOU learn?", not "may you help someone?"**, so the old design forced a parent to claim to be a Teacher — changing their own dashboard and practice options — just to help their child. **⚠️ Do NOT re-gate any of this on `ProfileType`; `PARENT` stays unimplemented with zero users.** **⚠️ THE PRIVACY LINE IS RATIFIED AND ABSOLUTE: a supporter sees readiness, progress and quiz performance, NEVER the learner's notes** — this protects the core loop, because learners who suspect notes are visible write less honestly. Teachers still exclusively keep DOCX export, multi-version exports, question-count control and the Exam Builder; only the single-quiz share link opened up. **Ratified 2026-08-19 (Q4):** connections are **invite + accept in BOTH directions, revocable either side**, and **acceptance is load-bearing** — without it anyone could claim a supporting relationship over any account by knowing an email address. **Ratified 2026-08-19 (Q5):** age is collected **at link time, never at signup**, with guardian consent below a threshold that is **configuration, and whose NUMBER remains owner-owned pending counsel** — do not let a shipped default be read as a legal position. **Rejected and recorded:** `learnerLevel` as an age proxy (breaks both ways), adults-only-first (excludes the motivating parent-child case), and a supporter `ProfileType`. Previously v0.85.0 - 2026-08-18. Adds the **Domain Context Catalog** decline (2026-08-17), which is the single most likely thing to be re-proposed from this span. Previously v0.73.0 - 2026-08-12.
+> Last updated: v0.92.0 - 2026-08-27 (Released). **Adds the `v0.91.0` and `v0.92.0` verdicts — read the Shared Learning Material and Activity Sharing sections below before re-proposing anything in that arc.** Previously v0.90.0 - 2026-08-27. **Adds the three Linked Learners surfacing verdicts taken 2026-08-27 — read them before re-proposing any of the four.** Previously v0.89.1 - 2026-08-20. **Stamp had gone four releases stale (v0.85.0) — restamped with the decisions most likely to be re-proposed.** **⚠️ `v0.89.0` shipped Learning Connections as a CAPABILITY, not a profile type** — a parent, tutor, sibling or mentor can make a quiz for someone, connect with them, and see their progress. **`ProfileType` answers "how do YOU learn?", not "may you help someone?"**, so the old design forced a parent to claim to be a Teacher — changing their own dashboard and practice options — just to help their child. **⚠️ Do NOT re-gate any of this on `ProfileType`; `PARENT` stays unimplemented with zero users.** **⚠️ THE PRIVACY LINE IS RATIFIED AND ABSOLUTE: a supporter sees readiness, progress and quiz performance, NEVER the learner's notes** — this protects the core loop, because learners who suspect notes are visible write less honestly. Teachers still exclusively keep DOCX export, multi-version exports, question-count control and the Exam Builder; only the single-quiz share link opened up. **Ratified 2026-08-19 (Q4):** connections are **invite + accept in BOTH directions, revocable either side**, and **acceptance is load-bearing** — without it anyone could claim a supporting relationship over any account by knowing an email address. **Ratified 2026-08-19 (Q5):** age is collected **at link time, never at signup**, with guardian consent below a threshold that is **configuration, and whose NUMBER remains owner-owned pending counsel** — do not let a shipped default be read as a legal position. **Rejected and recorded:** `learnerLevel` as an age proxy (breaks both ways), adults-only-first (excludes the motivating parent-child case), and a supporter `ProfileType`. Previously v0.85.0 - 2026-08-18. Adds the **Domain Context Catalog** decline (2026-08-17), which is the single most likely thing to be re-proposed from this span. Previously v0.73.0 - 2026-08-12.
+
+---
+
+## Shared Learning Material and Activity Sharing — settled in `v0.91.0` / `v0.92.0`
+
+**⚠️ `NoteVisibility` stays `PRIVATE | PUBLIC`. A `SHARED` enum value was REJECTED and must not be re-proposed.**
+Three independent reasons, all verified against code: every read path is `findByIdAndOwnerUserId`, so the enum
+would grant nobody anything and would only *assert* what a table decides — two sources of truth that can disagree,
+with the label being the one people trust; `AccountPurgeService` **retains `PUBLIC` and deletes `PRIVATE`**, so a
+`SHARED` note matches neither branch and would **survive the purge of a deleted account while staying readable by
+its recipients**; and the enum has 42 usages across 24 files. Access lives in a `note_shares` grant table, and a
+shared note stays `PRIVATE` — excluded from Explore and included in purge **by default rather than by 24 correct
+decisions**. **The three-option "Who can access this note?" control is DERIVED, never stored.**
+
+**Selecting *Private* revokes every live share (owner decision, 2026-08-27),** with the count named in the
+confirmation. Silently keeping live shares under a control labelled "only you" would be a lie in the UI.
+*Public* revokes none, because public is strictly broader.
+
+**⚠️ PHASES ARE SEQUENCED, NOT EVIDENCE-GATED — the owner has ruled this TWICE.** With zero connections in
+production, a gating read returns nothing, so gating is not caution, it is an indefinite stop. Checkpoint rows for
+this arc are **observational and gate nothing**. Do not propose holding a phase behind the previous phase's read.
+
+**⚠️ Connecting shares NOTHING.** A relationship creates the *capacity* to grant. Nothing is reciprocal by
+default: A→B activity sharing on with B→A off must be representable, and the connection DTO carries two
+independently computed fields so a single boolean cannot collapse the model.
+
+**⚠️ No relationship-type column (`GUARDIAN | TUTOR | PARTNER`) — REJECTED.** Permissions define the
+relationship; a type column would immediately invite gating on it, which is the exact `ProfileType` mistake
+`v0.89.0` exists to correct.
+
+**Guardian consent, two settled properties.** It is **asymmetric** — it gates the LEARNER's data only, so a
+supporter sharing their *own* activity with a consent-requiring learner is not blocked. And it **fails CLOSED on
+an unknown birth year**: it denies nobody today, which is precisely why it must not fail open, since the only
+route to a null is a future grant path that produced `ACCEPTED` without one — the exact state the check exists to
+catch.
+
+**⚠️ Naming, settled in `v0.92.0`: the quota LABEL ("AI quizzes") and the Challenge Quiz MODE name are different
+strings on purpose**, pinned by a regression test. And **no second counter** for shared quizzes — that is a
+pricing decision nobody has taken. Disclosure was the fix; **do not move the share-link check into the generation
+path**, because generating without sharing is legitimate.
+
+**"Shared with you" Library placement — DECIDED 2026-08-27, before the consultation was even sent.** Diagnosis:
+**terminal signal AND distance**, not terminal signal alone — which overturned the session's own hypothesis that
+announcing the section would suffice. Ratified: the section **stays below the complete owned-notes flow**, never
+above owned material and **never interleaved with owned pagination**; when shared items exist, a compact
+persistent **`Shared with you · N` jump affordance** sits in the existing upper Library controls and scrolls to
+the section; it renders **nothing at zero count and reserves no empty space**. **⚠️ It is an interim NAVIGATION
+solution, explicitly not an announcement banner**, and it **retires when real usage shows *Shared with me* has
+become a repeated destination** — the evidence that earns the eventual `[ My Notes ] [ Shared with me ]` tab
+architecture. **Rejected: moving the section above the owned notes** (it would displace the learner's own material
+on every visit, including for the majority with nothing shared). **Still not open: shared notes are never mixed
+into the owned grid, and the section stays hidden when empty.**
+
+**⚠️ Known and NOT yet fixed — do not assume the activity grant bounds what a supporter sees.**
+`/linked-learners/{id}/progress` returns the same four engagement fields gated only on `ACCEPTED`, with no grant
+check, so the `v0.92.0` sharing control is real learner→supporter and **decorative in reverse**. Fixing it is
+reserved for Phase 3, which reimplements that helper over a `PROGRESS` grant.
 
 ---
 

@@ -15,6 +15,29 @@ import java.util.UUID;
 public interface NoteShareRepository extends JpaRepository<NoteShareEntity, UUID> {
     List<NoteShareEntity> findByNoteIdAndRevokedAtIsNullOrderByCreatedAtAsc(UUID noteId);
 
+    /**
+     * Live shares whose relationship is still {@code ACCEPTED}.
+     *
+     * <p>⚠️ The plain live-row lookup above is NOT enough for the owner-facing listing. It filters on
+     * {@code revoked_at IS NULL} only, while {@code PUT /notes/&#123;id&#125;/shares} requires every id to be
+     * {@code ACCEPTED} — so a connection that lapsed to {@code PENDING} (a `v0.89.1` birth-year correction) or
+     * {@code REVOKED} stayed listed, and round-tripping that list back through {@code PUT} was rejected. The
+     * recipient's own reads were already denied, so this over-reported rather than leaking; the defect is that
+     * the two endpoints disagreed about a valid share set.
+     */
+    @Query("""
+            select share from NoteShareEntity share
+             where share.noteId = :noteId
+               and share.revokedAt is null
+               and exists (
+                   select 1 from LinkedLearnerRelationshipEntity relationship
+                    where relationship.id = share.relationshipId
+                      and relationship.status = com.studysnap.backend.entity.LinkedLearnerStatus.ACCEPTED
+               )
+             order by share.createdAt asc
+            """)
+    List<NoteShareEntity> findLiveAcceptedByNoteIdOrderByCreatedAtAsc(@Param("noteId") UUID noteId);
+
     Optional<NoteShareEntity> findFirstByNoteIdAndGranteeUserIdAndRevokedAtIsNull(
             UUID noteId,
             UUID granteeUserId
@@ -70,6 +93,20 @@ public interface NoteShareRepository extends JpaRepository<NoteShareEntity, UUID
             @Param("revokedAt") OffsetDateTime revokedAt
     );
 
+    /**
+     * The recipient's "Shared with you" page, cursor-paged newest-first.
+     *
+     * <p>⚠️ The {@code cast(...)} calls on the cursor parameters are LOAD-BEARING — do not remove them as
+     * noise. This is a NATIVE query, so PostgreSQL types the parameters itself, and a bare {@code $2 IS NULL}
+     * gives it nothing to infer from: it fails the whole statement at parse time with
+     * {@code could not determine data type of parameter $2}, a 500 on every call including the first page.
+     * JPQL is unaffected because Hibernate types those parameters, which is why the same
+     * {@code :param is null} shape is safe elsewhere in this codebase and not here.
+     *
+     * <p>⚠️ H2 accepts the uncast form, so the unit suite cannot catch this. It shipped in `v0.91.0` and was
+     * reported from a running app; the fix was reproduced and verified against real PostgreSQL 16, the same way
+     * `v0.83.1`'s NOT NULL insert defect was.
+     */
     @Query(value = """
             select ns.id as shareId,
                    note.id as noteId,
@@ -94,9 +131,10 @@ public interface NoteShareRepository extends JpaRepository<NoteShareEntity, UUID
                      and relationship.learner_user_id = ns.grantee_user_id)
                  or (relationship.learner_user_id = ns.owner_user_id
                      and relationship.supporter_user_id = ns.grantee_user_id))
-               and (:cursorCreatedAt is null
-                    or ns.created_at < :cursorCreatedAt
-                    or (ns.created_at = :cursorCreatedAt and ns.id < :cursorId))
+               and (cast(:cursorCreatedAt as timestamptz) is null
+                    or ns.created_at < cast(:cursorCreatedAt as timestamptz)
+                    or (ns.created_at = cast(:cursorCreatedAt as timestamptz)
+                        and ns.id < cast(:cursorId as uuid)))
              order by ns.created_at desc, ns.id desc
             """, nativeQuery = true)
     List<SharedNoteListProjection> findSharedWithMe(

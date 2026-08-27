@@ -3,6 +3,8 @@ import LinkedLearnersPage from "./page";
 import {
   acceptLinkedLearner,
   acceptLinkedLearnerInvitation,
+  ApiRequestError,
+  getLinkedLearnerActivity,
   listLinkedLearnerInvitations,
   correctLinkedLearnerBirthYear,
   getLinkedLearners,
@@ -10,6 +12,7 @@ import {
   recordLinkedLearnerGuardianConsent,
   previewLinkedLearnerBirthYearCorrection,
   revokeLinkedLearner,
+  setLinkedLearnerActivityGrant,
   type LinkedLearnerResponse,
 } from "@/lib/api";
 
@@ -25,6 +28,15 @@ jest.mock("@/lib/api", () => ({
   listLinkedLearnerInvitations: jest.fn(),
   acceptLinkedLearnerInvitation: jest.fn(),
   revokeLinkedLearnerInvitation: jest.fn(),
+  setLinkedLearnerActivityGrant: jest.fn(),
+  getLinkedLearnerActivity: jest.fn(),
+  ApiRequestError: class ApiRequestError extends Error {
+    status: number;
+    constructor(message: string, options: { status: number }) {
+      super(message);
+      this.status = options.status;
+    }
+  },
 }));
 
 const baseLink: LinkedLearnerResponse = {
@@ -41,6 +53,8 @@ const baseLink: LinkedLearnerResponse = {
   birthYearRequired: false,
   guardianConsentRequired: false,
   guardianConsentRecorded: false,
+  activitySharedByMe: false,
+  activitySharedWithMe: false,
 };
 
 beforeEach(() => {
@@ -134,6 +148,192 @@ it("offers progress only to the supporter on an accepted connection", async () =
   );
   expect(screen.getAllByText("pending")).toHaveLength(1);
   expect(screen.getAllByRole("link", { name: "View progress" })).toHaveLength(1);
+});
+
+it("renders the two activity directions independently from both callers", async () => {
+  const accepted = {
+    ...baseLink,
+    status: "ACCEPTED" as const,
+    incomingInvitation: false,
+  };
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...accepted,
+    callerRole: "LEARNER",
+    counterpartyDisplayName: "Alex",
+    activitySharedByMe: false,
+    activitySharedWithMe: true,
+  }]);
+  const first = render(<LinkedLearnersPage />);
+
+  expect(await screen.findByRole("switch", { name: "Share my study activity with Alex" })).not.toBeChecked();
+  expect(screen.getByText("Alex shares their study activity with you")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "View momentum" })).toBeInTheDocument();
+
+  first.unmount();
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...accepted,
+    callerRole: "SUPPORTER",
+    counterpartyDisplayName: "Blair",
+    activitySharedByMe: true,
+    activitySharedWithMe: false,
+  }]);
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByRole("switch", { name: "Share my study activity with Blair" })).toBeChecked();
+  expect(screen.getByText("Blair does not share their study activity with you")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "View momentum" })).not.toBeInTheDocument();
+});
+
+it("keeps the server-confirmed activity toggle state when the write fails", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    status: "ACCEPTED",
+    incomingInvitation: false,
+    activitySharedByMe: false,
+  }]);
+  jest.mocked(setLinkedLearnerActivityGrant).mockRejectedValue(new Error("Network failed"));
+  render(<LinkedLearnersPage />);
+
+  const toggle = await screen.findByRole("switch", { name: /share my study activity/i });
+  fireEvent.click(toggle);
+
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Network failed"));
+  expect(toggle).not.toBeChecked();
+});
+
+it("renders zero momentum honestly instead of hiding it", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    status: "ACCEPTED",
+    incomingInvitation: false,
+    activitySharedWithMe: true,
+  }]);
+  jest.mocked(getLinkedLearnerActivity).mockResolvedValue({
+    displayName: "Pat Supporter",
+    engagementMode: "FOCUSED",
+    currentStreak: 0,
+    longestStreak: 0,
+    studyDaysThisWeek: 0,
+  });
+  render(<LinkedLearnersPage />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "View momentum" }));
+  expect(await screen.findByText("No meaningful study activity recorded yet.")).toBeInTheDocument();
+  expect(screen.getByText("Focused")).toBeInTheDocument();
+});
+
+it("refetches momentum on every expand so revoked data is never re-rendered from memory", async () => {
+  // ⚠️ The privacy defect this pins: access is re-derived server-side on every request, which is what
+  // makes a revoke cut immediately. Serving a cached payload on re-expand defeats that CLIENT-side —
+  // collapse, the owner revokes, re-expand, and withdrawn momentum renders with no request issued, so
+  // no 403 arrives and the access-ended path never runs.
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    status: "ACCEPTED",
+    incomingInvitation: false,
+    activitySharedWithMe: true,
+  }]);
+  jest.mocked(getLinkedLearnerActivity).mockResolvedValue({
+    displayName: "Pat Supporter",
+    engagementMode: "CONSISTENCY",
+    currentStreak: 7,
+    longestStreak: 9,
+    studyDaysThisWeek: 4,
+  });
+  render(<LinkedLearnersPage />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "View momentum" }));
+  expect(await screen.findByText("7 days")).toBeInTheDocument();
+  expect(getLinkedLearnerActivity).toHaveBeenCalledTimes(1);
+
+  // Collapse: the payload must not survive.
+  fireEvent.click(screen.getByRole("button", { name: "Hide momentum" }));
+  expect(screen.queryByText("7 days")).not.toBeInTheDocument();
+
+  // Re-expand must hit the server again rather than re-rendering what it already had.
+  fireEvent.click(screen.getByRole("button", { name: "View momentum" }));
+  await waitFor(() => expect(getLinkedLearnerActivity).toHaveBeenCalledTimes(2));
+});
+
+it("does not strand an open momentum panel when the grant is withdrawn", async () => {
+  // The control that closes the panel lives inside the activitySharedWithMe branch, so a refresh
+  // flipping the grant false must take the panel with it — not leave it open and undismissable.
+  jest.mocked(getLinkedLearners)
+    .mockResolvedValueOnce([{
+      ...baseLink, status: "ACCEPTED", incomingInvitation: false, activitySharedWithMe: true,
+    }])
+    .mockResolvedValue([{
+      ...baseLink, status: "ACCEPTED", incomingInvitation: false, activitySharedWithMe: false,
+    }]);
+  jest.mocked(getLinkedLearnerActivity).mockResolvedValue({
+    displayName: "Pat Supporter",
+    engagementMode: "CONSISTENCY",
+    currentStreak: 7,
+    longestStreak: 9,
+    studyDaysThisWeek: 4,
+  });
+  render(<LinkedLearnersPage />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "View momentum" }));
+  expect(await screen.findByText("7 days")).toBeInTheDocument();
+
+  // A 403 on a later read is the access-ended path; it must clear the panel.
+  jest.mocked(getLinkedLearnerActivity).mockRejectedValue(
+    Object.assign(new Error("gone"), { status: 403, name: "ApiRequestError" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Hide momentum" }));
+  fireEvent.click(screen.getByRole("button", { name: "View momentum" }));
+
+  await waitFor(() => expect(screen.queryByText("7 days")).not.toBeInTheDocument());
+});
+
+it("shows momentum load failures inline and retries them", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    status: "ACCEPTED",
+    incomingInvitation: false,
+    activitySharedWithMe: true,
+  }]);
+  jest.mocked(getLinkedLearnerActivity)
+    .mockRejectedValueOnce(new Error("Temporary failure"))
+    .mockResolvedValueOnce({
+      displayName: "Pat Supporter",
+      engagementMode: "CONSISTENCY",
+      currentStreak: 2,
+      longestStreak: 5,
+      studyDaysThisWeek: 3,
+    });
+  render(<LinkedLearnersPage />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "View momentum" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Temporary failure");
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+  expect(await screen.findByText("2 days")).toBeInTheDocument();
+  expect(getLinkedLearnerActivity).toHaveBeenCalledTimes(2);
+});
+
+it("collapses momentum and refreshes connection state when access ends", async () => {
+  const accepted = {
+    ...baseLink,
+    status: "ACCEPTED" as const,
+    incomingInvitation: false,
+    activitySharedWithMe: true,
+  };
+  jest.mocked(getLinkedLearners)
+    .mockResolvedValueOnce([accepted])
+    .mockResolvedValueOnce([{ ...accepted, activitySharedWithMe: false }]);
+  jest.mocked(getLinkedLearnerActivity).mockRejectedValue(
+    new ApiRequestError("Access ended", { status: 404 }),
+  );
+  render(<LinkedLearnersPage />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "View momentum" }));
+
+  await waitFor(() => expect(getLinkedLearners).toHaveBeenCalledTimes(2));
+  expect(screen.queryByLabelText(/momentum/i)).not.toBeInTheDocument();
+  expect(screen.getByText(/does not share their study activity with you/i)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
 });
 
 it("offers birth year correction only on the learner's own connection surface", async () => {

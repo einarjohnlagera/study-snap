@@ -11,6 +11,8 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.LinkedLearnerGuardianConsentEntity;
+import com.studysnap.backend.entity.LinkedLearnerGrantEntity;
+import com.studysnap.backend.entity.LinkedLearnerGrantScope;
 import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
@@ -22,6 +24,7 @@ import com.studysnap.backend.exception.LinkedLearnerBirthYearCorrectionNotAllowe
 import com.studysnap.backend.exception.LinkedLearnerProgressNotFoundException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
+import com.studysnap.backend.repository.LinkedLearnerGrantRepository;
 import com.studysnap.backend.entity.LinkedLearnerInvitationEntity;
 import static org.mockito.ArgumentMatchers.eq;
 import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
@@ -66,6 +69,7 @@ class LinkedLearnerServiceTest {
     @Mock private LinkedLearnerRelationshipRepository relationshipRepository;
     @Mock private LinkedLearnerInvitationRepository invitationRepository;
     @Mock private LinkedLearnerGuardianConsentRepository consentRepository;
+    @Mock private LinkedLearnerGrantRepository grantRepository;
     @Mock private UserRepository userRepository;
     @Mock private OnboardingGuardService onboardingGuardService;
     @Mock private AuthService authService;
@@ -86,12 +90,14 @@ class LinkedLearnerServiceTest {
                 relationshipRepository,
                 invitationRepository,
                 consentRepository,
+                grantRepository,
                 userRepository,
                 onboardingGuardService,
                 authService,
                 emailService,
                 emailTemplateService,
                 properties,
+                new GuardianConsentPolicy(properties),
                 invitationRateLimitService
         );
         // The birth-year decision loads the learner through a PESSIMISTIC_WRITE read. Route it to
@@ -623,6 +629,40 @@ class LinkedLearnerServiceTest {
                         || name.contains("note")
                         || name.contains("studypack")
                         || name.contains("concepthealth"));
+    }
+
+    @Test
+    void listComputesTheAsymmetricActivityFieldsIndependentlyForBothCallers() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 30);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        LinkedLearnerGrantEntity learnerToSupporter = new LinkedLearnerGrantEntity();
+        learnerToSupporter.setId(UUID.randomUUID());
+        learnerToSupporter.setRelationshipId(relationship.getId());
+        learnerToSupporter.setFromUserId(learner.getId());
+        learnerToSupporter.setToUserId(supporter.getId());
+        learnerToSupporter.setScope(LinkedLearnerGrantScope.ACTIVITY);
+        learnerToSupporter.setGrantedAt(OffsetDateTime.now());
+        stubUser(supporter);
+        stubUser(learner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of(relationship));
+        when(grantRepository.findByRelationshipIdInAndScopeAndRevokedAtIsNull(
+                Set.of(relationship.getId()), LinkedLearnerGrantScope.ACTIVITY))
+                .thenReturn(List.of(learnerToSupporter));
+
+        LinkedLearnerResponse supporterView = service.list(supporter.getId()).getFirst();
+        LinkedLearnerResponse learnerView = service.list(learner.getId()).getFirst();
+
+        assertThat(supporterView.activitySharedByMe()).isFalse();
+        assertThat(supporterView.activitySharedWithMe()).isTrue();
+        assertThat(learnerView.activitySharedByMe()).isTrue();
+        assertThat(learnerView.activitySharedWithMe()).isFalse();
+        verify(grantRepository, times(2)).findByRelationshipIdInAndScopeAndRevokedAtIsNull(
+                Set.of(relationship.getId()), LinkedLearnerGrantScope.ACTIVITY);
     }
 
     /**

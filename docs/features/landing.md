@@ -94,8 +94,10 @@ Rules:
 
 - **Every claim must be live.** The section currently promises three things, all shipping: share a note and
   its Study Pack with someone you choose; see their readiness, study frequency and practice once they accept;
-  and never see their notes. **Do not add a claim for a later phase** — activity sharing and per-scope
-  progress permissions are not built.
+  and never see their notes. **Do not add a claim for a later phase** — per-scope progress permissions are not
+  built. **⚠️ Activity sharing IS built as of `v0.92.0` and may be described.** This line previously named it as
+  unbuilt and outlived the feature by a release — the same failure as the *Coming Soon* teaser four lines above,
+  which is why the rule is stated here rather than assumed.
 - **Relationship-neutral copy.** Marketing may lead with the parent case because it is the clearest real-world
   pain point, but the product gates nothing on who someone is to you. Name several relationships — parents,
   tutors, siblings, study partners — and never imply a guardian mode, a supporter profile, or any account type

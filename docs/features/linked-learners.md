@@ -2,7 +2,9 @@
 
 ## Scope
 
-Linked Learners records a directional supporter → learner relationship only after mutual agreement. Phase 2 established the relationship; Phase 3 lets the supporter read a deliberately narrow progress projection after the relationship is accepted.
+Linked Learners records a directional supporter → learner relationship only after mutual agreement. The relationship layer and the supporter progress read both shipped in `v0.89.0`; controlled note sharing shipped in `v0.91.0` and directional activity sharing in `v0.92.0`.
+
+**⚠️ PHASE NUMBERING — read this before using the word "Phase" anywhere in this file.** Two schemes exist and this document has already mixed them. The **canonical** scheme is the ratified Learning Connections plan (`docs/claude-plans/learning-connections-phase-plan.md`, and `ROADMAP.md`): **Phase 1 = shared learning material (`v0.91.0`, shipped), Phase 2 = activity sharing (`v0.92.0`, shipped), Phase 3 = per-scope `PROGRESS` grants (NOT built).** A superseded `v0.89.0`-era scheme numbered the *rollout of the relationship layer itself* and called the supporter progress read "Phase 3" — under the canonical scheme that read is simply shipped `v0.89.0` behaviour and is **not** Phase 3. **⚠️ `PROGRESS`-scope grants are NOT built. The supporter progress read IS built.** Those are different things and the old numbering makes them look like the same one.
 
 A supported learner remains a full, ordinary NoteLib account with their own login, plan and quota. A supporter may also be a learner. The relationship is separate from `ProfileType`; no supporter profile type exists or is required.
 
@@ -130,12 +132,78 @@ The caller's link list contains only:
 - relationship status;
 - created, accepted and revoked dates;
 - workflow flags needed to finish birth-year and consent steps.
+- two independent activity-grant states: activity shared by the caller and activity shared by the counterparty.
 
 The relationship list itself contains no readiness, progress, score, quiz performance, note, Study Pack, collection or `ConceptHealth` data.
 
 Notes remain private. The link is free metadata and does not pool, transfer or change subscription or generation quota.
 
-## Phase 3 supporter progress read
+## Directional activity sharing
+
+Accepting a Learning Connection grants no activity access. It creates only the capacity for either person to
+opt in to sharing their own activity. Grants are directional: A sharing with B never writes, implies or enables
+B sharing with A. The connection response therefore carries two separately computed fields,
+`activitySharedByMe` and `activitySharedWithMe`; neither is derived from the other.
+
+Each person can change only the grant whose `from_user_id` is their authenticated user id. Relationship and
+counterparty ids are derived from the loaded relationship, never supplied by the request. Turning sharing off
+sets `revoked_at`; it never deletes history, and turning it back on inserts a new row. Both operations are
+idempotent. The schema also permits `PROGRESS`, but Phase 2 never writes or reads that scope; it exists solely so
+Phase 3 does not require a second grant-table migration.
+
+Every momentum read reloads the relationship and requires it to be exactly `ACCEPTED`, then requires the live
+counterparty-to-caller `ACTIVITY` grant. There is no cache or grace period, so revoking either the grant or the
+relationship cuts the next read. A birth-year correction that pauses `ACCEPTED` to `PENDING` cuts it through the
+same status predicate.
+
+Guardian consent is deliberately asymmetric. It is re-asserted only when the shared data belongs to the
+relationship's learner. Reading a consent-requiring learner's activity needs the relationship consent row;
+reading the supporter's own shared activity does not, even when the counterparty learner requires consent. This
+is defence in depth over the `PENDING` gate, not a second age rule: one shared `GuardianConsentPolicy` owns the
+configuration-backed age decision.
+
+**That defence fails CLOSED.** If the learner's data is requested and their birth year is unknown, the read is
+denied rather than waved through. Acceptance records the year, so an `ACCEPTED` relationship always carries one
+and this denies nobody today — which is precisely why it must not fail open. The only way to reach it with a
+null year is a future grant path that produced `ACCEPTED` without one, and that is the exact state the check
+exists to catch; treating "unknown age" as "no consent needed" would let such a path silently reopen the
+`v0.89.1` gate.
+
+The momentum response is a read-only projection of activity NoteLib already records: display name, engagement
+mode, current streak, longest streak and meaningful study days this week. It adds no activity type or score,
+deliberately excludes `OPENED_STUDY_PACK` through the existing `MEANINGFUL_STUDY_ACTIVITIES` definition, and
+writes no activity event, `ConceptHealth`, progress timestamp or user state. Zeroes render as an honest empty
+answer rather than being hidden.
+
+### Activity-sharing analytics
+
+Phase 2's grant-to-view loop uses three product-analytics events, separate from learner activity tracking:
+
+- `CONNECTION_ACTIVITY_SHARED` fires only when enabling sharing inserts a new live grant;
+- `CONNECTION_ACTIVITY_SHARE_REVOKED` fires only when disabling sharing revokes a live grant;
+- `CONNECTION_ACTIVITY_VIEWED` fires only after an authorized momentum response is successfully assembled.
+
+The relationship id is the analytics entity id. Grant events carry only the caller's relationship role
+(`SUPPORTER` or `LEARNER`); view metadata is empty. Repeating an already-applied grant setting emits nothing,
+and denied or failed momentum reads emit nothing. Analytics publication is best-effort and cannot fail the grant
+transition or momentum response. These events contain no streak, study-day, score, mastery, concept, title or
+other learning-content field, and they do not create `UserActivityEventEntity` rows or change learning state.
+
+## Supporter progress read (shipped in `v0.89.0`)
+
+**⚠️ Formerly headed "Phase 3" under the superseded numbering — see the phase-numbering note above. This read is SHIPPED. Phase 3 in the canonical scheme is per-scope `PROGRESS` grants, which are NOT built.**
+
+**The owner-facing share listing is relationship-aware.** `GET /notes/{id}/shares` returns only live shares whose
+relationship is still `ACCEPTED`, matching what `PUT` will accept. Filtering on `revoked_at` alone kept a lapsed
+connection listed and made a round-tripped list fail validation. **⚠️ The diff source inside `PUT` stays
+unfiltered** — it must see the true live set, or removing a lapsed recipient would never revoke their row and
+re-adding them would collide on `ux_note_shares_live`.
+
+**Authorization faults deny; unreadable material does not.** A recipient's mid-session access recheck tolerates a
+Study Pack it cannot *read* — completing a session whose pack was deleted or corrupted has always succeeded, and
+the caller owns the session regardless. But a fault raised while *deciding* whether a non-owner may read shared
+material is not evidence of access, so it denies. Unknown is not permission, the same rule the `v0.89.1` consent
+gate applies.
 
 The progress route is addressed only as `/linked-learners/{relationshipId}/progress`. It never accepts a learner user id. One shared authorization helper loads that relationship, verifies that the caller is its supporter, verifies that its status is exactly `ACCEPTED`, and returns the authorized learner id used by the aggregate services. A learner cannot use the route to read their supporter. A third party, a `PENDING` link, a `REVOKED` link and a missing relationship receive no data; revoked and missing relationships use the same not-found response.
 

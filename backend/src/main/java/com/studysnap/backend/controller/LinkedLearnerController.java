@@ -4,6 +4,9 @@ import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.GuardianConsentRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
 import com.studysnap.backend.dto.LinkedLearnerBirthYearCorrectionPreviewResponse;
+import com.studysnap.backend.dto.LinkedLearnerActivityGrantRequest;
+import com.studysnap.backend.dto.LinkedLearnerActivityGrantResponse;
+import com.studysnap.backend.dto.LinkedLearnerActivityResponse;
 import com.studysnap.backend.dto.LinkedLearnerProgressResponse;
 import com.studysnap.backend.dto.LinkedLearnerInvitationResponse;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
@@ -11,6 +14,8 @@ import com.studysnap.backend.dto.RecordLinkedLearnerBirthYearRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.LinkedLearnerService;
+import com.studysnap.backend.service.LinkedLearnerActivityService;
+import com.studysnap.backend.service.LinkedLearnerGrantService;
 import com.studysnap.backend.service.LinkedLearnerProgressService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +39,8 @@ import java.util.UUID;
 public class LinkedLearnerController {
     private final LinkedLearnerService linkedLearnerService;
     private final LinkedLearnerProgressService linkedLearnerProgressService;
+    private final LinkedLearnerGrantService linkedLearnerGrantService;
+    private final LinkedLearnerActivityService linkedLearnerActivityService;
 
     @PostMapping("/invite")
     public SimpleMessageResponse invite(
@@ -92,6 +99,24 @@ public class LinkedLearnerController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return linkedLearnerProgressService.getProgress(user.userId(), relationshipId);
+    }
+
+    @PutMapping("/{relationshipId}/grants/activity")
+    public LinkedLearnerActivityGrantResponse setActivityGrant(
+            @PathVariable UUID relationshipId,
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody LinkedLearnerActivityGrantRequest request
+    ) {
+        return linkedLearnerGrantService.setActivityGrant(
+                user.userId(), relationshipId, request.granted());
+    }
+
+    @GetMapping("/{relationshipId}/activity")
+    public LinkedLearnerActivityResponse getActivity(
+            @PathVariable UUID relationshipId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return linkedLearnerActivityService.getActivity(user.userId(), relationshipId);
     }
 
     @PostMapping("/{relationshipId}/accept")

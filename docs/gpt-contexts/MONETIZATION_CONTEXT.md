@@ -2,7 +2,7 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **pricing, plan tiers, paywalls, or checkout**.
-> Last updated: v0.76.0 - 2026-08-14
+> Last updated: v0.92.0 - 2026-08-27 (Released). **⚠️ This module had gone SIXTEEN releases stale (v0.76.0) while being pasted into sessions as fact** — restamped at the `v0.92.0` signoff with the monetization-relevant changes from that span. The three paywall-copy rules and the `getUpgradeCtas` rule below are unchanged and still current.
 
 ---
 
@@ -22,6 +22,40 @@ Runtime entitlement source of truth is the backend subscription model and `GET /
 - **Paywall copy follows three rules ratified in `v0.76.0`** — full contract in `docs/features/pricing.md`. **(1) Upgrade BUTTON labels stay feature-named.** A button fired when a learner clicked Board Exam Mode says `Unlock Board Exam Mode`, because a button states *what the click does*, not *why to care*. Do not propose replacing these with system-level promises. **(2) Paywall HEADLINES split by type:** capability paywalls (nothing was used up) carry the narrative; quota paywalls keep a factual headline, because a learner who just hit a wall needs to know that is why the modal appeared. **(3) `PLAN_CARD_SUBTEXT` describes the TIER, never a feature** — it is keyed on plan type alone and renders on *every* paywall, which is how Adaptive Practice copy ended up on the Interview Practice and Board Exam Mode modals before `v0.76.0` fixed it.
 - **The paywall modal renders upgrade *targets* only** (`PlanCard` is typed `"PLUS" | "PRO"`). Free is represented by a single line, not a card — a Free card would look selectable and lead nowhere.
 - **Four separate components render plan `title`/`description`** — `/pricing`'s `PricingPlansSection`, the landing page's `SimplePricingSection`, `app/settings/page.tsx`, and `components/billing/paywall-modal.tsx`. `v0.68.0` shipped a real misalignment bug because plan `description` lengths had drifted to 62/96/133 characters, which cannot render at equal line counts in a multi-column card grid. They are now balanced at **88/88/92**. If you propose changing a plan description, keep the three within a few characters of each other, or you will silently break card alignment on four surfaces at once.
+
+### The generation meter is called "AI quizzes" (`v0.92.0`) — and it is ONE counter doing TWO jobs
+
+- **`user_usage.challenge_quiz_generations` is spent by BOTH Challenge Quiz and "Quiz for someone."** Free 20 /
+  Plus 100 / Pro 200 per month. Every usage meter, the pricing page and the quiz-generation dialog label it
+  **"AI quizzes"**, from a single definition (`frontend/lib/usage-labels.ts`).
+- **⚠️ The quota LABEL and the Challenge Quiz MODE name are deliberately DIFFERENT strings**, pinned by a
+  regression test. The mode keeps its product name everywhere it names the mode. **A global find-and-replace
+  unifying them is a known failure and must not be proposed.**
+- **⚠️ There were THREE vocabularies for this one counter before `v0.92.0`** — the Dashboard said *Challenge
+  Quiz*, Settings said *Quiz*, and the API fields say `challengeQuizzes*`. The API field names were deliberately
+  NOT renamed (existing contract with test coverage); only user-facing labels changed.
+- **⚠️ NO SECOND COUNTER.** A separate meter for quizzes made for someone else is **a pricing decision nobody has
+  taken**. Do not propose one as a "clarity" fix — it changes what people pay for.
+- **⚠️ Known limitation, live today:** the meters are unified but the **exhaustion copy is not**. The paywall
+  headline still says *"quiz generation limit"* and the server message *"monthly quiz credit limit"*, so a user
+  who watches an *AI quizzes* meter run out is then told about two differently-named limits.
+
+### Quiz share links are a second, cheaper meter — disclosed early, still enforced late
+
+- **Free 3 / Plus 10 / Pro unlimited per month**, enforced by `QuizShareLimitService` at **exactly one call site:
+  link creation.** `GET /api/me/plan` carries the limit, used and remaining counts (added in `v0.92.0`); unlimited
+  uses the same `null` representation as the export limits — **do not invent a new sentinel.**
+- **⚠️ Do NOT move the share-link check into the generation path.** Generating without sharing is legitimate
+  (teacher export, regenerating before sharing). `v0.92.0` surfaced the cap **earlier**; it deliberately did not
+  apply it earlier. The distinction is load-bearing: the cheaper limit being enforced last was the defect, and
+  disclosure — not enforcement — was the fix.
+- **`v0.89.0` removed the `TEACHER` gate on creating a share link.** Anyone can make a quiz for someone; the
+  recipient needs **no account and no relationship**. Teachers still exclusively keep DOCX export, multi-version
+  exports, question-count control and the Exam Builder.
+- **Learning Connections costs nothing and has no plan dimension** — no per-learner charge, no shared or
+  transferred quota, no sub-accounts. A supporter generates on their own account against their own allowance.
+  `v0.91.0` (note sharing) and `v0.92.0` (activity sharing) added **no** paid surface. Do not propose gating any
+  part of Learning Connections by plan without treating it as a new pricing decision.
 
 Upgrade CTA rule:
 

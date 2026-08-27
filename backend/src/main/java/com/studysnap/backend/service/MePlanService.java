@@ -36,6 +36,7 @@ public class MePlanService {
 
         int studyPackLimit = properties.getPricing().resolveMonthlyStudyPackLimit(planType);
         int challengeQuizLimit = properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
+        Integer quizShareLinkLimit = properties.getPricing().resolveMonthlyQuizShareLinkLimit(planType);
         int adaptivePracticeLimit = properties.getPricing().resolveMonthlyAdaptivePracticeLimit(planType);
         int interviewPracticeLimit = properties.getPricing().resolveMonthlyInterviewPracticeLimit(planType);
         int longExamLimit = properties.getPricing().resolveMonthlyLongExamLimit(planType);
@@ -47,6 +48,7 @@ public class MePlanService {
 
         int studyPackUsed = studyPackUsage.usedCount();
         int challengeQuizUsed = usage.challengeQuizGenerations();
+        int quizShareLinkUsed = usage.quizShareLinksCreated();
         int adaptivePracticeUsed = usage.adaptiveQuizGenerations();
         int interviewPracticeUsed = usage.interviewPracticeUsedThisMonth();
         int longExamUsed = usage.longExamUsedThisMonth();
@@ -65,6 +67,7 @@ public class MePlanService {
                 new MePlanResponse.Limits(
                         studyPackLimit,
                         challengeQuizLimit,
+                        quizShareLinkLimit,
                         adaptivePracticeLimit,
                         interviewPracticeLimit,
                         ocrLimit,
@@ -77,6 +80,7 @@ public class MePlanService {
                 new MePlanResponse.Usage(
                         studyPackUsed,
                         challengeQuizUsed,
+                        quizShareLinkUsed,
                         adaptivePracticeUsed,
                         interviewPracticeUsed,
                         ocrUsed,
@@ -89,6 +93,7 @@ public class MePlanService {
                 new MePlanResponse.Remaining(
                         remaining(studyPackLimit, studyPackUsed),
                         remaining(challengeQuizLimit, challengeQuizUsed),
+                        remainingNullable(quizShareLinkLimit, quizShareLinkUsed),
                         remaining(adaptivePracticeLimit, adaptivePracticeUsed),
                         remaining(interviewPracticeLimit, interviewPracticeUsed),
                         remaining(ocrLimit, ocrUsed),

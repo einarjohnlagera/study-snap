@@ -8,20 +8,25 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Toggle } from "@/components/ui/toggle";
 import { LINKED_LEARNER_STATUS_COPY } from "@/lib/linked-learner-status";
 import {
   acceptLinkedLearner,
+  ApiRequestError,
   acceptLinkedLearnerInvitation,
   listLinkedLearnerInvitations,
   revokeLinkedLearnerInvitation,
   type LinkedLearnerInvitationResponse,
   correctLinkedLearnerBirthYear,
   getLinkedLearners,
+  getLinkedLearnerActivity,
   inviteLinkedLearner,
   previewLinkedLearnerBirthYearCorrection,
   recordLinkedLearnerBirthYear,
   recordLinkedLearnerGuardianConsent,
   revokeLinkedLearner,
+  setLinkedLearnerActivityGrant,
+  type LinkedLearnerActivityResponse,
   type LinkedLearnerResponse,
   type LinkedLearnerSide,
 } from "@/lib/api";
@@ -130,6 +135,143 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function engagementModeLabel(mode: LinkedLearnerActivityResponse["engagementMode"]): string {
+  if (mode === "STREAK") return "Streak";
+  if (mode === "CONSISTENCY") return "Consistency";
+  return "Focused";
+}
+
+function ActivitySharingPanel({
+  link,
+  onGrantUpdated,
+  onAccessEnded,
+  onFailure,
+}: Readonly<{
+  link: LinkedLearnerResponse;
+  onGrantUpdated: (granted: boolean) => void;
+  onAccessEnded: () => Promise<void>;
+  onFailure: (message: string) => void;
+}>) {
+  const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [activity, setActivity] = useState<LinkedLearnerActivityResponse | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  const loadActivity = useCallback(async () => {
+    setActivityLoading(true);
+    setActivityError(null);
+    try {
+      setActivity(await getLinkedLearnerActivity(link.id));
+    } catch (loadError) {
+      if (loadError instanceof ApiRequestError && (loadError.status === 403 || loadError.status === 404)) {
+        setExpanded(false);
+        setActivity(null);
+        await onAccessEnded();
+        return;
+      }
+      setActivity(null);
+      setActivityError(errorMessage(loadError, "Could not load this study activity."));
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [link.id, onAccessEnded]);
+
+  const handleToggle = async (granted: boolean) => {
+    setSaving(true);
+    try {
+      const response = await setLinkedLearnerActivityGrant(link.id, granted);
+      onGrantUpdated(response.granted);
+    } catch (saveError) {
+      // The rendered value remains the last server-confirmed value. For a privacy control, a
+      // failed write must never leave an optimistic state displayed as if it were persisted.
+      onFailure(errorMessage(saveError, "Could not update activity sharing. Your previous setting was restored."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleActivityView = () => {
+    const nextExpanded = !expanded;
+    setExpanded(nextExpanded);
+    if (nextExpanded) {
+      // ⚠️ ALWAYS refetch on expand — never re-render momentum from memory.
+      // Access is re-derived server-side on every request, and that is what makes a revoke cut
+      // immediately. Serving a cached `activity` on re-expand defeats it CLIENT-side: collapse,
+      // the owner revokes, re-expand, and withdrawn data renders with no request issued, so no
+      // 403 arrives and the access-ended path never runs. On a privacy control the cheap read is
+      // the correct trade.
+      void loadActivity();
+    } else {
+      // Drop the payload on collapse so it cannot outlive the grant that authorized it.
+      setActivity(null);
+      setActivityError(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border p-3 sm:p-4">
+      <div className="flex items-center justify-between gap-4">
+        <label htmlFor={`activity-sharing-${link.id}`} className="text-sm font-medium">
+          Share my study activity with {link.counterpartyDisplayName}
+        </label>
+        <Toggle
+          id={`activity-sharing-${link.id}`}
+          checked={link.activitySharedByMe}
+          onChange={(granted) => void handleToggle(granted)}
+          ariaLabel={`Share my study activity with ${link.counterpartyDisplayName}`}
+          disabled={saving}
+        />
+      </div>
+      <div className="border-t border-border pt-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-foreground/70">
+            {link.activitySharedWithMe
+              ? `${link.counterpartyDisplayName} shares their study activity with you`
+              : `${link.counterpartyDisplayName} does not share their study activity with you`}
+          </p>
+          {link.activitySharedWithMe ? (
+            <Button
+              type="button"
+              variant="outline"
+              aria-expanded={expanded}
+              onClick={toggleActivityView}
+            >
+              {expanded ? "Hide momentum" : "View momentum"}
+            </Button>
+          ) : null}
+        </div>
+
+        {/* ⚠️ Gated on the grant as well as on `expanded`: the control that closes this panel lives
+            inside the `activitySharedWithMe` branch, so a refresh that flips the grant false would
+            otherwise strand an open panel on screen with no way to dismiss it. */}
+        {expanded && link.activitySharedWithMe ? (
+          <div className="mt-3 rounded-lg bg-muted/50 p-3" aria-label={`${link.counterpartyDisplayName}'s momentum`}>
+            {activityLoading ? <Skeleton className="h-20 w-full" /> : null}
+            {!activityLoading && activityError ? (
+              <div className="space-y-2">
+                <p role="alert" className="text-sm text-red-700 dark:text-red-300">{activityError}</p>
+                <Button type="button" variant="outline" onClick={() => void loadActivity()}>Retry</Button>
+              </div>
+            ) : null}
+            {!activityLoading && activity ? (
+              <div className="grid gap-3 sm:grid-cols-4">
+                <div><p className="text-xs text-foreground/60">Current streak</p><p className="font-semibold">{activity.currentStreak} days</p></div>
+                <div><p className="text-xs text-foreground/60">Longest streak</p><p className="font-semibold">{activity.longestStreak} days</p></div>
+                <div><p className="text-xs text-foreground/60">This week</p><p className="font-semibold">{activity.studyDaysThisWeek} study days</p></div>
+                <div><p className="text-xs text-foreground/60">Study mode</p><p className="font-semibold">{engagementModeLabel(activity.engagementMode)}</p></div>
+                {activity.currentStreak === 0 && activity.longestStreak === 0 && activity.studyDaysThisWeek === 0 ? (
+                  <p className="text-sm text-foreground/70 sm:col-span-4">No meaningful study activity recorded yet.</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function LinkedLearnersPage() {
   const [links, setLinks] = useState<LinkedLearnerResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,6 +366,18 @@ export default function LinkedLearnersPage() {
 
   const replaceLink = (updated: LinkedLearnerResponse) => {
     setLinks((current) => current.map((link) => link.id === updated.id ? updated : link));
+  };
+
+  /**
+   * Merge specific fields into one link, inside the state updater.
+   *
+   * <p>⚠️ Use this rather than `replaceLink({ ...link, field })` whenever the caller is an event
+   * handler. `link` there is the snapshot from the render that created the handler, so spreading it
+   * writes back every OTHER field as it looked at click time — silently reverting anything a
+   * concurrent `loadLinks()` refreshed in between (status, the counterparty's grant, consent state).
+   */
+  const updateLinkFields = (id: string, fields: Partial<LinkedLearnerResponse>) => {
+    setLinks((current) => current.map((link) => link.id === id ? { ...link, ...fields } : link));
   };
 
   /**
@@ -673,6 +827,18 @@ export default function LinkedLearnersPage() {
               {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "LEARNER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.pausedForConsentLearnerView}</p> : null}
               {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.pausedForConsentSupporterView}</p> : null}
               {pending && link.guardianConsentRequired && link.guardianConsentRecorded ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.consentRecorded}</p> : null}
+
+              {link.status === "ACCEPTED" ? (
+                <ActivitySharingPanel
+                  link={link}
+                  // ⚠️ Field-level merge, not `{ ...link }` — `link` is the snapshot from the render that
+                  // created this handler, so writing the whole object back would revert any field a
+                  // concurrent loadLinks() had refreshed (status, the other direction's grant, consent).
+                  onGrantUpdated={(granted) => updateLinkFields(link.id, { activitySharedByMe: granted })}
+                  onAccessEnded={loadLinks}
+                  onFailure={(message) => setError(message)}
+                />
+              ) : null}
 
               <div className="flex flex-wrap gap-2">
                 {link.status === "ACCEPTED" && link.callerRole === "SUPPORTER" ? (
