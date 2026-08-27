@@ -15,6 +15,7 @@ import {
   listCollections,
   listNoteStatuses,
   listNotes,
+  listSharedWithMe,
   listSubjects,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
@@ -63,6 +64,7 @@ jest.mock("@/lib/api", () => ({
   listLibraryPage: jest.fn(),
   listNoteStatuses: jest.fn(),
   listNotes: jest.fn(),
+  listSharedWithMe: jest.fn(),
   listSubjects: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
@@ -276,6 +278,7 @@ describe("Library page", () => {
     (listNoteStatuses as jest.Mock).mockReset();
     (listNoteStatuses as jest.Mock).mockResolvedValue([]);
     (listNotes as jest.Mock).mockReset();
+    (listSharedWithMe as jest.Mock).mockReset().mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
     (listNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-42",
@@ -363,6 +366,34 @@ describe("Library page", () => {
       const matching = filterMockNotes(notes, params);
       return {noteIds: matching.map((note) => note.id), totalMatching: matching.length, truncated: false};
     });
+  });
+
+  it("hides Shared with you when empty and shows shared-note provenance when populated", async () => {
+    (listNotes as jest.Mock).mockResolvedValue([]);
+    const firstRender = render(<LibraryPage />);
+
+    await screen.findByText("Your note library is empty");
+    expect(screen.queryByRole("heading", { name: "Shared with you" })).not.toBeInTheDocument();
+    firstRender.unmount();
+
+    (listSharedWithMe as jest.Mock).mockResolvedValue({
+      items: [{
+        noteId: "shared-note-1",
+        title: "Cells from Maria",
+        subject: "Biology",
+        ownerDisplayName: "Maria Santos",
+        studyPackReady: true,
+        sharedAt: "2026-08-27T00:00:00Z",
+      }],
+      nextCursor: null,
+      hasMore: false,
+    });
+    const { unmount } = render(<LibraryPage />);
+
+    expect(await screen.findByRole("heading", { name: "Shared with you" })).toBeInTheDocument();
+    expect(screen.getByText("Shared by Maria Santos")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Study" })).toHaveAttribute("href", "/shared/notes/shared-note-1");
+    unmount();
   });
 
   it("loads the initial library page exactly once", async () => {

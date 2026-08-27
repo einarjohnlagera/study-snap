@@ -36,6 +36,7 @@ public class ConceptHealthService {
     private final StudyPackRepository studyPackRepository;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
+    private final NoteShareService noteShareService;
 
     @Transactional
     public void recordCorrectAnswers(
@@ -95,7 +96,14 @@ public class ConceptHealthService {
     ) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-            .orElseThrow(StudyPackNotFoundException::new);
+            .orElseGet(() -> {
+                // A recipient reading a SHARED pack is not its owner, so the owner-scoped lookup misses.
+                // Authorize the share first — that call re-verifies the relationship is ACCEPTED — and only
+                // then read the row unscoped. Concept health itself stays keyed to the CALLER, so the
+                // recipient accumulates their own mastery and the owner's is never read or written.
+                noteShareService.requireSharedStudyPackAccess(userId, studyPackId);
+                return studyPackRepository.findById(studyPackId).orElseThrow(StudyPackNotFoundException::new);
+            });
         PlanType planType = subscriptionService.resolvePlan(userId);
         boolean includeReviewTiming = canViewConceptReviewTiming(planType);
         return getConceptHealth(userId, studyPackId, getKeyConcepts(studyPack), now, includeReviewTiming);

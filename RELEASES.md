@@ -16,11 +16,11 @@ middle state**, and it is Phase 1 of the ratified Learning Connections direction
 
 Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-plan.md`.
 
-### Planned Scope
+### Shipped
 
 - **`note_shares` grant table (migration).** Per note × per grantee, carrying `relationship_id` so revocation is a
-  single predicate. Rows are revoked, never deleted, so re-sharing re-arms rather than colliding with the live-row
-  unique index.
+  single predicate. Rows are revoked, never deleted; re-sharing inserts a new live row while the prior revoked row
+  remains as history, which the partial live-row unique index permits.
 - **Share / unshare API (backend).** Owner-only read and desired-state write on a note's shares, plus the
   recipient's `shared-with-me` list.
 - **Recipient note and Study Pack reads (backend).** New authorized methods — **not** the owner-scoped `getById`
@@ -32,6 +32,29 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
 - **Copy to my Library (backend + frontend).** Widens the existing copy rule to `isOwner || PUBLIC || live share`.
 - **Five analytics events.** Shared, revoked, note opened, pack opened, copied — the funnel that no table can
   express.
+
+### Known limitations
+
+- **⚠️ Material access is re-derived on every mutating call, and must stay that way.** Nothing is cached for
+  the life of a session, which is what makes a revoked share, a revoked relationship, or a `v0.89.1` birth-year
+  correction cut practice access on the very next request. **Query cost is unchanged:** the authorization read
+  briefly doubled Quick Review completion from 3 Study Pack reads to 6, and `completeSession` now resolves
+  access once and carries the result rather than re-reading the same row for the concept breakdown. A test
+  pins the count at 3 so a duplicated resolution cannot creep back in unnoticed.
+- **⚠️ A recheck that had never executed.** As delivered, every pre-existing construction of
+  `QuickReviewSessionService`, `ConceptHealthService`, `NoteService` and both touched controllers passed `null`
+  for the new sharing dependency through a hand-written legacy constructor, with `!= null` guards at the call
+  sites. Production wiring was correct — Spring selects the `@Autowired` all-args constructor — but **the guard
+  made the mid-session access recheck a silent no-op across all 1,723 backend tests**, the `v0.86.0` "passing
+  for the wrong reason" class, and `recheckMaterialAccess` failed *open* rather than closed. The legacy
+  constructors and null guards were removed during audit, and `revokedShareDeniesTheRecipientMidSession` now
+  pins the behaviour (mutation-verified: making the recheck inert fails that test and nothing else).
+- **⚠️ Completion tolerates a Study Pack it cannot read, and that is deliberate.** `findVisibleStudyPack`
+  returns empty rather than denying when the pack does not exist, and `recheckMaterialAccess` logs rather than
+  denies on an infrastructure read fault while still propagating every `AppException`. The caller owns the
+  *session*, which is loaded separately, so failing these cases would strand a learner's own session for a
+  reason unrelated to sharing. Every throw in the authorization chain was verified to be an `AppException`
+  subclass, so no denial can be swallowed by that catch.
 
 ### Anti-drift — locked for this release
 
@@ -65,10 +88,6 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
   `[CHECKPOINT — due 2026-09-19]` and `[CHECKPOINT — due 2026-10-13]` both read them.
 - No activity sharing, no progress permission model, no leaderboard, no rings, no public people search, no social
   feed. Those are Phases 2–5.
-
-### Shipped
-
-_(nothing yet)_
 
 ## v0.90.0 - Invitation Integrity
 

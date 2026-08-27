@@ -17,6 +17,8 @@ import {
   getChallengeQuizPerformanceSummary,
   getChallengeQuizSessionReview,
   getNote,
+  getNoteShares,
+  getLinkedLearners,
   getNoteApplicablePrograms,
   getMyStudyPack,
   getQuickReviewPerformanceSummary,
@@ -26,6 +28,7 @@ import {
   listRecentQuizSessions,
   listSubjects,
   replaceNoteApplicablePrograms,
+  replaceNoteShares,
   startQuickReviewSession,
   trackAnalyticsEvent,
   updateNote,
@@ -92,11 +95,14 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
+  getNoteShares: jest.fn(),
+  getLinkedLearners: jest.fn(),
   getNoteApplicablePrograms: jest.fn(),
   listCoursePrograms: jest.fn(),
   listRecentQuizSessions: jest.fn(),
   listSubjects: jest.fn(),
   replaceNoteApplicablePrograms: jest.fn(),
+  replaceNoteShares: jest.fn(),
   isEmailNotVerifiedError: () => false,
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
@@ -160,9 +166,12 @@ describe("PrivateNoteDetailPageClient", () => {
       configurable: true,
     });
     (getNote as jest.Mock).mockReset();
+    (getNoteShares as jest.Mock).mockReset().mockResolvedValue([]);
+    (getLinkedLearners as jest.Mock).mockReset().mockResolvedValue([]);
     (getCourseProgramCatalog as jest.Mock).mockReset();
     (getNoteApplicablePrograms as jest.Mock).mockReset();
     (replaceNoteApplicablePrograms as jest.Mock).mockReset();
+    (replaceNoteShares as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (createStudyPackFromNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
@@ -1092,7 +1101,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Share" }));
 
     expect(screen.getByText("This note is private")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Make Public & Share" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish & Share Link" }));
 
     expect(updateNoteVisibility).toHaveBeenCalledWith("note-1", "PUBLIC");
     expect(await screen.findByText("Share this note")).toBeInTheDocument();
@@ -1102,6 +1111,66 @@ describe("PrivateNoteDetailPageClient", () => {
     });
     expect(screen.getAllByText("Link copied to clipboard").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Copy Link" })).not.toBeInTheDocument();
+  });
+
+  it("restores persisted recipients and revokes them when Private is selected", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, visibility: "PRIVATE" });
+    (getNoteShares as jest.Mock).mockResolvedValue([
+      {
+        relationshipId: "relationship-1",
+        granteeDisplayName: "Maria Santos",
+        granteeEmail: "maria@example.com",
+        createdAt: "2026-08-27T00:00:00Z",
+      },
+    ]);
+    (getLinkedLearners as jest.Mock).mockResolvedValue([
+      {
+        id: "relationship-1",
+        counterpartyDisplayName: "Maria Santos",
+        counterpartyEmail: "maria@example.com",
+        status: "ACCEPTED",
+      },
+    ]);
+    (replaceNoteShares as jest.Mock).mockResolvedValue([]);
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    const sharedAccessButton = await screen.findByRole("button", { name: "Shared" });
+    fireEvent.click(sharedAccessButton);
+    fireEvent.click(screen.getByRole("button", { name: /Share with connections/ }));
+    expect(await screen.findByRole("checkbox")).toBeChecked();
+    fireEvent.click(sharedAccessButton);
+    fireEvent.click(sharedAccessButton);
+    fireEvent.click(screen.getByRole("button", { name: /Private/ }));
+    expect(screen.getByText("Maria Santos will lose access to this note.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Make Private" }));
+
+    await waitFor(() => expect(replaceNoteShares).toHaveBeenCalledWith("note-1", []));
+    expect(updateNoteVisibility).not.toHaveBeenCalled();
+  });
+
+  it("publishes without revoking persisted connection shares", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, visibility: "PRIVATE" });
+    (getNoteShares as jest.Mock).mockResolvedValue([
+      {
+        relationshipId: "relationship-1",
+        granteeDisplayName: "Maria Santos",
+        granteeEmail: "maria@example.com",
+        createdAt: "2026-08-27T00:00:00Z",
+      },
+    ]);
+    (updateNoteVisibility as jest.Mock).mockResolvedValue({ ...baseNote, visibility: "PUBLIC" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Shared" }));
+    fireEvent.click(screen.getByRole("button", { name: /Public/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Make Public" }));
+
+    await waitFor(() => expect(updateNoteVisibility).toHaveBeenCalledWith("note-1", "PUBLIC"));
+    expect(replaceNoteShares).not.toHaveBeenCalled();
   });
 
   it("supports Make a Copy and Delete from the note actions menu", async () => {

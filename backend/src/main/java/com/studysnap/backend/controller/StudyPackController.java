@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.NextStepResponse;
 import com.studysnap.backend.dto.QuickReviewActivityRequest;
 import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.dto.SharedStudyPackResponse;
 import com.studysnap.backend.dto.UpdateStudyPackMetadataRequest;
 import com.studysnap.backend.dto.UpdateStudyPackTagsRequest;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
@@ -18,6 +19,7 @@ import com.studysnap.backend.service.ConceptHealthService;
 import com.studysnap.backend.service.MemorizationCardService;
 import com.studysnap.backend.service.PostSessionNextStepService;
 import com.studysnap.backend.service.StudyPackService;
+import com.studysnap.backend.service.NoteShareService;
 import com.studysnap.backend.util.UuidParsingUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +50,7 @@ import java.util.List;
 public class StudyPackController {
 	private final AuthService authService;
 	private final StudyPackService studyPackService;
+	private final NoteShareService noteShareService;
 	private final ConceptHealthService conceptHealthService;
 	private final MemorizationCardService memorizationCardService;
 	private final PostSessionNextStepService postSessionNextStepService;
@@ -90,6 +93,14 @@ public class StudyPackController {
 	) {
 		UUID userId = user.userId();
 		return studyPackService.getById(id, userId);
+	}
+
+	@GetMapping("/shared/{id}")
+	public SharedStudyPackResponse getSharedById(
+			@PathVariable String id,
+			@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		return noteShareService.getSharedStudyPack(user.userId(), id);
 	}
 
 	@GetMapping("/{id}/concept-health")

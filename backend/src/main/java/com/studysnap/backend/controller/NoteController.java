@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteQuickReviewLastReviewedResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.NoteShareResponse;
 import com.studysnap.backend.dto.NoteStatusResponse;
 import com.studysnap.backend.dto.NotesLibraryFilterOptionsResponse;
 import com.studysnap.backend.dto.NotesLibraryIdsResponse;
@@ -28,6 +29,8 @@ import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.SubjectStatsResponse;
+import com.studysnap.backend.dto.SharedNoteResponse;
+import com.studysnap.backend.dto.SharedNotesPageResponse;
 import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
@@ -36,10 +39,12 @@ import com.studysnap.backend.dto.CopyOnSignupRequest;
 import com.studysnap.backend.dto.CopyOnSignupResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
+import com.studysnap.backend.dto.UpdateNoteSharesRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.SharedNoteNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BulkGenerationResultService;
@@ -48,6 +53,7 @@ import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteBulkImportService;
 import com.studysnap.backend.service.NoteBulkGenerationService;
 import com.studysnap.backend.service.NoteService;
+import com.studysnap.backend.service.NoteShareService;
 import com.studysnap.backend.service.NoteGenerationService;
 import com.studysnap.backend.service.NoteTextExtractionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
@@ -114,6 +120,7 @@ public class NoteController {
     private final AuthService authService;
     private final BulkGenerationResultService bulkGenerationResultService;
     private final NoteService noteService;
+    private final NoteShareService noteShareService;
     private final NoteBulkImportService noteBulkImportService;
     private final NoteBulkGenerationService noteBulkGenerationService;
     private final NoteGenerationService noteGenerationService;
@@ -221,6 +228,61 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         return noteService.getById(id, userId);
+    }
+
+    @GetMapping("/{id}/shares")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public List<NoteShareResponse> listShares(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteShareService.listShares(user.userId(), id);
+    }
+
+    @PutMapping("/{id}/shares")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public List<NoteShareResponse> replaceShares(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateNoteSharesRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteShareService.replaceShares(user.userId(), id, request.relationshipIds());
+    }
+
+    @GetMapping("/shared-with-me")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public SharedNotesPageResponse listSharedWithMe(
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String cursor,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteShareService.listSharedWithMe(user.userId(), limit, cursor);
+    }
+
+    @GetMapping("/shared/{id}")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public SharedNoteResponse getSharedNote(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteShareService.getSharedNote(user.userId(), id);
+    }
+
+    @PostMapping("/shared/{id}/copy")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteResponse copySharedNote(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        noteShareService.requireSharedNoteAccess(
+                user.userId(),
+                UuidParsingUtils.parseUuidOrThrow(id, SharedNoteNotFoundException::new)
+        );
+        try {
+            return noteService.copyNote(id, user.userId(), true);
+        } catch (NoteNotFoundException exception) {
+            throw new SharedNoteNotFoundException();
+        }
     }
 
     @DeleteMapping("/{id}")

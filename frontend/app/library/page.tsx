@@ -23,7 +23,7 @@ import {
   X,
 } from "lucide-react";
 import {AppModal} from "@/components/ui/app-modal";
-import {Button} from "@/components/ui/button";
+import {Button, buttonVariants} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {CreateMenu} from "@/components/ui/create-menu";
 import {SharedNoteCard} from "@/components/notes/shared-note-card";
@@ -43,6 +43,7 @@ import {
   getSavedLibraryFilters,
   listLibraryMatchingIds,
   listLibraryPage,
+  listSharedWithMe,
   listNoteStatuses,
   listSubjects,
   type BulkGenerationResultResponse,
@@ -52,6 +53,7 @@ import {
   type NoteStatusResponse,
   type SavedLibraryFilterResponse,
   type SavedLibraryFilterState,
+  type SharedNoteListItemResponse,
   type SubjectStatsResponse,
   type NoteVisibility,
 } from "@/lib/api";
@@ -621,6 +623,11 @@ export default function LibraryPage() {
   const [saveFilterError, setSaveFilterError] = useState<string | null>(null);
   const [saveFilterSubmitting, setSaveFilterSubmitting] = useState(false);
   const [deletingSavedFilterId, setDeletingSavedFilterId] = useState<string | null>(null);
+  const [sharedItems, setSharedItems] = useState<SharedNoteListItemResponse[]>([]);
+  const [sharedNextCursor, setSharedNextCursor] = useState<string | null>(null);
+  const [sharedHasMore, setSharedHasMore] = useState(false);
+  const [sharedLoadingMore, setSharedLoadingMore] = useState(false);
+  const [sharedError, setSharedError] = useState<string | null>(null);
 
   const authUser = getAuthUser();
   const isTeacherExamBuilderEnabled = authUser?.profileType === "TEACHER";
@@ -699,6 +706,41 @@ export default function LibraryPage() {
     }
   }, [libraryFilterParams, router, sortBy, subjectStatsFilterParams]);
 
+  const loadSharedNotes = useCallback(async () => {
+    if (!requireAuthenticatedOnboardedUser(router)) {
+      return;
+    }
+    setSharedError(null);
+    try {
+      const page = await listSharedWithMe({ limit: LIBRARY_PAGE_SIZE });
+      setSharedItems(page.items);
+      setSharedNextCursor(page.nextCursor);
+      setSharedHasMore(page.hasMore);
+    } catch (loadError) {
+      setSharedError(loadError instanceof Error ? loadError.message : "Could not load notes shared with you.");
+    }
+  }, [router]);
+
+  const loadMoreSharedNotes = useCallback(async () => {
+    if (!sharedNextCursor || sharedLoadingMore) {
+      return;
+    }
+    setSharedLoadingMore(true);
+    try {
+      const page = await listSharedWithMe({ limit: LIBRARY_PAGE_SIZE, cursor: sharedNextCursor });
+      setSharedItems((previous) => {
+        const knownIds = new Set(previous.map((item) => item.noteId));
+        return [...previous, ...page.items.filter((item) => !knownIds.has(item.noteId))];
+      });
+      setSharedNextCursor(page.nextCursor);
+      setSharedHasMore(page.hasMore);
+    } catch (loadError) {
+      setSharedError(loadError instanceof Error ? loadError.message : "Could not load more shared notes.");
+    } finally {
+      setSharedLoadingMore(false);
+    }
+  }, [sharedLoadingMore, sharedNextCursor]);
+
   // Silent refresh used by the generation poller: updates the note list only,
   // without toggling the loading skeleton or resetting pagination.
   const fetchNotesSilently = useCallback(async (): Promise<NoteListItemResponse[] | null> => {
@@ -769,6 +811,10 @@ export default function LibraryPage() {
   useEffect(() => {
     void loadSavedFilters();
   }, [loadSavedFilters]);
+
+  useEffect(() => {
+    void loadSharedNotes();
+  }, [loadSharedNotes]);
 
   useEffect(() => {
     if (!toast) {
@@ -1964,6 +2010,54 @@ export default function LibraryPage() {
           ) : null}
         </div>
       )}
+
+      {sharedItems.length > 0 || sharedError ? (
+        <section className="space-y-4" aria-labelledby="shared-with-you-heading">
+          <div className="space-y-1">
+            <h2 id="shared-with-you-heading" className="text-xl font-semibold">Shared with you</h2>
+            <p className="text-sm text-foreground/70">Notes your Learning Connections chose to share with you.</p>
+          </div>
+          {sharedError ? (
+            <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-red-700 dark:text-red-300">{sharedError}</p>
+              <Button type="button" size="sm" variant="outline" onClick={() => void loadSharedNotes()}>
+                Retry
+              </Button>
+            </Card>
+          ) : null}
+          {sharedItems.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {sharedItems.map((item) => (
+                <Card key={item.noteId} className="flex h-full flex-col justify-between gap-4 p-4 sm:p-6">
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                      {item.studyPackReady ? "Study Pack ready" : "Note shared"}
+                    </p>
+                    <h3 className="text-lg font-semibold">{item.title?.trim() || "Untitled note"}</h3>
+                    {item.subject ? <p className="text-sm text-foreground/70">{item.subject}</p> : null}
+                    <p className="text-sm text-foreground/65">Shared by {item.ownerDisplayName}</p>
+                  </div>
+                  <Link href={`/shared/notes/${item.noteId}`} className={buttonVariants({ className: "w-full sm:w-auto" })}>
+                    Study
+                  </Link>
+                </Card>
+              ))}
+            </div>
+          ) : null}
+          {sharedHasMore ? (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void loadMoreSharedNotes()}
+                disabled={sharedLoadingMore}
+              >
+                {sharedLoadingMore ? "Loading…" : "Load more shared notes"}
+              </Button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <AppModal
         isOpen={saveFilterOpen}

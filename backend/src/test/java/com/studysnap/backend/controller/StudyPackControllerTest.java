@@ -61,6 +61,7 @@ class StudyPackControllerTest {
         studyPackController = new StudyPackController(
                 authService,
                 studyPackService,
+                org.mockito.Mockito.mock(com.studysnap.backend.service.NoteShareService.class),
                 conceptHealthService,
                 memorizationCardService,
                 postSessionNextStepService
