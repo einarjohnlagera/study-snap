@@ -57,6 +57,43 @@ in the file at signoff, or the gate is not a gate.**
   enforced last.** `MePlanResponse` does not carry the share-link limit at all today, which is why no frontend
   surface can disclose it; that is the backend half.
 
+#### Added mid-release 2026-08-27, after items 1–5 shipped
+
+**⚠️ Appended here at the moment they were agreed, which is this release's own rule.** `v0.91.0` carried a
+folded-in item in conversation instead of in this list, and it shipped as missing. Items 6–10 were selected by the
+owner after a survey of carried limitations; the pre-declared cold-agent pressure test now covers them too.
+
+- **6. Help Center — an activity-sharing section, a falsified doc-comment, and the plan numbers (frontend).**
+  **⚠️ Item 6 is partly a defect THIS release introduced, not a carried one.**
+  `learning-connections-guide.tsx:8` instructs, verbatim, that *"Activity sharing and per-scope progress
+  permissions are Phases 2 and 3 and are NOT built — do not describe them here."* Phase 2 shipped activity
+  sharing in item 3, so that comment now tells the next agent not to document a live feature. The guide also has
+  **no activity-sharing section**, and `v0.91.0` recorded the absent supporter Help section as one of the two
+  reasons nobody could discover this capability — so Phase 2 ships into the same hole. Third, `:29` hardcodes
+  *"Free plans can have 3 share links a month, Plus 10, Pro unlimited"*, duplicating `pricing-config.ts`; a
+  carried `v0.91.0` limitation, and exactly what items 4–5 just centralised everywhere else.
+- **7. `GET /notes/{id}/shares` must not list a recipient who can no longer read (backend).** Carried `v0.91.0`
+  limitation. `listShares` filters on `revoked_at IS NULL` only, with no join to relationship status, while `PUT`
+  requires every id to be `ACCEPTED` — so a lapsed connection stays listed and a round-tripped list can be
+  rejected. Over-reports in the **safe** direction (never under-reports access), but the two endpoints disagree
+  about a valid share set. Item 2's `requireGrant` is the same cross-check.
+- **8. Drop the `aria-haspopup="menu"` wiring on the note-access dropdown (frontend).** Carried `v0.91.0`
+  limitation, pre-existing and newly aggravated: that release put a checkbox list inside the panel, and a
+  checkbox list cannot live in a menu. **The fix is dropping the wiring, not completing it** — there is no
+  `role="menu"` to add without breaking the checkboxes.
+- **9. `recheckMaterialAccess` must fail CLOSED on a non-`AppException` fault (backend).** Carried `v0.91.0`
+  limitation, and **the same bug class item 2 fixed in `requireGrant` this release** — fixing one and leaving its
+  twin is incoherent. **⚠️ This is NOT a pure cleanup and was escalated to the owner rather than folded silently:**
+  the broad catch exists so a corrupt or unreadable pack cannot strand a learner's own session, so narrowing it
+  trades one failure for another. Owner selected fail-closed 2026-08-27. **Deliberate denials already extend
+  `AppException` and are rethrown**, so the change must affect only the infrastructure-fault path and must not
+  convert a learner's own unreadable pack into a lockout.
+- **10. Phase 2 analytics — a grant → momentum-view funnel (backend + frontend).** Raised at prompt time, left
+  unanswered, and **re-raised before signoff rather than allowed to lapse**; owner selected it 2026-08-27.
+  New `AnalyticsEventType` values added to the enum before firing, per `AGENTS.md`. **⚠️ Instrumentation only —
+  it must not change any grant, read or authorization behaviour**, and it measures Phase 2's own loop, not
+  Phase 5's motivation questions, which stay undecided.
+
 ### Anti-drift — locked rules for this release
 
 **Phase 2 (items 1–3)**
