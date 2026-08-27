@@ -32,6 +32,14 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
 - **Copy to my Library (backend + frontend).** Widens the existing copy rule to `isOwner || PUBLIC || live share`.
 - **Five analytics events.** Shared, revoked, note opened, pack opened, copied — the funnel that no table can
   express.
+- **The Help Center covers helping someone learn.** None of its 14 sections mentioned it, and *Export &
+  Sharing* documented PDF export without ever naming shareable quiz links — so after the landing page was
+  corrected, the public surface told the truth while the in-app surface still said nothing. A new
+  **Helping Someone Learn** section covers the no-account quiz link, inviting and connecting, sharing a note
+  and its Study Pack, following a connection's progress, and the two privacy boundaries. *Export & Sharing*
+  now opens by distinguishing files you download from putting material in a person's hands. **⚠️ Every claim
+  in that section is live** — activity sharing and per-scope progress permissions are Phases 2 and 3 and are
+  deliberately absent.
 - **The landing page stopped advertising this as "Coming Soon".** The only public surface mentioning supporter
   features carried a *Coming Soon* badge and an "I'm interested" waitlist button describing the progress view
   that shipped in `v0.89.0` — so for three releases it told visitors the capability did not exist and collected
