@@ -1,5 +1,116 @@
 # RELEASES.md - NoteLib
 
+## v0.92.0 - Activity Sharing
+
+**Status: In Progress** (kicked off 2026-08-27)
+
+Theme: let a connection see that you are studying — only if you decide to show them — and tell people what a quiz
+costs before they spend it.
+
+### Why this release exists
+
+**Phase 2 of the ratified Learning Connections direction** (`docs/claude-plans/learning-connections-phase-plan.md`,
+§13). `v0.91.0` shipped Phase 1: a connection can now be given *material*. It cannot be given anything else.
+Accepting a connection still grants nothing, and there is no mechanism by which one person can see that another is
+studying at all — the only cross-user read in the product remains the supporter progress aggregate, which is
+authorized by role (`caller == supporter`) rather than by permission.
+
+Phase 2 adds the permission substrate and uses exactly one of its two scopes. **⚠️ PHASES ARE SEQUENCED, NOT
+EVIDENCE-GATED (owner, 2026-08-27).** `linked_learner_relationships` was **empty in production on 2026-08-26**, and
+`v0.91.0` fixed the two reasons nobody could discover the capability (the landing page had advertised it as
+*Coming Soon* for three releases after it shipped; the Help Center had no supporter section). Adoption may still be
+zero. **That is not a reason to gate Phase 2 — the owner has ruled on this twice — but it is a reason not to
+describe Phase 2's value as proven.** `[CHECKPOINT — due 2026-09-26]` and `[CHECKPOINT — due 2026-09-19]` are both
+observational and gate nothing here.
+
+The second item is a **carry, not a new find**. Quota legibility was folded into `v0.91.0` on 2026-08-27, never
+built, and **missed by that release's signoff gate** — the delivery pass overwrote the `### Planned Scope` heading
+with `### Shipped`, so the completeness check ran against a remembered list. It is written into this release's
+Planned Scope at kickoff for exactly that reason. **This kickoff also carries the structural repair: the `### Planned
+Scope` heading below is permanent and delivery appends to `### Shipped` beneath it — the scope list must still exist
+in the file at signoff, or the gate is not a gate.**
+
+### Planned Scope
+
+- **1. Phase 2 — Activity Sharing: the `linked_learner_grants` table (backend + migration).**
+  `(relationship_id, from_user_id, to_user_id, scope, granted_at, revoked_at)`, `scope IN ('ACTIVITY','PROGRESS')`,
+  `CHECK (from_user_id <> to_user_id)`, live-row unique index on `(relationship_id, from_user_id, scope)`.
+  **⚠️ Ship the table with BOTH scopes now and use only `ACTIVITY`.** Phase 3 uses `PROGRESS`, and this is the only
+  cross-phase coupling in the plan — one migration, not two.
+- **2. Phase 2 — the grant check (backend).** `LinkedLearnerGrantAuthorizationService.requireGrant(caller,
+  relationshipId, scope)`: relationship `ACCEPTED`; caller is one of the two parties and `from_user_id` resolves to
+  the *other* party; a live grant row exists for `(relationship, from → caller, scope)`; **⚠️ guardian consent
+  re-asserted inside the check** where the shared data belongs to a learner who requires it; caller's email
+  verified, matching the existing progress read.
+- **3. Phase 2 — directional opt-in UI and the momentum view (frontend).** Each side independently grants activity
+  to the other. A ↔ B with A→B `ACTIVITY` ON and B→A OFF **must be representable and must render correctly on both
+  sides**. The view projects existing data only: `MEANINGFUL_STUDY_ACTIVITIES` rows, `users.current_streak` /
+  `longest_streak`, and `countStudyDaysThisWeek`.
+- **4. Quota legibility — name the meter (backend + frontend).** `GeneratedQuizService.assertQuizCreditAvailable`
+  spends `user_usage.challenge_quiz_generations` when a user makes a quiz **for someone else**, while every surface
+  labels that meter *Challenge Quiz* — a parent who never takes one cannot tell what they are spending. Disclosure
+  only. Carried from `v0.91.0`; prompt exists at `docs/codex-prompts/v0.91.0-quota-legibility.md` (gitignored),
+  retarget the version number.
+- **5. Quota legibility — disclose the share-link cap earlier (backend + frontend).**
+  `QuizShareLimitService.assertShareLinkQuotaNotExceeded` has **exactly one call site — link creation** — so a Free
+  user pays the LLM cost for a 4th, 5th and 6th quiz before discovering none can be shared. **The cheaper limit is
+  enforced last.** `MePlanResponse` does not carry the share-link limit at all today, which is why no frontend
+  surface can disclose it; that is the backend half.
+
+### Anti-drift — locked rules for this release
+
+**Phase 2 (items 1–3)**
+
+- **⚠️ Absence of a live grant means NO ACCESS.** Accepting a connection grants nothing; it creates the *capacity*
+  to grant. The default is closed structurally, not by convention.
+- **⚠️ Sharing is DIRECTIONAL and never reciprocal by default.** One grant never implies its mirror.
+- **⚠️ NO NEW MEASUREMENT.** `ActivityType.MEANINGFUL_STUDY_ACTIVITIES` already defines what *studied* means and
+  **deliberately excludes `OPENED_STUDY_PACK`**. `UserActivityEventEntity` rows, streaks and study-days all exist.
+  Phase 2 is a **permissioned projection of data already written** — do not invent activity concepts, and do not
+  add an activity type.
+- **⚠️ Do NOT touch `LinkedLearnerReadAuthorizationService.requireAcceptedLearnerId` in this release.** It hardcodes
+  caller-is-supporter, and **Phase 3** reimplements it over `requireGrant(caller, relationshipId, PROGRESS)`.
+  Rewriting it here changes who can read progress during a release that is not about progress.
+- **⚠️ Guardian consent must be re-asserted inside the grant check** where the data belongs to a learner who
+  requires it, or `v0.89.1`'s gate quietly reopens. A consent lapse must cut activity as well as progress.
+- **⚠️ Every read re-verifies `ACCEPTED`** — no cache, no grace period. A relationship revoke and a `v0.89.1`
+  birth-year correction (`ACCEPTED` → `PENDING`) must each cut activity access immediately, by the same predicate.
+- **⚠️ No relationship-type column** (`GUARDIAN | TUTOR | PARTNER`). Permissions define the relationship; a type
+  column would immediately invite gating on it — the exact `ProfileType` mistake `v0.89.0` was built to correct.
+- **⚠️ No new profile type and nothing gated on `ProfileType`.** Learning Connections stays a capability.
+- **⚠️ Do NOT change what `linked_learner_relationships`, `_invitations` or `_guardian_consents` mean.**
+  `[CHECKPOINT — due 2026-09-19]` and `[CHECKPOINT — due 2026-10-13]` read those tables.
+- **⚠️ `NoteVisibility` stays `PRIVATE | PUBLIC`.** Unchanged from `v0.91.0`; no `SHARED` value.
+- **⚠️ Explicitly OUT OF SCOPE and each needing its own decision (Phase 5):** mastery, scores, leaderboards,
+  comparison between people, activity rings, social feed, reactions, public people search.
+- **⚠️ No endpoint accepts a learner user id.** Authorization keys on the relationship, never on a supplied id.
+
+**Quota legibility (items 4–5)**
+
+- **⚠️ DISCLOSURE ONLY. No limit, counter or metering change**, and **no second counter** — a separate meter for
+  shared quizzes is a pricing decision nobody has taken. Free 20 / Plus 100 / Pro 200 generations and Free 3 /
+  Plus 10 / Pro unlimited share links all stay exactly as they are.
+- **⚠️ Do NOT move the share-link check into the generation path.** Generating without sharing is legitimate
+  (teacher export, regenerate before sharing). **Surface the cap earlier; do not apply it earlier.**
+- **⚠️ The quota LABEL and the Challenge Quiz MODE name are different strings.** The mode keeps its name everywhere
+  it names the mode. A global find-and-replace would destroy the distinction — a regression test pins it.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: FULL cold-agent test.** Decided now rather than at signoff, because the shape is
+  already known: Phase 2 introduces a permission substrate touching shared authorization code, and `v0.91.0` — a
+  six-PR release of the same feature family — had its blocking defect found in code that session had itself written
+  *and* reviewed. Agents start cold, spawned with no inherited context, and are told to read the real code rather
+  than any summary written by the session spawning them.
+- **The `### Planned Scope` heading above is permanent.** Delivery appends to `### Shipped`; it must never rename
+  or overwrite the scope list. At signoff the completeness gate reads the list **from this file** — if the heading
+  is gone, that absence is itself the finding, and the list is reconstructed from the kickoff commit rather than
+  from recollection.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.91.0 - Shared Learning Material
 
 **Status: Released** (kicked off and signed off 2026-08-27)
