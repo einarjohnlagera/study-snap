@@ -32,6 +32,15 @@ Full audit and five-phase plan: `docs/claude-plans/learning-connections-phase-pl
 - **Copy to my Library (backend + frontend).** Widens the existing copy rule to `isOwner || PUBLIC || live share`.
 - **Five analytics events.** Shared, revoked, note opened, pack opened, copied — the funnel that no table can
   express.
+- **The landing page stopped advertising this as "Coming Soon".** The only public surface mentioning supporter
+  features carried a *Coming Soon* badge and an "I'm interested" waitlist button describing the progress view
+  that shipped in `v0.89.0` — so for three releases it told visitors the capability did not exist and collected
+  a click instead of a signup. It is now a live feature section: share a note and its Study Pack, see readiness
+  and study activity once they accept, and never see their notes. **Relationship-neutral** — parents, tutors,
+  siblings and study partners are named, and nothing implies a guardian mode or supporter profile. Its CTA
+  reuses `LANDING_CTA_CLICKED` with a placement, so no new event ships. `GUARDIAN_INTEREST` is **retired, not
+  deleted**: nothing fires it and it is gone from the frontend's firing vocabulary, but the enum value stays
+  because those rows are the product's only pre-launch interest baseline for this capability.
 
 ### Known limitations
 

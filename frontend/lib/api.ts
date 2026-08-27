@@ -621,7 +621,6 @@ export type AnalyticsEventType =
   | "SIGNUP"
   | "LANDING_PAGE_VIEWED"
   | "LANDING_CTA_CLICKED"
-  | "GUARDIAN_INTEREST"
   | "DEMO_OPENED"
   | "SIGNUP_STARTED"
   | "SIGNUP_COMPLETED"
