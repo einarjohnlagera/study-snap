@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionLink } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,99 @@ import {
 
 const INPUT_CLASSES = "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary";
 
+const MIN_BIRTH_YEAR = 1900;
+
+/** Single source for the range message, so live feedback and submit validation cannot diverge. */
+function birthYearRangeError(rawYear: string): string | null {
+  const currentYear = new Date().getFullYear();
+  const year = Number(rawYear);
+  if (!Number.isFinite(year) || year < MIN_BIRTH_YEAR || year > currentYear) {
+    return `Enter a year between ${MIN_BIRTH_YEAR} and ${currentYear}.`;
+  }
+  return null;
+}
+
+/**
+ * Birth-year input with a stepper.
+ *
+ * <p>⚠️ The steppers are DISABLED until four digits are present, and they seed nothing. Stepping up from an
+ * empty field would have to start somewhere, and any starting year is a declaration the person did not make —
+ * the same reason this field has no default. `users.birth_year` is account-global and effectively write-once,
+ * driving guardian consent for every connection the account will ever form.
+ *
+ * <p>⚠️ Not `type="number"`. Its spin buttons come with scroll-wheel editing, which can silently change a
+ * value this consequential while someone scrolls the page. These buttons step only on a deliberate click, and
+ * clamp inside the same range the server enforces, so the stepper can never produce an invalid year.
+ */
+function BirthYearInput({
+  id,
+  value,
+  onChange,
+  inputRef,
+  invalid,
+  describedBy,
+  required,
+}: Readonly<{
+  id: string;
+  value: string;
+  onChange: (next: string) => void;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+  invalid?: boolean;
+  describedBy?: string;
+  required?: boolean;
+}>) {
+  const maxYear = new Date().getFullYear();
+  const stepDisabled = value.trim().length !== 4;
+
+  const step = (delta: number) => {
+    const parsed = Number(value.trim());
+    if (!Number.isFinite(parsed)) return;
+    onChange(String(Math.min(Math.max(parsed + delta, MIN_BIRTH_YEAR), maxYear)));
+  };
+
+  return (
+    // ⚠️ Sized to its content, not to the card. A birth year is exactly four digits, and a full-width
+    // input both looks wrong beside the email field and pushes the steppers so far from the digits that
+    // they read as unrelated furniture.
+    <div className="relative w-32">
+      <input
+        id={id}
+        ref={inputRef}
+        className={`${INPUT_CLASSES} pr-9 tabular-nums`}
+        value={value}
+        onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 4))}
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={4}
+        placeholder="YYYY"
+        required={required}
+        aria-invalid={invalid ? true : undefined}
+        aria-describedby={describedBy}
+      />
+      <div className="absolute inset-y-0 right-1 flex flex-col justify-center">
+        <button
+          type="button"
+          aria-label="Increase birth year"
+          disabled={stepDisabled}
+          onClick={() => step(1)}
+          className="flex h-4 w-6 items-center justify-center rounded text-foreground/50 transition-colors hover:bg-highlight hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+        >
+          <ChevronUp className="h-3 w-3" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Decrease birth year"
+          disabled={stepDisabled}
+          onClick={() => step(-1)}
+          className="flex h-4 w-6 items-center justify-center rounded text-foreground/50 transition-colors hover:bg-highlight hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+        >
+          <ChevronDown className="h-3 w-3" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function formatDate(value: string | null) {
   if (!value) return null;
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value));
@@ -50,6 +144,14 @@ export default function LinkedLearnersPage() {
   const [correctingBirthYear, setCorrectingBirthYear] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Field-level, because a form whose only invalid field is a permanent declaration should say WHICH
+  // field is wrong. A disabled submit button cannot, and a toast names the problem away from the input.
+  const [fieldErrors, setFieldErrors] = useState<{ email: string | null; birthYear: string | null }>({
+    email: null,
+    birthYear: null,
+  });
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const birthYearInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadLinks = useCallback(async () => {
     try {
@@ -123,17 +225,70 @@ export default function LinkedLearnersPage() {
     setLinks((current) => current.map((link) => link.id === updated.id ? updated : link));
   };
 
+  /**
+   * ⚠️ There is deliberately NO default birth year.
+   *
+   * <p>`users.birth_year` is account-global and effectively write-once — it drives guardian consent for
+   * every connection the account will ever form, and only the learner can correct it. A pre-filled value is
+   * a declaration nobody made: tab past it and you have silently asserted an age. Defaulting young puts
+   * every adult under the consent threshold; defaulting old disables the gate the threshold exists for.
+   * Collecting it at link time instead of signup is pointless if the field answers itself.
+   */
+  const validateInvite = (): boolean => {
+    const trimmedEmail = email.trim();
+    const nextErrors: { email: string | null; birthYear: string | null } = { email: null, birthYear: null };
+
+    if (!trimmedEmail) {
+      nextErrors.email = "Enter the email address of the person you want to invite.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      nextErrors.email = "That does not look like an email address.";
+    }
+
+    if (inviterRole === "LEARNER") {
+      const rawYear = inviteBirthYear.trim();
+      // ⚠️ Blank is NOT a client-side error. The year is required only when this account has none
+      // recorded yet, and the client cannot know that before the first connection exists — the server
+      // owns that decision and its message surfaces in the form's error banner. Validating a blank here
+      // would block a returning learner who declared their year on an earlier connection.
+      if (!rawYear) {
+        nextErrors.birthYear = null;
+      } else if (rawYear.length !== 4) {
+        nextErrors.birthYear = "Enter all four digits, like 2011.";
+      } else {
+        // Mirrors the server bound (MINIMUM_BIRTH_YEAR..current year) so a rejection is explained here
+        // rather than arriving as a generic failure after the request.
+        nextErrors.birthYear = birthYearRangeError(rawYear);
+      }
+    }
+
+    setFieldErrors(nextErrors);
+    if (nextErrors.email) {
+      emailInputRef.current?.focus();
+      return false;
+    }
+    if (nextErrors.birthYear) {
+      birthYearInputRef.current?.focus();
+      return false;
+    }
+    return true;
+  };
+
   const handleInvite = async (event: React.FormEvent) => {
     event.preventDefault();
-    setInviting(true);
     setError(null);
     setNotice(null);
+    if (!validateInvite()) {
+      return;
+    }
+    setInviting(true);
     try {
       const response = await inviteLinkedLearner(
         email, inviterRole,
         inviterRole === "LEARNER" && inviteBirthYear.trim() ? Number(inviteBirthYear.trim()) : null);
       setNotice(response.message);
       setEmail("");
+      setInviteBirthYear("");
+      setFieldErrors({ email: null, birthYear: null });
       await Promise.all([loadLinks(), loadInvitations()]);
     } catch (inviteError) {
       setError(errorMessage(inviteError, "Could not send the invitation."));
@@ -266,7 +421,7 @@ export default function LinkedLearnersPage() {
           <h2 className="text-lg font-semibold">Send an invitation</h2>
           <p className="mt-1 text-sm text-foreground/70">The other person must accept before the connection becomes active. They do not need a NoteLib account yet — if they do not have one, the invitation waits for them to sign up.</p>
         </div>
-        <form className="space-y-4" onSubmit={handleInvite}>
+        <form className="space-y-4" onSubmit={handleInvite} noValidate>
           <div className="grid gap-2 sm:grid-cols-2">
             <button type="button" onClick={() => setInviterRole("SUPPORTER")} aria-pressed={inviterRole === "SUPPORTER"} className={`rounded-lg border p-3 text-left text-sm ${inviterRole === "SUPPORTER" ? "border-primary bg-primary/10" : "border-border"}`}>
               <span className="font-medium">I will support them</span>
@@ -279,23 +434,57 @@ export default function LinkedLearnersPage() {
           </div>
           <label className="block space-y-1.5 text-sm font-medium">
             Their email
-            <input className={INPUT_CLASSES} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
-          </label>
-        {inviterRole === "LEARNER" ? (
-          <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="invite-birth-year">Your birth year</label>
             <input
-              id="invite-birth-year"
-              className="h-11 w-40 rounded-lg border border-border bg-background px-3 text-sm"
-              value={inviteBirthYear}
-              onChange={(event) => setInviteBirthYear(event.target.value)}
+              ref={emailInputRef}
+              className={INPUT_CLASSES}
+              type="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setFieldErrors((previous) => ({ ...previous, email: null }));
+              }}
+              autoComplete="email"
+              aria-invalid={fieldErrors.email ? true : undefined}
+              aria-describedby={fieldErrors.email ? "invite-email-error" : undefined}
             />
-            <p className="text-xs text-foreground/60">
-              Needed now so the person you invite can accept. If you are under the guardian-consent
-              age, a guardian confirms before the connection becomes active.
-            </p>
-          </div>
-        ) : null}
+            {fieldErrors.email ? (
+              <p id="invite-email-error" role="alert" className="text-xs font-normal text-red-700 dark:text-red-300">
+                {fieldErrors.email}
+              </p>
+            ) : null}
+          </label>
+          {inviterRole === "LEARNER" ? (
+            <label className="block space-y-1.5 text-sm font-medium" htmlFor="invite-birth-year">
+              Your birth year
+              <BirthYearInput
+                id="invite-birth-year"
+                value={inviteBirthYear}
+                inputRef={birthYearInputRef}
+                invalid={Boolean(fieldErrors.birthYear)}
+                describedBy={
+                  fieldErrors.birthYear ? "invite-birth-year-error" : "invite-birth-year-help"
+                }
+                onChange={(next) => {
+                  setInviteBirthYear(next);
+                  // Live, but only once the year is complete — flagging "19" mid-typing would be noise.
+                  // Waiting for submit was the gap: a plainly impossible year sat there looking accepted.
+                  setFieldErrors((previous) => ({
+                    ...previous,
+                    birthYear: next.length === 4 ? birthYearRangeError(next) : null,
+                  }));
+                }}
+              />
+              {fieldErrors.birthYear ? (
+                <p id="invite-birth-year-error" role="alert" className="text-xs font-normal text-red-700 dark:text-red-300">
+                  {fieldErrors.birthYear}
+                </p>
+              ) : null}
+              <p id="invite-birth-year-help" className="text-xs font-normal text-foreground/60">
+                Needed now so the person you invite can accept. If you are under the guardian-consent
+                age, a guardian confirms before the connection becomes active.
+              </p>
+            </label>
+          ) : null}
           <Button type="submit" loading={inviting} loadingText="Sending invitation…">Send invitation</Button>
         </form>
       </Card>
@@ -317,7 +506,15 @@ export default function LinkedLearnersPage() {
           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={handleBirthYearCorrection}>
             <label className="block flex-1 space-y-1.5 text-sm font-medium">
               Corrected birth year
-              <input className={INPUT_CLASSES} type="number" min="1900" max="9999" value={correctedBirthYear} onChange={(event) => { setCorrectedBirthYear(event.target.value); setCorrectionWarningCount(null); }} required />
+              <BirthYearInput
+                id="corrected-birth-year"
+                value={correctedBirthYear}
+                required
+                onChange={(next) => {
+                  setCorrectedBirthYear(next);
+                  setCorrectionWarningCount(null);
+                }}
+              />
             </label>
             <Button type="submit" variant="outline" loading={correctingBirthYear}>Review correction</Button>
           </form>
