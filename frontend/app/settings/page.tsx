@@ -46,6 +46,7 @@ import {
 import { buildLoginPath, clearAuthUser, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
 import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, passSavingsPct, resolveCyclePricing } from "@/lib/billing-pricing";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
+import { AI_QUIZZES_USAGE_LABEL } from "@/lib/usage-labels";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
@@ -1071,7 +1072,7 @@ export default function SettingsPage() {
                   resetDateLabel={usageResetDateLabel}
                 />
                 <UsageMetric
-                  label="Quiz"
+                  label={AI_QUIZZES_USAGE_LABEL}
                   used={challengeQuizUsed}
                   limit={challengeQuizLimit}
                   resetDateLabel={usageResetDateLabel}

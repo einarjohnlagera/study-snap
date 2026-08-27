@@ -696,6 +696,9 @@ describe("Settings page cancellation flow", () => {
     render(<SettingsPage />);
 
     expect(await screen.findByText("Usage resets on: April 15")).toBeInTheDocument();
+    expect(screen.getByTestId("usage-metric-ai-quizzes")).toBeInTheDocument();
+    expect(screen.queryByTestId("usage-metric-challenge-quiz")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("usage-metric-quiz")).not.toBeInTheDocument();
     expect(screen.queryByTestId("usage-metric-adaptive-practice")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("usage-metric-docx-exports")).getByText("1 / 2")).toBeInTheDocument();
     expect(within(screen.getByTestId("usage-metric-pdf-exports")).getByText("0 / 2")).toBeInTheDocument();

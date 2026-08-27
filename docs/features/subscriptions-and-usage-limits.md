@@ -21,10 +21,13 @@ Do not derive plan access from:
 
 Challenge Quiz has no manual difficulty selector (removed v0.60.1) on any plan; difficulty is fully automatic from the last Quick Review score.
 
+The generation allowance is user-facing as **“AI quizzes”**, described as **“Challenge Quiz sessions and quizzes you make for someone.”** The Challenge Quiz mode keeps its product name; only usage-meter and pricing labels use the broader quota name. Both jobs continue to spend the single `challenge_quiz_generations` counter.
+
 ### Free
 
 - `10` Study Packs / month
-- `20` Challenge Quizzes / month
+- `20` AI quizzes / month
+- `3` shareable quiz links / month
 - topic note generation: backend-configured Free limit (`5` by default)
 - OCR: backend-configured Free limit (`20` by default)
 - exports: `2` / month
@@ -37,7 +40,8 @@ Challenge Quiz has no manual difficulty selector (removed v0.60.1) on any plan; 
 ### Plus
 
 - `50` Study Packs / month
-- `100` Challenge Quizzes / month
+- `100` AI quizzes / month
+- `10` shareable quiz links / month
 - topic note generation: backend-configured Plus limit (`25` by default)
 - OCR: backend-configured Plus limit (`50` by default)
 - exports: `15` / month
@@ -48,8 +52,9 @@ Challenge Quiz has no manual difficulty selector (removed v0.60.1) on any plan; 
 ### Pro
 
 - `100` Study Packs / month
-- `200` Challenge Quizzes / month
-- Board Exam Mode uses the shared Challenge Quiz budget and has a dedicated `10` source-note units / month hard cap; quota is deducted per source note (a 3-note session costs 3 units)
+- `200` AI quizzes / month
+- unlimited shareable quiz links
+- Board Exam Mode uses the shared AI-quiz budget and has a dedicated `10` source-note units / month hard cap; quota is deducted per source note (a 3-note session costs 3 units)
 - topic note generation: backend-configured Pro limit (`100` by default)
 - OCR: backend-configured Pro limit (`100` by default)
 - exports: unlimited
@@ -61,6 +66,8 @@ For actual behavior and gating decisions:
 
 - use backend plan limits and feature flags
 - treat `GET /api/me/plan` as the frontend contract
+
+`GET /api/me/plan` includes the share-link monthly limit, used count and remaining count; unlimited uses the same `null` representation as other unlimited limits. The “Quiz for someone” dialog displays both AI quizzes remaining and share links remaining before generation. An exhausted share-link allowance is informational there: generation and export remain valid, while the existing link-creation path remains the only enforcement point.
 
 ## Concept due and mastery signals
 

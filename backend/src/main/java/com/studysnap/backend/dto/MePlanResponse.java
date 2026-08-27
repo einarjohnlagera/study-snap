@@ -21,6 +21,7 @@ public record MePlanResponse(
     public record Limits(
             int studyPacksPerMonth,
             int challengeQuizzesPerMonth,
+            Integer quizShareLinksPerMonth,
             int adaptivePracticePerMonth,
             int interviewPracticePerMonth,
             int ocrPerMonth,
@@ -41,6 +42,7 @@ public record MePlanResponse(
             this(
                     studyPacksPerMonth,
                     challengeQuizzesPerMonth,
+                    0,
                     adaptivePracticePerMonth,
                     0,
                     ocrPerMonth,
@@ -57,6 +59,7 @@ public record MePlanResponse(
     public record Usage(
             int studyPacksUsed,
             int challengeQuizzesUsed,
+            int quizShareLinksUsed,
             int adaptivePracticeUsed,
             int interviewPracticeUsed,
             int ocrUsed,
@@ -77,6 +80,7 @@ public record MePlanResponse(
             this(
                     studyPacksUsed,
                     challengeQuizzesUsed,
+                    0,
                     adaptivePracticeUsed,
                     0,
                     ocrUsed,
@@ -93,6 +97,7 @@ public record MePlanResponse(
     public record Remaining(
             int studyPacksRemaining,
             int challengeQuizzesRemaining,
+            Integer quizShareLinksRemaining,
             int adaptivePracticeRemaining,
             int interviewPracticeRemaining,
             int ocrRemaining,
@@ -113,6 +118,7 @@ public record MePlanResponse(
             this(
                     studyPacksRemaining,
                     challengeQuizzesRemaining,
+                    0,
                     adaptivePracticeRemaining,
                     0,
                     ocrRemaining,

@@ -9,6 +9,7 @@ export type MePlanResponse = {
   limits: {
     studyPacksPerMonth: number;
     challengeQuizzesPerMonth: number;
+    quizShareLinksPerMonth?: number | null;
     adaptivePracticePerMonth: number;
     interviewPracticePerMonth?: number;
     longExamPerMonth?: number;
@@ -21,6 +22,7 @@ export type MePlanResponse = {
   usage: {
     studyPacksUsed: number;
     challengeQuizzesUsed: number;
+    quizShareLinksUsed?: number;
     adaptivePracticeUsed: number;
     interviewPracticeUsed?: number;
     longExamUsed?: number;
@@ -33,6 +35,7 @@ export type MePlanResponse = {
   remaining: {
     studyPacksRemaining: number;
     challengeQuizzesRemaining: number;
+    quizShareLinksRemaining?: number | null;
     adaptivePracticeRemaining: number;
     interviewPracticeRemaining?: number;
     longExamRemaining?: number;
