@@ -57,6 +57,13 @@ code — and it is the strongest argument for doing Phase 3 next rather than any
   on `progressSharedWithMe` alone** and needs no `callerRole` clause — role stops being the access rule on this
   surface without leaving a residual role check for the next agent to delete or misread. The learner's panel gains
   the caller-owned *Share my study progress* toggle; the supporter's gains the read-only counterparty line.
+  **⚠️ ALSO DECIDED AT KICKOFF, because decision (5) below has nowhere to render without it: the sharing panel
+  must render on `PENDING` as well as `ACCEPTED`.** It is gated `link.status === "ACCEPTED"` today, so a paused
+  relationship shows no panel at all. **That gate is a real reachability gap this release forces into view:**
+  `setActivityGrant` was deliberately written so **granting requires `ACCEPTED` while withdrawing does not** —
+  its comment says gating withdrawal *"locked a learner out of turning sharing OFF at exactly the moment it
+  matters most"* — and yet **the UI still has exactly that lockout**, because the learner cannot reach the
+  toggle during a pause. The server-side asymmetry is currently unreachable through the product.
 - **4. Phase 3 analytics — a progress grant → view funnel (backend + frontend).**
   `CONNECTION_PROGRESS_SHARED`, `CONNECTION_PROGRESS_SHARE_REVOKED`, `CONNECTION_PROGRESS_VIEWED`, mirroring
   Phase 2's three events and its rules: enum first, relationship-scoped, idempotent no-ops and denied reads emit
@@ -75,6 +82,11 @@ code — and it is the strongest argument for doing Phase 3 next rather than any
   what will resume), while **`*SharedWithMe` reflects ACTUAL ACCESS and filters on `ACCEPTED`** — it is the field
   the view affordance gates on, so it must answer what the server would answer. **A paused relationship renders as
   paused, not as off**, reusing the existing `PENDING` status copy rather than a new state.
+  **⚠️ Adding the status predicate makes `affectedRows == 0` ambiguous and that must be resolved in the same
+  change:** today zero rows means only *"a live grant already exists"* and the method returns success
+  unconditionally on that assumption, but with the predicate attached it also means *"lost the race to a
+  revoke"* — so the unchanged code would report `granted: true` for a write that never happened. Re-check for
+  a live row after a zero-row insert; return success only if one exists.
   Second: `setActivityGrant` reads the relationship with a plain `findById`, decides it is `ACCEPTED`, then
   inserts — so a revoke committing in between leaves a live grant row on a relationship that is not.
   **⚠️ The fix is this repo's CONDITIONAL-WRITE idiom, not a lock, and the distinction was checked rather than
