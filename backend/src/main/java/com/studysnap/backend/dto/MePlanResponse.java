@@ -4,6 +4,15 @@ import com.studysnap.backend.entity.PlanType;
 
 import java.time.OffsetDateTime;
 
+/**
+ * Plan, limits and usage for the current user.
+ *
+ * <p>⚠️ The shorter convenience constructors on {@code Limits}, {@code Usage} and {@code Remaining}
+ * are TEST-ONLY fixtures. They pass {@code 0} for the quiz-share-link fields, and {@code 0} on a
+ * LIMIT reads as "no share links allowed" rather than "unknown" — a false disclosure, which is worse
+ * than a missing one on the very surface this DTO exists to make legible. Production must use the
+ * canonical constructors, as {@code MePlanService} does.
+ */
 public record MePlanResponse(
         PlanType plan,
         UsageCycle usageCycle,
@@ -21,6 +30,7 @@ public record MePlanResponse(
     public record Limits(
             int studyPacksPerMonth,
             int challengeQuizzesPerMonth,
+            Integer quizShareLinksPerMonth,
             int adaptivePracticePerMonth,
             int interviewPracticePerMonth,
             int ocrPerMonth,
@@ -41,6 +51,7 @@ public record MePlanResponse(
             this(
                     studyPacksPerMonth,
                     challengeQuizzesPerMonth,
+                    0,
                     adaptivePracticePerMonth,
                     0,
                     ocrPerMonth,
@@ -57,6 +68,7 @@ public record MePlanResponse(
     public record Usage(
             int studyPacksUsed,
             int challengeQuizzesUsed,
+            int quizShareLinksUsed,
             int adaptivePracticeUsed,
             int interviewPracticeUsed,
             int ocrUsed,
@@ -77,6 +89,7 @@ public record MePlanResponse(
             this(
                     studyPacksUsed,
                     challengeQuizzesUsed,
+                    0,
                     adaptivePracticeUsed,
                     0,
                     ocrUsed,
@@ -93,6 +106,7 @@ public record MePlanResponse(
     public record Remaining(
             int studyPacksRemaining,
             int challengeQuizzesRemaining,
+            Integer quizShareLinksRemaining,
             int adaptivePracticeRemaining,
             int interviewPracticeRemaining,
             int ocrRemaining,
@@ -113,6 +127,7 @@ public record MePlanResponse(
             this(
                     studyPacksRemaining,
                     challengeQuizzesRemaining,
+                    0,
                     adaptivePracticeRemaining,
                     0,
                     ocrRemaining,

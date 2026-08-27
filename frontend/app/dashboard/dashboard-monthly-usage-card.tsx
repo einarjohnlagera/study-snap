@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import type { MePlanResponse } from "@/lib/me-plan";
 import { getUsageProgressPercent } from "@/lib/plans";
+import { AI_QUIZZES_USAGE_DESCRIPTION, AI_QUIZZES_USAGE_LABEL } from "@/lib/usage-labels";
 
 type DashboardMonthlyUsageCardProps = {
   usageSummary: MePlanResponse | null;
@@ -33,7 +34,8 @@ export function DashboardMonthlyUsageCard({
       limit: usageSummary.limits.studyPacksPerMonth,
     },
     {
-      label: "Challenge Quiz",
+      label: AI_QUIZZES_USAGE_LABEL,
+      description: AI_QUIZZES_USAGE_DESCRIPTION,
       used: usageSummary.usage.challengeQuizzesUsed,
       limit: usageSummary.limits.challengeQuizzesPerMonth,
     },
@@ -59,7 +61,12 @@ export function DashboardMonthlyUsageCard({
           return (
             <div key={item.label} className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-foreground">{item.label}</p>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{item.label}</p>
+                  {item.description ? (
+                    <p className="text-xs text-foreground/60">{item.description}</p>
+                  ) : null}
+                </div>
                 <p className="text-sm text-foreground/70">
                   {item.used} / {item.limit}
                 </p>

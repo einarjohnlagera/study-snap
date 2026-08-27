@@ -142,6 +142,7 @@ import {
   buildAdaptivePracticeHref,
 } from "@/lib/adaptive-practice-entry";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
+import { AI_QUIZZES_USAGE_LABEL } from "@/lib/usage-labels";
 import Link from "next/link";
 
 const COPIED_STUDY_PACK_REGENERATE_HINT_ID = "copied-study-pack-regenerate-hint";
@@ -1046,6 +1047,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       usageSummary.remaining?.challengeQuizzesRemaining,
     )
     : null;
+  const quizShareLinksRemaining = usageSummary?.remaining?.quizShareLinksRemaining;
   const adaptivePracticeRemaining = usageSummary
     ? resolveRemainingUsageCredits(
       usageSummary.usage.adaptivePracticeUsed,
@@ -1055,6 +1057,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     : null;
   const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
   const currentPlan = usageSummary?.plan ?? (isPaidPlan ? (getAuthUser()?.planType ?? "FREE") : "FREE");
+  const quizShareUpgradeCta = getUpgradeCtas(currentPlan as AppPlanType).primary;
+  const hasExhaustedQuizShareLinks = quizShareLinksRemaining === 0;
   const canViewConceptReviewTiming = currentPlan === "PLUS" || currentPlan === "PRO";
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const hasReachedChallengeQuizLimit = currentPlan === "FREE" && challengeQuizzesRemaining !== null && challengeQuizzesRemaining <= 0;
@@ -3186,6 +3190,28 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         )}
       >
         <div className="space-y-3">
+          {usageSummary ? (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3" aria-label="Quiz allowances">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-foreground/70">{AI_QUIZZES_USAGE_LABEL} left this month</span>
+                <span className="font-medium text-foreground">{challengeQuizzesRemaining}</span>
+              </div>
+              {quizShareLinksRemaining !== undefined ? (
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-foreground/70">Share links left this month</span>
+                  <span className="font-medium text-foreground">
+                    {quizShareLinksRemaining === null ? "Unlimited" : quizShareLinksRemaining}
+                  </span>
+                </div>
+              ) : null}
+              {hasExhaustedQuizShareLinks ? (
+                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
+                  You can still make and export this quiz, but you can&apos;t create another share link until your quota resets.
+                  {quizShareUpgradeCta ? ` ${quizShareUpgradeCta.label}.` : ""}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <GuidanceTip
             tipId="teacher-generate-quiz-multi-note"
             message="You can select multiple notes to build a quiz from a full unit — use the note checkboxes in your library first."

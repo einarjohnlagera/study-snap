@@ -132,6 +132,13 @@ in the file at signoff, or the gate is not a gate.**
   existing engagement mode, streak and meaningful-study-day data, renders zero activity honestly, and exposes
   no progress, mastery, score, content title or authored free text. Failed privacy writes retain the last
   server-confirmed toggle state; ended access collapses the view and refreshes the connection.
+- **The shared generation meter is now legible as “AI quizzes.”** Dashboard, Settings and pricing use one
+  shared label and explain that Challenge Quiz sessions and quizzes made for someone draw from the same monthly
+  allowance. The Challenge Quiz mode keeps its product name.
+- **Share-link capacity is disclosed before quiz generation.** `/me/plan` now exposes the existing share-link
+  limit, usage and remaining count, including Pro's existing unlimited representation. The generation dialog
+  shows both meters and warns when links are exhausted without blocking generation; enforcement remains solely
+  at link creation and no quota or counter changed.
 
 ### Known limitations
 
