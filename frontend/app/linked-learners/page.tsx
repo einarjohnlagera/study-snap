@@ -268,6 +268,7 @@ export default function LinkedLearnersPage() {
   });
   const emailInputRef = useRef<HTMLInputElement | null>(null);
   const birthYearInputRef = useRef<HTMLInputElement | null>(null);
+  const inviteFormRef = useRef<HTMLFormElement | null>(null);
 
   const loadLinks = useCallback(async () => {
     try {
@@ -285,6 +286,8 @@ export default function LinkedLearnersPage() {
   }, [loadLinks]);
 
   const [invitations, setInvitations] = useState<LinkedLearnerInvitationResponse[]>([]);
+  const [invitationsLoading, setInvitationsLoading] = useState(true);
+  const [invitationListError, setInvitationListError] = useState<string | null>(null);
   const [invitationLinks, setInvitationLinks] = useState<LinkedLearnerInvitationLinkResponse[]>([]);
   const [invitationLinksLoading, setInvitationLinksLoading] = useState(true);
   const [invitationLinkError, setInvitationLinkError] = useState<string | null>(null);
@@ -299,9 +302,13 @@ export default function LinkedLearnersPage() {
   const loadInvitations = useCallback(async () => {
     try {
       setInvitations(await listLinkedLearnerInvitations());
-    } catch {
-      // A failed invitation load must not blank the connections list beside it.
+      setInvitationListError(null);
+    } catch (loadError) {
+      // A failed invitation load must not render an empty or partial list as if it were complete.
       setInvitations([]);
+      setInvitationListError(errorMessage(loadError, "Could not load invitations."));
+    } finally {
+      setInvitationsLoading(false);
     }
   }, []);
 
@@ -408,6 +415,18 @@ export default function LinkedLearnersPage() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const handleInviteAgain = (invitation: LinkedLearnerInvitationResponse) => {
+    setEmail(invitation.invitedEmail);
+    // ⚠️ Re-arm writes inviter_role again. Preserving the expired row's role here prevents the
+    // existing relationship-to-be from silently flipping direction when the invite is submitted.
+    setInviterRole(invitation.inviterRole);
+    setFieldErrors({ email: null, birthYear: null });
+    setError(null);
+    setNotice("Review the invitation, then send it again. This will send another email.");
+    inviteFormRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    emailInputRef.current?.focus();
   };
 
   const replaceLink = (updated: LinkedLearnerResponse) => {
@@ -699,7 +718,7 @@ export default function LinkedLearnersPage() {
           <h2 className="text-lg font-semibold">Send an invitation</h2>
           <p className="mt-1 text-sm text-foreground/70">The other person must accept before the connection becomes active. They do not need a NoteLib account yet — if they do not have one, the invitation waits for them to sign up.</p>
         </div>
-        <form className="space-y-4" onSubmit={handleInvite} noValidate>
+        <form ref={inviteFormRef} className="space-y-4" onSubmit={handleInvite} noValidate>
           <div className="grid gap-2 sm:grid-cols-2">
             <button type="button" onClick={() => setInviterRole("SUPPORTER")} aria-pressed={inviterRole === "SUPPORTER"} className={`rounded-lg border p-3 text-left text-sm ${inviterRole === "SUPPORTER" ? "border-primary bg-primary/10" : "border-border"}`}>
               <span className="font-medium">I will support them</span>
@@ -822,25 +841,50 @@ export default function LinkedLearnersPage() {
       {notice ? <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">{notice}</p> : null}
       {error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{error}</p> : null}
 
+      {invitationsLoading ? <Skeleton className="h-20 w-full" /> : null}
+      {invitationListError ? (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {invitationListError}
+        </p>
+      ) : null}
+
       {invitations.length > 0 ? (
         <section className="space-y-3" aria-labelledby="invitations-heading">
           <h2 id="invitations-heading" className="text-lg font-semibold">Pending invitations</h2>
           <ul className="space-y-3">
             {invitations.map((invitation) => (
-              <li key={invitation.id} className="rounded-xl border border-border p-4">
-                <p className="text-sm font-medium text-foreground">
+              <li
+                key={invitation.id}
+                className={`rounded-xl border p-4 ${invitation.expired
+                  ? "border-amber-300 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/20"
+                  : "border-border"}`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-sm font-medium text-foreground">
                   {invitation.incoming
                     ? `${invitation.inviterName ?? "Someone"} invited you`
                     : `You invited ${invitation.invitedEmail}`}
-                </p>
+                  </p>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${invitation.expired
+                    ? "bg-amber-200 text-amber-950 dark:bg-amber-900 dark:text-amber-100"
+                    : "bg-muted text-foreground/75"}`}
+                  >
+                    {invitation.expired ? "Expired" : "Pending"}
+                  </span>
+                </div>
                 <p className="mt-1 text-xs text-foreground/60">
-                  {invitation.incoming
+                  {invitation.expired
+                    ? `Expired on ${formatDate(invitation.expiresAt)}. Invite them again to send a new email and reopen the invitation.`
+                    : invitation.incoming
                     ? (invitation.inviterRole === "SUPPORTER"
                         ? "They would support your learning."
                         : "They are asking you to support their learning.")
                     : "Waiting for them to accept."}
                 </p>
-                {invitation.incoming ? (
+                {!invitation.expired ? (
+                  <p className="mt-1 text-xs text-foreground/55">Expires {formatDate(invitation.expiresAt)}</p>
+                ) : null}
+                {invitation.incoming && !invitation.expired ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <label className="text-xs text-foreground/70" htmlFor={`birth-year-${invitation.id}`}>
                       Your birth year
@@ -871,10 +915,19 @@ export default function LinkedLearnersPage() {
                     </Button>
                   </div>
                 ) : null}
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {invitation.expired && !invitation.incoming ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleInviteAgain(invitation)}
+                    >
+                      Invite again
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
-                    variant="outline"
+                    variant={invitation.expired ? "destructiveOutline" : "outline"}
                     disabled={busyId === invitation.id}
                     onClick={() => void handleWithdrawInvitation(invitation)}
                   >

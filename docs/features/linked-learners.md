@@ -102,7 +102,21 @@ Two paths are deliberately **left ungated**, because they cut or narrow access r
 
 An invitation is a standing offer to whoever controls an address, so it lapses. `expires_at` is set from `studysnap.linked-learners.invitation-ttl-days` (default 30) and is a real column, not `created_at` plus an interval — re-arming a lapsed invitation must not reset when the address was **first** invited, which `created_at` records and the list displays.
 
-Expiry is enforced in three places, not one: the recipient's incoming lookup, the inviter's outgoing list, and acceptance itself. Filtering only at acceptance would leave an expired invitation listed and actionable. Re-inviting a lapsed address **re-arms** it rather than failing, because the live-row unique index would otherwise block that address permanently.
+Expiry is enforced at acceptance and in the recipient's incoming lookup. The incoming half deliberately remains
+live-only: a recipient cannot act on an expired invitation, and only the inviter can re-arm it.
+
+The inviter's outgoing list exposes both `expiresAt` and a server-computed expired state. A live invitation shows
+its expiry clock. After it lapses, it remains visible while
+`expires_at > now - studysnap.linked-learners.invitation-ttl-days` — the same configured duration for which it was
+live, not a second hardcoded retention period. This bounded disclosure lets the inviter distinguish expiry from
+silence without accumulating every address ever invited forever. The expired row can still be revoked through
+the ordinary invitation revoke action.
+
+**Invite again** returns the inviter to the existing email invite flow with the expired row's address and role
+pre-filled. Preserving the role matters because re-arm reapplies `inviter_role`; changing it would flip the
+direction of the relationship-to-be. Submitting sends email again and consumes the existing invitation rate
+limit. It does not call a resend endpoint: re-inviting a lapsed address **re-arms the same row** by extending
+`expires_at` in place, leaving its id and original `created_at` unchanged rather than creating a second row.
 
 ### Rate limiting
 

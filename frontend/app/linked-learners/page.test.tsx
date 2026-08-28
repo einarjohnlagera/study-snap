@@ -13,6 +13,7 @@ import {
   inviteLinkedLearner,
   recordLinkedLearnerGuardianConsent,
   previewLinkedLearnerBirthYearCorrection,
+  revokeLinkedLearnerInvitation,
   revokeLinkedLearnerInvitationLink,
   revokeLinkedLearner,
   setLinkedLearnerActivityGrant,
@@ -502,6 +503,7 @@ it("shows an incoming invitation and accepts it through the invitation endpoint"
   (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
     id: "inv-1", incoming: true, inviterRole: "SUPPORTER",
     invitedEmail: "me@example.com", inviterName: "Aunt May", createdAt: "2026-08-20T00:00:00Z",
+    expiresAt: "2026-09-19T00:00:00Z", expired: false,
   }]);
   (acceptLinkedLearnerInvitation as jest.Mock).mockResolvedValue({
     ...baseLink, status: "ACCEPTED", guardianConsentRequired: false, guardianConsentRecorded: false,
@@ -528,6 +530,7 @@ it("renders no name on an outgoing invitation even when the API supplies one", a
   (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
     id: "inv-2", incoming: false, inviterRole: "SUPPORTER",
     invitedEmail: "someone@example.com", inviterName: "Should Never Render", createdAt: "2026-08-20T00:00:00Z",
+    expiresAt: "2026-09-19T00:00:00Z", expired: false,
   }]);
 
   render(<LinkedLearnersPage />);
@@ -547,11 +550,112 @@ it("offers birth-year correction after a learner-initiated invite, before anyone
   (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
     id: "inv-9", incoming: false, inviterRole: "LEARNER",
     invitedEmail: "supporter@example.com", inviterName: null, createdAt: "2026-08-26T00:00:00Z",
+    expiresAt: "2026-09-25T00:00:00Z", expired: false,
   }]);
 
   render(<LinkedLearnersPage />);
 
   expect(await screen.findByRole("heading", { name: "Correct your birth year" })).toBeInTheDocument();
+});
+
+it("shows the expiry clock on a live outgoing invitation", async () => {
+  jest.mocked(listLinkedLearnerInvitations).mockResolvedValue([{
+    id: "inv-live",
+    incoming: false,
+    inviterRole: "SUPPORTER",
+    invitedEmail: "learner@example.com",
+    inviterName: null,
+    createdAt: "2026-08-20T00:00:00Z",
+    expiresAt: "2026-09-19T00:00:00Z",
+    expired: false,
+  }]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByText(/^Expires /)).toBeInTheDocument();
+  expect(listLinkedLearnerInvitations).toHaveBeenCalledTimes(1);
+  expect(screen.getByText("Pending")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Invite again" })).not.toBeInTheDocument();
+});
+
+it("renders an expired invitation distinctly and pre-fills address and role for invite again", async () => {
+  jest.mocked(listLinkedLearnerInvitations).mockResolvedValue([{
+    id: "inv-expired",
+    incoming: false,
+    inviterRole: "LEARNER",
+    invitedEmail: "mentor@example.com",
+    inviterName: null,
+    createdAt: "2026-07-01T00:00:00Z",
+    expiresAt: "2026-08-01T00:00:00Z",
+    expired: true,
+  }]);
+  jest.mocked(inviteLinkedLearner).mockResolvedValue({ message: "Invitation sent." });
+
+  render(<LinkedLearnersPage />);
+
+  const expiredBadge = await screen.findByText("Expired");
+  expect(expiredBadge.closest("li")).toHaveClass("border-amber-300");
+  expect(screen.getByText(/Invite them again to send a new email/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Invite again" }));
+
+  expect(screen.getByLabelText("Their email")).toHaveValue("mentor@example.com");
+  expect(screen.getByRole("button", { name: /they will support me/i })).toHaveAttribute("aria-pressed", "true");
+
+  fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+  await waitFor(() => expect(inviteLinkedLearner)
+    .toHaveBeenCalledWith("mentor@example.com", "LEARNER", null));
+});
+
+it("keeps an expired invitation listed when invite again is rate-limited", async () => {
+  jest.mocked(listLinkedLearnerInvitations).mockResolvedValue([{
+    id: "inv-rate-limited",
+    incoming: false,
+    inviterRole: "SUPPORTER",
+    invitedEmail: "learner@example.com",
+    inviterName: null,
+    createdAt: "2026-07-01T00:00:00Z",
+    expiresAt: "2026-08-01T00:00:00Z",
+    expired: true,
+  }]);
+  jest.mocked(inviteLinkedLearner).mockRejectedValue(new Error("Too many invitations. Try again later."));
+
+  render(<LinkedLearnersPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Invite again" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Too many invitations. Try again later.");
+  expect(screen.getByText(/You invited learner@example.com/)).toBeInTheDocument();
+});
+
+it("removes an expired invitation through the existing revoke action", async () => {
+  jest.mocked(listLinkedLearnerInvitations)
+    .mockResolvedValueOnce([{
+      id: "inv-expired-revoke",
+      incoming: false,
+      inviterRole: "SUPPORTER",
+      invitedEmail: "learner@example.com",
+      inviterName: null,
+      createdAt: "2026-07-01T00:00:00Z",
+      expiresAt: "2026-08-01T00:00:00Z",
+      expired: true,
+    }])
+    .mockResolvedValueOnce([]);
+  jest.mocked(revokeLinkedLearnerInvitation).mockResolvedValue({ message: "Invitation updated." });
+
+  render(<LinkedLearnersPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+
+  await waitFor(() => expect(revokeLinkedLearnerInvitation).toHaveBeenCalledWith("inv-expired-revoke"));
+  await waitFor(() => expect(screen.queryByText(/You invited learner@example.com/)).not.toBeInTheDocument());
+});
+
+it("surfaces an invitation list load failure instead of rendering it as an empty list", async () => {
+  jest.mocked(listLinkedLearnerInvitations).mockRejectedValue(new Error("Invitation list unavailable"));
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Invitation list unavailable");
+  expect(screen.queryByRole("heading", { name: "Pending invitations" })).not.toBeInTheDocument();
 });
 
 it("keeps letters out of the birth-year field and validates the year in the form, not in a browser bubble", async () => {

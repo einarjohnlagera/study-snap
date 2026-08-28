@@ -157,10 +157,13 @@ public class LinkedLearnerService {
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
         String callerEmail = normalizeEmail(caller.getEmail());
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime outgoingVisibilityCutoff = now.minusDays(
+                properties.getLinkedLearners().getInvitationTtlDays());
 
         List<LinkedLearnerInvitationResponse> outgoing = invitationRepository
                 .findByInviterUserIdAndStatusAndExpiresAtAfter(
-                        callerUserId, LinkedLearnerStatus.PENDING, OffsetDateTime.now())
+                        callerUserId, LinkedLearnerStatus.PENDING, outgoingVisibilityCutoff)
                 .stream()
                 .map(invitation -> new LinkedLearnerInvitationResponse(
                         invitation.getId(), false, invitation.getInviterRole(),
@@ -168,12 +171,14 @@ public class LinkedLearnerService {
                         // ⚠️ No name for an outgoing invitation. The inviter typed the address and
                         // must learn nothing further from it, or the list harvests names again.
                         null,
-                        invitation.getCreatedAt()))
+                        invitation.getCreatedAt(),
+                        invitation.getExpiresAt(),
+                        !invitation.getExpiresAt().isAfter(now)))
                 .toList();
 
         List<LinkedLearnerInvitationResponse> incoming = invitationRepository
                 .findByInvitedEmailAndStatusAndExpiresAtAfter(
-                        callerEmail, LinkedLearnerStatus.PENDING, OffsetDateTime.now())
+                        callerEmail, LinkedLearnerStatus.PENDING, now)
                 .stream()
                 .filter(invitation -> !callerUserId.equals(invitation.getInviterUserId()))
                 .map(invitation -> new LinkedLearnerInvitationResponse(
@@ -182,7 +187,9 @@ public class LinkedLearnerService {
                         // The recipient DOES need to know who is asking in order to decide.
                         userRepository.findById(invitation.getInviterUserId())
                                 .map(this::resolveDisplayName).orElse(null),
-                        invitation.getCreatedAt()))
+                        invitation.getCreatedAt(),
+                        invitation.getExpiresAt(),
+                        false))
                 .toList();
 
         return java.util.stream.Stream.concat(outgoing.stream(), incoming.stream()).toList();

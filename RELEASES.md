@@ -114,6 +114,12 @@ rule forbade changing the progress payload. That rule was release-scoped; this r
 
 ### Shipped
 
+- **Email invitation expiry is visible and recoverable** — outgoing email invitations now expose their expiry
+  clock and remain visible after lapsing for a bounded window equal to the configured invitation TTL. The server
+  computes the expired state; expired cards offer **Invite again**, which pre-fills the original address and role
+  and uses the existing rate-limited invite path to re-arm the same row. Incoming expired invitations remain
+  hidden, and the existing revoke action can dismiss an expired outgoing row.
+
 - **Progress and activity scopes now split at the payload boundary** — Removed `engagement` from the supporter progress response and stopped reading study engagement on that path, so streaks, study days and engagement mode require a live `ACTIVITY` grant. `hasActivity` now derives only from readiness concepts, reviewed Study Packs or practiced plan items; the progress page drops its Study activity card, and connection copy again states that activity is not shared when `ACTIVITY` is off even if `PROGRESS` is on.
 - **Shareable single-use connection invitations** — Added `V126`'s address-free invitation-link table and authenticated create/list/revoke/resolve/redeem flows with 22-character Base62 tokens, creator-scoped rate limiting and cookie-backed auth intent recovery. Redemption conditionally claims the live token, creates only a `PENDING` relationship with the redeemer as initiator, and leaves the link creator to confirm through the existing acceptance and guardian-consent machinery; unknown, revoked, expired and redeemed tokens share one not-found contract, while PostgreSQL concurrency tests pin exactly one winner for redeem/redeem and redeem/revoke races. `/linked-learners` now creates, copies, reloads and revokes live links, and the redemption page discloses only creator display name and role before mutual agreement.
 
