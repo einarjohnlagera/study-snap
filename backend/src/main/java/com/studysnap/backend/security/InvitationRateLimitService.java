@@ -1,8 +1,7 @@
 package com.studysnap.backend.security;
 
 import com.studysnap.backend.config.StudySnapProperties;
-import com.studysnap.backend.exception.AppException;
-import org.springframework.http.HttpStatus;
+import com.studysnap.backend.exception.TooManyLinkedLearnerInvitationsException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -13,8 +12,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Meters linked-learner invitations, which are an authenticated path to sending mail to an
- * arbitrary third-party address from NoteLib's own signed sending domain.
+ * Meters linked-learner invitations. Email invitations send mail from NoteLib's signed domain;
+ * shareable links are distributed by their creator but still initiate third-party contact.
  *
  * <p>⚠️ Email-keying removed the account lookup that used to bound this implicitly: an invite to an
  * address with no account is now a real, deliverable send rather than a no-op. That is the point of
@@ -51,6 +50,21 @@ public class InvitationRateLimitService {
         consume("inviter:" + inviterUserId, config.getInvitesPerWindow(), window(config), now);
     }
 
+    /**
+     * Link invitations have no address key. Their independent creator bucket is deliberate: link
+     * creation can still produce third-party contact when the creator distributes the URL, while
+     * consuming this bucket must not change or dilute the email-invitation limits above.
+     */
+    public void assertLinkCreationAllowed(UUID creatorUserId) {
+        assertLinkCreationAllowed(creatorUserId, OffsetDateTime.now());
+    }
+
+    void assertLinkCreationAllowed(UUID creatorUserId, OffsetDateTime now) {
+        StudySnapProperties.LinkedLearners config = properties.getLinkedLearners();
+        consume("link-creator:" + creatorUserId,
+                config.getInvitationLinksPerWindow(), window(config), now);
+    }
+
     private Duration window(StudySnapProperties.LinkedLearners config) {
         return Duration.ofHours(config.getInviteRateLimitWindowHours());
     }
@@ -64,11 +78,7 @@ public class InvitationRateLimitService {
             }
             bucket.window = window;
             if (bucket.count >= limit) {
-                throw new AppException(
-                        "TOO_MANY_INVITATIONS",
-                        "You have sent too many invitations recently. Please try again later.",
-                        HttpStatus.TOO_MANY_REQUESTS
-                );
+                throw new TooManyLinkedLearnerInvitationsException();
             }
             bucket.count++;
         }

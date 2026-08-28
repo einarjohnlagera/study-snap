@@ -16,6 +16,10 @@ import {
   clearPendingLightweightProfileCompletion,
   setPendingLightweightProfileCompletion,
 } from "./onboarding-v2";
+import {
+  clearLinkedLearnerInvitationIntentCookie,
+  setLinkedLearnerInvitationIntentCookie,
+} from "./linked-learner-invitation-intent";
 
 const SESSION_EXPIRED_STORAGE_KEY = "notelib-session-expired-user-id";
 
@@ -47,6 +51,7 @@ describe("auth redirect helpers", () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.replaceState({}, "", "/login");
+    clearLinkedLearnerInvitationIntentCookie();
   });
 
   it("prefers an explicit redirect query after login", () => {
@@ -60,6 +65,45 @@ describe("auth redirect helpers", () => {
 
   it("falls back to the dashboard when no redirect query exists", () => {
     expect(resolvePostLoginDestination(verifiedUser)).toBe("/dashboard");
+  });
+
+  it("restores a connection invitation after login or signup completes", () => {
+    setLinkedLearnerInvitationIntentCookie("AbCdEf0123456789GhIjKl");
+
+    expect(resolvePostLoginDestination(verifiedUser))
+      .toBe("/linked-learners/invite/AbCdEf0123456789GhIjKl");
+  });
+
+  it("keeps verification and onboarding ahead of a stored connection invitation", () => {
+    setLinkedLearnerInvitationIntentCookie("AbCdEf0123456789GhIjKl");
+
+    expect(resolvePostLoginDestination({ ...verifiedUser, emailVerifiedAt: null }))
+      .toBe("/verify-email");
+    expect(resolvePostLoginDestination({ ...verifiedUser, onboardingCompletedAt: null }))
+      .toBe("/onboarding");
+  });
+
+  it("does not let a stored invitation preempt the session-expiry identity guard", () => {
+    // ⚠️ Found by the v0.94.0 cold-agent pressure test. The invitation cookie carries NO identity —
+    // it is written before anyone logs in — so allowing it to decide the destination let it skip the
+    // guard that exists precisely to stop a DIFFERENT user on a shared device landing on someone
+    // else's resource. Shared browser: person A opens an invite link, abandons at /auth; person B's
+    // session had expired and they log in. B must reach the dashboard, not A's connection request.
+    globalThis.sessionStorage.setItem("notelib-session-expired-user-id", "someone-else");
+    setLinkedLearnerInvitationIntentCookie("AbCdEf0123456789GhIjKl");
+
+    expect(resolvePostLoginDestination(verifiedUser, {
+      search: "?reason=session_expired&redirect=%2Fnotes%2F123",
+    })).toBe("/dashboard");
+  });
+
+  it("still honours a stored invitation on an ordinary login", () => {
+    // The guard above must not break the feature: with no session-expiry claim in play, a person who
+    // opened an invitation link and then logged in normally still lands on it.
+    setLinkedLearnerInvitationIntentCookie("AbCdEf0123456789GhIjKl");
+
+    expect(resolvePostLoginDestination(verifiedUser))
+      .toBe("/linked-learners/invite/AbCdEf0123456789GhIjKl");
   });
 
   it("ignores stale redirect queries after manual logout for the same user", () => {

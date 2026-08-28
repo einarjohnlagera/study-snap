@@ -4,13 +4,17 @@ import {
   acceptLinkedLearner,
   acceptLinkedLearnerInvitation,
   ApiRequestError,
+  createLinkedLearnerInvitationLink,
   getLinkedLearnerActivity,
   listLinkedLearnerInvitations,
+  listLinkedLearnerInvitationLinks,
   correctLinkedLearnerBirthYear,
   getLinkedLearners,
   inviteLinkedLearner,
   recordLinkedLearnerGuardianConsent,
   previewLinkedLearnerBirthYearCorrection,
+  revokeLinkedLearnerInvitation,
+  revokeLinkedLearnerInvitationLink,
   revokeLinkedLearner,
   setLinkedLearnerActivityGrant,
   setLinkedLearnerProgressGrant,
@@ -19,6 +23,7 @@ import {
 
 jest.mock("@/lib/api", () => ({
   acceptLinkedLearner: jest.fn(),
+  createLinkedLearnerInvitationLink: jest.fn(),
   correctLinkedLearnerBirthYear: jest.fn(),
   getLinkedLearners: jest.fn(),
   inviteLinkedLearner: jest.fn(),
@@ -27,8 +32,10 @@ jest.mock("@/lib/api", () => ({
   previewLinkedLearnerBirthYearCorrection: jest.fn(),
   revokeLinkedLearner: jest.fn(),
   listLinkedLearnerInvitations: jest.fn(),
+  listLinkedLearnerInvitationLinks: jest.fn(),
   acceptLinkedLearnerInvitation: jest.fn(),
   revokeLinkedLearnerInvitation: jest.fn(),
+  revokeLinkedLearnerInvitationLink: jest.fn(),
   setLinkedLearnerActivityGrant: jest.fn(),
   setLinkedLearnerProgressGrant: jest.fn(),
   getLinkedLearnerActivity: jest.fn(),
@@ -61,10 +68,53 @@ const baseLink: LinkedLearnerResponse = {
   progressSharedWithMe: false,
 };
 
+const invitationLink = {
+  id: "invite-link-1",
+  token: "AbCdEf0123456789GhIjKl",
+  url: "https://notelib.test/linked-learners/invite/AbCdEf0123456789GhIjKl",
+  creatorRole: "SUPPORTER" as const,
+  createdAt: "2026-08-28T01:00:00Z",
+  expiresAt: "2026-09-27T01:00:00Z",
+};
+
 beforeEach(() => {
   (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([]);
+  (listLinkedLearnerInvitationLinks as jest.Mock).mockResolvedValue([]);
   jest.clearAllMocks();
   jest.mocked(getLinkedLearners).mockResolvedValue([]);
+});
+
+it("loads live invitation links on refresh", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks).mockResolvedValue([invitationLink]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByDisplayValue(invitationLink.url)).toBeInTheDocument();
+  expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(1);
+});
+
+it("creates a single-use invitation link", async () => {
+  jest.mocked(createLinkedLearnerInvitationLink).mockResolvedValue(invitationLink);
+  render(<LinkedLearnersPage />);
+  await screen.findByText("No live invitation links.");
+
+  fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
+
+  await waitFor(() => expect(createLinkedLearnerInvitationLink)
+    .toHaveBeenCalledWith("SUPPORTER", null));
+  expect(await screen.findByDisplayValue(invitationLink.url)).toBeInTheDocument();
+});
+
+it("keeps a live link visible when revocation fails", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks).mockResolvedValue([invitationLink]);
+  jest.mocked(revokeLinkedLearnerInvitationLink).mockRejectedValue(new Error("Network unavailable"));
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  fireEvent.click(screen.getByRole("button", { name: "Revoke link" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Network unavailable");
+  expect(screen.getByDisplayValue(invitationLink.url)).toBeInTheDocument();
 });
 
 it("invites in either direction", async () => {
@@ -188,8 +238,8 @@ it("renders activity in both directions and progress control only for the learne
   render(<LinkedLearnersPage />);
 
   expect(await screen.findByRole("switch", { name: "Share my study activity with Blair" })).toBeChecked();
-  expect(screen.getByText("Blair's study activity is visible through shared progress")).toBeInTheDocument();
-  expect(screen.queryByText("Blair does not share their study activity with you")).not.toBeInTheDocument();
+  expect(screen.getByText("Blair does not share their study activity with you")).toBeInTheDocument();
+  expect(screen.queryByText("Blair's study activity is visible through shared progress")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "View momentum" })).not.toBeInTheDocument();
   expect(screen.queryByRole("switch", { name: /share my study progress/i })).not.toBeInTheDocument();
   expect(screen.getByText("Blair shares their study progress with you")).toBeInTheDocument();
@@ -442,7 +492,11 @@ it("explains paused guardian-consent connections to both sides", async () => {
   render(<LinkedLearnersPage />);
 
   expect(await screen.findByText("This connection is paused until the supporter records guardian consent.")).toBeInTheDocument();
-  expect(screen.getByText("Your progress access is paused because guardian consent is required. Record consent above to unblock the connection.")).toBeInTheDocument();
+  expect(screen.getByText("This connection is paused until you record guardian consent.")).toBeInTheDocument();
+  // ⚠️ Pins the v0.94.0 correction: the paused copy describes STATUS only. Since v0.93.0 an ACCEPTED
+  // relationship does not imply progress access, so no status string may promise it.
+  expect(screen.queryByText(/progress access is paused/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/unblock the connection/i)).not.toBeInTheDocument();
 });
 
 it("shows an incoming invitation and accepts it through the invitation endpoint", async () => {
@@ -453,6 +507,7 @@ it("shows an incoming invitation and accepts it through the invitation endpoint"
   (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
     id: "inv-1", incoming: true, inviterRole: "SUPPORTER",
     invitedEmail: "me@example.com", inviterName: "Aunt May", createdAt: "2026-08-20T00:00:00Z",
+    expiresAt: "2026-09-19T00:00:00Z", expired: false,
   }]);
   (acceptLinkedLearnerInvitation as jest.Mock).mockResolvedValue({
     ...baseLink, status: "ACCEPTED", guardianConsentRequired: false, guardianConsentRecorded: false,
@@ -479,6 +534,7 @@ it("renders no name on an outgoing invitation even when the API supplies one", a
   (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
     id: "inv-2", incoming: false, inviterRole: "SUPPORTER",
     invitedEmail: "someone@example.com", inviterName: "Should Never Render", createdAt: "2026-08-20T00:00:00Z",
+    expiresAt: "2026-09-19T00:00:00Z", expired: false,
   }]);
 
   render(<LinkedLearnersPage />);
@@ -498,11 +554,112 @@ it("offers birth-year correction after a learner-initiated invite, before anyone
   (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([{
     id: "inv-9", incoming: false, inviterRole: "LEARNER",
     invitedEmail: "supporter@example.com", inviterName: null, createdAt: "2026-08-26T00:00:00Z",
+    expiresAt: "2026-09-25T00:00:00Z", expired: false,
   }]);
 
   render(<LinkedLearnersPage />);
 
   expect(await screen.findByRole("heading", { name: "Correct your birth year" })).toBeInTheDocument();
+});
+
+it("shows the expiry clock on a live outgoing invitation", async () => {
+  jest.mocked(listLinkedLearnerInvitations).mockResolvedValue([{
+    id: "inv-live",
+    incoming: false,
+    inviterRole: "SUPPORTER",
+    invitedEmail: "learner@example.com",
+    inviterName: null,
+    createdAt: "2026-08-20T00:00:00Z",
+    expiresAt: "2026-09-19T00:00:00Z",
+    expired: false,
+  }]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByText(/^Expires /)).toBeInTheDocument();
+  expect(listLinkedLearnerInvitations).toHaveBeenCalledTimes(1);
+  expect(screen.getByText("Pending")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Invite again" })).not.toBeInTheDocument();
+});
+
+it("renders an expired invitation distinctly and pre-fills address and role for invite again", async () => {
+  jest.mocked(listLinkedLearnerInvitations).mockResolvedValue([{
+    id: "inv-expired",
+    incoming: false,
+    inviterRole: "LEARNER",
+    invitedEmail: "mentor@example.com",
+    inviterName: null,
+    createdAt: "2026-07-01T00:00:00Z",
+    expiresAt: "2026-08-01T00:00:00Z",
+    expired: true,
+  }]);
+  jest.mocked(inviteLinkedLearner).mockResolvedValue({ message: "Invitation sent." });
+
+  render(<LinkedLearnersPage />);
+
+  const expiredBadge = await screen.findByText("Expired");
+  expect(expiredBadge.closest("li")).toHaveClass("border-amber-300");
+  expect(screen.getByText(/Invite them again to send a new email/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Invite again" }));
+
+  expect(screen.getByLabelText("Their email")).toHaveValue("mentor@example.com");
+  expect(screen.getByRole("button", { name: /they will support me/i })).toHaveAttribute("aria-pressed", "true");
+
+  fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+  await waitFor(() => expect(inviteLinkedLearner)
+    .toHaveBeenCalledWith("mentor@example.com", "LEARNER", null));
+});
+
+it("keeps an expired invitation listed when invite again is rate-limited", async () => {
+  jest.mocked(listLinkedLearnerInvitations).mockResolvedValue([{
+    id: "inv-rate-limited",
+    incoming: false,
+    inviterRole: "SUPPORTER",
+    invitedEmail: "learner@example.com",
+    inviterName: null,
+    createdAt: "2026-07-01T00:00:00Z",
+    expiresAt: "2026-08-01T00:00:00Z",
+    expired: true,
+  }]);
+  jest.mocked(inviteLinkedLearner).mockRejectedValue(new Error("Too many invitations. Try again later."));
+
+  render(<LinkedLearnersPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Invite again" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Too many invitations. Try again later.");
+  expect(screen.getByText(/You invited learner@example.com/)).toBeInTheDocument();
+});
+
+it("removes an expired invitation through the existing revoke action", async () => {
+  jest.mocked(listLinkedLearnerInvitations)
+    .mockResolvedValueOnce([{
+      id: "inv-expired-revoke",
+      incoming: false,
+      inviterRole: "SUPPORTER",
+      invitedEmail: "learner@example.com",
+      inviterName: null,
+      createdAt: "2026-07-01T00:00:00Z",
+      expiresAt: "2026-08-01T00:00:00Z",
+      expired: true,
+    }])
+    .mockResolvedValueOnce([]);
+  jest.mocked(revokeLinkedLearnerInvitation).mockResolvedValue({ message: "Invitation updated." });
+
+  render(<LinkedLearnersPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+
+  await waitFor(() => expect(revokeLinkedLearnerInvitation).toHaveBeenCalledWith("inv-expired-revoke"));
+  await waitFor(() => expect(screen.queryByText(/You invited learner@example.com/)).not.toBeInTheDocument());
+});
+
+it("surfaces an invitation list load failure instead of rendering it as an empty list", async () => {
+  jest.mocked(listLinkedLearnerInvitations).mockRejectedValue(new Error("Invitation list unavailable"));
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Invitation list unavailable");
+  expect(screen.queryByRole("heading", { name: "Pending invitations" })).not.toBeInTheDocument();
 });
 
 it("keeps letters out of the birth-year field and validates the year in the form, not in a browser bubble", async () => {

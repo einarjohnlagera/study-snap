@@ -3,12 +3,18 @@ import { Activity, ArrowRight, BookOpen, LineChart, Link2, Lock, Send } from "lu
 import { pricingConfig } from "@/lib/pricing-config";
 
 /**
- * ⚠️ Every claim here must be live. This guide covers what shipped in v0.89.0–v0.93.0: quiz links,
- * connections, shared notes, directional activity sharing, and learner-controlled progress sharing.
+ * ⚠️ Every claim here must be live. This guide covers what shipped in v0.89.0–v0.94.0: quiz links,
+ * connections, shared notes, directional activity sharing, learner-controlled progress sharing, and
+ * shareable single-use invitation links.
  *
  * <p>⚠️ Activity sharing shipped in v0.92.0 (Phase 2), and learner-granted PROGRESS permission shipped
  * in v0.93.0 (Phase 3). Activity can be shared in either direction; progress runs learner to supporter
  * only. Do not imply a guardian mode or a supporter profile type.
+ *
+ * <p>⚠️ v0.94.0 moved streaks and study days OUT of the progress view — they now need a separate
+ * ACTIVITY grant. Do not describe the progress view as showing how often someone studies. This file
+ * was NOT in that release's diff, so its sweep missed it and a cold-agent pressure test caught it;
+ * check this guide against code whenever a sharing scope changes, not only when the file is touched.
  *
  * <p>⚠️ Plan numbers are imported from pricing-config, never retyped. They were hardcoded here until
  * v0.92.0 and would have drifted the moment a limit changed.
@@ -38,9 +44,10 @@ const SECTIONS: Section[] = [
     icon: Link2,
     title: "Connect with someone you help regularly",
     description:
-      "Invite them by email address from Learning connections. They accept from their own account, and either of you can end the connection at any time.",
+      "From Learning connections you can invite them by email address, or create a link and send it however you like. Either way they act from their own account, and either of you can end the connection at any time.",
     bullets: [
-      "Invitations are one at a time and expire after 30 days",
+      "An email invitation names one address and expires after 30 days; you can see its clock and invite again once it lapses",
+      "A link is single-use: the first person to open it sends you a request, and you confirm before the connection exists",
       "You can invite someone who has not signed up yet — the invitation waits for them",
       "Nothing is shared just because you are connected",
     ],
@@ -62,10 +69,11 @@ const SECTIONS: Section[] = [
     icon: LineChart,
     title: "Follow how they are doing",
     description:
-      "After the learner turns on Share my study progress, People you support on your Dashboard leads to their progress: how ready they are, how often they study, and how their quizzes are going.",
+      "After the learner turns on Share my study progress, People you support on your Dashboard leads to their progress: how ready they are, how far through their plans they are, and how their quizzes are going.",
     bullets: [
       "An accepted connection alone grants no progress access — the learner chooses whether to share it",
       "The learner can turn progress sharing off at any time; ending or pausing the connection also cuts access immediately",
+      "Streaks and study days are NOT part of this view — they are a separate choice, Share my study activity",
       "Looking at their progress never changes it",
       "Supporters never receive the learner's notes or other authored study text",
     ],

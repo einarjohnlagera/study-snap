@@ -1,5 +1,287 @@
 # RELEASES.md - NoteLib
 
+## v0.94.0 - Connection Experience
+
+**Status: Released** (kicked off 2026-08-28, signed off 2026-08-29)
+
+Theme: make a connection reachable by a link, make the two sharing switches mean exactly what they say, and stop
+an invitation from dying in silence.
+
+### Why this release exists
+
+**Phase 4 of the ratified Learning Connections direction** (`docs/claude-plans/learning-connections-phase-plan.md`,
+§13). **⚠️ Phase 4 is ONE LINE in that plan** — *"shareable invitation links, supporter onboarding, connection
+management"* — so it was audited against code before scoping, the way `v0.89.0` audited Phase 1 rather than
+trusting its own roadmap entry. **That audit changed the release's shape and one of its findings halves an item.**
+
+**Audit result, verified at kickoff:**
+
+1. **Supporter onboarding is BLOCKED and is therefore OUT OF SCOPE as sequencing, not as a defect.** Onboarding is
+   frozen until `[CHECKPOINT — due 2026-09-11]`, 14 days out. It becomes a clean `v0.95.0`.
+2. **"Resend an invitation" is HALF-BUILT, and the built half is the hard half.** There is no resend endpoint
+   anywhere — verified across all of `backend/src/main/java` and `frontend/lib/api.ts`, not just the controller —
+   **but re-inviting the same address already RE-ARMS the expired row by updating `expires_at`**, and
+   `LinkedLearnerInvitationReArmTest` guards the direction bug that re-arm once had. What is missing is that
+   nobody is ever told. `listInvitations` filters on `findByInviterUserIdAndStatusAndExpiresAtAfter`, so **an
+   expired invitation SILENTLY VANISHES from the inviter's list** — they cannot tell whether the person declined,
+   ignored it, or the clock simply ran out. `LinkedLearnerInvitationResponse` carries no `expiresAt`, so no
+   frontend surface could show the clock even if it wanted to.
+3. **Shareable invitation links are a SECURITY DESIGN, not a feature.** ⚠️ **Raised as a deferral and the owner
+   ruled to scope it now (2026-08-28), accepting the three constraints below as anti-drift rules.** Recorded
+   because the reasoning must not be re-derived: a link **bypasses email-keying**, which is exactly what `v0.90.0`
+   shipped to close the account-existence oracle; whoever holds the link becomes the counterparty, which cuts
+   against `v0.89.0`'s ruling that *acceptance is load-bearing, since without it anyone could claim a relationship
+   by knowing an email address*; and it must still route a minor through guardian consent, because birth year is
+   collected at link time from the learner.
+
+**And one carried defect is fixed rather than deferred a second time.** `v0.93.0`'s cold-agent pressure test found
+— independently, from two agents on opposite halves — that `LinkedLearnerProgressResponse.engagement` is
+byte-for-byte the payload the `ACTIVITY` scope gates, so **a live `PROGRESS` grant makes the learner's activity
+toggle inert and the learner is not told.** It was recorded rather than fixed because `v0.93.0`'s own anti-drift
+rule forbade changing the progress payload. That rule was release-scoped; this release revisits it deliberately.
+
+### Planned Scope
+
+- **1. Split the progress payload so the two switches mean what they say (backend + frontend).**
+  **⚠️ OWNER DECISION 2026-08-28: split, rather than couple the toggles or disclose in copy.** Remove `engagement`
+  from `LinkedLearnerProgressResponse`; streaks, longest streak, study days and engagement mode become reachable
+  **only** through a live `ACTIVITY` grant. **This is the structural fix and it is the one that makes turning
+  activity off actually do something** — consistent with *absence of a grant means no access*, rather than
+  asserting scope independence by convention while the payload quietly ignores it. **⚠️ `hasActivity` must be
+  re-derived** — it currently reads `engagement.studyDaysThisWeek`. **⚠️ A supporter holding only `PROGRESS`
+  loses streaks and study days from that view; that is the intended consequence, not a regression.** The
+  supporter-facing copy `v0.93.0` added (*"…study activity is visible through shared progress"*) becomes FALSE and
+  must go.
+- **2. Shareable invitation links (backend + frontend).** **⚠️ Scoped on owner ruling against a deferral
+  recommendation; the three constraints below are anti-drift, not advice.**
+  **⚠️ A link must NOT reopen the account-existence oracle** `v0.90.0` closed — nothing about whether an address
+  or account exists may be inferable from link creation, redemption or failure.
+  **⚠️ Acceptance stays load-bearing.** Holding a link must not by itself create an `ACCEPTED` relationship; the
+  redeeming party takes an explicit act, and the inviter must be able to revoke a link before it is used.
+  **⚠️ Guardian consent is NOT bypassable by link.** A learner below the threshold redeeming a link must land in
+  the same `PENDING` + consent path as an email-keyed invitation; birth year is still collected at link time from
+  the learner, never from the inviter.
+  **⚠️ Invitations stay ONE-AT-A-TIME by principle** (`v0.90.0`) — a link is a delivery mechanism for one
+  relationship, **not** a multi-recipient invite. The quiz share link remains the many-recipient mechanism and is
+  neither extended nor merged into this.
+- **3. An invitation stops dying in silence (backend + frontend).** Surface `expiresAt` on
+  `LinkedLearnerInvitationResponse` and show the clock on a pending invitation. When one has expired, say so and
+  point at re-inviting, **which already re-arms the existing row** — so this is disclosure of a working path, not
+  a new mechanism. **⚠️ Do NOT add a resend endpoint that writes a NEW invitation row**, and do not change what a
+  row in `linked_learner_invitations` means: `[CHECKPOINT — due 2026-10-13]` reads that table to ask whether the
+  30-day TTL is cutting real acceptances.
+
+#### Added mid-release 2026-08-28, after items 1–3 shipped
+
+**⚠️ Appended at the moment they were agreed, per this release's own rule.** Both are carried `v0.93.0`
+pressure-test findings. **⚠️ Raised as adding review surface to an already-overdetermined pressure test; the
+owner selected both anyway** — recorded so the trade is visible rather than implied.
+
+- **4. Two user-facing statements that this release family made FALSE (frontend, copy only).**
+  `frontend/lib/linked-learner-status.ts:63` tells a supporter *"Progress becomes available once the connection
+  finishes activating."* **Activation stopped granting progress in `v0.93.0` — that was the entire point of that
+  release** — so the string has now shipped false through two releases. `:37` likewise says recording guardian
+  consent will *"unblock the connection"*, implying progress access the supporter may never have had.
+  **⚠️ This file was missed by `v0.93.0`'s own sweep because it holds prose, not status literals**, so a grep for
+  `"ACCEPTED"` across `app/` and `components/` never reached it. **⚠️ The paused copy cannot fully distinguish
+  "granted, now paused" from "never granted"** — the DTO zeroes `*SharedWithMe` on a non-`ACCEPTED` row — so the
+  copy must describe the *status*, not assert anything about access.
+- **5. `toResponse`'s `*SharedWithMe` omits the guardian-consent predicate `requireGrant` enforces (backend).**
+  The two disagree and **the DTO is the more permissive one**, so a supporter can be shown a *View progress* link
+  whose read then 404s. **⚠️ And there is no remediation path:** `recordGuardianConsent` requires `PENDING`, so an
+  `ACCEPTED` relationship in that state can only be repaired by revoke and re-invite.
+  **⚠️ The predicate is ASYMMETRIC and must stay so** — guardian consent gates the LEARNER's data only, exactly as
+  `requireGrant` applies it when `fromUserId` is the learner. A supporter sharing their own activity with a
+  learner who requires consent is **not** gated by it, and blanket-applying the check would wrongly hide that.
+  **⚠️ Reachable only by raising `GUARDIAN_CONSENT_MAX_AGE`**, which `CLAUDE.md` records as owner-owned and pending
+  counsel — so this is defence in depth against a change that is planned, not hypothetical. **⚠️ Do NOT change
+  `requireGrant`, the authorization model, or the threshold itself.** This aligns a DTO with a check that is
+  already correct.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Absence of a live grant means NO ACCESS**, and after item 1 that is true of the engagement fields too, not
+  merely asserted about them.
+- **⚠️ The progress read stays UNIDIRECTIONAL** — supporter reads learner, never the reverse. `requireGrant` is
+  symmetric; the explicit caller-is-supporter assertion in `requireAcceptedLearnerId` stays, and the test that
+  pins it (`learnerCannotReadSupporterEvenWithAReverseDirectionProgressGrant`) must keep failing on its removal.
+- **⚠️ `PROGRESS` grants stay learner-issued only.** Activity stays grantable by either party.
+- **⚠️ Granting requires `ACCEPTED`; withdrawing deliberately does not**, and the sharing panel keeps rendering on
+  `PENDING` so a learner can withdraw during a birth-year pause.
+- **⚠️ Every read re-verifies `ACCEPTED`** — no cache, no grace.
+- **⚠️ Guardian consent stays re-asserted inside the grant check**, including its deliberate deny-on-null-birth-year
+  branch.
+- **⚠️ Do NOT change what `linked_learner_relationships`, `_invitations` or `_guardian_consents` MEAN** —
+  `[CHECKPOINT — due 2026-09-19]`, `[CHECKPOINT — due 2026-09-26]` and `[CHECKPOINT — due 2026-10-13]` all read
+  those tables.
+- **⚠️ No relationship-type column, no new profile type, nothing gated on `ProfileType`.**
+- **⚠️ `NoteVisibility` stays `PRIVATE | PUBLIC`.**
+- **⚠️ No endpoint accepts a learner user id** — authorization keys on the relationship or the link token.
+- **⚠️ No public people search**, explicitly excluded from Phase 4 by the plan.
+- **⚠️ OUT OF SCOPE, each needing its own decision (Phase 5): mastery comparison between people, scores,
+  leaderboards, activity rings, social feed, reactions.**
+- **⚠️ Supporter onboarding is OUT** until the `2026-09-11` freeze lifts. Do not touch onboarding.
+- **⚠️ Do NOT lengthen `NativeQueryParameterTypingTest`'s pattern**, and any new native query must keep
+  `NativeQueryPostgresIntegrationTest`'s exact-count assertion honest by raising `EXPECTED_NATIVE_QUERIES`
+  deliberately.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: FULL cold-agent test**, decided now. Under the gate rewritten in `CLAUDE.md` at the
+  `v0.93.0` signoff, one trigger is enough; **this release fires two** — it introduces a link-based authentication
+  path AND changes a permission payload, so it moves an authorization boundary in two independent places. The
+  ~490k-token cost is accepted deliberately rather than by default.
+- **The `### Planned Scope` heading above is permanent.** Delivery appends to `### Shipped` beneath it. At signoff
+  the completeness gate reads the list **from this file** — and at `v0.93.0` that gate earned its place by
+  catching a numbering collision, so the list must stay numbered without duplicates.
+- **A `[CHECKPOINT]` row is owed at signoff** for the shareable-link half, which ships ahead of any evidence that
+  link-based invitation converts better than email-keyed. Item 3 additionally needs the deploy-split caveat
+  recorded **before** `[CHECKPOINT — due 2026-10-13]`'s read, since making expiry visible may itself change the
+  acceptance rate that checkpoint measures.
+
+### Shipped
+
+- **Email invitation expiry is visible and recoverable** — outgoing email invitations now expose their expiry
+  clock and remain visible after lapsing for a bounded window equal to the configured invitation TTL. The server
+  computes the expired state; expired cards offer **Invite again**, which pre-fills the original address and role
+  and uses the existing rate-limited invite path to re-arm the same row. Incoming expired invitations remain
+  hidden, and the existing revoke action can dismiss an expired outgoing row.
+
+- **Progress and activity scopes now split at the payload boundary** — Removed `engagement` from the supporter progress response and stopped reading study engagement on that path, so streaks, study days and engagement mode require a live `ACTIVITY` grant. `hasActivity` now derives only from readiness concepts, reviewed Study Packs or practiced plan items; the progress page drops its Study activity card, and connection copy again states that activity is not shared when `ACTIVITY` is off even if `PROGRESS` is on.
+- **Shareable single-use connection invitations** — Added `V126`'s address-free invitation-link table and authenticated create/list/revoke/resolve/redeem flows with 22-character Base62 tokens, creator-scoped rate limiting and cookie-backed auth intent recovery. Redemption conditionally claims the live token, creates only a `PENDING` relationship with the redeemer as initiator, and leaves the link creator to confirm through the existing acceptance and guardian-consent machinery; unknown, revoked, expired and redeemed tokens share one not-found contract, while PostgreSQL concurrency tests pin exactly one winner for redeem/redeem and redeem/revoke races. `/linked-learners` now creates, copies, reloads and revokes live links, and the redemption page discloses only creator display name and role before mutual agreement.
+
+- **⚠️ Found at the `/audit-diff` and fixed in scope: the indistinguishability guarantee had no real test.**
+  `unknownRevokedExpiredAndRedeemedAllUseOneNotFoundContract` stubs `findUsableByToken` to return empty for **all
+  four** token strings, so the four cases are one case — it proves the exception is constructed identically, which
+  was never in doubt, and proves nothing about the query predicate that produces it. **Deleting `revokedAt is
+  null` from `findUsableByToken` — making a revoked link resolvable and redeemable — left the entire 1,775-test
+  suite green.** Indistinguishability is a property of the PREDICATE, so only a real row can establish it;
+  `revokedRedeemedAndExpiredInvitationLinksAreAllUnusable` now seeds revoked, redeemed and expired rows against
+  real PostgreSQL and asserts each is unusable, with a live link as the control. Mutation-verified: the same
+  deletion now fails exactly that test. **Same lesson as `v0.93.0`'s blocking finding — a mocked repository cannot
+  test a predicate** — and it recurred in the very release that recorded it, which is why the executing test lives
+  beside the others in `NativeQueryPostgresIntegrationTest` rather than in the service's mocked class.
+- **⚠️ Audit note on how that split is actually pinned, so the guarantee is not over-claimed.** The mutation this
+  item was written around — **re-adding `engagement` to the response** — fails at **compile** time, not as a test
+  assertion, because the test constructs the record directly. That is a *stronger* guard than a test, but it
+  means `serializedProgressPayloadContainsNoEngagementKey` was never exercised by it: for a Java record, any
+  component change breaks compilation before Jackson ever runs. **That test's real value is narrower than its name
+  suggests** — it guards serialization-level drift (a computed property, a `@JsonInclude` change, a future field),
+  not the removal itself. It is worth keeping for exactly that, and its `containsExactlyInAnyOrder` form also
+  catches an accidental addition. **The behavioural half WAS mutation-verified:** restoring the
+  `engagement.studyDaysThisWeek()` disjunct to `hasActivity` fails four tests, including
+  `learnerWithOnlyStudyDaysReturnsSuccessfulExplicitlyEmptyProgressAggregates`, which is the one that pins the
+  inference-channel argument rather than the field list.
+- **Two carried disclosure defects closed, and the fix for one found a third instance of it.** The status-copy
+  module told supporters *"Progress becomes available once the connection finishes activating"* and that recording
+  consent would *"unblock the connection"* — both false since `v0.93.0`, and both shipped through two releases
+  because that file holds prose rather than status literals, so the sweep for `"ACCEPTED"` never reached it. The
+  paused and activating copy now describes **status only**. **⚠️ The regression assertion added with that fix
+  immediately failed on a SECOND instance in a different file** — `SharingPanel` rendered *"{name}'s progress
+  access is paused"* and *"…activity access is paused"*, claiming access that may never have existed. Both are
+  now status-shaped, for the reason the DTO makes unavoidable: `*SharedWithMe` is zeroed on a non-`ACCEPTED` row,
+  so the frontend genuinely cannot distinguish "granted, now paused" from "never granted" and must not guess.
+  A broad `queryByText` assertion pins the class rather than the three strings.
+- **`toResponse` no longer reports access the authorization check would deny.** `*SharedWithMe` now applies the
+  same guardian-consent gate as `requireGrant`, so the DTO can no longer be the more permissive of the two and
+  render a *View progress* link whose read 404s — which mattered because there is no way back: consent can only
+  be recorded on a `PENDING` relationship. **⚠️ The gate is asymmetric and stays so** — it protects the learner's
+  data, so a supporter sharing their own activity with a learner who requires consent is not gated by it.
+  **Both halves mutation-verified:** dropping the predicate fails
+  `acceptedRelationshipMissingGuardianConsentReportsNoAccessFromTheLearner`; removing the asymmetry fails
+  `missingGuardianConsentDoesNotHideTheSupportersOwnSharedActivityFromTheLearner`.
+**⚠️ Found by the pre-signoff cold-agent pressure test (three agents on non-overlapping halves,
+2026-08-28/29), pre-declared at kickoff on three triggers. Fixed in scope where possible; the rest is below.**
+
+**The load-bearing negative results first.** **No authorization bypass and no privilege escalation exist**, and
+every predicate the mutation agent tested is correct in shipped code. The single-use boundary genuinely
+serializes under READ COMMITTED — redeem-vs-revoke, two redeemers and expiry all collapse to the same 404 via row
+lock plus EvalPlanQual re-check, with `V126`'s four CHECK constraints as a second layer. **Acceptance stays
+load-bearing** (`redeem` never calls `accept`, and `initiated_by` makes the creator the only party who can).
+Guardian consent has full parity with the email path. The progress read is unidirectional. Item 1 is complete:
+no streak or study-day value survives anywhere in the progress payload. CSRF is ruled out (JWT from the
+`Authorization` header only, `allowCredentials(false)`).
+
+- **⚠️ THIRD RECURRENCE OF ONE CLASS, IN THE RELEASE FAMILY THAT DIAGNOSED IT — now closed at the file level.**
+  `RELEASES.md` already recorded *"a mocked repository cannot test a predicate."* `LinkedLearnerInvitationLinkRepository`
+  has **four** queries and the earlier real-row test covered **two**. Neutralising `findLiveByCreator`'s creator
+  scoping, its `revokedAt is null` filter, or `markRevokedIfUsable`'s creator predicate each left **all 1,786
+  tests green** — and `list()` returns the token **and the full invitation URL**, so an unscoped creator filter
+  would have handed one person another's live links. `invitationLinkQueriesAreScopedToTheirCreatorAndToLiveRows`
+  now exercises all four against real rows; both creator mutations are re-verified failing.
+- **⚠️ The invitation intent could preempt an identity guard, and the cookie carries no identity.**
+  `resolveAuthenticatedHome` returned the invite path, and `resolvePostLoginDestination` returns early on any
+  non-`/dashboard` home — so a live invite cookie skipped the session-expiry branch whose own comment says a
+  different user on the same device must land on the dashboard *"rather than a resource they may not own."* That
+  guard keys on `SESSION_EXPIRED_USER_KEY`, which **does** carry identity; the intent cookie is written before
+  anyone logs in and carries none. Identity checks now run first via `resolveGatedHome`, and the intent may only
+  choose among destinations they already allowed. Mutation-verified.
+- **⚠️ Two files the release never touched still promised what item 1 removed.**
+  `supported-learners-card.tsx` offered *"readiness and study activity"* and the Help guide said the progress view
+  shows *"how often they study"* — both false once streaks moved behind the `ACTIVITY` grant. **The sweep that
+  fixed the sibling string missed these because it searched the DIFF, not the surface**; the guide was not in
+  `7fd310ba..HEAD` at all. The guide now also documents shareable links, whose absence had left *"invitations are
+  one at a time"* contradicted by a creator holding several live links, and its header carries a standing
+  instruction to re-check it whenever a sharing scope changes rather than only when the file is touched.
+- **⚠️ `v0.94.0` item 5's own consent predicate failed OPEN where `requireGrant` fails CLOSED.** `consentRequired`
+  is false when the birth year is null, so an unknown age showed the *View progress* affordance while the
+  authorization call denies — the exact stale-permissive shape item 5 existed to remove, in item 5's code, under a
+  comment claiming to mirror that gate. Now withholds on unknown age, pinned by
+  `unknownLearnerAgeWithholdsAccessJustAsRequireGrantDenies`.
+- **Two guarantees the docs asserted and nothing enforced.** `resolvePrivateDisplayName`'s fallback could be
+  changed to return `user.getEmail()` uncaught — the code comment says *"Never falls back to email"* and the
+  feature doc says *"never email or user id"*, while the only test asserted record component NAMES, not the
+  value. And `AGENTS.md`'s *"birth year is collected from the learner, never from the inviter"* survived changing
+  the role condition to `if (true)`. Both now pinned and mutation-verified.
+- **A test named for a guarantee it does not check was renamed rather than left to mislead.**
+  `unknownRevokedExpiredAndRedeemedAllUseOneNotFoundContract` stubs the lookup empty for all four token strings,
+  so the four cases are one case. It is now
+  `theNotFoundExceptionItselfIsIdenticalWhicheverBranchRaisesIt`, with a pointer to the real-row test that does
+  establish indistinguishability.
+
+### Known limitations — carried, not silently dropped
+
+- **⚠️ A single UNCONFIRMED link redemption is irreversible in two ways, and this is a product question rather
+  than a defect.** It permanently writes the redeemer's account-global, **write-once** birth year, and it hands
+  the creator that person's display name **and whether they are a minor** (`guardianConsentRequired` on the
+  connection list) — while the creator need never accept. **Widened, not introduced:** the email path discloses
+  the same fields on acceptance, but required already knowing an address; a link harvests from arbitrary
+  clickers, bounded only by the creation rate limit. Worth an explicit decision before links are promoted.
+- **`requireVerifiedOnboarded` does not actually require onboarding** — `assertProfileComplete` passes when
+  `onboardingCompletedAt` is null, so the stated property is false although nothing downstream breaks today.
+- **The 409 on `redeem` (duplicate relationship) is the one distinguishable failure** in a feature that otherwise
+  collapses every terminal state to an identical 404. It discloses only that a relationship already exists with
+  a creator whose identity the caller is about to learn anyway.
+- **The revoke/redeem race test is a nondeterministic detector.** Dropping `redeemedAt is null` from
+  `markRevokedIfUsable` survived four targeted runs and was caught once under full-suite load, and then only as a
+  `DataIntegrityViolationException` from `ck_linked_learner_invitation_link_terminal_state`. **In production that
+  CHECK is the real guard**, so the JPQL clause is defence in depth; the finding is about the test.
+- **Endpoint coverage is one of five.** `LinkedLearnerInvitationLinkSecurityIntegrationTest` covers `/resolve`;
+  `.anyRequest().authenticated()` makes the rest safe today, but a single canary is the whole guard.
+- **The PostgreSQL harness produced ZERO signal for this release's new repository** — all four link queries are
+  JPQL, so the `nativeQuery = true` reflective scan never sees them, and the exact-count guard is unaffected by
+  them. Real-row tests are the only coverage those predicates have, which is why the item above matters.
+- **Frontend, carried:** the paused banner claims sharing "resumes" on never-accepted `PENDING` rows that link
+  redemption newly creates, while both toggles are disabled; `linked-learner-status.ts`'s stated premise that
+  `PENDING` no longer means "waiting for someone to accept" is false again for link redemptions, and the creator
+  is not told they are the one who must act; reloading after a successful redemption reads as a dead link;
+  *"Invitation withdrawn."* is asserted even when the counterparty had already accepted, and the connection list
+  is not refreshed; the live-links list never refetches, so Copy and Revoke can act on a dead link; and success
+  feedback for the link card renders two cards below the action. Accessibility: `birth-year-input` steppers are
+  nested inside `<label>` in three of four call sites, a raw checkbox is used where the `Checkbox` component is
+  used elsewhere on the same page, and disabled toggles leave the tab order.
+- **Pre-existing, unchanged:** `revoke()` still does not revoke grant rows, so a `REVOKED` relationship reports
+  `*SharedByMe: true` with the panel hidden — inert, since `requireGrant` demands `ACCEPTED` and a re-invite
+  creates a new relationship id; `REVOKED` cards accumulate with no dismiss; the token appears in the `/auth`
+  `redirect` param as well as the cookie, where only the cookie is ever read on that path.
+
+### Process note
+
+**⚠️ Running a read-only auditor concurrently with a mutation agent produced a false finding.** The backend agent
+reported an uncommitted edit deleting a self-link guard; it was the tests agent's in-flight mutation, restored
+seconds later. Sequence them, or tell the read-only agents a mutation pass is running.
+
+
 ## v0.93.0 - Progress Refinement
 
 **Status: Released** (kicked off 2026-08-27, signed off 2026-08-28)

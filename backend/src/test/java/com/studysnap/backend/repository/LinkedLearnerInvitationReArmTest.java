@@ -109,9 +109,14 @@ class LinkedLearnerInvitationReArmTest {
         OffsetDateTime expiresAt = jdbcTemplate.queryForObject(
                 "select expires_at from linked_learner_invitations where id = ?",
                 OffsetDateTime.class, invitationId);
+        UUID persistedId = jdbcTemplate.queryForObject(
+                "select id from linked_learner_invitations", UUID.class);
 
+        assertThat(persistedId).isEqualTo(invitationId);
         assertThat(createdAt.toInstant()).isEqualTo(firstInvitedAt.toInstant());
         assertThat(expiresAt).isAfter(now.plusDays(29));
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from linked_learner_invitations", Integer.class)).isEqualTo(1);
     }
 
     @Test

@@ -7,6 +7,7 @@ import {
   hasPendingLightweightProfileCompletion,
 } from "./onboarding-v2";
 import type { ThemePreference } from "./theme-preferences";
+import { getLinkedLearnerInvitationIntentPath } from "./linked-learner-invitation-intent";
 
 export type AuthUser = {
   id: string;
@@ -193,7 +194,17 @@ export function needsProfileType(authUser: AuthUser | null): boolean {
     && !hasPendingLightweightProfileCompletion(authUser.id);
 }
 
-export function resolveAuthenticatedHome(authUser: AuthUser | null): string {
+/**
+ * Where an authenticated user belongs, BEFORE any pending intent is considered.
+ *
+ * <p>⚠️ Split out at the v0.94.0 pressure test. The invitation-intent cookie carries NO identity — it
+ * is written before anyone logs in — so letting it decide the destination allowed it to preempt
+ * {@link resolvePostLoginDestination}'s session-expiry guard, whose whole purpose is to stop a
+ * DIFFERENT user on a shared device landing on a resource they may not own. That guard keys on
+ * `SESSION_EXPIRED_USER_KEY`, which does carry identity. Identity checks must run first; an intent
+ * may only choose between destinations they have already allowed.
+ */
+function resolveGatedHome(authUser: AuthUser | null): string {
   if (!authUser?.emailVerifiedAt) {
     return "/verify-email";
   }
@@ -203,13 +214,23 @@ export function resolveAuthenticatedHome(authUser: AuthUser | null): string {
   return "/dashboard";
 }
 
+export function resolveAuthenticatedHome(authUser: AuthUser | null): string {
+  const gatedHome = resolveGatedHome(authUser);
+  if (gatedHome !== "/dashboard") {
+    return gatedHome;
+  }
+  return getLinkedLearnerInvitationIntentPath() ?? "/dashboard";
+}
+
 export function resolvePostLoginDestination(
   authUser: AuthUser | null,
   options?: { search?: string | URLSearchParams | null },
 ): string {
-  const authenticatedHome = resolveAuthenticatedHome(authUser);
-  if (authenticatedHome !== "/dashboard") {
-    return authenticatedHome;
+  // ⚠️ The GATED home, not resolveAuthenticatedHome: a pending invitation intent must not
+  // short-circuit the identity checks below. See resolveGatedHome.
+  const gatedHome = resolveGatedHome(authUser);
+  if (gatedHome !== "/dashboard") {
+    return gatedHome;
   }
 
   const params = options?.search instanceof URLSearchParams
@@ -230,6 +251,9 @@ export function resolvePostLoginDestination(
     if (expiredUserId && authUser?.id === expiredUserId && redirectTarget && !isAuthRoutePath(redirectTarget)) {
       return redirectTarget;
     }
+    // ⚠️ Deliberately NOT the invitation intent either. A session expired and someone logged in; if
+    // it is not the same person, sending them into a pending connection flow is the exact
+    // wrong-resource hand-off this branch exists to prevent.
     return "/dashboard";
   }
 
@@ -237,7 +261,7 @@ export function resolvePostLoginDestination(
     return redirectTarget;
   }
 
-  return "/dashboard";
+  return getLinkedLearnerInvitationIntentPath() ?? "/dashboard";
 }
 
 export function getAccessToken(): string | null {

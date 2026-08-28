@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
+import com.studysnap.backend.dto.LinkedLearnerInvitationResponse;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import org.springframework.http.HttpStatus;
@@ -179,6 +180,58 @@ class LinkedLearnerServiceTest {
         assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
         assertThat(relationship.getAcceptedAt()).isNotNull();
         verify(relationshipRepository).markAcceptedIfPending(eq(relationship.getId()), any());
+    }
+
+    @Test
+    void linkRedeemerCannotAcceptAndTheLinkCreatorConfirmationActivatesTheRelationship() {
+        UserEntity creatorSupporter = user(SUPPORTER_EMAIL);
+        UserEntity redeemerLearner = user(LEARNER_EMAIL);
+        redeemerLearner.setBirthYear(2000);
+        // Link redemption makes the redeemer the initiator. The creator is therefore the existing
+        // acceptance machinery's invited party, preserving two distinct acts of agreement.
+        LinkedLearnerRelationshipEntity relationship =
+                relationship(creatorSupporter, redeemerLearner, LinkedLearnerSide.LEARNER);
+        stubRelationshipUsers(relationship, creatorSupporter, redeemerLearner);
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        AcceptLinkedLearnerRequest request = new AcceptLinkedLearnerRequest(null, false);
+
+        assertThatThrownBy(() -> service.accept(relationship.getId(), redeemerLearner.getId(), request))
+                .isInstanceOf(LinkedLearnerNotAllowedException.class);
+
+        LinkedLearnerResponse confirmed = service.accept(
+                relationship.getId(), creatorSupporter.getId(), request);
+
+        assertThat(confirmed.status()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
+        assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
+    }
+
+    @Test
+    void minorLinkRedeemerStaysPendingUntilTheCreatorRecordsGuardianConsent() {
+        UserEntity creatorSupporter = user(SUPPORTER_EMAIL);
+        UserEntity redeemerLearner = user(LEARNER_EMAIL);
+        redeemerLearner.setBirthYear(Year.now().getValue() - 10);
+        LinkedLearnerRelationshipEntity relationship =
+                relationship(creatorSupporter, redeemerLearner, LinkedLearnerSide.LEARNER);
+        stubRelationshipUsers(relationship, creatorSupporter, redeemerLearner);
+        when(consentRepository.findByRelationshipId(relationship.getId()))
+                .thenReturn(
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.of(new LinkedLearnerGuardianConsentEntity()));
+
+        LinkedLearnerResponse withoutConsent = service.accept(
+                relationship.getId(), creatorSupporter.getId(), new AcceptLinkedLearnerRequest(null, false));
+
+        assertThat(withoutConsent.status()).isEqualTo(LinkedLearnerStatus.PENDING);
+        assertThat(withoutConsent.counterpartyEmail()).isNull();
+        assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.PENDING);
+
+        LinkedLearnerResponse withConsent = service.accept(
+                relationship.getId(), creatorSupporter.getId(), new AcceptLinkedLearnerRequest(null, true));
+
+        assertThat(withConsent.status()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
+        verify(consentRepository).save(any(LinkedLearnerGuardianConsentEntity.class));
     }
 
     @Test
@@ -696,6 +749,100 @@ class LinkedLearnerServiceTest {
                         LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS));
     }
 
+    /**
+     * ⚠️ The DTO must not be MORE PERMISSIVE than {@code requireGrant}, which denies on missing
+     * guardian consent. Before this, `*SharedWithMe` was `accepted && grantExists` only, so a
+     * supporter could be shown a "View progress" link whose read then 404s — with no way back,
+     * because recordGuardianConsent requires PENDING. Reachable by raising GUARDIAN_CONSENT_MAX_AGE,
+     * which is owner-owned and pending counsel.
+     */
+    /**
+     * ⚠️ The DTO must fail CLOSED on an unknown learner age, matching {@code requireGrant}'s
+     * deny-on-null branch. `consentRequired` is false when the year is null, so without an explicit
+     * unknown-age check the DTO showed access the authorization call denies — the stale-permissive
+     * shape item 5 existed to remove, present in item 5's own code. Found by the v0.94.0 pressure test.
+     */
+    @Test
+    void unknownLearnerAgeWithholdsAccessJustAsRequireGrantDenies() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(null);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        LinkedLearnerGrantEntity activity = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.ACTIVITY);
+        LinkedLearnerGrantEntity progress = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.PROGRESS);
+        stubUser(supporter);
+        stubUser(learner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                Set.of(relationship.getId()), List.of(
+                        LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS)))
+                .thenReturn(List.of(activity, progress));
+
+        LinkedLearnerResponse supporterView = service.list(supporter.getId()).getFirst();
+
+        assertThat(supporterView.activitySharedWithMe()).isFalse();
+        assertThat(supporterView.progressSharedWithMe()).isFalse();
+    }
+
+    @Test
+    void acceptedRelationshipMissingGuardianConsentReportsNoAccessFromTheLearner() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 10);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        LinkedLearnerGrantEntity activity = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.ACTIVITY);
+        LinkedLearnerGrantEntity progress = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.PROGRESS);
+        stubUser(supporter);
+        stubUser(learner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                Set.of(relationship.getId()), List.of(
+                        LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS)))
+                .thenReturn(List.of(activity, progress));
+
+        LinkedLearnerResponse supporterView = service.list(supporter.getId()).getFirst();
+
+        assertThat(supporterView.activitySharedWithMe()).isFalse();
+        assertThat(supporterView.progressSharedWithMe()).isFalse();
+    }
+
+    /**
+     * ⚠️ The consent gate is ASYMMETRIC and must stay so: it protects the LEARNER's data. A supporter
+     * sharing their OWN activity with a learner who requires consent is not gated by it — exactly as
+     * {@code requireGrant} applies the check only when {@code fromUserId} is the learner. Blanket-
+     * applying it would wrongly hide the supporter's activity from the learner.
+     */
+    @Test
+    void missingGuardianConsentDoesNotHideTheSupportersOwnSharedActivityFromTheLearner() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 10);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        LinkedLearnerGrantEntity supporterActivity = grant(
+                relationship, supporter.getId(), learner.getId(), LinkedLearnerGrantScope.ACTIVITY);
+        stubUser(supporter);
+        stubUser(learner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                Set.of(relationship.getId()), List.of(
+                        LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS)))
+                .thenReturn(List.of(supporterActivity));
+
+        LinkedLearnerResponse learnerView = service.list(learner.getId()).getFirst();
+
+        assertThat(learnerView.activitySharedWithMe()).isTrue();
+    }
+
     @Test
     void pendingRelationshipKeepsRowsVisibleByMeButReportsNoAccessWithMeForBothScopes() {
         UserEntity supporter = user(SUPPORTER_EMAIL);
@@ -786,6 +933,68 @@ class LinkedLearnerServiceTest {
         verify(invitationRepository, never()).insertPendingIfAbsent(
                 any(), any(), anyString(), anyString(), any(), any());
         verify(emailService, never()).sendEmail(any());
+    }
+
+    @Test
+    void invitationListUsesABoundedOutgoingWindowAndKeepsIncomingLiveOnly() {
+        UserEntity caller = user("caller@example.com");
+        UserEntity inviter = user("inviter@example.com");
+        LinkedLearnerInvitationEntity outgoingExpired = invitation(caller.getId(), "ignored@example.com");
+        outgoingExpired.setExpiresAt(OffsetDateTime.now().minusDays(1));
+        LinkedLearnerInvitationEntity incomingLive = invitation(inviter.getId(), caller.getEmail());
+        incomingLive.setExpiresAt(OffsetDateTime.now().plusDays(4));
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        when(userRepository.findById(inviter.getId())).thenReturn(Optional.of(inviter));
+        when(invitationRepository.findByInviterUserIdAndStatusAndExpiresAtAfter(
+                eq(caller.getId()), eq(LinkedLearnerStatus.PENDING), any(OffsetDateTime.class)))
+                .thenReturn(List.of(outgoingExpired));
+        when(invitationRepository.findByInvitedEmailAndStatusAndExpiresAtAfter(
+                eq(caller.getEmail()), eq(LinkedLearnerStatus.PENDING), any(OffsetDateTime.class)))
+                .thenReturn(List.of(incomingLive));
+        properties.getLinkedLearners().setInvitationTtlDays(11);
+
+        OffsetDateTime before = OffsetDateTime.now();
+        List<LinkedLearnerInvitationResponse> response = service.listInvitations(caller.getId());
+        OffsetDateTime after = OffsetDateTime.now();
+
+        assertThat(response).hasSize(2);
+        LinkedLearnerInvitationResponse outgoing = response.getFirst();
+        assertThat(outgoing.expired()).isTrue();
+        assertThat(outgoing.expiresAt()).isEqualTo(outgoingExpired.getExpiresAt());
+        assertThat(outgoing.inviterName()).isNull();
+        LinkedLearnerInvitationResponse incoming = response.getLast();
+        assertThat(incoming.expired()).isFalse();
+        assertThat(incoming.inviterName()).isEqualTo(inviter.getDisplayName());
+
+        ArgumentCaptor<OffsetDateTime> outgoingCutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(invitationRepository).findByInviterUserIdAndStatusAndExpiresAtAfter(
+                eq(caller.getId()), eq(LinkedLearnerStatus.PENDING), outgoingCutoff.capture());
+        assertThat(outgoingCutoff.getValue())
+                .isBetween(before.minusDays(11), after.minusDays(11));
+
+        ArgumentCaptor<OffsetDateTime> incomingCutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(invitationRepository).findByInvitedEmailAndStatusAndExpiresAtAfter(
+                eq(caller.getEmail()), eq(LinkedLearnerStatus.PENDING), incomingCutoff.capture());
+        assertThat(incomingCutoff.getValue()).isBetween(before, after);
+
+        assertThat(Arrays.stream(LinkedLearnerInvitationResponse.class.getRecordComponents())
+                .map(component -> component.getName())
+                .toList())
+                .containsExactly("id", "incoming", "inviterRole", "invitedEmail", "inviterName",
+                        "createdAt", "expiresAt", "expired");
+    }
+
+    @Test
+    void anExpiredInvitationCanStillBeRevokedByItsInviter() {
+        UserEntity caller = user("caller@example.com");
+        LinkedLearnerInvitationEntity expired = invitation(caller.getId(), "ignored@example.com");
+        expired.setExpiresAt(OffsetDateTime.now().minusDays(1));
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        when(invitationRepository.findById(expired.getId())).thenReturn(Optional.of(expired));
+
+        service.revokeInvitation(expired.getId(), caller.getId());
+
+        verify(invitationRepository).markRevokedIfPending(eq(expired.getId()), any(OffsetDateTime.class));
     }
 
     @Test

@@ -4,7 +4,6 @@ import com.studysnap.backend.dto.LinkedLearnerProgressResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
-import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.SubjectProgressEntry;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.UserEntity;
@@ -47,7 +46,6 @@ public class LinkedLearnerProgressService {
                 .orElseThrow(LinkedLearnerProgressNotFoundException::new);
 
         MasterySnapshotResponse quizPerformance = dashboardService.getMasterySnapshot(learnerUserId);
-        StudyEngagementResponse engagement = dashboardService.getStudyEngagement(learnerUserId);
         ProgressReportResponse progressReport = progressReportService.getProgressReport(
                 learnerUserId,
                 null,
@@ -58,16 +56,18 @@ public class LinkedLearnerProgressService {
         LinkedLearnerProgressResponse.ReadinessCounts readiness = aggregateReadiness(progressReport.subjects());
         LinkedLearnerProgressResponse.CollectionProgressCounts collectionProgress =
                 aggregateCollectionProgress(collections);
+        // ⚠️ Progress-shaped only: study days and both streak fields are activity-derived. Even a
+        // boolean inferred from them would disclose activity without an ACTIVITY grant. Their
+        // former partial use in hasActivity is now deliberately removed, closing the v0.93.0 LOW
+        // finding completely rather than merely omitting the engagement object from serialization.
         boolean hasActivity = readiness.totalConcepts() > 0
                 || quizPerformance.studyPacksReviewed() > 0
-                || engagement.studyDaysThisWeek() > 0
                 || collectionProgress.practicedItems() > 0;
 
         LinkedLearnerProgressResponse response = new LinkedLearnerProgressResponse(
                 relationshipId,
                 resolveDisplayName(learner),
                 quizPerformance,
-                engagement,
                 readiness,
                 collectionProgress,
                 hasActivity
