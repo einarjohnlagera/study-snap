@@ -14,7 +14,7 @@ export function SupportedLearnersCard({
     <section className="space-y-3" aria-labelledby="supported-learners-heading">
       <div>
         <h2 id="supported-learners-heading" className="text-lg font-semibold sm:text-xl">People you support</h2>
-        <p className="mt-1 text-sm text-foreground/70">See readiness and study activity without access to personal notes or study material.</p>
+        <p className="mt-1 text-sm text-foreground/70">See readiness, plan progress and quiz performance without access to personal notes or study material.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {links.map((link) => {
