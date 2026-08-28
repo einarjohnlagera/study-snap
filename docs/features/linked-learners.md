@@ -189,11 +189,6 @@ deliberately excludes `OPENED_STUDY_PACK` through the existing `MEANINGFUL_STUDY
 writes no activity event, `ConceptHealth`, progress timestamp or user state. Zeroes render as an honest empty
 answer rather than being hidden.
 
-Because the progress response contains those same four engagement fields, supporter-facing copy describes
-activity **access** across both scopes. When `ACTIVITY` is off but `PROGRESS` is on, the card says activity is
-visible through shared progress; it does not claim an activity grant exists, and the momentum panel remains
-unavailable.
-
 ### Activity-sharing analytics
 
 Phase 2's grant-to-view loop uses three product-analytics events, separate from learner activity tracking:
@@ -230,15 +225,19 @@ The progress route is addressed only as `/linked-learners/{relationshipId}/progr
 
 The caller must also have a **verified email**. That is redundant while every path granting an `ACCEPTED` relationship is itself gated, and it is deliberate: it means a future grant path that loses its gate cannot silently open this read too. It costs nothing, because `email_verified_at` is monotonic — nothing clears it, and an address change re-stamps it only once the new address is confirmed.
 
-Every request performs that authorization again. Grant revocation, relationship revocation, or a birth-year correction therefore cuts access immediately, with no cached view or grace period. The read is transactionally read-only and reuses the existing owner-scoped Dashboard, Progress and collection calculations with the authorized learner id. It creates no session, changes no `ConceptHealth`, progress timestamp, streak or engagement counter, and attributes no learner activity event. A successful response emits only relationship-scoped `CONNECTION_PROGRESS_VIEWED` product analytics; denied reads emit nothing and analytics failure cannot fail the response.
+Every request performs that authorization again. Grant revocation, relationship revocation, or a birth-year correction therefore cuts access immediately, with no cached view or grace period. The read is transactionally read-only and reuses the existing owner-scoped Dashboard mastery, Progress and collection calculations with the authorized learner id. It creates no session, changes no `ConceptHealth`, progress timestamp, streak or engagement counter, and attributes no learner activity event. A successful response emits only relationship-scoped `CONNECTION_PROGRESS_VIEWED` product analytics; denied reads emit nothing and analytics failure cannot fail the response.
 
 ### What a supporter can see
 
 - quiz-performance aggregates: recent average, recent best and Study Packs reviewed;
-- engagement aggregates: current and longest streak, study days this week and engagement mode;
 - readiness counts: total, mastered, due and not-started concepts, plus the derived readiness percentage;
 - collection counts: plans, total items, ready items and practiced items;
 - the counterparty display identity already present on the relationship.
+
+The progress payload carries **no engagement fields**. Current streak, longest streak, study days this week and
+engagement mode require a separate live `ACTIVITY` grant and remain available only through the momentum response.
+`hasActivity` is likewise progress-shaped: readiness concepts, reviewed Study Packs or practiced plan items can
+set it, while activity-only study days and streaks cannot become a boolean inference channel.
 
 A learner with no activity returns a successful empty aggregate and is shown as **No learning activity yet**. A supporter sees *View progress* only when `progressSharedWithMe` is true. A pending connection shows its existing paused explanation, offers no view action, and leaves the learner's live sharing toggles reachable for withdrawal.
 

@@ -114,6 +114,7 @@ rule forbade changing the progress payload. That rule was release-scoped; this r
 
 ### Shipped
 
+- **Progress and activity scopes now split at the payload boundary** — Removed `engagement` from the supporter progress response and stopped reading study engagement on that path, so streaks, study days and engagement mode require a live `ACTIVITY` grant. `hasActivity` now derives only from readiness concepts, reviewed Study Packs or practiced plan items; the progress page drops its Study activity card, and connection copy again states that activity is not shared when `ACTIVITY` is off even if `PROGRESS` is on.
 - **Shareable single-use connection invitations** — Added `V126`'s address-free invitation-link table and authenticated create/list/revoke/resolve/redeem flows with 22-character Base62 tokens, creator-scoped rate limiting and cookie-backed auth intent recovery. Redemption conditionally claims the live token, creates only a `PENDING` relationship with the redeemer as initiator, and leaves the link creator to confirm through the existing acceptance and guardian-consent machinery; unknown, revoked, expired and redeemed tokens share one not-found contract, while PostgreSQL concurrency tests pin exactly one winner for redeem/redeem and redeem/revoke races. `/linked-learners` now creates, copies, reloads and revokes live links, and the redemption page discloses only creator display name and role before mutual agreement.
 
 - **⚠️ Found at the `/audit-diff` and fixed in scope: the indistinguishability guarantee had no real test.**
@@ -127,6 +128,17 @@ rule forbade changing the progress payload. That rule was release-scoped; this r
   deletion now fails exactly that test. **Same lesson as `v0.93.0`'s blocking finding — a mocked repository cannot
   test a predicate** — and it recurred in the very release that recorded it, which is why the executing test lives
   beside the others in `NativeQueryPostgresIntegrationTest` rather than in the service's mocked class.
+- **⚠️ Audit note on how that split is actually pinned, so the guarantee is not over-claimed.** The mutation this
+  item was written around — **re-adding `engagement` to the response** — fails at **compile** time, not as a test
+  assertion, because the test constructs the record directly. That is a *stronger* guard than a test, but it
+  means `serializedProgressPayloadContainsNoEngagementKey` was never exercised by it: for a Java record, any
+  component change breaks compilation before Jackson ever runs. **That test's real value is narrower than its name
+  suggests** — it guards serialization-level drift (a computed property, a `@JsonInclude` change, a future field),
+  not the removal itself. It is worth keeping for exactly that, and its `containsExactlyInAnyOrder` form also
+  catches an accidental addition. **The behavioural half WAS mutation-verified:** restoring the
+  `engagement.studyDaysThisWeek()` disjunct to `hasActivity` fails four tests, including
+  `learnerWithOnlyStudyDaysReturnsSuccessfulExplicitlyEmptyProgressAggregates`, which is the one that pins the
+  inference-channel argument rather than the field list.
 
 ## v0.93.0 - Progress Refinement
 
