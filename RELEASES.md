@@ -1,5 +1,120 @@
 # RELEASES.md - NoteLib
 
+## v0.94.0 - Connection Experience
+
+**Status: In progress** (kicked off 2026-08-28)
+
+Theme: make a connection reachable by a link, make the two sharing switches mean exactly what they say, and stop
+an invitation from dying in silence.
+
+### Why this release exists
+
+**Phase 4 of the ratified Learning Connections direction** (`docs/claude-plans/learning-connections-phase-plan.md`,
+§13). **⚠️ Phase 4 is ONE LINE in that plan** — *"shareable invitation links, supporter onboarding, connection
+management"* — so it was audited against code before scoping, the way `v0.89.0` audited Phase 1 rather than
+trusting its own roadmap entry. **That audit changed the release's shape and one of its findings halves an item.**
+
+**Audit result, verified at kickoff:**
+
+1. **Supporter onboarding is BLOCKED and is therefore OUT OF SCOPE as sequencing, not as a defect.** Onboarding is
+   frozen until `[CHECKPOINT — due 2026-09-11]`, 14 days out. It becomes a clean `v0.95.0`.
+2. **"Resend an invitation" is HALF-BUILT, and the built half is the hard half.** There is no resend endpoint
+   anywhere — verified across all of `backend/src/main/java` and `frontend/lib/api.ts`, not just the controller —
+   **but re-inviting the same address already RE-ARMS the expired row by updating `expires_at`**, and
+   `LinkedLearnerInvitationReArmTest` guards the direction bug that re-arm once had. What is missing is that
+   nobody is ever told. `listInvitations` filters on `findByInviterUserIdAndStatusAndExpiresAtAfter`, so **an
+   expired invitation SILENTLY VANISHES from the inviter's list** — they cannot tell whether the person declined,
+   ignored it, or the clock simply ran out. `LinkedLearnerInvitationResponse` carries no `expiresAt`, so no
+   frontend surface could show the clock even if it wanted to.
+3. **Shareable invitation links are a SECURITY DESIGN, not a feature.** ⚠️ **Raised as a deferral and the owner
+   ruled to scope it now (2026-08-28), accepting the three constraints below as anti-drift rules.** Recorded
+   because the reasoning must not be re-derived: a link **bypasses email-keying**, which is exactly what `v0.90.0`
+   shipped to close the account-existence oracle; whoever holds the link becomes the counterparty, which cuts
+   against `v0.89.0`'s ruling that *acceptance is load-bearing, since without it anyone could claim a relationship
+   by knowing an email address*; and it must still route a minor through guardian consent, because birth year is
+   collected at link time from the learner.
+
+**And one carried defect is fixed rather than deferred a second time.** `v0.93.0`'s cold-agent pressure test found
+— independently, from two agents on opposite halves — that `LinkedLearnerProgressResponse.engagement` is
+byte-for-byte the payload the `ACTIVITY` scope gates, so **a live `PROGRESS` grant makes the learner's activity
+toggle inert and the learner is not told.** It was recorded rather than fixed because `v0.93.0`'s own anti-drift
+rule forbade changing the progress payload. That rule was release-scoped; this release revisits it deliberately.
+
+### Planned Scope
+
+- **1. Split the progress payload so the two switches mean what they say (backend + frontend).**
+  **⚠️ OWNER DECISION 2026-08-28: split, rather than couple the toggles or disclose in copy.** Remove `engagement`
+  from `LinkedLearnerProgressResponse`; streaks, longest streak, study days and engagement mode become reachable
+  **only** through a live `ACTIVITY` grant. **This is the structural fix and it is the one that makes turning
+  activity off actually do something** — consistent with *absence of a grant means no access*, rather than
+  asserting scope independence by convention while the payload quietly ignores it. **⚠️ `hasActivity` must be
+  re-derived** — it currently reads `engagement.studyDaysThisWeek`. **⚠️ A supporter holding only `PROGRESS`
+  loses streaks and study days from that view; that is the intended consequence, not a regression.** The
+  supporter-facing copy `v0.93.0` added (*"…study activity is visible through shared progress"*) becomes FALSE and
+  must go.
+- **2. Shareable invitation links (backend + frontend).** **⚠️ Scoped on owner ruling against a deferral
+  recommendation; the three constraints below are anti-drift, not advice.**
+  **⚠️ A link must NOT reopen the account-existence oracle** `v0.90.0` closed — nothing about whether an address
+  or account exists may be inferable from link creation, redemption or failure.
+  **⚠️ Acceptance stays load-bearing.** Holding a link must not by itself create an `ACCEPTED` relationship; the
+  redeeming party takes an explicit act, and the inviter must be able to revoke a link before it is used.
+  **⚠️ Guardian consent is NOT bypassable by link.** A learner below the threshold redeeming a link must land in
+  the same `PENDING` + consent path as an email-keyed invitation; birth year is still collected at link time from
+  the learner, never from the inviter.
+  **⚠️ Invitations stay ONE-AT-A-TIME by principle** (`v0.90.0`) — a link is a delivery mechanism for one
+  relationship, **not** a multi-recipient invite. The quiz share link remains the many-recipient mechanism and is
+  neither extended nor merged into this.
+- **3. An invitation stops dying in silence (backend + frontend).** Surface `expiresAt` on
+  `LinkedLearnerInvitationResponse` and show the clock on a pending invitation. When one has expired, say so and
+  point at re-inviting, **which already re-arms the existing row** — so this is disclosure of a working path, not
+  a new mechanism. **⚠️ Do NOT add a resend endpoint that writes a NEW invitation row**, and do not change what a
+  row in `linked_learner_invitations` means: `[CHECKPOINT — due 2026-10-13]` reads that table to ask whether the
+  30-day TTL is cutting real acceptances.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Absence of a live grant means NO ACCESS**, and after item 1 that is true of the engagement fields too, not
+  merely asserted about them.
+- **⚠️ The progress read stays UNIDIRECTIONAL** — supporter reads learner, never the reverse. `requireGrant` is
+  symmetric; the explicit caller-is-supporter assertion in `requireAcceptedLearnerId` stays, and the test that
+  pins it (`learnerCannotReadSupporterEvenWithAReverseDirectionProgressGrant`) must keep failing on its removal.
+- **⚠️ `PROGRESS` grants stay learner-issued only.** Activity stays grantable by either party.
+- **⚠️ Granting requires `ACCEPTED`; withdrawing deliberately does not**, and the sharing panel keeps rendering on
+  `PENDING` so a learner can withdraw during a birth-year pause.
+- **⚠️ Every read re-verifies `ACCEPTED`** — no cache, no grace.
+- **⚠️ Guardian consent stays re-asserted inside the grant check**, including its deliberate deny-on-null-birth-year
+  branch.
+- **⚠️ Do NOT change what `linked_learner_relationships`, `_invitations` or `_guardian_consents` MEAN** —
+  `[CHECKPOINT — due 2026-09-19]`, `[CHECKPOINT — due 2026-09-26]` and `[CHECKPOINT — due 2026-10-13]` all read
+  those tables.
+- **⚠️ No relationship-type column, no new profile type, nothing gated on `ProfileType`.**
+- **⚠️ `NoteVisibility` stays `PRIVATE | PUBLIC`.**
+- **⚠️ No endpoint accepts a learner user id** — authorization keys on the relationship or the link token.
+- **⚠️ No public people search**, explicitly excluded from Phase 4 by the plan.
+- **⚠️ OUT OF SCOPE, each needing its own decision (Phase 5): mastery comparison between people, scores,
+  leaderboards, activity rings, social feed, reactions.**
+- **⚠️ Supporter onboarding is OUT** until the `2026-09-11` freeze lifts. Do not touch onboarding.
+- **⚠️ Do NOT lengthen `NativeQueryParameterTypingTest`'s pattern**, and any new native query must keep
+  `NativeQueryPostgresIntegrationTest`'s exact-count assertion honest by raising `EXPECTED_NATIVE_QUERIES`
+  deliberately.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: FULL cold-agent test**, decided now. Under the gate rewritten in `CLAUDE.md` at the
+  `v0.93.0` signoff, one trigger is enough; **this release fires two** — it introduces a link-based authentication
+  path AND changes a permission payload, so it moves an authorization boundary in two independent places. The
+  ~490k-token cost is accepted deliberately rather than by default.
+- **The `### Planned Scope` heading above is permanent.** Delivery appends to `### Shipped` beneath it. At signoff
+  the completeness gate reads the list **from this file** — and at `v0.93.0` that gate earned its place by
+  catching a numbering collision, so the list must stay numbered without duplicates.
+- **A `[CHECKPOINT]` row is owed at signoff** for the shareable-link half, which ships ahead of any evidence that
+  link-based invitation converts better than email-keyed. Item 3 additionally needs the deploy-split caveat
+  recorded **before** `[CHECKPOINT — due 2026-10-13]`'s read, since making expiry visible may itself change the
+  acceptance rate that checkpoint measures.
+
+### Shipped
+
+
 ## v0.93.0 - Progress Refinement
 
 **Status: Released** (kicked off 2026-08-27, signed off 2026-08-28)
