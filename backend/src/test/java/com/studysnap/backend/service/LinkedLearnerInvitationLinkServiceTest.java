@@ -167,8 +167,16 @@ class LinkedLearnerInvitationLinkServiceTest {
                 .isInstanceOf(LinkedLearnerRelationshipAlreadyExistsException.class);
     }
 
+    /**
+     * ⚠️ NAMED FOR WHAT IT ACTUALLY CHECKS. This stubs `findUsableByToken` empty for all four token
+     * strings, so the four "cases" are ONE case — it proves the exception is constructed identically,
+     * nothing more. That the four STATES are genuinely indistinguishable is a property of the query
+     * predicate, and is pinned by `revokedRedeemedAndExpiredInvitationLinksAreAllUnusable` in
+     * `NativeQueryPostgresIntegrationTest`, against real rows. Renamed at the v0.94.0 pressure test,
+     * which found the old name promised the stronger guarantee.
+     */
     @Test
-    void unknownRevokedExpiredAndRedeemedAllUseOneNotFoundContract() {
+    void theNotFoundExceptionItselfIsIdenticalWhicheverBranchRaisesIt() {
         UUID callerId = UUID.randomUUID();
         when(linkRepository.findUsableByToken(anyString(), any())).thenReturn(Optional.empty());
 
@@ -213,6 +221,55 @@ class LinkedLearnerInvitationLinkServiceTest {
         relationship.setInitiatedBy(LinkedLearnerSide.LEARNER);
         relationship.setStatus(LinkedLearnerStatus.PENDING);
         return relationship;
+    }
+
+    /**
+     * ⚠️ Pins the VALUE of the no-name fallback, not just the response's shape.
+     *
+     * <p>A cold-agent pressure test changed `PRIVATE_DISPLAY_NAME_FALLBACK` to `user.getEmail()` and
+     * nothing failed: the existing test asserts record COMPONENT NAMES, and the fallback string
+     * appeared in no test anywhere. The code comment says "Never falls back to email" and the feature
+     * doc says "never email or user id" — both were unenforced.
+     */
+    @Test
+    void aCreatorWithNoNameResolvesToAPlaceholderAndNeverToTheirEmail() {
+        UUID callerId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UserEntity nameless = new UserEntity();
+        nameless.setId(creatorId);
+        nameless.setEmail("private-address@example.test");
+        when(linkRepository.findUsableByToken(eq(TOKEN), any()))
+                .thenReturn(Optional.of(link(creatorId, LinkedLearnerSide.SUPPORTER)));
+        when(userRepository.findById(creatorId)).thenReturn(Optional.of(nameless));
+
+        LinkedLearnerInvitationLinkResolveResponse response = service.resolve(callerId, TOKEN);
+
+        assertThat(response.inviterName()).doesNotContain("@");
+        assertThat(response.inviterName()).isNotEqualTo(nameless.getEmail());
+        assertThat(response.inviterName()).isNotBlank();
+    }
+
+    /**
+     * ⚠️ Pins that a SUPPORTER redeemer's birth year is never captured. AGENTS.md states birth year is
+     * "collected at link time from the learner, never from the inviter"; a pressure test changed the
+     * role condition to `if (true)` and all 1,786 tests stayed green.
+     */
+    @Test
+    void aSupporterRedeemingALearnersLinkNeverHasTheirBirthYearCaptured() {
+        UUID creatorId = UUID.randomUUID();
+        UUID redeemerId = UUID.randomUUID();
+        LinkedLearnerInvitationLinkEntity learnerCreated = link(creatorId, LinkedLearnerSide.LEARNER);
+        LinkedLearnerRelationshipEntity relationship = relationship(redeemerId, creatorId);
+        when(linkRepository.findUsableByToken(eq(TOKEN), any())).thenReturn(Optional.of(learnerCreated));
+        when(userRepository.findById(redeemerId)).thenReturn(Optional.of(user(redeemerId, "Sam")));
+        when(linkRepository.markRedeemedIfUsable(eq(TOKEN), eq(redeemerId), any())).thenReturn(1);
+        when(linkedLearnerService.createPendingRelationship(
+                eq(redeemerId), eq(creatorId), eq(LinkedLearnerSide.SUPPORTER), any()))
+                .thenReturn(new LinkedLearnerService.PendingRelationshipCreation(relationship, true));
+
+        service.redeem(redeemerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(1990));
+
+        verify(linkedLearnerService, never()).captureLearnerBirthYearIfMissing(any(), any());
     }
 
     private UserEntity user(UUID id, String name) {

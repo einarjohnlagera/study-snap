@@ -2,6 +2,7 @@ package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.LinkedLearnerGrantScope;
+import com.studysnap.backend.entity.LinkedLearnerInvitationLinkEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.model.NoteLibraryReadiness;
 import com.studysnap.backend.model.NoteListItemProjection;
@@ -293,6 +294,54 @@ class NativeQueryPostgresIntegrationTest {
                 .as("a revoked link cannot be claimed").isZero();
         assertThat(invitationLinkRepository.markRedeemedIfUsable("ExpiredTokenAAAAAAAAAA", redeemer, now))
                 .as("an expired link cannot be claimed").isZero();
+    }
+
+    /**
+     * ⚠️ Covers the TWO link queries the earlier real-row test never reached.
+     *
+     * <p>A cold-agent pressure test neutralised `findLiveByCreator`'s creator predicate, its
+     * `revokedAt is null` filter, and `markRevokedIfUsable`'s creator predicate — **all 1,786 tests
+     * stayed green each time**. That matters because `list()` returns the token AND the full
+     * invitation URL, so an unscoped creator filter would hand one person another's live links.
+     *
+     * <p>This is the THIRD recurrence of one class in this repository: a mocked repository cannot
+     * test a predicate. `LinkedLearnerInvitationLinkRepository` has four queries; the release that
+     * diagnosed the class added real-row coverage for two of them.
+     */
+    @Test
+    void invitationLinkQueriesAreScopedToTheirCreatorAndToLiveRows() {
+        UUID creator = seedUser("link-owner");
+        UUID otherCreator = seedUser("link-other");
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        UUID mine = UUID.randomUUID();
+        seedInvitationLink(mine, "OwnerLiveTokenAAAAAAAA", creator);
+        seedInvitationLink("OtherLiveTokenAAAAAAAA", otherCreator);
+        UUID revoked = UUID.randomUUID();
+        seedInvitationLink(revoked, "OwnerRevokedTokenAAAAA", creator);
+        jdbcTemplate.update(
+                "update linked_learner_invitation_links set revoked_at = now() where id = ?", revoked);
+
+        assertThat(invitationLinkRepository.findLiveByCreator(creator, now))
+                .as("only this creator's live links — the list exposes tokens and full URLs")
+                .extracting(LinkedLearnerInvitationLinkEntity::getId)
+                .containsExactly(mine);
+
+        assertThat(invitationLinkRepository.markRevokedIfUsable(mine, otherCreator, now))
+                .as("a non-creator cannot revoke someone else's link")
+                .isZero();
+        assertThat(invitationLinkRepository.markRevokedIfUsable(mine, creator, now))
+                .as("the creator can").isEqualTo(1);
+        assertThat(invitationLinkRepository.markRevokedIfUsable(mine, creator, now))
+                .as("revoking twice is not a second revocation").isZero();
+
+        UUID claimable = UUID.randomUUID();
+        seedInvitationLink(claimable, "OwnerClaimTokenAAAAAAA", creator);
+        UUID redeemer = seedUser("link-redeemer2");
+        assertThat(invitationLinkRepository.markRedeemedIfUsable("OwnerClaimTokenAAAAAAA", redeemer, now))
+                .isEqualTo(1);
+        assertThat(invitationLinkRepository.markRedeemedIfUsable("OwnerClaimTokenAAAAAAA", redeemer, now))
+                .as("single-threaded second claim on an already-redeemed row").isZero();
     }
 
     private void seedInvitationLink(String token, UUID creatorUserId) {

@@ -629,8 +629,14 @@ public class LinkedLearnerService {
         // counsel — planned rather than hypothetical, which is why this is defence in depth and not
         // dead code.
         boolean counterpartyIsLearner = callerRole == LinkedLearnerSide.SUPPORTER;
+        // ⚠️ An UNKNOWN birth year withholds too, matching requireGrant's deny-on-null branch. Without
+        // this the DTO failed OPEN exactly where the check fails CLOSED — the stale-permissive shape
+        // this predicate exists to remove — because `consentRequired` is false when the year is null.
+        // Found by the v0.94.0 cold-agent pressure test, in code added by v0.94.0 item 5 whose own
+        // comment claimed to mirror that gate.
+        boolean learnerAgeUnknown = counterpartyIsLearner && learner.getBirthYear() == null;
         boolean counterpartyDataWithheldForConsent =
-                counterpartyIsLearner && consentRequired && !consentRecorded;
+                learnerAgeUnknown || (counterpartyIsLearner && consentRequired && !consentRecorded);
         boolean readableFromCounterparty = accepted && !counterpartyDataWithheldForConsent;
 
         return new LinkedLearnerResponse(

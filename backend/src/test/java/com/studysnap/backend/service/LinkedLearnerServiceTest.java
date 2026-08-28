@@ -756,6 +756,38 @@ class LinkedLearnerServiceTest {
      * because recordGuardianConsent requires PENDING. Reachable by raising GUARDIAN_CONSENT_MAX_AGE,
      * which is owner-owned and pending counsel.
      */
+    /**
+     * ⚠️ The DTO must fail CLOSED on an unknown learner age, matching {@code requireGrant}'s
+     * deny-on-null branch. `consentRequired` is false when the year is null, so without an explicit
+     * unknown-age check the DTO showed access the authorization call denies — the stale-permissive
+     * shape item 5 existed to remove, present in item 5's own code. Found by the v0.94.0 pressure test.
+     */
+    @Test
+    void unknownLearnerAgeWithholdsAccessJustAsRequireGrantDenies() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(null);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        LinkedLearnerGrantEntity activity = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.ACTIVITY);
+        LinkedLearnerGrantEntity progress = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.PROGRESS);
+        stubUser(supporter);
+        stubUser(learner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                Set.of(relationship.getId()), List.of(
+                        LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS)))
+                .thenReturn(List.of(activity, progress));
+
+        LinkedLearnerResponse supporterView = service.list(supporter.getId()).getFirst();
+
+        assertThat(supporterView.activitySharedWithMe()).isFalse();
+        assertThat(supporterView.progressSharedWithMe()).isFalse();
+    }
+
     @Test
     void acceptedRelationshipMissingGuardianConsentReportsNoAccessFromTheLearner() {
         UserEntity supporter = user(SUPPORTER_EMAIL);
