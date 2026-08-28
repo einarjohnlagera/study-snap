@@ -29,6 +29,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.mockito.Mockito.doThrow;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -46,6 +47,7 @@ class LinkedLearnerProgressServiceTest {
     @Mock private ProgressReportService progressReportService;
     @Mock private NoteCollectionService noteCollectionService;
     @Mock private UserRepository userRepository;
+    @Mock private AnalyticsService analyticsService;
 
     private LinkedLearnerProgressService progressService;
 
@@ -57,7 +59,8 @@ class LinkedLearnerProgressServiceTest {
                 dashboardService,
                 progressReportService,
                 noteCollectionService,
-                userRepository
+                userRepository,
+                analyticsService
         );
     }
 
@@ -80,7 +83,7 @@ class LinkedLearnerProgressServiceTest {
     }
 
     @Test
-    void acceptedSupporterReadReturnsOnlyAggregateLearnerProgress() {
+    void progressAuthorizedSupporterReadReturnsOnlyAggregateLearnerProgress() {
         UUID callerUserId = UUID.randomUUID();
         UUID relationshipId = UUID.randomUUID();
         UUID learnerUserId = UUID.randomUUID();
@@ -109,6 +112,11 @@ class LinkedLearnerProgressServiceTest {
         assertThat(response.collectionProgress()).isEqualTo(
                 new LinkedLearnerProgressResponse.CollectionProgressCounts(2, 6, 4, 3));
         assertThat(response.hasActivity()).isTrue();
+        assertThat(Arrays.stream(LinkedLearnerProgressResponse.class.getRecordComponents())
+                .map(java.lang.reflect.RecordComponent::getName))
+                .containsExactly(
+                        "relationshipId", "learnerDisplayName", "quizPerformance", "engagement",
+                        "readiness", "collectionProgress", "hasActivity");
     }
 
     @Test
@@ -159,8 +167,13 @@ class LinkedLearnerProgressServiceTest {
         verify(dashboardService).getStudyEngagement(learnerUserId);
         verify(progressReportService).getProgressReport(eq(learnerUserId), eq(null), any(OffsetDateTime.class));
         verify(noteCollectionService).list(learnerUserId);
+        verify(analyticsService).trackEvent(
+                callerUserId,
+                com.studysnap.backend.entity.AnalyticsEventType.CONNECTION_PROGRESS_VIEWED,
+                relationshipId,
+                java.util.Map.of());
         verifyNoMoreInteractions(authorizationService, dashboardService, progressReportService,
-                noteCollectionService, userRepository);
+                noteCollectionService, userRepository, analyticsService);
     }
 
     @Test
@@ -177,6 +190,26 @@ class LinkedLearnerProgressServiceTest {
                 "concept", "concepts", "subject", "subjects", "title", "titles",
                 "note", "notes", "content", "summary", "studypackid", "noteid");
         assertThat(readinessFields).doesNotContain("concept", "subject", "title", "note", "content");
+    }
+
+    @Test
+    void analyticsFailureDoesNotFailAnAuthorizedProgressRead() {
+        UUID callerUserId = UUID.randomUUID();
+        UUID relationshipId = UUID.randomUUID();
+        UUID learnerUserId = UUID.randomUUID();
+        stubAuthorizedRead(callerUserId, relationshipId, learnerUserId);
+        when(dashboardService.getMasterySnapshot(learnerUserId))
+                .thenReturn(new MasterySnapshotResponse(null, null, 0));
+        when(dashboardService.getStudyEngagement(learnerUserId))
+                .thenReturn(new StudyEngagementResponse(EngagementMode.FOCUSED, 0, 0, 0));
+        when(progressReportService.getProgressReport(eq(learnerUserId), eq(null), any(OffsetDateTime.class)))
+                .thenReturn(progressReport(List.of()));
+        when(noteCollectionService.list(learnerUserId)).thenReturn(List.of());
+        doThrow(new IllegalStateException("analytics unavailable"))
+                .when(analyticsService).trackEvent(any(), any(), any(), any());
+
+        assertThatCode(() -> progressService.getProgress(callerUserId, relationshipId))
+                .doesNotThrowAnyException();
     }
 
     private void stubAuthorizedRead(UUID callerUserId, UUID relationshipId, UUID learnerUserId) {

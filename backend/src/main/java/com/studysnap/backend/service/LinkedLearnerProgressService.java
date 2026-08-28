@@ -6,19 +6,23 @@ import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.ProgressReportResponse;
 import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.SubjectProgressEntry;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.LinkedLearnerProgressNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class LinkedLearnerProgressService {
     private final LinkedLearnerReadAuthorizationService authorizationService;
@@ -27,6 +31,7 @@ public class LinkedLearnerProgressService {
     private final ProgressReportService progressReportService;
     private final NoteCollectionService noteCollectionService;
     private final UserRepository userRepository;
+    private final AnalyticsService analyticsService;
 
     @Transactional(readOnly = true)
     public LinkedLearnerProgressResponse getProgress(UUID callerUserId, UUID relationshipId) {
@@ -58,7 +63,7 @@ public class LinkedLearnerProgressService {
                 || engagement.studyDaysThisWeek() > 0
                 || collectionProgress.practicedItems() > 0;
 
-        return new LinkedLearnerProgressResponse(
+        LinkedLearnerProgressResponse response = new LinkedLearnerProgressResponse(
                 relationshipId,
                 resolveDisplayName(learner),
                 quizPerformance,
@@ -67,6 +72,27 @@ public class LinkedLearnerProgressService {
                 collectionProgress,
                 hasActivity
         );
+        trackAnalytics(callerUserId, relationshipId);
+        return response;
+    }
+
+    private void trackAnalytics(UUID callerUserId, UUID relationshipId) {
+        try {
+            analyticsService.trackEvent(
+                    callerUserId,
+                    AnalyticsEventType.CONNECTION_PROGRESS_VIEWED,
+                    relationshipId,
+                    Map.of()
+            );
+        } catch (RuntimeException analyticsFault) {
+            // Analytics must never turn an authorized progress read into a failed response.
+            log.warn(
+                    "action=track_progress_view_analytics outcome=failed userId={} relationshipId={}",
+                    callerUserId,
+                    relationshipId,
+                    analyticsFault
+            );
+        }
     }
 
     private LinkedLearnerProgressResponse.ReadinessCounts aggregateReadiness(

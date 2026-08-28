@@ -2,9 +2,9 @@
 
 ## Scope
 
-Linked Learners records a directional supporter → learner relationship only after mutual agreement. The relationship layer and the supporter progress read both shipped in `v0.89.0`; controlled note sharing shipped in `v0.91.0` and directional activity sharing in `v0.92.0`.
+Linked Learners records a directional supporter → learner relationship only after mutual agreement. The relationship layer and the supporter progress read both shipped in `v0.89.0`; controlled note sharing shipped in `v0.91.0`, directional activity sharing in `v0.92.0`, and explicit learner-granted progress permission in `v0.93.0`.
 
-**⚠️ PHASE NUMBERING — read this before using the word "Phase" anywhere in this file.** Two schemes exist and this document has already mixed them. The **canonical** scheme is the ratified Learning Connections plan (`docs/claude-plans/learning-connections-phase-plan.md`, and `ROADMAP.md`): **Phase 1 = shared learning material (`v0.91.0`, shipped), Phase 2 = activity sharing (`v0.92.0`, shipped), Phase 3 = per-scope `PROGRESS` grants (NOT built).** A superseded `v0.89.0`-era scheme numbered the *rollout of the relationship layer itself* and called the supporter progress read "Phase 3" — under the canonical scheme that read is simply shipped `v0.89.0` behaviour and is **not** Phase 3. **⚠️ `PROGRESS`-scope grants are NOT built. The supporter progress read IS built.** Those are different things and the old numbering makes them look like the same one.
+**⚠️ PHASE NUMBERING — read this before using the word "Phase" anywhere in this file.** Two schemes exist and this document has already mixed them. The **canonical** scheme is the ratified Learning Connections plan (`docs/claude-plans/learning-connections-phase-plan.md`, and `ROADMAP.md`): **Phase 1 = shared learning material (`v0.91.0`, shipped), Phase 2 = activity sharing (`v0.92.0`, shipped), Phase 3 = per-scope `PROGRESS` permission (`v0.93.0`, shipped).** A superseded `v0.89.0`-era scheme numbered the *rollout of the relationship layer itself* and called the original supporter progress read "Phase 3". Under the canonical scheme the read is `v0.89.0` behaviour whose implicit acceptance-based authorization was replaced by the Phase 3 grant.
 
 A supported learner remains a full, ordinary NoteLib account with their own login, plan and quota. A supporter may also be a learner. The relationship is separate from `ProfileType`; no supporter profile type exists or is required.
 
@@ -12,8 +12,8 @@ A supported learner remains a full, ordinary NoteLib account with their own logi
 
 | State | Meaning | Allowed actions |
 |---|---|---|
-| `PENDING` | A relationship exists but is not yet active: the invitation was accepted and required guardian consent is still outstanding, or an accepted connection was paused after a birth-year correction made consent necessary | Either party may revoke; the learner may record a birth year; the supporter may record required guardian consent |
-| `ACCEPTED` | The invited party explicitly accepted after any required consent was recorded | Either party may revoke |
+| `PENDING` | A relationship exists but is not yet active: the invitation was accepted and required guardian consent is still outstanding, or an accepted connection was paused after a birth-year correction made consent necessary | Either party may revoke; the learner may record a birth year; the supporter may record required guardian consent; either party may withdraw their own surviving activity grant, and the learner may withdraw their surviving progress grant |
+| `ACCEPTED` | The invited party explicitly accepted after any required consent was recorded | Either party may revoke or change their activity grant; the learner may change their progress grant |
 | `REVOKED` | Either party ended or declined the relationship | Revoke remains idempotent; a new invitation may create a new row |
 
 Either party can initiate. `initiated_by` records whether the supporter or learner sent the invitation, and only the opposite side can accept it. Knowing an account's email address is therefore never enough to create an accepted relationship.
@@ -28,9 +28,10 @@ Relationship state is safe under concurrent requests, and the mechanism is delib
 
 - **The birth-year decision holds a pessimistic write lock on the learner** (`findByIdForUpdate`). Acceptance reads the birth year under that lock, so a correction into the consent range cannot land between the read and the write. Both orderings are safe: if acceptance wins, the correction then observes the new `ACCEPTED` row and pauses it; if the correction wins, acceptance reads the corrected year and requires consent. **Every writer of `users.birth_year` takes this lock** — invite, accept, record and correct — because leaving one out reopens the window through that path.
 - **Status transitions are conditional updates**, never read-modify-save. Acceptance applies only while the row is still `PENDING`; revocation applies while it is `PENDING` **or** `ACCEPTED`, so revoking still wins when an acceptance committed first; and the correction's pause applies only while the row is `ACCEPTED`, so a revoke committing mid-correction is not resurrected.
+- **Grant creation is conditional on the relationship still being `ACCEPTED` in the insert statement.** A grant request that read `ACCEPTED` but loses a race to relationship revocation writes no row. Because a zero-row insert can also mean an identical live grant already exists, the service rechecks the live row: an idempotent repeat succeeds, while a lost authorization race returns not-found. Withdrawal deliberately has no status predicate, so a surviving grant can always be turned off during a pause.
 - Only one row is ever locked, and it is always the learner's, so no lock cycle exists.
 
-These five interleavings are pinned by `LinkedLearnerConcurrencyTest`, which runs two real transactions on two threads, takes the **real** row lock, and asserts the persisted row rather than a returned DTO. **⚠️ Its harness must model two things at once — the lock AND Hibernate returning a stale managed entity.** Each earlier version modelled one and silently lost the other, in both directions; a harness that skips the lock leaves this whole mechanism uncovered while still reporting green.
+These five interleavings are pinned by `LinkedLearnerConcurrencyTest`, which runs two real transactions on two threads and asserts persisted state rather than trusting a returned DTO. **⚠️ The grant-versus-revoke race is NOT among them and must not be re-added there:** that class mocks the grant repository, so a test written against it can only model its own answer — one was written that way, hardcoded the zero row count it existed to prove, and was removed at the `v0.93.0` pressure test. The conditional insert's `ACCEPTED` predicate is instead executed for real by `NativeQueryPostgresIntegrationTest`. Its acceptance/correction cases take the **real** learner-row lock. **⚠️ That part of the harness must model two things at once — the lock AND Hibernate returning a stale managed entity.** Each earlier version modelled one and silently lost the other, in both directions; a harness that skips the lock leaves that mechanism uncovered while still reporting green.
 
 Live duplicate rows for the same supporter → learner direction are prevented by a partial unique index covering `PENDING` and `ACCEPTED`. `REVOKED` history does not block a fresh invitation. A database check and a service guard both prevent self-linking. Invitations carry their own partial unique index over inviter and address, active only while the invitation is `PENDING`.
 
@@ -132,9 +133,9 @@ The caller's link list contains only:
 - relationship status;
 - created, accepted and revoked dates;
 - workflow flags needed to finish birth-year and consent steps.
-- two independent activity-grant states: activity shared by the caller and activity shared by the counterparty.
+- four grant-derived states: activity and progress shared by the caller, plus activity and progress actually shared with the caller. `*SharedByMe` reflects the live row even while a connection is paused; `*SharedWithMe` additionally requires `ACCEPTED`, because it represents current access.
 
-The relationship list itself contains no readiness, progress, score, quiz performance, note, Study Pack, collection or `ConceptHealth` data.
+The relationship list itself contains no readiness counts, progress aggregates, score, quiz performance, note, Study Pack, collection or `ConceptHealth` data; its progress booleans are permission state only.
 
 Notes remain private. The link is free metadata and does not pool, transfer or change subscription or generation quota.
 
@@ -148,8 +149,7 @@ B sharing with A. The connection response therefore carries two separately compu
 Each person can change only the grant whose `from_user_id` is their authenticated user id. Relationship and
 counterparty ids are derived from the loaded relationship, never supplied by the request. Turning sharing off
 sets `revoked_at`; it never deletes history, and turning it back on inserts a new row. Both operations are
-idempotent. The schema also permits `PROGRESS`, but Phase 2 never writes or reads that scope; it exists solely so
-Phase 3 does not require a second grant-table migration.
+idempotent. The same table also stores `PROGRESS`; `v0.93.0` began using that scope without another migration.
 
 Every momentum read reloads the relationship and requires it to be exactly `ACCEPTED`, then requires the live
 counterparty-to-caller `ACTIVITY` grant. There is no cache or grace period, so revoking either the grant or the
@@ -175,6 +175,11 @@ deliberately excludes `OPENED_STUDY_PACK` through the existing `MEANINGFUL_STUDY
 writes no activity event, `ConceptHealth`, progress timestamp or user state. Zeroes render as an honest empty
 answer rather than being hidden.
 
+Because the progress response contains those same four engagement fields, supporter-facing copy describes
+activity **access** across both scopes. When `ACTIVITY` is off but `PROGRESS` is on, the card says activity is
+visible through shared progress; it does not claim an activity grant exists, and the momentum panel remains
+unavailable.
+
 ### Activity-sharing analytics
 
 Phase 2's grant-to-view loop uses three product-analytics events, separate from learner activity tracking:
@@ -189,9 +194,9 @@ and denied or failed momentum reads emit nothing. Analytics publication is best-
 transition or momentum response. These events contain no streak, study-day, score, mastery, concept, title or
 other learning-content field, and they do not create `UserActivityEventEntity` rows or change learning state.
 
-## Supporter progress read (shipped in `v0.89.0`)
+## Learner-granted supporter progress read
 
-**⚠️ Formerly headed "Phase 3" under the superseded numbering — see the phase-numbering note above. This read is SHIPPED. Phase 3 in the canonical scheme is per-scope `PROGRESS` grants, which are NOT built.**
+The aggregate read shipped in `v0.89.0`; `v0.93.0` replaced its implicit `ACCEPTED`-means-access rule with an explicit `PROGRESS` grant. No payload field changed.
 
 **The owner-facing share listing is relationship-aware.** `GET /notes/{id}/shares` returns only live shares whose
 relationship is still `ACCEPTED`, matching what `PUT` will accept. Filtering on `revoked_at` alone kept a lapsed
@@ -205,11 +210,13 @@ the caller owns the session regardless. But a fault raised while *deciding* whet
 material is not evidence of access, so it denies. Unknown is not permission, the same rule the `v0.89.1` consent
 gate applies.
 
-The progress route is addressed only as `/linked-learners/{relationshipId}/progress`. It never accepts a learner user id. One shared authorization helper loads that relationship, verifies that the caller is its supporter, verifies that its status is exactly `ACCEPTED`, and returns the authorized learner id used by the aggregate services. A learner cannot use the route to read their supporter. A third party, a `PENDING` link, a `REVOKED` link and a missing relationship receive no data; revoked and missing relationships use the same not-found response.
+The learner alone may create a `PROGRESS` grant, directed learner → supporter. Activity remains grantable by either side; progress does not. The write requires a verified email, relationship membership and `ACCEPTED` when enabling. Disabling requires membership but not `ACCEPTED`, so a learner can withdraw a surviving row while a birth-year correction has paused the relationship. Repeat writes are idempotent, and analytics fires only for a real insert or revoke.
+
+The progress route is addressed only as `/linked-learners/{relationshipId}/progress`. It never accepts a learner user id. The authorization helper keeps the caller-is-supporter assertion explicit, then requires the live learner-to-supporter `PROGRESS` grant through the shared grant authorization service. That service re-verifies `ACCEPTED`, direction, guardian consent for learner data and the caller's verified email on every read. A learner cannot use the route to read their supporter even if a reverse-direction row somehow exists. A third party, no grant, a `PENDING` link, a `REVOKED` link and a missing relationship receive no data through the progress route's established `LINKED_LEARNER_PROGRESS_NOT_FOUND` contract.
 
 The caller must also have a **verified email**. That is redundant while every path granting an `ACCEPTED` relationship is itself gated, and it is deliberate: it means a future grant path that loses its gate cannot silently open this read too. It costs nothing, because `email_verified_at` is monotonic — nothing clears it, and an address change re-stamps it only once the new address is confirmed.
 
-Every request performs that authorization again. Revocation therefore cuts access immediately, with no cached view or grace period. The read is transactionally read-only and reuses the existing owner-scoped Dashboard, Progress and collection calculations with the authorized learner id. It creates no session, changes no `ConceptHealth`, progress timestamp, streak or engagement counter, and attributes no learner analytics event.
+Every request performs that authorization again. Grant revocation, relationship revocation, or a birth-year correction therefore cuts access immediately, with no cached view or grace period. The read is transactionally read-only and reuses the existing owner-scoped Dashboard, Progress and collection calculations with the authorized learner id. It creates no session, changes no `ConceptHealth`, progress timestamp, streak or engagement counter, and attributes no learner activity event. A successful response emits only relationship-scoped `CONNECTION_PROGRESS_VIEWED` product analytics; denied reads emit nothing and analytics failure cannot fail the response.
 
 ### What a supporter can see
 
@@ -219,7 +226,7 @@ Every request performs that authorization again. Revocation therefore cuts acces
 - collection counts: plans, total items, ready items and practiced items;
 - the counterparty display identity already present on the relationship.
 
-A learner with no activity returns a successful empty aggregate and is shown as **No learning activity yet**. A pending invitation is shown as pending and has no progress action.
+A learner with no activity returns a successful empty aggregate and is shown as **No learning activity yet**. A supporter sees *View progress* only when `progressSharedWithMe` is true. A pending connection shows its existing paused explanation, offers no view action, and leaves the learner's live sharing toggles reachable for withdrawal.
 
 ### Free-text names decision
 
@@ -239,4 +246,4 @@ Recipient note and Study Pack responses are separate allowlist DTOs containing l
 
 ## Dashboard presentation
 
-The Dashboard adds a **People you support** section for accounts with live supporter-side relationships. Accepted links lead to the relationship-scoped progress view; pending links name the actual blocker — the learner's birth year, guardian consent outstanding, or consent recorded and activation finishing — and never claim acceptance is still required, which since `V122` is false for every row written after the migration. This section is additive: a person who is both a learner and a supporter sees their own learning workspace and the people they support together, without a mode switch or a profile-type distinction. A supporter with no notes of their own therefore still has a useful home surface.
+The Dashboard adds a **People you support** section for accounts with live supporter-side relationships. An accepted link leads to the relationship-scoped progress view only when the learner's live `PROGRESS` grant makes `progressSharedWithMe` true. Accepted-without-grant and pending links offer no progress action; pending links name the actual blocker — the learner's birth year, guardian consent outstanding, or consent recorded and activation finishing — and never claim acceptance is still required, which since `V122` is false for every row written after the migration. This section is additive: a person who is both a learner and a supporter sees their own learning workspace and the people they support together, without a mode switch or a profile-type distinction. A supporter with no notes of their own therefore still has a useful home surface.

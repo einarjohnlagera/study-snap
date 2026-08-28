@@ -518,20 +518,21 @@ public class LinkedLearnerService {
         Set<UUID> relationshipIds = relationships.stream()
                 .map(LinkedLearnerRelationshipEntity::getId)
                 .collect(Collectors.toSet());
-        Map<UUID, Set<UUID>> sharedFromUserIdsByRelationship = relationshipIds.isEmpty()
+        Map<UUID, List<LinkedLearnerGrantEntity>> grantsByRelationship = relationshipIds.isEmpty()
                 ? Map.of()
-                : grantRepository.findByRelationshipIdInAndScopeAndRevokedAtIsNull(
-                                relationshipIds, LinkedLearnerGrantScope.ACTIVITY)
+                : grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                                relationshipIds, List.of(
+                                        LinkedLearnerGrantScope.ACTIVITY,
+                                        LinkedLearnerGrantScope.PROGRESS))
                         .stream()
                         .collect(Collectors.groupingBy(
-                                LinkedLearnerGrantEntity::getRelationshipId,
-                                Collectors.mapping(LinkedLearnerGrantEntity::getFromUserId, Collectors.toSet())
+                                LinkedLearnerGrantEntity::getRelationshipId
                         ));
         return relationships.stream()
                 .map(relationship -> toResponse(
                         relationship,
                         callerUserId,
-                        sharedFromUserIdsByRelationship.getOrDefault(relationship.getId(), Set.of())))
+                        grantsByRelationship.getOrDefault(relationship.getId(), List.of())))
                 .toList();
     }
 
@@ -547,19 +548,18 @@ public class LinkedLearnerService {
     }
 
     private LinkedLearnerResponse toResponse(LinkedLearnerRelationshipEntity relationship, UUID callerUserId) {
-        Set<UUID> sharedFromUserIds = grantRepository
-                .findByRelationshipIdInAndScopeAndRevokedAtIsNull(
-                        Set.of(relationship.getId()), LinkedLearnerGrantScope.ACTIVITY)
-                .stream()
-                .map(LinkedLearnerGrantEntity::getFromUserId)
-                .collect(Collectors.toSet());
-        return toResponse(relationship, callerUserId, sharedFromUserIds);
+        List<LinkedLearnerGrantEntity> grants = grantRepository
+                .findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                        Set.of(relationship.getId()), List.of(
+                                LinkedLearnerGrantScope.ACTIVITY,
+                                LinkedLearnerGrantScope.PROGRESS));
+        return toResponse(relationship, callerUserId, grants);
     }
 
     private LinkedLearnerResponse toResponse(
             LinkedLearnerRelationshipEntity relationship,
             UUID callerUserId,
-            Set<UUID> sharedFromUserIds
+            List<LinkedLearnerGrantEntity> grants
     ) {
         LinkedLearnerSide callerRole = callerUserId.equals(relationship.getSupporterUserId())
                 ? LinkedLearnerSide.SUPPORTER : LinkedLearnerSide.LEARNER;
@@ -572,6 +572,9 @@ public class LinkedLearnerService {
                 && guardianConsentPolicy.requiresGuardianConsent(learner.getBirthYear());
         boolean consentRecorded = consentRepository.findByRelationshipId(relationship.getId()).isPresent();
         boolean invitedParty = relationship.getInitiatedBy() != callerRole;
+        boolean accepted = relationship.getStatus() == LinkedLearnerStatus.ACCEPTED;
+        Set<UUID> activitySharedFromUserIds = sharedFromUserIds(grants, LinkedLearnerGrantScope.ACTIVITY);
+        Set<UUID> progressSharedFromUserIds = sharedFromUserIds(grants, LinkedLearnerGrantScope.PROGRESS);
 
         return new LinkedLearnerResponse(
                 relationship.getId(),
@@ -593,9 +596,21 @@ public class LinkedLearnerService {
                 learner.getBirthYear() == null,
                 consentRequired,
                 consentRecorded,
-                sharedFromUserIds.contains(callerUserId),
-                sharedFromUserIds.contains(counterpartyId)
+                activitySharedFromUserIds.contains(callerUserId),
+                accepted && activitySharedFromUserIds.contains(counterpartyId),
+                progressSharedFromUserIds.contains(callerUserId),
+                accepted && progressSharedFromUserIds.contains(counterpartyId)
         );
+    }
+
+    private Set<UUID> sharedFromUserIds(
+            List<LinkedLearnerGrantEntity> grants,
+            LinkedLearnerGrantScope scope
+    ) {
+        return grants.stream()
+                .filter(grant -> grant.getScope() == scope)
+                .map(LinkedLearnerGrantEntity::getFromUserId)
+                .collect(Collectors.toSet());
     }
 
     private void sendInvitationEmail(

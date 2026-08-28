@@ -10,6 +10,7 @@ import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
 import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
+import com.studysnap.backend.repository.LinkedLearnerGrantRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.InvitationRateLimitService;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,9 +41,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
 
 /**
- * The five interleavings that a Mockito-only test cannot prove.
+ * The concurrency interleavings that belong together in one two-transaction harness.
  *
  * <p>⚠️ WHY THIS EXISTS. Two release-blocking races were found in {@code v0.90.0} while every unit
  * test was green, because a mocked repository has no isolation, no locks and no second transaction.
@@ -50,11 +52,13 @@ import static org.mockito.Mockito.when;
  * transaction manager, coordinated by latches rather than sleeps, and assert the PERSISTED row —
  * never a returned DTO or a method invocation.
  *
- * <p>⚠️ HARNESS LIMITATION, stated rather than glossed: the repositories are wired to JDBC instead
- * of Hibernate, so this proves the concurrency DESIGN — the pessimistic learner lock and the
- * conditional status updates — against real SQL semantics. It does not exercise Hibernate's
- * persistence context. H2 was probed first and confirmed to BLOCK on {@code SELECT ... FOR UPDATE}
- * contention rather than throw, which is the production behaviour this depends on.
+ * <p>⚠️ HARNESS LIMITATION, stated rather than glossed: the relationship repositories are wired to
+ * JDBC instead of Hibernate, so the original five cases prove the pessimistic learner lock and
+ * conditional status updates against real SQL semantics. The grant/revoke case coordinates two real
+ * service transactions but models the native insert's zero-row conditional outcome through its
+ * repository boundary; the exact insert syntax and ACCEPTED predicate are separately executed against
+ * PostgreSQL. H2 was probed first and confirmed to BLOCK on {@code SELECT ... FOR UPDATE} contention
+ * rather than throw, which is the production behaviour the relationship cases depend on.
  */
 @SpringJUnitConfig(LinkedLearnerConcurrencyTest.TestConfiguration.class)
 class LinkedLearnerConcurrencyTest {
@@ -62,10 +66,12 @@ class LinkedLearnerConcurrencyTest {
     private static final int MINOR_YEAR = Year.now().getValue() - 10;
 
     @Autowired private LinkedLearnerService service;
+    @Autowired private LinkedLearnerGrantService grantService;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private UserRepository userRepository;
     @Autowired private LinkedLearnerRelationshipRepository relationshipRepository;
     @Autowired private LinkedLearnerGuardianConsentRepository consentRepository;
+    @Autowired private LinkedLearnerGrantRepository grantRepository;
     @Autowired private PlatformTransactionManager transactionManager;
 
     private UUID learnerId;
@@ -81,6 +87,7 @@ class LinkedLearnerConcurrencyTest {
         newTransaction = new TransactionTemplate(transactionManager);
         newTransaction.setPropagationBehavior(TransactionTemplate.PROPAGATION_REQUIRES_NEW);
 
+        jdbcTemplate.execute("drop table if exists linked_learner_grants");
         jdbcTemplate.execute("drop table if exists linked_learner_relationships");
         jdbcTemplate.execute("drop table if exists users");
         jdbcTemplate.execute("""
@@ -97,6 +104,16 @@ class LinkedLearnerConcurrencyTest {
                     learner_user_id uuid not null,
                     status varchar(16) not null,
                     accepted_at timestamp with time zone,
+                    revoked_at timestamp with time zone
+                )""");
+        jdbcTemplate.execute("""
+                create table linked_learner_grants (
+                    id uuid primary key,
+                    relationship_id uuid not null,
+                    from_user_id uuid not null,
+                    to_user_id uuid not null,
+                    scope varchar(16) not null,
+                    granted_at timestamp with time zone not null,
                     revoked_at timestamp with time zone
                 )""");
         jdbcTemplate.update("insert into users values (?, ?, null, ?)",
@@ -308,6 +325,20 @@ class LinkedLearnerConcurrencyTest {
         assertThat(persistedRevokedAt()).isNotNull();
     }
 
+    // ⚠️ REMOVED at the v0.93.0 pre-signoff pressure test: `progressGrantLosingTheRaceToRelationship
+    // RevokeWritesNoLiveRow` was SELF-FULFILLING and is deliberately not replaced here. Its mock
+    // hardcoded `return 0` — simulating the very outcome it existed to prove — and its closing
+    // `count(*) ... where revoked_at is null` assertion was vacuously zero, because a mocked
+    // repository never writes to that table. It added no guarantee over the existing unit test
+    // `LinkedLearnerGrantServiceTest.zeroRowInsertWithoutALiveGrantReportsNotFound`.
+    //
+    // The conditional insert's ACCEPTED predicate is now covered where it can actually be executed:
+    // `NativeQueryPostgresIntegrationTest.liveGrantInsertIsScopedToItsOwnRelationshipAndRequiresAccepted`
+    // runs the real statement against real rows and kills both the `'ACCEPTED'`->`'PENDING'` and the
+    // deleted-relationship-id mutants. Do not re-add a mocked "race" test here: this class mocks
+    // `grantRepository` (see setUp), so it CANNOT exercise that statement, and a test that models its
+    // own answer is worse than an absent one.
+
     // ---------------------------------------------------------------------------- infrastructure
 
     private Thread run(AtomicReference<Throwable> sink, Runnable body) {
@@ -509,6 +540,11 @@ class LinkedLearnerConcurrencyTest {
         }
 
         @Bean
+        LinkedLearnerGrantRepository grantRepository() {
+            return mock(LinkedLearnerGrantRepository.class);
+        }
+
+        @Bean
         UserRepository userRepository() {
             return mock(UserRepository.class);
         }
@@ -518,13 +554,14 @@ class LinkedLearnerConcurrencyTest {
                 LinkedLearnerRelationshipRepository relationshipRepository,
                 LinkedLearnerInvitationRepository invitationRepository,
                 LinkedLearnerGuardianConsentRepository consentRepository,
+                LinkedLearnerGrantRepository grantRepository,
                 UserRepository userRepository
         ) {
             return new LinkedLearnerService(
                     relationshipRepository,
                     invitationRepository,
                     consentRepository,
-                    mock(com.studysnap.backend.repository.LinkedLearnerGrantRepository.class),
+                    grantRepository,
                     userRepository,
                     mock(OnboardingGuardService.class),
                     mock(AuthService.class),
@@ -533,6 +570,18 @@ class LinkedLearnerConcurrencyTest {
                     new StudySnapProperties(),
                     new GuardianConsentPolicy(new StudySnapProperties()),
                     mock(InvitationRateLimitService.class));
+        }
+
+        @Bean
+        LinkedLearnerGrantService linkedLearnerGrantService(
+                LinkedLearnerRelationshipRepository relationshipRepository,
+                LinkedLearnerGrantRepository grantRepository
+        ) {
+            return new LinkedLearnerGrantService(
+                    relationshipRepository,
+                    grantRepository,
+                    mock(AuthService.class),
+                    mock(AnalyticsService.class));
         }
     }
 }

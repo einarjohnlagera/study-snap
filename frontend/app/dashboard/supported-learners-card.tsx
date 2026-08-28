@@ -25,10 +25,14 @@ export function SupportedLearnersCard({
                 <h3 className="font-semibold">{link.counterpartyDisplayName}</h3>
                 <p className="mt-1 text-sm text-foreground/65">{status.headline}</p>
               </div>
-              {link.status === "ACCEPTED" ? (
+              {link.progressSharedWithMe ? (
                 <ResponsiveActionLink href={`/linked-learners/${link.id}/progress`} action="progress" label="View progress" />
               ) : (
-                <p className="text-sm text-foreground/70">{status.detail}</p>
+                <p className="text-sm text-foreground/70">
+                  {link.status === "ACCEPTED"
+                    ? `${link.counterpartyDisplayName} is not sharing progress with you.`
+                    : status.detail}
+                </p>
               )}
             </Card>
           );

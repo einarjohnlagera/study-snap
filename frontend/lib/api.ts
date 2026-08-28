@@ -1112,6 +1112,8 @@ export type LinkedLearnerResponse = {
   guardianConsentRecorded: boolean;
   activitySharedByMe: boolean;
   activitySharedWithMe: boolean;
+  progressSharedByMe: boolean;
+  progressSharedWithMe: boolean;
 };
 
 export type LinkedLearnerActivityResponse = {
@@ -5543,6 +5545,22 @@ export async function setLinkedLearnerActivityGrant(
     true,
   );
   return parseApiResponse<{ granted: boolean }>(response, "Could not update activity sharing.");
+}
+
+export async function setLinkedLearnerProgressGrant(
+  relationshipId: string,
+  granted: boolean,
+): Promise<{ granted: boolean }> {
+  const response = await fetchWithAuth(
+    `/linked-learners/${relationshipId}/grants/progress`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ granted }),
+    },
+    true,
+  );
+  return parseApiResponse<{ granted: boolean }>(response, "Could not update progress sharing.");
 }
 
 export async function getLinkedLearnerActivity(

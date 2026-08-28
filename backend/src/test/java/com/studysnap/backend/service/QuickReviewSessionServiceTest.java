@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.exception.SharedNoteNotFoundException;
+import com.studysnap.backend.exception.QuickReviewSessionNotFoundException;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
@@ -100,9 +101,10 @@ class QuickReviewSessionServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(any(UUID.class), any(UUID.class), any()))
                 .thenAnswer(invocation -> quickReviewSessionRepository.findByIdAndUserId(
-                        invocation.getArgument(0),
-                        invocation.getArgument(1)
-                ));
+                                invocation.getArgument(0),
+                                invocation.getArgument(1)
+                        )
+                        .filter(session -> invocation.getArgument(2) == session.getSessionMode()));
         lenient().when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
                         any(UUID.class),
                         any(UUID.class),
@@ -1046,6 +1048,32 @@ class QuickReviewSessionServiceTest {
         assertThat(session.getCurrentRound()).isEqualTo(QuickReviewRound.RETRY);
         assertThat(session.getRetryCount()).isEqualTo(1);
         assertThat(session.getSessionState()).containsEntry("retryQuestionIndexes", List.of(1, 3));
+    }
+
+    @Test
+    void updateSessionProgress_rejectsNonQuickReviewSession() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity challengeSession = QuickReviewSessionEntityBuilder.anInProgressSession()
+                .withId(sessionId)
+                .withUserId(userId)
+                .withStudyPackId(studyPackId)
+                .withSessionMode(QuickReviewSessionMode.CHALLENGE)
+                .build();
+        QuickReviewSessionProgressRequest request = new QuickReviewSessionProgressRequest(
+                1,
+                QuickReviewRound.INITIAL,
+                0,
+                Map.of()
+        );
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId))
+                .thenReturn(Optional.of(challengeSession));
+
+        String id = sessionId.toString();
+        assertThatThrownBy(() -> quickReviewSessionService.updateSessionProgress(id, userId, request))
+                .isInstanceOf(QuickReviewSessionNotFoundException.class);
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
     }
 
     @Test

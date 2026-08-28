@@ -3,14 +3,12 @@ import { Activity, ArrowRight, BookOpen, LineChart, Link2, Lock, Send } from "lu
 import { pricingConfig } from "@/lib/pricing-config";
 
 /**
- * ⚠️ Every claim here must be live. This guide covers what shipped in v0.89.0–v0.92.0: quiz links,
- * connections, the supporter progress view, shared notes, and directional activity sharing.
+ * ⚠️ Every claim here must be live. This guide covers what shipped in v0.89.0–v0.93.0: quiz links,
+ * connections, shared notes, directional activity sharing, and learner-controlled progress sharing.
  *
- * <p>⚠️ Activity sharing IS built as of v0.92.0 (Phase 2) — this comment previously said it was not,
- * and that instruction outlived the feature by one release. Per-scope PROGRESS permissions are still
- * Phase 3 and are NOT built: do not describe a setting that decides what a connection can see beyond
- * choosing who to share a note with and whether to share your activity. Do not imply a guardian mode
- * or a supporter profile type.
+ * <p>⚠️ Activity sharing shipped in v0.92.0 (Phase 2), and learner-granted PROGRESS permission shipped
+ * in v0.93.0 (Phase 3). Activity can be shared in either direction; progress runs learner to supporter
+ * only. Do not imply a guardian mode or a supporter profile type.
  *
  * <p>⚠️ Plan numbers are imported from pricing-config, never retyped. They were hardcoded here until
  * v0.92.0 and would have drifted the moment a limit changed.
@@ -64,10 +62,12 @@ const SECTIONS: Section[] = [
     icon: LineChart,
     title: "Follow how they are doing",
     description:
-      "Once a connection is accepted, People you support on your Dashboard leads to their progress: how ready they are, how often they study, and how their quizzes are going.",
+      "After the learner turns on Share my study progress, People you support on your Dashboard leads to their progress: how ready they are, how often they study, and how their quizzes are going.",
     bullets: [
-      "Ending the connection cuts your access to it immediately",
+      "An accepted connection alone grants no progress access — the learner chooses whether to share it",
+      "The learner can turn progress sharing off at any time; ending or pausing the connection also cuts access immediately",
       "Looking at their progress never changes it",
+      "Supporters never receive the learner's notes or other authored study text",
     ],
     cta: { label: "Open Dashboard", href: "/dashboard" },
   },
@@ -81,6 +81,18 @@ const SECTIONS: Section[] = [
       "It works one way at a time: sharing yours does not make theirs visible to you. Whoever turned sharing on can turn it off, and either of you can end the connection",
       "They see streaks and study days, never your scores, your notes or what you studied",
       "Turning it off, or ending the connection, cuts their view immediately",
+    ],
+    cta: { label: "Learning connections", href: "/linked-learners" },
+  },
+  {
+    icon: LineChart,
+    title: "Choose whether a supporter sees your progress",
+    description:
+      "If you are the learner on a connection, turn on Share my study progress to let that supporter open your aggregate progress view. It is off until you choose to enable it.",
+    bullets: [
+      "Progress sharing is separate from study activity sharing — either can be on while the other is off",
+      "Only the learner can grant progress access; the supporter cannot enable it for themselves",
+      "You can turn it off even while a birth-year correction has paused the connection",
     ],
     cta: { label: "Learning connections", href: "/linked-learners" },
   },

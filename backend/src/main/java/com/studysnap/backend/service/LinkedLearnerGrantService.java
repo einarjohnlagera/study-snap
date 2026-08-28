@@ -7,6 +7,7 @@ import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.exception.LinkedLearnerNotFoundException;
+import com.studysnap.backend.exception.LinkedLearnerProgressGrantNotAllowedException;
 import com.studysnap.backend.repository.LinkedLearnerGrantRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,24 @@ public class LinkedLearnerGrantService {
             UUID relationshipId,
             boolean granted
     ) {
+        return setGrant(callerUserId, relationshipId, LinkedLearnerGrantScope.ACTIVITY, granted);
+    }
+
+    @Transactional
+    public LinkedLearnerActivityGrantResponse setProgressGrant(
+            UUID callerUserId,
+            UUID relationshipId,
+            boolean granted
+    ) {
+        return setGrant(callerUserId, relationshipId, LinkedLearnerGrantScope.PROGRESS, granted);
+    }
+
+    private LinkedLearnerActivityGrantResponse setGrant(
+            UUID callerUserId,
+            UUID relationshipId,
+            LinkedLearnerGrantScope scope,
+            boolean granted
+    ) {
         authService.requireEmailVerified(callerUserId);
         LinkedLearnerRelationshipEntity relationship = relationshipRepository.findById(relationshipId)
                 .orElseThrow(LinkedLearnerNotFoundException::new);
@@ -52,19 +71,33 @@ public class LinkedLearnerGrantService {
         }
         // Membership is required on BOTH branches — a non-party may not touch the row either way.
         UUID toUserId = resolveOtherParty(relationship, callerUserId);
+        if (granted
+                && scope == LinkedLearnerGrantScope.PROGRESS
+                && !callerUserId.equals(relationship.getLearnerUserId())) {
+            throw new LinkedLearnerProgressGrantNotAllowedException();
+        }
 
         int affectedRows;
         AnalyticsEventType eventType;
         if (granted) {
             affectedRows = grantRepository.insertLiveIfAbsent(
                     UUID.randomUUID(), relationshipId, callerUserId, toUserId,
-                    LinkedLearnerGrantScope.ACTIVITY.name(), OffsetDateTime.now(ZoneOffset.UTC));
-            eventType = AnalyticsEventType.CONNECTION_ACTIVITY_SHARED;
+                    scope.name(), OffsetDateTime.now(ZoneOffset.UTC));
+            if (affectedRows == 0 && grantRepository
+                    .findFirstByRelationshipIdAndFromUserIdAndScopeAndRevokedAtIsNull(
+                            relationshipId, callerUserId, scope)
+                    .filter(existing -> toUserId.equals(existing.getToUserId()))
+                    .isEmpty()) {
+                // Zero is ambiguous after the ACCEPTED predicate: it means either idempotent success
+                // or that the relationship stopped being accepted after the initial read.
+                throw new LinkedLearnerNotFoundException();
+            }
+            eventType = sharedEvent(scope);
         } else {
             affectedRows = grantRepository.revokeLive(
-                    relationshipId, callerUserId, LinkedLearnerGrantScope.ACTIVITY,
+                    relationshipId, callerUserId, scope,
                     OffsetDateTime.now(ZoneOffset.UTC));
-            eventType = AnalyticsEventType.CONNECTION_ACTIVITY_SHARE_REVOKED;
+            eventType = revokedEvent(scope);
         }
         if (affectedRows > 0) {
             trackAnalytics(
@@ -75,6 +108,18 @@ public class LinkedLearnerGrantService {
             );
         }
         return new LinkedLearnerActivityGrantResponse(granted);
+    }
+
+    private AnalyticsEventType sharedEvent(LinkedLearnerGrantScope scope) {
+        return scope == LinkedLearnerGrantScope.ACTIVITY
+                ? AnalyticsEventType.CONNECTION_ACTIVITY_SHARED
+                : AnalyticsEventType.CONNECTION_PROGRESS_SHARED;
+    }
+
+    private AnalyticsEventType revokedEvent(LinkedLearnerGrantScope scope) {
+        return scope == LinkedLearnerGrantScope.ACTIVITY
+                ? AnalyticsEventType.CONNECTION_ACTIVITY_SHARE_REVOKED
+                : AnalyticsEventType.CONNECTION_PROGRESS_SHARE_REVOKED;
     }
 
     private void trackAnalytics(

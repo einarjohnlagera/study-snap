@@ -46,7 +46,7 @@ import {
 import { buildLoginPath, clearAuthUser, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
 import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, passSavingsPct, resolveCyclePricing } from "@/lib/billing-pricing";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
-import { AI_QUIZZES_USAGE_LABEL } from "@/lib/usage-labels";
+import { AI_QUIZZES_USAGE_DESCRIPTION, AI_QUIZZES_USAGE_LABEL } from "@/lib/usage-labels";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
@@ -93,11 +93,13 @@ function UsageMetric({
   used,
   limit,
   resetDateLabel,
+  description,
 }: Readonly<{
   label: string;
   used: number;
   limit: number;
   resetDateLabel: string;
+  description?: string;
 }>) {
   const progressPercent = getUsageProgressPercent(used, limit);
   const hasReachedLimit = limit > 0 && used >= limit;
@@ -106,6 +108,7 @@ function UsageMetric({
     <div data-testid={metricTestId} className="space-y-3 rounded-md border border-border bg-background p-4">
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground">{label}</p>
+        {description ? <p className="text-xs text-foreground/60">{description}</p> : null}
         <p className="text-sm text-foreground/70">
           {used} / {limit}
         </p>
@@ -1076,6 +1079,7 @@ export default function SettingsPage() {
                   used={challengeQuizUsed}
                   limit={challengeQuizLimit}
                   resetDateLabel={usageResetDateLabel}
+                  description={AI_QUIZZES_USAGE_DESCRIPTION}
                 />
                 <ExportUsageMetric
                   label="DOCX Exports"
