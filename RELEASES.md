@@ -2,7 +2,7 @@
 
 ## v0.93.0 - Progress Refinement
 
-**Status: In progress** (kicked off 2026-08-27)
+**Status: Released** (kicked off 2026-08-27, signed off 2026-08-28)
 
 Theme: an accepted connection stops implying that someone can see your progress — the learner decides, per
 scope and per direction, and the product's only cross-user read finally asks.
@@ -104,14 +104,14 @@ code — and it is the strongest argument for doing Phase 3 next rather than any
   that outlives the feature by one release, which the `docs/features/` re-read pass structurally cannot catch.
   Naming it at kickoff is how it is prevented from happening twice.
 
-#### Added mid-release 2026-08-28, after items 1–5 shipped
+#### Added mid-release 2026-08-28, after items 1–6 shipped
 
 **⚠️ Appended here at the moment they were agreed, which is this release's own rule** — `v0.91.0` carried a
-folded-in item in conversation instead of in this list and it shipped as missing. Items 6–9 were selected by the
+folded-in item in conversation instead of in this list and it shipped as missing. Items 7–10 were selected by the
 owner from a survey of carried limitations and open backlog rows; the pre-declared cold-agent pressure test now
 covers them too.
 
-- **6. A native-query test harness against real PostgreSQL (test infrastructure).** Backlog Index row, opened at
+- **7. A native-query test harness against real PostgreSQL (test infrastructure).** Backlog Index row, opened at
   the `v0.92.0` signoff and **fully costed there**: *"No test ever executes a native query against PostgreSQL —
   the root cause behind TWO production 500s."* **⚠️ This release is what makes it urgent rather than tidy.** Item
   5 **rewrote one of the 31** — `insertLiveIfAbsent`, from `VALUES` to `INSERT … SELECT … WHERE status =
@@ -131,7 +131,7 @@ covers them too.
   prepares while `(:p is null or col < :p)` does not, so keep the casts; "just reorder the OR" is a landmine a
   later readability edit re-arms. **⚠️ The cheaper "PREPARE only when a PG is reachable" variant was considered
   and REJECTED as false comfort** at the `v0.92.0` signoff; do not re-propose it.
-- **7. The `ACTIVITY`/`PROGRESS` scope overlap is now user-visible, and THIS RELEASE created it (frontend).**
+- **8. The `ACTIVITY`/`PROGRESS` scope overlap is now user-visible, and THIS RELEASE created it (frontend).**
   `LinkedLearnerProgressResponse` carries `StudyEngagementResponse` — the **identical four fields**
   (`engagementMode`, `currentStreak`, `longestStreak`, `studyDaysThisWeek`) the momentum panel renders. So a
   learner who grants `PROGRESS` but not `ACTIVITY` produces a connection card reading **"X does not share their
@@ -141,13 +141,13 @@ covers them too.
   ONLY — do NOT change either grant's meaning, do NOT make `PROGRESS` imply an `ACTIVITY` grant row, and do NOT
   remove engagement from the progress payload**, which this release's own anti-drift rule forbids. Fix the copy so
   it describes what the supporter can actually see.
-- **8. `UsageMetric` takes no `description` prop, so quota legibility stops at the Dashboard (frontend).**
+- **9. `UsageMetric` takes no `description` prop, so quota legibility stops at the Dashboard (frontend).**
   Carried `v0.92.0` limitation. The *"Challenge Quiz sessions and quizzes you make for someone"* line renders on
   the Dashboard card only; **Settings shows the bare *AI quizzes* meter with no explanation** — so a parent
   checking their usage on the page built for checking usage still cannot tell what they are spending, which is
   the exact question `v0.92.0` items 4–5 existed to answer. **⚠️ DISCLOSURE ONLY: no limit, counter or metering
   change, and the quota label and the Challenge Quiz mode name stay different strings.**
-- **9. `QuickReviewSessionServiceTest` discards the mode argument, so a cross-mode guard is untested (backend
+- **10. `QuickReviewSessionServiceTest` discards the mode argument, so a cross-mode guard is untested (backend
   test).** Carried `v0.92.0` limitation. `:101` leniently delegates
   `findByIdAndUserIdAndSessionMode(any, any, any)` to `findByIdAndUserId`, **throwing the mode away** — so **no
   test in that class exercises the `QUICK_REVIEW` filter** that stops a Challenge, Adaptive, Interview or Long
