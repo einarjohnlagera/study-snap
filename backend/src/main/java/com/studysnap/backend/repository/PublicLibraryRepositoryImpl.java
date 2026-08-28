@@ -222,7 +222,9 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
             parameters.put("courseProgramSlug", criteria.courseProgramSlug());
         }
         if (criteria.learnerLevel() != null) {
-            where.append(" and n.learner_level = :learnerLevel");
+            // Keep an explicit separator: the next optional text-block predicate starts at its first token,
+            // and without this space Hibernate reads the assembled parameter as `:learnerLeveland`.
+            where.append(" and n.learner_level = :learnerLevel ");
             parameters.put("learnerLevel", criteria.learnerLevel().name());
         }
         if (criteria.tagSlugs() != null && !criteria.tagSlugs().isEmpty()) {
@@ -303,7 +305,8 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
             where.append("""
                      and exists (
                          select 1 from unnest(n.tags) as public_filter_tag(value)
-                         where """)
+                         where""")
+                    .append(" ")
                     .append(normalizedSlugSql("public_filter_tag.value"))
                     .append(" in (").append(placeholders).append(")\n)");
             return;
