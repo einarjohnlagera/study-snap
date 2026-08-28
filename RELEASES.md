@@ -114,9 +114,10 @@ covers them too.
 - **6. A native-query test harness against real PostgreSQL (test infrastructure).** Backlog Index row, opened at
   the `v0.92.0` signoff and **fully costed there**: *"No test ever executes a native query against PostgreSQL —
   the root cause behind TWO production 500s."* **⚠️ This release is what makes it urgent rather than tidy.** Item
-  5 added a **32nd** native query — `insertLiveIfAbsent` rewritten from `VALUES` to `INSERT … SELECT … WHERE
-  status = 'ACCEPTED'` — and **the only reason we know it works is that the `/audit-diff` `PREPARE`d it by hand
-  against PostgreSQL 16.** H2 would have accepted a broken form exactly as it accepted the `v0.91.0` *Shared with
+  5 **rewrote one of the 31** — `insertLiveIfAbsent`, from `VALUES` to `INSERT … SELECT … WHERE status =
+  'ACCEPTED'`, which is a real shape change carrying `ON CONFLICT … WHERE` partial-index syntax — and **the only
+  reason we know it works is that the `/audit-diff` `PREPARE`d it by hand against PostgreSQL 16.** (The count is
+  still 31, not 32: that query was already native. The hazard is the rewrite, not a new row in the inventory.) H2 would have accepted a broken form exactly as it accepted the `v0.91.0` *Shared with
   you* query that 500'd on every production call while 1,744 tests passed. A hand check that happens only when
   someone remembers is not a guard. **Recommended and already costed in the row:**
   `org.testcontainers:postgresql` + `junit-jupiter` (test scope), `@ServiceConnection`, **Flyway ENABLED so the
