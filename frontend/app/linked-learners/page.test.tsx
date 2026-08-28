@@ -4,13 +4,16 @@ import {
   acceptLinkedLearner,
   acceptLinkedLearnerInvitation,
   ApiRequestError,
+  createLinkedLearnerInvitationLink,
   getLinkedLearnerActivity,
   listLinkedLearnerInvitations,
+  listLinkedLearnerInvitationLinks,
   correctLinkedLearnerBirthYear,
   getLinkedLearners,
   inviteLinkedLearner,
   recordLinkedLearnerGuardianConsent,
   previewLinkedLearnerBirthYearCorrection,
+  revokeLinkedLearnerInvitationLink,
   revokeLinkedLearner,
   setLinkedLearnerActivityGrant,
   setLinkedLearnerProgressGrant,
@@ -19,6 +22,7 @@ import {
 
 jest.mock("@/lib/api", () => ({
   acceptLinkedLearner: jest.fn(),
+  createLinkedLearnerInvitationLink: jest.fn(),
   correctLinkedLearnerBirthYear: jest.fn(),
   getLinkedLearners: jest.fn(),
   inviteLinkedLearner: jest.fn(),
@@ -27,8 +31,10 @@ jest.mock("@/lib/api", () => ({
   previewLinkedLearnerBirthYearCorrection: jest.fn(),
   revokeLinkedLearner: jest.fn(),
   listLinkedLearnerInvitations: jest.fn(),
+  listLinkedLearnerInvitationLinks: jest.fn(),
   acceptLinkedLearnerInvitation: jest.fn(),
   revokeLinkedLearnerInvitation: jest.fn(),
+  revokeLinkedLearnerInvitationLink: jest.fn(),
   setLinkedLearnerActivityGrant: jest.fn(),
   setLinkedLearnerProgressGrant: jest.fn(),
   getLinkedLearnerActivity: jest.fn(),
@@ -61,10 +67,53 @@ const baseLink: LinkedLearnerResponse = {
   progressSharedWithMe: false,
 };
 
+const invitationLink = {
+  id: "invite-link-1",
+  token: "AbCdEf0123456789GhIjKl",
+  url: "https://notelib.test/linked-learners/invite/AbCdEf0123456789GhIjKl",
+  creatorRole: "SUPPORTER" as const,
+  createdAt: "2026-08-28T01:00:00Z",
+  expiresAt: "2026-09-27T01:00:00Z",
+};
+
 beforeEach(() => {
   (listLinkedLearnerInvitations as jest.Mock).mockResolvedValue([]);
+  (listLinkedLearnerInvitationLinks as jest.Mock).mockResolvedValue([]);
   jest.clearAllMocks();
   jest.mocked(getLinkedLearners).mockResolvedValue([]);
+});
+
+it("loads live invitation links on refresh", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks).mockResolvedValue([invitationLink]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByDisplayValue(invitationLink.url)).toBeInTheDocument();
+  expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(1);
+});
+
+it("creates a single-use invitation link", async () => {
+  jest.mocked(createLinkedLearnerInvitationLink).mockResolvedValue(invitationLink);
+  render(<LinkedLearnersPage />);
+  await screen.findByText("No live invitation links.");
+
+  fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
+
+  await waitFor(() => expect(createLinkedLearnerInvitationLink)
+    .toHaveBeenCalledWith("SUPPORTER", null));
+  expect(await screen.findByDisplayValue(invitationLink.url)).toBeInTheDocument();
+});
+
+it("keeps a live link visible when revocation fails", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks).mockResolvedValue([invitationLink]);
+  jest.mocked(revokeLinkedLearnerInvitationLink).mockRejectedValue(new Error("Network unavailable"));
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  fireEvent.click(screen.getByRole("button", { name: "Revoke link" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Network unavailable");
+  expect(screen.getByDisplayValue(invitationLink.url)).toBeInTheDocument();
 });
 
 it("invites in either direction", async () => {

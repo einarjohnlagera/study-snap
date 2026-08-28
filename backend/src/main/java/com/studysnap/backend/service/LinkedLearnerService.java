@@ -238,9 +238,9 @@ public class LinkedLearnerService {
     }
 
     /**
-     * Accept an email-keyed invitation. This is the ONLY path that creates a relationship row, which
-     * is what keeps {@code linked_learner_relationships} meaning what the open checkpoint counts —
-     * an unresolved invitation is not a connection.
+     * Accept an email-keyed invitation and create its relationship row. Shareable-link redemption
+     * deliberately reuses the same pending-relationship helper below; an unresolved email invitation
+     * still creates no relationship row and remains outside the checkpoint denominator.
      *
      * <p>⚠️ The caller must own the invited ADDRESS, not merely hold the invitation id. The id is a
      * UUID and unguessable in practice, but authorising on possession of an identifier rather than
@@ -301,16 +301,9 @@ public class LinkedLearnerService {
             throw new LinkedLearnerInvalidStateException();
         }
 
-        UUID supporterUserId = inviterRole == LinkedLearnerSide.SUPPORTER ? inviterUserId : callerUserId;
-        UUID learnerUserId = inviterRole == LinkedLearnerSide.LEARNER ? inviterUserId : callerUserId;
-
-        relationshipRepository.insertPendingIfAbsent(
-                UUID.randomUUID(), supporterUserId, learnerUserId,
-                inviterRole.name(), now);
-        LinkedLearnerRelationshipEntity relationship = relationshipRepository
-                .findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
-                        supporterUserId, learnerUserId, LIVE_STATUSES)
-                .orElseThrow(LinkedLearnerNotFoundException::new);
+        PendingRelationshipCreation creation = createPendingRelationship(
+                inviterUserId, callerUserId, inviterRole, now);
+        LinkedLearnerRelationshipEntity relationship = creation.relationship();
 
         return accept(relationship.getId(), callerUserId, request);
     }
@@ -452,6 +445,47 @@ public class LinkedLearnerService {
     }
 
     /**
+     * Shared relationship-creation path for email invitations and single-use invitation links.
+     * For a link redemption the REDEEMER is the initiator, so the creator is the existing accept
+     * machinery's invited party and must confirm before this PENDING row can become ACCEPTED.
+     */
+    PendingRelationshipCreation createPendingRelationship(
+            UUID initiatorUserId,
+            UUID counterpartyUserId,
+            LinkedLearnerSide initiatorRole,
+            OffsetDateTime createdAt
+    ) {
+        UUID supporterUserId = initiatorRole == LinkedLearnerSide.SUPPORTER
+                ? initiatorUserId : counterpartyUserId;
+        UUID learnerUserId = initiatorRole == LinkedLearnerSide.LEARNER
+                ? initiatorUserId : counterpartyUserId;
+        int inserted = relationshipRepository.insertPendingIfAbsent(
+                UUID.randomUUID(), supporterUserId, learnerUserId, initiatorRole.name(), createdAt);
+        LinkedLearnerRelationshipEntity relationship = relationshipRepository
+                .findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
+                        supporterUserId, learnerUserId, LIVE_STATUSES)
+                .orElseThrow(LinkedLearnerNotFoundException::new);
+        return new PendingRelationshipCreation(relationship, inserted == 1);
+    }
+
+    /** Uses the same lock and write-once validation as every existing learner birth-year path. */
+    void captureLearnerBirthYearIfMissing(UUID learnerUserId, Integer suppliedBirthYear) {
+        if (lockAndReadBirthYear(learnerUserId) != null) {
+            return;
+        }
+        if (suppliedBirthYear == null) {
+            throw new LinkedLearnerBirthYearRequiredException();
+        }
+        persistBirthYear(learnerUserId, suppliedBirthYear);
+    }
+
+    record PendingRelationshipCreation(
+            LinkedLearnerRelationshipEntity relationship,
+            boolean inserted
+    ) {
+    }
+
+    /**
      * The single way to load a learner whose birth year a consent decision depends on. Only ONE row
      * is ever locked, and it is always the learner's, so no lock cycle exists and no deadlock is
      * possible between these paths.
@@ -581,14 +615,16 @@ public class LinkedLearnerService {
                 callerRole,
                 relationship.getInitiatedBy(),
                 relationship.getStatus() == LinkedLearnerStatus.PENDING && invitedParty,
-                // The name-harvesting oracle this once guarded against is closed at the source:
-                // since v0.90.0 inviting an address creates NO relationship row, so a row existing
-                // at all means the invited party accepted and both sides agreed to the link. Gating
-                // on acceptedAt is now actively wrong -- a consent-pending link and a link re-paused
-                // by correctBirthYear() both carry a null acceptedAt, which rendered a blank name
-                // above the email on a real, mutually-agreed connection.
+                // Email invitations still create no relationship row until their recipient accepts.
+                // Shareable-link redemption is the deliberate exception: it creates PENDING so the
+                // creator can identify and confirm the redeemer. That is the same display name the
+                // authenticated resolve endpoint already discloses; email remains accepted-only below.
+                // Gating the name on acceptedAt would also blank consent-pending and re-paused links.
                 resolveDisplayName(counterparty),
-                counterparty.getEmail(),
+                // A shareable-link redemption creates PENDING before the creator confirms. Email
+                // must not leak through the relationship list after resolve deliberately withheld
+                // it, so identity stays display-name-only until mutual agreement is complete.
+                accepted ? counterparty.getEmail() : null,
                 relationship.getStatus(),
                 relationship.getCreatedAt(),
                 relationship.getAcceptedAt(),

@@ -114,6 +114,19 @@ rule forbade changing the progress payload. That rule was release-scoped; this r
 
 ### Shipped
 
+- **Shareable single-use connection invitations** — Added `V126`'s address-free invitation-link table and authenticated create/list/revoke/resolve/redeem flows with 22-character Base62 tokens, creator-scoped rate limiting and cookie-backed auth intent recovery. Redemption conditionally claims the live token, creates only a `PENDING` relationship with the redeemer as initiator, and leaves the link creator to confirm through the existing acceptance and guardian-consent machinery; unknown, revoked, expired and redeemed tokens share one not-found contract, while PostgreSQL concurrency tests pin exactly one winner for redeem/redeem and redeem/revoke races. `/linked-learners` now creates, copies, reloads and revokes live links, and the redemption page discloses only creator display name and role before mutual agreement.
+
+- **⚠️ Found at the `/audit-diff` and fixed in scope: the indistinguishability guarantee had no real test.**
+  `unknownRevokedExpiredAndRedeemedAllUseOneNotFoundContract` stubs `findUsableByToken` to return empty for **all
+  four** token strings, so the four cases are one case — it proves the exception is constructed identically, which
+  was never in doubt, and proves nothing about the query predicate that produces it. **Deleting `revokedAt is
+  null` from `findUsableByToken` — making a revoked link resolvable and redeemable — left the entire 1,775-test
+  suite green.** Indistinguishability is a property of the PREDICATE, so only a real row can establish it;
+  `revokedRedeemedAndExpiredInvitationLinksAreAllUnusable` now seeds revoked, redeemed and expired rows against
+  real PostgreSQL and asserts each is unusable, with a live link as the control. Mutation-verified: the same
+  deletion now fails exactly that test. **Same lesson as `v0.93.0`'s blocking finding — a mocked repository cannot
+  test a predicate** — and it recurred in the very release that recorded it, which is why the executing test lives
+  beside the others in `NativeQueryPostgresIntegrationTest` rather than in the service's mocked class.
 
 ## v0.93.0 - Progress Refinement
 

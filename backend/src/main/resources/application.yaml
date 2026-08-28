@@ -146,6 +146,8 @@ studysnap:
     # Two keys on purpose: volume, and per-address so one victim cannot be hammered.
     invites-per-window: ${INVITES_PER_WINDOW:20}
     invites-per-address-per-window: ${INVITES_PER_ADDRESS_PER_WINDOW:3}
+    # Separate creator bucket: links do not have an address key, but their creation is still metered.
+    invitation-links-per-window: ${INVITATION_LINKS_PER_WINDOW:20}
     invite-rate-limit-window-hours: ${INVITE_RATE_LIMIT_WINDOW_HOURS:24}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}

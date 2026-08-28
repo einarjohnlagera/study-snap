@@ -1102,7 +1102,7 @@ export type LinkedLearnerResponse = {
   initiatedBy: LinkedLearnerSide;
   incomingInvitation: boolean;
   counterpartyDisplayName: string;
-  counterpartyEmail: string;
+  counterpartyEmail: string | null;
   status: LinkedLearnerStatus;
   createdAt: string;
   acceptedAt: string | null;
@@ -5617,6 +5617,87 @@ export async function revokeLinkedLearnerInvitation(invitationId: string): Promi
     true,
   );
   return parseApiResponse<SimpleMessageResponse>(response, "Could not withdraw the invitation.");
+}
+
+export type LinkedLearnerInvitationLinkResponse = {
+  id: string;
+  token: string;
+  url: string;
+  creatorRole: LinkedLearnerSide;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export type LinkedLearnerInvitationLinkResolveResponse = {
+  inviterName: string;
+  inviterRole: LinkedLearnerSide;
+};
+
+export async function createLinkedLearnerInvitationLink(
+  creatorRole: LinkedLearnerSide,
+  learnerBirthYear: number | null,
+): Promise<LinkedLearnerInvitationLinkResponse> {
+  const response = await fetchWithAuth(
+    "/linked-learners/invitation-links",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ creatorRole, learnerBirthYear }),
+    },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerInvitationLinkResponse>(response, "Could not create the invitation link.");
+}
+
+export async function listLinkedLearnerInvitationLinks(): Promise<LinkedLearnerInvitationLinkResponse[]> {
+  const response = await fetchWithAuth(
+    "/linked-learners/invitation-links",
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerInvitationLinkResponse[]>(response, "Could not load invitation links.");
+}
+
+export async function revokeLinkedLearnerInvitationLink(linkId: string): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/invitation-links/${linkId}/revoke`,
+    { method: "POST", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not revoke the invitation link.");
+}
+
+export async function resolveLinkedLearnerInvitationLink(
+  token: string,
+): Promise<LinkedLearnerInvitationLinkResolveResponse> {
+  const response = await fetchWithAuth(
+    `/linked-learners/invitation-links/${encodeURIComponent(token)}/resolve`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<LinkedLearnerInvitationLinkResolveResponse>(
+    response,
+    "This invitation link is not available.",
+  );
+}
+
+export async function redeemLinkedLearnerInvitationLink(
+  token: string,
+  learnerBirthYear: number | null,
+): Promise<{ relationshipId: string; status: "PENDING" }> {
+  const response = await fetchWithAuth(
+    `/linked-learners/invitation-links/${encodeURIComponent(token)}/redeem`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ learnerBirthYear }),
+    },
+    true,
+  );
+  return parseApiResponse<{ relationshipId: string; status: "PENDING" }>(
+    response,
+    "Could not use this invitation link.",
+  );
 }
 
 export async function acceptLinkedLearner(

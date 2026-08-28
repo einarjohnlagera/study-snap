@@ -182,6 +182,58 @@ class LinkedLearnerServiceTest {
     }
 
     @Test
+    void linkRedeemerCannotAcceptAndTheLinkCreatorConfirmationActivatesTheRelationship() {
+        UserEntity creatorSupporter = user(SUPPORTER_EMAIL);
+        UserEntity redeemerLearner = user(LEARNER_EMAIL);
+        redeemerLearner.setBirthYear(2000);
+        // Link redemption makes the redeemer the initiator. The creator is therefore the existing
+        // acceptance machinery's invited party, preserving two distinct acts of agreement.
+        LinkedLearnerRelationshipEntity relationship =
+                relationship(creatorSupporter, redeemerLearner, LinkedLearnerSide.LEARNER);
+        stubRelationshipUsers(relationship, creatorSupporter, redeemerLearner);
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        AcceptLinkedLearnerRequest request = new AcceptLinkedLearnerRequest(null, false);
+
+        assertThatThrownBy(() -> service.accept(relationship.getId(), redeemerLearner.getId(), request))
+                .isInstanceOf(LinkedLearnerNotAllowedException.class);
+
+        LinkedLearnerResponse confirmed = service.accept(
+                relationship.getId(), creatorSupporter.getId(), request);
+
+        assertThat(confirmed.status()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
+        assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
+    }
+
+    @Test
+    void minorLinkRedeemerStaysPendingUntilTheCreatorRecordsGuardianConsent() {
+        UserEntity creatorSupporter = user(SUPPORTER_EMAIL);
+        UserEntity redeemerLearner = user(LEARNER_EMAIL);
+        redeemerLearner.setBirthYear(Year.now().getValue() - 10);
+        LinkedLearnerRelationshipEntity relationship =
+                relationship(creatorSupporter, redeemerLearner, LinkedLearnerSide.LEARNER);
+        stubRelationshipUsers(relationship, creatorSupporter, redeemerLearner);
+        when(consentRepository.findByRelationshipId(relationship.getId()))
+                .thenReturn(
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.empty(),
+                        Optional.of(new LinkedLearnerGuardianConsentEntity()));
+
+        LinkedLearnerResponse withoutConsent = service.accept(
+                relationship.getId(), creatorSupporter.getId(), new AcceptLinkedLearnerRequest(null, false));
+
+        assertThat(withoutConsent.status()).isEqualTo(LinkedLearnerStatus.PENDING);
+        assertThat(withoutConsent.counterpartyEmail()).isNull();
+        assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.PENDING);
+
+        LinkedLearnerResponse withConsent = service.accept(
+                relationship.getId(), creatorSupporter.getId(), new AcceptLinkedLearnerRequest(null, true));
+
+        assertThat(withConsent.status()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
+        verify(consentRepository).save(any(LinkedLearnerGuardianConsentEntity.class));
+    }
+
+    @Test
     void unknownAndKnownEmailInvitesAreIndistinguishableInResponseAndInState() {
         UserEntity caller = user("caller@example.com");
         when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));

@@ -16,6 +16,10 @@ import {
   clearPendingLightweightProfileCompletion,
   setPendingLightweightProfileCompletion,
 } from "./onboarding-v2";
+import {
+  clearLinkedLearnerInvitationIntentCookie,
+  setLinkedLearnerInvitationIntentCookie,
+} from "./linked-learner-invitation-intent";
 
 const SESSION_EXPIRED_STORAGE_KEY = "notelib-session-expired-user-id";
 
@@ -47,6 +51,7 @@ describe("auth redirect helpers", () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.replaceState({}, "", "/login");
+    clearLinkedLearnerInvitationIntentCookie();
   });
 
   it("prefers an explicit redirect query after login", () => {
@@ -60,6 +65,22 @@ describe("auth redirect helpers", () => {
 
   it("falls back to the dashboard when no redirect query exists", () => {
     expect(resolvePostLoginDestination(verifiedUser)).toBe("/dashboard");
+  });
+
+  it("restores a connection invitation after login or signup completes", () => {
+    setLinkedLearnerInvitationIntentCookie("AbCdEf0123456789GhIjKl");
+
+    expect(resolvePostLoginDestination(verifiedUser))
+      .toBe("/linked-learners/invite/AbCdEf0123456789GhIjKl");
+  });
+
+  it("keeps verification and onboarding ahead of a stored connection invitation", () => {
+    setLinkedLearnerInvitationIntentCookie("AbCdEf0123456789GhIjKl");
+
+    expect(resolvePostLoginDestination({ ...verifiedUser, emailVerifiedAt: null }))
+      .toBe("/verify-email");
+    expect(resolvePostLoginDestination({ ...verifiedUser, onboardingCompletedAt: null }))
+      .toBe("/onboarding");
   });
 
   it("ignores stale redirect queries after manual logout for the same user", () => {
