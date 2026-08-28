@@ -278,6 +278,8 @@ function SharingPanel({
               ? `${link.counterpartyDisplayName}'s activity access is paused`
               : link.activitySharedWithMe
               ? `${link.counterpartyDisplayName} shares their study activity with you`
+              : link.progressSharedWithMe
+                ? `${link.counterpartyDisplayName}'s study activity is visible through shared progress`
               : `${link.counterpartyDisplayName} does not share their study activity with you`}
           </p>
           {link.activitySharedWithMe ? (

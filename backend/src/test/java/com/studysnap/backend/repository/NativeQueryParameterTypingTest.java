@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code EntityManager.createNativeQuery} (both {@code *RepositoryImpl} files), a cast to the WRONG type
  * ({@code timestamp} rather than {@code timestamptz} parses fine and shifts the cursor), and anything
  * outside this directory. **The durable fix is executing native queries against real PostgreSQL** — see
- * the Testcontainers row in `ROADMAP.md`'s Backlog Index. This guard is a cheap tripwire, not that fix.
+ * {@link NativeQueryPostgresIntegrationTest}. This guard remains the Docker-free tripwire.
  *
  * <p>⚠️ This is a SOURCE-TEXT test on purpose, and it is the only form that works here. The suite runs on H2,
  * which accepts the uncast form, so no behavioural test in this repository can fail on this defect — that is

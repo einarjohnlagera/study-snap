@@ -175,6 +175,11 @@ deliberately excludes `OPENED_STUDY_PACK` through the existing `MEANINGFUL_STUDY
 writes no activity event, `ConceptHealth`, progress timestamp or user state. Zeroes render as an honest empty
 answer rather than being hidden.
 
+Because the progress response contains those same four engagement fields, supporter-facing copy describes
+activity **access** across both scopes. When `ACTIVITY` is off but `PROGRESS` is on, the card says activity is
+visible through shared progress; it does not claim an activity grant exists, and the momentum panel remains
+unavailable.
+
 ### Activity-sharing analytics
 
 Phase 2's grant-to-view loop uses three product-analytics events, separate from learner activity tracking:
