@@ -749,6 +749,68 @@ class LinkedLearnerServiceTest {
                         LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS));
     }
 
+    /**
+     * ⚠️ The DTO must not be MORE PERMISSIVE than {@code requireGrant}, which denies on missing
+     * guardian consent. Before this, `*SharedWithMe` was `accepted && grantExists` only, so a
+     * supporter could be shown a "View progress" link whose read then 404s — with no way back,
+     * because recordGuardianConsent requires PENDING. Reachable by raising GUARDIAN_CONSENT_MAX_AGE,
+     * which is owner-owned and pending counsel.
+     */
+    @Test
+    void acceptedRelationshipMissingGuardianConsentReportsNoAccessFromTheLearner() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 10);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        LinkedLearnerGrantEntity activity = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.ACTIVITY);
+        LinkedLearnerGrantEntity progress = grant(
+                relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.PROGRESS);
+        stubUser(supporter);
+        stubUser(learner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                Set.of(relationship.getId()), List.of(
+                        LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS)))
+                .thenReturn(List.of(activity, progress));
+
+        LinkedLearnerResponse supporterView = service.list(supporter.getId()).getFirst();
+
+        assertThat(supporterView.activitySharedWithMe()).isFalse();
+        assertThat(supporterView.progressSharedWithMe()).isFalse();
+    }
+
+    /**
+     * ⚠️ The consent gate is ASYMMETRIC and must stay so: it protects the LEARNER's data. A supporter
+     * sharing their OWN activity with a learner who requires consent is not gated by it — exactly as
+     * {@code requireGrant} applies the check only when {@code fromUserId} is the learner. Blanket-
+     * applying it would wrongly hide the supporter's activity from the learner.
+     */
+    @Test
+    void missingGuardianConsentDoesNotHideTheSupportersOwnSharedActivityFromTheLearner() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(Year.now().getValue() - 10);
+        LinkedLearnerRelationshipEntity relationship = acceptedRelationship(supporter, learner);
+        LinkedLearnerGrantEntity supporterActivity = grant(
+                relationship, supporter.getId(), learner.getId(), LinkedLearnerGrantScope.ACTIVITY);
+        stubUser(supporter);
+        stubUser(learner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                learner.getId(), learner.getId())).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+        when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
+                Set.of(relationship.getId()), List.of(
+                        LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS)))
+                .thenReturn(List.of(supporterActivity));
+
+        LinkedLearnerResponse learnerView = service.list(learner.getId()).getFirst();
+
+        assertThat(learnerView.activitySharedWithMe()).isTrue();
+    }
+
     @Test
     void pendingRelationshipKeepsRowsVisibleByMeButReportsNoAccessWithMeForBothScopes() {
         UserEntity supporter = user(SUPPORTER_EMAIL);

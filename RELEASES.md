@@ -172,6 +172,24 @@ owner selected both anyway** — recorded so the trade is visible rather than im
   `engagement.studyDaysThisWeek()` disjunct to `hasActivity` fails four tests, including
   `learnerWithOnlyStudyDaysReturnsSuccessfulExplicitlyEmptyProgressAggregates`, which is the one that pins the
   inference-channel argument rather than the field list.
+- **Two carried disclosure defects closed, and the fix for one found a third instance of it.** The status-copy
+  module told supporters *"Progress becomes available once the connection finishes activating"* and that recording
+  consent would *"unblock the connection"* — both false since `v0.93.0`, and both shipped through two releases
+  because that file holds prose rather than status literals, so the sweep for `"ACCEPTED"` never reached it. The
+  paused and activating copy now describes **status only**. **⚠️ The regression assertion added with that fix
+  immediately failed on a SECOND instance in a different file** — `SharingPanel` rendered *"{name}'s progress
+  access is paused"* and *"…activity access is paused"*, claiming access that may never have existed. Both are
+  now status-shaped, for the reason the DTO makes unavoidable: `*SharedWithMe` is zeroed on a non-`ACCEPTED` row,
+  so the frontend genuinely cannot distinguish "granted, now paused" from "never granted" and must not guess.
+  A broad `queryByText` assertion pins the class rather than the three strings.
+- **`toResponse` no longer reports access the authorization check would deny.** `*SharedWithMe` now applies the
+  same guardian-consent gate as `requireGrant`, so the DTO can no longer be the more permissive of the two and
+  render a *View progress* link whose read 404s — which mattered because there is no way back: consent can only
+  be recorded on a `PENDING` relationship. **⚠️ The gate is asymmetric and stays so** — it protects the learner's
+  data, so a supporter sharing their own activity with a learner who requires consent is not gated by it.
+  **Both halves mutation-verified:** dropping the predicate fails
+  `acceptedRelationshipMissingGuardianConsentReportsNoAccessFromTheLearner`; removing the asymmetry fails
+  `missingGuardianConsentDoesNotHideTheSupportersOwnSharedActivityFromTheLearner`.
 
 ## v0.93.0 - Progress Refinement
 
