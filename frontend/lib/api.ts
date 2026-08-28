@@ -1132,7 +1132,6 @@ export type LinkedLearnerProgressResponse = {
   relationshipId: string;
   learnerDisplayName: string;
   quizPerformance: MasterySnapshotResponse;
-  engagement: StudyEngagementResponse;
   readiness: {
     totalConcepts: number;
     masteredConcepts: number;

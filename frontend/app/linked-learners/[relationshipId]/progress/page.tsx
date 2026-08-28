@@ -59,7 +59,7 @@ export default function LinkedLearnerProgressPage() {
       <PageHeader
         eyebrow="Learning support"
         title={progress ? `${progress.learnerDisplayName}'s progress` : "Learner progress"}
-        description="A privacy-safe view of readiness, study activity and quiz performance. Personal notes and study material are never shown."
+        description="A privacy-safe view of readiness, plan progress and quiz performance. Personal notes and study material are never shown."
       />
 
       {loading ? (
@@ -99,13 +99,6 @@ export default function LinkedLearnerProgressPage() {
             <p className="text-3xl font-semibold">{formatScore(progress.quizPerformance.averageRecentScore)}</p>
             <p className="text-sm text-foreground/70">
               Best recent score: {formatScore(progress.quizPerformance.bestRecentScore)} · {progress.quizPerformance.studyPacksReviewed} Study Packs reviewed
-            </p>
-          </Card>
-          <Card className="space-y-3 p-5">
-            <h2 className="text-lg font-semibold">Study activity</h2>
-            <p className="text-3xl font-semibold">{progress.engagement.currentStreak} day streak</p>
-            <p className="text-sm text-foreground/70">
-              {progress.engagement.studyDaysThisWeek} study days this week · Longest streak {progress.engagement.longestStreak} days
             </p>
           </Card>
           <Card className="space-y-3 p-5">

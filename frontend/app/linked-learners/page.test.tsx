@@ -237,8 +237,8 @@ it("renders activity in both directions and progress control only for the learne
   render(<LinkedLearnersPage />);
 
   expect(await screen.findByRole("switch", { name: "Share my study activity with Blair" })).toBeChecked();
-  expect(screen.getByText("Blair's study activity is visible through shared progress")).toBeInTheDocument();
-  expect(screen.queryByText("Blair does not share their study activity with you")).not.toBeInTheDocument();
+  expect(screen.getByText("Blair does not share their study activity with you")).toBeInTheDocument();
+  expect(screen.queryByText("Blair's study activity is visible through shared progress")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "View momentum" })).not.toBeInTheDocument();
   expect(screen.queryByRole("switch", { name: /share my study progress/i })).not.toBeInTheDocument();
   expect(screen.getByText("Blair shares their study progress with you")).toBeInTheDocument();

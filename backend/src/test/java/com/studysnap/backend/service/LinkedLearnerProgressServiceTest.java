@@ -1,5 +1,7 @@
 package com.studysnap.backend.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.dto.GoalSummaryResponse;
 import com.studysnap.backend.dto.LinkedLearnerProgressResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
@@ -14,6 +16,8 @@ import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.springframework.http.HttpStatus;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -29,6 +34,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,8 +96,6 @@ class LinkedLearnerProgressServiceTest {
         stubAuthorizedRead(callerUserId, relationshipId, learnerUserId);
         when(dashboardService.getMasterySnapshot(learnerUserId))
                 .thenReturn(new MasterySnapshotResponse(new BigDecimal("76.50"), new BigDecimal("90.00"), 3));
-        when(dashboardService.getStudyEngagement(learnerUserId))
-                .thenReturn(new StudyEngagementResponse(EngagementMode.CONSISTENCY, 4, 9, 3));
         when(progressReportService.getProgressReport(eq(learnerUserId), eq(null), any(OffsetDateTime.class)))
                 .thenReturn(progressReport(List.of(
                         new SubjectProgressEntry("Private subject", 5, 2, 1, 2, 40),
@@ -106,7 +110,6 @@ class LinkedLearnerProgressServiceTest {
 
         assertThat(response.learnerDisplayName()).isEqualTo("Learner Name");
         assertThat(response.quizPerformance().averageRecentScore()).isEqualByComparingTo("76.50");
-        assertThat(response.engagement().studyDaysThisWeek()).isEqualTo(3);
         assertThat(response.readiness()).isEqualTo(
                 new LinkedLearnerProgressResponse.ReadinessCounts(8, 3, 2, 3, 38));
         assertThat(response.collectionProgress()).isEqualTo(
@@ -115,20 +118,22 @@ class LinkedLearnerProgressServiceTest {
         assertThat(Arrays.stream(LinkedLearnerProgressResponse.class.getRecordComponents())
                 .map(java.lang.reflect.RecordComponent::getName))
                 .containsExactly(
-                        "relationshipId", "learnerDisplayName", "quizPerformance", "engagement",
+                        "relationshipId", "learnerDisplayName", "quizPerformance",
                         "readiness", "collectionProgress", "hasActivity");
     }
 
     @Test
-    void learnerWithNoActivityReturnsSuccessfulExplicitlyEmptyAggregates() {
+    void learnerWithOnlyStudyDaysReturnsSuccessfulExplicitlyEmptyProgressAggregates() {
         UUID callerUserId = UUID.randomUUID();
         UUID relationshipId = UUID.randomUUID();
         UUID learnerUserId = UUID.randomUUID();
         stubAuthorizedRead(callerUserId, relationshipId, learnerUserId);
         when(dashboardService.getMasterySnapshot(learnerUserId))
                 .thenReturn(new MasterySnapshotResponse(null, null, 0));
-        when(dashboardService.getStudyEngagement(learnerUserId))
-                .thenReturn(new StudyEngagementResponse(EngagementMode.FOCUSED, 0, 0, 0));
+        // If queried, this learner would disclose study activity. The progress path must not query
+        // it or infer hasActivity from it without a separate ACTIVITY grant.
+        lenient().when(dashboardService.getStudyEngagement(learnerUserId))
+                .thenReturn(new StudyEngagementResponse(EngagementMode.CONSISTENCY, 4, 9, 3));
         when(progressReportService.getProgressReport(eq(learnerUserId), eq(null), any(OffsetDateTime.class)))
                 .thenReturn(progressReport(List.of()));
         when(noteCollectionService.list(learnerUserId)).thenReturn(List.of());
@@ -139,6 +144,35 @@ class LinkedLearnerProgressServiceTest {
         assertThat(response.readiness().totalConcepts()).isZero();
         assertThat(response.collectionProgress().collectionCount()).isZero();
         assertThat(response.quizPerformance().averageRecentScore()).isNull();
+        verify(dashboardService, never()).getStudyEngagement(learnerUserId);
+    }
+
+    @ParameterizedTest(name = "hasActivity is true for concepts={0}, reviewedPacks={1}, practicedItems={2}")
+    @CsvSource({"1, 0, 0", "0, 1, 0", "0, 0, 1"})
+    void hasActivityIsTrueForEachProgressShapedSignal(
+            int totalConcepts,
+            int reviewedPacks,
+            int practicedItems
+    ) {
+        UUID callerUserId = UUID.randomUUID();
+        UUID relationshipId = UUID.randomUUID();
+        UUID learnerUserId = UUID.randomUUID();
+        stubAuthorizedRead(callerUserId, relationshipId, learnerUserId);
+        when(dashboardService.getMasterySnapshot(learnerUserId))
+                .thenReturn(new MasterySnapshotResponse(null, null, reviewedPacks));
+        List<SubjectProgressEntry> subjects = totalConcepts == 0
+                ? List.of()
+                : List.of(new SubjectProgressEntry("Private subject", totalConcepts, 0, 0, totalConcepts, 0));
+        when(progressReportService.getProgressReport(eq(learnerUserId), eq(null), any(OffsetDateTime.class)))
+                .thenReturn(progressReport(subjects));
+        List<NoteCollectionSummaryResponse> collections = practicedItems == 0
+                ? List.of()
+                : List.of(collection(practicedItems, 0, practicedItems));
+        when(noteCollectionService.list(learnerUserId)).thenReturn(collections);
+
+        LinkedLearnerProgressResponse response = progressService.getProgress(callerUserId, relationshipId);
+
+        assertThat(response.hasActivity()).isTrue();
     }
 
     @Test
@@ -149,22 +183,20 @@ class LinkedLearnerProgressServiceTest {
         stubAuthorizedRead(callerUserId, relationshipId, learnerUserId);
         when(dashboardService.getMasterySnapshot(learnerUserId))
                 .thenReturn(new MasterySnapshotResponse(null, null, 0));
-        when(dashboardService.getStudyEngagement(learnerUserId))
-                .thenReturn(new StudyEngagementResponse(EngagementMode.FOCUSED, 0, 0, 0));
         when(progressReportService.getProgressReport(eq(learnerUserId), eq(null), any(OffsetDateTime.class)))
                 .thenReturn(progressReport(List.of()));
         when(noteCollectionService.list(learnerUserId)).thenReturn(List.of());
 
         progressService.getProgress(callerUserId, relationshipId);
 
-        // These are the only service boundaries that reach ConceptHealth, quiz sessions,
-        // collection progress, and engagement state. The supporter projection invokes only
-        // their established read APIs and performs no direct learner save.
+        // These are the service boundaries that reach ConceptHealth, quiz sessions and collection
+        // progress. The engagement boundary is deliberately absent; the remaining calls use only
+        // established read APIs and perform no direct learner save.
         verify(authorizationService).requireAcceptedLearnerId(callerUserId, relationshipId);
         verify(userRepository).findById(learnerUserId);
         verify(userRepository, never()).save(any(UserEntity.class));
         verify(dashboardService).getMasterySnapshot(learnerUserId);
-        verify(dashboardService).getStudyEngagement(learnerUserId);
+        verify(dashboardService, never()).getStudyEngagement(learnerUserId);
         verify(progressReportService).getProgressReport(eq(learnerUserId), eq(null), any(OffsetDateTime.class));
         verify(noteCollectionService).list(learnerUserId);
         verify(analyticsService).trackEvent(
@@ -193,6 +225,28 @@ class LinkedLearnerProgressServiceTest {
     }
 
     @Test
+    void serializedProgressPayloadContainsNoEngagementKey() {
+        LinkedLearnerProgressResponse response = new LinkedLearnerProgressResponse(
+                UUID.randomUUID(),
+                "Learner Name",
+                new MasterySnapshotResponse(null, null, 0),
+                new LinkedLearnerProgressResponse.ReadinessCounts(0, 0, 0, 0, 0),
+                new LinkedLearnerProgressResponse.CollectionProgressCounts(0, 0, 0, 0),
+                false
+        );
+
+        JsonNode payload = new ObjectMapper().valueToTree(response);
+        Set<String> serializedKeys = new LinkedHashSet<>();
+        payload.fieldNames().forEachRemaining(serializedKeys::add);
+
+        assertThat(serializedKeys)
+                .containsExactlyInAnyOrder(
+                        "relationshipId", "learnerDisplayName", "quizPerformance",
+                        "readiness", "collectionProgress", "hasActivity")
+                .doesNotContain("engagement");
+    }
+
+    @Test
     void analyticsFailureDoesNotFailAnAuthorizedProgressRead() {
         UUID callerUserId = UUID.randomUUID();
         UUID relationshipId = UUID.randomUUID();
@@ -200,8 +254,6 @@ class LinkedLearnerProgressServiceTest {
         stubAuthorizedRead(callerUserId, relationshipId, learnerUserId);
         when(dashboardService.getMasterySnapshot(learnerUserId))
                 .thenReturn(new MasterySnapshotResponse(null, null, 0));
-        when(dashboardService.getStudyEngagement(learnerUserId))
-                .thenReturn(new StudyEngagementResponse(EngagementMode.FOCUSED, 0, 0, 0));
         when(progressReportService.getProgressReport(eq(learnerUserId), eq(null), any(OffsetDateTime.class)))
                 .thenReturn(progressReport(List.of()));
         when(noteCollectionService.list(learnerUserId)).thenReturn(List.of());

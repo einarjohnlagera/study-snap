@@ -6,7 +6,6 @@ public record LinkedLearnerProgressResponse(
         UUID relationshipId,
         String learnerDisplayName,
         MasterySnapshotResponse quizPerformance,
-        StudyEngagementResponse engagement,
         ReadinessCounts readiness,
         CollectionProgressCounts collectionProgress,
         boolean hasActivity
