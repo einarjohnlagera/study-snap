@@ -71,6 +71,33 @@ rule forbade changing the progress payload. That rule was release-scoped; this r
   row in `linked_learner_invitations` means: `[CHECKPOINT — due 2026-10-13]` reads that table to ask whether the
   30-day TTL is cutting real acceptances.
 
+#### Added mid-release 2026-08-28, after items 1–3 shipped
+
+**⚠️ Appended at the moment they were agreed, per this release's own rule.** Both are carried `v0.93.0`
+pressure-test findings. **⚠️ Raised as adding review surface to an already-overdetermined pressure test; the
+owner selected both anyway** — recorded so the trade is visible rather than implied.
+
+- **4. Two user-facing statements that this release family made FALSE (frontend, copy only).**
+  `frontend/lib/linked-learner-status.ts:63` tells a supporter *"Progress becomes available once the connection
+  finishes activating."* **Activation stopped granting progress in `v0.93.0` — that was the entire point of that
+  release** — so the string has now shipped false through two releases. `:37` likewise says recording guardian
+  consent will *"unblock the connection"*, implying progress access the supporter may never have had.
+  **⚠️ This file was missed by `v0.93.0`'s own sweep because it holds prose, not status literals**, so a grep for
+  `"ACCEPTED"` across `app/` and `components/` never reached it. **⚠️ The paused copy cannot fully distinguish
+  "granted, now paused" from "never granted"** — the DTO zeroes `*SharedWithMe` on a non-`ACCEPTED` row — so the
+  copy must describe the *status*, not assert anything about access.
+- **5. `toResponse`'s `*SharedWithMe` omits the guardian-consent predicate `requireGrant` enforces (backend).**
+  The two disagree and **the DTO is the more permissive one**, so a supporter can be shown a *View progress* link
+  whose read then 404s. **⚠️ And there is no remediation path:** `recordGuardianConsent` requires `PENDING`, so an
+  `ACCEPTED` relationship in that state can only be repaired by revoke and re-invite.
+  **⚠️ The predicate is ASYMMETRIC and must stay so** — guardian consent gates the LEARNER's data only, exactly as
+  `requireGrant` applies it when `fromUserId` is the learner. A supporter sharing their own activity with a
+  learner who requires consent is **not** gated by it, and blanket-applying the check would wrongly hide that.
+  **⚠️ Reachable only by raising `GUARDIAN_CONSENT_MAX_AGE`**, which `CLAUDE.md` records as owner-owned and pending
+  counsel — so this is defence in depth against a change that is planned, not hypothetical. **⚠️ Do NOT change
+  `requireGrant`, the authorization model, or the threshold itself.** This aligns a DTO with a check that is
+  already correct.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Absence of a live grant means NO ACCESS**, and after item 1 that is true of the engagement fields too, not
