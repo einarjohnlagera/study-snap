@@ -203,6 +203,15 @@ deliberately excludes `OPENED_STUDY_PACK` through the existing `MEANINGFUL_STUDY
 writes no activity event, `ConceptHealth`, progress timestamp or user state. Zeroes render as an honest empty
 answer rather than being hidden.
 
+The connection list's `*SharedWithMe` fields apply the **same guardian-consent gate as `requireGrant`**, so the
+DTO can never be more permissive than the check: a supporter is not shown access to a learner who requires
+consent that has not been recorded. **That gate is asymmetric on purpose** — consent protects the *learner's*
+data, so a supporter sharing their own activity with a learner who requires consent is not gated by it. Status
+copy for a paused or activating connection describes the **status only** and never promises progress: since
+`v0.93.0` an `ACCEPTED` relationship does not imply progress access, and the DTO zeroes `*SharedWithMe` on a
+non-`ACCEPTED` row, so the frontend cannot distinguish "granted, now paused" from "never granted" and must not
+guess.
+
 ### Activity-sharing analytics
 
 Phase 2's grant-to-view loop uses three product-analytics events, separate from learner activity tracking:

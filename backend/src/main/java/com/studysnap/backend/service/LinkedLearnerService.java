@@ -616,6 +616,22 @@ public class LinkedLearnerService {
         boolean accepted = relationship.getStatus() == LinkedLearnerStatus.ACCEPTED;
         Set<UUID> activitySharedFromUserIds = sharedFromUserIds(grants, LinkedLearnerGrantScope.ACTIVITY);
         Set<UUID> progressSharedFromUserIds = sharedFromUserIds(grants, LinkedLearnerGrantScope.PROGRESS);
+        // ⚠️ Mirror requireGrant's consent gate, INCLUDING its asymmetry. Guardian consent protects
+        // the LEARNER's data only, so it blocks a read whose counterparty is the learner and must NOT
+        // touch a read of the supporter's own shared activity — blanket-applying it would wrongly
+        // hide a supporter's activity from a learner who happens to require consent.
+        //
+        // Without this the DTO was the MORE PERMISSIVE of the two: `requireGrant` denies on missing
+        // consent while `*SharedWithMe` did not, so a supporter could be shown a "View progress" link
+        // whose read then 404s — with no way back, because recordGuardianConsent requires PENDING and
+        // an ACCEPTED relationship in that state can only be repaired by revoke and re-invite.
+        // Reachable today only by raising GUARDIAN_CONSENT_MAX_AGE, which is owner-owned and pending
+        // counsel — planned rather than hypothetical, which is why this is defence in depth and not
+        // dead code.
+        boolean counterpartyIsLearner = callerRole == LinkedLearnerSide.SUPPORTER;
+        boolean counterpartyDataWithheldForConsent =
+                counterpartyIsLearner && consentRequired && !consentRecorded;
+        boolean readableFromCounterparty = accepted && !counterpartyDataWithheldForConsent;
 
         return new LinkedLearnerResponse(
                 relationship.getId(),
@@ -640,9 +656,9 @@ public class LinkedLearnerService {
                 consentRequired,
                 consentRecorded,
                 activitySharedFromUserIds.contains(callerUserId),
-                accepted && activitySharedFromUserIds.contains(counterpartyId),
+                readableFromCounterparty && activitySharedFromUserIds.contains(counterpartyId),
                 progressSharedFromUserIds.contains(callerUserId),
-                accepted && progressSharedFromUserIds.contains(counterpartyId)
+                readableFromCounterparty && progressSharedFromUserIds.contains(counterpartyId)
         );
     }
 

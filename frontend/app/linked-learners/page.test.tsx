@@ -492,7 +492,11 @@ it("explains paused guardian-consent connections to both sides", async () => {
   render(<LinkedLearnersPage />);
 
   expect(await screen.findByText("This connection is paused until the supporter records guardian consent.")).toBeInTheDocument();
-  expect(screen.getByText("Your progress access is paused because guardian consent is required. Record consent above to unblock the connection.")).toBeInTheDocument();
+  expect(screen.getByText("This connection is paused until you record guardian consent.")).toBeInTheDocument();
+  // ⚠️ Pins the v0.94.0 correction: the paused copy describes STATUS only. Since v0.93.0 an ACCEPTED
+  // relationship does not imply progress access, so no status string may promise it.
+  expect(screen.queryByText(/progress access is paused/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/unblock the connection/i)).not.toBeInTheDocument();
 });
 
 it("shows an incoming invitation and accepts it through the invitation endpoint", async () => {

@@ -187,7 +187,9 @@ function SharingPanel({
         <div className="border-t border-border pt-3">
           <p className="text-sm text-foreground/70">
             {paused
-              ? `${link.counterpartyDisplayName}'s progress access is paused`
+              // ⚠️ STATUS, not access. The DTO zeroes `*SharedWithMe` on a non-ACCEPTED row, so we
+              // cannot tell "granted, now paused" from "never granted" — claiming either is a guess.
+              ? `Sharing is paused while this connection is inactive`
               : link.progressSharedWithMe
                 ? `${link.counterpartyDisplayName} shares their study progress with you`
                 : `${link.counterpartyDisplayName} does not share their study progress with you`}
@@ -198,7 +200,7 @@ function SharingPanel({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-foreground/70">
             {paused
-              ? `${link.counterpartyDisplayName}'s activity access is paused`
+              ? `Sharing is paused while this connection is inactive`
               : link.activitySharedWithMe
               ? `${link.counterpartyDisplayName} shares their study activity with you`
               : `${link.counterpartyDisplayName} does not share their study activity with you`}

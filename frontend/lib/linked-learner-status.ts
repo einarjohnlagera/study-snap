@@ -33,8 +33,16 @@ export const LINKED_LEARNER_STATUS_COPY = {
   active: "Learning connection active",
   waitingForLearnerBirthYear: "Waiting for the learner to record their birth year.",
   pausedForConsentLearnerView: "This connection is paused until the supporter records guardian consent.",
+  // ⚠️ These describe the connection's STATUS and must not assert anything about access.
+  // Two reasons, both learned the hard way. (1) Since v0.93.0 an ACCEPTED relationship no longer
+  // implies progress access — it needs a live learner-issued PROGRESS grant — so any copy promising
+  // that activation or consent "unblocks progress" is false. The earlier wording survived two
+  // releases because this file holds prose rather than status literals, so v0.93.0's own sweep for
+  // `"ACCEPTED"` never reached it. (2) The DTO zeroes `*SharedWithMe` on a non-ACCEPTED row, so the
+  // frontend genuinely CANNOT tell "granted, now paused" from "never granted" — claiming either
+  // would be a guess rendered as fact.
   pausedForConsentSupporterView:
-    "Your progress access is paused because guardian consent is required. Record consent above to unblock the connection.",
+    "This connection is paused until you record guardian consent.",
   consentRecorded: "Guardian consent has been recorded.",
 } as const;
 
@@ -60,7 +68,9 @@ export function describeSupportedLearnerStatus(link: LinkedLearnerResponse): {
     case "GUARDIAN_CONSENT_RECORDED":
       return {
         headline: "Guardian consent recorded",
-        detail: "Progress becomes available once the connection finishes activating.",
+        // ⚠️ Says only that the connection is finishing. It must NOT promise progress: since
+        // v0.93.0 that requires a separate grant the learner alone can give.
+        detail: "This connection is finishing activation.",
       };
     default:
       // ⚠️ Neutral on purpose: this branch must not assert either meaning of PENDING, because a
