@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
+import com.studysnap.backend.dto.LinkedLearnerInvitationResponse;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import org.springframework.http.HttpStatus;
@@ -838,6 +839,68 @@ class LinkedLearnerServiceTest {
         verify(invitationRepository, never()).insertPendingIfAbsent(
                 any(), any(), anyString(), anyString(), any(), any());
         verify(emailService, never()).sendEmail(any());
+    }
+
+    @Test
+    void invitationListUsesABoundedOutgoingWindowAndKeepsIncomingLiveOnly() {
+        UserEntity caller = user("caller@example.com");
+        UserEntity inviter = user("inviter@example.com");
+        LinkedLearnerInvitationEntity outgoingExpired = invitation(caller.getId(), "ignored@example.com");
+        outgoingExpired.setExpiresAt(OffsetDateTime.now().minusDays(1));
+        LinkedLearnerInvitationEntity incomingLive = invitation(inviter.getId(), caller.getEmail());
+        incomingLive.setExpiresAt(OffsetDateTime.now().plusDays(4));
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        when(userRepository.findById(inviter.getId())).thenReturn(Optional.of(inviter));
+        when(invitationRepository.findByInviterUserIdAndStatusAndExpiresAtAfter(
+                eq(caller.getId()), eq(LinkedLearnerStatus.PENDING), any(OffsetDateTime.class)))
+                .thenReturn(List.of(outgoingExpired));
+        when(invitationRepository.findByInvitedEmailAndStatusAndExpiresAtAfter(
+                eq(caller.getEmail()), eq(LinkedLearnerStatus.PENDING), any(OffsetDateTime.class)))
+                .thenReturn(List.of(incomingLive));
+        properties.getLinkedLearners().setInvitationTtlDays(11);
+
+        OffsetDateTime before = OffsetDateTime.now();
+        List<LinkedLearnerInvitationResponse> response = service.listInvitations(caller.getId());
+        OffsetDateTime after = OffsetDateTime.now();
+
+        assertThat(response).hasSize(2);
+        LinkedLearnerInvitationResponse outgoing = response.getFirst();
+        assertThat(outgoing.expired()).isTrue();
+        assertThat(outgoing.expiresAt()).isEqualTo(outgoingExpired.getExpiresAt());
+        assertThat(outgoing.inviterName()).isNull();
+        LinkedLearnerInvitationResponse incoming = response.getLast();
+        assertThat(incoming.expired()).isFalse();
+        assertThat(incoming.inviterName()).isEqualTo(inviter.getDisplayName());
+
+        ArgumentCaptor<OffsetDateTime> outgoingCutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(invitationRepository).findByInviterUserIdAndStatusAndExpiresAtAfter(
+                eq(caller.getId()), eq(LinkedLearnerStatus.PENDING), outgoingCutoff.capture());
+        assertThat(outgoingCutoff.getValue())
+                .isBetween(before.minusDays(11), after.minusDays(11));
+
+        ArgumentCaptor<OffsetDateTime> incomingCutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(invitationRepository).findByInvitedEmailAndStatusAndExpiresAtAfter(
+                eq(caller.getEmail()), eq(LinkedLearnerStatus.PENDING), incomingCutoff.capture());
+        assertThat(incomingCutoff.getValue()).isBetween(before, after);
+
+        assertThat(Arrays.stream(LinkedLearnerInvitationResponse.class.getRecordComponents())
+                .map(component -> component.getName())
+                .toList())
+                .containsExactly("id", "incoming", "inviterRole", "invitedEmail", "inviterName",
+                        "createdAt", "expiresAt", "expired");
+    }
+
+    @Test
+    void anExpiredInvitationCanStillBeRevokedByItsInviter() {
+        UserEntity caller = user("caller@example.com");
+        LinkedLearnerInvitationEntity expired = invitation(caller.getId(), "ignored@example.com");
+        expired.setExpiresAt(OffsetDateTime.now().minusDays(1));
+        when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        when(invitationRepository.findById(expired.getId())).thenReturn(Optional.of(expired));
+
+        service.revokeInvitation(expired.getId(), caller.getId());
+
+        verify(invitationRepository).markRevokedIfPending(eq(expired.getId()), any(OffsetDateTime.class));
     }
 
     @Test

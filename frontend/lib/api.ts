@@ -5581,6 +5581,9 @@ export type LinkedLearnerInvitationResponse = {
   /** Null for an outgoing invitation: the inviter typed the address and must learn nothing more. */
   inviterName: string | null;
   createdAt: string;
+  expiresAt: string;
+  /** Server-computed so the expiry boundary never depends on the browser clock. */
+  expired: boolean;
 };
 
 export async function listLinkedLearnerInvitations(): Promise<LinkedLearnerInvitationResponse[]> {
