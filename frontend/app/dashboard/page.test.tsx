@@ -302,6 +302,23 @@ describe("DashboardPage profile variants", () => {
         birthYearRequired: false,
         guardianConsentRequired: false,
         guardianConsentRecorded: false,
+        progressSharedWithMe: true,
+      },
+      {
+        id: "accepted-without-progress",
+        callerRole: "SUPPORTER",
+        initiatedBy: "SUPPORTER",
+        incomingInvitation: false,
+        counterpartyDisplayName: "No Grant Learner",
+        counterpartyEmail: "no-grant@example.com",
+        status: "ACCEPTED",
+        createdAt: "2026-08-18T00:00:00Z",
+        acceptedAt: "2026-08-19T00:00:00Z",
+        revokedAt: null,
+        birthYearRequired: false,
+        guardianConsentRequired: false,
+        guardianConsentRecorded: false,
+        progressSharedWithMe: false,
       },
       {
         id: "pending-link",
@@ -325,10 +342,12 @@ describe("DashboardPage profile variants", () => {
     expect(await screen.findByRole("heading", { name: "People you support" })).toBeInTheDocument();
     expect(screen.getByText("Alex Learner")).toBeInTheDocument();
     expect(screen.getByText("Sam Learner")).toBeInTheDocument();
+    expect(screen.getByText("No Grant Learner is not sharing progress with you.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View progress" })).toHaveAttribute(
       "href",
       "/linked-learners/accepted-link/progress",
     );
+    expect(screen.getAllByRole("link", { name: "View progress" })).toHaveLength(1);
     // ⚠️ This PENDING row carries no birth-year or consent blocker, which since V122 can only be a
     // LEGACY pre-migration row. The copy must stay neutral: claiming the invitation still needs
     // accepting is false for every row written after the migration.

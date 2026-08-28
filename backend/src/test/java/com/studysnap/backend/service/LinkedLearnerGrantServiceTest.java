@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
+import com.studysnap.backend.entity.LinkedLearnerGrantEntity;
+import com.studysnap.backend.entity.LinkedLearnerGrantScope;
+import com.studysnap.backend.exception.LinkedLearnerProgressGrantNotAllowedException;
 import com.studysnap.backend.repository.LinkedLearnerGrantRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +37,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class LinkedLearnerGrantServiceTest {
+    private static final String ACTIVITY_SCOPE = "ACTIVITY";
+    private static final String PROGRESS_SCOPE = "PROGRESS";
     @Mock private LinkedLearnerRelationshipRepository relationshipRepository;
     @Mock private LinkedLearnerGrantRepository grantRepository;
     @Mock private AuthService authService;
@@ -94,21 +99,26 @@ class LinkedLearnerGrantServiceTest {
         UUID learnerId = relationship.getLearnerUserId();
         UUID supporterId = relationship.getSupporterUserId();
         when(grantRepository.insertLiveIfAbsent(
-                any(), eq(relationshipId), eq(learnerId), eq(supporterId), eq("ACTIVITY"), any()))
+                any(), eq(relationshipId), eq(learnerId), eq(supporterId), eq(ACTIVITY_SCOPE), any()))
                 .thenReturn(1);
 
         assertThat(service.setActivityGrant(learnerId, relationshipId, true).granted()).isTrue();
 
         verify(grantRepository).insertLiveIfAbsent(
-                any(), eq(relationshipId), eq(learnerId), eq(supporterId), eq("ACTIVITY"), any());
+                any(), eq(relationshipId), eq(learnerId), eq(supporterId), eq(ACTIVITY_SCOPE), any());
     }
 
     @Test
     void repeatedEnableAndDisableRequestsAreNoOpSafe() {
-        when(grantRepository.insertLiveIfAbsent(any(), eq(relationshipId), eq(callerId), any(), eq("ACTIVITY"), any()))
+        when(grantRepository.insertLiveIfAbsent(
+                any(), eq(relationshipId), eq(callerId), any(), eq(ACTIVITY_SCOPE), any()))
                 .thenReturn(1, 0);
         when(grantRepository.revokeLive(eq(relationshipId), eq(callerId), any(), any()))
                 .thenReturn(1, 0);
+        when(grantRepository.findFirstByRelationshipIdAndFromUserIdAndScopeAndRevokedAtIsNull(
+                relationshipId, callerId, LinkedLearnerGrantScope.ACTIVITY))
+                .thenReturn(Optional.of(liveGrant(
+                        callerId, relationship.getLearnerUserId(), LinkedLearnerGrantScope.ACTIVITY)));
 
         assertThat(service.setActivityGrant(callerId, relationshipId, true).granted()).isTrue();
         assertThat(service.setActivityGrant(callerId, relationshipId, true).granted()).isTrue();
@@ -116,7 +126,7 @@ class LinkedLearnerGrantServiceTest {
         assertThat(service.setActivityGrant(callerId, relationshipId, false).granted()).isFalse();
 
         verify(grantRepository, times(2)).insertLiveIfAbsent(
-                any(), eq(relationshipId), eq(callerId), any(), eq("ACTIVITY"), any());
+                any(), eq(relationshipId), eq(callerId), any(), eq(ACTIVITY_SCOPE), any());
         verify(grantRepository, times(2)).revokeLive(eq(relationshipId), eq(callerId), any(), any());
         verify(analyticsService).trackEvent(
                 callerId,
@@ -134,9 +144,64 @@ class LinkedLearnerGrantServiceTest {
     }
 
     @Test
+    void supporterCannotGrantProgressAndNoRowIsWritten() {
+        assertThatThrownBy(() -> service.setProgressGrant(callerId, relationshipId, true))
+                .isInstanceOf(LinkedLearnerProgressGrantNotAllowedException.class);
+
+        verifyNoMoreInteractions(grantRepository);
+    }
+
+    @Test
+    void learnerProgressGrantAndRevokeEmitOnlyRealTransitionEvents() {
+        UUID learnerId = relationship.getLearnerUserId();
+        UUID supporterId = relationship.getSupporterUserId();
+        when(grantRepository.insertLiveIfAbsent(
+                any(), eq(relationshipId), eq(learnerId), eq(supporterId), eq(PROGRESS_SCOPE), any()))
+                .thenReturn(1, 0);
+        when(grantRepository.findFirstByRelationshipIdAndFromUserIdAndScopeAndRevokedAtIsNull(
+                relationshipId, learnerId, LinkedLearnerGrantScope.PROGRESS))
+                .thenReturn(Optional.of(liveGrant(learnerId, supporterId, LinkedLearnerGrantScope.PROGRESS)));
+        when(grantRepository.revokeLive(
+                eq(relationshipId), eq(learnerId), eq(LinkedLearnerGrantScope.PROGRESS), any()))
+                .thenReturn(1, 0);
+
+        assertThat(service.setProgressGrant(learnerId, relationshipId, true).granted()).isTrue();
+        assertThat(service.setProgressGrant(learnerId, relationshipId, true).granted()).isTrue();
+        assertThat(service.setProgressGrant(learnerId, relationshipId, false).granted()).isFalse();
+        assertThat(service.setProgressGrant(learnerId, relationshipId, false).granted()).isFalse();
+
+        verify(analyticsService).trackEvent(
+                learnerId,
+                AnalyticsEventType.CONNECTION_PROGRESS_SHARED,
+                relationshipId,
+                Map.of("role", "LEARNER"));
+        verify(analyticsService).trackEvent(
+                learnerId,
+                AnalyticsEventType.CONNECTION_PROGRESS_SHARE_REVOKED,
+                relationshipId,
+                Map.of("role", "LEARNER"));
+        verifyNoMoreInteractions(analyticsService);
+    }
+
+    @Test
+    void zeroRowInsertWithoutALiveGrantReportsNotFound() {
+        UUID learnerId = relationship.getLearnerUserId();
+        when(grantRepository.insertLiveIfAbsent(
+                any(), eq(relationshipId), eq(learnerId), eq(callerId), eq(PROGRESS_SCOPE), any()))
+                .thenReturn(0);
+        when(grantRepository.findFirstByRelationshipIdAndFromUserIdAndScopeAndRevokedAtIsNull(
+                relationshipId, learnerId, LinkedLearnerGrantScope.PROGRESS))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setProgressGrant(learnerId, relationshipId, true))
+                .isInstanceOf(LinkedLearnerNotFoundException.class);
+        verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
+    }
+
+    @Test
     void grantEventMetadataContainsOnlyCallerRole() throws Exception {
         when(grantRepository.insertLiveIfAbsent(
-                any(), eq(relationshipId), eq(callerId), any(), eq("ACTIVITY"), any()))
+                any(), eq(relationshipId), eq(callerId), any(), eq(ACTIVITY_SCOPE), any()))
                 .thenReturn(1);
 
         service.setActivityGrant(callerId, relationshipId, true);
@@ -158,7 +223,7 @@ class LinkedLearnerGrantServiceTest {
     @Test
     void failedGrantWriteEmitsNoEvent() {
         when(grantRepository.insertLiveIfAbsent(
-                any(), eq(relationshipId), eq(callerId), any(), eq("ACTIVITY"), any()))
+                any(), eq(relationshipId), eq(callerId), any(), eq(ACTIVITY_SCOPE), any()))
                 .thenThrow(new IllegalStateException("write failed"));
 
         assertThatThrownBy(() -> service.setActivityGrant(callerId, relationshipId, true))
@@ -170,7 +235,7 @@ class LinkedLearnerGrantServiceTest {
     @Test
     void analyticsFailureDoesNotFailGrantTransition() {
         when(grantRepository.insertLiveIfAbsent(
-                any(), eq(relationshipId), eq(callerId), any(), eq("ACTIVITY"), any()))
+                any(), eq(relationshipId), eq(callerId), any(), eq(ACTIVITY_SCOPE), any()))
                 .thenReturn(1);
         doThrow(new IllegalStateException("analytics unavailable"))
                 .when(analyticsService)
@@ -178,5 +243,19 @@ class LinkedLearnerGrantServiceTest {
 
         assertThatCode(() -> service.setActivityGrant(callerId, relationshipId, true))
                 .doesNotThrowAnyException();
+    }
+
+    private LinkedLearnerGrantEntity liveGrant(
+            UUID fromUserId,
+            UUID toUserId,
+            LinkedLearnerGrantScope scope
+    ) {
+        LinkedLearnerGrantEntity grant = new LinkedLearnerGrantEntity();
+        grant.setId(UUID.randomUUID());
+        grant.setRelationshipId(relationshipId);
+        grant.setFromUserId(fromUserId);
+        grant.setToUserId(toUserId);
+        grant.setScope(scope);
+        return grant;
     }
 }

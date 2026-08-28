@@ -164,6 +164,11 @@ code — and it is the strongest argument for doing Phase 3 next rather than any
 
 ### Shipped
 
+- **Explicit learner-granted progress permission** — added `PUT /linked-learners/{relationshipId}/grants/progress` over the existing `PROGRESS` scope and scope-parameterized the grant service without changing the live activity endpoint. Only the learner may enable progress sharing; withdrawal remains available on paused relationships, writes stay idempotent, and real transitions emit the new relationship-scoped progress grant/revoke events.
+- **Default-closed supporter progress authorization** — reimplemented `requireAcceptedLearnerId` over the shared grant authorization service while retaining the explicit caller-is-supporter assertion and the progress route's `LINKED_LEARNER_PROGRESS_NOT_FOUND` contract. An accepted relationship without a live learner-to-supporter `PROGRESS` grant now reads nothing; grant revoke, relationship revoke, consent lapse and birth-year pause each cut the next request, while the aggregate payload remains unchanged.
+- **Atomic grant creation and truthful permission DTOs** — made live-grant insertion conditional on the relationship still being `ACCEPTED`, distinguished idempotent zero-row inserts from lost authorization races, and batched both scopes into the connection list without an N+1. `*SharedByMe` reflects the surviving row; `*SharedWithMe` additionally requires `ACCEPTED`, for both activity and progress.
+- **Per-scope connection controls** — added the learner-only *Share my study progress* toggle, supporter read-only progress state, last-server-confirmed rollback on failed writes, and pending-state controls that keep withdrawal reachable while explaining that access is paused. Connection and Dashboard *View progress* actions now gate only on `progressSharedWithMe`.
+- **Progress funnel and live guidance** — added `CONNECTION_PROGRESS_SHARED`, `CONNECTION_PROGRESS_SHARE_REVOKED` and `CONNECTION_PROGRESS_VIEWED`, all best-effort and emitted only for successful state changes or reads. Updated the Help Center and linked-learners feature contract to describe explicit progress consent and the unchanged privacy boundary.
 
 ## v0.92.0 - Activity Sharing
 

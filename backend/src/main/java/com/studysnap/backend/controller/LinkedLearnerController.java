@@ -111,6 +111,16 @@ public class LinkedLearnerController {
                 user.userId(), relationshipId, request.granted());
     }
 
+    @PutMapping("/{relationshipId}/grants/progress")
+    public LinkedLearnerActivityGrantResponse setProgressGrant(
+            @PathVariable UUID relationshipId,
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody LinkedLearnerActivityGrantRequest request
+    ) {
+        return linkedLearnerGrantService.setProgressGrant(
+                user.userId(), relationshipId, request.granted());
+    }
+
     @GetMapping("/{relationshipId}/activity")
     public LinkedLearnerActivityResponse getActivity(
             @PathVariable UUID relationshipId,
