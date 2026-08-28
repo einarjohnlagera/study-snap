@@ -1,5 +1,157 @@
 # RELEASES.md - NoteLib
 
+## v0.95.0 - Redemption Integrity
+
+**Status: In Progress** (kicked off 2026-08-29)
+
+Theme: redeeming an invitation link should not cost the redeemer something permanent before anyone has agreed to
+anything — and the surfaces around a live link should stop lying about what they are showing.
+
+### Why this release exists
+
+**`v0.94.0` shipped shareable invitation links and recorded, as a Known limitation rather than a defect, that a
+single UNCONFIRMED redemption is irreversible in two ways.** It permanently writes the redeemer's account-global,
+**write-once** birth year, and it hands the link creator that person's display name **and whether they are a
+minor** (`guardianConsentRequired` on the connection list) — while the creator need never accept. **Widened, not
+introduced:** the email path discloses the same fields on acceptance, but required already knowing an address; a
+link harvests from arbitrary clickers, bounded only by the creation rate limit.
+
+**⚠️ THE OWNER RULED ON 2026-08-29: DEFER THE BIRTH-YEAR WRITE.** Recorded here so the reasoning is not
+re-derived. The alternatives on the table were disclosing more loudly before redemption, accepting it as
+equivalent to the email path, and deferring the ruling; the ruling removes half the irreversibility outright
+rather than describing it better. **This is the cheapest moment to change the shape of links** — they are new,
+not yet promoted anywhere prominent, and the cost grows with every redemption that lands.
+
+**⚠️ AND THE NAIVE FIX IS KNOWN TO BE WRONG — audited at kickoff, before scoping, not to be re-derived.**
+`recordGuardianConsent` (`LinkedLearnerService:427-430`) throws `LinkedLearnerBirthYearRequiredException` when the
+learner's year is null **and requires `PENDING`**. So simply removing the `captureLearnerBirthYearIfMissing` call
+at `LinkedLearnerInvitationLinkService:122` leaves a link-redeemed minor sitting `PENDING` with a null year, and
+**their supporter can never record guardian consent — the path becomes unreachable for exactly the population it
+protects.** `accept()` (`:364-373`), `toResponse`'s `consentRequired` / `learnerAgeUnknown` (`:612-613`, `:637`,
+`:661`) and the separate `recordBirthYear` writer (`:397`) all read the same field. **The provisional year must
+live somewhere the consent machinery can read while `PENDING`.**
+
+**⚠️ SECOND KICKOFF AUDIT FINDING, recorded because it corrects a `v0.94.0` premise rather than adding scope.**
+`v0.94.0` blocked supporter onboarding on "onboarding is frozen until `[CHECKPOINT — due 2026-09-11]`." That
+checkpoint is, per `ROADMAP.md`'s consolidation note, **the signup funnel read alone** — 375 signups against a
+62.4% completion baseline, measuring `app/onboarding/page.tsx`. **"Supporter onboarding" has no definition
+anywhere in the plan** — grepping `learning-connections-phase-plan.md` for `onboard` returns exactly two hits, a
+caller-gate description and the Phase 4 row itself — and the redemption page already treats `/onboarding` as a
+**waypoint it carries a token through** (`app/linked-learners/invite/[token]/page.tsx:45,56`), not a surface it
+edits. **So the block rests on an assumption, and the discriminating test is checkable: does the work edit the
+signup → verify-email → onboarding path the baseline measures?** It is **not** claimed here that supporter
+onboarding is unblocked; it is claimed that nobody has checked. It needs a definition step first, which is why it
+is `v0.96.0` and not folded in beside a security migration.
+
+### Planned Scope
+
+- **1. Defer the birth-year write until the relationship is confirmed (backend + migration + frontend).**
+  **⚠️ OWNER RULING 2026-08-29.** A link redemption must stop writing `users.birth_year`. The redeemer's declared
+  year is held **provisionally** until the creator confirms, and only then promoted to the account-global column.
+  **⚠️ THE STORAGE SHAPE IS DECIDED HERE, NOT BY DELIVERY — a first draft of this rule said to hold the year on
+  `linked_learner_invitation_links` and that is UNBUILDABLE; it is recorded so it is not re-proposed.** `redeem()`
+  sets `redeemed_at` and `redeemed_by_user_id`, so the link row is **terminal** the moment it is used
+  (`ck_linked_learner_invitation_link_terminal_state`), and **`linked_learner_relationships` carries no link id**
+  — its columns are `id, supporter_user_id, learner_user_id, status, initiated_by, created_at, accepted_at,
+  revoked_at`, so `recordGuardianConsent(relationshipId, …)` and `accept()` have **no path back to the link**.
+  Reconstructing one from `(redeemed_by_user_id, creator_user_id)` is not unique either, because a revoke plus
+  re-invite mints a new relationship for the same pair. **⚠️ SO: a NEW side table keyed by RELATIONSHIP ID** —
+  provisional year, declared-at, one row per pending relationship — **deleted on promotion and on revoke**, which
+  also honours `v0.89.1`'s rule that declared-value history is minor's personal data and is not retained.
+  **⚠️ Do NOT add a column to `linked_learner_relationships`, `_invitations` or `_guardian_consents`**, whose
+  meaning `[CHECKPOINT — due 2026-09-19]`, `[CHECKPOINT — due 2026-09-26]` and `[CHECKPOINT — due 2026-10-13]`
+  all read.
+  **⚠️ AND THE DEFERRAL IS FROM `users.birth_year` ONLY — NOT from the consent machinery, which would DEADLOCK.**
+  `accept()` (`:364-370`) throws `LinkedLearnerBirthYearRequiredException` when the learner's year is null and
+  **the caller is not the learner** — so with a supporter-created link redeemed by a learner, deferring the year
+  out of reach would leave **the supporter permanently unable to confirm the relationship they must confirm.**
+  The provisional year therefore feeds `consentRequired`, `learnerAgeUnknown` and `accept()` exactly as a
+  persisted year does today; what changes is that **nothing is written to the account-global write-once column
+  until the creator confirms.** A redemption that is never confirmed leaves no trace on the redeemer's account.
+  **⚠️ Guardian consent must keep working end to end for a link-redeemed minor while `PENDING`** — that is the
+  acceptance test for this item, not a side condition. **⚠️ `users.birth_year` stays account-global and
+  WRITE-ONCE**; this changes *when* it is written, never that it is written once, and `v0.89.1`'s correction path
+  is untouched. **⚠️ Birth year is still collected from the LEARNER, never from the inviter** — `AGENTS.md`
+  states it and a test pins it. **⚠️ The email-keyed path is NOT changed** — it collects at invite time from the
+  learner and already requires the address to be known.
+- **2. The link surfaces stop reporting state they cannot see (frontend).** The live-links list never refetches,
+  so **Copy and Revoke can act on a link that is already dead**; reloading after a successful redemption reads as
+  a dead link; and the paused banner claims sharing will *"resume"* on never-accepted `PENDING` rows that link
+  redemption newly creates, where it never started. **⚠️ Copy is the sharp one** — it hands out a token the
+  server will reject. **⚠️ The frontend genuinely cannot distinguish "granted, now paused" from "never granted"**
+  (the DTO zeroes `*SharedWithMe` on a non-`ACCEPTED` row), so the copy must describe the **status** and must not
+  guess at access — the same rule `v0.94.0` applied to `linked-learner-status.ts` and `SharingPanel`.
+- **3. The connection accessibility set (frontend).** `birth-year-input`'s steppers are nested inside `<label>` in
+  three of four call sites; a raw checkbox is used where the shared `Checkbox` component is used elsewhere **on
+  the same page**; disabled toggles are left in the tab order. Carried from `v0.94.0`, all three verified there.
+- **4. The "Quiz for someone" modal discloses that quizzes are AI-generated (frontend, copy only).** Carried from
+  `v0.94.0`. **⚠️ Disclosure only** — no quota, limit, counter or metering change, and the Challenge Quiz **mode
+  name** stays distinct from the quota **label** everywhere, which a regression test pins.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Acceptance stays LOAD-BEARING** (`v0.89.0`) — holding or redeeming a link never by itself creates an
+  `ACCEPTED` relationship, and item 1 must make redemption *less* consequential, never more.
+- **⚠️ Guardian consent is NOT bypassable by link** and stays re-asserted inside the grant check, including its
+  deliberate deny-on-null-birth-year branch. **⚠️ `v0.94.0`'s fail-closed fix stays fail-closed** — unknown age
+  withholds access (`unknownLearnerAgeWithholdsAccessJustAsRequireGrantDenies`); a provisional year must not
+  become a back door that reports access the authorization check would deny.
+- **⚠️ No account-existence oracle** (`v0.90.0`) — nothing about whether an address or account exists may be
+  inferable from link creation, redemption or failure, and the single not-found contract for unknown, revoked,
+  expired and redeemed tokens is preserved.
+- **⚠️ Absence of a live grant means NO ACCESS.** An `ACCEPTED` relationship implies no access of any kind.
+- **⚠️ The progress read stays UNIDIRECTIONAL** with the explicit caller-is-supporter assertion; the test pinning
+  it must keep failing on its removal. **`PROGRESS` stays learner-issued only**; activity stays mutual.
+- **⚠️ Every read re-verifies `ACCEPTED`** — no cache, no grace.
+- **⚠️ Invitations stay ONE-AT-A-TIME by principle** — a link delivers ONE relationship; the quiz share link stays
+  the many-recipient mechanism and is neither extended nor merged into this.
+- **⚠️ No relationship-type column, no new profile type, nothing gated on `ProfileType`.**
+- **⚠️ `NoteVisibility` stays `PRIVATE | PUBLIC`.** **⚠️ No endpoint accepts a learner user id.** **⚠️ No public
+  people search.**
+- **⚠️ Do NOT touch `app/onboarding/page.tsx` or the signup → verify-email → onboarding path** —
+  `[CHECKPOINT — due 2026-09-11]`'s 62.4% completion baseline cannot be re-run. Supporter onboarding is `v0.96.0`.
+- **⚠️ Out of scope, each needing its own decision (Phase 5): mastery comparison between people, scores,
+  leaderboards, activity rings, social feed, reactions.**
+- **⚠️ Deprioritized deliberately, not forgotten:** `revoke()` still not revoking grant rows (`RELEASES.md`
+  records it as inert — `requireGrant` demands `ACCEPTED` and a re-invite mints a new relationship id) and the
+  1-of-5 endpoint/cross-mode test-coverage items. Both stay in `v0.94.0`'s Known limitations.
+- **⚠️ Do NOT lengthen `NativeQueryParameterTypingTest`'s pattern**, and any new native query must keep
+  `NativeQueryPostgresIntegrationTest`'s exact-count assertion honest by raising `EXPECTED_NATIVE_QUERIES`
+  deliberately.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: ONE SCOPED COLD AGENT, framed as FALSIFICATION**, decided now rather than at
+  signoff. Item 1 fires a single trigger — it moves a privacy boundary and touches guardian consent — and the
+  re-tiered gate in `CLAUDE.md` reserves the ~490k-token full test for a permission substrate, a first-of-kind
+  cross-user read, or money/quota/production-data semantics. **None of those applies:** this release adds no
+  scope, no new cross-user read and no new authorization path. The agent gets a tight file list and the specific
+  claims delivery makes, and is asked to disprove each. `model: "sonnet"` is sufficient for claim-checking.
+  **⚠️ Escalate to the full test only if item 1's design grows a second write path or a new grant interaction.**
+- **⚠️ Item 1's guarantee lives partly in a `WHERE` clause, so a mocked repository CANNOT test it.** This class has
+  now recurred three times, twice inside the releases that recorded it. Any predicate that decides whether a
+  provisional year is promoted, read or discarded needs a test that executes the statement against real rows in
+  `NativeQueryPostgresIntegrationTest`, and it must be mutation-verified with the killing test named.
+- **The `### Planned Scope` heading above is permanent.** Delivery appends to `### Shipped` beneath it; the
+  signoff completeness gate reads the numbered list from this file, so it stays numbered without duplicates.
+- **A `[CHECKPOINT]` row is owed at signoff for item 1** — deferring the birth-year write changes the redemption
+  funnel, and it ships ahead of any evidence about how many redemptions are actually confirmed.
+  **⚠️ It carries a DEPLOY-SPLIT CAVEAT, and the caveat must be written into the row BEFORE the read, not discovered
+  at it** — the same convention `[CHECKPOINT — due 2026-10-13]` already carries. Item 1 changes the redemption
+  funnel that `[CHECKPOINT — due 2026-09-26]` (`v0.94.0` — *does anyone create an invitation LINK, and does a
+  redemption ever get confirmed?*) is already measuring, and that window opened on 2026-08-29. **Confirmation rate is
+  exactly the quantity both rows read**, so a mid-window change to what redemption costs the redeemer may itself
+  move it. Record the split date and treat pre- and post-deploy redemptions separately.
+- **⚠️ Sequence the pressure test's agents.** `v0.94.0` ran a read-only auditor concurrently with a mutation agent
+  and got a false finding — the auditor reported the mutation as an uncommitted edit deleting a security guard.
+  Sequence them, or tell the read-only agents a mutation pass is running.
+
+### Shipped
+
+_(nothing yet)_
+
+
+
 ## v0.94.0 - Connection Experience
 
 **Status: Released** (kicked off 2026-08-28, signed off 2026-08-29)
