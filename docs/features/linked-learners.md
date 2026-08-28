@@ -2,9 +2,9 @@
 
 ## Scope
 
-Linked Learners records a directional supporter → learner relationship only after mutual agreement. The relationship layer and the supporter progress read both shipped in `v0.89.0`; controlled note sharing shipped in `v0.91.0`, directional activity sharing in `v0.92.0`, explicit learner-granted progress permission in `v0.93.0`, and single-use invitation links in `v0.94.0`.
+Linked Learners records a directional supporter → learner relationship only after mutual agreement — by email invitation, or since `v0.94.0` by a single-use shareable link whose redemption creates a `PENDING` row the link's creator must confirm. The relationship layer and the supporter progress read both shipped in `v0.89.0`; controlled note sharing shipped in `v0.91.0`, directional activity sharing in `v0.92.0`, explicit learner-granted progress permission in `v0.93.0`, and single-use invitation links in `v0.94.0`.
 
-**⚠️ PHASE NUMBERING — read this before using the word "Phase" anywhere in this file.** Two schemes exist and this document has already mixed them. The **canonical** scheme is the ratified Learning Connections plan (`docs/claude-plans/learning-connections-phase-plan.md`, and `ROADMAP.md`): **Phase 1 = shared learning material (`v0.91.0`, shipped), Phase 2 = activity sharing (`v0.92.0`, shipped), Phase 3 = per-scope `PROGRESS` permission (`v0.93.0`, shipped).** A superseded `v0.89.0`-era scheme numbered the *rollout of the relationship layer itself* and called the original supporter progress read "Phase 3". Under the canonical scheme the read is `v0.89.0` behaviour whose implicit acceptance-based authorization was replaced by the Phase 3 grant.
+**⚠️ PHASE NUMBERING — read this before using the word "Phase" anywhere in this file.** Two schemes exist and this document has already mixed them. The **canonical** scheme is the ratified Learning Connections plan (`docs/claude-plans/learning-connections-phase-plan.md`, and `ROADMAP.md`): **Phase 1 = shared learning material (`v0.91.0`, shipped), Phase 2 = activity sharing (`v0.92.0`, shipped), Phase 3 = per-scope `PROGRESS` permission (`v0.93.0`, shipped), Phase 4 = connection experience (`v0.94.0`, shipped PARTIALLY — links and connection management yes, supporter onboarding no).** A superseded `v0.89.0`-era scheme numbered the *rollout of the relationship layer itself* and called the original supporter progress read "Phase 3". Under the canonical scheme the read is `v0.89.0` behaviour whose implicit acceptance-based authorization was replaced by the Phase 3 grant.
 
 A supported learner remains a full, ordinary NoteLib account with their own login, plan and quota. A supporter may also be a learner. The relationship is separate from `ProfileType`; no supporter profile type exists or is required.
 
@@ -228,7 +228,7 @@ other learning-content field, and they do not create `UserActivityEventEntity` r
 
 ## Learner-granted supporter progress read
 
-The aggregate read shipped in `v0.89.0`; `v0.93.0` replaced its implicit `ACCEPTED`-means-access rule with an explicit `PROGRESS` grant. No payload field changed.
+The aggregate read shipped in `v0.89.0`; `v0.93.0` replaced its implicit `ACCEPTED`-means-access rule with an explicit `PROGRESS` grant, changing no payload field. **`v0.94.0` then removed `engagement` from that payload** — see below — so streaks and study days are no longer reachable through progress at all.
 
 **The owner-facing share listing is relationship-aware.** `GET /notes/{id}/shares` returns only live shares whose
 relationship is still `ACCEPTED`, matching what `PUT` will accept. Filtering on `revoked_at` alone kept a lapsed

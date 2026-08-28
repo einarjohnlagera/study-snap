@@ -2,7 +2,7 @@
 
 ## v0.94.0 - Connection Experience
 
-**Status: In progress** (kicked off 2026-08-28)
+**Status: Released** (kicked off 2026-08-28, signed off 2026-08-29)
 
 Theme: make a connection reachable by a link, make the two sharing switches mean exactly what they say, and stop
 an invitation from dying in silence.
