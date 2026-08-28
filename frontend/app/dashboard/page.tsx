@@ -61,6 +61,7 @@ import { ProfessionalInterviewPracticeCard } from "@/components/dashboard/profes
 import { DashboardGoalCard } from "@/components/dashboard/dashboard-goal-card";
 import { GoalPromptBanner } from "@/components/dashboard/goal-prompt-banner";
 import { DiscoveryIntentConsumer } from "@/components/dashboard/discovery-intent-consumer";
+import { LinkedLearnerInvitationIntentConsumer } from "@/components/dashboard/linked-learner-invitation-intent-consumer";
 import { AppModal } from "@/components/ui/app-modal";
 import {
   clearFirstStudyOnboardingStep,
@@ -757,6 +758,7 @@ export default function DashboardPage() {
               onboarded (the adoption succeeded server-side and they were never shown it). Reaching
               this branch means the guard already passed and the dashboard loaded. */}
           <DiscoveryIntentConsumer />
+          <LinkedLearnerInvitationIntentConsumer />
           <SupportedLearnersCard links={supportedLearners} />
           {hasPrimaryCollection ? (
             primaryCollectionGoal ? (

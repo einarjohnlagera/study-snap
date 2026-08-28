@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { BirthYearInput } from "@/components/linked-learners/birth-year-input";
 import { ResponsiveActionLink } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,8 +14,12 @@ import {
   acceptLinkedLearner,
   ApiRequestError,
   acceptLinkedLearnerInvitation,
+  createLinkedLearnerInvitationLink,
   listLinkedLearnerInvitations,
+  listLinkedLearnerInvitationLinks,
   revokeLinkedLearnerInvitation,
+  revokeLinkedLearnerInvitationLink,
+  type LinkedLearnerInvitationLinkResponse,
   type LinkedLearnerInvitationResponse,
   correctLinkedLearnerBirthYear,
   getLinkedLearners,
@@ -44,87 +48,6 @@ function birthYearRangeError(rawYear: string): string | null {
     return `Enter a year between ${MIN_BIRTH_YEAR} and ${currentYear}.`;
   }
   return null;
-}
-
-/**
- * Birth-year input with a stepper.
- *
- * <p>⚠️ The steppers are DISABLED until four digits are present, and they seed nothing. Stepping up from an
- * empty field would have to start somewhere, and any starting year is a declaration the person did not make —
- * the same reason this field has no default. `users.birth_year` is account-global and effectively write-once,
- * driving guardian consent for every connection the account will ever form.
- *
- * <p>⚠️ Not `type="number"`. Its spin buttons come with scroll-wheel editing, which can silently change a
- * value this consequential while someone scrolls the page. These buttons step only on a deliberate click, and
- * clamp inside the same range the server enforces, so the stepper can never produce an invalid year.
- */
-function BirthYearInput({
-  id,
-  value,
-  onChange,
-  inputRef,
-  invalid,
-  describedBy,
-  required,
-}: Readonly<{
-  id: string;
-  value: string;
-  onChange: (next: string) => void;
-  inputRef?: React.RefObject<HTMLInputElement | null>;
-  invalid?: boolean;
-  describedBy?: string;
-  required?: boolean;
-}>) {
-  const maxYear = new Date().getFullYear();
-  const stepDisabled = value.trim().length !== 4;
-
-  const step = (delta: number) => {
-    const parsed = Number(value.trim());
-    if (!Number.isFinite(parsed)) return;
-    onChange(String(Math.min(Math.max(parsed + delta, MIN_BIRTH_YEAR), maxYear)));
-  };
-
-  return (
-    // ⚠️ Sized to its content, not to the card. A birth year is exactly four digits, and a full-width
-    // input both looks wrong beside the email field and pushes the steppers so far from the digits that
-    // they read as unrelated furniture.
-    <div className="relative w-32">
-      <input
-        id={id}
-        ref={inputRef}
-        className={`${INPUT_CLASSES} pr-9 tabular-nums`}
-        value={value}
-        onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 4))}
-        inputMode="numeric"
-        autoComplete="off"
-        maxLength={4}
-        placeholder="YYYY"
-        required={required}
-        aria-invalid={invalid ? true : undefined}
-        aria-describedby={describedBy}
-      />
-      <div className="absolute inset-y-0 right-1 flex flex-col justify-center">
-        <button
-          type="button"
-          aria-label="Increase birth year"
-          disabled={stepDisabled}
-          onClick={() => step(1)}
-          className="flex h-4 w-6 items-center justify-center rounded text-foreground/50 transition-colors hover:bg-highlight hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-        >
-          <ChevronUp className="h-3 w-3" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          aria-label="Decrease birth year"
-          disabled={stepDisabled}
-          onClick={() => step(-1)}
-          className="flex h-4 w-6 items-center justify-center rounded text-foreground/50 transition-colors hover:bg-highlight hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-        >
-          <ChevronDown className="h-3 w-3" aria-hidden="true" />
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function formatDate(value: string | null) {
@@ -364,6 +287,13 @@ export default function LinkedLearnersPage() {
   }, [loadLinks]);
 
   const [invitations, setInvitations] = useState<LinkedLearnerInvitationResponse[]>([]);
+  const [invitationLinks, setInvitationLinks] = useState<LinkedLearnerInvitationLinkResponse[]>([]);
+  const [invitationLinksLoading, setInvitationLinksLoading] = useState(true);
+  const [invitationLinkError, setInvitationLinkError] = useState<string | null>(null);
+  const [linkCreatorRole, setLinkCreatorRole] = useState<LinkedLearnerSide>("SUPPORTER");
+  const [linkBirthYear, setLinkBirthYear] = useState("");
+  const [creatingInvitationLink, setCreatingInvitationLink] = useState(false);
+  const [busyInvitationLinkId, setBusyInvitationLinkId] = useState<string | null>(null);
   // Captured up front only when the inviter IS the learner: the supporter accepts later, and the
   // consent gate needs the learner's own year, which only the learner may declare.
   const [inviteBirthYear, setInviteBirthYear] = useState("");
@@ -380,6 +310,72 @@ export default function LinkedLearnersPage() {
   useEffect(() => {
     void loadInvitations();
   }, [loadInvitations]);
+
+  const loadInvitationLinks = useCallback(async () => {
+    try {
+      setInvitationLinks(await listLinkedLearnerInvitationLinks());
+      setInvitationLinkError(null);
+    } catch (loadError) {
+      setInvitationLinkError(errorMessage(loadError, "Could not load invitation links."));
+    } finally {
+      setInvitationLinksLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadInvitationLinks();
+  }, [loadInvitationLinks]);
+
+  const handleCreateInvitationLink = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const rawYear = linkBirthYear.trim();
+    if (linkCreatorRole === "LEARNER" && rawYear) {
+      const rangeError = rawYear.length === 4 ? birthYearRangeError(rawYear) : "Enter all four digits, like 2011.";
+      if (rangeError) {
+        setInvitationLinkError(rangeError);
+        return;
+      }
+    }
+    setCreatingInvitationLink(true);
+    setInvitationLinkError(null);
+    try {
+      const created = await createLinkedLearnerInvitationLink(
+        linkCreatorRole,
+        linkCreatorRole === "LEARNER" && rawYear ? Number(rawYear) : null,
+      );
+      setInvitationLinks((current) => [created, ...current]);
+      setLinkBirthYear("");
+      setNotice("Invitation link created. It can be used once.");
+    } catch (createError) {
+      setInvitationLinkError(errorMessage(createError, "Could not create the invitation link."));
+    } finally {
+      setCreatingInvitationLink(false);
+    }
+  };
+
+  const handleCopyInvitationLink = async (link: LinkedLearnerInvitationLinkResponse) => {
+    try {
+      await globalThis.navigator.clipboard.writeText(link.url);
+      setNotice("Invitation link copied.");
+    } catch {
+      setInvitationLinkError("Could not copy the link. Select the URL and copy it manually.");
+    }
+  };
+
+  const handleRevokeInvitationLink = async (link: LinkedLearnerInvitationLinkResponse) => {
+    setBusyInvitationLinkId(link.id);
+    setInvitationLinkError(null);
+    try {
+      await revokeLinkedLearnerInvitationLink(link.id);
+      // No optimistic removal: a failed privacy write must leave the last server-confirmed state.
+      setInvitationLinks((current) => current.filter((item) => item.id !== link.id));
+      setNotice("Invitation link revoked.");
+    } catch (revokeError) {
+      setInvitationLinkError(errorMessage(revokeError, "Could not revoke the invitation link."));
+    } finally {
+      setBusyInvitationLinkId(null);
+    }
+  };
 
   const handleAcceptInvitation = async (invitation: LinkedLearnerInvitationResponse) => {
     setBusyId(invitation.id);
@@ -638,6 +634,70 @@ export default function LinkedLearnersPage() {
 
       <Card className="space-y-4 p-4 sm:p-6">
         <div>
+          <h2 className="text-lg font-semibold">Invite with a link</h2>
+          <p className="mt-1 text-sm text-foreground/70">
+            Create a single-use link when you do not have the other person&apos;s email. Opening it sends you a connection request that you must confirm.
+          </p>
+        </div>
+        <form className="space-y-4" onSubmit={handleCreateInvitationLink}>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button type="button" onClick={() => setLinkCreatorRole("SUPPORTER")} aria-pressed={linkCreatorRole === "SUPPORTER"} className={`rounded-lg border p-3 text-left text-sm ${linkCreatorRole === "SUPPORTER" ? "border-primary bg-primary/10" : "border-border"}`}>
+              <span className="font-medium">The link is for a learner</span>
+              <span className="mt-1 block text-foreground/65">The person opening the link is the learner.</span>
+            </button>
+            <button type="button" onClick={() => setLinkCreatorRole("LEARNER")} aria-pressed={linkCreatorRole === "LEARNER"} className={`rounded-lg border p-3 text-left text-sm ${linkCreatorRole === "LEARNER" ? "border-primary bg-primary/10" : "border-border"}`}>
+              <span className="font-medium">The link is for a supporter</span>
+              <span className="mt-1 block text-foreground/65">The person opening the link is your supporter.</span>
+            </button>
+          </div>
+          {linkCreatorRole === "LEARNER" ? (
+            <label className="block space-y-1.5 text-sm font-medium" htmlFor="invitation-link-birth-year">
+              Your birth year
+              <BirthYearInput
+                id="invitation-link-birth-year"
+                value={linkBirthYear}
+                onChange={setLinkBirthYear}
+              />
+              <span className="block text-xs font-normal text-foreground/60">
+                Needed only if you have not recorded it before, so guardian consent cannot be bypassed through a link.
+              </span>
+            </label>
+          ) : null}
+          <Button type="submit" loading={creatingInvitationLink} loadingText="Creating link…">
+            Create invitation link
+          </Button>
+        </form>
+
+        {invitationLinkError ? (
+          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+            {invitationLinkError}
+          </p>
+        ) : null}
+
+        <div className="space-y-3" aria-label="Live invitation links">
+          <h3 className="font-medium">Your live links</h3>
+          {invitationLinksLoading ? <Skeleton className="h-16 w-full" /> : null}
+          {!invitationLinksLoading && invitationLinks.length === 0 ? (
+            <p className="text-sm text-foreground/65">No live invitation links.</p>
+          ) : null}
+          {invitationLinks.map((link) => (
+            <div key={link.id} className="space-y-2 rounded-lg border border-border p-3">
+              <p className="text-sm font-medium">
+                {link.creatorRole === "SUPPORTER" ? "You will support the person who opens this" : "The person who opens this will support you"}
+              </p>
+              <p className="text-xs text-foreground/60">Expires {formatDate(link.expiresAt)}</p>
+              <input className={INPUT_CLASSES} readOnly value={link.url} aria-label="Invitation link URL" />
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={() => void handleCopyInvitationLink(link)}>Copy link</Button>
+                <Button type="button" variant="destructiveOutline" loading={busyInvitationLinkId === link.id} onClick={() => void handleRevokeInvitationLink(link)}>Revoke link</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="space-y-4 p-4 sm:p-6">
+        <div>
           <h2 className="text-lg font-semibold">Send an invitation</h2>
           <p className="mt-1 text-sm text-foreground/70">The other person must accept before the connection becomes active. They do not need a NoteLib account yet — if they do not have one, the invitation waits for them to sign up.</p>
         </div>
@@ -710,14 +770,15 @@ export default function LinkedLearnersPage() {
       </Card>
 
       {/*
-        ⚠️ An outgoing LEARNER invitation counts, not just an existing relationship. `invite` writes
+        ⚠️ An outgoing LEARNER invitation or live invitation link counts, not just an existing relationship. `invite` writes
         the write-once account-global birth year and creates NO relationship row, so gating on
         `links` alone hid this card for the entire life of an unaccepted invitation — up to the full
         TTL, or forever if it is never accepted. That is precisely the flow v0.90.0 added, and the
         release documents the learner-only correction path as the mitigation for it.
       */}
       {(links.some((link) => link.callerRole === "LEARNER" && !link.birthYearRequired)
-        || invitations.some((invitation) => !invitation.incoming && invitation.inviterRole === "LEARNER")) ? (
+        || invitations.some((invitation) => !invitation.incoming && invitation.inviterRole === "LEARNER")
+        || invitationLinks.some((link) => link.creatorRole === "LEARNER")) ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <div>
             <h2 className="text-lg font-semibold">Correct your birth year</h2>
@@ -842,7 +903,7 @@ export default function LinkedLearnersPage() {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="font-semibold">{link.counterpartyDisplayName}</h3>
-                  <p className="text-sm text-foreground/65">{link.counterpartyEmail}</p>
+                  {link.counterpartyEmail ? <p className="text-sm text-foreground/65">{link.counterpartyEmail}</p> : null}
                   <p className="mt-1 text-xs text-foreground/55">You are the {link.callerRole === "SUPPORTER" ? "supporter" : "learner"} · Invited {formatDate(link.createdAt)}</p>
                 </div>
                 <span className="w-fit rounded-full bg-muted px-2.5 py-1 text-xs font-medium">{link.status.toLowerCase()}</span>

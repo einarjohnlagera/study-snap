@@ -1,0 +1,225 @@
+package com.studysnap.backend.service;
+
+import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.CreateLinkedLearnerInvitationLinkRequest;
+import com.studysnap.backend.dto.LinkedLearnerInvitationLinkResolveResponse;
+import com.studysnap.backend.dto.RedeemLinkedLearnerInvitationLinkRequest;
+import com.studysnap.backend.entity.LinkedLearnerInvitationLinkEntity;
+import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
+import com.studysnap.backend.entity.LinkedLearnerSide;
+import com.studysnap.backend.entity.LinkedLearnerStatus;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.LinkedLearnerInvitationLinkNotFoundException;
+import com.studysnap.backend.exception.LinkedLearnerRelationshipAlreadyExistsException;
+import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
+import com.studysnap.backend.repository.LinkedLearnerInvitationLinkRepository;
+import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.security.InvitationRateLimitService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.lang.reflect.RecordComponent;
+import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class LinkedLearnerInvitationLinkServiceTest {
+    private static final String TOKEN = "AbCdEf0123456789GhIjKl";
+
+    @Mock private LinkedLearnerInvitationLinkRepository linkRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private LinkedLearnerService linkedLearnerService;
+    @Mock private OnboardingGuardService onboardingGuardService;
+    @Mock private AuthService authService;
+    @Mock private InvitationRateLimitService invitationRateLimitService;
+
+    private LinkedLearnerInvitationLinkService service;
+
+    @BeforeEach
+    void setUp() {
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getBilling().setFrontendBaseUrl("https://notelib.test");
+        service = new LinkedLearnerInvitationLinkService(
+                linkRepository,
+                userRepository,
+                linkedLearnerService,
+                onboardingGuardService,
+                authService,
+                invitationRateLimitService,
+                properties
+        );
+    }
+
+    @Test
+    void createUsesA131BitTokenAndTheLinkSpecificRateBucket() {
+        UUID creatorId = UUID.randomUUID();
+        when(userRepository.findById(creatorId)).thenReturn(Optional.of(user(creatorId, "Creator")));
+        when(linkRepository.existsByToken(anyString())).thenReturn(false);
+        when(linkRepository.save(any(LinkedLearnerInvitationLinkEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.create(
+                creatorId, new CreateLinkedLearnerInvitationLinkRequest(LinkedLearnerSide.SUPPORTER, null));
+
+        assertThat(response.token()).hasSize(22).matches("[0-9A-Za-z]{22}");
+        assertThat(response.url()).isEqualTo("https://notelib.test/linked-learners/invite/" + response.token());
+        verify(invitationRateLimitService).assertLinkCreationAllowed(creatorId);
+    }
+
+    @Test
+    void learnerCreatorBirthYearUsesTheExistingLockedWriterBeforeCreation() {
+        UUID creatorId = UUID.randomUUID();
+        when(userRepository.findById(creatorId)).thenReturn(Optional.of(user(creatorId, "Learner")));
+        when(linkRepository.existsByToken(anyString())).thenReturn(false);
+        when(linkRepository.save(any(LinkedLearnerInvitationLinkEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.create(creatorId,
+                new CreateLinkedLearnerInvitationLinkRequest(LinkedLearnerSide.LEARNER, 2012));
+
+        verify(linkedLearnerService).captureLearnerBirthYearIfMissing(creatorId, 2012);
+    }
+
+    @Test
+    void authenticatedResolveReturnsOnlyDisplayNameAndRoleNeverEmailOrUserId() {
+        UUID callerId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        LinkedLearnerInvitationLinkEntity link = link(creatorId, LinkedLearnerSide.LEARNER);
+        when(linkRepository.findUsableByToken(eq(TOKEN), any())).thenReturn(Optional.of(link));
+        when(userRepository.findById(creatorId)).thenReturn(Optional.of(user(creatorId, "Taylor")));
+
+        LinkedLearnerInvitationLinkResolveResponse response = service.resolve(callerId, TOKEN);
+
+        assertThat(response.inviterName()).isEqualTo("Taylor");
+        assertThat(Arrays.stream(LinkedLearnerInvitationLinkResolveResponse.class.getRecordComponents())
+                .map(RecordComponent::getName))
+                .containsExactly("inviterName", "inviterRole")
+                .noneMatch(name -> name.toLowerCase().contains("email") || name.toLowerCase().contains("userid"));
+        verify(authService).requireEmailVerified(callerId);
+        verify(onboardingGuardService).assertProfileComplete(callerId);
+    }
+
+    @Test
+    void redeemCreatesPendingWithTheRedeemerAsInitiatorAndNeverAcceptsDirectly() {
+        UUID creatorId = UUID.randomUUID();
+        UUID redeemerId = UUID.randomUUID();
+        LinkedLearnerInvitationLinkEntity link = link(creatorId, LinkedLearnerSide.SUPPORTER);
+        LinkedLearnerRelationshipEntity relationship = relationship(creatorId, redeemerId);
+        when(userRepository.findById(redeemerId)).thenReturn(Optional.of(user(redeemerId, "Redeemer")));
+        when(linkRepository.findUsableByToken(eq(TOKEN), any())).thenReturn(Optional.of(link));
+        when(linkRepository.markRedeemedIfUsable(eq(TOKEN), eq(redeemerId), any())).thenReturn(1);
+        when(linkedLearnerService.createPendingRelationship(
+                eq(redeemerId), eq(creatorId), eq(LinkedLearnerSide.LEARNER), any()))
+                .thenReturn(new LinkedLearnerService.PendingRelationshipCreation(relationship, true));
+
+        var response = service.redeem(
+                redeemerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(2012));
+
+        assertThat(response.status()).isEqualTo(LinkedLearnerStatus.PENDING);
+        verify(linkedLearnerService).captureLearnerBirthYearIfMissing(redeemerId, 2012);
+        verify(linkedLearnerService, never()).accept(any(), any(), any());
+    }
+
+    @Test
+    void creatorCannotRedeemTheirOwnLinkAndTheTokenIsNotConsumed() {
+        UUID creatorId = UUID.randomUUID();
+        LinkedLearnerInvitationLinkEntity link = link(creatorId, LinkedLearnerSide.SUPPORTER);
+        RedeemLinkedLearnerInvitationLinkRequest request =
+                new RedeemLinkedLearnerInvitationLinkRequest(2012);
+        when(userRepository.findById(creatorId)).thenReturn(Optional.of(user(creatorId, "Creator")));
+        when(linkRepository.findUsableByToken(eq(TOKEN), any())).thenReturn(Optional.of(link));
+
+        assertThatThrownBy(() -> service.redeem(creatorId, TOKEN, request))
+                .isInstanceOf(LinkedLearnerSelfLinkException.class);
+
+        verify(linkRepository, never()).markRedeemedIfUsable(anyString(), any(), any());
+    }
+
+    @Test
+    void duplicateRelationshipRollsBackByThrowingAfterTheConditionalClaim() {
+        UUID creatorId = UUID.randomUUID();
+        UUID redeemerId = UUID.randomUUID();
+        LinkedLearnerInvitationLinkEntity link = link(creatorId, LinkedLearnerSide.LEARNER);
+        when(userRepository.findById(redeemerId)).thenReturn(Optional.of(user(redeemerId, "Redeemer")));
+        when(linkRepository.findUsableByToken(eq(TOKEN), any())).thenReturn(Optional.of(link));
+        when(linkRepository.markRedeemedIfUsable(eq(TOKEN), eq(redeemerId), any())).thenReturn(1);
+        when(linkedLearnerService.createPendingRelationship(
+                eq(redeemerId), eq(creatorId), eq(LinkedLearnerSide.SUPPORTER), any()))
+                .thenReturn(new LinkedLearnerService.PendingRelationshipCreation(
+                        relationship(redeemerId, creatorId), false));
+
+        assertThatThrownBy(() -> service.redeem(
+                redeemerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(null)))
+                .isInstanceOf(LinkedLearnerRelationshipAlreadyExistsException.class);
+    }
+
+    @Test
+    void unknownRevokedExpiredAndRedeemedAllUseOneNotFoundContract() {
+        UUID callerId = UUID.randomUUID();
+        when(linkRepository.findUsableByToken(anyString(), any())).thenReturn(Optional.empty());
+
+        LinkedLearnerInvitationLinkNotFoundException unknown = captureNotFound(callerId, "unknown");
+        LinkedLearnerInvitationLinkNotFoundException revoked = captureNotFound(callerId, "revoked");
+        LinkedLearnerInvitationLinkNotFoundException expired = captureNotFound(callerId, "expired");
+        LinkedLearnerInvitationLinkNotFoundException redeemed = captureNotFound(callerId, "redeemed");
+
+        assertThat(new Object[] {revoked.getStatus(), revoked.getCode(), revoked.getMessage()})
+                .isEqualTo(new Object[] {unknown.getStatus(), unknown.getCode(), unknown.getMessage()});
+        assertThat(new Object[] {expired.getStatus(), expired.getCode(), expired.getMessage()})
+                .isEqualTo(new Object[] {unknown.getStatus(), unknown.getCode(), unknown.getMessage()});
+        assertThat(new Object[] {redeemed.getStatus(), redeemed.getCode(), redeemed.getMessage()})
+                .isEqualTo(new Object[] {unknown.getStatus(), unknown.getCode(), unknown.getMessage()});
+    }
+
+    private LinkedLearnerInvitationLinkNotFoundException captureNotFound(UUID callerId, String token) {
+        try {
+            service.resolve(callerId, token);
+            throw new AssertionError("Expected unavailable token");
+        } catch (LinkedLearnerInvitationLinkNotFoundException exception) {
+            return exception;
+        }
+    }
+
+    private LinkedLearnerInvitationLinkEntity link(UUID creatorId, LinkedLearnerSide creatorRole) {
+        LinkedLearnerInvitationLinkEntity link = new LinkedLearnerInvitationLinkEntity();
+        link.setId(UUID.randomUUID());
+        link.setToken(TOKEN);
+        link.setCreatorUserId(creatorId);
+        link.setCreatorRole(creatorRole);
+        link.setCreatedAt(OffsetDateTime.now());
+        link.setExpiresAt(OffsetDateTime.now().plusDays(1));
+        return link;
+    }
+
+    private LinkedLearnerRelationshipEntity relationship(UUID supporterId, UUID learnerId) {
+        LinkedLearnerRelationshipEntity relationship = new LinkedLearnerRelationshipEntity();
+        relationship.setId(UUID.randomUUID());
+        relationship.setSupporterUserId(supporterId);
+        relationship.setLearnerUserId(learnerId);
+        relationship.setInitiatedBy(LinkedLearnerSide.LEARNER);
+        relationship.setStatus(LinkedLearnerStatus.PENDING);
+        return relationship;
+    }
+
+    private UserEntity user(UUID id, String name) {
+        UserEntity user = new UserEntity();
+        user.setId(id);
+        user.setDisplayName(name);
+        user.setEmail(name.toLowerCase() + "@example.test");
+        return user;
+    }
+}

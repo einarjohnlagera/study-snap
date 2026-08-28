@@ -296,6 +296,9 @@ public class StudySnapProperties {
          */
         private int invitesPerAddressPerWindow = 3;
 
+        /** Single-use invitation links one account may create per window. */
+        private int invitationLinksPerWindow = 20;
+
         /** Window for both invitation limits, in hours. */
         private int inviteRateLimitWindowHours = 24;
     }

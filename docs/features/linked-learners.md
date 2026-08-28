@@ -2,7 +2,7 @@
 
 ## Scope
 
-Linked Learners records a directional supporter → learner relationship only after mutual agreement. The relationship layer and the supporter progress read both shipped in `v0.89.0`; controlled note sharing shipped in `v0.91.0`, directional activity sharing in `v0.92.0`, and explicit learner-granted progress permission in `v0.93.0`.
+Linked Learners records a directional supporter → learner relationship only after mutual agreement. The relationship layer and the supporter progress read both shipped in `v0.89.0`; controlled note sharing shipped in `v0.91.0`, directional activity sharing in `v0.92.0`, explicit learner-granted progress permission in `v0.93.0`, and single-use invitation links in `v0.94.0`.
 
 **⚠️ PHASE NUMBERING — read this before using the word "Phase" anywhere in this file.** Two schemes exist and this document has already mixed them. The **canonical** scheme is the ratified Learning Connections plan (`docs/claude-plans/learning-connections-phase-plan.md`, and `ROADMAP.md`): **Phase 1 = shared learning material (`v0.91.0`, shipped), Phase 2 = activity sharing (`v0.92.0`, shipped), Phase 3 = per-scope `PROGRESS` permission (`v0.93.0`, shipped).** A superseded `v0.89.0`-era scheme numbered the *rollout of the relationship layer itself* and called the original supporter progress read "Phase 3". Under the canonical scheme the read is `v0.89.0` behaviour whose implicit acceptance-based authorization was replaced by the Phase 3 grant.
 
@@ -12,13 +12,13 @@ A supported learner remains a full, ordinary NoteLib account with their own logi
 
 | State | Meaning | Allowed actions |
 |---|---|---|
-| `PENDING` | A relationship exists but is not yet active: the invitation was accepted and required guardian consent is still outstanding, or an accepted connection was paused after a birth-year correction made consent necessary | Either party may revoke; the learner may record a birth year; the supporter may record required guardian consent; either party may withdraw their own surviving activity grant, and the learner may withdraw their surviving progress grant |
+| `PENDING` | A relationship exists but is not yet active: a shareable link was redeemed and awaits creator confirmation, required guardian consent is outstanding, or an accepted connection was paused after a birth-year correction made consent necessary | Either party may revoke; the invited party may confirm; the learner may record a birth year; the supporter may record required guardian consent; either party may withdraw their own surviving activity grant, and the learner may withdraw their surviving progress grant |
 | `ACCEPTED` | The invited party explicitly accepted after any required consent was recorded | Either party may revoke or change their activity grant; the learner may change their progress grant |
 | `REVOKED` | Either party ended or declined the relationship | Revoke remains idempotent; a new invitation may create a new row |
 
 Either party can initiate. `initiated_by` records whether the supporter or learner sent the invitation, and only the opposite side can accept it. Knowing an account's email address is therefore never enough to create an accepted relationship.
 
-**⚠️ Since `v0.90.0` a relationship row is created only at acceptance.** An unaccepted invitation lives in `linked_learner_invitations`, not here, so a `PENDING` relationship no longer means "awaiting acceptance" — it means accepted but not yet active. `[CHECKPOINT — due 2026-09-19]` reads this table, and an unresolved invitation is not a connection of any kind.
+**Email invitations still create a relationship row only at acceptance.** An unaccepted email invitation lives in `linked_learner_invitations`, not here. Shareable links deliberately relocate the counterparty choice: redemption creates `PENDING` with the redeemer as `initiated_by`, so the creator is the existing acceptance machinery's invited party and must confirm before the row becomes `ACCEPTED`. `[CHECKPOINT — due 2026-09-19]` must therefore distinguish `PENDING` from active connections; holding or merely resolving a token creates no relationship.
 
 **⚠️ Rows written BEFORE `V122` still carry the old meaning, and nothing marks them.** A pre-migration `PENDING` row genuinely is awaiting acceptance. Any surface describing a pending connection must therefore stay neutral when no birth-year or consent blocker is present — that combination is the legacy case, and asserting either meaning would be wrong for one of the two populations. `frontend/lib/linked-learner-status.ts` owns that vocabulary for both the Dashboard card and the Learning Connections page, so the two cannot drift apart.
 
@@ -43,7 +43,21 @@ This also unlocks inviting someone who has not signed up. The invitation waits a
 
 NoteLib stores the invitation before attempting email delivery. Delivery uses the shared email service and template mechanism. A delivery failure is logged and does not roll back the invitation; sending the same invitation again provides a retry path without creating a second live row.
 
-The **invitation** list never carries a counterparty name — the inviter typed the address and learns nothing further from it. **Relationship** rows do carry the name, and since `v0.90.0` that is safe by construction rather than by withholding: a relationship exists only once the invited party accepted, so both sides have agreed to the link. Withholding it until `accepted_at` was set became actively wrong when `PENDING` changed meaning, since a consent-pending connection legitimately has a null `accepted_at`.
+The **email-invitation** list never carries a counterparty name — the inviter typed the address and learns nothing further from it. Relationship rows carry a display name. While a shareable-link relationship is `PENDING`, the relationship response withholds counterparty email from both sides; otherwise the ordinary relationship list would undo the resolve endpoint's display-name-only boundary before mutual confirmation. Email appears only after `ACCEPTED`.
+
+### Shareable invitation links
+
+Shareable connection invitations live in `linked_learner_invitation_links`, never in the email-keyed invitation table. A link names no address, so putting it in `linked_learner_invitations` would violate the non-null address contract, defeat its partial uniqueness because PostgreSQL treats nulls as distinct, and pollute the email TTL checkpoint.
+
+Each link carries a 22-character Base62 token (about 131 bits), creator and creator role, expiry, and mutually exclusive revoked or redeemed terminal timestamps. Creation and listing require the same verified-email and completed-profile gates as email invitations. Link creation has its own creator-scoped rate-limit bucket; it does not consume or dilute the email path's inviter-and-address buckets.
+
+Token resolution is deliberately authenticated, unlike anonymous Study Pack and quiz share tokens. It returns only the creator's display name and role—never email or user id—because this token can form a cross-user permission relationship rather than merely disclose shared material. The frontend stores the opaque token in a short-lived first-party cookie before authentication so it survives login, signup, verification and onboarding; a Dashboard intent consumer resumes it without coupling the feature to onboarding.
+
+Redemption is one explicit act but is not acceptance. The redeemer becomes the relationship initiator, a `PENDING` relationship is created through the same relationship-creation helper as email invitations, and the link creator must confirm it through the existing accept endpoint. This is how the creator names the counterparty after distribution rather than agreeing twice. If either party is the learner, birth year is captured from that learner under the same user-row lock as the email path; a minor remains `PENDING` until the existing guardian-consent requirement is satisfied.
+
+Redemption claims the token with one conditional update requiring an unrevoked, unredeemed and unexpired row. Revocation uses the same predicate. PostgreSQL serializes competing writes on that row, so two redeemers or a revoke racing redemption yield exactly one winner. A duplicate live relationship throws inside the redemption transaction, rolling the token claim back so the link is not consumed.
+
+Unknown, revoked, expired and redeemed tokens all miss the same usable-token predicate and raise the same `LINKED_LEARNER_INVITATION_LINK_NOT_FOUND` response. No message or code says which terminal state occurred or implies the token previously existed. A link is single-use but creators may hold multiple separately metered single-use links; it is not the multi-recipient quiz sharing mechanism.
 
 ### Invite form validation
 
@@ -58,8 +72,8 @@ is validated against 1900–current year, mirroring `persistBirthYear`, and that
 typed**, not only on submit, so an impossible year cannot sit in the field looking accepted. Both the live check
 and the submit check call `birthYearRangeError`, so they cannot diverge. The correction field on the same page
 uses the identical control, as do the two acceptance forms (accepting an invitation, and accepting a
-relationship) — **all four year inputs on this page are the same component**, and a fifth must not be
-hand-rolled. When this was first written only two of the four had been converted; a cold-context audit at the
+relationship) and the invitation-link creation and redemption forms — **every connection year input uses the same component**, and another must not be
+hand-rolled. When this was first written only two of the original four had been converted; a cold-context audit at the
 `v0.91.0` signoff found the other two still raw, one of them with no digit filter and no bounds at all.
 
 **⚠️ The steppers are disabled until four digits are present, and they seed nothing.** Stepping up from an empty
@@ -128,7 +142,7 @@ For supporter-initiated invitations, the invited learner provides their year dur
 
 The caller's link list contains only:
 
-- counterparty display name and email;
+- counterparty display name, plus email only after the relationship is `ACCEPTED`;
 - caller and initiator direction;
 - relationship status;
 - created, accepted and revoked dates;

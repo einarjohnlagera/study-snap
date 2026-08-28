@@ -7,6 +7,7 @@ import {
   hasPendingLightweightProfileCompletion,
 } from "./onboarding-v2";
 import type { ThemePreference } from "./theme-preferences";
+import { getLinkedLearnerInvitationIntentPath } from "./linked-learner-invitation-intent";
 
 export type AuthUser = {
   id: string;
@@ -200,7 +201,7 @@ export function resolveAuthenticatedHome(authUser: AuthUser | null): string {
   if (needsOnboarding(authUser) || needsProfileType(authUser)) {
     return "/onboarding";
   }
-  return "/dashboard";
+  return getLinkedLearnerInvitationIntentPath() ?? "/dashboard";
 }
 
 export function resolvePostLoginDestination(

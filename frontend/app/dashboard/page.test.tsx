@@ -50,6 +50,9 @@ jest.mock("@/lib/route-guards", () => ({
 jest.mock("@/components/dashboard/discovery-intent-consumer", () => ({
   DiscoveryIntentConsumer: () => <div data-testid="discovery-intent-consumer" />,
 }));
+jest.mock("@/components/dashboard/linked-learner-invitation-intent-consumer", () => ({
+  LinkedLearnerInvitationIntentConsumer: () => <div data-testid="linked-learner-invitation-intent-consumer" />,
+}));
 
 jest.mock("./dashboard-study-plan-section", () => ({
   DashboardStudyPlanSection: (props: Record<string, unknown>) => mockDashboardStudyPlanSection(props),

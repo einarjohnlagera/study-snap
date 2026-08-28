@@ -22,6 +22,10 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -38,6 +42,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -85,14 +93,18 @@ class NativeQueryPostgresIntegrationTest {
     @Autowired
     private LinkedLearnerGrantRepository grantRepository;
 
+    @Autowired
+    private LinkedLearnerInvitationLinkRepository invitationLinkRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @Test
     void everyAnnotatedNativeQueryPreparesAgainstPostgres16() throws Exception {
         List<NativeQueryMethod> queries = findNativeQueries();
 
-        // ⚠️ A LOWER BOUND, not an exact count. `isNotEmpty()` alone would stay green if the reflective
-        // scan silently broke and found two queries instead of every one — which is precisely the false
-        // comfort this harness exists to remove. The bound sits below the 31 present when it was written,
-        // so ADDING a native query never needs an edit here; only a scan that collapses fails.
+        // ⚠️ Exact by design. `isNotEmpty()` or a lower bound would stay green if the reflective scan
+        // silently lost queries. Adding a native query must raise EXPECTED_NATIVE_QUERIES deliberately.
         assertThat(queries)
                 .as("reflective scan over repository @Query(nativeQuery = true) methods")
                 .hasSize(EXPECTED_NATIVE_QUERIES);
@@ -148,6 +160,156 @@ class NativeQueryPostgresIntegrationTest {
                 .as("a revoked row does not block re-granting")
                 .isEqualTo(1);
         assertThat(liveGrants(pausedRelationship)).isEqualTo(1);
+    }
+
+    /** Executes the single-use predicate against real rows and two real PostgreSQL transactions. */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void concurrentInvitationLinkRedemptionHasExactlyOneWinner() throws Exception {
+        UUID creator = seedUser("link-creator");
+        UUID firstRedeemer = seedUser("link-redeemer-one");
+        UUID secondRedeemer = seedUser("link-redeemer-two");
+        String token = "RaceTokn0123456789AbCd";
+        seedInvitationLink(token, creator);
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        List<Integer> results = race(
+                () -> invitationLinkRepository.markRedeemedIfUsable(token, firstRedeemer, now),
+                () -> invitationLinkRepository.markRedeemedIfUsable(token, secondRedeemer, now));
+
+        assertThat(results).containsExactlyInAnyOrder(0, 1);
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from linked_learner_invitation_links where token = ? and redeemed_at is not null",
+                Integer.class,
+                token
+        )).isEqualTo(1);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void invitationLinkRevocationAndRedemptionHaveExactlyOneWinner() throws Exception {
+        UUID creator = seedUser("revoke-creator");
+        UUID redeemer = seedUser("revoke-redeemer");
+        UUID linkId = UUID.randomUUID();
+        String token = "RevokeRac0123456789AbC";
+        seedInvitationLink(linkId, token, creator);
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        List<Integer> results = race(
+                () -> invitationLinkRepository.markRedeemedIfUsable(token, redeemer, now),
+                () -> invitationLinkRepository.markRevokedIfUsable(linkId, creator, now));
+
+        assertThat(results).containsExactlyInAnyOrder(0, 1);
+        Map<String, Object> terminal = jdbcTemplate.queryForMap(
+                "select revoked_at, redeemed_at from linked_learner_invitation_links where id = ?", linkId);
+        assertThat((terminal.get("revoked_at") == null) ^ (terminal.get("redeemed_at") == null)).isTrue();
+    }
+
+    private List<Integer> race(ThrowingIntSupplier first, ThrowingIntSupplier second) throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> firstResult = executor.submit(() -> inTransaction(ready, start, first));
+            Future<Integer> secondResult = executor.submit(() -> inTransaction(ready, start, second));
+            assertThat(ready.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            return List.of(firstResult.get(), secondResult.get());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private int inTransaction(
+            CountDownLatch ready,
+            CountDownLatch start,
+            ThrowingIntSupplier operation
+    ) {
+        return new TransactionTemplate(transactionManager).execute(status -> {
+            ready.countDown();
+            try {
+                if (!start.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                    throw new AssertionError("Timed out waiting to start conditional-write race");
+                }
+                return operation.getAsInt();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Conditional-write race was interrupted", interrupted);
+            }
+        });
+    }
+
+    /**
+     * ⚠️ The ONLY test that proves a revoked, redeemed or expired link is actually unusable.
+     *
+     * <p>Added at the item-2 audit. `LinkedLearnerInvitationLinkServiceTest`'s
+     * {@code unknownRevokedExpiredAndRedeemedAllUseOneNotFoundContract} stubs
+     * {@code findUsableByToken} to return empty for ALL FOUR token strings, so the four cases are
+     * one case — it proves the exception is constructed identically, which was never in doubt, and
+     * proves nothing about the query predicate. Deleting {@code revokedAt is null} from
+     * {@code findUsableByToken} left the whole 1,775-test suite green.
+     *
+     * <p>Indistinguishability is a property of the PREDICATE, so only a real row can establish it.
+     */
+    @Test
+    void revokedRedeemedAndExpiredInvitationLinksAreAllUnusable() {
+        UUID creator = seedUser("link-creator");
+        UUID redeemer = seedUser("link-redeemer");
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        seedInvitationLink("LiveTokenAAAAAAAAAAAAA", creator);
+        assertThat(invitationLinkRepository.findUsableByToken("LiveTokenAAAAAAAAAAAAA", now))
+                .as("a live, unexpired link is usable — the control for the three cases below")
+                .isPresent();
+
+        UUID revokedId = UUID.randomUUID();
+        seedInvitationLink(revokedId, "RevokedTokenAAAAAAAAAA", creator);
+        jdbcTemplate.update(
+                "update linked_learner_invitation_links set revoked_at = now() where id = ?", revokedId);
+
+        UUID redeemedId = UUID.randomUUID();
+        seedInvitationLink(redeemedId, "RedeemedTokenAAAAAAAAA", creator);
+        jdbcTemplate.update(
+                "update linked_learner_invitation_links"
+                        + " set redeemed_at = now(), redeemed_by_user_id = ? where id = ?",
+                redeemer, redeemedId);
+
+        UUID expiredId = UUID.randomUUID();
+        seedInvitationLink(expiredId, "ExpiredTokenAAAAAAAAAA", creator);
+        jdbcTemplate.update(
+                "update linked_learner_invitation_links"
+                        + " set expires_at = now() - interval '1 day' where id = ?", expiredId);
+
+        assertThat(invitationLinkRepository.findUsableByToken("RevokedTokenAAAAAAAAAA", now))
+                .as("revoked").isEmpty();
+        assertThat(invitationLinkRepository.findUsableByToken("RedeemedTokenAAAAAAAAA", now))
+                .as("redeemed").isEmpty();
+        assertThat(invitationLinkRepository.findUsableByToken("ExpiredTokenAAAAAAAAAA", now))
+                .as("expired").isEmpty();
+        assertThat(invitationLinkRepository.findUsableByToken("UnknownTokenAAAAAAAAAA", now))
+                .as("unknown").isEmpty();
+
+        assertThat(invitationLinkRepository.markRedeemedIfUsable("RevokedTokenAAAAAAAAAA", redeemer, now))
+                .as("a revoked link cannot be claimed").isZero();
+        assertThat(invitationLinkRepository.markRedeemedIfUsable("ExpiredTokenAAAAAAAAAA", redeemer, now))
+                .as("an expired link cannot be claimed").isZero();
+    }
+
+    private void seedInvitationLink(String token, UUID creatorUserId) {
+        seedInvitationLink(UUID.randomUUID(), token, creatorUserId);
+    }
+
+    private void seedInvitationLink(UUID id, String token, UUID creatorUserId) {
+        jdbcTemplate.update(
+                "insert into linked_learner_invitation_links"
+                        + " (id, token, creator_user_id, creator_role, created_at, expires_at)"
+                        + " values (?, ?, ?, 'SUPPORTER', now(), now() + interval '1 day')",
+                id, token, creatorUserId);
+    }
+
+    @FunctionalInterface
+    private interface ThrowingIntSupplier {
+        int getAsInt();
     }
 
     private int insertGrant(UUID relationshipId, UUID fromUserId, UUID toUserId) {

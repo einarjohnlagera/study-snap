@@ -7,6 +7,7 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.LinkedLearnerProgressService;
 import com.studysnap.backend.service.LinkedLearnerService;
+import com.studysnap.backend.service.LinkedLearnerInvitationLinkService;
 import com.studysnap.backend.service.LinkedLearnerActivityService;
 import com.studysnap.backend.service.LinkedLearnerGrantService;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,8 @@ class LinkedLearnerControllerTest {
     private LinkedLearnerGrantService linkedLearnerGrantService;
     @Mock
     private LinkedLearnerActivityService linkedLearnerActivityService;
+    @Mock
+    private LinkedLearnerInvitationLinkService linkedLearnerInvitationLinkService;
 
     private LinkedLearnerController controller;
 
@@ -43,7 +46,8 @@ class LinkedLearnerControllerTest {
                 linkedLearnerService,
                 linkedLearnerProgressService,
                 linkedLearnerGrantService,
-                linkedLearnerActivityService);
+                linkedLearnerActivityService,
+                linkedLearnerInvitationLinkService);
     }
 
     @Test

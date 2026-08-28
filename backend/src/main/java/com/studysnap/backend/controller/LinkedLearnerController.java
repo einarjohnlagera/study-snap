@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
+import com.studysnap.backend.dto.CreateLinkedLearnerInvitationLinkRequest;
 import com.studysnap.backend.dto.GuardianConsentRequest;
 import com.studysnap.backend.dto.InviteLinkedLearnerRequest;
 import com.studysnap.backend.dto.LinkedLearnerBirthYearCorrectionPreviewResponse;
@@ -9,11 +10,16 @@ import com.studysnap.backend.dto.LinkedLearnerActivityGrantResponse;
 import com.studysnap.backend.dto.LinkedLearnerActivityResponse;
 import com.studysnap.backend.dto.LinkedLearnerProgressResponse;
 import com.studysnap.backend.dto.LinkedLearnerInvitationResponse;
+import com.studysnap.backend.dto.LinkedLearnerInvitationLinkRedemptionResponse;
+import com.studysnap.backend.dto.LinkedLearnerInvitationLinkResolveResponse;
+import com.studysnap.backend.dto.LinkedLearnerInvitationLinkResponse;
 import com.studysnap.backend.dto.LinkedLearnerResponse;
 import com.studysnap.backend.dto.RecordLinkedLearnerBirthYearRequest;
+import com.studysnap.backend.dto.RedeemLinkedLearnerInvitationLinkRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.LinkedLearnerService;
+import com.studysnap.backend.service.LinkedLearnerInvitationLinkService;
 import com.studysnap.backend.service.LinkedLearnerActivityService;
 import com.studysnap.backend.service.LinkedLearnerGrantService;
 import com.studysnap.backend.service.LinkedLearnerProgressService;
@@ -41,6 +47,7 @@ public class LinkedLearnerController {
     private final LinkedLearnerProgressService linkedLearnerProgressService;
     private final LinkedLearnerGrantService linkedLearnerGrantService;
     private final LinkedLearnerActivityService linkedLearnerActivityService;
+    private final LinkedLearnerInvitationLinkService linkedLearnerInvitationLinkService;
 
     @PostMapping("/invite")
     public SimpleMessageResponse invite(
@@ -48,6 +55,51 @@ public class LinkedLearnerController {
             @Valid @RequestBody InviteLinkedLearnerRequest request
     ) {
         return linkedLearnerService.invite(user.userId(), request);
+    }
+
+    @PostMapping("/invitation-links")
+    public LinkedLearnerInvitationLinkResponse createInvitationLink(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody CreateLinkedLearnerInvitationLinkRequest request
+    ) {
+        return linkedLearnerInvitationLinkService.create(user.userId(), request);
+    }
+
+    @GetMapping("/invitation-links")
+    public List<LinkedLearnerInvitationLinkResponse> listInvitationLinks(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return linkedLearnerInvitationLinkService.list(user.userId());
+    }
+
+    @PostMapping("/invitation-links/{linkId}/revoke")
+    public SimpleMessageResponse revokeInvitationLink(
+            @PathVariable UUID linkId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return linkedLearnerInvitationLinkService.revoke(user.userId(), linkId);
+    }
+
+    /**
+     * ⚠️ AUTHENTICATED BY DESIGN, unlike /share/**, /p/** and /quiz/share/**. An anonymous quiz
+     * discloses authored material; this token can form a cross-user permission relationship and
+     * must not become a way for an arbitrary token holder to harvest the creator's identity.
+     */
+    @GetMapping("/invitation-links/{token}/resolve")
+    public LinkedLearnerInvitationLinkResolveResponse resolveInvitationLink(
+            @PathVariable String token,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return linkedLearnerInvitationLinkService.resolve(user.userId(), token);
+    }
+
+    @PostMapping("/invitation-links/{token}/redeem")
+    public LinkedLearnerInvitationLinkRedemptionResponse redeemInvitationLink(
+            @PathVariable String token,
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody RedeemLinkedLearnerInvitationLinkRequest request
+    ) {
+        return linkedLearnerInvitationLinkService.redeem(user.userId(), token, request);
     }
 
     @GetMapping("/invitations")
