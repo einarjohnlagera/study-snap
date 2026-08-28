@@ -1,8 +1,10 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.LinkedLearnerGrantScope;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.model.NoteLibraryReadiness;
+import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.model.NoteLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySource;
@@ -28,6 +30,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URI;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -55,8 +59,13 @@ class NativeQueryPostgresIntegrationTest {
     private static final String SKIP_FLAG = "-D" + SKIP_PROPERTY + "=true";
     private static final String CLASS_SUFFIX = ".class";
     private static final String SEARCH_PATTERN = "%heart%";
-    /** Below the 31 present when this harness was written: additions need no edit, a broken scan fails. */
-    private static final int MINIMUM_EXPECTED_NATIVE_QUERIES = 25;
+    /**
+     * The exact count present today. ADDING a native query fails this until the number is raised —
+     * deliberately, so the addition is noticed. A looser bound was tried first and rejected at the
+     * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
+     * six queries and stay green, which is the same false comfort the harness exists to remove.
+     */
+    private static final int EXPECTED_NATIVE_QUERIES = 31;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
@@ -73,6 +82,9 @@ class NativeQueryPostgresIntegrationTest {
     @Autowired
     private PublicLibraryRepositoryImpl publicLibraryRepository;
 
+    @Autowired
+    private LinkedLearnerGrantRepository grantRepository;
+
     @Test
     void everyAnnotatedNativeQueryPreparesAgainstPostgres16() throws Exception {
         List<NativeQueryMethod> queries = findNativeQueries();
@@ -83,11 +95,101 @@ class NativeQueryPostgresIntegrationTest {
         // so ADDING a native query never needs an edit here; only a scan that collapses fails.
         assertThat(queries)
                 .as("reflective scan over repository @Query(nativeQuery = true) methods")
-                .hasSizeGreaterThanOrEqualTo(MINIMUM_EXPECTED_NATIVE_QUERIES);
+                .hasSize(EXPECTED_NATIVE_QUERIES);
         for (int index = 0; index < queries.size(); index++) {
             prepare(queries.get(index), index);
         }
         System.out.printf("PREPARED %d repository-native queries against PostgreSQL 16.%n", queries.size());
+    }
+
+    /**
+     * ⚠️ The ONLY test that executes the live-grant insert against real data.
+     *
+     * <p>A cold-agent pressure test mutated this statement two ways at once — {@code 'ACCEPTED'} to
+     * {@code 'PENDING'} AND the {@code relationship.id = :relationshipId} predicate deleted, so the
+     * insert matches any row in the table — and <strong>all 1,760 tests passed</strong>, because every
+     * {@code LinkedLearnerGrantRepository} reference in the test tree is a Mockito mock. The
+     * {@code PREPARE} sweep above did not help: it validates syntax, types and {@code ON CONFLICT}
+     * arbiter resolution, never predicate correctness.
+     *
+     * <p>The second relationship is not padding — it is what kills the deleted-id-predicate mutant.
+     * Without another ACCEPTED row present while this one is PENDING, an insert that stopped filtering
+     * on the relationship id would still return 0 and the mutation would survive.
+     */
+    @Test
+    void liveGrantInsertIsScopedToItsOwnRelationshipAndRequiresAccepted() {
+        UUID supporter = seedUser("grant-supporter");
+        UUID learner = seedUser("grant-learner");
+        UUID pausedRelationship = seedRelationship(supporter, learner, "PENDING");
+        seedRelationship(seedUser("other-supporter"), seedUser("other-learner"), "ACCEPTED");
+
+        assertThat(insertGrant(pausedRelationship, learner, supporter))
+                .as("insert against a PENDING relationship while a DIFFERENT relationship is ACCEPTED")
+                .isZero();
+        assertThat(liveGrants(pausedRelationship)).isZero();
+
+        jdbcTemplate.update(
+                "update linked_learner_relationships set status = 'ACCEPTED' where id = ?", pausedRelationship);
+
+        assertThat(insertGrant(pausedRelationship, learner, supporter))
+                .as("insert once this relationship is ACCEPTED")
+                .isEqualTo(1);
+        assertThat(liveGrants(pausedRelationship)).isEqualTo(1);
+
+        assertThat(insertGrant(pausedRelationship, learner, supporter))
+                .as("repeat insert is idempotent via the live-row partial unique index")
+                .isZero();
+        assertThat(liveGrants(pausedRelationship)).isEqualTo(1);
+
+        jdbcTemplate.update(
+                "update linked_learner_grants set revoked_at = now() where relationship_id = ?",
+                pausedRelationship);
+        assertThat(insertGrant(pausedRelationship, learner, supporter))
+                .as("a revoked row does not block re-granting")
+                .isEqualTo(1);
+        assertThat(liveGrants(pausedRelationship)).isEqualTo(1);
+    }
+
+    private int insertGrant(UUID relationshipId, UUID fromUserId, UUID toUserId) {
+        return grantRepository.insertLiveIfAbsent(
+                UUID.randomUUID(),
+                relationshipId,
+                fromUserId,
+                toUserId,
+                LinkedLearnerGrantScope.PROGRESS.name(),
+                OffsetDateTime.now(ZoneOffset.UTC)
+        );
+    }
+
+    private int liveGrants(UUID relationshipId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from linked_learner_grants where relationship_id = ? and revoked_at is null",
+                Integer.class,
+                relationshipId
+        );
+        return count == null ? 0 : count;
+    }
+
+    private UUID seedUser(String handle) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into users (id, email, username, password_hash, role, first_name, last_name,"
+                        + " created_at, updated_at)"
+                        + " values (?, ?, ?, 'x', 'USER', 'Test', 'User', now(), now())",
+                id, handle + "-" + id + "@example.test", handle + "-" + id.toString().substring(0, 8)
+        );
+        return id;
+    }
+
+    private UUID seedRelationship(UUID supporterUserId, UUID learnerUserId, String status) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into linked_learner_relationships"
+                        + " (id, supporter_user_id, learner_user_id, status, initiated_by, created_at)"
+                        + " values (?, ?, ?, ?, 'SUPPORTER', now())",
+                id, supporterUserId, learnerUserId, status
+        );
+        return id;
     }
 
     @Test
@@ -148,6 +250,52 @@ class NativeQueryPostgresIntegrationTest {
         publicLibraryRepository.findPublicLibraryListItemProjectionsByIdIn(List.of(ownerUserId));
     }
 
+    /**
+     * ⚠️ Assertions on the PostgreSQL-only tag filter, which is unreachable from the H2 suite.
+     *
+     * <p>{@code postgresLibraryBranchesExecuteEveryFilter} above is a SMOKE test: it proves the PG
+     * branches parse and run, and asserts nothing about what they return. A cold-agent pressure test
+     * showed that gap concretely — flipping {@code " in ("} to {@code " not in ("} in
+     * {@code PublicLibraryRepositoryImpl.appendTagFilter}'s PostgreSQL branch inverts tag filtering on
+     * the anonymous Explore surface, and the whole suite stayed green. This test seeds real rows so
+     * that inversion fails.
+     */
+    @Test
+    void postgresTagFilterSelectsMatchingPublicNotesOnly() {
+        UUID author = seedUser("tag-author");
+        UUID matching = seedPublicNote(author, "Cardiology basics", new String[] {"cardiology", "review"});
+        seedPublicNote(author, "Unrelated pharmacology", new String[] {"pharmacology"});
+
+        List<NoteListItemProjection> cardiology = publicLibraryRepository.findPublicLibraryPage(
+                publicTagCriteria(List.of("cardiology")), PublicLibrarySort.RECENT, 0, 10);
+
+        assertThat(cardiology).extracting(NoteListItemProjection::getId).containsExactly(matching);
+        assertThat(publicLibraryRepository.countPublicLibraryMatches(publicTagCriteria(List.of("cardiology"))))
+                .isEqualTo(1);
+        assertThat(publicLibraryRepository.findPublicLibraryPage(
+                publicTagCriteria(List.of("nephrology")), PublicLibrarySort.RECENT, 0, 10))
+                .as("a tag no public note carries must match nothing")
+                .isEmpty();
+    }
+
+    private PublicLibraryFilterCriteria publicTagCriteria(List<String> tagSlugs) {
+        return new PublicLibraryFilterCriteria(
+                null, null, null, null, tagSlugs, null, null, null, false,
+                List.of(PublicLibrarySource.BY_YOU, PublicLibrarySource.OFFICIAL, PublicLibrarySource.COMMUNITY)
+        );
+    }
+
+    private UUID seedPublicNote(UUID ownerUserId, String title, String[] tags) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, content, visibility, tags,"
+                        + " target_profile_type, created_at, updated_at)"
+                        + " values (?, ?, ?, 'body', ?, ?, 'STUDENT', now(), now())",
+                id, ownerUserId, title, NoteVisibility.PUBLIC.name(), tags
+        );
+        return id;
+    }
+
     private void prepare(NativeQueryMethod query, int index) {
         String statementName = "notelib_native_query_" + index;
         String sql = positionalParameters(query.sql());
@@ -197,6 +345,7 @@ class NativeQueryPostgresIntegrationTest {
 
     private String positionalParameters(String sql) {
         Map<String, Integer> positions = new LinkedHashMap<>();
+        int occurrence = 0;
         StringBuilder translated = new StringBuilder();
         boolean inSingleQuote = false;
         boolean inDoubleQuote = false;
@@ -260,8 +409,17 @@ class NativeQueryPostgresIntegrationTest {
                     end++;
                 }
                 String name = sql.substring(index + 1, end);
-                int position = positions.computeIfAbsent(name, ignored -> positions.size() + 1);
-                translated.append('$').append(position);
+                // ⚠️ ONE PLACEHOLDER PER OCCURRENCE, not per distinct name — this must mirror what
+                // Hibernate actually emits, or the harness is weaker than the shape it is checking.
+                // Verified against PostgreSQL 16: `... where c < $1 or $1 is null` PREPAREs, while the
+                // production shape `... where c < $1 or $2 is null` fails with `could not determine data
+                // type of parameter $2`. Collapsing repeats to a single `$n` therefore made an uncast
+                // `(col < :p or :p is null)` pass here and 500 in production — the exact defect class
+                // this harness exists to close. `NoteShareRepository.findSharedWithMe` repeats
+                // `:cursorCreatedAt` three times and `LinkedLearnerGrantRepository.insertLiveIfAbsent`
+                // repeats `:relationshipId`, so this is live, not theoretical.
+                positions.merge(name, 1, Integer::sum);
+                translated.append('$').append(++occurrence);
                 index = end - 1;
                 continue;
             }

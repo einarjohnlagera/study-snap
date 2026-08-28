@@ -198,6 +198,33 @@ class LinkedLearnerGrantServiceTest {
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
     }
 
+    /**
+     * ⚠️ Pins the {@code toUserId} cross-check inside the zero-row recheck. Deleting that
+     * {@code .filter(...)} previously left the whole suite green: without it, a live row pointing at a
+     * DIFFERENT counterparty is accepted as proof that this caller's grant exists, and the write is
+     * reported as success. Added at the v0.93.0 pre-signoff pressure test.
+     */
+    @Test
+    void zeroRowInsertWithALiveGrantToADifferentCounterpartyReportsNotFound() {
+        UUID learnerId = relationship.getLearnerUserId();
+        LinkedLearnerGrantEntity foreignGrant = new LinkedLearnerGrantEntity();
+        foreignGrant.setId(UUID.randomUUID());
+        foreignGrant.setRelationshipId(relationshipId);
+        foreignGrant.setFromUserId(learnerId);
+        foreignGrant.setToUserId(UUID.randomUUID());
+        foreignGrant.setScope(LinkedLearnerGrantScope.PROGRESS);
+        when(grantRepository.insertLiveIfAbsent(
+                any(), eq(relationshipId), eq(learnerId), eq(callerId), eq(PROGRESS_SCOPE), any()))
+                .thenReturn(0);
+        when(grantRepository.findFirstByRelationshipIdAndFromUserIdAndScopeAndRevokedAtIsNull(
+                relationshipId, learnerId, LinkedLearnerGrantScope.PROGRESS))
+                .thenReturn(Optional.of(foreignGrant));
+
+        assertThatThrownBy(() -> service.setProgressGrant(learnerId, relationshipId, true))
+                .isInstanceOf(LinkedLearnerNotFoundException.class);
+        verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
+    }
+
     @Test
     void grantEventMetadataContainsOnlyCallerRole() throws Exception {
         when(grantRepository.insertLiveIfAbsent(
