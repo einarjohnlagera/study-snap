@@ -104,6 +104,57 @@ code — and it is the strongest argument for doing Phase 3 next rather than any
   that outlives the feature by one release, which the `docs/features/` re-read pass structurally cannot catch.
   Naming it at kickoff is how it is prevented from happening twice.
 
+#### Added mid-release 2026-08-28, after items 1–5 shipped
+
+**⚠️ Appended here at the moment they were agreed, which is this release's own rule** — `v0.91.0` carried a
+folded-in item in conversation instead of in this list and it shipped as missing. Items 6–9 were selected by the
+owner from a survey of carried limitations and open backlog rows; the pre-declared cold-agent pressure test now
+covers them too.
+
+- **6. A native-query test harness against real PostgreSQL (test infrastructure).** Backlog Index row, opened at
+  the `v0.92.0` signoff and **fully costed there**: *"No test ever executes a native query against PostgreSQL —
+  the root cause behind TWO production 500s."* **⚠️ This release is what makes it urgent rather than tidy.** Item
+  5 added a **32nd** native query — `insertLiveIfAbsent` rewritten from `VALUES` to `INSERT … SELECT … WHERE
+  status = 'ACCEPTED'` — and **the only reason we know it works is that the `/audit-diff` `PREPARE`d it by hand
+  against PostgreSQL 16.** H2 would have accepted a broken form exactly as it accepted the `v0.91.0` *Shared with
+  you* query that 500'd on every production call while 1,744 tests passed. A hand check that happens only when
+  someone remembers is not a guard. **Recommended and already costed in the row:**
+  `org.testcontainers:postgresql` + `junit-jupiter` (test scope), `@ServiceConnection`, **Flyway ENABLED so the
+  real migrations build the schema** — which is also the half that closes `v0.83.1`'s class — carrying (a) a
+  reflection-driven `PREPARE` sweep over every `@Query(nativeQuery = true)`, for which the extraction pattern
+  already exists in `LinkedLearnerInvitationReArmTest`, and (b) one integration test forcing `isPostgres()` true
+  so the **~20 dynamic Library/PublicLibrary queries that have never executed on any database in any test** are
+  reached. **⚠️ Do NOT lengthen `NativeQueryParameterTypingTest`'s pattern** — only two shapes actually fail on
+  PG16 (a parameter whose sole type context is `IS [NOT] NULL`, and arithmetic on a bare parameter), and widening
+  it restores the guess `v0.85.0` argued against. **⚠️ Typing is ORDER-SENSITIVE** — `(col < :p or :p is null)`
+  prepares while `(:p is null or col < :p)` does not, so keep the casts; "just reorder the OR" is a landmine a
+  later readability edit re-arms. **⚠️ The cheaper "PREPARE only when a PG is reachable" variant was considered
+  and REJECTED as false comfort** at the `v0.92.0` signoff; do not re-propose it.
+- **7. The `ACTIVITY`/`PROGRESS` scope overlap is now user-visible, and THIS RELEASE created it (frontend).**
+  `LinkedLearnerProgressResponse` carries `StudyEngagementResponse` — the **identical four fields**
+  (`engagementMode`, `currentStreak`, `longestStreak`, `studyDaysThisWeek`) the momentum panel renders. So a
+  learner who grants `PROGRESS` but not `ACTIVITY` produces a connection card reading **"X does not share their
+  study activity with you"** directly beside a live *View progress* link that shows exactly that activity.
+  **⚠️ This is NOT an access defect** — the learner consented to the superset, and `PROGRESS ⊃ ACTIVITY` is the
+  correct permission semantics. It is a **disclosure defect**: the UI states something false. **⚠️ DISCLOSURE
+  ONLY — do NOT change either grant's meaning, do NOT make `PROGRESS` imply an `ACTIVITY` grant row, and do NOT
+  remove engagement from the progress payload**, which this release's own anti-drift rule forbids. Fix the copy so
+  it describes what the supporter can actually see.
+- **8. `UsageMetric` takes no `description` prop, so quota legibility stops at the Dashboard (frontend).**
+  Carried `v0.92.0` limitation. The *"Challenge Quiz sessions and quizzes you make for someone"* line renders on
+  the Dashboard card only; **Settings shows the bare *AI quizzes* meter with no explanation** — so a parent
+  checking their usage on the page built for checking usage still cannot tell what they are spending, which is
+  the exact question `v0.92.0` items 4–5 existed to answer. **⚠️ DISCLOSURE ONLY: no limit, counter or metering
+  change, and the quota label and the Challenge Quiz mode name stay different strings.**
+- **9. `QuickReviewSessionServiceTest` discards the mode argument, so a cross-mode guard is untested (backend
+  test).** Carried `v0.92.0` limitation. `:101` leniently delegates
+  `findByIdAndUserIdAndSessionMode(any, any, any)` to `findByIdAndUserId`, **throwing the mode away** — so **no
+  test in that class exercises the `QUICK_REVIEW` filter** that stops a Challenge, Adaptive, Interview or Long
+  Exam session being driven through the Quick Review progress endpoint. **⚠️ The fix is the stub, not the
+  production code** — `updateSessionProgress` already passes `QuickReviewSessionMode.QUICK_REVIEW` correctly.
+  Make the stub honour the mode and add a test that fails if the filter is dropped; **mutation-verify it and name
+  the killing test**, per this repo's rule that a count hides tests passing for the wrong reason.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ THE BREAKING SEMANTIC, STATED PLAINLY: after this release an `ACCEPTED` relationship no longer implies
