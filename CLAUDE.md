@@ -67,7 +67,10 @@ cd backend
 # Build
 ./mvnw clean package -DskipTests
 
-# Run all tests
+# Run all tests (requires Docker: NativeQueryPostgresIntegrationTest starts a
+# PostgreSQL 16 container, applies the real Flyway migrations and PREPAREs every
+# native query. Opt out only with -Dnativequery.pg.skip=true, which leaves
+# PostgreSQL SQL and the migration set unverified.)
 ./mvnw test
 
 # Run a single test class
@@ -202,8 +205,15 @@ Always update `RELEASES.md` with a bullet under the current version section when
 When closing a release (marking it Released), commit the closure directly on the `releases/vX.Y.Z` branch (no separate branch/PR), and write a release notes file to `docs/releases/v{X.Y.Z}.md` using the Write tool. Follow the structure of existing files there: `# Release Notes: vX.Y.Z — Theme`, `## Release Theme` (one-sentence), `## Key Features` (bold emoji-prefixed titles with bullet points), `## Polish & Fixes` (flat bullet list). Do not output release notes as plain conversation text.
 
 **Before closing a release, decide the right depth of pre-signoff pressure test — do not default to the heaviest option every time.** Per-PR `/audit-diff` is diff-scoped: it cannot see (a) pre-existing code a PR didn't touch that a new feature increases exposure to, or (b) an invariant interaction between two features shipped in *different* PRs that both touch the same shared method. Both classes of bug only surface via a whole-release view, but that view is expensive, so gate it on release shape:
-- **Full pressure test** (multiple Explore agents inventorying every backend/frontend file touched this release, synthesized and pressure-tested via `advisor`) when the release has a single concept/entity touching 3+ surfaces (e.g. backend + several frontend consumers), OR roughly 6+ PRs, OR more than one PR touched the same pre-existing shared method/component.
+- **Full pressure test** (three cold agents on non-overlapping halves, synthesized via `advisor`) ONLY for a permission substrate, a first-of-kind cross-user read, or a change to money/quota/production-data semantics. Realistically **one release in four or five.** `v0.93.0` qualified and cost **~490k tokens across three agents**; budget for that before choosing it.
+- **One scoped cold agent** when any single trigger fires: the release moves an authorization or privacy boundary; two or more PRs touched the same shared method; **delivery introduced a defect the same session then fixed** (a measured blind-spot signal); or money, quota or production-data semantics changed. **Frame it as FALSIFICATION, not open-ended audit** — hand it a tight file list and the specific claims the implementing session made, and ask it to disprove each. That is far cheaper and targets the one thing cold agents are uniquely good at. `model: "sonnet"` is enough for claim-checking; reserve Opus for genuine unknown-unknowns.
 - **Otherwise**, a single `advisor()` call summarizing what shipped is enough — cheaper, and still catches anti-drift violations.
+
+**⚠️ The cheapest checks are the earliest ones, and this is where the yield actually is.** Measured over `v0.93.0`: `advisor()` **before the Codex prompt was written** caught a Flyway/`application.yaml` collision that would have run 125 migrations against H2 and broken ~1,750 tests, a scope contradiction that would have shipped a *View progress* link that 404s, and an ambiguous row-count branch — each for a few thousand tokens, and each preventing work rather than finding it afterwards. **Call `advisor()` before writing any Codex prompt, and again on the diff before commit.** Skipping that checkpoint, not lacking a stronger option, is the failure mode.
+
+**⚠️ Convert every recurring finding into an automated guard, because a guard is the only check that costs nothing to re-run.** `v0.93.0`'s PostgreSQL harness turned "a human must remember to check native SQL" into "the build fails," and found two live production defects on its first run. **But note what it did NOT do:** `PREPARE` validates syntax, types and `ON CONFLICT` arbiter resolution — never predicate correctness. A cold agent mutated `'ACCEPTED'` → `'PENDING'` in that same release's headline conditional insert, deleted its relationship-id predicate, and **all 1,760 tests passed** because every repository reference in the test tree was a Mockito mock. A guard is only worth what it actually executes; prefer a test that runs the statement against real data over one that merely parses it.
+
+**⚠️ Release SIZE is the biggest lever on verification cost, and it compounds.** Verification scales worse than linearly with items shipped: `v0.92.0` carried eleven items, `v0.93.0` nine across three PRs, and it was the folding that forced the heaviest option. **At three or four items per release the gate above resolves to one `advisor()` call**, each `/audit-diff` stays sharp because the diff is small, and the automated guards carry the rest. When asked to fold more items, say what it does to the verification tier.
 - Fix or explicitly document (in `RELEASES.md`, as a "Known limitations" note) every finding before signing off — never silently drop a finding.
 - **When the full pressure test runs, its agents must start cold.** Spawn them with the Agent tool, no inherited context, and instruct them explicitly to read the real code rather than trust any summary — including summaries written by the session spawning them. In `v0.74.0` the two most severe defects were in code that session had written *and* reviewed, and one was actively protected by a test asserting the wrong behaviour; a reviewer carrying that session's context inherits its blind spots along with its knowledge.
 

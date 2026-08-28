@@ -325,43 +325,19 @@ class LinkedLearnerConcurrencyTest {
         assertThat(persistedRevokedAt()).isNotNull();
     }
 
-    @Test
-    void progressGrantLosingTheRaceToRelationshipRevokeWritesNoLiveRow() throws Exception {
-        seedRelationship(LinkedLearnerStatus.ACCEPTED);
-        CountDownLatch grantReachedConditionalInsert = new CountDownLatch(1);
-        CountDownLatch revokeCommitted = new CountDownLatch(1);
-        when(grantRepository.insertLiveIfAbsent(
-                any(UUID.class), eq(relationshipId), eq(learnerId), eq(supporterId),
-                eq("PROGRESS"), any(OffsetDateTime.class)))
-                .thenAnswer(invocation -> {
-                    grantReachedConditionalInsert.countDown();
-                    revokeCommitted.await(5, TimeUnit.SECONDS);
-                    // This is the production statement's zero-row outcome once its ACCEPTED
-                    // predicate observes the committed revoke.
-                    return 0;
-                });
-        when(grantRepository.findFirstByRelationshipIdAndFromUserIdAndScopeAndRevokedAtIsNull(
-                relationshipId, learnerId,
-                com.studysnap.backend.entity.LinkedLearnerGrantScope.PROGRESS))
-                .thenReturn(Optional.empty());
-
-        AtomicReference<Throwable> grantError = new AtomicReference<>();
-        Thread grant = run(grantError, () -> newTransaction.executeWithoutResult(status ->
-                grantService.setProgressGrant(learnerId, relationshipId, true)));
-        grant.start();
-        assertThat(grantReachedConditionalInsert.await(5, TimeUnit.SECONDS)).isTrue();
-
-        newTransaction.executeWithoutResult(status -> service.revoke(relationshipId, supporterId));
-        revokeCommitted.countDown();
-        grant.join(10_000);
-
-        assertThat(grantError.get())
-                .isInstanceOf(com.studysnap.backend.exception.LinkedLearnerNotFoundException.class);
-        assertThat(persistedStatus()).isEqualTo(LinkedLearnerStatus.REVOKED.name());
-        assertThat(jdbcTemplate.queryForObject(
-                "select count(*) from linked_learner_grants where revoked_at is null", Integer.class))
-                .isZero();
-    }
+    // ⚠️ REMOVED at the v0.93.0 pre-signoff pressure test: `progressGrantLosingTheRaceToRelationship
+    // RevokeWritesNoLiveRow` was SELF-FULFILLING and is deliberately not replaced here. Its mock
+    // hardcoded `return 0` — simulating the very outcome it existed to prove — and its closing
+    // `count(*) ... where revoked_at is null` assertion was vacuously zero, because a mocked
+    // repository never writes to that table. It added no guarantee over the existing unit test
+    // `LinkedLearnerGrantServiceTest.zeroRowInsertWithoutALiveGrantReportsNotFound`.
+    //
+    // The conditional insert's ACCEPTED predicate is now covered where it can actually be executed:
+    // `NativeQueryPostgresIntegrationTest.liveGrantInsertIsScopedToItsOwnRelationshipAndRequiresAccepted`
+    // runs the real statement against real rows and kills both the `'ACCEPTED'`->`'PENDING'` and the
+    // deleted-relationship-id mutants. Do not re-add a mocked "race" test here: this class mocks
+    // `grantRepository` (see setUp), so it CANNOT exercise that statement, and a test that models its
+    // own answer is worse than an absent one.
 
     // ---------------------------------------------------------------------------- infrastructure
 
