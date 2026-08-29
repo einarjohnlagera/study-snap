@@ -41,12 +41,23 @@ public interface LinkedLearnerProvisionalBirthYearRepository
     /**
      * The account-global value always wins. Callers acquire the learner row lock and perform its
      * separate scalar read before invoking this statement; see LinkedLearnerService's lock Javadoc.
+     *
+     * <p>⚠️ The relationship join is a STRUCTURAL guard, not decoration. Without it the provisional
+     * row was reached by {@code relationship_id} alone while the account row was selected by a
+     * separately-passed {@code learnerUserId}, with nothing tying the two together — so a caller
+     * passing a mismatched pair would coalesce a STRANGER'S declared birth year onto this user's
+     * consent decision. Every current caller passes a matched pair, which is exactly why the
+     * mismatch would never announce itself. Joining through the relationship makes the fallback
+     * unreachable for a pair that does not belong together, rather than merely unused.
      */
     @Query(value = """
             select coalesce(u.birth_year, p.birth_year)
               from users u
+              left join linked_learner_relationships r
+                on r.id = :relationshipId
+               and r.learner_user_id = u.id
               left join linked_learner_provisional_birth_years p
-                on p.relationship_id = :relationshipId
+                on p.relationship_id = r.id
              where u.id = :learnerUserId
             """, nativeQuery = true)
     Optional<Integer> findEffectiveBirthYear(

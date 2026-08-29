@@ -783,6 +783,38 @@ class LinkedLearnerServiceTest {
                 .isAnnotationPresent(Transactional.class)).isTrue();
     }
 
+    /**
+     * ⚠️ REGRESSION GUARD FOR A LOCK STORM, not a correctness assertion about the payload.
+     *
+     * <p>{@code toResponse} runs once per relationship inside {@code list()}. Routing its
+     * birth-year lookup through {@code resolveEffectiveBirthYearForDecision} — which calls
+     * {@code lockAndReadBirthYear}, a PESSIMISTIC_WRITE lock — makes a plain connection list take a
+     * row-level write lock on EVERY counterparty, in list order. That breaks the one-row invariant
+     * {@code lockAndReadBirthYear}'s own Javadoc states and lets two concurrent listers with
+     * overlapping learners deadlock.
+     *
+     * <p>This shipped once in this release and was caught at review. Nothing pinned it: reverting
+     * the fix left the entire service and concurrency suite green, because every repository here is
+     * a mock and a mock cannot observe a lock. Assert the CALL instead.
+     */
+    @Test
+    void listTakesNoRowLockOnAnyCounterparty() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        LinkedLearnerRelationshipEntity relationship =
+                relationship(supporter, learner, LinkedLearnerSide.SUPPORTER);
+        relationship.setStatus(LinkedLearnerStatus.ACCEPTED);
+        stubRelationshipUsers(relationship, supporter, learner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(consentRepository.findByRelationshipId(relationship.getId()))
+                .thenReturn(Optional.empty());
+
+        service.list(supporter.getId());
+
+        verify(userRepository, never()).findByIdForUpdate(any(UUID.class));
+    }
+
     @Test
     void listResponseExposesPermissionFlagsButNoLearnerProgressPayload() {
         Set<String> componentNames = Arrays.stream(LinkedLearnerResponse.class.getRecordComponents())
