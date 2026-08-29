@@ -117,6 +117,43 @@ does not scope it. It needs a definition step first, and belongs with the connec
 
 ### Shipped
 
+- **Domain Context doctrine recorded — and `ADR-001`'s selection rule is untouched, which was the point.**
+  The direction proposed selecting *"the narrowest existing authoring tradition"*; that is the opposite
+  instruction to the ADR's **coarsest-label** rule, and its six conjunctive criteria are an enlarged form
+  of the four-criteria shape the ADR already rejected. **⚠️ The owner ruled the ADR remains authoritative**,
+  so the two water cases are recorded as **worked examples of the existing binary test** — the same form
+  the Architecture example already uses — rather than as a new rule. Both resolve to `Engineering Sciences`.
+  The ruling's five consequences are recorded verbatim, including that **multi-program applicability alone
+  does not imply `Engineering Sciences`** and **Review Set membership does not imply `Civil Engineering`**.
+- **⚠️ The correction instruction had NO in-repo target, which is worth recording rather than assuming.**
+  The direction said to fix the *"narrowest tradition"* wording wherever it appears; grepping `docs/`,
+  `CLAUDE.md` and `AGENTS.md` found it **only in this release's own tracking rows quoting it as the thing
+  to fix**. No competing rule was ever written into doctrine, so nothing needed unwinding.
+- **Three genuinely-new items recorded, each in its doctrinal home, and nothing already-existing restated.**
+  **(1)** A new Course/Program does **not** imply a new Domain Context — the converse the ADR governs by
+  but never stated, now in *Domain Context governance*, which matters as the catalog expands.
+  **(2)** `General Engineering` is **explicitly rejected**, beside the existing record of rejected invented
+  values: an honest `NULL` is a backlog marker a query can find, while a catch-all is a decision that only
+  looks made. **(3)** The zero-usage observation on the three program-shaped values, recorded as
+  **UNRESOLVED evidence with both explanations preserved** — authoring order versus vocabulary shape —
+  because **resolving it by reasoning would make the calibration checkpoint unfalsifiable before it runs**.
+- **The NULL carve-out is stated where NULL is defined, because it is ENFORCED.**
+  `domain_context IS NULL` is the backlog marker for **single-program notes only**; two or more Applicable
+  Programs require a Domain Context, rejected server-side. **⚠️ Recorded with its second-order effect:** as
+  shared material gains programs, classification becomes mandatory more often — **the multi-program rule is
+  itself the forcing function that generates the evidence**, so no instrumentation is owed.
+- **Architecture is clarified as decided, not reopened.** Observing the rebuild gathers evidence **against
+  the existing governance floor**; the decision itself is not open, and **note volume is explicitly not a
+  qualifying criterion**.
+- **Water Treatment is preserved as a calibration case WITH ITS PRIOR STATED** — R4 already established
+  that a broader Domain Context does not degrade content, so a pass confirms an existing finding rather
+  than proving a new one. **R4's existing runbook is reused; no second rubric was written.**
+- **Feature docs: linked, not restated.** `notes.md` no longer reads as though eight values are a fixed
+  constant — it points at the ADR's governance section instead of duplicating the bar. The other nine docs
+  named in the audit were swept for wording implying completeness or a program→context mapping and were
+  **clean**. **⚠️ Stale figures corrected: classification is 32.6% (370/1,135) with 5 of 8 values in use**,
+  not 12.7% and 4 of 8.
+
 - **⚠️ Found at the `/audit-diff`: BOTH real flush call sites were unpinned, while the feature they
   protect was well covered.** Mutation-testing showed the deferral itself is solid — reverting it fails
   six tests — but deleting the `savePendingLeafOrder` call from **`handleRemoveLeafNote`** or from
