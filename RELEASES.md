@@ -75,6 +75,12 @@ does not scope it. It needs a definition step first, and belongs with the connec
   notes only, because `NoteApplicableProgramsService:74-75` rejects a null Domain Context on two or more
   programs.
 
+#### Added mid-release 2026-08-29, after items 1-4 shipped
+
+**⚠️ Appended when agreed, and it required an ANTI-DRIFT AMENDMENT recorded above rather than made silently.** The fix belongs in `note-generation-developer.txt`, which this release had barred — but the bar's stated reason is the §5 *title* read, which an escape rule does not touch. **Raised as a letter-versus-reason conflict; the owner amended the rule to cover title content specifically.**
+
+- **5. LaTeX commands stop being eaten by JSON parsing (prompt + parser).** A model emitting `\times` inside a JSON string writes ONE backslash, and `\t` is a **valid JSON escape** — so Jackson parses it as a TAB and whitespace normalisation collapses it, leaving `imes`; `\frac` becomes `rac` the same way. **⚠️ A CONTENT-CORRUPTION BUG, NOT A VALIDATION ONE, which is why it survived:** the mangled text is **shorter**, so it passes every length and word-count check and is persisted. **⚠️ It also makes item 2 pay off** — rendering LaTeX correctly does nothing for content corrupted before it was stored. **⚠️ The prompt rule is the PRIMARY fix**; the parser repair is defence for content already in flight. **⚠️ `\n` and `\r` must NOT be repaired** — a newline is legitimate content and `"sentence\nWord"` is indistinguishable from a mangled `\nu`.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW.** `[CHECKPOINT — due 2026-09-11]`
@@ -83,7 +89,7 @@ does not scope it. It needs a definition step first, and belongs with the connec
 - **⚠️ Do NOT write a second math-rendering configuration.** `katex` is already a dependency and
   `renderMathText` already handles `$…$`, `$$…$$`, `\[…\]` plus `normalizeBareMath`. `remark-math` is for
   tokenization only.
-- **⚠️ Do NOT touch `note-generation-developer.txt`**, and do not run or pre-empt the §5 feedback-loop read.
+- **⚠️ `note-generation-developer.txt` is barred for TITLE CONTENT specifically** — amended 2026-08-29 on owner approval, with the reason recorded so the scope is not re-widened by accident. The bar exists to stop this release pre-empting the §5 feedback-loop read, which asks whether the note body's first line reaches the Study Pack title. **That reason covers titles, not the whole file**, so item 5's escaped-backslash rule may land there. **⚠️ Still forbidden: any title rule in that file, and running or pre-empting the §5 read.**
 - **⚠️ No title post-processing, no suffix stripping, no mass rename, no migration, no bulk update.** The
   rule is semantic and lives in the prompt, never in code.
 - **⚠️ Do NOT rename learner-owned notes**, do not propagate curated title changes into learner copies, and
@@ -116,6 +122,24 @@ does not scope it. It needs a definition step first, and belongs with the connec
   item permanently** if the matches are legitimate rather than scheduling a cleanup.
 
 ### Shipped
+
+- **LaTeX commands are no longer eaten by JSON parsing.** The prompt now requires escaped backslashes
+  **and carries the reason with the rule**, so a later edit cannot mistake it for house style. A
+  pre-normalisation repair converts a control character back to its command form when it is immediately
+  followed by a letter — placed **before** `normalizeWhitespaceToSingleSpaceOrNull`, the only moment the
+  evidence still exists.
+- **⚠️ `\n` and `\r` are deliberately NOT repaired, and a test pins it.** A newline is legitimate
+  content, and `"sentence\nWord"` is indistinguishable from a mangled `\nu` — repairing it would destroy
+  real line breaks to fix a rarer corruption. **Mutation-verified:** adding `\n` to the repair set fails
+  `repairCoversFracButNeverTouchesRealLineBreaks`.
+- **⚠️ Found while mutation-testing: the repair was pinned as an ALGORITHM but not as WIRING, and the
+  first version fixed the WRONG PATH.** Bullets go through `normalizeGeneratedNoteChars`, not
+  `normalizeGeneratedNoteText` — and bullets are where the corruption was observed
+  (`$I = P imes r imes t$`). Repairing only the text path would have fixed the case nobody reported and
+  missed the one that was. Both paths call it now, and
+  `theBulletPathRepairsEatenLatexRatherThanPersistingTheCorruption` asserts the wiring rather than the
+  helper. **Mutation-verified:** removing the repair from the bullet path fails exactly that test, and
+  passed everything before it existed.
 
 - **Summary renders maths, on all nine consumers including the SEO-indexed public pages.**
   `remark-math` is added as a **TOKENIZER only**; its extracted TeX renders through

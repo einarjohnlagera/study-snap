@@ -46,6 +46,16 @@ The LLM should produce:
 
 The strict JSON contract is documented in `docs/ai/PROMPTS.md`.
 
+**⚠️ LaTeX commands survive JSON parsing only because the prompt requires escaped backslashes, and a
+repair backs it up.** A model writing `\times` with ONE backslash produces a **valid JSON escape** —
+Jackson reads `\t` as a TAB, whitespace normalisation collapses it, and the command is destroyed into
+`imes` before anything validates it. **This is content corruption, not a validation failure:** the
+mangled text is *shorter*, so it passes every length and word-count check and is saved. The prompt rule
+is the primary fix; `repairJsonEatenLatexCommands` runs **before** whitespace normalisation, which is
+the only moment the control character still exists. **⚠️ `\n` and `\r` are deliberately not repaired**
+— a newline is legitimate content and `"sentence\nWord"` cannot be told apart from a mangled `\nu`, so
+commands beginning with `n` or `r` stay broken rather than risk destroying real line breaks.
+
 ## Exam-only keyConcept tags
 
 Long Exam and Interview Practice questions include an additional nullable `keyConcept` field on `QuizItem`. This field is separate from `concept`:
