@@ -196,6 +196,32 @@ is `v0.96.0` and not folded in beside a security migration.
   resumption promise renders on a pending connection at all, and is mutation-verified — re-adding a
   resume sentence beside the correct status sentence fails it.
 
+- **The connection accessibility set.** `BirthYearInput` was nested inside a wrapping `<label>` at
+  **five of its six call sites** (the `v0.94.0` note said three of four; the count grew as sites were
+  added), so the increment/decrement steppers sat inside a label whose activation forwards clicks to
+  the input. Each is now a wrapper `<div>` with the `<label htmlFor=…>` closed before the control,
+  matching the one site that already did it correctly. The raw `<input type="checkbox">` on the
+  invitation card is replaced by the shared `Checkbox` component used on the same page. And a
+  **disabled sharing switch no longer leaves the tab order**: `Toggle` renders `aria-disabled`
+  rather than the native `disabled` attribute, because a `disabled` button is unreachable by
+  keyboard — so the one state that most needs explaining became the one a screen-reader user could
+  not find. **Mutation-verified:** reverting `Toggle` to the native attribute fails
+  `keeps an unavailable sharing switch reachable instead of removing it from the tab order`. The
+  standard is now written down in `docs/ui-standards.md`, including when native `disabled` is still
+  the right choice.
+- **The "Quiz for someone" modal discloses that the questions are AI-generated.** **⚠️ Deliberately
+  NOT hung off the quota block**, which renders only once `usageSummary` resolves — conditioning the
+  disclosure on it would drop it exactly when the network is failing. It matters on this surface
+  specifically because the quiz is generated **for someone else**, so the person who can check it is
+  not the person who will sit it. **Mutation-verified:** making it depend on `usageSummary` fails
+  `discloses AI-generated questions even when the quota summary never loads`.
+- **⚠️ Provenance correction, recorded rather than quietly fixed.** This item entered `v0.95.0` scope
+  from a session handoff that cited it as one of `v0.94.0`'s Known limitations. **It is not in that
+  list** — checking `RELEASES.md` directly found no such entry, and the handoff's own instruction was
+  not to trust it over the files. The **gap is real and was verified in code** (the modal disclosed a
+  quota meter named *AI quizzes* but never that the generated content is AI-authored), so the item
+  shipped on its own merits; the citation, not the finding, was wrong.
+
 ### Known limitations
 
 - **Two learner-self paths still write `users.birth_year` directly.** A learner creating their own
