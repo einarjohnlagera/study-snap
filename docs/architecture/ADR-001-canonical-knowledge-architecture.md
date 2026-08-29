@@ -284,7 +284,42 @@ So a copy of a curated note is shadowed on both paths: at 2+ programs the inheri
 
 A longer rule enumerating four conjunctive criteria was considered and rejected — it invites more curator disagreement, not less, by creating four axes to argue over instead of one judgment to make.
 
+**`General Engineering` is explicitly rejected (owner, 2026-08-29).** It would be a vague catch-all that instructs the model toward no particular treatment, which is strictly worse than the honest signal `domain_context IS NULL` already carries: *not yet promoted*. **An honest NULL beats a catch-all**, because NULL is a backlog marker a query can find and a catch-all is a decision that looks made.
+
 **Names are derived from real curriculum vocabulary — board exam subject areas and recognized curriculum bundles — never invented.** Two candidate values that were invented rather than borrowed (`Health Sciences Foundation`, `Computing`) failed both the learner-comprehension test and the governance rule below, independently. That correlation is the rule's justification: an invented name usually signals there is no real shared body of knowledge behind it.
+
+**Worked examples — the water cases (owner ruling, 2026-08-29).** Recorded in the same form as the
+Architecture example below, because they are the rule applied rather than a new rule.
+
+- *Water Treatment* — would a Chemical Engineering student be served by this exact note, unchanged?
+  **Yes** → the shared bundle → `Engineering Sciences`.
+- *Water Supply Engineering* — would a Sanitary/Environmental student be served by the same note as a
+  Civil student, unchanged? **Yes** → the shared bundle → `Engineering Sciences`.
+
+**⚠️ The selection rule was NOT amended, and a proposal to invert it was declined.** A direction
+document proposed selecting *"the narrowest existing authoring tradition that materially improves
+generation."* That is the opposite instruction to the coarsest-label rule above, and its accompanying
+six conjunctive criteria are an enlarged form of the four-criteria shape this ADR already rejected for
+inviting more curator disagreement, not less. **The owner ruled on 2026-08-29 that this ADR remains
+authoritative**, and that the direction's actual intent — stopping Course/Program identity from
+mechanically determining Domain Context — is served by the rule as written plus these consequences:
+
+- **multi-program applicability alone does not imply `Engineering Sciences`**;
+- **membership of a Civil Engineering Review Set does not imply `Civil Engineering`**;
+- **the existence of a narrower or program-shaped value is not a reason to select it**;
+- **Applicable Programs remains responsible for curriculum and discovery applicability**;
+- **specialization must be justified by a real difference in authoring treatment** — a more specific
+  context is warranted only when that specificity materially changes the correct terminology, framing,
+  examples, conventions or scope of the generated material.
+
+**⚠️ Water Treatment is preserved as a calibration case, with its prior stated.** If representative
+generation under `Engineering Sciences` proves accurate but consistently mis-framed or too generic in
+terminology, examples, conventions or scope, that is evidence the taxonomy may be insufficient. **It
+does not justify preemptive expansion.** ⚠️ **Expect it to pass:** R4 below already established that a
+broader Domain Context does not degrade authored content, so a passing result confirms an existing
+finding rather than proving something new, and must not be recorded as if it did. Use R4's existing
+runbook (`docs/claude-prompt/canonical-knowledge-architecture-out/17-r4-verification-runbook.md`) —
+**do not write a second evaluation rubric.**
 
 ### Ratified value set (8, as of Release A)
 
@@ -295,6 +330,8 @@ A longer rule enumerating four conjunctive criteria was considered and rejected 
 **`Architecture` is deliberately NOT a Domain Context** (owner decision, 2026-08-03). Despite carrying 837 notes across five large subject plans, it uses the **program-name fallback** until there is enough *shared* canonical knowledge to justify its own context. This is the governance rule applied at ratification rather than retrofitted: a Domain Context earns its existence by materially reducing duplication, and Architecture's subject plans are Architecture-specific — a context for them would reduce nothing. Note volume is explicitly **not** a qualifying criterion; shared treatment is.
 
 This is the clearest worked example of the rule, and it is worth preserving as one: a program can be among the largest in the library and still not warrant a Domain Context.
+
+**⚠️ The Architecture rebuild gathers evidence AGAINST this floor; it does not reopen the 2026-08-03 decision (clarified 2026-08-29).** Observing whether an `Architecture` Domain Context becomes warranted during that rebuild is legitimate and expected — the governance bar above is exactly what such evidence would be measured against. **What is not open is the decision itself**, and no volume of Architecture notes reopens it, because **note volume is explicitly not a qualifying criterion; shared treatment is.** **Do not create `Architecture` from program identity alone.**
 
 **Applicability defaults for these values are NOT yet verified against current PRC board syllabi** and must be curator-checked before family-expansion defaults are set. Whether `Engineering Sciences` spans 8 or 11 engineering programs is a curriculum fact, not an architecture decision.
 
@@ -312,17 +349,39 @@ This is the clearest worked example of the rule, and it is worth preserving as o
 
 **One incidental finding, logged separately rather than here.** The regenerated Pressure Vessels summary dropped a comparison table and a Common Misconceptions block that its prior version had. This is **not** drift: the surviving prose stayed fully domain-specific, and a level-signal explanation is falsified by the note's own history — the original pack also had `learner_level` NULL and *did* carry the table. Recorded as one-sample structural variance on optional summary blocks, cause unestablished, with its own ROADMAP Backlog Index row on the user-facing grounds that a regeneration can silently drop content a learner valued.
 
+**Usage observation, 2026-08-29 — recorded as UNRESOLVED EVIDENCE, not as a finding.** Curator
+classification stands at **32.6% (370 of 1,135 public notes)** with **five** of the eight values in use.
+The three unused values — `Professional Education`, `Nursing`, `Accountancy` — are the program-shaped
+ones, and **1,135 notes remain on the program-name fallback**, including Accountancy 154 and Nursing 132.
+
+**Two explanations fit equally well and this ADR deliberately does not choose between them:**
+
+1. **Authoring order.** Curation has been Civil-Engineering-first, so the engineering values were reached
+   first and the program-shaped ones simply have not come up yet. Under this reading the zero is a
+   schedule artifact and predicts nothing.
+2. **The values are shaped wrongly.** A value named after a program may be the thing curators avoid,
+   precisely because the rule above tells them to ask about *treatment* rather than program identity.
+   Under this reading the zero is a signal about the vocabulary.
+
+**⚠️ Do not resolve this by reasoning — it is what the taxonomy calibration checkpoint reads.** Recording
+one explanation as settled would make that read unfalsifiable before it runs. **⚠️ Do not cite 12.7% or
+"four of eight values used"** — those are the 2026-08-17 figures and are superseded by the above.
+
 ### Domain Context governance
 
 > **Domain Contexts are expected to remain relatively stable.** Introducing a new one is an **architectural decision, not routine curriculum authoring** — it changes how the LLM is instructed to author an entire class of content and permanently widens the closed vocabulary curators assign. Learners do not see this authoring vocabulary. Treat it with the weight of a schema change: it needs an owner decision and a recorded rationale, not a curator's judgment call mid-authoring-session. **Adding notes is authoring. Adding a Domain Context is architecture.** This distinction is the primary defence against taxonomy explosion, and it is the reason the field is a curated closed set rather than free text.
 >
 > A new Domain Context value may be introduced only when **both** hold: (a) there is a sustained body of canonical knowledge — as a concrete floor, **~10 or more notes already authored or firmly planned** — whose treatment cannot be accurately represented by an existing value; and (b) an explicit owner decision is recorded in this ADR's revision log. **When in doubt, reuse an existing Domain Context.**
 >
+> **⚠️ A new Course / Program does NOT imply a new Domain Context (owner, 2026-08-29).** This ADR governs promotion by *shared treatment*, and never stated the converse — which matters now that the catalog is expanding. Programs are added as curriculum and discovery facts; a Domain Context is added only on the evidence bar above. **The catalog growing is not evidence for the taxonomy growing.**
+>
 > **Failure condition, reviewed at every `/kickoff`:** if the number of Domain Context values ever approaches the number of course programs, the taxonomy has failed and has collapsed back into the free-text field it replaced. Baseline at ratification: **8 contexts against 27+ programs.** A ratio trending toward 1:1 is the signal to stop and consolidate, not to keep adding.
 
 ### Program-name fallback is a transitional state, not the end state
 
 Thin programs (1–7 notes: Law, Medicine, Criminology, Psychology, Aviation, Business Administration, Physical Therapy, Civil Service, and initially Pharmacy and Information Technology) use their **program name** as the effective authoring context via the resolver's fallback chain. This is pragmatic, not desired.
+
+**⚠️ Carve-out, stated because it is ENFORCED and a curator otherwise meets an unexplained save error: `domain_context IS NULL` is the backlog marker for SINGLE-PROGRAM notes only.** A note with two or more Applicable Programs **must** carry a Domain Context — `NoteApplicableProgramsService` rejects the combination server-side, on the reasoning ratified above: *"treat the domain above as the authoritative academic domain"* is logically unsatisfiable when handed a list. **⚠️ Second-order effect, recorded because it is load-bearing rather than incidental: as shared engineering material gains Applicable Programs, Domain Context becomes mandatory more often — the multi-program rule is itself the forcing function that generates classification evidence.** No instrumentation is needed for it.
 
 **It is expressed mechanically rather than only documented, so it cannot be mistaken for the end state:** these values are **not** added to the curated `domain_contexts` set, so `domain_context IS NULL` *is* the marker of "not yet promoted," and the promotion backlog is a one-line query grouping null-context notes by `course_program`. A curator can see at any time which programs have crossed the ~10-note governance floor. Prose intent decays; a queryable state does not.
 
