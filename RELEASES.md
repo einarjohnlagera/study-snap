@@ -1,5 +1,287 @@
 # RELEASES.md - NoteLib
 
+## v0.96.0 - Authoring Integrity
+
+**Status: Released** (kicked off and signed off 2026-08-29)
+
+Theme: what the product generates, names and shows should be correct — and building a plan should not
+fight the save the last drag started.
+
+### Why this release exists
+
+**The theme is the scope filter, chosen deliberately (owner, 2026-08-29).** Asked to include everything
+un-gated, the release takes the four items about **generation, naming and display** and holds three about
+**connection privacy and lifecycle** for `v0.97.0` — they are a different subject, and the provisional
+birth year in the data export, unconfirmed-request expiry and supporter onboarding belong together.
+
+**Two of the "gates" lifted at kickoff turned out not to be gates, and this is recorded so it is not
+re-derived:**
+
+1. **The onboarding freeze barely binds on Summary maths.** `app/onboarding/page.tsx` **already renders
+   maths** in its quiz preview (`:2068`, `:2076`) via `renderMathText`, since `31a8a2b9` — long before this
+   release. So fixing the summary preview does not introduce maths to the path
+   `[CHECKPOINT — due 2026-09-11]` measures; it makes one screen **internally consistent with itself**,
+   inside a collapsible preview, adding no step to the flow. **⚠️ The read is still owed on 2026-09-11 and
+   this release must not add a step, remove one, or change the ORDER of the onboarding flow.**
+2. **The title policy's blocking read is not a gate, it is a missing fact — and both branches share a
+   half.** `developer.txt` is the confirmed title source either way
+   (`StudyPackService:1110` — `note.setTitle(normalizeEditableTitle(generated.title()))`). The unrun query
+   only decides whether `note-generation-developer.txt` **also** needs the rule. **This release ships the
+   confirmed half and pre-empts nothing**, which is exactly the ratified *"prefer the smallest change that
+   actually fixes the observed generation behavior."*
+
+**⚠️ Supporter onboarding is NOT in scope and was never actually gate-blocked — it is UNDEFINED.**
+*"Supporter onboarding"* has no definition anywhere in `learning-connections-phase-plan.md`; lifting a gate
+does not scope it. It needs a definition step first, and belongs with the connection work in `v0.97.0`.
+
+### Planned Scope
+
+- **1. Deferred *Save order* model in the Study Plan Builder (frontend).** Dragging performs **no network
+  call**; an explicit **Save order** action commits the whole plan in one write, with a discard affordance
+  and a leave guard. **⚠️ OWNER DECISIONS 2026-08-29, do not re-litigate:** explicit button over debounced
+  auto-save, and it covers **ALL** drag reordering — sections and notes — because they share
+  `persistLeafItems` and therefore share the identical race. **⚠️ THREE VERIFIED TRAPS**, each of which
+  would ship a silent defect if left implicit: **(a)** `refreshBuilder` calls `setLeafItems` unconditionally
+  from **13 call sites**, so a rename or an add would discard pending order with no navigation and no guard
+  fired — non-drag mutations must **flush first, never discard**; **(b)** there is no "section order", only
+  per-item positions, so the dirty check must compare against a **last-saved baseline**, not section names;
+  **(c)** a **500ms debounced combobox writer** at `study-plan-builder-page-client.tsx:443` fires on a timer
+  a leave guard never sees, and must participate in the flush rule. Prompt already written:
+  `docs/codex-prompts/v0.96.0-item1-deferred-builder-reorder.md`. **⚠️ `v0.95.1`'s mitigation stays** —
+  activation constraints and the saving indicator survive this rework.
+- **2. Summary renders maths (frontend).** `components/ui/summary-markdown.tsx` runs `react-markdown` +
+  `remark-gfm` with **no math plugin**, so `$Q = \frac{2}{3}…$` displays as source on **9 consumers,
+  including SEO-indexed public pages** (`/public/library/[subject]/[slug]`, `/p/[token]`).
+  **⚠️ The naive fix is WRONG and must not be attempted:** `_` is markdown emphasis, so `$x_1 + x_2$` is
+  mangled into `<em>` before any post-processing could find the math — tokenization must happen first.
+  **⚠️ Add `remark-math` for TOKENIZATION only and render its nodes through the EXISTING KaTeX setup** —
+  not `rehype-katex` — so the product keeps **one** math-rendering configuration rather than two that drift.
+- **3. Curated note titles name the knowledge, not the curriculum container (prompt, `developer.txt`).**
+  One **unconditional** rule in the shared Study Pack prompt. **⚠️ This changes the AI's default title
+  suggestion on learner-facing paths too, and that is ACCEPTED** — do not build a curated-only conditional
+  block. **⚠️ The instruction must be POSITIVE and SEMANTIC** — *include disciplinary language when it
+  describes the knowledge; omit it when it merely describes the audience, curriculum container or
+  applicability* — and must **never** be phrased as *"prepositional phrases are bad"* or *"'in X' is bad"*.
+  *"Nursing Management of Acute Asthma"* and *"Structural Applications of Differential Equations"* are
+  **correct** titles. **⚠️ Universal: no Engineering-specific and no per-program title logic, ever.**
+  **⚠️ `note-generation-developer.txt` is OUT until the §5 read runs.**
+- **4. Domain Context taxonomy doctrine (docs only).** Record the owner's 2026-08-29 reconciliation.
+  **⚠️ `ADR-001`'s COARSEST-context rule is NOT amended and remains authoritative**; the direction's
+  *"narrowest existing authoring tradition"* wording must be **corrected wherever it appears** so it does
+  not establish a competing rule. Record the four genuinely-new items only — a new Course/Program does not
+  imply a new Domain Context; `GENERAL_ENGINEERING` is rejected; the zero-usage observation as **unresolved**
+  evidence; and the calibration checkpoint. **⚠️ Everything else already exists as doctrine and must be
+  LINKED, not restated.** **⚠️ State §B's carve-out**: NULL is the backlog marker for **single-program**
+  notes only, because `NoteApplicableProgramsService:74-75` rejects a null Domain Context on two or more
+  programs.
+
+#### Added mid-release 2026-08-29, after items 1-4 shipped
+
+**⚠️ Appended when agreed, and it required an ANTI-DRIFT AMENDMENT recorded above rather than made silently.** The fix belongs in `note-generation-developer.txt`, which this release had barred — but the bar's stated reason is the §5 *title* read, which an escape rule does not touch. **Raised as a letter-versus-reason conflict; the owner amended the rule to cover title content specifically.**
+
+- **5. LaTeX commands stop being eaten by JSON parsing (prompt + parser).** A model emitting `\times` inside a JSON string writes ONE backslash, and `\t` is a **valid JSON escape** — so Jackson parses it as a TAB and whitespace normalisation collapses it, leaving `imes`; `\frac` becomes `rac` the same way. **⚠️ A CONTENT-CORRUPTION BUG, NOT A VALIDATION ONE, which is why it survived:** the mangled text is **shorter**, so it passes every length and word-count check and is persisted. **⚠️ It also makes item 2 pay off** — rendering LaTeX correctly does nothing for content corrupted before it was stored. **⚠️ The prompt rule is the PRIMARY fix**; the parser repair is defence for content already in flight. **⚠️ `\n` and `\r` must NOT be repaired** — a newline is legitimate content and `"sentence\nWord"` is indistinguishable from a mangled `\nu`.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW.** `[CHECKPOINT — due 2026-09-11]`
+  measures completion against a 62.4% baseline and **that read is still owed**. Rendering maths inside an
+  existing preview section is in scope; touching the flow is not.
+- **⚠️ Do NOT write a second math-rendering configuration.** `katex` is already a dependency and
+  `renderMathText` already handles `$…$`, `$$…$$`, `\[…\]` plus `normalizeBareMath`. `remark-math` is for
+  tokenization only.
+- **⚠️ `note-generation-developer.txt` is barred for TITLE CONTENT specifically** — amended 2026-08-29 on owner approval, with the reason recorded so the scope is not re-widened by accident. The bar exists to stop this release pre-empting the §5 feedback-loop read, which asks whether the note body's first line reaches the Study Pack title. **That reason covers titles, not the whole file**, so item 5's escaped-backslash rule may land there. **⚠️ Still forbidden: any title rule in that file, and running or pre-empting the §5 read.**
+- **⚠️ No title post-processing, no suffix stripping, no mass rename, no migration, no bulk update.** The
+  rule is semantic and lives in the prompt, never in code.
+- **⚠️ Do NOT rename learner-owned notes**, do not propagate curated title changes into learner copies, and
+  do not add validation preventing a learner naming a note *"Fluid Mechanics for my CE Finals"*.
+- **⚠️ Do NOT amend `ADR-001`'s selection rule**, and do not restate its governance rule in a feature doc —
+  link to it; an ADR outranks a feature doc, and a restated rule drifts.
+- **⚠️ Do NOT describe Domain Context classification as 12.7% or "4 of 8 values"** — the current read is
+  **32.6% (370/1,135)** and **5 of 8**.
+- **⚠️ Do NOT wholesale-refactor `study-plan-builder-page-client.tsx`** (2282 lines), do not remove the
+  `v0.88.0` debounced combobox writer or its comment, and keep `UNGROUPED_SECTION_NAME` excluded from
+  section drags as both source and target.
+- **⚠️ No backend change beyond the prompt file. No migration. No new analytics event.**
+- **⚠️ OUT OF SCOPE and held for `v0.97.0` — a different subject, not a deferral of merit:** the provisional
+  birth year in the account data export, unconfirmed-request expiry, and supporter onboarding (which needs a
+  definition step first).
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: a single `advisor()` call on the diff.** Four items, no permission substrate,
+  no cross-user read, no money or quota semantics, no migration. **⚠️ The title prompt has the widest blast
+  radius** — it changes the AI's default title on every generation path including learner-facing — so that
+  is where review attention goes; escalate to one scoped cold agent only if item 1's design grows a second
+  write path.
+- **The `### Planned Scope` heading above is permanent**; delivery appends to `### Shipped`.
+- **A `[CHECKPOINT]` row is owed at signoff for item 3**, and **⚠️ it SHARES ITS TRIGGER with the Domain
+  Context calibration checkpoint** — same three programs, same *sufficient representative authoring*
+  condition. State the trigger canonically once and cross-reference; **actioning either requires evaluating
+  the other.** **⚠️ Its metric is explicitly NON-AUTHORITATIVE** — `% in %` matches legitimate titles — so
+  the **two-stage action rule must be stated BEFORE the read**: count, hand-check a sample, and **close the
+  item permanently** if the matches are legitimate rather than scheduling a cleanup.
+
+### Shipped
+
+- **LaTeX commands are no longer eaten by JSON parsing.** The prompt now requires escaped backslashes
+  **and carries the reason with the rule**, so a later edit cannot mistake it for house style. A
+  pre-normalisation repair converts a control character back to its command form when it is immediately
+  followed by a letter — placed **before** `normalizeWhitespaceToSingleSpaceOrNull`, the only moment the
+  evidence still exists.
+- **⚠️ `\n` and `\r` are deliberately NOT repaired, and a test pins it.** A newline is legitimate
+  content, and `"sentence\nWord"` is indistinguishable from a mangled `\nu` — repairing it would destroy
+  real line breaks to fix a rarer corruption. **Mutation-verified:** adding `\n` to the repair set fails
+  `repairCoversFracButNeverTouchesRealLineBreaks`.
+- **⚠️ Found while mutation-testing: the repair was pinned as an ALGORITHM but not as WIRING, and the
+  first version fixed the WRONG PATH.** Bullets go through `normalizeGeneratedNoteChars`, not
+  `normalizeGeneratedNoteText` — and bullets are where the corruption was observed
+  (`$I = P imes r imes t$`). Repairing only the text path would have fixed the case nobody reported and
+  missed the one that was. Both paths call it now, and
+  `theBulletPathRepairsEatenLatexRatherThanPersistingTheCorruption` asserts the wiring rather than the
+  helper. **Mutation-verified:** removing the repair from the bullet path fails exactly that test, and
+  passed everything before it existed.
+
+- **Summary renders maths, on all nine consumers including the SEO-indexed public pages.**
+  `remark-math` is added as a **TOKENIZER only**; its extracted TeX renders through
+  `renderExtractedMath`, a newly exported wrapper over the **same KaTeX call the quiz surfaces already
+  use**. **⚠️ `rehype-katex` was deliberately not used** — it would be a second rendering
+  configuration, free to drift from the first on `output`, `throwOnError` and the error fallback.
+  **⚠️ Implementation note that cost real time: `remark-math` emits math as
+  `<code class="language-math math-inline|math-display">`, NOT as a span or div**, and display math
+  arrives wrapped in `<pre>`, which is unwrapped so KaTeX's block element is not nested in
+  preformatted text.
+- **⚠️ `SummaryMarkdown` was GLOBALLY MOCKED in `jest.setup.ts` and therefore had no real test
+  coverage anywhere — on any of its nine consumers.** The mock existed for a real reason: react-markdown's
+  ESM chain threw under `next/jest`, which excludes `node_modules` from transformation. `jest.config.js`
+  now transpiles that chain and the mock is gone, so tests render the real component. **⚠️ Two things
+  about the fix are worth recording:** `transformIgnorePatterns` must be applied **after**
+  `createJestConfig`, because `next/jest` overwrites whatever the passed-in config sets — setting it
+  inside silently does nothing; and enumerating the ESM chain package-by-package **does not converge**
+  (react-markdown pulls in unified, remark, micromark, mdast/hast utils and a long tail of
+  single-purpose modules), so the pattern excludes the large CommonJS packages instead. **Full suite
+  runtime is unchanged at ~62s.**
+- **⚠️ Four tests were found asserting the MOCK rather than the component.** They queried
+  `data-testid="summary-markdown"` — an id only the mock produced — and one asserted raw markdown
+  source (`- [Reviewer archive](…)`) as visible text, which the real renderer never emits. They now
+  assert rendered output: `<strong>`, and a link with its `href`. They were not loosened to accommodate
+  the change; they were pointed at what they had always meant to check.
+- **⚠️ One of my own new tests initially passed for the wrong reason, and a mutation caught it.** The
+  display-math test asserted `.katex-display, .katex` — an OR that passes even with `displayMode`
+  hardcoded `false`. Tightened to require `.katex-display`, which then exposed that the test CONTENT was
+  also wrong: `$$x$$` on one line is **inline** math by `remark-math`'s spec, and block form needs `$$`
+  on its own lines. **Mutation-verified after both fixes:** dropping the tokenizer fails three tests;
+  forcing display math inline fails exactly the display test.
+
+- **Curated note titles name the knowledge, not the curriculum container.** One unconditional `Title`
+  section added to the shared Study Pack prompt (`developer.txt`), which had **no title rules at all** —
+  the schema declared the field and nothing governed it. Written in the file's existing register: bare
+  section header, terse lowercase bullets, contrastive examples like the `Subject` section already uses.
+  **⚠️ It is unconditional by decision, so it also changes the AI's default suggestion on learner-facing
+  paths — intended, and it governs what the AI PROPOSES, never what a learner may name their own note.**
+- **⚠️ The rule is SEMANTIC, and the test pins that rather than its prose.** The failure mode is a later
+  edit compressing *"name the knowledge, not the curriculum container"* into *"'in X' is bad"* — which
+  would be **actively wrong**, because *"Nursing Management of Acute Asthma"* and *"Structural
+  Applications of Differential Equations"* are **correct** titles that a wording ban destroys. The prompt
+  therefore carries both directions of example plus an explicit line that this is *a judgment about
+  meaning, not about wording*, and `studyPackPromptTeachesTitleSemanticsRatherThanAWordingBan` asserts
+  both halves of the distinction and both positive cases. **Mutation-verified:** replacing the semantic
+  block with `do not append "in <Course/Program>"` fails exactly that test.
+- **⚠️ `note-generation-developer.txt` is deliberately untouched, and the test deliberately does NOT
+  assert its absence.** The rule stays out of it until the feedback-loop read decides whether the note
+  body's first line reaches the title; adding it afterwards is **correct work**, so a test forbidding it
+  would block the right future change. The reason is recorded in the test's own doc comment instead.
+- **Feature docs corrected where the chain is easy to misread.** `bulk-generation.md` now records that
+  the curator's typed topic is written to `notes.title` and then **overwritten** by
+  `applyBulkGeneratedMetadataToNote`, so `developer.txt` decides curated titles — an earlier reading of
+  the same code concluded the opposite. `study-pack-generation.md` records the semantic rule and the
+  never-compress warning beside the `title` field it governs.
+
+- **Domain Context doctrine recorded — and `ADR-001`'s selection rule is untouched, which was the point.**
+  The direction proposed selecting *"the narrowest existing authoring tradition"*; that is the opposite
+  instruction to the ADR's **coarsest-label** rule, and its six conjunctive criteria are an enlarged form
+  of the four-criteria shape the ADR already rejected. **⚠️ The owner ruled the ADR remains authoritative**,
+  so the two water cases are recorded as **worked examples of the existing binary test** — the same form
+  the Architecture example already uses — rather than as a new rule. Both resolve to `Engineering Sciences`.
+  The ruling's five consequences are recorded verbatim, including that **multi-program applicability alone
+  does not imply `Engineering Sciences`** and **Review Set membership does not imply `Civil Engineering`**.
+- **⚠️ The correction instruction had NO in-repo target, which is worth recording rather than assuming.**
+  The direction said to fix the *"narrowest tradition"* wording wherever it appears; grepping `docs/`,
+  `CLAUDE.md` and `AGENTS.md` found it **only in this release's own tracking rows quoting it as the thing
+  to fix**. No competing rule was ever written into doctrine, so nothing needed unwinding.
+- **Three genuinely-new items recorded, each in its doctrinal home, and nothing already-existing restated.**
+  **(1)** A new Course/Program does **not** imply a new Domain Context — the converse the ADR governs by
+  but never stated, now in *Domain Context governance*, which matters as the catalog expands.
+  **(2)** `General Engineering` is **explicitly rejected**, beside the existing record of rejected invented
+  values: an honest `NULL` is a backlog marker a query can find, while a catch-all is a decision that only
+  looks made. **(3)** The zero-usage observation on the three program-shaped values, recorded as
+  **UNRESOLVED evidence with both explanations preserved** — authoring order versus vocabulary shape —
+  because **resolving it by reasoning would make the calibration checkpoint unfalsifiable before it runs**.
+- **The NULL carve-out is stated where NULL is defined, because it is ENFORCED.**
+  `domain_context IS NULL` is the backlog marker for **single-program notes only**; two or more Applicable
+  Programs require a Domain Context, rejected server-side. **⚠️ Recorded with its second-order effect:** as
+  shared material gains programs, classification becomes mandatory more often — **the multi-program rule is
+  itself the forcing function that generates the evidence**, so no instrumentation is owed.
+- **Architecture is clarified as decided, not reopened.** Observing the rebuild gathers evidence **against
+  the existing governance floor**; the decision itself is not open, and **note volume is explicitly not a
+  qualifying criterion**.
+- **Water Treatment is preserved as a calibration case WITH ITS PRIOR STATED** — R4 already established
+  that a broader Domain Context does not degrade content, so a pass confirms an existing finding rather
+  than proving a new one. **R4's existing runbook is reused; no second rubric was written.**
+- **Feature docs: linked, not restated.** `notes.md` no longer reads as though eight values are a fixed
+  constant — it points at the ADR's governance section instead of duplicating the bar. The other nine docs
+  named in the audit were swept for wording implying completeness or a program→context mapping and were
+  **clean**. **⚠️ Stale figures corrected: classification is 32.6% (370/1,135) with 5 of 8 values in use**,
+  not 12.7% and 4 of 8.
+
+- **⚠️ Found at the `/audit-diff`: BOTH real flush call sites were unpinned, while the feature they
+  protect was well covered.** Mutation-testing showed the deferral itself is solid — reverting it fails
+  six tests — but deleting the `savePendingLeafOrder` call from **`handleRemoveLeafNote`** or from
+  **`handleAddLeafNotes`** left all 218 green. Those two are the only paths that bypass
+  `persistLeafItems`, which carries the flush for everything routed through it, so they are exactly the
+  paths needing their own call — and exactly the ones nothing tested. **The two existing flush tests
+  cover rename and the debounced combobox, which reach the flush through `persistLeafItems`**, so they
+  pass without exercising either explicit call. `flushes a pending order before removing a note` and
+  `blocks removing a note when the pending-order flush fails, and says why` now pin them,
+  mutation-verified.
+- **⚠️ Also found: the "say why" half of the flush-failure contract was DEAD CODE in practice.**
+  `savePendingLeafOrder` passed its tailored message — *"Could not save the pending order, so the note
+  was not removed."* — as the **fallback** argument to `makeErrorMessage`, which returns
+  `error.message` whenever one exists. On every real server error the fallback never fires, so the
+  curator saw a bare cause (*"Order write failed"*) and was **never told the action was blocked or that
+  their pending order was still on screen**. The message now **composes consequence with cause**, the
+  consequence leading because that is the actionable half. **Mutation-verified**, and the pre-existing
+  test that asserted the bare server string was rewritten to pin **both halves** rather than loosened.
+
+- **Study Plan Builder order saves are deliberate and race-free.** Dragging notes or sections now
+  updates only local order; **Save order** commits the full plan once and **Discard** restores the
+  last saved order. Non-drag mutations—including the debounced section control—flush a pending order
+  first, so their refresh cannot erase visible work. Failed saves remain retryable, navigation warns
+  before leaving, saving visibly pauses dragging, and the reorder refresh no longer downloads the
+  user's full note list. This removes the per-drop write/refetch cycle that made large plans feel
+  unresponsive and let a second drag race the first save into a corrupted order.
+
+
+
+### Known limitations
+
+- **⚠️ The escape repair deliberately leaves `\n` and `\r` commands broken.** A newline is legitimate
+  content, and `"sentence\nWord"` is indistinguishable from a mangled `\nu`, so repairing it would
+  destroy real line breaks to fix a rarer corruption. Commands beginning with `n` or `r` — `\nu`,
+  `\neq`, `\rho`, `\rightarrow` — stay corrupted if a model emits them unescaped. **The prompt rule is
+  the primary fix and covers them; the repair is defence in depth for content already in flight.**
+- **⚠️ The repair fixes FUTURE generation only. Already-corrupted notes are not repaired.** Any note
+  containing `imes` or `rac` predates this release and stays as it is. **No bulk migration was written**,
+  deliberately — and the corruption is invisible to length validation, so there is no count of how many
+  exist. Sizing that is a production read nobody has run.
+- **⚠️ The curated-title rule ships in ONE prompt, not two.** `note-generation-developer.txt` is
+  untouched pending the §5 feedback-loop read, which decides whether the note body's first line reaches
+  the Study Pack title. Until then, the note **body's** heading is ungoverned by the new rule.
+- **⚠️ Summary maths renders on the nine `SummaryMarkdown` consumers only.** Any other surface printing
+  raw markdown is unaffected, and no audit of such surfaces was performed in this release.
+- **The `[CHECKPOINT — due 2026-09-28]` metric is non-authoritative by construction** — `% in %` matches
+  legitimate titles, so the two-stage rule (count, hand-check a sample, close permanently if legitimate)
+  is stated in the row before the read rather than decided after it.
+
 ## v0.95.1 - Rendering and Reorder Fixes
 
 **Status: Released** (kicked off and signed off 2026-08-29)

@@ -27,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -249,6 +250,100 @@ class OpenAiLlmStudyPackServiceTest {
         JsonNode mentorTipItem = properties.path("mentorTips").path("items");
         assertThat(jsonArrayValues(mentorTipItem.path("required")))
                 .containsExactly("title", "body");
+    }
+
+    /**
+     * The curated-title rule is SEMANTIC, and the failure mode is a later edit compressing it into a
+     * wording ban. "Name the knowledge, not the curriculum container" must never become "'in X' is bad":
+     * "Nursing Management of Acute Asthma" and "Structural Applications of Differential Equations" are
+     * CORRECT titles, and a model taught to strip prepositional phrases would break both.
+     *
+     * <p>Note-generation is deliberately NOT asserted here. The rule lives only in the Study Pack prompt
+     * until the feedback-loop read decides whether the note body's first line reaches the title; adding
+     * it there later is correct work, so this test must not block it.
+     */
+    @Test
+    void noteGenerationPromptRequiresEscapedBackslashesWithItsReason() throws IOException {
+        String template = new ClassPathResource("prompts/study-pack-v1/note-generation-developer.txt")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(template).contains("Escape every backslash in the JSON you return");
+        // The reason must travel with the rule, or a later edit reads it as house style and drops it.
+        assertThat(template).contains("valid JSON escape");
+        assertThat(template).contains("passes every length check");
+    }
+
+    /**
+     * A content-corruption bug, not a validation one: the mangled text is SHORTER than the original,
+     * so every length and word-count check passes and the corruption is persisted.
+     */
+    @Test
+    void jsonEatenLatexCommandsAreRepairedBeforeWhitespaceCollapsesTheEvidence() {
+        // What Jackson hands us when the model writes ONE backslash before "times": a real TAB, then
+        // "imes". After whitespace normalization that reads "P imes r" and passes every check.
+        String eaten = "$I = P \u0009imes r\u0009imes t$";
+
+        String repaired = ReflectionTestUtils.invokeMethod(
+                service, "repairJsonEatenLatexCommands", eaten);
+
+        assertThat(repaired).isEqualTo("$I = P \\times r\\times t$");
+    }
+
+    @Test
+    void repairCoversFracButNeverTouchesRealLineBreaks() {
+        assertThat(ReflectionTestUtils.<String>invokeMethod(
+                service, "repairJsonEatenLatexCommands", "$\u000Crac{a}{b}$"))
+                .isEqualTo("$\\frac{a}{b}$");
+
+        // THE CASE THAT MUST NOT BE REPAIRED. A newline is legitimate content, and "sentence\nWord"
+        // is indistinguishable from a mangled \nu -- repairing it would destroy real line breaks to
+        // fix a rarer corruption. Commands starting with n or r stay broken by design, and the PROMPT
+        // rule is the primary fix.
+        String realLineBreak = "First sentence.\nSecond sentence.";
+        assertThat(ReflectionTestUtils.<String>invokeMethod(
+                service, "repairJsonEatenLatexCommands", realLineBreak))
+                .isEqualTo(realLineBreak);
+
+        // A tab that is only whitespace is left alone for normalization to collapse.
+        assertThat(ReflectionTestUtils.<String>invokeMethod(
+                service, "repairJsonEatenLatexCommands", "spaced\u0009 out"))
+                .isEqualTo("spaced\u0009 out");
+    }
+
+    /**
+     * ⚠️ Pins that the repair is WIRED IN, not merely present. Testing the helper directly proves the
+     * algorithm and nothing about whether any caller uses it — and bullets are the path the corruption
+     * was actually observed on ("$I = P imes r imes t$"), so this is the wiring that matters.
+     */
+    @Test
+    void theBulletPathRepairsEatenLatexRatherThanPersistingTheCorruption() {
+        String eatenBullet = "$I = P \u0009imes r$ where P is principal";
+
+        String normalized = ReflectionTestUtils.invokeMethod(
+                service, "normalizeGeneratedNoteChars", eatenBullet, 240, "invalid core details");
+
+        assertThat(normalized).isEqualTo("$I = P \\times r$ where P is principal");
+        // The corruption is silent precisely because the mangled form is SHORTER and passes checks.
+        assertThat(normalized).doesNotContain(" imes");
+    }
+
+    @Test
+    void studyPackPromptTeachesTitleSemanticsRatherThanAWordingBan() throws IOException {
+        String template = new ClassPathResource("prompts/study-pack-v1/developer.txt")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(template).contains("Title");
+        assertThat(template).contains("name the knowledge the material actually teaches");
+        // Both halves of the distinction must be present. Either alone teaches the wrong lesson.
+        assertThat(template).contains("include disciplinary or application context when it defines what is taught");
+        assertThat(template).contains("omit Course/Program, learner-group, or curriculum context when it only says who the material is for");
+        assertThat(template).contains("judgment about meaning, not about wording");
+        // The positive cases are what stop a wording ban from being inferred from the negative ones.
+        assertThat(template)
+                .contains("\"Nursing Management of Acute Asthma\" -> correct")
+                .contains("\"Structural Applications of Differential Equations\" -> correct");
+        // Universal by design: no per-program or per-discipline title logic, ever.
+        assertThat(template).doesNotContain("if the Course/Program is");
     }
 
     @Test

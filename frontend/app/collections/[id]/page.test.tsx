@@ -1125,7 +1125,10 @@ describe("CollectionDetailPageClient", () => {
     expect(screen.getByText("What now?")).toBeInTheDocument();
     expect(screen.getByText("Practice.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Extra resources" })).toBeInTheDocument();
-    expect(screen.getByText("- [Reviewer archive](https://example.com/reviewer)")).toBeInTheDocument();
+    // The saved resources are RENDERED, not echoed as markdown source — this asserted the mock's
+    // passthrough. The link proves the round-trip reached the component just as well.
+    expect(screen.getByRole("link", { name: "Reviewer archive" }))
+      .toHaveAttribute("href", "https://example.com/reviewer");
     expect(screen.getByRole("heading", { name: "Quick tips" })).toBeInTheDocument();
     expect(screen.getByText("Start timed practice")).toBeInTheDocument();
     expect(await screen.findByText("Companion saved.")).toBeInTheDocument();
@@ -1546,7 +1549,9 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
     expect(screen.getByRole("heading", { name: "What this covers" })).toBeInTheDocument();
-    expect(screen.getByTestId("summary-markdown")).toHaveTextContent("**Start** with the foundations.");
+    // Asserts the RENDERED markdown, not a mock's testid: "**Start**" becomes <strong>Start</strong>.
+    expect(screen.getByText("Start").tagName).toBe("STRONG");
+    expect(screen.getByText(/with the foundations\./)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "How to study this" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Avoid these traps" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Common questions" })).not.toBeInTheDocument();
@@ -1568,7 +1573,9 @@ describe("CollectionDetailPageClient", () => {
     expect(await screen.findByRole("heading", { name: "Learning Companion" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
     expect(screen.getByRole("heading", { name: "Extra resources" })).toBeInTheDocument();
-    expect(screen.getByTestId("summary-markdown")).toHaveTextContent("- [Curriculum guide](https://example.com/curriculum)");
+    // The real component renders the markdown link rather than echoing its source.
+    expect(screen.getByRole("link", { name: "Curriculum guide" }))
+      .toHaveAttribute("href", "https://example.com/curriculum");
     expect(screen.queryByRole("heading", { name: "What this covers" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Common questions" })).not.toBeInTheDocument();
   });
@@ -1613,10 +1620,8 @@ describe("CollectionDetailPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "View Full Guide" }));
     expect(screen.getByRole("heading", { name: "Common questions" })).toBeInTheDocument();
     expect(screen.getByText("How should I start?")).toBeInTheDocument();
-    expect(screen.getAllByTestId("summary-markdown").map((element) => element.textContent)).toEqual([
-      "Read the **overview** first.",
-      "Then practice the weakest concepts.",
-    ]);
+    expect(screen.getByText("overview").tagName).toBe("STRONG");
+    expect(screen.getByText(/Read the/)).toBeInTheDocument();
     expect(screen.getByText("Then practice the weakest concepts.")).toBeInTheDocument();
     expect(screen.queryByText(/^ $/)).not.toBeInTheDocument();
   });

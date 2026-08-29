@@ -2501,8 +2501,52 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         }
     }
 
+    /**
+     * ⚠️ Repair JSON-eaten LaTeX commands BEFORE whitespace normalization, which is the only moment
+     * the evidence still exists.
+     *
+     * <p>A model emitting {@code \times} inside a JSON string writes a single backslash, and
+     * {@code \t} is a VALID JSON escape — so Jackson parses it as a TAB and this method's next line
+     * collapses that TAB into a space, leaving {@code imes}. The same holds for {@code \b} and
+     * {@code \f} ({@code \frac} becomes {@code rac}).
+     *
+     * <p><b>This is a CONTENT-CORRUPTION bug, not a validation one</b>, which is why it went unnoticed:
+     * the mangled text is SHORTER than the original, so it passes every length and word-count check
+     * and is persisted as a corrupted note.
+     *
+     * <p>⚠️ {@code \n} and {@code \r} are deliberately NOT repaired. A newline is legitimate content
+     * here, and "sentence\nWord" is indistinguishable from a mangled {@code \nu} — repairing it would
+     * destroy real line breaks to fix a rarer corruption. Commands beginning with n or r therefore stay
+     * broken, and the PROMPT rule is the primary fix; this is defence for content already in flight.
+     */
+    private static String repairJsonEatenLatexCommands(String value) {
+        if (value == null) {
+            return null;
+        }
+        StringBuilder repaired = new StringBuilder(value.length());
+        for (int index = 0; index < value.length(); index++) {
+            char current = value.charAt(index);
+            char escapeLetter = switch (current) {
+                case '\t' -> 't';
+                case '\b' -> 'b';
+                case '\f' -> 'f';
+                default -> 0;
+            };
+            // Only a control character IMMEDIATELY followed by a letter can be an eaten command;
+            // anything else is ordinary (if pointless) whitespace and is left for normalization.
+            if (escapeLetter != 0 && index + 1 < value.length()
+                    && Character.isLetter(value.charAt(index + 1))) {
+                repaired.append('\\').append(escapeLetter);
+            } else {
+                repaired.append(current);
+            }
+        }
+        return repaired.toString();
+    }
+
     private String normalizeGeneratedNoteText(String value, int minWords, int maxWords, String errorMessage) {
-        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(value);
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(
+                repairJsonEatenLatexCommands(value));
         if (normalized == null || !StringNormalizationUtils.hasWordCountBetween(normalized, minWords, maxWords)) {
             throw invalidOutput(errorMessage);
         }
@@ -2538,8 +2582,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return normalized;
     }
 
+    // ⚠️ Bullets take THIS path, not normalizeGeneratedNoteText — and bullets are where the observed
+    // corruption appeared ("$I = P imes r imes t$"). Repairing only the other path would have fixed
+    // the case nobody reported and missed the one that was.
     private String normalizeGeneratedNoteChars(String value, int maxChars, String errorMessage) {
-        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(value);
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(
+                repairJsonEatenLatexCommands(value));
         if (normalized == null || normalized.length() > maxChars) {
             throw invalidOutput(errorMessage);
         }

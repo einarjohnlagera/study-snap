@@ -29,7 +29,15 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
 ## Output structure
 
 The LLM should produce:
-- title
+- title — **names the knowledge the material teaches, not the curriculum container it sits in.** The
+  prompt's `Title` rule is deliberately **semantic**, not a wording ban: disciplinary language belongs in
+  a title when it is part of the knowledge (*"Nursing Management of Acute Asthma"*, *"Structural
+  Applications of Differential Equations"* are both **correct**) and does not when it only names who the
+  material is for (*"Time Value of Money in Accountancy"*). **⚠️ Never compress this into "'in X' is
+  bad"** — that rule would break the two correct titles above. It is universal: there is **no
+  per-program or per-discipline title logic**. **⚠️ The rule is unconditional and therefore also changes
+  the AI's default suggestion on learner-facing generation paths — that is intended**, and it governs
+  what the AI *proposes*, never what a learner may name their own note.
 - summary (plain prose + optional markdown comparison table + optional Common Misconceptions paragraph)
 - subject
 - tags
@@ -37,6 +45,16 @@ The LLM should produce:
 - quiz[]
 
 The strict JSON contract is documented in `docs/ai/PROMPTS.md`.
+
+**⚠️ LaTeX commands survive JSON parsing only because the prompt requires escaped backslashes, and a
+repair backs it up.** A model writing `\times` with ONE backslash produces a **valid JSON escape** —
+Jackson reads `\t` as a TAB, whitespace normalisation collapses it, and the command is destroyed into
+`imes` before anything validates it. **This is content corruption, not a validation failure:** the
+mangled text is *shorter*, so it passes every length and word-count check and is saved. The prompt rule
+is the primary fix; `repairJsonEatenLatexCommands` runs **before** whitespace normalisation, which is
+the only moment the control character still exists. **⚠️ `\n` and `\r` are deliberately not repaired**
+— a newline is legitimate content and `"sentence\nWord"` cannot be told apart from a mangled `\nu`, so
+commands beginning with `n` or `r` stay broken rather than risk destroying real line breaks.
 
 ## Exam-only keyConcept tags
 

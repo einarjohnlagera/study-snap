@@ -171,6 +171,21 @@ function renderMathSegment(latex: string, delimiter: MathDelimiter, key: string)
 }
 
 /**
+ * Render an ALREADY-EXTRACTED LaTeX string — for callers whose parser has separated math from prose,
+ * so there are no delimiters left to scan for.
+ *
+ * <p>⚠️ This exists so the product keeps ONE KaTeX configuration. `SummaryMarkdown` needs math
+ * rendering, but markdown makes the text-scanning path above unusable: `_` is emphasis, so
+ * `$x_1 + x_2$` is mangled into `<em>` before any scanner could find it. `remark-math` therefore
+ * tokenizes there and hands the raw TeX here, rather than the alternative — adding `rehype-katex`,
+ * which would be a SECOND rendering configuration free to drift from this one on `output`,
+ * `throwOnError` and the error fallback.
+ */
+export function renderExtractedMath(latex: string, displayMode: boolean, key: string) {
+  return renderMathSegment(latex, displayMode ? BLOCK_DOLLAR_DELIMITER : INLINE_DOLLAR_DELIMITER, key);
+}
+
+/**
  * Renders text that MAY contain LaTeX, for callers that already have their own wrapper element.
  *
  * Returns the raw string untouched when the text contains no math delimiters, which is the

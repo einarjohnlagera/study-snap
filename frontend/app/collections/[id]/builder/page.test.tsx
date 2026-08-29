@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StudyPlanBuilderPageClient } from "./study-plan-builder-page-client";
 import {
   addCollectionItems,
@@ -482,6 +482,21 @@ describe("StudyPlanBuilderPageClient", () => {
     expect(screen.queryByText("Not in a section")).not.toBeInTheDocument();
   });
 
+  it("does not start a drag from a pointer press on the section rename input", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    const renameInput = await screen.findByLabelText("Section name Algebra");
+    fireEvent.pointerDown(renameInput, { clientX: 20, clientY: 20, pointerId: 1 });
+    fireEvent.pointerUp(renameInput, { clientX: 20, clientY: 20, pointerId: 1 });
+
+    expect(renameInput).toHaveValue("Algebra");
+    expect(screen.queryByRole("button", { name: "Save order" })).not.toBeInTheDocument();
+    expect(setCollectionItemOrder).not.toHaveBeenCalled();
+  });
+
   it("asks before combining a renamed section and cancellation writes nothing", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
       { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
@@ -523,7 +538,7 @@ describe("StudyPlanBuilderPageClient", () => {
     ]));
   });
 
-  it("does not refetch every note the user owns just to reorder one plan", async () => {
+  it("keeps reorder controls local until Save and does not refetch every note the user owns", async () => {
     // ⚠️ listNotes() fetches the ENTIRE note list. A reorder adds, removes and edits no note, so
     // refetching it after each drop was the bulk of the unresponsiveness on a large plan.
     (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
@@ -536,11 +551,19 @@ describe("StudyPlanBuilderPageClient", () => {
     const notesCallsBefore = (listNotes as jest.Mock).mock.calls.length;
     fireEvent.click(moveDown);
 
+    expect(setCollectionItemOrder).not.toHaveBeenCalled();
+    expect(screen.getByText(/order not saved/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+
     await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
+    expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
+      { noteId: "note-2", label: "Algebra" },
+      { noteId: "note-1", label: "Algebra" },
+    ]);
     expect((listNotes as jest.Mock).mock.calls.length).toBe(notesCallsBefore);
   });
 
-  it("says a save is running, because nothing on this surface used to say so", async () => {
+  it("visibly disables dragging and duplicate submission while Save order is running", async () => {
     // The curator could not tell a save was in flight, so they kept dragging into it. The drag
     // handles carry disabled:opacity-50, but a disabled 9px handle looks like an enabled one.
     let resolveOrder: (() => void) | undefined;
@@ -554,12 +577,178 @@ describe("StudyPlanBuilderPageClient", () => {
     render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
 
     fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    const saveButton = screen.getByRole("button", { name: "Save order" });
+    fireEvent.click(saveButton);
 
-    expect(await screen.findByText(/Saving/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Saving order/i)).toBeInTheDocument();
     expect(screen.queryByText(/to reorganize/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Drag Skeletal System")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    expect(setCollectionItemOrder).toHaveBeenCalledTimes(1);
 
     resolveOrder?.();
     await waitFor(() => expect(screen.getByText(/to reorganize/i)).toBeInTheDocument());
+  });
+
+  it("batches two local reorders into one final full-order save", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+      { ...collectionItem("note-3", "Joints", 2), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    fireEvent.click(screen.getByLabelText("Move Skeletal System down"));
+
+    expect(setCollectionItemOrder).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
+    expect(setCollectionItemOrder).toHaveBeenCalledWith("leaf-1", [
+      { noteId: "note-2", label: "Algebra" },
+      { noteId: "note-3", label: "Algebra" },
+      { noteId: "note-1", label: "Algebra" },
+    ]);
+  });
+
+  it("keeps the pending order and retry action when Save order fails", async () => {
+    (setCollectionItemOrder as jest.Mock).mockRejectedValueOnce(new Error("Order service unavailable"));
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    fireEvent.click(screen.getByRole("button", { name: "Save order" }));
+
+    // ⚠️ The message must carry the CONSEQUENCE as well as the cause. makeErrorMessage returns
+    // error.message whenever one exists, so a tailored message passed as a *fallback* is dead on
+    // every real server error — the curator would see a bare cause and never learn what it stopped.
+    const failure = await screen.findByText(/Order service unavailable/);
+    expect(failure).toHaveTextContent(/could not save/i);
+    expect(screen.getByRole("button", { name: "Save order" })).toBeInTheDocument();
+    expect(screen.getByText("Muscle Groups").compareDocumentPosition(screen.getByText("Skeletal System")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("discards back to the last-saved order and guards leaving while dirty", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    const beforeUnload = new Event("beforeunload", { cancelable: true });
+    globalThis.dispatchEvent(beforeUnload);
+    expect(beforeUnload.defaultPrevented).toBe(true);
+    const confirmSpy = jest.spyOn(globalThis, "confirm").mockReturnValue(false);
+    expect(fireEvent.click(screen.getByRole("link", { name: "Back to plan" }))).toBe(false);
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringMatching(/without saving/i));
+    confirmSpy.mockRestore();
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(screen.queryByRole("button", { name: "Save order" })).not.toBeInTheDocument();
+    expect(screen.getByText("Skeletal System").compareDocumentPosition(screen.getByText("Muscle Groups")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(setCollectionItemOrder).not.toHaveBeenCalled();
+  });
+
+  it("flushes a pending order before removing a note", async () => {
+    // ⚠️ Remove does NOT go through persistLeafItems, so it does not inherit that function's flush —
+    // it calls savePendingLeafOrder itself. Without that call, removeCollectionItem is followed by
+    // refreshBuilder, which calls setLeafItems(server state) and silently discards the pending drag.
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    (removeCollectionItem as jest.Mock).mockResolvedValue(undefined);
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    expect(setCollectionItemOrder).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText("Remove Muscle Groups"));
+
+    await waitFor(() => expect(removeCollectionItem).toHaveBeenCalledWith("leaf-1", "note-2"));
+    expect(setCollectionItemOrder).toHaveBeenCalledTimes(1);
+    expect((setCollectionItemOrder as jest.Mock).mock.calls[0][1]).toEqual([
+      { noteId: "note-2", label: "Algebra" },
+      { noteId: "note-1", label: "Algebra" },
+    ]);
+  });
+
+  it("blocks removing a note when the pending-order flush fails, and says why", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    (setCollectionItemOrder as jest.Mock).mockRejectedValue(new Error("Order write failed"));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    fireEvent.click(screen.getByLabelText("Remove Muscle Groups"));
+
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
+    // The mutation must not proceed on a failed flush, or the pending order is lost anyway.
+    expect(removeCollectionItem).not.toHaveBeenCalled();
+    expect(await screen.findByText(/pending order/i)).toBeInTheDocument();
+  });
+
+  it("flushes a pending order before renaming a section", async () => {
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+    const sectionInput = screen.getByLabelText("Section name Algebra");
+    fireEvent.change(sectionInput, { target: { value: "Foundations" } });
+    fireEvent.blur(sectionInput);
+
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(2));
+    expect((setCollectionItemOrder as jest.Mock).mock.calls[0][1]).toEqual([
+      { noteId: "note-2", label: "Algebra" },
+      { noteId: "note-1", label: "Algebra" },
+    ]);
+    expect((setCollectionItemOrder as jest.Mock).mock.calls[1][1]).toEqual([
+      { noteId: "note-2", label: "Foundations" },
+      { noteId: "note-1", label: "Foundations" },
+    ]);
+  });
+
+  it("flushes a pending order before the debounced section combobox writer", async () => {
+    jest.useFakeTimers();
+    try {
+      (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+        { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+        { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+      ], { parentCollectionId: null, childCount: 0 }));
+      render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+      fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+      const combobox = screen.getByLabelText("Section for Skeletal System");
+      fireEvent.focus(combobox);
+      fireEvent.change(combobox, { target: { value: "Calculus" } });
+      fireEvent.blur(combobox);
+      await act(async () => {
+        jest.advanceTimersByTime(500);
+        await Promise.resolve();
+      });
+
+      await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(2));
+      expect((setCollectionItemOrder as jest.Mock).mock.calls[0][1]).toEqual([
+        { noteId: "note-2", label: "Algebra" },
+        { noteId: "note-1", label: "Algebra" },
+      ]);
+      expect((setCollectionItemOrder as jest.Mock).mock.calls[1][1]).toEqual([
+        { noteId: "note-2", label: "Algebra" },
+        { noteId: "note-1", label: "Calculus" },
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("sets every section from note subjects after confirmation", async () => {
