@@ -173,6 +173,34 @@ It also disambiguates a trigger from its own dialog's confirm button when both w
 
 ---
 
+## Unavailable Controls Stay Reachable
+
+**Rule: a control that is temporarily unavailable uses `aria-disabled`, not the native `disabled`
+attribute, whenever the user needs to know it exists and why it is off.**
+
+A `disabled` button is removed from the tab order entirely. A keyboard or screen-reader user cannot
+reach it, cannot hear that it exists, and cannot discover why it is unavailable — so the state that
+most needs explaining is the one that becomes invisible. `aria-disabled` keeps the control
+focusable and announced while the handler refuses the action.
+
+`components/ui/toggle.tsx` follows this: it takes the same `disabled` prop, renders
+`aria-disabled`, returns early from `onClick`, and styles itself with the `aria-disabled:` Tailwind
+variant.
+
+### When the native attribute is still right
+
+Native `disabled` remains correct for a control whose unavailability is self-evident from context
+and carries no information the user needs — a **Submit** button greyed while a form is mid-flight,
+for example, where the loading state is already announced elsewhere. The distinction is whether
+skipping the control costs the user an explanation.
+
+### Applied example
+
+A sharing switch on a pending connection is unavailable because the connection is not active yet.
+That reason is exactly what the user needs, so the switch stays focusable and announces its state
+rather than vanishing from the tab order.
+
+
 ## Summary: before implementing any new page
 
 1. Does the page need a back link? → `<BackLink />` above the header, label = destination name only, no "Back to" prefix.

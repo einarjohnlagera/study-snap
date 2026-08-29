@@ -704,8 +704,8 @@ export default function LinkedLearnersPage() {
             </button>
           </div>
           {linkCreatorRole === "LEARNER" ? (
-            <label className="block space-y-1.5 text-sm font-medium" htmlFor="invitation-link-birth-year">
-              Your birth year
+            <div className="space-y-1.5 text-sm font-medium">
+              <label className="block" htmlFor="invitation-link-birth-year">Your birth year</label>
               <BirthYearInput
                 id="invitation-link-birth-year"
                 value={linkBirthYear}
@@ -714,7 +714,7 @@ export default function LinkedLearnersPage() {
               <span className="block text-xs font-normal text-foreground/60">
                 Needed only if you have not recorded it before, so guardian consent cannot be bypassed through a link.
               </span>
-            </label>
+            </div>
           ) : null}
           <Button type="submit" loading={creatingInvitationLink} loadingText="Creating link…">
             Create invitation link
@@ -787,8 +787,8 @@ export default function LinkedLearnersPage() {
             ) : null}
           </label>
           {inviterRole === "LEARNER" ? (
-            <label className="block space-y-1.5 text-sm font-medium" htmlFor="invite-birth-year">
-              Your birth year
+            <div className="space-y-1.5 text-sm font-medium">
+              <label className="block" htmlFor="invite-birth-year">Your birth year</label>
               <BirthYearInput
                 id="invite-birth-year"
                 value={inviteBirthYear}
@@ -816,7 +816,7 @@ export default function LinkedLearnersPage() {
                 Needed now so the person you invite can accept. If you are under the guardian-consent
                 age, a guardian confirms before the connection becomes active.
               </p>
-            </label>
+            </div>
           ) : null}
           <Button type="submit" loading={inviting} loadingText="Sending invitation…">Send invitation</Button>
         </form>
@@ -838,8 +838,8 @@ export default function LinkedLearnersPage() {
             <p className="mt-1 text-sm text-foreground/70">This is your account-level birth year used for guardian consent across all learning connections.</p>
           </div>
           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={handleBirthYearCorrection} noValidate>
-            <label className="block flex-1 space-y-1.5 text-sm font-medium">
-              Corrected birth year
+            <div className="flex-1 space-y-1.5 text-sm font-medium">
+              <label className="block" htmlFor="corrected-birth-year">Corrected birth year</label>
               <BirthYearInput
                 id="corrected-birth-year"
                 value={correctedBirthYear}
@@ -856,7 +856,7 @@ export default function LinkedLearnersPage() {
                   {correctionYearError}
                 </p>
               ) : null}
-            </label>
+            </div>
             <Button type="submit" variant="outline" loading={correctingBirthYear}>Review correction</Button>
           </form>
           {correctionWarningCount !== null ? (
@@ -932,16 +932,19 @@ export default function LinkedLearnersPage() {
                         ...current, [invitation.id]: next,
                       }))}
                     />
-                    <label className="flex items-center gap-2 text-xs text-foreground/70">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center gap-2 text-xs text-foreground/70">
+                      <Checkbox
+                        id={`consent-invitation-${invitation.id}`}
                         checked={consentChecked[invitation.id] === true}
-                        onChange={(event) => setConsentChecked((current) => ({
-                          ...current, [invitation.id]: event.target.checked,
+                        onChange={(checked) => setConsentChecked((current) => ({
+                          ...current, [invitation.id]: checked,
                         }))}
+                        ariaLabel="Confirm guardian consent attestation"
                       />
-                      A guardian confirms this connection
-                    </label>
+                      <label htmlFor={`consent-invitation-${invitation.id}`}>
+                        A guardian confirms this connection
+                      </label>
+                    </div>
                     <Button
                       type="button"
                       disabled={busyId === invitation.id}
@@ -998,14 +1001,14 @@ export default function LinkedLearnersPage() {
 
               {learnerCanSupplyYear ? (
                 <div className="space-y-2 rounded-lg border border-border p-3">
-                  <label className="block space-y-1.5 text-sm font-medium">
-                    Your birth year
+                  <div className="space-y-1.5 text-sm font-medium">
+                    <label className="block" htmlFor={`birth-year-link-${link.id}`}>Your birth year</label>
                     <BirthYearInput
                       id={`birth-year-link-${link.id}`}
                       value={birthYears[link.id] ?? ""}
                       onChange={(next) => setBirthYears((current) => ({ ...current, [link.id]: next }))}
                     />
-                  </label>
+                  </div>
                   {!canAccept ? <Button type="button" variant="outline" onClick={() => void handleBirthYear(link)} loading={busyId === link.id}>Save birth year</Button> : null}
                   <p className="text-xs text-foreground/60">We collect the year only, for the consent decision on this connection. It is not part of signup or your public profile.</p>
                 </div>

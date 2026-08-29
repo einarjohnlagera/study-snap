@@ -289,6 +289,31 @@ it("offers progress only when the counterparty has granted progress access", asy
   expect(screen.getAllByRole("link", { name: "View progress" })).toHaveLength(1);
 });
 
+it("keeps an unavailable sharing switch reachable instead of removing it from the tab order", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    callerRole: "LEARNER",
+    status: "PENDING",
+    incomingInvitation: false,
+    activitySharedByMe: false,
+    progressSharedByMe: false,
+  }]);
+
+  render(<LinkedLearnersPage />);
+
+  const toggle = await screen.findByRole("switch", { name: /share my study activity/i });
+  // ⚠️ A native `disabled` button is removed from the tab order entirely, so a keyboard or
+  // screen-reader user cannot reach the switch, hear that it exists, or learn why it is
+  // unavailable. aria-disabled keeps it discoverable and announced while still refusing the action.
+  expect(toggle).not.toBeDisabled();
+  expect(toggle).toHaveAttribute("aria-disabled", "true");
+  toggle.focus();
+  expect(toggle).toHaveFocus();
+
+  fireEvent.click(toggle);
+  expect(setLinkedLearnerActivityGrant).not.toHaveBeenCalled();
+});
+
 it("renders activity in both directions and progress control only for the learner", async () => {
   const accepted = {
     ...baseLink,

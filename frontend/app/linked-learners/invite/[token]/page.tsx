@@ -159,8 +159,8 @@ export default function LinkedLearnerInvitationPage() {
               Confirming creates a pending connection. {invitation.inviterName} must confirm you before it becomes active.
             </p>
             {redeemerIsLearner ? (
-              <label className="block space-y-1.5 text-sm font-medium" htmlFor="invitation-birth-year">
-                Your birth year
+              <div className="space-y-1.5 text-sm font-medium">
+                <label className="block" htmlFor="invitation-birth-year">Your birth year</label>
                 <BirthYearInput
                   id="invitation-birth-year"
                   value={birthYear}
@@ -171,7 +171,7 @@ export default function LinkedLearnerInvitationPage() {
                   the year is held only for its guardian-consent decision. Confirmation makes it
                   your permanent account-level year; revoking the request first deletes it.
                 </span>
-              </label>
+              </div>
             ) : null}
             {error ? <p role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p> : null}
             <Button type="button" onClick={() => void handleRedeem()} loading={redeeming}>

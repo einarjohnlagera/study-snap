@@ -1506,6 +1506,33 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: "Memorization" })).not.toBeInTheDocument();
   });
 
+  it("discloses AI-generated questions even when the quota summary never loads", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      generatedQuiz: null,
+    });
+    // ⚠️ The quota block renders only once usageSummary resolves. Hanging the disclosure off it
+    // would drop it exactly when the network is failing — so pin it independently.
+    (getMyPlan as jest.Mock).mockRejectedValue(new Error("plan unavailable"));
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Quiz" }));
+
+    expect(screen.getByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
+    expect(screen.queryByText("AI quizzes left this month")).not.toBeInTheDocument();
+    expect(screen.getByText(/Questions and answers are AI-generated from your note/i)).toBeInTheDocument();
+  });
+
   it("renders teacher note detail with Study Pack tabs visible and student-only sections hidden", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PRO",
@@ -1546,6 +1573,10 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText("From your profile: College")).toBeInTheDocument();
     expect(screen.getByText("AI quizzes left this month")).toBeInTheDocument();
     expect(screen.getByText("Share links left this month")).toBeInTheDocument();
+    // ⚠️ The disclosure must NOT hang off the quota block: this quiz is generated for someone
+    // else, so the person reviewing it is not the person who will sit it. See the sibling test
+    // that pins it rendering when usageSummary never loads.
+    expect(screen.getByText(/Questions and answers are AI-generated from your note/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Generate Quiz" }).at(-1) as HTMLButtonElement);
 
