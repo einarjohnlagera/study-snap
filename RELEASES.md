@@ -148,6 +148,79 @@ policy's second half is **blocked on the unrun §5 production read**, and the Do
   `docs/claude-prompt/*-out/`, which need their own pass — thinning a directory while keeping its row is a
   different and riskier operation.
 
+#### Gates lifted 2026-08-29, after kickoff — scope amended from seven items to nine
+
+**⚠️ OWNER INSTRUCTION: *"lift all the gates."* Raised twice, reaffirmed, and proceeding — recorded with
+what each lift actually costs, because two of these gates are DECISIONS and one is a MEASUREMENT IN FLIGHT,
+and those are not the same kind of thing.**
+
+- **LIFT 1 — the §5 production read no longer bars `note-generation-developer.txt` (a DECISION gate, and
+  the cheap one).** The bar existed so this release would not pre-empt a read that decides whether the note
+  body's first line feeds the Study Pack title. **Lifting it means applying the rule to BOTH prompts
+  unconditionally rather than waiting to learn whether one would have sufficed.** The cost is precisely
+  bounded: if the feedback loop turns out to be weak, we will have shipped a correct semantic rule in a
+  second prompt file that did not strictly need it — **the same rule, not a different one**, so it cannot
+  contradict `developer.txt`. **⚠️ The §5 query is NOT deleted and stays indexed** — it still answers
+  whether the loop exists, which matters for future title work; it simply stops gating this release.
+- **LIFT 2 — supporter onboarding is implemented, not just defined (a DECISION gate resting on an
+  undefined term).** Item 3 grows from a docs-only definition step into definition **plus** implementation.
+- **⚠️ LIFT 3 IS THE ONE THAT IS NOT FREE, AND IT IS DELIBERATELY LIFTED WITHOUT BEING SPENT.**
+  `[CHECKPOINT — due 2026-09-11]` is not a decision someone is withholding — **it is a live measurement
+  window with 13 days left**, 375 signups against a 62.4% completion baseline, and **editing the onboarding
+  FLOW does not confound that read, it destroys it.** That distinguishes it from `v0.78.0`'s and
+  `v0.82.0`'s gates, which were converted to recorded confounds on *discovery filters* — a confound can be
+  reasoned around afterwards; a destroyed baseline cannot be re-run. **⚠️ SO THE GATE IS LIFTED AND THE READ
+  IS STILL PROTECTED, because the code says we can have both:** `app/linked-learners/invite/[token]/page.tsx`
+  **traverses** `/onboarding` by carrying an opaque token in a first-party cookie — *"Query-string redirects
+  survive login but not signup"* — and **does not edit it**. So supporter onboarding is built on the
+  connection surfaces and the redemption path, and **`app/onboarding/page.tsx` and the signup →
+  verify-email → onboarding flow stay untouched.** **⚠️ If the definition step concludes the flow MUST be
+  edited, that is a NEW decision to bring back explicitly — it spends the read, and it must not be taken by
+  a delivery session discovering it mid-implementation.**
+
+- **8. (see the docs cleanup item below — numbering retained.)**
+- **9. The curated title rule lands in `note-generation-developer.txt` too (prompt).**
+  **⚠️ VERIFIED BEFORE SCOPING, because the item would have been INCOHERENT if it were false: that prompt
+  really does emit a `title`** — `note-generation-developer.txt:6` declares it in the output schema and
+  `:18` already governs it with two thin bullets (*"specific, academic, and anchored to the topic"*,
+  *"not generic"*). Had it emitted only body content, "apply the same title rule" would have been a rule
+  about **how the body opens** — a second formulation by construction, colliding with this item's own
+  anti-drift rule — and the item would have been withdrawn instead. It is coherent, so it ships. The same
+  **unconditional, positive, semantic** rule `v0.96.0` shipped into `developer.txt`, applied to the note-body
+  prompt. **⚠️ IT MUST BE THE SAME RULE, NOT A SECOND FORMULATION** — two prompts stating the same idea in
+  different words is exactly how the semantic rule degrades into the wording ban that
+  `studyPackPromptTeachesTitleSemanticsRatherThanAWordingBan` exists to prevent. **⚠️ *"Nursing Management
+  of Acute Asthma"* and *"Structural Applications of Differential Equations"* stay CORRECT titles.**
+  **⚠️ No Engineering-specific and no per-program logic, no title post-processing, no suffix stripping, no
+  mass rename, no migration.** **⚠️ Do not rename learner-owned notes** or validate against a learner naming
+  one *"Fluid Mechanics for my CE Finals"*. **⚠️ `v0.96.0`'s test deliberately did NOT assert this file's
+  absence** — the doc comment recording why is now satisfied and should be updated, not deleted.
+  **⚠️ The two existing `title` bullets are REPLACED by the shared rule, not stacked beside it** — leaving
+  *"specific, academic, and anchored to the topic"* above a seven-bullet semantic rule is how two
+  formulations start.
+- **⚠️ ITEM 3'S DEFINITION IS DONE, AND THE DISCRIMINATING TEST ANSWERS *NO* — written to
+  `docs/claude-plans/learning-connections-phase-plan.md`, the doc that had the gap.** Supporter onboarding
+  is **first-run orientation for the supporter ROLE on the connection surfaces**: what a supporter will
+  see, what they will **never** see (**the learner's notes — the absolute privacy line**), and who acts
+  next. **NOT a `ProfileType`** (`v0.89.0`'s axis error; `PARENT` must not be wired up), not a mode, not a
+  second onboarding, **not a step in the signup flow**. **⚠️ Orientation only — copy, empty states and
+  disclosure of an existing model; no permission, grant, endpoint, event or migration. If a proposal
+  changes an access rule, it has left the definition.** Surfaces: the connections-list empty state (the
+  true first run), the redemption page, the progress sub-page, and
+  `components/help/learning-connections-guide.tsx` — **which has never once been in a diff when the
+  behaviour it describes changed**, in `v0.93.0` or `v0.94.0`, so it is in scope by that history alone.
+
+**⚠️ THE VERIFICATION TIER MOVES, AND `CLAUDE.md` REQUIRES SAYING SO RATHER THAN LETTING IT DRIFT.**
+Seven items resolved to one scoped cold agent. **Nine items do not.** Item 9 changes the AI's default title
+on **every generation path** — `v0.96.0` recorded the title prompt as having *the widest blast radius in
+the release* when it touched one file; this touches the second. Item 3 becomes real feature work on the
+**redemption path**, beside item 5's gate tightening on that same path and item 1's lifecycle change.
+**⚠️ THE PRE-SIGNOFF PRESSURE TEST IS THEREFORE UPGRADED TO THE FULL THREE-AGENT COLD-CONTEXT TEST**
+(non-overlapping thirds — connection lifecycle and authorization; onboarding and redemption; prompts and
+docs-vs-code — synthesised via `advisor()`). **⚠️ Budget for it deliberately: `v0.93.0`'s cost ~490k tokens
+across three agents.** **⚠️ Folding a tenth item does not raise the tier further, but it does raise the
+cost of the test that is now committed** — `CLAUDE.md`'s size warning applies from here, not later.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ AN ANTI-DRIFT RULE IS BEING AMENDED, AND IT IS RAISED HERE RATHER THAN REASONED PAST.** `v0.95.0`
@@ -181,9 +254,11 @@ policy's second half is **blocked on the unrun §5 production read**, and the Do
   `[CHECKPOINT — due 2026-10-13]` reads the carrier.
 - **⚠️ Do NOT add, remove or reorder an onboarding FLOW step**, and no code lands under `frontend/app/onboarding`
   in this release. `[CHECKPOINT — due 2026-09-11]`'s 62.4% baseline cannot be re-run.
-- **⚠️ Do NOT touch the curated title policy or `note-generation-developer.txt`.** Its second half is blocked
-  on the unrun §5 read in `docs/claude-plans/canonical-curated-note-title-policy-audit.md`, which an
-  assistant cannot run.
+- **⚠️ SUPERSEDED BY LIFT 1 — `note-generation-developer.txt` IS now in scope, for the title rule and
+  nothing else.** The §5 read no longer gates it. **⚠️ The rule that survives the lift: it must be the SAME
+  rule as `developer.txt`'s, not a second formulation**, and everything the policy forbids still holds — no
+  post-processing, no suffix stripping, no mass rename, no migration, no per-program logic, and no renaming
+  of learner-owned notes.
 - **⚠️ Do NOT amend `ADR-001`.** The Domain Context calibration row written in this kickoff commit records a
   read, not a doctrine change.
 - **⚠️ `users.birth_year` stays account-global and WRITE-ONCE**, birth year is still collected from the
@@ -207,7 +282,10 @@ policy's second half is **blocked on the unrun §5 production read**, and the Do
 
 ### Pre-declared at kickoff
 
-- **Pre-signoff pressure test: ONE SCOPED COLD AGENT, framed as FALSIFICATION** — stated with its reasoning,
+- **⚠️ SUPERSEDED 2026-08-29 BY THE GATE LIFT ABOVE — the tier is now the FULL THREE-AGENT COLD-CONTEXT
+  PRESSURE TEST. The original pre-declaration is retained below because its reasoning is still what the
+  tier is measured against, and because a superseded gate that is deleted cannot be checked.**
+- **~~Pre-signoff pressure test: ONE SCOPED COLD AGENT, framed as FALSIFICATION~~** — stated with its reasoning,
   because seven items looks like a full-pressure-test release and is not. Item 4 is **inert by construction**
   (`requireGrant` demands `ACCEPTED`) and item 5 **tightens an existing gate** rather than introducing a
   permission substrate, so neither is an authorization-boundary *move*; there is no new cross-user read and

@@ -439,6 +439,76 @@ itself, following the denominator-clause precedent already used by `[CHECKPOINT 
 | **Phase 1 — Shared Learning Material** | `note_shares`, share/unshare API, recipient note + pack reads, *Shared with you*, Copy to my Library, 5 events, checkpoint row | One release. Migration + backend + frontend — a Codex-sized piece of work, not an inline one. |
 | **Phase 2 — Activity Sharing** | `linked_learner_grants` (`ACTIVITY`), directional opt-in UI, momentum view from existing activity rows | Next release after Phase 1. |
 | **Phase 3 — Progress Refinement** | `PROGRESS` grants; `requireAcceptedLearnerId` reimplemented over `requireGrant`; permission UI | Next release after Phase 2. **Ship the grant table in Phase 2 and use it in Phase 3** rather than migrating twice. |
+
+## Supporter onboarding — the definition (`v0.97.0` item 3, written 2026-08-29)
+
+**⚠️ THIS SECTION EXISTS BECAUSE THE TERM WAS NEVER DEFINED.** Phase 4 names *"supporter onboarding"* in
+one line and nothing else in this plan says what it is — grepping for `onboard` returns a caller-gate
+description and the Phase 4 row itself. It was blocked at `v0.94.0` on the onboarding freeze, and the
+`v0.95.0` kickoff found that block rested on an **unchecked assumption**. It was never gate-blocked. It was
+undefined, and lifting a gate does not scope an undefined thing.
+
+### What it is
+
+**Supporter onboarding is the first-run orientation for the supporter ROLE, delivered on the connection
+surfaces at the moment someone first becomes a supporter.** It answers three questions that the product
+currently answers nowhere:
+
+1. **What will I be able to see?** Readiness, progress and quiz performance — *if* the learner grants it.
+2. **What will I never see?** **The learner's notes. Never, under any grant.** This is the absolute privacy
+   line, and stating it plainly is the single highest-value thing this orientation does — for the *learner*,
+   not the supporter, because learners who suspect their notes are visible write less honestly.
+3. **What happens next, and who acts?** Acceptance is load-bearing; **an `ACCEPTED` relationship grants
+   nothing**; material, activity and progress each require their own live grant, and progress runs
+   learner → supporter only.
+
+### What it is NOT — each ruled already, and re-stated so the definition cannot drift into them
+
+- **NOT a `ProfileType`.** No supporter profile value, and nothing gated on `ProfileType`. `v0.89.0` ruled
+  this an **axis error**: `ProfileType` answers *"how do YOU learn?"*, never *"may you help someone?"*
+  `PARENT` exists unimplemented with zero users and **must not be wired up as the mechanism.**
+- **NOT a mode, a toggle, or an account type.** Supporting is a **capability**. A supporter is an ordinary
+  account that happens to hold a relationship.
+- **NOT a step in the signup flow.** See the discriminating test below.
+- **NOT a second onboarding.** There is one onboarding; this is orientation *within* a feature.
+- **NOT a demand-signal capture surface**, and not justified on supporter retention — `v0.89.0` ruled that
+  the wrong metric, because Phase 1's value accrues to the **learner** receiving the material.
+
+### ⚠️ The discriminating test, answered: NO
+
+**The test (from the Backlog Index row): does the work edit the signup → verify-email → onboarding path?**
+**Answer: no, and the code is why.** `app/linked-learners/invite/[token]/page.tsx` **traverses**
+`/onboarding` by writing an opaque token into a first-party cookie — its own comment records the reason:
+*"Query-string redirects survive login but not signup."* Auth routing then reconstructs the invitation path
+**after** onboarding completes. So `/onboarding` is a **waypoint the token passes through, not a surface
+this work edits.**
+
+**⚠️ THIS IS WHAT KEEPS `[CHECKPOINT — due 2026-09-11]` ALIVE.** That read is a **live measurement window**
+— 375 signups against a 62.4% completion baseline — so editing the flow would **destroy** it, not confound
+it. The owner lifted every gate on 2026-08-29; the read survives anyway because the definition does not
+need the flow. **⚠️ If implementation ever concludes the flow MUST be edited, that is a NEW decision to
+bring back to the owner explicitly — it spends the read, and it must not be taken mid-implementation.**
+
+### The surfaces it lands on — all verified to exist 2026-08-29
+
+| Surface | Role in the orientation |
+|---|---|
+| `app/linked-learners/page.tsx` | **The primary one.** Its empty state is the true first run — the moment someone has the capability and no relationship yet |
+| `app/linked-learners/invite/[token]/page.tsx` | The redeemer's first contact; already carries the birth-year declaration, so it is where *what happens to what I just typed* belongs |
+| `app/linked-learners/[relationshipId]/progress/page.tsx` | Where "what I can see" becomes concrete, and where its limits are legible |
+| `components/help/learning-connections-guide.tsx` | The durable reference the orientation points at rather than duplicates |
+
+**⚠️ `components/help/learning-connections-guide.tsx` HAS NEVER ONCE BEEN IN A DIFF WHEN THE BEHAVIOUR IT
+DESCRIBES CHANGED** — `v0.93.0` and `v0.94.0` both left it asserting things that had become false, each
+found by a cold agent reading the surface rather than the diff. **It is in scope here by that history
+alone**, and this release's sweep-by-surface obligation covers it.
+
+### Scope boundary
+
+**Orientation only: copy, empty states, and disclosure of an existing model.** It adds **no** permission, no
+grant, no endpoint, no analytics event and no migration, and it changes **nothing** about what a supporter
+can actually see. If a proposal for this item changes an access rule, it has left the definition.
+
 | **Phase 4 — Connection Experience** | **✅ RELEASED PARTIALLY as `v0.94.0`, 2026-08-29 — shareable links and connection management shipped; supporter onboarding did NOT and moves to `v0.95.0` once the onboarding freeze lifts at `[CHECKPOINT — due 2026-09-11]`.** **⚠️ AMENDED 2026-08-28 at the `v0.94.0` kickoff, after auditing this row against code — do not re-derive it.** The row named three things; the audit found only two are shippable now. **Supporter onboarding is BLOCKED** — onboarding is frozen until `[CHECKPOINT — due 2026-09-11]`, so it moves to `v0.95.0` as sequencing, not as a defect. **"Connection management" turned out to mean ONE verified gap:** re-inviting an address already RE-ARMS the expired row (`LinkedLearnerInvitationReArmTest`), but `listInvitations` filters expired rows out and `LinkedLearnerInvitationResponse` carries no `expiresAt`, so an expired invitation **silently vanishes** and nobody is told to re-invite. There is no resend endpoint, and there must not be one that writes a NEW row — `[CHECKPOINT — due 2026-10-13]` reads that table. **Shareable invitation links are a SECURITY DESIGN, not a feature**, and were raised as a deferral before the owner ruled to scope them in `v0.94.0` (2026-08-28) under three constraints: no account-existence oracle (`v0.90.0`), acceptance stays load-bearing (`v0.89.0`), and guardian consent is not bypassable by link. `v0.94.0` also carries the split of `engagement` out of the progress payload, fixing the `v0.93.0` finding that a live `PROGRESS` grant makes the activity toggle inert | Sequenced, not gated. No public user search. |
 | **Phase 5 — Motivation Experiments** | Deliberately uncommitted — rings, leaderboards and reactions each need their own decision | Last, and the only phase whose *content* is still open. |
 
