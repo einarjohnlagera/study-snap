@@ -72,7 +72,7 @@ For Study Plan detail sections, there is no separate section entity or nested-pl
 - null or empty labels belong to a trailing **Not in a section** bucket. That display string is also the reserved name, defined once in `frontend/lib/collection-labels.ts` and shared by every surface — a second copy would let a curator type the displayed name and mint a lookalike section.
 - **The reserved name is refused at the authoring surfaces, and folded on read.** The Builder's per-note control, its section rename, `Group by subject`, and Bulk Generate all reject it in any casing or spacing. The backend does **not** enforce it — `validateOptionalLabel` trims and length-checks only, keeping the server free of frontend display vocabulary — so a direct API call can still store it. Both reading surfaces therefore compare **normalized** against the sentinel and fold any casing into the bucket, so such a value can never render as a section. Only the sentinel comparison is case-folded; grouping between real sections stays case-sensitive.
 - when no item in the plan has a label, detail renders the existing flat ordered list with no section cards.
-- reordering preserves the displayed relative order of notes and sections. The detail page's dormant organize-mode path scopes drag to a section, while the Builder deliberately allows cross-section note drag. Every persisted reorder still submits the whole collection and rewrites every row position; notes in untouched sections retain their relative display order.
+- reordering preserves the displayed relative order of notes and sections. The detail page's dormant organize-mode path scopes drag to a section, while the Builder deliberately allows cross-section note drag. Builder drag results remain local until **Save order** submits the whole collection and rewrites every row position; notes in untouched sections retain their relative display order.
 - the Builder owns the per-note profile-aware **Section** / **Part** control. It uses the shared `SuggestionCombobox` (existing names as suggestions + free-type a new one), auto-saves on a 500 ms debounce, clears back to **Not in a section**, and snaps a typed case-variant to the existing section's exact casing. Grouping itself remains case-sensitive for backward compatibility.
 
 Sections are strictly sections within one plan. They are not child collections, independent plans, or module entities.
@@ -967,24 +967,23 @@ Do not add these under the collection CRUD spine unless explicitly scoped later:
 
 ## Builder drag behaviour
 
-Reordering in the Study Plan Builder persists on every drop: the drag handler writes the new order
-and then refreshes. Three properties make that safe and usable, and each is pinned by a test.
+Reordering in the leaf Study Plan Builder is deferred. Dragging notes within or across sections and
+dragging real section headers changes local item positions only; the equivalent keyboard up/down
+controls use the same pending order. The dirty check compares the full item-id/section sequence with
+the last successfully persisted baseline, because sections have no independently stored order.
+**Save order** sends exactly one whole-plan `PUT /collections/{id}/items/order`, then refreshes the
+collection once without refetching `listNotes()`. **Discard** restores that baseline. A failed save
+keeps the pending order visible and retryable, and duplicate saves are coalesced.
 
-- **A drop landing while a save is in flight is refused, not queued.** `disabled={mutationInProgress}`
-  is passed to every sortable, but `useSortable` evaluates it at drag *start* and `setMutationKind`
-  only schedules a re-render — so a fast second drag could begin before the disable committed, write
-  from a diverging base, and then be clobbered when the first drag's refresh called `setLeafItems`.
-  The guard is therefore at drop time as well.
-- **The surface says when a save is running.** Without it a curator cannot tell, and keeps dragging
-  into the save — which is how the race above was reachable by hand rather than only in theory.
-- **A reorder does not refetch the note list.** `persistLeafItems` passes
-  `refreshBuilder({ skipNotes: kind === "reorder-notes" })`, so the note list is skipped on the reorder
-  path only, because reordering adds, removes and edits no note. **⚠️ Any path that CAN
-  change the note set — add, remove, import — must not pass `skipNotes`.**
+Non-drag mutations remain immediate. Before rename, add, remove, per-note section assignment, or
+`Group by subject` writes, the Builder flushes a dirty order first; if that flush fails, the mutation
+does not proceed and the visible order is retained. This includes the v0.88.0 per-note section
+combobox's 500 ms post-blur writer. `refreshBuilder` also refuses to replace `leafItems` from a
+background refresh while the baseline is dirty, closing the silent-clobber path outside navigation.
+
+Unsaved order installs both a browser-leave guard and an in-app link guard. While Save is in flight,
+the surface announces that dragging is paused and every sortable is visibly disabled. A drop that
+was already active when another mutation began is still refused at `handleLeafDragEnd`.
 
 Both pointer and touch sensors carry an `activationConstraint`, so a drag does not begin on the first
 pixel of movement and does not compete with the section rename input inside the same row.
-
-**⚠️ This is mitigation.** The agreed direction (owner, 2026-08-29) is a deferred *Save order* model
-covering all drag reordering, where dragging performs no write until an explicit save. Everything
-above survives that change rather than being replaced by it.

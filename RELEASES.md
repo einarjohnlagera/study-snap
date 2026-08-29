@@ -117,7 +117,32 @@ does not scope it. It needs a definition step first, and belongs with the connec
 
 ### Shipped
 
-_(nothing yet)_
+- **⚠️ Found at the `/audit-diff`: BOTH real flush call sites were unpinned, while the feature they
+  protect was well covered.** Mutation-testing showed the deferral itself is solid — reverting it fails
+  six tests — but deleting the `savePendingLeafOrder` call from **`handleRemoveLeafNote`** or from
+  **`handleAddLeafNotes`** left all 218 green. Those two are the only paths that bypass
+  `persistLeafItems`, which carries the flush for everything routed through it, so they are exactly the
+  paths needing their own call — and exactly the ones nothing tested. **The two existing flush tests
+  cover rename and the debounced combobox, which reach the flush through `persistLeafItems`**, so they
+  pass without exercising either explicit call. `flushes a pending order before removing a note` and
+  `blocks removing a note when the pending-order flush fails, and says why` now pin them,
+  mutation-verified.
+- **⚠️ Also found: the "say why" half of the flush-failure contract was DEAD CODE in practice.**
+  `savePendingLeafOrder` passed its tailored message — *"Could not save the pending order, so the note
+  was not removed."* — as the **fallback** argument to `makeErrorMessage`, which returns
+  `error.message` whenever one exists. On every real server error the fallback never fires, so the
+  curator saw a bare cause (*"Order write failed"*) and was **never told the action was blocked or that
+  their pending order was still on screen**. The message now **composes consequence with cause**, the
+  consequence leading because that is the actionable half. **Mutation-verified**, and the pre-existing
+  test that asserted the bare server string was rewritten to pin **both halves** rather than loosened.
+
+- **Study Plan Builder order saves are deliberate and race-free.** Dragging notes or sections now
+  updates only local order; **Save order** commits the full plan once and **Discard** restores the
+  last saved order. Non-drag mutations—including the debounced section control—flush a pending order
+  first, so their refresh cannot erase visible work. Failed saves remain retryable, navigation warns
+  before leaving, saving visibly pauses dragging, and the reorder refresh no longer downloads the
+  user's full note list. This removes the per-drop write/refetch cycle that made large plans feel
+  unresponsive and let a second drag race the first save into a corrupted order.
 
 
 ## v0.95.1 - Rendering and Reorder Fixes

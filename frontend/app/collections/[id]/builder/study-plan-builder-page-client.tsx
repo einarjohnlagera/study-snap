@@ -53,7 +53,7 @@ import {
 } from "@/lib/api";
 
 type LoadState = "loading" | "ready" | "error" | "not-found";
-type MutationKind = "add-notes" | "add-subject" | "delete-subject" | "move-note" | "rename-section" | "rename-subject" | "reorder-notes" | "reorder-subjects" | "remove-note" | "set-sections" | null;
+type MutationKind = "add-notes" | "add-subject" | "delete-subject" | "move-note" | "rename-section" | "rename-subject" | "reorder-notes" | "reorder-subjects" | "remove-note" | "save-order" | "set-sections" | null;
 type BuilderSubject = GoalCollectionChildResponse & {
   items: NoteCollectionItem[];
 };
@@ -113,6 +113,15 @@ function getNoteMeta(item: Pick<NoteCollectionItem, "subject" | "courseProgram">
 
 function buildOrderPayload(items: NoteCollectionItem[]) {
   return items.map((item) => ({ noteId: item.noteId, label: item.label ?? null }));
+}
+
+function leafOrdersMatch(left: NoteCollectionItem[], right: NoteCollectionItem[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((item, index) => (
+    item.noteId === right[index]?.noteId && (item.label ?? null) === (right[index]?.label ?? null)
+  ));
 }
 
 function getSectionName(label: string | null | undefined): string {
@@ -1202,6 +1211,12 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [goal, setGoal] = useState<GoalCollectionDetailResponse | null>(null);
   const [subjects, setSubjects] = useState<BuilderSubject[]>([]);
   const [leafItems, setLeafItems] = useState<LeafBuilderNote[]>([]);
+  const [lastSavedLeafItems, setLastSavedLeafItems] = useState<LeafBuilderNote[]>([]);
+  const leafItemsRef = useRef<LeafBuilderNote[]>([]);
+  const lastSavedLeafItemsRef = useRef<LeafBuilderNote[]>([]);
+  const leafOrderDirtyRef = useRef(false);
+  const pendingDragAssignmentCountRef = useRef(0);
+  const leafOrderSavePromiseRef = useRef<Promise<boolean> | null>(null);
   const [notes, setNotes] = useState<NoteListItemResponse[]>([]);
   const [refreshingNotes, setRefreshingNotes] = useState(false);
   const [collapsedSubjectIds, setCollapsedSubjectIds] = useState<Set<string>>(new Set());
@@ -1263,7 +1278,16 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       if (collectionResult.childCount === 0) {
         setGoal(null);
         setSubjects([]);
-        setLeafItems(sortCollectionItemsByPosition(collectionResult.items));
+        const serverItems = sortCollectionItemsByPosition(collectionResult.items);
+        // A background/auth-triggered refresh must never overwrite a visible pending order. Every
+        // deliberate non-drag mutation flushes first; this guard covers refreshes not initiated by
+        // a mutation (including the second auth/profile load on this client page).
+        if (!leafOrderDirtyRef.current) {
+          leafItemsRef.current = serverItems;
+          lastSavedLeafItemsRef.current = serverItems;
+          setLeafItems(serverItems);
+          setLastSavedLeafItems(serverItems);
+        }
         return;
       }
       const goalResult = await getCollectionGoal(collectionId);
@@ -1271,7 +1295,11 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       const nextSubjects = buildSubjects(goalResult, childDetails);
       setGoal(goalResult);
       setSubjects(nextSubjects);
+      leafItemsRef.current = [];
+      lastSavedLeafItemsRef.current = [];
+      leafOrderDirtyRef.current = false;
       setLeafItems([]);
+      setLastSavedLeafItems([]);
       // Collapse every section on the initial load only (see loadBuilder) so a plan
       // with many Subject Plans opens as a scannable header list. Later refreshes
       // (after add/remove/rename) never reseed, so manual expand/collapse state
@@ -1323,6 +1351,8 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   };
 
   const recoverLeafAfterFailure = async (error: unknown, fallback: string, previousItems: LeafBuilderNote[]) => {
+    leafItemsRef.current = previousItems;
+    leafOrderDirtyRef.current = !leafOrdersMatch(previousItems, lastSavedLeafItemsRef.current);
     setLeafItems(previousItems);
     setMutationError(makeErrorMessage(error, fallback));
     try {
@@ -1337,15 +1367,134 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     [addNotesSubjectId, subjects],
   );
   const leafSections = useMemo(() => buildLeafSections(leafItems), [leafItems]);
+  const leafOrderDirty = useMemo(
+    () => !leafOrdersMatch(leafItems, lastSavedLeafItems),
+    [lastSavedLeafItems, leafItems],
+  );
+  leafOrderDirtyRef.current = leafOrderDirty;
+  useEffect(() => {
+    if (!leafOrderDirty) {
+      return;
+    }
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = true;
+    };
+    const handleInAppNavigation = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest("a[href]")) {
+        return;
+      }
+      if (!globalThis.confirm("Leave without saving this order?")) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    globalThis.addEventListener("beforeunload", handleBeforeUnload);
+    globalThis.document.addEventListener("click", handleInAppNavigation, true);
+    return () => {
+      globalThis.removeEventListener("beforeunload", handleBeforeUnload);
+      globalThis.document.removeEventListener("click", handleInAppNavigation, true);
+    };
+  }, [leafOrderDirty]);
   const hasNonBlankLeafSubject = useMemo(
     () => leafItems.some((item) => Boolean(item.subject?.trim())),
     [leafItems],
   );
   const mutationInProgress = mutationKind !== null;
+  const orderSaveInProgress = mutationKind === "save-order";
   // A collection nested under a Goal can never itself become a parent (backend
   // rejects nesting under a non-top-level collection), so only an undecided
   // top-level collection can still choose to become a Goal.
   const canBecomeGoal = leafItems.length === 0 && collection?.parentCollectionId == null;
+
+  const savePendingLeafOrder = async (options: { refreshAfter: boolean; failureMessage: string }): Promise<boolean> => {
+    if (!leafOrderDirtyRef.current) {
+      return true;
+    }
+    if (leafOrderSavePromiseRef.current) {
+      return leafOrderSavePromiseRef.current;
+    }
+    if (mutationKind !== null) {
+      return false;
+    }
+    const pendingItems = leafItemsRef.current;
+    const savePromise = (async () => {
+      setMutationKind("save-order");
+      setMutationError(null);
+      try {
+        try {
+          await setCollectionItemOrder(collectionId, buildOrderPayload(pendingItems));
+        } catch (error) {
+          // Keep both the pending items and their last-saved baseline intact so dirty remains true
+          // and the curator can retry. In particular, do not refresh after a failed write.
+          //
+          // ⚠️ COMPOSE the consequence with the cause; do NOT pass the consequence as a fallback.
+          // makeErrorMessage returns error.message whenever one exists, so a fallback is dead on
+          // every real server error — the curator would see a bare "Order write failed" and never
+          // learn that their action was BLOCKED and their pending order is still on screen. The
+          // consequence leads because that is the part they can act on.
+          const cause = error instanceof Error && error.message ? ` ${error.message}` : "";
+          setMutationError(`${options.failureMessage}${cause}`);
+          return false;
+        }
+        lastSavedLeafItemsRef.current = pendingItems;
+        leafOrderDirtyRef.current = false;
+        setLastSavedLeafItems(pendingItems);
+        if (pendingDragAssignmentCountRef.current > 0) {
+          void trackAnalyticsEvent({
+            eventType: "COLLECTION_SECTION_ASSIGNED",
+            entityId: collectionId,
+            metadata: {
+              collectionId,
+              source: "drag",
+              noteCount: pendingDragAssignmentCountRef.current,
+            },
+          });
+          pendingDragAssignmentCountRef.current = 0;
+        }
+        if (options.refreshAfter) {
+          // The client already owns the authoritative note order, and a reorder cannot change the
+          // note picker. Refresh the collection once without downloading the user's entire library.
+          try {
+            await refreshBuilder({ skipNotes: true });
+          } catch (error) {
+            // The write already succeeded and the local baseline is authoritative. Report only the
+            // refresh problem; restoring dirty here would invite a duplicate write on retry.
+            setMutationError(makeErrorMessage(error, "Order saved, but the builder could not refresh."));
+          }
+        }
+        return true;
+      } finally {
+        setMutationKind(null);
+      }
+    })();
+    leafOrderSavePromiseRef.current = savePromise;
+    try {
+      return await savePromise;
+    } finally {
+      leafOrderSavePromiseRef.current = null;
+    }
+  };
+
+  const handleSaveLeafOrder = async () => {
+    if (!leafOrderDirtyRef.current || mutationKind !== null) {
+      return;
+    }
+    await savePendingLeafOrder({ refreshAfter: true, failureMessage: "Could not save this order." });
+  };
+
+  const handleDiscardLeafOrder = () => {
+    if (mutationKind !== null) {
+      return;
+    }
+    const savedItems = lastSavedLeafItemsRef.current;
+    leafItemsRef.current = savedItems;
+    leafOrderDirtyRef.current = false;
+    pendingDragAssignmentCountRef.current = 0;
+    setLeafItems(savedItems);
+    setMutationError(null);
+  };
 
   const persistLeafItems = async (
     nextItems: LeafBuilderNote[],
@@ -1355,13 +1504,26 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     analyticsSource?: SectionAssignmentSource,
     analyticsNoteCount?: number,
   ) => {
+    // Non-drag writes are intentionally still immediate, but any order the curator can already see
+    // must reach the server first. If that flush fails, this mutation is blocked and the pending
+    // order stays on screen for retry.
+    const flushed = await savePendingLeafOrder({
+      refreshAfter: false,
+      failureMessage: `Could not save the pending order, so this change was not made.`,
+    });
+    if (!flushed) {
+      return;
+    }
     setMutationKind(kind);
     setMutationError(null);
+    leafItemsRef.current = nextItems;
     setLeafItems(nextItems);
     try {
       await setCollectionItemOrder(collectionId, buildOrderPayload(nextItems));
-      // A pure reorder cannot change which notes exist, so it does not need the note list.
-      await refreshBuilder({ skipNotes: kind === "reorder-notes" });
+      lastSavedLeafItemsRef.current = nextItems;
+      leafOrderDirtyRef.current = false;
+      setLastSavedLeafItems(nextItems);
+      await refreshBuilder();
       if (analyticsSource) {
         void trackAnalyticsEvent({
           eventType: "COLLECTION_SECTION_ASSIGNED",
@@ -1383,6 +1545,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     noteId: string,
     targetSectionName: string,
     targetIndex: number,
+    deferSave: boolean,
     analyticsSource?: SectionAssignmentSource,
   ) => {
     const previousItems = leafItems;
@@ -1412,6 +1575,20 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       { ...movedItem, label: targetLabel },
       ...withoutMoved.slice(insertionIndex),
     ].map((item, index) => ({ ...item, position: index }));
+    if (deferSave) {
+      leafItemsRef.current = nextItems;
+      const nextOrderDirty = !leafOrdersMatch(nextItems, lastSavedLeafItemsRef.current);
+      leafOrderDirtyRef.current = nextOrderDirty;
+      if (analyticsSource === "drag" && getSectionName(movedItem.label) !== targetSectionName) {
+        pendingDragAssignmentCountRef.current += 1;
+      }
+      if (!nextOrderDirty) {
+        pendingDragAssignmentCountRef.current = 0;
+      }
+      setLeafItems(nextItems);
+      setMutationError(null);
+      return;
+    }
     void persistLeafItems(nextItems, previousItems, "Could not save note order.", "reorder-notes", analyticsSource);
   };
 
@@ -1462,7 +1639,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       .find((name) => name !== UNGROUPED_SECTION_NAME && normalizeSectionValue(name) === normalizeSectionValue(trimmedLabel));
     const targetSectionName = exactExistingName ?? (trimmedLabel || UNGROUPED_SECTION_NAME);
     const targetSection = leafSections.find((section) => section.name === targetSectionName);
-    moveLeafNote(noteId, targetSectionName, targetSection?.items.length ?? 0, "combobox");
+    moveLeafNote(noteId, targetSectionName, targetSection?.items.length ?? 0, false, "combobox");
   };
 
   const handleSetSectionsFromSubjects = () => {
@@ -1507,14 +1684,23 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     if (!section || currentIndex < 0 || targetIndex < 0 || targetIndex >= section.items.length) {
       return;
     }
-    moveLeafNote(noteId, sectionName, targetIndex);
+    moveLeafNote(noteId, sectionName, targetIndex, true);
   };
 
   const handleRemoveLeafNote = async (noteId: string) => {
-    const previousItems = leafItems;
+    const flushed = await savePendingLeafOrder({
+      refreshAfter: false,
+      failureMessage: "Could not save the pending order, so the note was not removed.",
+    });
+    if (!flushed) {
+      return;
+    }
+    const previousItems = leafItemsRef.current;
     setMutationKind("remove-note");
     setMutationError(null);
-    setLeafItems((current) => current.filter((item) => item.noteId !== noteId));
+    const nextItems = previousItems.filter((item) => item.noteId !== noteId);
+    leafItemsRef.current = nextItems;
+    setLeafItems(nextItems);
     try {
       await removeCollectionItem(collectionId, noteId);
       await refreshBuilder();
@@ -1526,17 +1712,26 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   };
 
   const handleAddLeafNotes = async (targetId: string, noteIds: string[]) => {
-    const previousItems = leafItems;
+    const flushed = await savePendingLeafOrder({
+      refreshAfter: false,
+      failureMessage: "Could not save the pending order, so notes were not added.",
+    });
+    if (!flushed) {
+      throw new Error("Could not save the pending order.");
+    }
+    const previousItems = leafItemsRef.current;
     const noteById = new Map(notes.map((n) => [n.id, n]));
     setMutationKind("add-notes");
     setMutationError(null);
     const optimisticItems = noteIds
       .map((id, offset) => {
         const n = noteById.get(id);
-        return n ? toOptimisticItem(n, leafItems.length + offset) : null;
+        return n ? toOptimisticItem(n, previousItems.length + offset) : null;
       })
       .filter((item): item is NoteCollectionItem => item !== null);
-    setLeafItems((prev) => [...prev, ...optimisticItems]);
+    const nextItems = [...previousItems, ...optimisticItems];
+    leafItemsRef.current = nextItems;
+    setLeafItems(nextItems);
     try {
       await addCollectionItems(targetId, noteIds);
       await refreshBuilder();
@@ -1811,7 +2006,14 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       const nextItems = newOrder
         .flatMap((sName) => leafSections.find((s) => s.name === sName)?.items ?? [])
         .map((item, index) => ({ ...item, position: index }));
-      void persistLeafItems(nextItems, leafItems, "Could not save section order.", "reorder-notes");
+      leafItemsRef.current = nextItems;
+      const nextOrderDirty = !leafOrdersMatch(nextItems, lastSavedLeafItemsRef.current);
+      leafOrderDirtyRef.current = nextOrderDirty;
+      if (!nextOrderDirty) {
+        pendingDragAssignmentCountRef.current = 0;
+      }
+      setLeafItems(nextItems);
+      setMutationError(null);
       return;
     }
 
@@ -1849,6 +2051,7 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
       activeData.noteId,
       targetSectionName,
       targetIndex,
+      true,
       sourceSectionName === targetSectionName ? undefined : "drag",
     );
   };
@@ -1981,18 +2184,36 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              {/*
-                ⚠️ There was NO saving indicator anywhere near the sections, which is what made the
-                race reachable by hand: a curator could not tell a save was running, so they kept
-                dragging into it. The drag handles carry `disabled:opacity-50`, but a disabled
-                handle looks much like an enabled one at 9px. Say it in words instead, in the slot
-                that already explains the interaction.
-              */}
               <p className="text-xs text-foreground/55" role="status">
-                {mutationInProgress
-                  ? `Saving… dragging is paused until this finishes.`
-                  : `Drag notes or ${labels.sectionSingular.toLowerCase()}s to reorganize.`}
+                {orderSaveInProgress
+                  ? "Saving order… dragging is paused until this finishes."
+                  : mutationInProgress
+                    ? "Saving… dragging is paused until this finishes."
+                    : leafOrderDirty
+                      ? "Order not saved. Save or discard your changes."
+                      : `Drag notes or ${labels.sectionSingular.toLowerCase()}s to reorganize.`}
               </p>
+              {leafOrderDirty ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDiscardLeafOrder}
+                    disabled={mutationInProgress}
+                  >
+                    Discard
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void handleSaveLeafOrder()}
+                    disabled={mutationInProgress}
+                  >
+                    {orderSaveInProgress ? "Saving…" : "Save order"}
+                  </Button>
+                </div>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
