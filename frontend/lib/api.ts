@@ -1094,7 +1094,7 @@ export type SimpleMessageResponse = {
 };
 
 export type LinkedLearnerSide = "SUPPORTER" | "LEARNER";
-export type LinkedLearnerStatus = "PENDING" | "ACCEPTED" | "REVOKED";
+export type LinkedLearnerStatus = "PENDING" | "ACCEPTED" | "REVOKED" | "EXPIRED";
 
 export type LinkedLearnerResponse = {
   id: string;

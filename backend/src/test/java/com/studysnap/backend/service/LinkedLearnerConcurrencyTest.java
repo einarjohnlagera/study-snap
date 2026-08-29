@@ -106,7 +106,8 @@ class LinkedLearnerConcurrencyTest {
                     learner_user_id uuid not null,
                     status varchar(16) not null,
                     accepted_at timestamp with time zone,
-                    revoked_at timestamp with time zone
+                    revoked_at timestamp with time zone,
+                    expires_at timestamp with time zone
                 )""");
         jdbcTemplate.execute("""
                 create table linked_learner_grants (
@@ -352,7 +353,11 @@ class LinkedLearnerConcurrencyTest {
 
     private void seedRelationship(LinkedLearnerStatus status) {
         jdbcTemplate.update(
-                "insert into linked_learner_relationships values (?, ?, ?, ?, null, null)",
+                """
+                        insert into linked_learner_relationships
+                            (id, supporter_user_id, learner_user_id, status, accepted_at, revoked_at, expires_at)
+                        values (?, ?, ?, ?, null, null, null)
+                        """,
                 relationshipId, supporterId, learnerId, status.name());
     }
 

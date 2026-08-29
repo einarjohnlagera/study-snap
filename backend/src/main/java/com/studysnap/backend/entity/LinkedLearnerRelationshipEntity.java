@@ -44,4 +44,7 @@ public class LinkedLearnerRelationshipEntity {
 
     @Column(name = "revoked_at")
     private OffsetDateTime revokedAt;
+
+    @Column(name = "expires_at")
+    private OffsetDateTime expiresAt;
 }

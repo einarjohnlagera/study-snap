@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toggle } from "@/components/ui/toggle";
-import { LINKED_LEARNER_STATUS_COPY } from "@/lib/linked-learner-status";
+import { describeSupportedLearnerStatus, LINKED_LEARNER_STATUS_COPY } from "@/lib/linked-learner-status";
 import {
   acceptLinkedLearner,
   ApiRequestError,
@@ -1002,6 +1002,7 @@ export default function LinkedLearnersPage() {
         {!loading && links.length === 0 ? <Card className="p-5 text-sm text-foreground/70">No invitations or connections yet.</Card> : null}
         {links.map((link) => {
           const pending = link.status === "PENDING";
+          const statusDescription = describeSupportedLearnerStatus(link);
           const canAccept = pending && link.incomingInvitation;
           const learnerCanSupplyYear = pending && link.callerRole === "LEARNER" && link.birthYearRequired;
           const supporterCanConsent = pending && link.callerRole === "SUPPORTER" && link.guardianConsentRequired && !link.guardianConsentRecorded;
@@ -1047,6 +1048,12 @@ export default function LinkedLearnersPage() {
               {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "LEARNER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.pausedForConsentLearnerView}</p> : null}
               {pending && link.guardianConsentRequired && !link.guardianConsentRecorded && link.callerRole === "SUPPORTER" ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.pausedForConsentSupporterView}</p> : null}
               {pending && link.guardianConsentRequired && link.guardianConsentRecorded ? <p className="text-sm text-foreground/70">{LINKED_LEARNER_STATUS_COPY.consentRecorded}</p> : null}
+              {link.status === "EXPIRED" ? (
+                <div className="rounded-lg border border-border bg-muted/35 p-3 text-sm text-foreground/70">
+                  <p className="font-medium text-foreground">{statusDescription.headline}</p>
+                  <p className="mt-1">{statusDescription.detail}</p>
+                </div>
+              ) : null}
 
               {link.status === "ACCEPTED" || link.status === "PENDING" ? (
                 <SharingPanel
@@ -1066,7 +1073,7 @@ export default function LinkedLearnersPage() {
                   <ResponsiveActionLink href={`/linked-learners/${link.id}/progress`} action="progress" label="View progress" />
                 ) : null}
                 {canAccept ? <Button type="button" onClick={() => void handleAccept(link)} loading={busyId === link.id} disabled={(link.birthYearRequired && (link.callerRole !== "LEARNER" || !birthYears[link.id]?.trim())) || (supporterCanConsent && consentChecked[link.id] !== true)}>Accept invitation</Button> : null}
-                {link.status !== "REVOKED" ? <Button type="button" variant="destructiveOutline" onClick={() => void handleRevoke(link)} loading={busyId === link.id}>Revoke</Button> : null}
+                {link.status === "ACCEPTED" || link.status === "PENDING" ? <Button type="button" variant="destructiveOutline" onClick={() => void handleRevoke(link)} loading={busyId === link.id}>Revoke</Button> : null}
               </div>
               {link.acceptedAt ? <p className="text-xs text-foreground/55">Accepted {formatDate(link.acceptedAt)}</p> : null}
               {link.revokedAt ? <p className="text-xs text-foreground/55">Revoked {formatDate(link.revokedAt)}</p> : null}

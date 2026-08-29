@@ -143,6 +143,8 @@ studysnap:
     guardian-consent-max-age: ${GUARDIAN_CONSENT_MAX_AGE:17}
     # An email-keyed invitation is a standing offer to whoever controls the address, so it lapses.
     invitation-ttl-days: ${INVITATION_TTL_DAYS:30}
+    # Separate from the invitation/link carrier clock: this dates a relationship request from creation.
+    request-ttl-days: ${REQUEST_TTL_DAYS:30}
     # Two keys on purpose: volume, and per-address so one victim cannot be hammered.
     invites-per-window: ${INVITES_PER_WINDOW:20}
     invites-per-address-per-window: ${INVITES_PER_ADDRESS_PER_WINDOW:3}

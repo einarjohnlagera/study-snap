@@ -448,19 +448,24 @@ public class LinkedLearnerService {
         onboardingGuardService.assertProfileComplete(callerUserId);
         LinkedLearnerRelationshipEntity relationship = requireRelationship(relationshipId);
         requireParty(relationship, callerUserId);
+        if (relationship.getStatus() == LinkedLearnerStatus.REVOKED
+                || relationship.getStatus() == LinkedLearnerStatus.EXPIRED) {
+            // Both terminal states are idempotent. In particular, an expiry is not rewritten as a
+            // deliberate revocation and keeps its honest status for both parties.
+            return toResponse(relationship, callerUserId);
+        }
         // Take the learner lock EXPLICITLY, for ordering rather than for the value. Revocation is
         // now part of the provisional-year lifecycle, and acceptance holds this same lock while it
         // promotes then deletes; without it a revoke could delete the provisional row between
         // acceptance's read and its promotion, leaving an ACCEPTED relationship whose learner has no
         // account-global year — the state requireGrant denies with no remediation path.
         lockAndReadBirthYear(relationship.getLearnerUserId());
-        if (relationship.getStatus() != LinkedLearnerStatus.REVOKED) {
-            // ⚠️ Conditional on BOTH live statuses, so revocation still wins when an acceptance
-            // committed first. Zero rows means it was already REVOKED, which is not an error — revoke
-            // is idempotent — so report the persisted state rather than the stale one.
-            relationshipRepository.markRevokedIfLive(relationshipId, OffsetDateTime.now());
+        // ⚠️ Conditional on BOTH live statuses, so revocation still wins when an acceptance
+        // committed first. Zero rows means a terminal transition won, which is not an error — report
+        // the persisted state rather than the stale one, and do not delete its provisional row.
+        if (relationshipRepository.markRevokedIfLive(relationshipId, OffsetDateTime.now()) == 1) {
+            provisionalBirthYearRepository.deleteForRelationship(relationshipId);
         }
-        provisionalBirthYearRepository.deleteForRelationship(relationshipId);
         return toResponse(requireRelationship(relationshipId), callerUserId);
     }
 
@@ -479,8 +484,10 @@ public class LinkedLearnerService {
                 ? initiatorUserId : counterpartyUserId;
         UUID learnerUserId = initiatorRole == LinkedLearnerSide.LEARNER
                 ? initiatorUserId : counterpartyUserId;
+        OffsetDateTime expiresAt = createdAt.plusDays(
+                properties.getLinkedLearners().getRequestTtlDays());
         int inserted = relationshipRepository.insertPendingIfAbsent(
-                UUID.randomUUID(), supporterUserId, learnerUserId, initiatorRole.name(), createdAt);
+                UUID.randomUUID(), supporterUserId, learnerUserId, initiatorRole.name(), createdAt, expiresAt);
         LinkedLearnerRelationshipEntity relationship = relationshipRepository
                 .findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
                         supporterUserId, learnerUserId, LIVE_STATUSES)

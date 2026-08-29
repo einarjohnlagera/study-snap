@@ -62,3 +62,13 @@ it("reports an active connection without a pending reason", () => {
   const accepted = { ...baseLink, status: "ACCEPTED" as const };
   expect(describeSupportedLearnerStatus(accepted).detail).toBeNull();
 });
+
+it("describes an expired request as timed out rather than revoked", () => {
+  const expired = { ...baseLink, status: "EXPIRED" as const };
+  const status = describeSupportedLearnerStatus(expired);
+
+  expect(status.headline).toMatch(/expired/i);
+  expect(status.detail).toMatch(/new invitation/i);
+  // Pin the semantic class, not one exact sentence: expiry is neutral and never a withdrawal.
+  expect(`${status.headline} ${status.detail}`).not.toMatch(/revok|withdr|ended/i);
+});
