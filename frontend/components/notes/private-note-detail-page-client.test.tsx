@@ -2871,6 +2871,60 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByText("Haven't reviewed the full notes yet? Skim the source material before testing yourself.")).not.toBeInTheDocument();
   });
 
+  it("renders math in the Full Notes body instead of printing LaTeX source", async () => {
+    // ⚠️ Full Notes rendered the body in a bare whitespace-pre-wrap <p> with no markdown and no
+    // math, so a well-formed formula displayed as source. This is a RENDERING gap, not the
+    // corrupted-escape item — the stored content here is valid LaTeX.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      content: "The discharge formula is $Q = \\frac{2}{3} C_d L$ where $C_d$ varies.",
+    });
+    searchParamValues = { tab: "full-notes" };
+    searchParamsMock = createSearchParamsMock();
+
+    const { container } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByRole("tab", { name: "Full Notes" });
+    // KaTeX emits its own markup; assert the class rather than one rendered glyph, so a KaTeX
+    // version bump cannot fail this for the wrong reason.
+    await waitFor(() => expect(container.querySelector(".katex")).not.toBeNull());
+    // ⚠️ Do NOT assert the absence of the TeX source: KaTeX deliberately keeps it in a MathML
+    // <annotation encoding="application/x-tex"> for assistive tech, so it is present and should be.
+    // The property that actually distinguishes rendered from unrendered is that the `$` delimiters
+    // were CONSUMED by the parser rather than printed.
+    const body = container.querySelector("p.whitespace-pre-wrap");
+    expect(body?.textContent ?? "").not.toContain("$");
+    expect(body?.textContent ?? "").toContain("varies");
+  });
+
+  it("returns to the filtered library the reader came from after deleting a note", async () => {
+    // ⚠️ backHref already reads and validates the `ref` param, which is why the BackLink preserved
+    // an active Library filter — while delete hardcoded "/library" and threw it away. The two
+    // disagreed in the same file.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (deleteNote as jest.Mock).mockResolvedValue(undefined);
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+    });
+    searchParamValues = { from: "library", ref: "/library?subject=Biology&sort=recent" };
+    searchParamsMock = createSearchParamsMock();
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete note" }));
+
+    await waitFor(() => expect(deleteNote).toHaveBeenCalledWith("note-1"));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/library?subject=Biology&sort=recent"));
+    expect(pushMock).not.toHaveBeenCalledWith("/library");
+  });
+
   it("sorts Key Concepts by readiness — struggling and due first, mastered last", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({

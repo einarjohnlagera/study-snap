@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { HashScrollListener } from "@/components/navigation/hash-scroll-listener";
+// Safe in a server component: the math module has no hooks, no "use client" and no browser APIs;
+// katex renders to a string. Full Notes is plain text, so there is no markdown tokenizer to fight.
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 import { PublicMiniQuizPreview } from "@/components/notes/public-mini-quiz-preview";
 import { PublicFlashcardsPreview } from "@/components/notes/public-flashcards-preview";
 import { PublicPracticeModeTeaser } from "@/components/notes/public-practice-mode-teaser";
@@ -322,7 +325,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
               <div className="max-w-3xl space-y-4 text-sm leading-7 text-foreground/85">
                 {fullContent.map((block, index) => (
                   <p key={`${note.id}-full-notes-${index}`} className="whitespace-pre-wrap">
-                    {block}
+                    {renderMathText(block)}
                   </p>
                 ))}
               </div>

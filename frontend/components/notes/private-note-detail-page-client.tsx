@@ -29,6 +29,7 @@ import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { AddToCollectionModal } from "@/components/notes/add-to-collection-modal";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
+import { renderMathText } from "@/components/study-pack/quiz-working-solution";
 import { StudyPackGeneratedFeedbackPrompt } from "@/components/feedback/study-pack-generated-feedback-prompt";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { getCollectionLabels } from "@/lib/collection-labels";
@@ -1961,7 +1962,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setDeleting(true);
     try {
       await deleteNote(note.id);
-      navigateTo("/library");
+      // ⚠️ Return to where the reader CAME FROM, not to a bare /library. `backHref` already reads
+      // the `ref` param, validates it against a /library or /collections/ prefix (an open-redirect
+      // guard) and falls back to /library — which is exactly why the BackLink preserves an active
+      // Library filter while deleting used to discard it. Deleting a note opened from a collection
+      // now also returns to that collection rather than dumping the user in the Library.
+      navigateTo(backHref);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not delete note.";
       setError(message);
@@ -2882,8 +2888,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <Card className="space-y-3 p-4 sm:p-6">
                 <h2 className="text-lg font-semibold sm:text-xl">Full Notes</h2>
                 <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                  {/*
+                    ⚠️ Full Notes is PLAIN TEXT, not markdown — `whitespace-pre-wrap` preserves the
+                    generated layout. That is exactly why renderMathText applies directly here and
+                    not to SummaryMarkdown: with no markdown tokenizer in the way, `$x_1 + x_2$`
+                    cannot be mangled into emphasis before the math is found. Same call pattern as
+                    quiz-question-text.tsx, and normalizeBareMath additionally repairs notes stored
+                    before any instruction to emit delimiters.
+                  */}
                   <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">
-                    {fullNoteContent}
+                    {renderMathText(fullNoteContent)}
                   </p>
                 </div>
               </Card>

@@ -523,6 +523,45 @@ describe("StudyPlanBuilderPageClient", () => {
     ]));
   });
 
+  it("does not refetch every note the user owns just to reorder one plan", async () => {
+    // ⚠️ listNotes() fetches the ENTIRE note list. A reorder adds, removes and edits no note, so
+    // refetching it after each drop was the bulk of the unresponsiveness on a large plan.
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    const moveDown = await screen.findByLabelText("Move Skeletal System down");
+    const notesCallsBefore = (listNotes as jest.Mock).mock.calls.length;
+    fireEvent.click(moveDown);
+
+    await waitFor(() => expect(setCollectionItemOrder).toHaveBeenCalledTimes(1));
+    expect((listNotes as jest.Mock).mock.calls.length).toBe(notesCallsBefore);
+  });
+
+  it("says a save is running, because nothing on this surface used to say so", async () => {
+    // The curator could not tell a save was in flight, so they kept dragging into it. The drag
+    // handles carry disabled:opacity-50, but a disabled 9px handle looks like an enabled one.
+    let resolveOrder: (() => void) | undefined;
+    (setCollectionItemOrder as jest.Mock).mockImplementation(() => new Promise<void>((resolve) => {
+      resolveOrder = () => resolve();
+    }));
+    (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
+      { ...collectionItem("note-1", "Skeletal System", 0), label: "Algebra" },
+      { ...collectionItem("note-2", "Muscle Groups", 1), label: "Algebra" },
+    ], { parentCollectionId: null, childCount: 0 }));
+    render(<StudyPlanBuilderPageClient collectionId="leaf-1" />);
+
+    fireEvent.click(await screen.findByLabelText("Move Skeletal System down"));
+
+    expect(await screen.findByText(/Saving/i)).toBeInTheDocument();
+    expect(screen.queryByText(/to reorganize/i)).not.toBeInTheDocument();
+
+    resolveOrder?.();
+    await waitFor(() => expect(screen.getByText(/to reorganize/i)).toBeInTheDocument());
+  });
+
   it("sets every section from note subjects after confirmation", async () => {
     (getCollection as jest.Mock).mockResolvedValue(collectionDetail("leaf-1", "Anatomy Plan", [
       { ...collectionItem("note-1", "Skeletal System", 0), label: "Old", subject: "Biology" },

@@ -1,5 +1,151 @@
 # RELEASES.md - NoteLib
 
+## v0.95.1 - Rendering and Reorder Fixes
+
+**Status: Released** (kicked off and signed off 2026-08-29)
+
+Theme: a generated formula should look like a formula, and dragging a section should not fight the
+save that the last drag started.
+
+### Why this release exists
+
+**A patch, and the scope test is deliberate: only fixes that need no new interaction model and no
+frozen-path change.** Two owner reports from real use on the same afternoon, both investigated
+against code before scoping.
+
+**1. LaTeX renders as raw source, and it is a RENDERING gap rather than the corruption already on
+record.** ⚠️ **Do not close `v0.86.0-note-item-limit-mismatch.md`'s LaTeX item with this** — that one
+is about corrupted escapes in stored content; here the stored content is well-formed
+(`\frac{2}{3}`, `\sqrt{2g}`, `H^{3/2}` all carry correct single backslashes) and simply meets a
+renderer that does no math. **⚠️ THERE ARE TWO DISTINCT GAPS AND THEY NEED DIFFERENT FIXES:**
+`private-note-detail-page-client.tsx:2884` and the public library page render the note body in a bare
+`<p className="whitespace-pre-wrap">` — **no markdown, no math, nothing** — while
+`components/ui/summary-markdown.tsx` runs `react-markdown` + `remark-gfm` with **no math plugin**.
+**Only the first is in this patch.** The plain-text surfaces are the same situation the quiz
+components are already in, so `renderMathText` applies directly; `katex` is already a dependency and
+`normalizeBareMath` additionally repairs older notes stored without delimiters.
+
+**2. Dragging in the Study Plan Builder fights its own saves.** Every drop awaits
+`setCollectionItemOrder` **and then `refreshBuilder()`**, which fetches the collection plus
+**`listNotes()` — the user's entire note list** — then the goal and every child collection. Nothing
+gates dragging while that runs: `DndContext` has no disabled state and `handleLeafDragEnd` never
+checks `mutationKind`, so a second drag computes from current state, writes, and is then clobbered
+when the first drag's refresh lands. Owner-reported as *"reordering the sections much worse"*, and it
+is a genuine race. Both sensors also lack an `activationConstraint`, so a drag begins on the first
+pixel of movement and competes with clicking the section rename input inside the same row.
+
+### Planned Scope
+
+- **1. Render math on the plain-text note surfaces (frontend).** Apply the existing
+  `renderMathText` to the Full Notes body in `private-note-detail-page-client.tsx` and the public
+  library note page. **⚠️ No new dependency and no second math implementation** — this is the call
+  pattern `quiz-question-text.tsx` already uses. **⚠️ These surfaces are plain text, so there is no
+  markdown/emphasis conflict**; that is exactly why they can be fixed now and Summary cannot.
+- **2. Make dragging responsive and stop it racing its own save (frontend).** Add an
+  `activationConstraint` to **both** `PointerSensor` and `TouchSensor`; disable dragging **visibly**
+  while a save is in flight; and stop refetching `listNotes()` on the reorder path. **⚠️ This is
+  MITIGATION, not the agreed fix** — the owner chose a deferred *Save order* model (2026-08-29),
+  which is `v0.96.0`. Everything here survives that rework rather than being thrown away, which is
+  the test applied when choosing it.
+
+#### Added mid-release 2026-08-29, after items 1-2 shipped
+
+**⚠️ Appended when agreed, per this release's own rule.** Two more owner reports from real use, both
+audited before scoping at the owner's explicit request. Both are frontend and neither changes the
+verification tier.
+
+- **3. Deleting a note returns to where the reader came from (frontend).** `handleDeleteNote`
+  hardcodes `navigateTo("/library")` while `backHref` in the **same file** already reads the `ref`
+  param, validates it against a `/library` or `/collections/` prefix and falls back — which is
+  exactly why *Back* preserves an active Library filter and delete discards it.
+- **4. A filter that matches nothing stays a filter (frontend).** Three effects stripped a selected
+  subject, course/program or tag whenever the value was absent from the facet options, so applying a
+  saved filter whose subject no longer has notes silently rendered the **whole library**.
+  **⚠️ The facets are GLOBAL** — `getLibraryFilterOptions()` takes no parameters — so this is not a
+  feedback loop; it fires when a value genuinely no longer exists, which is the state a curator
+  consolidating subjects lands in. **⚠️ The desired behaviour is already built** (*"No notes match
+  these filters"* plus a Clear filters button, and comboboxes rather than `<select>`s that can render
+  an off-list value), so the effects are the only thing preventing it.
+
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Do NOT touch `components/ui/summary-markdown.tsx` in this release.** Fixing Summary math needs
+  `remark-math` for tokenization — `_` is markdown emphasis, so `$x_1 + x_2$` is mangled into `<em>`
+  before any post-processing could see it — and **`app/onboarding/page.tsx` renders
+  `SummaryMarkdown`**, so the change lands on the signup path `[CHECKPOINT — due 2026-09-11]`
+  measures against a 62.4% completion baseline. That freeze lifts 2026-09-11; this is `v0.96.0`.
+- **⚠️ Do NOT build the deferred *Save order* model here.** It is agreed and prompted, and it is a new
+  interaction model with unsaved state — not patch-shaped.
+- **⚠️ Do NOT change what `setCollectionItemOrder` sends or means**, and add no endpoint.
+- **⚠️ `UNGROUPED_SECTION_NAME` stays excluded from section drags**, both as source and as target.
+- **⚠️ Do NOT remove the 500ms debounced combobox writer** at `study-plan-builder-page-client.tsx:443`
+  or its comment — it is a `v0.88.0` mechanism with a recorded reason.
+- **⚠️ Do NOT wholesale-refactor `study-plan-builder-page-client.tsx`** (2282 lines).
+- **⚠️ Never surface the word "label" in UI copy**; the unsectioned bucket stays *"Not in a section"*.
+- **⚠️ No backend change, no migration, no analytics event.**
+
+### Pre-declared at kickoff
+
+- **Pressure test: a single `advisor()` call on the diff.** Two frontend items, no authorization or
+  privacy boundary, no money or quota semantics, no migration — the re-tiered gate in `CLAUDE.md`
+  resolves here without a cold agent.
+- **The `### Planned Scope` heading above is permanent**; delivery appends to `### Shipped`.
+- **No `[CHECKPOINT]` is owed — re-checked at signoff after two items were folded in, not carried over from kickoff.** All four fix behaviour against an owner-reported defect with observed symptoms, rather than shipping ahead of evidence: none rests on a pre-committed rule, an owner override, an ambiguous read or a bootstrap argument, and none changes a surface any live checkpoint measures. **Item 4 removes behaviour**, which was the one worth re-examining — but the empty state and clear affordances it exposes already existed and are now pinned by tests, so nothing ships on an unevidenced premise.
+
+### Shipped
+
+- **Math renders on the plain-text note surfaces.** The Full Notes body and the public library note
+  page rendered the note in a bare `<p className="whitespace-pre-wrap">` — **no markdown, no math** —
+  so a well-formed `$Q = \frac{2}{3} C_d L \sqrt{2g} H^{3/2}$` displayed as source. Both now use the
+  existing `renderMathText`, the same call pattern `quiz-question-text.tsx` uses; `katex` was already
+  a dependency, and `normalizeBareMath` additionally repairs notes stored before any instruction to
+  emit delimiters. **⚠️ Safe in the public page's SERVER component — verified, not assumed:** the math
+  module has no hooks, no `"use client"` and no browser APIs, and KaTeX renders to a string.
+  **⚠️ The test asserts the `$` delimiters were CONSUMED, not that the TeX is absent** — KaTeX
+  deliberately keeps the source in a MathML `<annotation>` for assistive tech, so asserting its
+  absence would have failed for the wrong reason. **Mutation-verified:** reverting to `{fullNoteContent}`
+  fails `renders math in the Full Notes body instead of printing LaTeX source`.
+- **Dragging in the Builder no longer fights its own save.** Three changes, each surviving the
+  `v0.96.0` deferred-save rework. **(1)** Both `PointerSensor` and `TouchSensor` gained an
+  `activationConstraint`, so a drag no longer begins on the first pixel and stops competing with the
+  section rename input inside the same row. **(2) A drop landing while a save is in flight is now
+  refused.** `disabled={mutationInProgress}` already existed, but `useSortable` evaluates it at drag
+  *start*, and `setMutationKind` only schedules a re-render — so a fast second drag began before the
+  disable committed. The guard is at drop time, which is the hole that was actually reachable.
+  **(3) A reorder no longer refetches `listNotes()`** — the user's entire note list — since a reorder
+  adds, removes and edits no note. **⚠️ Paths that CAN change the note set must not pass `skipNotes`.**
+- **⚠️ The surface never said a save was running, and that is what made the race reachable by hand.**
+  There was no saving indicator anywhere near the sections; the drag handles carry
+  `disabled:opacity-50`, but a disabled 9px handle looks much like an enabled one. The line that
+  explains the interaction now says so in words while a mutation is in flight. **Mutation-verified:**
+  removing it fails `says a save is running, because nothing on this surface used to say so`, and
+  restoring the refetch fails `does not refetch every note the user owns just to reorder one plan`.
+
+- **Deleting a note no longer throws away the filter you came from.** Delete now navigates to
+  `backHref`, the same validated return target the BackLink uses — so an active Library filter
+  survives, and a note opened from a collection returns to that collection instead of dumping the
+  reader in the Library. **Mutation-verified:** restoring the hardcoded `/library` fails
+  `returns to the filtered library the reader came from after deleting a note`.
+- **A filter that matches nothing now shows an empty library rather than silently clearing itself.**
+  The three facet-pruning effects are removed, with a comment recording why they must not come back:
+  they predate `e47ed9a6`'s move to server-side filtering, when facets were derived client-side from
+  loaded notes and an off-list value could not be rendered meaningfully. Global facets turned that
+  pruning from a rendering constraint into a silent discard of an explicit choice.
+  **⚠️ Each filter control now also renders while its own filter is ACTIVE**, not only while its
+  facet list is non-empty — otherwise preserving a nothing-matching filter would hide the control for
+  the last subject in a library and leave its clear button unreachable.
+  **⚠️ `filterOptionsLoaded` went with the effects**: they were its only readers, leaving state
+  written twice and read nowhere. **Mutation-verified:** restoring the subject reset fails
+  `keeps a filter that matches nothing instead of falling back to the whole library`; restoring the
+  facet-only gate fails `keeps the subject control reachable while its filter is active but its
+  facet list is empty`.
+- **⚠️ That second test first PASSED FOR THE WRONG REASON and was corrected.** `availableSubjects`
+  merges `listSubjects("mine")` with the filter-option facets, and the shared test helper's
+  `mockLibrarySubject` falls back to `"General"` for a subject-less note — so a fixture of notes
+  without subjects still produced a non-empty list, and the gate mutation survived. Both inputs are
+  now emptied explicitly. Caught by mutation-testing the assertion rather than trusting it green.
+
 ## v0.95.0 - Redemption Integrity
 
 **Status: Released** (kicked off and signed off 2026-08-29)

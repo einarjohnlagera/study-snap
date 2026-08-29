@@ -113,6 +113,18 @@ Error and empty states:
 
 `Summary`, `Key Concepts`, `Quiz`, and `Full Notes` are view tabs, not action buttons.
 
+**Math rendering differs by tab, and the split is deliberate rather than an oversight to "fix".**
+`Full Notes` renders the note body as PLAIN TEXT (`whitespace-pre-wrap` preserves the generated
+layout), so it passes through `renderMathText` — the same helper the quiz surfaces use — which
+handles `$…$`, `$$…$$` and `\[…\]`, and repairs undelimited legacy content via `normalizeBareMath`.
+The public library note page does the same. **⚠️ `Summary` does NOT yet render math**, because it
+goes through `SummaryMarkdown` (`react-markdown` + `remark-gfm`), and markdown makes the naive fix
+wrong: `_` is emphasis, so `$x_1 + x_2$` becomes `<em>` before any post-processing could find the
+math. That needs `remark-math` at the tokenizer, and `app/onboarding/page.tsx` renders
+`SummaryMarkdown`, so the change lands on the signup path `[CHECKPOINT — due 2026-09-11]` measures.
+**⚠️ None of this is the corrupted-escape issue** in `v0.86.0-note-item-limit-mismatch.md`; the
+content here is well-formed and was simply never rendered.
+
 Rules:
 
 - keep `Summary` as the default tab
