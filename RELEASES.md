@@ -2,7 +2,7 @@
 
 ## v0.96.0 - Authoring Integrity
 
-**Status: In Progress** (kicked off 2026-08-29)
+**Status: Released** (kicked off and signed off 2026-08-29)
 
 Theme: what the product generates, names and shows should be correct — and building a plan should not
 fight the save the last drag started.
@@ -260,6 +260,27 @@ does not scope it. It needs a definition step first, and belongs with the connec
   user's full note list. This removes the per-drop write/refetch cycle that made large plans feel
   unresponsive and let a second drag race the first save into a corrupted order.
 
+
+
+### Known limitations
+
+- **⚠️ The escape repair deliberately leaves `\n` and `\r` commands broken.** A newline is legitimate
+  content, and `"sentence\nWord"` is indistinguishable from a mangled `\nu`, so repairing it would
+  destroy real line breaks to fix a rarer corruption. Commands beginning with `n` or `r` — `\nu`,
+  `\neq`, `\rho`, `\rightarrow` — stay corrupted if a model emits them unescaped. **The prompt rule is
+  the primary fix and covers them; the repair is defence in depth for content already in flight.**
+- **⚠️ The repair fixes FUTURE generation only. Already-corrupted notes are not repaired.** Any note
+  containing `imes` or `rac` predates this release and stays as it is. **No bulk migration was written**,
+  deliberately — and the corruption is invisible to length validation, so there is no count of how many
+  exist. Sizing that is a production read nobody has run.
+- **⚠️ The curated-title rule ships in ONE prompt, not two.** `note-generation-developer.txt` is
+  untouched pending the §5 feedback-loop read, which decides whether the note body's first line reaches
+  the Study Pack title. Until then, the note **body's** heading is ungoverned by the new rule.
+- **⚠️ Summary maths renders on the nine `SummaryMarkdown` consumers only.** Any other surface printing
+  raw markdown is unaffected, and no audit of such surfaces was performed in this release.
+- **The `[CHECKPOINT — due 2026-09-28]` metric is non-authoritative by construction** — `% in %` matches
+  legitimate titles, so the two-stage rule (count, hand-check a sample, close permanently if legitimate)
+  is stated in the row before the read rather than decided after it.
 
 ## v0.95.1 - Rendering and Reorder Fixes
 

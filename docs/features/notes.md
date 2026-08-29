@@ -112,7 +112,7 @@ Course / Program(s) is one discovery axis, never a primary program plus a second
   - **A learner may be shown the Applicable Programs their note carries, read-only, with their provenance; they may never author, add, remove or edit them (ratified 2026-08-10, `ADR-001`).** The earlier flat "no learner-facing Applicable Programs UI" was about authoring **controls** — `v0.71.1` provides the permitted read-only provenance display so a learner can explain why their own note is filed where it is. Still forbidden and unchanged: any learner-facing control that edits programs, any derivation of a row from a learner's personal string, the `source` provenance column, and re-derivation or clearing of rows on a learner save.
 - The existing `GET /course-programs` scopes now include program names found only through the join while retaining their `List<String>` contract. Because the authoring Course / Program comboboxes share those suggestions, an author may see a catalog program reached only through applicability; that intentional widening does not couple the legacy string to the curated set.
 
-`DomainContext` is a closed architectural enum with exactly eight ratified values:
+`DomainContext` is a closed architectural enum, **curated and governed by `ADR-001` rather than fixed at a number** — eight values as of Release A, listed below. Adding one is an architectural decision with an evidence bar; see that ADR's *Domain Context governance* section, and do not restate the bar here:
 
 - `ENGINEERING_MATHEMATICS` — Engineering Mathematics
 - `ENGINEERING_SCIENCES` — Engineering Sciences
