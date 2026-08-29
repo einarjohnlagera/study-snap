@@ -29,7 +29,15 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
 ## Output structure
 
 The LLM should produce:
-- title
+- title — **names the knowledge the material teaches, not the curriculum container it sits in.** The
+  prompt's `Title` rule is deliberately **semantic**, not a wording ban: disciplinary language belongs in
+  a title when it is part of the knowledge (*"Nursing Management of Acute Asthma"*, *"Structural
+  Applications of Differential Equations"* are both **correct**) and does not when it only names who the
+  material is for (*"Time Value of Money in Accountancy"*). **⚠️ Never compress this into "'in X' is
+  bad"** — that rule would break the two correct titles above. It is universal: there is **no
+  per-program or per-discipline title logic**. **⚠️ The rule is unconditional and therefore also changes
+  the AI's default suggestion on learner-facing generation paths — that is intended**, and it governs
+  what the AI *proposes*, never what a learner may name their own note.
 - summary (plain prose + optional markdown comparison table + optional Common Misconceptions paragraph)
 - subject
 - tags

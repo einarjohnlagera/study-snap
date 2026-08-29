@@ -117,6 +117,30 @@ does not scope it. It needs a definition step first, and belongs with the connec
 
 ### Shipped
 
+- **Curated note titles name the knowledge, not the curriculum container.** One unconditional `Title`
+  section added to the shared Study Pack prompt (`developer.txt`), which had **no title rules at all** —
+  the schema declared the field and nothing governed it. Written in the file's existing register: bare
+  section header, terse lowercase bullets, contrastive examples like the `Subject` section already uses.
+  **⚠️ It is unconditional by decision, so it also changes the AI's default suggestion on learner-facing
+  paths — intended, and it governs what the AI PROPOSES, never what a learner may name their own note.**
+- **⚠️ The rule is SEMANTIC, and the test pins that rather than its prose.** The failure mode is a later
+  edit compressing *"name the knowledge, not the curriculum container"* into *"'in X' is bad"* — which
+  would be **actively wrong**, because *"Nursing Management of Acute Asthma"* and *"Structural
+  Applications of Differential Equations"* are **correct** titles that a wording ban destroys. The prompt
+  therefore carries both directions of example plus an explicit line that this is *a judgment about
+  meaning, not about wording*, and `studyPackPromptTeachesTitleSemanticsRatherThanAWordingBan` asserts
+  both halves of the distinction and both positive cases. **Mutation-verified:** replacing the semantic
+  block with `do not append "in <Course/Program>"` fails exactly that test.
+- **⚠️ `note-generation-developer.txt` is deliberately untouched, and the test deliberately does NOT
+  assert its absence.** The rule stays out of it until the feedback-loop read decides whether the note
+  body's first line reaches the title; adding it afterwards is **correct work**, so a test forbidding it
+  would block the right future change. The reason is recorded in the test's own doc comment instead.
+- **Feature docs corrected where the chain is easy to misread.** `bulk-generation.md` now records that
+  the curator's typed topic is written to `notes.title` and then **overwritten** by
+  `applyBulkGeneratedMetadataToNote`, so `developer.txt` decides curated titles — an earlier reading of
+  the same code concluded the opposite. `study-pack-generation.md` records the semantic rule and the
+  never-compress warning beside the `title` field it governs.
+
 - **Domain Context doctrine recorded — and `ADR-001`'s selection rule is untouched, which was the point.**
   The direction proposed selecting *"the narrowest existing authoring tradition"*; that is the opposite
   instruction to the ADR's **coarsest-label** rule, and its six conjunctive criteria are an enlarged form
