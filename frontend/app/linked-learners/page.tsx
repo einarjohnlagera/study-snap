@@ -328,12 +328,21 @@ export default function LinkedLearnersPage() {
     void loadInvitations();
   }, [loadInvitations]);
 
-  const loadInvitationLinks = useCallback(async () => {
+  const loadInvitationLinks = useCallback(async (preserveOnError = false) => {
     try {
       setInvitationLinks(await listLinkedLearnerInvitationLinks());
       setInvitationLinkError(null);
     } catch (loadError) {
-      setInvitationLinkError(errorMessage(loadError, "Could not load invitation links."));
+      if (preserveOnError) {
+        // A focus refresh is opportunistic. Keep the last server-confirmed list visible through a
+        // transient background failure, and say plainly that it may now be stale.
+        const message = errorMessage(loadError, "Could not refresh invitation links.");
+        setInvitationLinkError(`${message} Showing the last loaded list.`);
+      } else {
+        // A failed invitation-link load must not render an empty or partial list as if complete.
+        setInvitationLinks([]);
+        setInvitationLinkError(errorMessage(loadError, "Could not load invitation links."));
+      }
     } finally {
       setInvitationLinksLoading(false);
     }
@@ -341,6 +350,16 @@ export default function LinkedLearnersPage() {
 
   useEffect(() => {
     void loadInvitationLinks();
+  }, [loadInvitationLinks]);
+
+  useEffect(() => {
+    const refreshInvitationLinks = () => {
+      void loadInvitationLinks(true);
+    };
+    globalThis.addEventListener("focus", refreshInvitationLinks);
+    return () => {
+      globalThis.removeEventListener("focus", refreshInvitationLinks);
+    };
   }, [loadInvitationLinks]);
 
   const handleCreateInvitationLink = async (event: React.FormEvent) => {
@@ -356,11 +375,11 @@ export default function LinkedLearnersPage() {
     setCreatingInvitationLink(true);
     setInvitationLinkError(null);
     try {
-      const created = await createLinkedLearnerInvitationLink(
+      await createLinkedLearnerInvitationLink(
         linkCreatorRole,
         linkCreatorRole === "LEARNER" && rawYear ? Number(rawYear) : null,
       );
-      setInvitationLinks((current) => [created, ...current]);
+      await loadInvitationLinks();
       setLinkBirthYear("");
       setNotice("Invitation link created. It can be used once.");
     } catch (createError) {
@@ -384,11 +403,16 @@ export default function LinkedLearnersPage() {
     setInvitationLinkError(null);
     try {
       await revokeLinkedLearnerInvitationLink(link.id);
-      // No optimistic removal: a failed privacy write must leave the last server-confirmed state.
-      setInvitationLinks((current) => current.filter((item) => item.id !== link.id));
+      await loadInvitationLinks();
       setNotice("Invitation link revoked.");
     } catch (revokeError) {
-      setInvitationLinkError(errorMessage(revokeError, "Could not revoke the invitation link."));
+      if (revokeError instanceof ApiRequestError && revokeError.status === 404) {
+        await loadInvitationLinks();
+        setNotice("Invitation link was already gone.");
+      } else {
+        // No optimistic removal: a failed privacy write leaves the last server-confirmed list.
+        setInvitationLinkError(errorMessage(revokeError, "Could not revoke the invitation link."));
+      }
     } finally {
       setBusyInvitationLinkId(null);
     }

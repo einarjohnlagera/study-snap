@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { BirthYearInput } from "@/components/linked-learners/birth-year-input";
 import { BackLink } from "@/components/ui/back-link";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   redeemLinkedLearnerInvitationLink,
@@ -23,6 +24,10 @@ import {
   clearLinkedLearnerInvitationIntentCookie,
   setLinkedLearnerInvitationIntentCookie,
 } from "@/lib/linked-learner-invitation-intent";
+import {
+  getLinkedLearnerRedemptionCompletion,
+  setLinkedLearnerRedemptionCompletion,
+} from "@/lib/linked-learner-redemption-completion";
 
 const MINIMUM_BIRTH_YEAR = 1900;
 
@@ -35,6 +40,7 @@ export default function LinkedLearnerInvitationPage() {
   const [loading, setLoading] = useState(true);
   const [redeeming, setRedeeming] = useState(false);
   const [redeemed, setRedeemed] = useState(false);
+  const [alreadySent, setAlreadySent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -67,6 +73,18 @@ export default function LinkedLearnerInvitationPage() {
       })
       .catch((resolveError) => {
         if (!cancelled) {
+          try {
+            const completion = getLinkedLearnerRedemptionCompletion();
+            if (completion?.token === token && completion.userId === authUser.id) {
+              // ⚠️ Do NOT clear the marker here. Clearing on first read makes this fix work
+              // exactly once: the next reload falls through to the dead-link error, so the same
+              // action gets two contradictory answers. Let it expire on its own max-age instead.
+              setAlreadySent(true);
+              return;
+            }
+          } catch {
+            // A blocked cookie jar must fail closed to the generic not-found state.
+          }
           setError(resolveError instanceof Error
             ? resolveError.message : "This invitation link is not available.");
         }
@@ -100,6 +118,11 @@ export default function LinkedLearnerInvitationPage() {
       const result = await redeemLinkedLearnerInvitationLink(token, parsedBirthYear);
       if (result.status !== "PENDING") {
         throw new Error("The connection was not created safely. Please contact support.");
+      }
+      try {
+        setLinkedLearnerRedemptionCompletion(token, getAuthUser()?.id ?? "");
+      } catch {
+        // This marker only improves this browser's reload copy; it must never affect redemption.
       }
       setRedeemed(true);
     } catch (redeemError) {
@@ -156,15 +179,29 @@ export default function LinkedLearnerInvitationPage() {
             </Button>
           </>
         ) : null}
-        {redeemed ? (
+        {redeemed || alreadySent ? (
           <div className="space-y-3">
             <h2 className="text-lg font-semibold">Request sent</h2>
-            <p className="text-sm text-foreground/70">
-              The connection is pending until the person who created the link confirms it. If you
-              supplied a new birth year, it stays with this pending request until then and is deleted
-              if either person revokes first. No learning activity or progress is shared yet.
-            </p>
-            <Button type="button" onClick={() => router.push("/linked-learners")}>View learning connections</Button>
+            {redeemed ? (
+              // Stated immediately after the redemption call returned PENDING, which is asserted
+              // above — so this branch may describe the connection's state.
+              <p className="text-sm text-foreground/70">
+                The connection is pending until the person who created the link confirms it. If you
+                supplied a new birth year, it stays with this pending request until then and is
+                deleted if either person revokes first. No learning activity or progress is shared
+                yet.
+              </p>
+            ) : (
+              // ⚠️ A RELOAD KNOWS ONLY THAT THIS BROWSER SENT THE REQUEST — never its state now.
+              // The creator may have confirmed since, so asserting "pending" or "nothing is shared
+              // yet" here would be the same defect this item exists to close: reporting state the
+              // surface cannot see. State the past fact and point at the page that does know.
+              <p className="text-sm text-foreground/70">
+                You already sent this request from this browser. Open your learning connections to
+                see where it stands now.
+              </p>
+            )}
+            <Link className={buttonVariants({})} href="/linked-learners">View learning connections</Link>
           </div>
         ) : null}
       </Card>

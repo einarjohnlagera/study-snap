@@ -159,6 +159,31 @@ is `v0.96.0` and not folded in beside a security migration.
   alongside the write, lookup, promotion and cleanup predicates. An unconfirmed redemption therefore
   leaves no account-level birth-year trace, and acceptance remains the consequential act.
 
+- **Invitation-link surfaces refresh the state they claim to show.** The creator's live-link list
+  now refetches after creation, after revocation and whenever the page regains focus; a foreground
+  load failure clears the list, while a failed focus refresh keeps the last loaded list visible and
+  labels it as such. A revoke that finds the link already gone refetches and reports that outcome
+  without error styling. This **shrinks** the window in which Copy can hand out a token that died
+  elsewhere; it cannot close that window because copying to the clipboard is a local action with no
+  token validation at copy time. After a successful redemption, a separate short-lived client marker
+  scoped to that token and redeemer user id lets only the same browser user see a “Request sent”
+  acknowledgement on reload. The marker is never inferred from the token response, and a missing or
+  blocked marker preserves the existing generic not-found state — a different user on the same
+  device always gets the generic surface, which has its own test.
+- **⚠️ Found at the `/audit-diff`, and the second one is this item's own defect class.**
+  **(1) The marker was cleared on first read, so the fix worked exactly once** — reload and you saw
+  “Request sent”, reload again and you were back to the dead-link error, two contradictory answers to
+  one action. It now expires on its own max-age instead. **(2) The reload surface asserted that the
+  connection *"is pending"* and that *"no learning activity or progress is shared yet"* — state a
+  reload cannot see**, since the creator may have confirmed in the meantime. That is precisely the
+  report-what-you-cannot-see defect this item exists to close, reintroduced inside the fix for it.
+  The reload branch now states only the past fact — this browser sent the request — and points at
+  the connections page, which does know. The immediate post-redemption branch keeps its confident
+  copy, because there the server's `PENDING` response was just asserted. **Both mutation-verified:**
+  restoring clear-on-read fails `shows the already-sent state after the same user reloads a redeemed
+  token`; restoring the pending copy fails `does not assert the connection's current state on a
+  reload`, which pins the class rather than one sentence.
+
 - **A pending connection stops promising that sharing will resume.** The paused banner told both
   parties that *"existing sharing choices resume when the connection is active"* — false for a
   `PENDING` row that was never accepted, which is exactly the state a link redemption newly creates:
