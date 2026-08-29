@@ -88,6 +88,36 @@ is `v0.96.0` and not folded in beside a security migration.
   `v0.94.0`. **⚠️ Disclosure only** — no quota, limit, counter or metering change, and the Challenge Quiz **mode
   name** stays distinct from the quota **label** everywhere, which a regression test pins.
 
+#### Added mid-release 2026-08-29, after items 1-4 shipped
+
+**⚠️ Appended at the moment they were agreed, per this release's own rule.** All three are carried
+`v0.94.0` frontend limitations in the surfaces this release already touched. **⚠️ The fold was
+chosen for its VERIFICATION COST, not just its size:** these are frontend-only and sit in files the
+pre-declared cold agent must read anyway for item 1's frontend half, so the tier stays at **one
+scoped cold agent**. **⚠️ `revoke()` not revoking grant rows was deliberately NOT folded** — it
+touches grants and authorization, which would move this release to the full three-agent test, and it
+is recorded as inert (`requireGrant` demands `ACCEPTED`, and a re-invite mints a new relationship
+id). Paying the heavy tier for a defect with no user-visible effect is the wrong trade; it stays in
+`v0.94.0`'s Known limitations.
+
+- **5. The link creator is told they are the one who must act (frontend).**
+  `linked-learner-status.ts` documents that *"since `v0.90.0`, `PENDING` no longer means waiting for
+  someone to accept."* **⚠️ `v0.94.0` made that premise partly FALSE again** — link redemption
+  creates `PENDING` immediately with the redeemer as initiator — so a redeemed link fell to the
+  neutral `UNRESOLVED` branch and its creator was told only that the connection was *"not active
+  yet"*, never that they were holding it up. **⚠️ Unlike the `acceptedAt` case in item 2c, a correct
+  discriminator EXISTS:** `incomingInvitation` is the server's own `PENDING && caller is the invited
+  party`. **⚠️ The new branch goes AFTER the blocker branches** — a birth year or outstanding consent
+  is the nearer thing to resolve, and naming confirmation first would send someone to a button that
+  cannot complete yet.
+- **6. Withdrawal reports the server's outcome and refreshes both lists (frontend).**
+  *"Invitation withdrawn."* was asserted unconditionally, and only the invitation list reloaded. The
+  counterparty may have accepted between render and click, so the message was a claim the client
+  never verified and a connection created in that window stayed invisible until a manual reload.
+- **7. Invitation-link feedback renders inside the link card (frontend).** It went to the page-level
+  notice two cards below the action, which reads as no feedback at all.
+
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Acceptance stays LOAD-BEARING** (`v0.89.0`) — holding or redeeming a link never by itself creates an
@@ -221,6 +251,21 @@ is `v0.96.0` and not folded in beside a security migration.
   not to trust it over the files. The **gap is real and was verified in code** (the modal disclosed a
   quota meter named *AI quizzes* but never that the generated content is AI-authored), so the item
   shipped on its own merits; the citation, not the finding, was wrong.
+
+- **A redeemed link now names the person who must act.** The status vocabulary gained an
+  `AWAITING_CALLER_CONFIRMATION` reason keyed on `incomingInvitation`, ordered **after** the
+  birth-year and guardian-consent branches so the nearer blocker still wins. The stale doc comment
+  claiming `PENDING` never means "waiting for someone to accept" is corrected in place rather than
+  deleted, since it remains true for the email path and false only for link redemptions.
+  **Mutation-verified:** dropping the branch fails `tells the link creator that they are the one who
+  must confirm`, and a second test pins the ordering.
+- **Withdrawal stopped asserting an outcome it had not verified**, reporting the server's own message
+  and refreshing the connection list alongside the invitation list. **Mutation-verified:** restoring
+  the hardcoded string and the single refresh fails `reports the server's withdrawal outcome and
+  refreshes the connection list too`.
+- **Invitation-link feedback moved into the link card.** **The test pins document POSITION** — the
+  message must appear before the next card begins — rather than a container the markup could reshape.
+  **Mutation-verified:** routing it back to the page-level notice fails that test.
 
 ### Known limitations
 

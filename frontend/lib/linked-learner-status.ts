@@ -4,11 +4,19 @@ import type { LinkedLearnerResponse } from "@/lib/api";
  * ONE vocabulary for why a learning connection is not active, shared by the Learning Connections
  * page and the Dashboard card.
  *
- * ⚠️ Since v0.90.0 a relationship row is created only at ACCEPTANCE, so `PENDING` no longer means
- * "waiting for someone to accept". It means the invitation WAS accepted and guardian consent is
- * outstanding, or an active connection was paused by a birth-year correction. Telling a supporter
- * their invitation still needs accepting is therefore false on the common path — and it is exactly
- * the copy that shipped.
+ * ⚠️ Since v0.90.0 an EMAIL invitation creates a relationship row only at ACCEPTANCE, so for that
+ * path `PENDING` does not mean "waiting for someone to accept". It means the invitation WAS
+ * accepted and guardian consent is outstanding, or an active connection was paused by a birth-year
+ * correction. Telling that supporter their invitation still needs accepting is false — and it is
+ * exactly the copy that shipped.
+ *
+ * ⚠️ v0.94.0 MADE THAT PREMISE PARTLY FALSE AGAIN, which is why the branch below exists. Redeeming
+ * a shareable invitation link creates a `PENDING` row immediately, with the REDEEMER as initiator
+ * and the link's creator as the party who must confirm. For those rows `PENDING` means exactly
+ * "waiting for someone to accept" — and that someone is the caller. Falling through to `UNRESOLVED`
+ * told a creator whose link had just been redeemed only that the connection was "not active yet",
+ * never that they were the one holding it up. `incomingInvitation` is the server's own
+ * `PENDING && caller is the invited party`, so it identifies that case exactly.
  *
  * ⚠️ Rows written before the V122 migration DO carry the old meaning, with nothing marking them.
  * `UNRESOLVED` gives them neutral copy that is true either way. **It is not the ONLY branch such a
@@ -20,12 +28,17 @@ export type LinkedLearnerPendingReason =
   | "BIRTH_YEAR_REQUIRED"
   | "GUARDIAN_CONSENT_REQUIRED"
   | "GUARDIAN_CONSENT_RECORDED"
+  | "AWAITING_CALLER_CONFIRMATION"
   | "UNRESOLVED";
 
 export function resolvePendingReason(link: LinkedLearnerResponse): LinkedLearnerPendingReason {
   if (link.birthYearRequired) return "BIRTH_YEAR_REQUIRED";
   if (link.guardianConsentRequired && !link.guardianConsentRecorded) return "GUARDIAN_CONSENT_REQUIRED";
   if (link.guardianConsentRequired && link.guardianConsentRecorded) return "GUARDIAN_CONSENT_RECORDED";
+  // ⚠️ AFTER the blocker branches on purpose. A birth year or an outstanding consent is the NEARER
+  // thing to resolve, and naming confirmation first would send the caller to a button that cannot
+  // complete yet.
+  if (link.incomingInvitation) return "AWAITING_CALLER_CONFIRMATION";
   return "UNRESOLVED";
 }
 
@@ -71,6 +84,11 @@ export function describeSupportedLearnerStatus(link: LinkedLearnerResponse): {
         // ⚠️ Says only that the connection is finishing. It must NOT promise progress: since
         // v0.93.0 that requires a separate grant the learner alone can give.
         detail: "This connection is finishing activation.",
+      };
+    case "AWAITING_CALLER_CONFIRMATION":
+      return {
+        headline: "Waiting for you to confirm",
+        detail: "Someone opened your invitation link. Confirm the request to activate this connection.",
       };
     default:
       // ⚠️ Neutral on purpose: this branch must not assert either meaning of PENDING, because a

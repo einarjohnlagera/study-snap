@@ -303,6 +303,9 @@ export default function LinkedLearnersPage() {
   const [invitationLinks, setInvitationLinks] = useState<LinkedLearnerInvitationLinkResponse[]>([]);
   const [invitationLinksLoading, setInvitationLinksLoading] = useState(true);
   const [invitationLinkError, setInvitationLinkError] = useState<string | null>(null);
+  // ⚠️ Separate from the page-level `notice`, which renders two cards below this one — far enough
+  // that feedback for a link action read as no feedback at all.
+  const [invitationLinkNotice, setInvitationLinkNotice] = useState<string | null>(null);
   const [linkCreatorRole, setLinkCreatorRole] = useState<LinkedLearnerSide>("SUPPORTER");
   const [linkBirthYear, setLinkBirthYear] = useState("");
   const [creatingInvitationLink, setCreatingInvitationLink] = useState(false);
@@ -374,6 +377,7 @@ export default function LinkedLearnersPage() {
     }
     setCreatingInvitationLink(true);
     setInvitationLinkError(null);
+    setInvitationLinkNotice(null);
     try {
       await createLinkedLearnerInvitationLink(
         linkCreatorRole,
@@ -381,7 +385,7 @@ export default function LinkedLearnersPage() {
       );
       await loadInvitationLinks();
       setLinkBirthYear("");
-      setNotice("Invitation link created. It can be used once.");
+      setInvitationLinkNotice("Invitation link created. It can be used once.");
     } catch (createError) {
       setInvitationLinkError(errorMessage(createError, "Could not create the invitation link."));
     } finally {
@@ -390,9 +394,11 @@ export default function LinkedLearnersPage() {
   };
 
   const handleCopyInvitationLink = async (link: LinkedLearnerInvitationLinkResponse) => {
+    setInvitationLinkError(null);
+    setInvitationLinkNotice(null);
     try {
       await globalThis.navigator.clipboard.writeText(link.url);
-      setNotice("Invitation link copied.");
+      setInvitationLinkNotice("Invitation link copied.");
     } catch {
       setInvitationLinkError("Could not copy the link. Select the URL and copy it manually.");
     }
@@ -401,14 +407,15 @@ export default function LinkedLearnersPage() {
   const handleRevokeInvitationLink = async (link: LinkedLearnerInvitationLinkResponse) => {
     setBusyInvitationLinkId(link.id);
     setInvitationLinkError(null);
+    setInvitationLinkNotice(null);
     try {
       await revokeLinkedLearnerInvitationLink(link.id);
       await loadInvitationLinks();
-      setNotice("Invitation link revoked.");
+      setInvitationLinkNotice("Invitation link revoked.");
     } catch (revokeError) {
       if (revokeError instanceof ApiRequestError && revokeError.status === 404) {
         await loadInvitationLinks();
-        setNotice("Invitation link was already gone.");
+        setInvitationLinkNotice("Invitation link was already gone.");
       } else {
         // No optimistic removal: a failed privacy write leaves the last server-confirmed list.
         setInvitationLinkError(errorMessage(revokeError, "Could not revoke the invitation link."));
@@ -443,9 +450,14 @@ export default function LinkedLearnersPage() {
     setBusyId(invitation.id);
     setError(null);
     try {
-      await revokeLinkedLearnerInvitation(invitation.id);
-      setNotice("Invitation withdrawn.");
-      await loadInvitations();
+      // ⚠️ Report the SERVER's outcome, not an assumed one. The counterparty may have accepted
+      // between render and click, in which case a relationship now exists and "Invitation
+      // withdrawn." would be a claim this client never verified. Refresh BOTH lists for the same
+      // reason: withdrawing only reloaded invitations, so a connection created in that window
+      // stayed invisible until a manual reload.
+      const result = await revokeLinkedLearnerInvitation(invitation.id);
+      setNotice(result.message ?? "Invitation withdrawn.");
+      await Promise.all([loadInvitations(), loadLinks()]);
     } catch (revokeError) {
       setError(errorMessage(revokeError, "Could not withdraw the invitation."));
     } finally {
@@ -721,6 +733,11 @@ export default function LinkedLearnersPage() {
           </Button>
         </form>
 
+        {invitationLinkNotice ? (
+          <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
+            {invitationLinkNotice}
+          </p>
+        ) : null}
         {invitationLinkError ? (
           <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
             {invitationLinkError}
