@@ -293,7 +293,10 @@ it("lets a learner withdraw live grants while a paused connection explains the p
   jest.mocked(setLinkedLearnerProgressGrant).mockResolvedValue({ granted: false });
   render(<LinkedLearnersPage />);
 
-  expect(await screen.findByText(/Access is paused while this connection is pending/i)).toBeInTheDocument();
+  // Pin the CLASS, not the string: nothing on a pending connection may promise that sharing
+  // resumes, because a link-redeemed PENDING was never accepted and has nothing to resume.
+  expect(await screen.findByText(/pending, so nothing is being shared right now/i)).toBeInTheDocument();
+  expect(screen.queryByText(/resume/i)).not.toBeInTheDocument();
   const progressToggle = screen.getByRole("switch", { name: /share my study progress/i });
   expect(progressToggle).toBeEnabled();
   fireEvent.click(progressToggle);
