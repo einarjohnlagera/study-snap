@@ -2,7 +2,7 @@
 
 ## v0.95.1 - Rendering and Reorder Fixes
 
-**Status: In Progress** (kicked off 2026-08-29)
+**Status: Released** (kicked off and signed off 2026-08-29)
 
 Theme: a generated formula should look like a formula, and dragging a section should not fight the
 save that the last drag started.
@@ -91,8 +91,7 @@ verification tier.
   privacy boundary, no money or quota semantics, no migration — the re-tiered gate in `CLAUDE.md`
   resolves here without a cold agent.
 - **The `### Planned Scope` heading above is permanent**; delivery appends to `### Shipped`.
-- **No `[CHECKPOINT]` is owed.** Both items fix behaviour against a reported defect rather than
-  shipping ahead of evidence, and neither changes a measured surface.
+- **No `[CHECKPOINT]` is owed — re-checked at signoff after two items were folded in, not carried over from kickoff.** All four fix behaviour against an owner-reported defect with observed symptoms, rather than shipping ahead of evidence: none rests on a pre-committed rule, an owner override, an ambiguous read or a bootstrap argument, and none changes a surface any live checkpoint measures. **Item 4 removes behaviour**, which was the one worth re-examining — but the empty state and clear affordances it exposes already existed and are now pinned by tests, so nothing ships on an unevidenced premise.
 
 ### Shipped
 

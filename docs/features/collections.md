@@ -977,8 +977,9 @@ and then refreshes. Three properties make that safe and usable, and each is pinn
   The guard is therefore at drop time as well.
 - **The surface says when a save is running.** Without it a curator cannot tell, and keeps dragging
   into the save — which is how the race above was reachable by hand rather than only in theory.
-- **A reorder does not refetch the note list.** `refreshBuilder({ skipNotes: true })` is used on the
-  reorder path only, because reordering adds, removes and edits no note. **⚠️ Any path that CAN
+- **A reorder does not refetch the note list.** `persistLeafItems` passes
+  `refreshBuilder({ skipNotes: kind === "reorder-notes" })`, so the note list is skipped on the reorder
+  path only, because reordering adds, removes and edits no note. **⚠️ Any path that CAN
   change the note set — add, remove, import — must not pass `skipNotes`.**
 
 Both pointer and touch sensors carry an `activationConstraint`, so a drag does not begin on the first
