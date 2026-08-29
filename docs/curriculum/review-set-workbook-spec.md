@@ -8,6 +8,9 @@ from it. **Change one and check the other** — the columns are the seam.
 ## The pipeline
 
 ```
+review-set-reshape-read.sql        ← gather the inputs (read-only, any Review Set)
+        │
+        ▼   hand the results to the strategist with the GPT module
 strategist proposal (markdown + a TSV block)
         │
         ▼   save the TSV block verbatim as <set>.tsv
@@ -81,6 +84,7 @@ cleanly in git.
 
 | File | Role |
 |---|---|
+| `review-set-reshape-read.sql` | the read that gathers a strategist's inputs; parameterised by collection id |
 | `build_review_set_workbook.py` | the builder — data-driven, no per-set logic |
 | `<set>.tsv` | the source rows; regenerable input, diffable, **the thing to edit** |
 | `<set>-target-shape.xlsx` | the generated deliverable |
