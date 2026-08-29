@@ -794,6 +794,49 @@ describe("Library page", () => {
     expect(replaceMock).toHaveBeenCalledWith("/library?subject=Biology", { scroll: false });
   });
 
+  it("keeps a filter that matches nothing instead of falling back to the whole library", async () => {
+    // ⚠️ Three effects used to strip a selected subject/program/tag absent from the facet options,
+    // so a saved filter whose subject no longer has any notes silently rendered the ENTIRE library.
+    // A filter that matches nothing must still be a filter. The facets are global
+    // (getLibraryFilterOptions takes no params), so "Hydraulics" is genuinely gone here.
+    currentSearch = "subject=Hydraulics";
+    (listNotes as jest.Mock).mockResolvedValue(
+      notesAcrossSubjects([["Biology", 3], ["Chemistry", 2]]),
+    );
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("No notes match these filters")).toBeInTheDocument();
+    // The five notes that do NOT match must not be rendered.
+    expect(screen.queryByText("Note note-1")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
+  });
+
+  it("keeps the subject control reachable while its filter is active but its facet list is empty", async () => {
+    // ⚠️ Each control was gated purely on a non-empty facet list. With a nothing-matching filter now
+    // preserved, that would hide the control for the last subject in a library — leaving the filter
+    // applied and its own clear button unreachable.
+    // Notes exist — so this is the filtered view, not the empty-library onboarding state — but the
+    // subject facet list is genuinely EMPTY while a subject filter is active.
+    // ⚠️ Both inputs must be emptied. `availableSubjects` merges `listSubjects("mine")` with the
+    // filter-options facets, and the shared mock's `mockLibrarySubject` falls back to "General" for
+    // a subject-less note — so simply passing notes without subjects leaves the list non-empty and
+    // the assertion below would pass without exercising anything.
+    currentSearch = "subject=Hydraulics";
+    (listNotes as jest.Mock).mockResolvedValue([buildNote("note-1"), buildNote("note-2")]);
+    (listSubjects as jest.Mock).mockResolvedValue([]);
+    (getLibraryFilterOptions as jest.Mock).mockResolvedValue({
+      subjects: [], coursePrograms: [], tags: [],
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("No notes match these filters");
+    fireEvent.click(screen.getByRole("button", { name: "Open more filters" }));
+
+    expect(await screen.findByRole("button", { name: "Clear subject filter" })).toBeInTheDocument();
+  });
+
   it("hides subject stats when a subject filter is already active", async () => {
     currentSearch = "subject=Biology";
     (listNotes as jest.Mock).mockResolvedValue(

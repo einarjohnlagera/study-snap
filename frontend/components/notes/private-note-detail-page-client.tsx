@@ -1962,7 +1962,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setDeleting(true);
     try {
       await deleteNote(note.id);
-      navigateTo("/library");
+      // ⚠️ Return to where the reader CAME FROM, not to a bare /library. `backHref` already reads
+      // the `ref` param, validates it against a /library or /collections/ prefix (an open-redirect
+      // guard) and falls back to /library — which is exactly why the BackLink preserves an active
+      // Library filter while deleting used to discard it. Deleting a note opened from a collection
+      // now also returns to that collection rather than dumping the user in the Library.
+      navigateTo(backHref);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not delete note.";
       setError(message);
