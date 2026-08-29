@@ -29,6 +29,7 @@ import com.studysnap.backend.repository.LinkedLearnerGrantRepository;
 import com.studysnap.backend.entity.LinkedLearnerInvitationEntity;
 import static org.mockito.ArgumentMatchers.eq;
 import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
+import com.studysnap.backend.repository.LinkedLearnerProvisionalBirthYearRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +73,7 @@ class LinkedLearnerServiceTest {
     @Mock private LinkedLearnerInvitationRepository invitationRepository;
     @Mock private LinkedLearnerGuardianConsentRepository consentRepository;
     @Mock private LinkedLearnerGrantRepository grantRepository;
+    @Mock private LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository;
     @Mock private UserRepository userRepository;
     @Mock private OnboardingGuardService onboardingGuardService;
     @Mock private AuthService authService;
@@ -93,6 +95,7 @@ class LinkedLearnerServiceTest {
                 invitationRepository,
                 consentRepository,
                 grantRepository,
+                provisionalBirthYearRepository,
                 userRepository,
                 onboardingGuardService,
                 authService,
@@ -112,6 +115,9 @@ class LinkedLearnerServiceTest {
         // sets a birth year on its user still exercises the real path.
         lenient().when(userRepository.findBirthYearById(any(UUID.class)))
                 .thenAnswer(invocation -> userRepository.findById(invocation.<UUID>getArgument(0))
+                        .map(UserEntity::getBirthYear));
+        lenient().when(provisionalBirthYearRepository.findEffectiveBirthYear(any(), any()))
+                .thenAnswer(invocation -> userRepository.findById(invocation.<UUID>getArgument(1))
                         .map(UserEntity::getBirthYear));
         lenient().when(userRepository.writeBirthYear(any(UUID.class), any(), any()))
                 .thenAnswer(invocation -> {
@@ -232,6 +238,96 @@ class LinkedLearnerServiceTest {
 
         assertThat(withConsent.status()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
         verify(consentRepository).save(any(LinkedLearnerGuardianConsentEntity.class));
+    }
+
+    @Test
+    void provisionalMinorYearKeepsGuardianConsentReachableAndPromotesOnlyOnAcceptance() {
+        UserEntity creatorSupporter = user(SUPPORTER_EMAIL);
+        UserEntity redeemerLearner = user(LEARNER_EMAIL);
+        redeemerLearner.setBirthYear(null);
+        int provisionalYear = Year.now().getValue() - 10;
+        LinkedLearnerRelationshipEntity relationship =
+                relationship(creatorSupporter, redeemerLearner, LinkedLearnerSide.LEARNER);
+        LinkedLearnerGuardianConsentEntity consent = new LinkedLearnerGuardianConsentEntity();
+        consent.setRelationshipId(relationship.getId());
+        stubRelationshipUsers(relationship, creatorSupporter, redeemerLearner);
+        when(provisionalBirthYearRepository.findEffectiveBirthYear(
+                relationship.getId(), redeemerLearner.getId())).thenReturn(Optional.of(provisionalYear));
+        when(consentRepository.findByRelationshipId(relationship.getId()))
+                .thenReturn(Optional.empty(), Optional.of(consent), Optional.of(consent), Optional.of(consent));
+        when(consentRepository.save(any())).thenReturn(consent);
+
+        LinkedLearnerResponse consented = service.recordGuardianConsent(
+                relationship.getId(), creatorSupporter.getId());
+        assertThat(consented.guardianConsentRecorded()).isTrue();
+        assertThat(relationship.getStatus()).isEqualTo(LinkedLearnerStatus.PENDING);
+        verify(userRepository, never()).writeBirthYear(any(), any(), any());
+        verify(provisionalBirthYearRepository, never())
+                .promoteIfAccountBirthYearMissing(any(), any(), any());
+
+        LinkedLearnerResponse accepted = service.accept(
+                relationship.getId(), creatorSupporter.getId(),
+                new AcceptLinkedLearnerRequest(null, false));
+
+        assertThat(accepted.status()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
+        verify(provisionalBirthYearRepository).promoteIfAccountBirthYearMissing(
+                eq(relationship.getId()), eq(redeemerLearner.getId()), any());
+        verify(provisionalBirthYearRepository).deleteForRelationship(relationship.getId());
+    }
+
+    @Test
+    void bothPartiesRefreshAProvisionalMinorAsPendingAndConsentRequired() {
+        UserEntity creatorSupporter = user(SUPPORTER_EMAIL);
+        UserEntity redeemerLearner = user(LEARNER_EMAIL);
+        redeemerLearner.setBirthYear(null);
+        LinkedLearnerRelationshipEntity relationship =
+                relationship(creatorSupporter, redeemerLearner, LinkedLearnerSide.LEARNER);
+        stubRelationshipUsers(relationship, creatorSupporter, redeemerLearner);
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                creatorSupporter.getId(), creatorSupporter.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
+                redeemerLearner.getId(), redeemerLearner.getId())).thenReturn(List.of(relationship));
+        when(provisionalBirthYearRepository.findEffectiveBirthYear(
+                relationship.getId(), redeemerLearner.getId()))
+                .thenReturn(Optional.of(Year.now().getValue() - 10));
+        when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
+
+        LinkedLearnerResponse creatorView = service.list(creatorSupporter.getId()).getFirst();
+        LinkedLearnerResponse redeemerView = service.list(redeemerLearner.getId()).getFirst();
+
+        assertThat(creatorView.status()).isEqualTo(LinkedLearnerStatus.PENDING);
+        assertThat(creatorView.incomingInvitation()).isTrue();
+        assertThat(creatorView.birthYearRequired()).isFalse();
+        assertThat(creatorView.guardianConsentRequired()).isTrue();
+        assertThat(creatorView.activitySharedWithMe()).isFalse();
+        assertThat(creatorView.progressSharedWithMe()).isFalse();
+        assertThat(redeemerView.status()).isEqualTo(LinkedLearnerStatus.PENDING);
+        assertThat(redeemerView.incomingInvitation()).isFalse();
+        assertThat(redeemerView.birthYearRequired()).isFalse();
+        assertThat(redeemerView.guardianConsentRequired()).isTrue();
+    }
+
+    @Test
+    void redemptionPreparationValidatesBeforeLockAndSkipsProvisioningForAnExistingYear() {
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(2000);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+
+        assertThat(service.prepareProvisionalBirthYearForLinkRedemption(learner.getId(), null)).isNull();
+        assertThatThrownBy(() -> service.prepareProvisionalBirthYearForLinkRedemption(
+                learner.getId(), Year.now().getValue() + 1))
+                .isInstanceOf(InvalidLinkedLearnerBirthYearException.class);
+    }
+
+    @Test
+    void redemptionPreparationRequiresADeclarationWhenTheAccountYearIsMissing() {
+        UserEntity learner = user(LEARNER_EMAIL);
+        learner.setBirthYear(null);
+        when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
+
+        assertThatThrownBy(() -> service.prepareProvisionalBirthYearForLinkRedemption(
+                learner.getId(), null))
+                .isInstanceOf(LinkedLearnerBirthYearRequiredException.class);
     }
 
     @Test

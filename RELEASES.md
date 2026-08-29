@@ -148,7 +148,56 @@ is `v0.96.0` and not folded in beside a security migration.
 
 ### Shipped
 
-_(nothing yet)_
+- **Invitation-link birth years are provisional until creator confirmation.** `V127` adds one
+  relationship-keyed provisional birth-year row for a learner redeemer whose account has no year.
+  Redemption validates and locks before claiming the token, then writes the declaration only after
+  creating `PENDING`; `accept`, guardian consent and both parties' connection lists resolve the
+  account-global year first and that relationship's provisional year second. Only a successful
+  conditional acceptance promotes without overwriting a non-null account year, then deletes the
+  provisional row; revocation deletes it without promotion. A real PostgreSQL test pins the
+  supporter-created link → minor learner redemption → supporter guardian consent → acceptance path,
+  alongside the write, lookup, promotion and cleanup predicates. An unconfirmed redemption therefore
+  leaves no account-level birth-year trace, and acceptance remains the consequential act.
+
+### Known limitations
+
+- **Two learner-self paths still write `users.birth_year` directly.** A learner creating their own
+  invitation link through `LinkedLearnerInvitationLinkService.create()` and a learner explicitly
+  using `LinkedLearnerService.recordBirthYear()` on a pending relationship remain account-global,
+  write-once writes. Those are deliberate acts by the learner on their own account; this item changes
+  only the stranger-triggered redemption path and does not imply that every connection surface is
+  provisional.
+- **⚠️ OPEN QUESTION FOR THE OWNER, recorded rather than decided: a provisional birth year does NOT
+  appear in the account data export.** `AccountDataExportService:81` exports `users.birth_year`, and
+  a provisional declaration lives outside that column until acceptance promotes it — so between
+  redemption and confirmation the year a person declared is held but is not exported to them.
+  Whether that is acceptable is a data-protection judgment, not an implementation detail. **Nothing
+  was changed either way.** Recorded here because the delivery was asked to surface it and did not.
+- **⚠️ Found at the `/audit-diff` and fixed in scope: routing the DTO through the locking resolver
+  turned a plain list into a lock storm.** `toResponse` runs once per relationship inside `list()`,
+  and the delivered resolver called `lockAndReadBirthYear`, which is `PESSIMISTIC_WRITE` — so
+  `GET /linked-learners` took a row-level write lock on **every counterparty learner, in list
+  order**, and `list()` had been downgraded from `readOnly = true` to permit it. That breaks the
+  invariant `lockAndReadBirthYear`'s own Javadoc states — *"Only ONE row is ever locked … no lock
+  cycle exists and no deadlock is possible"* — and lets two concurrent listers with overlapping
+  learners deadlock. The resolver is now split: **decisions** (`accept`, `recordGuardianConsent`)
+  keep the locked read, **projection** takes an unlocked one with identical precedence, and `list()`
+  is `readOnly` again. Revocation keeps the lock but takes it explicitly, since acceptance holds the
+  same lock while it promotes and deletes.
+- **⚠️ Also found at the `/audit-diff`: the acceptance test asserted the COLUMNS but not the RESPONSE.**
+  `toResponse` reads the effective year **after** promotion writes `users.birth_year` and cleanup
+  removes the provisional row — the one moment the projection could report a momentarily-absent year
+  and tell the supporter the learner's age is unknown on the very response that accepted them. The
+  behaviour was already correct (same transaction, same connection), but nothing pinned it: the
+  mocked test stubs `findEffectiveBirthYear` to a fixed value, so it cannot observe post-promotion
+  state at all. The real-row test now asserts `birthYearRequired`, `guardianConsentRequired` and
+  `guardianConsentRecorded` on the returned DTO. **Mutation-verified:** making the projection read
+  the provisional row alone fails exactly that assertion.
+- **`storeProvisionalBirthYear` throws `LinkedLearnerInvalidStateException` on a zero-row insert,
+  and that branch should be unreachable** — its predicate requires `users.birth_year is null`, and
+  the redemption path holds the learner row lock from before the token is claimed. If it ever does
+  fire, the transaction rolls back so the link survives, but the redeemer sees an opaque invalid-state
+  error rather than the birth-year message. Recorded rather than defended against speculatively.
 
 
 

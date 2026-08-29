@@ -10,6 +10,8 @@ import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.LinkedLearnerInvitationLinkNotFoundException;
+import com.studysnap.backend.exception.InvalidLinkedLearnerBirthYearException;
+import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerRelationshipAlreadyExistsException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.repository.LinkedLearnerInvitationLinkRepository;
@@ -30,9 +32,11 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -122,6 +126,8 @@ class LinkedLearnerInvitationLinkServiceTest {
         when(userRepository.findById(redeemerId)).thenReturn(Optional.of(user(redeemerId, "Redeemer")));
         when(linkRepository.findUsableByToken(eq(TOKEN), any())).thenReturn(Optional.of(link));
         when(linkRepository.markRedeemedIfUsable(eq(TOKEN), eq(redeemerId), any())).thenReturn(1);
+        when(linkedLearnerService.prepareProvisionalBirthYearForLinkRedemption(redeemerId, 2012))
+                .thenReturn(2012);
         when(linkedLearnerService.createPendingRelationship(
                 eq(redeemerId), eq(creatorId), eq(LinkedLearnerSide.LEARNER), any()))
                 .thenReturn(new LinkedLearnerService.PendingRelationshipCreation(relationship, true));
@@ -130,7 +136,9 @@ class LinkedLearnerInvitationLinkServiceTest {
                 redeemerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(2012));
 
         assertThat(response.status()).isEqualTo(LinkedLearnerStatus.PENDING);
-        verify(linkedLearnerService).captureLearnerBirthYearIfMissing(redeemerId, 2012);
+        verify(linkedLearnerService).prepareProvisionalBirthYearForLinkRedemption(redeemerId, 2012);
+        verify(linkedLearnerService).storeProvisionalBirthYear(
+                eq(relationship.getId()), eq(redeemerId), eq(2012), any());
         verify(linkedLearnerService, never()).accept(any(), any(), any());
     }
 
@@ -165,6 +173,84 @@ class LinkedLearnerInvitationLinkServiceTest {
         assertThatThrownBy(() -> service.redeem(
                 redeemerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(null)))
                 .isInstanceOf(LinkedLearnerRelationshipAlreadyExistsException.class);
+    }
+
+    @Test
+    void learnerWithAnExistingAccountYearGetsNoProvisionalRow() {
+        UUID creatorId = UUID.randomUUID();
+        UUID redeemerId = UUID.randomUUID();
+        LinkedLearnerInvitationLinkEntity link = link(creatorId, LinkedLearnerSide.SUPPORTER);
+        LinkedLearnerRelationshipEntity relationship = relationship(creatorId, redeemerId);
+        when(userRepository.findById(redeemerId)).thenReturn(Optional.of(user(redeemerId, "Redeemer")));
+        when(linkRepository.findUsableByToken(eq(TOKEN), any())).thenReturn(Optional.of(link));
+        when(linkRepository.markRedeemedIfUsable(eq(TOKEN), eq(redeemerId), any())).thenReturn(1);
+        when(linkedLearnerService.prepareProvisionalBirthYearForLinkRedemption(redeemerId, null))
+                .thenReturn(null);
+        when(linkedLearnerService.createPendingRelationship(
+                eq(redeemerId), eq(creatorId), eq(LinkedLearnerSide.LEARNER), any()))
+                .thenReturn(new LinkedLearnerService.PendingRelationshipCreation(relationship, true));
+
+        service.redeem(redeemerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(null));
+
+        verify(linkedLearnerService, never()).storeProvisionalBirthYear(any(), any(), anyInt(), any());
+    }
+
+    @Test
+    void invalidLearnerYearFailsBeforeTheTokenClaim() {
+        UUID creatorId = UUID.randomUUID();
+        UUID redeemerId = UUID.randomUUID();
+        when(userRepository.findById(redeemerId)).thenReturn(Optional.of(user(redeemerId, "Redeemer")));
+        when(linkRepository.findUsableByToken(eq(TOKEN), any()))
+                .thenReturn(Optional.of(link(creatorId, LinkedLearnerSide.SUPPORTER)));
+        doThrow(new InvalidLinkedLearnerBirthYearException())
+                .when(linkedLearnerService)
+                .prepareProvisionalBirthYearForLinkRedemption(redeemerId, 1800);
+        RedeemLinkedLearnerInvitationLinkRequest request =
+                new RedeemLinkedLearnerInvitationLinkRequest(1800);
+
+        assertThatThrownBy(() -> service.redeem(redeemerId, TOKEN, request))
+                .isInstanceOf(InvalidLinkedLearnerBirthYearException.class);
+
+        verify(linkRepository, never()).markRedeemedIfUsable(anyString(), any(), any());
+    }
+
+    @Test
+    void missingLearnerYearFailsBeforeTheTokenClaim() {
+        UUID creatorId = UUID.randomUUID();
+        UUID redeemerId = UUID.randomUUID();
+        when(userRepository.findById(redeemerId)).thenReturn(Optional.of(user(redeemerId, "Redeemer")));
+        when(linkRepository.findUsableByToken(eq(TOKEN), any()))
+                .thenReturn(Optional.of(link(creatorId, LinkedLearnerSide.SUPPORTER)));
+        doThrow(new LinkedLearnerBirthYearRequiredException())
+                .when(linkedLearnerService)
+                .prepareProvisionalBirthYearForLinkRedemption(redeemerId, null);
+        RedeemLinkedLearnerInvitationLinkRequest request =
+                new RedeemLinkedLearnerInvitationLinkRequest(null);
+
+        assertThatThrownBy(() -> service.redeem(redeemerId, TOKEN, request))
+                .isInstanceOf(LinkedLearnerBirthYearRequiredException.class);
+
+        verify(linkRepository, never()).markRedeemedIfUsable(anyString(), any(), any());
+    }
+
+    @Test
+    void lostTokenClaimWritesNoRelationshipOrProvisionalYear() {
+        UUID creatorId = UUID.randomUUID();
+        UUID redeemerId = UUID.randomUUID();
+        when(userRepository.findById(redeemerId)).thenReturn(Optional.of(user(redeemerId, "Redeemer")));
+        when(linkRepository.findUsableByToken(eq(TOKEN), any()))
+                .thenReturn(Optional.of(link(creatorId, LinkedLearnerSide.SUPPORTER)));
+        when(linkedLearnerService.prepareProvisionalBirthYearForLinkRedemption(redeemerId, 2012))
+                .thenReturn(2012);
+        when(linkRepository.markRedeemedIfUsable(eq(TOKEN), eq(redeemerId), any())).thenReturn(0);
+        RedeemLinkedLearnerInvitationLinkRequest request =
+                new RedeemLinkedLearnerInvitationLinkRequest(2012);
+
+        assertThatThrownBy(() -> service.redeem(redeemerId, TOKEN, request))
+                .isInstanceOf(LinkedLearnerInvitationLinkNotFoundException.class);
+
+        verify(linkedLearnerService, never()).createPendingRelationship(any(), any(), any(), any());
+        verify(linkedLearnerService, never()).storeProvisionalBirthYear(any(), any(), anyInt(), any());
     }
 
     /**
@@ -269,7 +355,9 @@ class LinkedLearnerInvitationLinkServiceTest {
 
         service.redeem(redeemerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(1990));
 
-        verify(linkedLearnerService, never()).captureLearnerBirthYearIfMissing(any(), any());
+        verify(linkedLearnerService, never())
+                .prepareProvisionalBirthYearForLinkRedemption(any(), any());
+        verify(linkedLearnerService, never()).storeProvisionalBirthYear(any(), any(), any(Integer.class), any());
     }
 
     private UserEntity user(UUID id, String name) {

@@ -144,7 +144,9 @@ export default function LinkedLearnerInvitationPage() {
                   onChange={setBirthYear}
                 />
                 <span className="block text-xs font-normal text-foreground/60">
-                  Needed only if you have not recorded it before. It determines whether guardian consent is required.
+                  Needed only if you have not recorded it before. Until this request is confirmed,
+                  the year is held only for its guardian-consent decision. Confirmation makes it
+                  your permanent account-level year; revoking the request first deletes it.
                 </span>
               </label>
             ) : null}
@@ -158,7 +160,9 @@ export default function LinkedLearnerInvitationPage() {
           <div className="space-y-3">
             <h2 className="text-lg font-semibold">Request sent</h2>
             <p className="text-sm text-foreground/70">
-              The connection is pending until the person who created the link confirms it. No learning activity or progress is shared yet.
+              The connection is pending until the person who created the link confirms it. If you
+              supplied a new birth year, it stays with this pending request until then and is deleted
+              if either person revokes first. No learning activity or progress is shared yet.
             </p>
             <Button type="button" onClick={() => router.push("/linked-learners")}>View learning connections</Button>
           </div>

@@ -151,11 +151,12 @@ it("accepts an incoming invitation", async () => {
   expect(await screen.findByText("accepted")).toBeInTheDocument();
 });
 
-it("shows consent only when required and blocks recording until attested", async () => {
+it("loads a link-redeemed provisional minor as confirmable and completes guardian consent", async () => {
   const minorLink: LinkedLearnerResponse = {
     ...baseLink,
     callerRole: "SUPPORTER",
     initiatedBy: "LEARNER",
+    birthYearRequired: false,
     guardianConsentRequired: true,
   };
   jest.mocked(getLinkedLearners).mockResolvedValue([minorLink]);
