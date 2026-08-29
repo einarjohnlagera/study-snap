@@ -30,6 +30,26 @@ Relationship state is safe under concurrent requests, and the mechanism is delib
 - **The birth-year decision holds a pessimistic write lock on the learner** (`findByIdForUpdate`). Acceptance reads the birth year under that lock, so a correction into the consent range cannot land between the read and the write. Both orderings are safe: if acceptance wins, the correction then observes the new `ACCEPTED` row and pauses it; if the correction wins, acceptance reads the corrected year and requires consent. **Every writer of `users.birth_year` takes this lock** — invite, accept, record and correct — because leaving one out reopens the window through that path.
 - **Effective birth year resolves through TWO paths that differ only in locking, and the split is load-bearing.** Both give the account-global `users.birth_year` precedence and fall back only to the provisional row for that exact relationship, and the lookup joins through `linked_learner_relationships` so a relationship that does not belong to the learner can never supply their year. **Consent DECISIONS — `accept()` and `recordGuardianConsent()` — resolve after the learner's pessimistic write lock.** **PROJECTION — the DTO fields `birthYearRequired`, `guardianConsentRequired` and fail-closed access state — resolves WITHOUT a lock.** ⚠️ That is not an optimisation: `toResponse` runs once per relationship inside `list()`, so routing it through the locking resolver made a plain connection list take a row-level write lock on every counterparty in list order, breaking the one-row invariant the lock's own Javadoc states and allowing two concurrent listers with overlapping learners to deadlock. `list()` is `@Transactional(readOnly = true)` and `listTakesNoRowLockOnAnyCounterparty` pins it. Revocation takes the same learner-first lock order before its relationship transition so it cannot form a lock cycle with acceptance or correction.
 - **Status transitions are conditional updates**, never read-modify-save. Acceptance and expiry apply only while the row is still `PENDING`; revocation applies while it is `PENDING` **or** `ACCEPTED`, so revoking still wins when an acceptance committed first; and the correction's pause applies only while the row is `ACCEPTED`, so a revoke committing mid-correction is not resurrected. A queued expiry that affects zero rows does not delete the provisional declaration belonging to the winning state.
+- **A TERMINAL transition cuts every live grant on the relationship — one rule shared by revocation and
+  expiry, in both directions and every scope.** `revokeAllLiveForRelationship` runs inside the same
+  successful-transition branch that deletes the provisional declaration, so a lost race to acceptance cuts
+  nothing. It also runs on revoke's idempotent terminal early-return, because revocation did **not** cut
+  grants before `v0.97.0` — a relationship revoked earlier keeps live rows and reports `*SharedByMe: true`
+  forever otherwise.
+- **⚠️ THE CONSENT PAUSE IS NOT A TERMINATION AND MUST NEVER CUT A GRANT.** `v0.93.0` made the row survive
+  the `ACCEPTED → PENDING` pause **by design**: `*SharedByMe` reflects the ROW, so it reports the caller's own
+  standing act of sharing and what resumes on re-acceptance. Cutting there would make a learner's own toggle
+  read OFF while they never touched it, and sharing would silently fail to resume.
+  `aConsentPauseLeavesEveryGrantLiveBecauseAPauseIsNotATermination` pins it against real rows.
+- **⚠️ Expiry's grant cut is UNREACHABLE today, and that is established rather than assumed.** The live-grant
+  insert is conditional on `ACCEPTED`, so a `PENDING` relationship can never receive a grant; and the only
+  route from `ACCEPTED` back to `PENDING` is the consent pause, which leaves `expires_at` NULL and is
+  therefore unexpirable. So the sweep can never *meet* a live grant. The cut stays as one rule shared with
+  revoke, and two tests record why its zero-row count is correct rather than a defect.
+- **The pre-`v0.97.0` gap was INERT, not a privilege escalation, and should stay described that way.**
+  `requireGrant` demands `ACCEPTED`, so a live grant row on a terminated relationship granted nothing. What it
+  broke was **DTO honesty** — the connection list asserting a sharing act on a relationship that no longer
+  exists.
 - **Grant creation is conditional on the relationship still being `ACCEPTED` in the insert statement.** A grant request that read `ACCEPTED` but loses a race to relationship revocation writes no row. Because a zero-row insert can also mean an identical live grant already exists, the service rechecks the live row: an idempotent repeat succeeds, while a lost authorization race returns not-found. Withdrawal deliberately has no status predicate, so a surviving grant can always be turned off during a pause.
 - **The expiry sweep takes the same learner-first lock, one relationship per transaction.** The job itself is not transactional: it selects due IDs, then delegates each ID to a transactional worker. Each worker locks exactly one learner, conditionally changes one relationship, and commits before the next ID. A poisoned relationship rolls back alone and cannot turn a daily sweep into a many-row lock storm.
 - Only one learner row is ever locked per transaction, so no lock cycle exists.

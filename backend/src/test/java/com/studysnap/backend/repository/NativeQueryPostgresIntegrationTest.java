@@ -885,6 +885,91 @@ class NativeQueryPostgresIntegrationTest {
                 .containsExactlyInAnyOrder(2010, 2011);
     }
 
+    /**
+     * ⚠️ THE LOAD-BEARING HALF OF ITEM 4. A consent pause is NOT a termination, so it must leave
+     * every grant row live. v0.93.0 made the row survive the ACCEPTED -> PENDING pause BY DESIGN:
+     * {@code *SharedByMe} reflects the ROW, so it reports the caller's own standing act of sharing
+     * and what resumes on re-acceptance. Cutting here would make a learner's own toggle read OFF
+     * while they never touched it, and sharing would silently fail to resume.
+     */
+    @Test
+    void aConsentPauseLeavesEveryGrantLiveBecauseAPauseIsNotATermination() {
+        UUID supporter = seedUser("pause-grant-supporter");
+        UUID learner = seedUser("pause-grant-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
+        insertGrant(relationshipId, learner, supporter);
+        assertThat(liveGrants(relationshipId)).isOne();
+
+        linkedLearnerService().correctBirthYear(learner, Year.now().getValue() - 10);
+
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
+        assertThat(liveGrants(relationshipId))
+                .as("the pause must leave sharing intact so it resumes on re-acceptance")
+                .isOne();
+    }
+
+    @Test
+    void revokingARelationshipCutsEveryLiveGrantOnItInBothDirections() {
+        UUID supporter = seedUser("revoke-grant-supporter");
+        UUID learner = seedUser("revoke-grant-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
+        insertGrant(relationshipId, learner, supporter);
+        insertGrant(relationshipId, supporter, learner);
+        assertThat(liveGrants(relationshipId)).isEqualTo(2);
+
+        linkedLearnerService().revoke(relationshipId, supporter);
+
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("REVOKED");
+        assertThat(liveGrants(relationshipId)).isZero();
+    }
+
+    /**
+     * ⚠️ WHY EXPIRY'S GRANT CUT IS UNREACHABLE TODAY, established here rather than assumed. v0.93.0
+     * made {@code insertLiveIfAbsent} conditional on the relationship being ACCEPTED at write time,
+     * so a PENDING relationship can never receive a grant. Combined with the fact that the only
+     * route from ACCEPTED back to PENDING is the consent pause — which leaves {@code expires_at}
+     * NULL and is therefore unexpirable — the sweep can never MEET a live grant. The cut stays in
+     * the worker as one rule shared with revoke; this records that it is defence in depth, so
+     * nobody later reads its zero-row count as a defect.
+     */
+    @Test
+    void aPendingRelationshipCannotReceiveAGrantWhichIsWhyExpiryNeverMeetsOne() {
+        UUID supporter = seedUser("pending-grant-supporter");
+        UUID learner = seedUser("pending-grant-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "PENDING");
+
+        assertThat(insertGrant(relationshipId, learner, supporter))
+                .as("v0.93.0 conditions the live-grant insert on ACCEPTED")
+                .isZero();
+        assertThat(liveGrants(relationshipId)).isZero();
+    }
+
+    /**
+     * Defence in depth for the rule above: if any future path ever leaves a live grant on an
+     * expirable PENDING row, the sweep must cut it exactly as revoke does. The state is forced
+     * directly, because no supported path can produce it today.
+     */
+    @Test
+    void expiryStillCutsAGrantIfAPendingRelationshipEverHoldsOne() {
+        UUID supporter = seedUser("expire-grant-supporter");
+        UUID learner = seedUser("expire-grant-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        insertGrant(relationshipId, learner, supporter);
+        assertThat(liveGrants(relationshipId)).isOne();
+        jdbcTemplate.update(
+                "update linked_learner_relationships set status = 'PENDING' where id = ?",
+                relationshipId);
+        setRelationshipExpiry(relationshipId, OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
+
+        assertThat(requestExpiryWorker.expire(relationshipId, OffsetDateTime.now(ZoneOffset.UTC)))
+                .isTrue();
+
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("EXPIRED");
+        assertThat(liveGrants(relationshipId)).isZero();
+    }
+
     private LinkedLearnerService linkedLearnerService() {
         StudySnapProperties properties = new StudySnapProperties();
         return new LinkedLearnerService(

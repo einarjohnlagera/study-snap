@@ -12,3 +12,15 @@ spring:
 server:
   servlet:
     context-path: /api
+
+# ⚠️ Scheduled jobs are DISABLED IN TESTS ("-" is Spring's Scheduled.CRON_DISABLED).
+# GenerationRecoveryJob runs every 10 minutes in production, so on any full-suite run that spans a
+# 10-minute boundary it fired mid-test and its queries landed in
+# NoteServiceStatusProjectionIntegrationTest's captured query list — "Expected size: 2 but was: 4",
+# reproducible only by timing. Jobs are exercised by calling them directly; none of them should ever
+# run on a wall clock during a test.
+studysnap:
+  generation:
+    recovery-cron: "-"
+  linked-learners:
+    request-expiry-cron: "-"
