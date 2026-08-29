@@ -765,6 +765,58 @@ it("removes an expired invitation through the existing revoke action", async () 
   await waitFor(() => expect(screen.queryByText(/You invited learner@example.com/)).not.toBeInTheDocument());
 });
 
+it("reports the server's withdrawal outcome and refreshes the connection list too", async () => {
+  jest.mocked(listLinkedLearnerInvitations)
+    .mockResolvedValueOnce([{
+      id: "inv-accepted-race",
+      incoming: false,
+      inviterRole: "SUPPORTER",
+      invitedEmail: "learner@example.com",
+      inviterName: null,
+      createdAt: "2026-08-01T00:00:00Z",
+      expiresAt: "2026-09-01T00:00:00Z",
+      expired: false,
+    }])
+    .mockResolvedValueOnce([]);
+  // ⚠️ The counterparty may have accepted between render and click, in which case a relationship
+  // now exists and "Invitation withdrawn." is a claim the client never verified.
+  jest.mocked(revokeLinkedLearnerInvitation).mockResolvedValue({
+    message: "That invitation was already accepted.",
+  });
+
+  render(<LinkedLearnersPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+
+  await waitFor(() => expect(screen.getByRole("status"))
+    .toHaveTextContent("That invitation was already accepted."));
+  expect(screen.queryByText("Invitation withdrawn.")).not.toBeInTheDocument();
+  // Withdrawing only reloaded invitations, so a connection created in that window stayed invisible.
+  await waitFor(() => expect(getLinkedLearners).toHaveBeenCalledTimes(2));
+});
+
+it("puts invitation-link feedback inside the link card, not two cards below it", async () => {
+  jest.mocked(createLinkedLearnerInvitationLink).mockResolvedValue({
+    id: "new-link",
+    token: "AbCdEf0123456789GhIjKl",
+    url: "https://notelib.test/linked-learners/invite/AbCdEf0123456789GhIjKl",
+    creatorRole: "SUPPORTER",
+    createdAt: "2026-08-29T10:00:00Z",
+    expiresAt: "2026-09-28T10:00:00Z",
+  });
+
+  render(<LinkedLearnersPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Create invitation link" }));
+
+  const feedback = await screen.findByText("Invitation link created. It can be used once.");
+  // ⚠️ Feedback rendered two cards below the action reads as no feedback at all. Assert the
+  // PROPERTY that was wrong — document position — rather than a container the markup may reshape:
+  // the message must appear before the next card begins, not after it.
+  const nextCard = screen.getByRole("heading", { name: "Send an invitation" });
+  const feedbackPrecedesNextCard =
+    feedback.compareDocumentPosition(nextCard) & Node.DOCUMENT_POSITION_FOLLOWING;
+  expect(feedbackPrecedesNextCard).toBeTruthy();
+});
+
 it("surfaces an invitation list load failure instead of rendering it as an empty list", async () => {
   jest.mocked(listLinkedLearnerInvitations).mockRejectedValue(new Error("Invitation list unavailable"));
 
