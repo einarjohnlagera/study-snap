@@ -115,11 +115,12 @@ public class LinkedLearnerInvitationLinkService {
         }
 
         LinkedLearnerSide redeemerRole = opposite(link.getCreatorRole());
+        Integer provisionalBirthYear = null;
         if (redeemerRole == LinkedLearnerSide.LEARNER) {
-            // The null check is inside LinkedLearnerService's learner-row lock. If revocation wins
-            // while that lock is held, the failed claim below rolls this write back with the rest
-            // of the transaction rather than recording a year for a connection that was not made.
-            linkedLearnerService.captureLearnerBirthYearIfMissing(
+            // Validate before consuming the token and hold the learner-row lock to transaction end.
+            // A null result means an account-global year already exists, so there is nothing to
+            // defer and no provisional row will be written.
+            provisionalBirthYear = linkedLearnerService.prepareProvisionalBirthYearForLinkRedemption(
                     callerUserId, request.learnerBirthYear());
         }
 
@@ -135,6 +136,12 @@ public class LinkedLearnerInvitationLinkService {
         if (!creation.inserted()) {
             // Throwing rolls the token claim back, so a duplicate relationship never consumes it.
             throw new LinkedLearnerRelationshipAlreadyExistsException();
+        }
+        // The provisional declaration is keyed by relationship id, so it can only be written after
+        // the PENDING row exists. Any failure still rolls the token claim and relationship back.
+        if (provisionalBirthYear != null) {
+            linkedLearnerService.storeProvisionalBirthYear(
+                    creation.relationship().getId(), callerUserId, provisionalBirthYear, now);
         }
         return new LinkedLearnerInvitationLinkRedemptionResponse(
                 creation.relationship().getId(), LinkedLearnerStatus.PENDING);

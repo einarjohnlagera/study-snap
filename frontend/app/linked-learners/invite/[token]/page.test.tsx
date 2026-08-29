@@ -80,4 +80,6 @@ it("redeems into pending and collects the learner birth year", async () => {
     .toHaveBeenCalledWith("AbCdEf0123456789GhIjKl", 2012));
   expect(await screen.findByText("Request sent")).toBeInTheDocument();
   expect(screen.getByText(/pending until the person who created the link confirms/i)).toBeInTheDocument();
+  expect(screen.getByText(/stays with this pending request until then/i)).toBeInTheDocument();
+  expect(screen.getByText(/deleted if either person revokes first/i)).toBeInTheDocument();
 });

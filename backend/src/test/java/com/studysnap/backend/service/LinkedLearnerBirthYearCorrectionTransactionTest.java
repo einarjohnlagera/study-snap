@@ -219,6 +219,7 @@ class LinkedLearnerBirthYearCorrectionTransactionTest {
                     mock(LinkedLearnerInvitationRepository.class),
                     consentRepository,
                     mock(com.studysnap.backend.repository.LinkedLearnerGrantRepository.class),
+                    mock(com.studysnap.backend.repository.LinkedLearnerProvisionalBirthYearRepository.class),
                     userRepository,
                     mock(OnboardingGuardService.class),
                     mock(AuthService.class),

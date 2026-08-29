@@ -37,6 +37,8 @@ Implementation status: Phases 1-4 are **Released** (`v0.91.0`-`v0.94.0`), with *
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
+**⚠️ `v0.95.0` effective birth-year path:** Every relationship-scoped consent decision must use the single effective-birth-year resolver only after `lockAndReadBirthYear`. `users.birth_year` wins when non-null; otherwise only the provisional row keyed to that exact relationship id may supply the value. Do not read provisional years directly from another service path.
+
 Active release guardrail:
 
 - v0.29.1 consciously allows one narrow relaxation of the v0.29.0 no batch/progress infrastructure rule: a single terminal-outcome `bulk_generation_result` receipt for bulk generation, written once at batch completion, read once by the owner, then deleted or expired after 24h. This receipt may carry requested/created counts, generation-failed topic strings, quota-blocked topic strings, and retry context. It is not a batch-job entity, live progress table, per-item status row, or new status enum; the broader no batch/progress infrastructure rule still applies everywhere else.
