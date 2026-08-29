@@ -2,7 +2,7 @@
 
 ## v0.95.0 - Redemption Integrity
 
-**Status: In Progress** (kicked off 2026-08-29)
+**Status: Released** (kicked off and signed off 2026-08-29)
 
 Theme: redeeming an invitation link should not cost the redeemer something permanent before anyone has agreed to
 anything — and the surfaces around a live link should stop lying about what they are showing.
