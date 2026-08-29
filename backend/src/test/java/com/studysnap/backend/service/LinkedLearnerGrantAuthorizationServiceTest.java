@@ -103,6 +103,19 @@ class LinkedLearnerGrantAuthorizationServiceTest {
     }
 
     @Test
+    void expiredAndRevokedRelationshipsUseTheSameNotFoundAccessContract() {
+        relationship.setStatus(LinkedLearnerStatus.REVOKED);
+        assertThatThrownBy(() -> service.requireGrant(
+                SUPPORTER_ID, RELATIONSHIP_ID, LinkedLearnerGrantScope.ACTIVITY))
+                .isInstanceOf(LinkedLearnerNotFoundException.class);
+
+        relationship.setStatus(LinkedLearnerStatus.EXPIRED);
+        assertThatThrownBy(() -> service.requireGrant(
+                SUPPORTER_ID, RELATIONSHIP_ID, LinkedLearnerGrantScope.ACTIVITY))
+                .isInstanceOf(LinkedLearnerNotFoundException.class);
+    }
+
+    @Test
     void guardianConsentAppliesToLearnerDataButNotSupporterData() {
         UserEntity minorLearner = user(LEARNER_ID, 2015);
         when(userRepository.findById(LEARNER_ID)).thenReturn(Optional.of(minorLearner));

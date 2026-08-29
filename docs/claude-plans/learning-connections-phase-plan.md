@@ -48,9 +48,9 @@ are wrong for different reasons. The recipient path must be a separate method.
 
 ### 1.4 Learning Connections as shipped
 
-- `linked_learner_relationships` (supporter, learner, status `PENDING|ACCEPTED|REVOKED`, `initiated_by`,
-  created/accepted/revoked timestamps). Live-row uniqueness is **per direction**; the only check constraint
-  blocks self-linking.
+- `linked_learner_relationships` (supporter, learner, status `PENDING|ACCEPTED|REVOKED|EXPIRED`, `initiated_by`,
+  created/accepted/revoked/request-expiry timestamps). Live-row uniqueness is **per direction** over
+  `PENDING|ACCEPTED`; `EXPIRED` is terminal and a fresh invitation creates a new relationship.
 - `linked_learner_invitations` — email-keyed, expiring (default 30 days), rate-limited on two keys, conditional
   status transitions, claim-before-create on acceptance.
 - `linked_learner_guardian_consents` — one row per relationship, required below a configured age threshold.

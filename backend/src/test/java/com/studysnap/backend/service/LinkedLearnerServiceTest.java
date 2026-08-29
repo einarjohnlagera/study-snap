@@ -189,6 +189,49 @@ class LinkedLearnerServiceTest {
     }
 
     @Test
+    void expiredRelationshipCannotBeAcceptedAndRevokePreservesTheExpiryStatus() {
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        LinkedLearnerRelationshipEntity relationship = relationship(
+                supporter, learner, LinkedLearnerSide.SUPPORTER);
+        relationship.setStatus(LinkedLearnerStatus.EXPIRED);
+        stubRelationshipUsers(relationship, supporter, learner);
+
+        assertThatThrownBy(() -> service.accept(
+                relationship.getId(), learner.getId(), new AcceptLinkedLearnerRequest(null, false)))
+                .isInstanceOf(LinkedLearnerInvalidStateException.class);
+
+        assertThat(service.revoke(relationship.getId(), learner.getId()).status())
+                .isEqualTo(LinkedLearnerStatus.EXPIRED);
+        verify(relationshipRepository, never()).markRevokedIfLive(any(), any());
+        verify(provisionalBirthYearRepository, never()).deleteForRelationship(relationship.getId());
+        verify(userRepository, never()).findByIdForUpdate(learner.getId());
+    }
+
+    @Test
+    void pendingRelationshipExpiryUsesTheConfiguredRequestClockFromCreatedAt() {
+        properties.getLinkedLearners().setRequestTtlDays(45);
+        UserEntity supporter = user(SUPPORTER_EMAIL);
+        UserEntity learner = user(LEARNER_EMAIL);
+        LinkedLearnerRelationshipEntity relationship = relationship(
+                supporter, learner, LinkedLearnerSide.SUPPORTER);
+        OffsetDateTime createdAt = OffsetDateTime.parse("2026-08-29T10:00:00Z");
+        when(relationshipRepository.insertPendingIfAbsent(
+                any(), eq(supporter.getId()), eq(learner.getId()),
+                eq(LinkedLearnerSide.SUPPORTER.name()), eq(createdAt), eq(createdAt.plusDays(45))))
+                .thenReturn(1);
+        when(relationshipRepository.findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
+                eq(supporter.getId()), eq(learner.getId()), any())).thenReturn(Optional.of(relationship));
+
+        service.createPendingRelationship(
+                supporter.getId(), learner.getId(), LinkedLearnerSide.SUPPORTER, createdAt);
+
+        verify(relationshipRepository).insertPendingIfAbsent(
+                any(), eq(supporter.getId()), eq(learner.getId()),
+                eq(LinkedLearnerSide.SUPPORTER.name()), eq(createdAt), eq(createdAt.plusDays(45)));
+    }
+
+    @Test
     void linkRedeemerCannotAcceptAndTheLinkCreatorConfirmationActivatesTheRelationship() {
         UserEntity creatorSupporter = user(SUPPORTER_EMAIL);
         UserEntity redeemerLearner = user(LEARNER_EMAIL);
@@ -395,7 +438,8 @@ class LinkedLearnerServiceTest {
 
         verify(userRepository, never()).findByEmailIgnoreCase(anyString());
         verify(relationshipRepository, never()).insertPendingIfAbsent(
-                any(UUID.class), any(UUID.class), any(UUID.class), anyString(), any(OffsetDateTime.class));
+                any(UUID.class), any(UUID.class), any(UUID.class), anyString(),
+                any(OffsetDateTime.class), any(OffsetDateTime.class));
     }
 
     @Test
@@ -1142,7 +1186,7 @@ class LinkedLearnerServiceTest {
 
         // ⚠️ No relationship, which is the point: expiry must cut the path to a cross-user read.
         verify(relationshipRepository, never()).insertPendingIfAbsent(
-                any(), any(), any(), anyString(), any());
+                any(), any(), any(), anyString(), any(), any());
     }
 
     @Test
@@ -1163,7 +1207,7 @@ class LinkedLearnerServiceTest {
                 .isInstanceOf(LinkedLearnerInvalidStateException.class);
 
         verify(relationshipRepository, never()).insertPendingIfAbsent(
-                any(), any(), any(), anyString(), any());
+                any(), any(), any(), anyString(), any(), any());
     }
 
     @Test
@@ -1320,7 +1364,7 @@ class LinkedLearnerServiceTest {
         // what makes it a gate rather than a check somewhere in the middle.
         verify(userRepository, never()).findById(any(UUID.class));
         verify(invitationRepository, never()).findById(any(UUID.class));
-        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any());
+        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any(), any());
     }
 
     @Test
@@ -1335,7 +1379,7 @@ class LinkedLearnerServiceTest {
                 .isInstanceOf(LinkedLearnerNotAllowedException.class);
 
         // ⚠️ Authorises on owning the ADDRESS, not on holding the id.
-        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any());
+        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any(), any());
     }
 
     @Test
@@ -1349,7 +1393,7 @@ class LinkedLearnerServiceTest {
         assertThatThrownBy(() -> service.acceptInvitation(
                 invitation.getId(), caller.getId(), new AcceptLinkedLearnerRequest(null, false)))
                 .isInstanceOf(LinkedLearnerInvalidStateException.class);
-        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any());
+        verify(relationshipRepository, never()).insertPendingIfAbsent(any(), any(), any(), anyString(), any(), any());
     }
 
     @Test

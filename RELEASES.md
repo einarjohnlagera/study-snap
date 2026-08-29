@@ -242,6 +242,19 @@ cost of the test that is now committed** — `CLAUDE.md`'s size warning applies 
   touch. **⚠️ THE PROHIBITION OTHERWISE STANDS IN FULL** — no column may be added to
   `linked_learner_invitations` or `_guardian_consents`, and no further column to
   `linked_learner_relationships` beyond `expires_at`, without the same explicit amendment.
+- **⚠️ DECIDED AT SCOPING 2026-08-29, recorded so it does not read as unresolved at signoff: WHEN A REQUEST
+  EXPIRES, THE CARRIER STAYS TERMINAL.** A redemption already sets `redeemed_at`, so the link is spent; when
+  the relationship it created expires, **nothing re-opens the link** — the creator mints a new one.
+  **No un-expiry, no re-arm, no resend endpoint.** This follows from acceptance being **load-bearing**: a
+  request that timed out is a request nobody confirmed, and reviving it would let a link outlive the single
+  relationship it was minted to deliver. **⚠️ The cost is real and is accepted, not overlooked:** a supporter
+  whose learner never confirmed must start over with nothing prompting them. That is answered in **item 3's
+  orientation copy**, not with a lifecycle change — which is why the two items are stated together here.
+- **⚠️ ITEM 2 SHIPS AS ITS OWN PR, AFTER ITEMS 1 AND 6 MERGE — a sequencing decision, not a deferral.**
+  `AccountDataExportService` is touched by nothing else in this release, and item 2's only coupling to item 1
+  is that expiry deletes the row the export would show — **a one-line note, not a shared code path.** Bundling
+  a compliance-surface field into the same diff as a migration, a sweep and a concurrency harness would hand
+  the three-agent pressure test one diff to pull apart instead of two with independent correctness arguments.
 - **⚠️ THE REQUEST TTL MUST BE ≥30 DAYS AND DATED FROM RELATIONSHIP `created_at`.** This is not a default, it
   is what keeps `[CHECKPOINT — due 2026-09-26]` answerable — see finding 2 above. A shorter TTL or a
   different clock silently destroys a dated read.
@@ -321,6 +334,41 @@ cost of the test that is now committed** — `CLAUDE.md`'s size warning applies 
 
 ### Shipped
 
+- **Unconfirmed relationship requests now expire without retaining a redeemer's provisional birth year indefinitely (items 1 and 6).** `V128` adds the relationship-only `expires_at`, widens only `ck_linked_learner_status` with terminal `EXPIRED`, backfills existing `PENDING` deadlines from `created_at + 30 days`, and indexes the due predicate. The separate invitation constraint and `invitation-ttl-days` carrier clock are unchanged. New requests use configurable `request-ttl-days` with a hard minimum of 30; acceptance clears the deadline.
+- **The scheduled sweep preserves the learner-lock ordering without creating a lock storm.** The non-transactional job reads due IDs once, then a separate transactional worker handles exactly one relationship and one learner lock at a time. `markExpiredIfPending` is a conditional update with automatic clear/flush; only a one-row win deletes the provisional declaration. A zero-row race keeps it, and an exception rolls back that row alone while the job continues. Re-inviting an expired pair mints a new relationship; the spent link carrier remains terminal.
+- **Expired state is honest end to end.** Relationship responses expose `EXPIRED`, continue zeroing `*SharedWithMe` outside `ACCEPTED`, and authorization continues using the same not-found contract as `REVOKED`. Learning Connections renders a neutral timeout distinct from revocation and directs the person to send a new invitation; the shared Dashboard status vocabulary and Learning Connections guide were updated together.
+- **Real-row mutation coverage names the predicate it kills.** `dueRequestFinderIncludesTheExactBoundaryAndOnlyPendingRows` kills `<= → <`, a dropped `PENDING` filter, and a future-row match; `markExpiredIfPendingTransitionsOnlyItsPendingTarget` kills `'PENDING' → 'ACCEPTED'` and removal of the transition's status predicate; `acceptingPendingRelationshipClearsItsExpiryDeadline` kills removal of `expires_at = null`; and `expiredPairCanCreateANewRelationshipWhileInvitationStatusVocabularyStaysClosed` pins both the live-pair predicate and the unchanged invitation constraint.
+- **⚠️ FOUND AT `/audit-diff` AND FIXED IN SCOPE — THE SWEEP TERMINATED CONSENT-PAUSED CONNECTIONS, AND A
+  DELIVERED TEST WAS BLESSING IT.** `markExpiredIfPending` guarded on `status = 'PENDING'` **alone**. But
+  `pauseAcceptedForConsent` returns an `ACCEPTED` row to `PENDING` for a `v0.89.1` birth-year correction and
+  leaves `expires_at` **NULL**, because acceptance cleared it — so a paused connection is indistinguishable
+  from an unconfirmed request **by status alone**, and the sweep expired it. **That is precisely the release's
+  own anti-drift rule inverted: a pause is not a termination**, and it contradicted the sentence
+  `linked-learners.md` had just gained. **The `expires_at IS NULL` protection lived entirely in the FINDER**,
+  and selection is deliberately a different transaction from execution — one learner lock each — so anything
+  the finder filtered can change in between.
+- **⚠️ THE TEST THAT SHOULD HAVE CAUGHT IT PERMITTED IT.** `runCorrectionExpiryRace` asserted
+  `isIn("PENDING", "EXPIRED")`, so the defect passed as an allowed outcome. **Reproduced deterministically
+  before fixing** — a seeded `ACCEPTED` row, corrected into the minor range, then swept:
+  `expected: "PENDING" but was: "EXPIRED"`. The assertion is now `isEqualTo("PENDING")`, which both commit
+  orders satisfy: expiry loses to an `ACCEPTED` row, and a paused row has no deadline.
+- **The fix re-checks the deadline in the statement**, making a NULL deadline **structurally** unexpirable
+  rather than merely unselected. **⚠️ Two of the delivered tests then failed — and that was the point:** both
+  seeded `PENDING` rows with **no deadline at all** and passed only because the guard ignored it. Their
+  fixtures now set a due deadline, and one gained an explicit undated-row assertion.
+  **Mutation-verified:** dropping the deadline predicate fails **three** tests —
+  `consentPausedRelationshipIsNeverExpiredBecauseAPauseIsNotATermination`,
+  `markExpiredIfPendingTransitionsOnlyItsPendingTarget` and
+  `requestExpiryRacesCannotStrandAnAcceptedLearnerInEitherCommitOrder`.
+- **⚠️ `expires_at` is no longer overwritten with the sweep time.** The delivered statement set
+  `expires_at = :expiredAt` on expiry, giving one column two meanings — a deadline while `PENDING`, an event
+  time once `EXPIRED`. **Three dated checkpoints read this table**, and a column that silently changes meaning
+  on one status is exactly the drift those reads cannot survive. It now means *the deadline*, for every status.
+- **⚠️ A denylist on the dashboard would have leaked the new status, and the delivery caught it.**
+  `app/dashboard/page.tsx` filtered supporters with `status !== "REVOKED"` — so `EXPIRED` would have rendered
+  as a live connection. It is now an allowlist (`PENDING || ACCEPTED`). Recorded because the enumeration of
+  every `status` read is what surfaced it, not review of the diff.
+- **The provisional-row invariant now has a two-thread, real-PostgreSQL harness.** `requestExpiryRacesCannotStrandAnAcceptedLearnerInEitherCommitOrder` runs sweep versus `accept()`, sweep versus `revoke()`, and sweep versus the birth-year correction in both commit orders, with the second transaction visibly blocked on the real learner row. Every interleaving directly rejects the unremediable state: `ACCEPTED` plus a provisional row plus null `users.birth_year`.
 - **The curated title rule now governs BOTH title-emitting prompts (item 9).** `note-generation-developer.txt`
   declared a `title` in its output schema (`:6`) but governed it with two thin bullets — *"specific,
   academic, and anchored to the topic"* and *"not generic"* — while `developer.txt` carried the full

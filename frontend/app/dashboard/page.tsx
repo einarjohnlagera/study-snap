@@ -474,7 +474,8 @@ export default function DashboardPage() {
       setOverview(overviewResult.status === "fulfilled" ? overviewResult.value : null);
       setFeedbackPromptContext(feedbackContextResult.status === "fulfilled" ? feedbackContextResult.value : null);
       setSupportedLearners(linkedLearnersResult.status === "fulfilled"
-        ? linkedLearnersResult.value.filter((link) => link.callerRole === "SUPPORTER" && link.status !== "REVOKED")
+        ? linkedLearnersResult.value.filter((link) => link.callerRole === "SUPPORTER"
+          && (link.status === "PENDING" || link.status === "ACCEPTED"))
         : []);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your notes.";

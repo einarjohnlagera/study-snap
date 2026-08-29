@@ -289,6 +289,21 @@ it("offers progress only when the counterparty has granted progress access", asy
   expect(screen.getAllByRole("link", { name: "View progress" })).toHaveLength(1);
 });
 
+it("renders an expired request distinctly after loading it from the server", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    status: "EXPIRED",
+    incomingInvitation: false,
+  }]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByText(/connection request expired/i)).toBeInTheDocument();
+  expect(screen.getByText(/new invitation/i)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+  expect(getLinkedLearners).toHaveBeenCalledTimes(1);
+});
+
 it("keeps an unavailable sharing switch reachable instead of removing it from the tab order", async () => {
   jest.mocked(getLinkedLearners).mockResolvedValue([{
     ...baseLink,
