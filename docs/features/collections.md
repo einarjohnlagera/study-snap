@@ -964,3 +964,26 @@ Do not add these under the collection CRUD spine unless explicitly scoped later:
 - live-link or shared-progress adopted plans
 - plan browse directory
 - lesson-plan document parsing
+
+## Builder drag behaviour
+
+Reordering in the Study Plan Builder persists on every drop: the drag handler writes the new order
+and then refreshes. Three properties make that safe and usable, and each is pinned by a test.
+
+- **A drop landing while a save is in flight is refused, not queued.** `disabled={mutationInProgress}`
+  is passed to every sortable, but `useSortable` evaluates it at drag *start* and `setMutationKind`
+  only schedules a re-render — so a fast second drag could begin before the disable committed, write
+  from a diverging base, and then be clobbered when the first drag's refresh called `setLeafItems`.
+  The guard is therefore at drop time as well.
+- **The surface says when a save is running.** Without it a curator cannot tell, and keeps dragging
+  into the save — which is how the race above was reachable by hand rather than only in theory.
+- **A reorder does not refetch the note list.** `refreshBuilder({ skipNotes: true })` is used on the
+  reorder path only, because reordering adds, removes and edits no note. **⚠️ Any path that CAN
+  change the note set — add, remove, import — must not pass `skipNotes`.**
+
+Both pointer and touch sensors carry an `activationConstraint`, so a drag does not begin on the first
+pixel of movement and does not compete with the section rename input inside the same row.
+
+**⚠️ This is mitigation.** The agreed direction (owner, 2026-08-29) is a deferred *Save order* model
+covering all drag reordering, where dragging performs no write until an explicit save. Everything
+above survives that change rather than being replaced by it.

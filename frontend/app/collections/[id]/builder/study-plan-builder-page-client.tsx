@@ -1222,9 +1222,14 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   const [pendingSectionRename, setPendingSectionRename] = useState<{ oldName: string; newName: string } | null>(null);
   const [setSectionsConfirmOpen, setSetSectionsConfirmOpen] = useState(false);
 
+  // ⚠️ Both sensors need an activation constraint, and the reason is not tuning. Without one a drag
+  // begins on the first pixel of pointer movement, so clicking the section rename INPUT — which sits
+  // inside the draggable row — competes with starting a drag, and the surface reads as twitchy. The
+  // touch delay additionally lets a scroll gesture start on a card without dragging it, which is the
+  // reported viewport.
   const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(TouchSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
   useEffect(() => {
@@ -1240,15 +1245,21 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     }
   }, []);
 
-  const refreshBuilder = useCallback(async (options?: { seedCollapsed?: boolean }) => {
+  const refreshBuilder = useCallback(async (options?: { seedCollapsed?: boolean; skipNotes?: boolean }) => {
     setRefreshingBuilder(true);
     try {
+      // ⚠️ `listNotes()` fetches the user's ENTIRE note list. A reorder changes only item positions
+      // inside this collection — it adds, removes and edits no note — so refetching every note the
+      // user owns after each drop was the bulk of the unresponsiveness on a large plan. Paths that
+      // can change the note set (add, remove, import) must NOT pass skipNotes.
       const [collectionResult, notesResult] = await Promise.all([
         getCollection(collectionId),
-        listNotes(),
+        options?.skipNotes ? Promise.resolve(null) : listNotes(),
       ]);
       setCollection(collectionResult);
-      setNotes(notesResult);
+      if (notesResult) {
+        setNotes(notesResult);
+      }
       if (collectionResult.childCount === 0) {
         setGoal(null);
         setSubjects([]);
@@ -1349,7 +1360,8 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
     setLeafItems(nextItems);
     try {
       await setCollectionItemOrder(collectionId, buildOrderPayload(nextItems));
-      await refreshBuilder();
+      // A pure reorder cannot change which notes exist, so it does not need the note list.
+      await refreshBuilder({ skipNotes: kind === "reorder-notes" });
       if (analyticsSource) {
         void trackAnalyticsEvent({
           eventType: "COLLECTION_SECTION_ASSIGNED",
@@ -1762,6 +1774,15 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
   };
 
   const handleLeafDragEnd = (event: DragEndEvent) => {
+    // ⚠️ A drop that lands while a save is in flight is DISCARDED, not queued. Two drags in flight
+    // wrote from diverging bases: the second computed its order from current state, then the first
+    // drag's refresh called setLeafItems(server state) and clobbered it — the reported "reordering
+    // the sections much worse". Dragging is also visually disabled while this is true, so the drop
+    // is refused rather than silently ignored.
+    if (mutationKind !== null) {
+      setActiveDrag(null);
+      return;
+    }
     const activeData = event.active.data.current;
     const overData = event.over?.data.current;
     setActiveDrag(null);
@@ -1960,7 +1981,18 @@ export function StudyPlanBuilderPageClient({ collectionId }: Readonly<{ collecti
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <p className="text-xs text-foreground/55">Drag notes or {labels.sectionSingular.toLowerCase()}s to reorganize.</p>
+              {/*
+                ⚠️ There was NO saving indicator anywhere near the sections, which is what made the
+                race reachable by hand: a curator could not tell a save was running, so they kept
+                dragging into it. The drag handles carry `disabled:opacity-50`, but a disabled
+                handle looks much like an enabled one at 9px. Say it in words instead, in the slot
+                that already explains the interaction.
+              */}
+              <p className="text-xs text-foreground/55" role="status">
+                {mutationInProgress
+                  ? `Saving… dragging is paused until this finishes.`
+                  : `Drag notes or ${labels.sectionSingular.toLowerCase()}s to reorganize.`}
+              </p>
               <Button
                 type="button"
                 variant="outline"
