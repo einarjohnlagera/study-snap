@@ -76,7 +76,32 @@ pixel of movement and competes with clicking the section rename input inside the
 
 ### Shipped
 
-_(nothing yet)_
+- **Math renders on the plain-text note surfaces.** The Full Notes body and the public library note
+  page rendered the note in a bare `<p className="whitespace-pre-wrap">` — **no markdown, no math** —
+  so a well-formed `$Q = \frac{2}{3} C_d L \sqrt{2g} H^{3/2}$` displayed as source. Both now use the
+  existing `renderMathText`, the same call pattern `quiz-question-text.tsx` uses; `katex` was already
+  a dependency, and `normalizeBareMath` additionally repairs notes stored before any instruction to
+  emit delimiters. **⚠️ Safe in the public page's SERVER component — verified, not assumed:** the math
+  module has no hooks, no `"use client"` and no browser APIs, and KaTeX renders to a string.
+  **⚠️ The test asserts the `$` delimiters were CONSUMED, not that the TeX is absent** — KaTeX
+  deliberately keeps the source in a MathML `<annotation>` for assistive tech, so asserting its
+  absence would have failed for the wrong reason. **Mutation-verified:** reverting to `{fullNoteContent}`
+  fails `renders math in the Full Notes body instead of printing LaTeX source`.
+- **Dragging in the Builder no longer fights its own save.** Three changes, each surviving the
+  `v0.96.0` deferred-save rework. **(1)** Both `PointerSensor` and `TouchSensor` gained an
+  `activationConstraint`, so a drag no longer begins on the first pixel and stops competing with the
+  section rename input inside the same row. **(2) A drop landing while a save is in flight is now
+  refused.** `disabled={mutationInProgress}` already existed, but `useSortable` evaluates it at drag
+  *start*, and `setMutationKind` only schedules a re-render — so a fast second drag began before the
+  disable committed. The guard is at drop time, which is the hole that was actually reachable.
+  **(3) A reorder no longer refetches `listNotes()`** — the user's entire note list — since a reorder
+  adds, removes and edits no note. **⚠️ Paths that CAN change the note set must not pass `skipNotes`.**
+- **⚠️ The surface never said a save was running, and that is what made the race reachable by hand.**
+  There was no saving indicator anywhere near the sections; the drag handles carry
+  `disabled:opacity-50`, but a disabled 9px handle looks much like an enabled one. The line that
+  explains the interaction now says so in words while a mutation is in flight. **Mutation-verified:**
+  removing it fails `says a save is running, because nothing on this surface used to say so`, and
+  restoring the refetch fails `does not refetch every note the user owns just to reorder one plan`.
 
 
 ## v0.95.0 - Redemption Integrity
