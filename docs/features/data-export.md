@@ -19,7 +19,8 @@ NoteLib supports GDPR-style data portability through an authenticated account ex
 Included:
 
 - `meta`: `exportedAt`, `schemaVersion`
-- `account`: profile basics owned by the user, including email, first/last/display name, username, profile type, learner level, course/program, study goal, focus subjects, exam date, account-global `birthYear`, and account creation time
+- `account`: profile basics owned by the user, including email, first/last/display name, username, profile type, learner level, course/program, study goal, focus subjects, exam date, account-global `birthYear`, `provisionalBirthYears[]`, and account creation time
+- `account.provisionalBirthYears[]`: birth years the requester declared **as the learner** when redeeming an invitation link, each with its `relationshipId` and `declaredAt`. **⚠️ Deliberately separate from `birthYear` and never merged into it** — `users.birth_year` is account-global and write-once, while a provisional declaration is neither and becomes the account year only if the link's creator confirms. Merging them would make the one surface that exists to state what is held accurately assert an account-global value that was never written. **⚠️ It is a LIST because a learner can hold more than one**: the table is keyed by relationship, so someone who redeems two links before either creator confirms has two independent declarations. **⚠️ Only rows where the requester is the LEARNER are exported** — the table has no user column, so the query joins `linked_learner_relationships` on `learner_user_id`; that join is the privacy boundary, not a filter applied afterwards. Expiry and revocation delete the row, so it stops appearing — correct, not a regression.
 - `notes[]`: owned public and private notes, including title, subject, note-level `domainContext`, note-level `learnerLevel`, content, visibility, copy source title, and timestamps; both new metadata fields may be `null`
 - `studyPacks[]`: owned Study Packs, including linked `noteId`, title, summary, key concepts, and quiz
 - `collections[]`: owned Study Plans/collections, with ordered owned note references by id and title
@@ -32,7 +33,7 @@ Excluded:
 - Analytics events
 - Financial and billing records, including payments, subscriptions, transactions, vouchers, and provider event data
 - Any data not owned by the requester
-- Linked-learner relationship and guardian-consent rows are not currently included. The export exposes the requester's current `birthYear`, but does not disclose counterparties or relationship-specific attestations.
+- Linked-learner relationship and guardian-consent rows are not currently included. The export exposes the requester's current `birthYear` and their own provisional declarations, but **does not disclose counterparties** or relationship-specific attestations. `provisionalBirthYears[]` carries a `relationshipId` the requester is already a party to, and no counterparty identity.
 
 ## Design Decisions
 

@@ -157,6 +157,7 @@ class AuthControllerTest {
                         List.of(),
                         null,
                         null,
+                        List.of(),
                         OffsetDateTime.parse("2026-06-01T10:00:00Z")
                 ),
                 List.of(),
