@@ -338,6 +338,52 @@ cost of the test that is now committed** — `CLAUDE.md`'s size warning applies 
 - **The scheduled sweep preserves the learner-lock ordering without creating a lock storm.** The non-transactional job reads due IDs once, then a separate transactional worker handles exactly one relationship and one learner lock at a time. `markExpiredIfPending` is a conditional update with automatic clear/flush; only a one-row win deletes the provisional declaration. A zero-row race keeps it, and an exception rolls back that row alone while the job continues. Re-inviting an expired pair mints a new relationship; the spent link carrier remains terminal.
 - **Expired state is honest end to end.** Relationship responses expose `EXPIRED`, continue zeroing `*SharedWithMe` outside `ACCEPTED`, and authorization continues using the same not-found contract as `REVOKED`. Learning Connections renders a neutral timeout distinct from revocation and directs the person to send a new invitation; the shared Dashboard status vocabulary and Learning Connections guide were updated together.
 - **Real-row mutation coverage names the predicate it kills.** `dueRequestFinderIncludesTheExactBoundaryAndOnlyPendingRows` kills `<= → <`, a dropped `PENDING` filter, and a future-row match; `markExpiredIfPendingTransitionsOnlyItsPendingTarget` kills `'PENDING' → 'ACCEPTED'` and removal of the transition's status predicate; `acceptingPendingRelationshipClearsItsExpiryDeadline` kills removal of `expires_at = null`; and `expiredPairCanCreateANewRelationshipWhileInvitationStatusVocabularyStaysClosed` pins both the live-pair predicate and the unchanged invitation constraint.
+- **Terminal transitions cut grant rows — one rule for revoke and expiry (item 4).**
+  `revokeAllLiveForRelationship` ends every live grant on a terminated relationship, **in both directions and
+  every scope**, unlike the per-direction per-scope `revokeLive` that withdrawal uses. It runs inside the same
+  successful-transition branch that deletes the provisional declaration, so a lost race to acceptance cuts
+  nothing.
+- **⚠️ IT ALSO RUNS ON REVOKE'S IDEMPOTENT TERMINAL EARLY-RETURN, and that is not defensiveness.** Revocation
+  did **not** cut grants before `v0.97.0`, and `revoke()` now early-returns on a terminal status — so a
+  relationship revoked earlier would keep live rows and report `*SharedByMe: true` forever, never reaching the
+  transition branch. The statement is idempotent, so this heals those rows and changes nothing else.
+- **⚠️ THE CONSENT PAUSE MUST NEVER CUT A GRANT, and this is the load-bearing half of the item.** `v0.93.0`
+  made the row survive the `ACCEPTED → PENDING` pause **by design**: `*SharedByMe` reflects the ROW, so it
+  reports the caller's own standing act of sharing and what resumes on re-acceptance. Cutting there would make
+  a learner's own toggle read OFF while they never touched it. **Mutation-verified:** adding the cut beside
+  `pauseAcceptedForConsent` fails `aConsentPauseLeavesEveryGrantLiveBecauseAPauseIsNotATermination`; removing
+  it from revoke fails `revokingARelationshipCutsEveryLiveGrantOnItInBothDirections`.
+- **⚠️ EXPIRY'S GRANT CUT IS UNREACHABLE TODAY — ESTABLISHED, NOT ASSUMED, AND THE FIRST TEST WRITTEN FOR IT
+  WAS WRONG BECAUSE OF IT.** A test seeding a grant on a `PENDING` row failed at its *setup* assertion:
+  `insertLiveIfAbsent` is conditional on `ACCEPTED` (`v0.93.0`), so a `PENDING` relationship can never receive
+  a grant — and the only route from `ACCEPTED` back to `PENDING` is the consent pause, which leaves
+  `expires_at` NULL and is therefore unexpirable. **So the sweep can never MEET a live grant.** The cut stays
+  as one rule shared with revoke, and two tests now record *why* its zero-row count is correct:
+  `aPendingRelationshipCannotReceiveAGrantWhichIsWhyExpiryNeverMeetsOne` and a forced-state defence-in-depth
+  case. **⚠️ Nobody should later read that zero as a defect.**
+- **⚠️ The pre-`v0.97.0` gap stays described as INERT.** `requireGrant` demands `ACCEPTED`, so a live grant on
+  a terminated relationship granted nothing; what it broke was **DTO honesty**. This is not a privilege
+  escalation and the release notes must not imply one.
+- **⚠️ FOUND WHILE VERIFYING THESE ITEMS: a real, pre-existing test flake, diagnosed rather than re-run
+  until it passed.** The full suite failed in `NoteServiceStatusProjectionIntegrationTest` with
+  *"Expected size: 2 but was: 4"*, the two extra statements being generation-recovery queries. The test
+  passes in isolation and passed on the merge base, so it was tempting to call it unrelated noise. The cause
+  is real: **`GenerationRecoveryJob` runs `0 */10 * * * *` — every ten minutes on the wall clock — so on any
+  full-suite run spanning a ten-minute boundary it fires mid-test and its queries land in that test's
+  captured query list.** Earlier builds passed by timing, not by correctness.
+- **Scheduled jobs are now disabled in the test profile** (`"-"`, Spring's `Scheduled.CRON_DISABLED`), which
+  is in scope here because this release **adds** a `@Scheduled` job and it should never be able to pollute a
+  test. Jobs are exercised by calling them directly. **⚠️ Known limitation, recorded not fixed:** three jobs
+  carry **hardcoded** crons (`BillingUsageResetJob`, `SubscriptionExpiryJob`, `BulkGenerationResultCleanupJob`
+  at `0 45 * * * *`) and cannot be disabled by configuration, so the same class of flake remains theoretically
+  reachable for them.
+- **Invitation-link endpoint security coverage, 1 of 5 → 5 of 5 (item 7).** `create`, `list`, `revoke`,
+  `resolve` and `redeem` are each asserted anonymous-rejected. **⚠️ The point is not that
+  `.anyRequest().authenticated()` is currently sufficient — it is — but that a single canary is the whole
+  guard:** the day a `permitAll` matcher is added, or an endpoint moves under a path that already has one,
+  one test covering one endpoint would not notice. **Redemption is the sharpest of the five**, since it is
+  what creates the relationship. CSRF is disabled for this JWT API, so the unauthenticated POSTs return 401
+  rather than 403 — checked rather than assumed.
 - **A provisional birth year now appears in the account data export (item 2).** `AccountDataExportService`
   exported `users.birth_year` only, so between redemption and confirmation the year a person declared was
   **held but never disclosed to them**. Owner ruled INCLUDE IT on **completeness, not user value** — the

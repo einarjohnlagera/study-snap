@@ -1,5 +1,6 @@
 package com.studysnap.backend.service.jobs;
 
+import com.studysnap.backend.repository.LinkedLearnerGrantRepository;
 import com.studysnap.backend.repository.LinkedLearnerProvisionalBirthYearRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class LinkedLearnerRequestExpiryWorker {
     private final LinkedLearnerRelationshipRepository relationshipRepository;
     private final LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository;
+    private final LinkedLearnerGrantRepository grantRepository;
     private final UserRepository userRepository;
 
     @Transactional
@@ -40,6 +42,10 @@ public class LinkedLearnerRequestExpiryWorker {
                                 relationshipId);
                         return false;
                     }
+                    // ⚠️ Same terminal rule as revoke: every live grant on this relationship ends,
+                    // both directions and every scope. Inside the winning branch, so a relationship
+                    // that was accepted or paused instead keeps its grants.
+                    grantRepository.revokeAllLiveForRelationship(relationshipId, expiredAt);
                     provisionalBirthYearRepository.deleteForRelationship(relationshipId);
                     log.info("linked-learners.request-expiry expired relationshipId={}", relationshipId);
                     return true;

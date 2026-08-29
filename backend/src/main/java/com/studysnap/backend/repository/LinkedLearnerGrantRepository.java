@@ -66,4 +66,33 @@ public interface LinkedLearnerGrantRepository extends JpaRepository<LinkedLearne
             @Param("scope") LinkedLearnerGrantScope scope,
             @Param("revokedAt") OffsetDateTime revokedAt
     );
+
+    /**
+     * Cut every live grant on a relationship, in both directions and every scope, for a TERMINAL
+     * transition.
+     *
+     * <p>⚠️ THIS IS FOR TERMINAL STATUSES ONLY — {@code REVOKED} and {@code EXPIRED}. It must NEVER
+     * be called on the {@code ACCEPTED -> PENDING} consent pause. v0.93.0 made the grant row survive
+     * that pause BY DESIGN: {@code *SharedByMe} reflects the ROW, so it reports the caller's own
+     * standing act of sharing and what will resume on re-acceptance. Cutting on a pause would make a
+     * learner's own toggle read OFF while they never touched it, and sharing would not resume.
+     *
+     * <p>⚠️ Unlike {@link #revokeLive} this is deliberately NOT scoped to a direction or a scope. A
+     * terminated relationship ends every grant on it, whoever issued it; leaving one live would keep
+     * {@code *SharedByMe} asserting a sharing act on a relationship that no longer exists.
+     *
+     * <p>Idempotent via the {@code revokedAt is null} guard, so calling it on an already-terminal
+     * relationship is a no-op — which is also what heals rows left live by the pre-v0.97.0 revoke.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LinkedLearnerGrantEntity grant
+               set grant.revokedAt = :revokedAt
+             where grant.relationshipId = :relationshipId
+               and grant.revokedAt is null
+            """)
+    int revokeAllLiveForRelationship(
+            @Param("relationshipId") UUID relationshipId,
+            @Param("revokedAt") OffsetDateTime revokedAt
+    );
 }
