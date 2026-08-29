@@ -1,5 +1,125 @@
 # RELEASES.md - NoteLib
 
+## v0.96.0 - Authoring Integrity
+
+**Status: In Progress** (kicked off 2026-08-29)
+
+Theme: what the product generates, names and shows should be correct — and building a plan should not
+fight the save the last drag started.
+
+### Why this release exists
+
+**The theme is the scope filter, chosen deliberately (owner, 2026-08-29).** Asked to include everything
+un-gated, the release takes the four items about **generation, naming and display** and holds three about
+**connection privacy and lifecycle** for `v0.97.0` — they are a different subject, and the provisional
+birth year in the data export, unconfirmed-request expiry and supporter onboarding belong together.
+
+**Two of the "gates" lifted at kickoff turned out not to be gates, and this is recorded so it is not
+re-derived:**
+
+1. **The onboarding freeze barely binds on Summary maths.** `app/onboarding/page.tsx` **already renders
+   maths** in its quiz preview (`:2068`, `:2076`) via `renderMathText`, since `31a8a2b9` — long before this
+   release. So fixing the summary preview does not introduce maths to the path
+   `[CHECKPOINT — due 2026-09-11]` measures; it makes one screen **internally consistent with itself**,
+   inside a collapsible preview, adding no step to the flow. **⚠️ The read is still owed on 2026-09-11 and
+   this release must not add a step, remove one, or change the ORDER of the onboarding flow.**
+2. **The title policy's blocking read is not a gate, it is a missing fact — and both branches share a
+   half.** `developer.txt` is the confirmed title source either way
+   (`StudyPackService:1110` — `note.setTitle(normalizeEditableTitle(generated.title()))`). The unrun query
+   only decides whether `note-generation-developer.txt` **also** needs the rule. **This release ships the
+   confirmed half and pre-empts nothing**, which is exactly the ratified *"prefer the smallest change that
+   actually fixes the observed generation behavior."*
+
+**⚠️ Supporter onboarding is NOT in scope and was never actually gate-blocked — it is UNDEFINED.**
+*"Supporter onboarding"* has no definition anywhere in `learning-connections-phase-plan.md`; lifting a gate
+does not scope it. It needs a definition step first, and belongs with the connection work in `v0.97.0`.
+
+### Planned Scope
+
+- **1. Deferred *Save order* model in the Study Plan Builder (frontend).** Dragging performs **no network
+  call**; an explicit **Save order** action commits the whole plan in one write, with a discard affordance
+  and a leave guard. **⚠️ OWNER DECISIONS 2026-08-29, do not re-litigate:** explicit button over debounced
+  auto-save, and it covers **ALL** drag reordering — sections and notes — because they share
+  `persistLeafItems` and therefore share the identical race. **⚠️ THREE VERIFIED TRAPS**, each of which
+  would ship a silent defect if left implicit: **(a)** `refreshBuilder` calls `setLeafItems` unconditionally
+  from **13 call sites**, so a rename or an add would discard pending order with no navigation and no guard
+  fired — non-drag mutations must **flush first, never discard**; **(b)** there is no "section order", only
+  per-item positions, so the dirty check must compare against a **last-saved baseline**, not section names;
+  **(c)** a **500ms debounced combobox writer** at `study-plan-builder-page-client.tsx:443` fires on a timer
+  a leave guard never sees, and must participate in the flush rule. Prompt already written:
+  `docs/codex-prompts/v0.96.0-item1-deferred-builder-reorder.md`. **⚠️ `v0.95.1`'s mitigation stays** —
+  activation constraints and the saving indicator survive this rework.
+- **2. Summary renders maths (frontend).** `components/ui/summary-markdown.tsx` runs `react-markdown` +
+  `remark-gfm` with **no math plugin**, so `$Q = \frac{2}{3}…$` displays as source on **9 consumers,
+  including SEO-indexed public pages** (`/public/library/[subject]/[slug]`, `/p/[token]`).
+  **⚠️ The naive fix is WRONG and must not be attempted:** `_` is markdown emphasis, so `$x_1 + x_2$` is
+  mangled into `<em>` before any post-processing could find the math — tokenization must happen first.
+  **⚠️ Add `remark-math` for TOKENIZATION only and render its nodes through the EXISTING KaTeX setup** —
+  not `rehype-katex` — so the product keeps **one** math-rendering configuration rather than two that drift.
+- **3. Curated note titles name the knowledge, not the curriculum container (prompt, `developer.txt`).**
+  One **unconditional** rule in the shared Study Pack prompt. **⚠️ This changes the AI's default title
+  suggestion on learner-facing paths too, and that is ACCEPTED** — do not build a curated-only conditional
+  block. **⚠️ The instruction must be POSITIVE and SEMANTIC** — *include disciplinary language when it
+  describes the knowledge; omit it when it merely describes the audience, curriculum container or
+  applicability* — and must **never** be phrased as *"prepositional phrases are bad"* or *"'in X' is bad"*.
+  *"Nursing Management of Acute Asthma"* and *"Structural Applications of Differential Equations"* are
+  **correct** titles. **⚠️ Universal: no Engineering-specific and no per-program title logic, ever.**
+  **⚠️ `note-generation-developer.txt` is OUT until the §5 read runs.**
+- **4. Domain Context taxonomy doctrine (docs only).** Record the owner's 2026-08-29 reconciliation.
+  **⚠️ `ADR-001`'s COARSEST-context rule is NOT amended and remains authoritative**; the direction's
+  *"narrowest existing authoring tradition"* wording must be **corrected wherever it appears** so it does
+  not establish a competing rule. Record the four genuinely-new items only — a new Course/Program does not
+  imply a new Domain Context; `GENERAL_ENGINEERING` is rejected; the zero-usage observation as **unresolved**
+  evidence; and the calibration checkpoint. **⚠️ Everything else already exists as doctrine and must be
+  LINKED, not restated.** **⚠️ State §B's carve-out**: NULL is the backlog marker for **single-program**
+  notes only, because `NoteApplicableProgramsService:74-75` rejects a null Domain Context on two or more
+  programs.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW.** `[CHECKPOINT — due 2026-09-11]`
+  measures completion against a 62.4% baseline and **that read is still owed**. Rendering maths inside an
+  existing preview section is in scope; touching the flow is not.
+- **⚠️ Do NOT write a second math-rendering configuration.** `katex` is already a dependency and
+  `renderMathText` already handles `$…$`, `$$…$$`, `\[…\]` plus `normalizeBareMath`. `remark-math` is for
+  tokenization only.
+- **⚠️ Do NOT touch `note-generation-developer.txt`**, and do not run or pre-empt the §5 feedback-loop read.
+- **⚠️ No title post-processing, no suffix stripping, no mass rename, no migration, no bulk update.** The
+  rule is semantic and lives in the prompt, never in code.
+- **⚠️ Do NOT rename learner-owned notes**, do not propagate curated title changes into learner copies, and
+  do not add validation preventing a learner naming a note *"Fluid Mechanics for my CE Finals"*.
+- **⚠️ Do NOT amend `ADR-001`'s selection rule**, and do not restate its governance rule in a feature doc —
+  link to it; an ADR outranks a feature doc, and a restated rule drifts.
+- **⚠️ Do NOT describe Domain Context classification as 12.7% or "4 of 8 values"** — the current read is
+  **32.6% (370/1,135)** and **5 of 8**.
+- **⚠️ Do NOT wholesale-refactor `study-plan-builder-page-client.tsx`** (2282 lines), do not remove the
+  `v0.88.0` debounced combobox writer or its comment, and keep `UNGROUPED_SECTION_NAME` excluded from
+  section drags as both source and target.
+- **⚠️ No backend change beyond the prompt file. No migration. No new analytics event.**
+- **⚠️ OUT OF SCOPE and held for `v0.97.0` — a different subject, not a deferral of merit:** the provisional
+  birth year in the account data export, unconfirmed-request expiry, and supporter onboarding (which needs a
+  definition step first).
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: a single `advisor()` call on the diff.** Four items, no permission substrate,
+  no cross-user read, no money or quota semantics, no migration. **⚠️ The title prompt has the widest blast
+  radius** — it changes the AI's default title on every generation path including learner-facing — so that
+  is where review attention goes; escalate to one scoped cold agent only if item 1's design grows a second
+  write path.
+- **The `### Planned Scope` heading above is permanent**; delivery appends to `### Shipped`.
+- **A `[CHECKPOINT]` row is owed at signoff for item 3**, and **⚠️ it SHARES ITS TRIGGER with the Domain
+  Context calibration checkpoint** — same three programs, same *sufficient representative authoring*
+  condition. State the trigger canonically once and cross-reference; **actioning either requires evaluating
+  the other.** **⚠️ Its metric is explicitly NON-AUTHORITATIVE** — `% in %` matches legitimate titles — so
+  the **two-stage action rule must be stated BEFORE the read**: count, hand-check a sample, and **close the
+  item permanently** if the matches are legitimate rather than scheduling a cleanup.
+
+### Shipped
+
+_(nothing yet)_
+
+
 ## v0.95.1 - Rendering and Reorder Fixes
 
 **Status: Released** (kicked off and signed off 2026-08-29)
