@@ -120,6 +120,8 @@ This receipt is not a batch-job entity, not a progress table, not a per-item sta
 
 The batch subject wins. Bulk Study Pack completion applies the AI-refined title and AI tags to the note, then re-applies the batch subject so the AI subject cannot replace it. This completion behavior is bulk-only and does not change normal single-note metadata suggestions.
 
+**⚠️ That AI-refined title is the FINAL curated note title, and the chain is easy to misread.** The curator's typed topic is written to `notes.title` first and then **overwritten** — `StudyPackService.applyBulkGeneratedMetadataToNote` calls `note.setTitle(normalizeEditableTitle(generated.title()))`. So the Study Pack prompt's `Title` rule (`developer.txt`) is what actually decides curated titles, not the typed topic and not the note body's own heading. An earlier reading of this same code concluded the opposite; this doc is recorded as the more legible description of that four-hop path.
+
 ## Quota Model
 
 - ADMIN bulk generation bypasses note-generation quota, Study Pack quota, per-user AI rate limits, and their usage counters.

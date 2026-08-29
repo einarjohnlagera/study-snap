@@ -251,6 +251,35 @@ class OpenAiLlmStudyPackServiceTest {
                 .containsExactly("title", "body");
     }
 
+    /**
+     * The curated-title rule is SEMANTIC, and the failure mode is a later edit compressing it into a
+     * wording ban. "Name the knowledge, not the curriculum container" must never become "'in X' is bad":
+     * "Nursing Management of Acute Asthma" and "Structural Applications of Differential Equations" are
+     * CORRECT titles, and a model taught to strip prepositional phrases would break both.
+     *
+     * <p>Note-generation is deliberately NOT asserted here. The rule lives only in the Study Pack prompt
+     * until the feedback-loop read decides whether the note body's first line reaches the title; adding
+     * it there later is correct work, so this test must not block it.
+     */
+    @Test
+    void studyPackPromptTeachesTitleSemanticsRatherThanAWordingBan() throws IOException {
+        String template = new ClassPathResource("prompts/study-pack-v1/developer.txt")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(template).contains("Title");
+        assertThat(template).contains("name the knowledge the material actually teaches");
+        // Both halves of the distinction must be present. Either alone teaches the wrong lesson.
+        assertThat(template).contains("include disciplinary or application context when it defines what is taught");
+        assertThat(template).contains("omit Course/Program, learner-group, or curriculum context when it only says who the material is for");
+        assertThat(template).contains("judgment about meaning, not about wording");
+        // The positive cases are what stop a wording ban from being inferred from the negative ones.
+        assertThat(template)
+                .contains("\"Nursing Management of Acute Asthma\" -> correct")
+                .contains("\"Structural Applications of Differential Equations\" -> correct");
+        // Universal by design: no per-program or per-discipline title logic, ever.
+        assertThat(template).doesNotContain("if the Course/Program is");
+    }
+
     @Test
     void contentPromptTemplates_splitDomainAndNoteLearnerLevelWithoutReaderPlaceholders() throws IOException {
         for (String resourcePath : List.of(
