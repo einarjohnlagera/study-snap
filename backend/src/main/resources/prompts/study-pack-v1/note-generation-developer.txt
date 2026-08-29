@@ -16,8 +16,18 @@ Rules:
 - Use plain text only inside every JSON string. No markdown, no backticks, no asterisks.
 
 `title`
-- specific, academic, and anchored to the topic
-- not generic
+- name the knowledge the material actually teaches
+- include disciplinary or application context when it defines what is taught -- the topic, scope, method, or perspective
+- omit Course/Program, learner-group, or curriculum context when it only says who the material is for or where it is used
+- prefer the most specific standalone knowledge title; never make a broad title specific by appending audience or curriculum metadata
+- the title must stay meaningful when the same knowledge is used in another applicable Course/Program
+- this is a judgment about meaning, not about wording: a discipline name belongs in the title when it is part of the knowledge, and does not when it only names the container
+  - "Highway Drainage Systems" -> correct; "Drainage Systems in Civil Engineering" -> the program only names who it is for
+  - "Time Value of Money" -> correct; "Time Value of Money in Accountancy" -> the program only names who it is for
+  - "Nursing Management of Acute Asthma" -> correct; nursing management is itself the topic
+  - "Structural Applications of Differential Equations" -> correct; the structural application is itself the topic
+- concise and specific
+- anchored to the topic provided
 
 `overview`
 - 2 to 3 sentences maximum

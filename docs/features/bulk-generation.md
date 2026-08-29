@@ -120,7 +120,14 @@ This receipt is not a batch-job entity, not a progress table, not a per-item sta
 
 The batch subject wins. Bulk Study Pack completion applies the AI-refined title and AI tags to the note, then re-applies the batch subject so the AI subject cannot replace it. This completion behavior is bulk-only and does not change normal single-note metadata suggestions.
 
-**⚠️ That AI-refined title is the FINAL curated note title, and the chain is easy to misread.** The curator's typed topic is written to `notes.title` first and then **overwritten** — `StudyPackService.applyBulkGeneratedMetadataToNote` calls `note.setTitle(normalizeEditableTitle(generated.title()))`. So the Study Pack prompt's `Title` rule (`developer.txt`) is what actually decides curated titles, not the typed topic and not the note body's own heading. An earlier reading of this same code concluded the opposite; this doc is recorded as the more legible description of that four-hop path.
+**⚠️ That AI-refined title is the FINAL curated note title, and the chain is easy to misread.** The curator's typed topic is written to `notes.title` first and then **overwritten** — `StudyPackService.applyBulkGeneratedMetadataToNote` calls `note.setTitle(normalizeEditableTitle(generated.title()))`. So the Study Pack prompt's `Title` rule (`developer.txt`) is what actually decides curated titles, not the typed topic and not the note body's own heading. An earlier reading of this same code concluded the opposite; this doc is recorded as the more legible description of that four-hop path. **⚠️ `v0.97.0` UPDATE: the note
+body's own prompt (`note-generation-developer.txt`) now carries the SAME `Title` rule.** That does not change
+which prompt decides the final curated title — `developer.txt` still overwrites it — but it removes the
+divergence that made the four-hop path misreadable: previously the two prompts governed `title` by different
+rules (*"specific, academic, and anchored to the topic"* versus the semantic rule), so an intermediate title
+could be shaped by a rule the final one did not share. **⚠️ The unrun §5 read is what would have told us
+whether the body's first line feeds the final title; the owner lifted that gate on 2026-08-29 and both
+prompts were aligned rather than waiting to learn whether one would have sufficed. The query stays indexed.**
 
 ## Quota Model
 

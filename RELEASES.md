@@ -321,7 +321,30 @@ cost of the test that is now committed** — `CLAUDE.md`'s size warning applies 
 
 ### Shipped
 
-_(nothing yet)_
+- **The curated title rule now governs BOTH title-emitting prompts (item 9).** `note-generation-developer.txt`
+  declared a `title` in its output schema (`:6`) but governed it with two thin bullets — *"specific,
+  academic, and anchored to the topic"* and *"not generic"* — while `developer.txt` carried the full
+  semantic rule. The same rule, **verbatim**, now sits in both.
+- **⚠️ The item was verified coherent BEFORE it was scoped, and it could have been withdrawn.** Had that
+  prompt emitted only body content, *"apply the same title rule"* would have been a rule about **how the
+  body opens** — a second formulation by construction, colliding with this item's own anti-drift rule.
+- **⚠️ The test asserts over BOTH files, because the failure mode is DIVERGENCE, not absence.**
+  `bothTitleEmittingPromptsTeachTitleSemanticsRatherThanAWordingBan` replaces the single-file
+  `v0.96.0` test, so one prompt drifting from the other fails rather than passing quietly. **`v0.96.0`
+  deliberately did not assert this file's absence** — adding the rule later was correct work a forbidding
+  test would have blocked — and the doc comment recording that reason is now **satisfied rather than
+  deleted**. **Mutation-verified:** reverting to the old two bullets fails it, and replacing the semantic
+  block with `do not append "in <Course/Program>"` fails it.
+- **⚠️ A topic-fidelity bullet was nearly lost as a side effect, and is now pinned separately.** The
+  replaced text carried *"anchored to the topic"* — **a different idea** from knowledge-versus-container,
+  and one that only note generation needs, since only it is handed a topic as input. It is kept and
+  asserted by `noteGenerationPromptStillAnchorsTheTitleToTheRequestedTopic`, so tightening one rule cannot
+  silently drop the other. **Mutation-verified:** dropping the bullet fails exactly that test.
+- **Feature docs updated on both sides of the chain.** `study-pack-generation.md` records that one rule now
+  spans two prompts and must stay one rule; `bulk-generation.md` records that `developer.txt` still decides
+  the final curated title, and that what changed is the removal of a **divergence** — the two prompts
+  previously governed `title` by different rules, so an intermediate title could be shaped by a rule the
+  final one did not share.
 
 ## v0.96.0 - Authoring Integrity
 
