@@ -338,6 +338,32 @@ cost of the test that is now committed** — `CLAUDE.md`'s size warning applies 
 - **The scheduled sweep preserves the learner-lock ordering without creating a lock storm.** The non-transactional job reads due IDs once, then a separate transactional worker handles exactly one relationship and one learner lock at a time. `markExpiredIfPending` is a conditional update with automatic clear/flush; only a one-row win deletes the provisional declaration. A zero-row race keeps it, and an exception rolls back that row alone while the job continues. Re-inviting an expired pair mints a new relationship; the spent link carrier remains terminal.
 - **Expired state is honest end to end.** Relationship responses expose `EXPIRED`, continue zeroing `*SharedWithMe` outside `ACCEPTED`, and authorization continues using the same not-found contract as `REVOKED`. Learning Connections renders a neutral timeout distinct from revocation and directs the person to send a new invitation; the shared Dashboard status vocabulary and Learning Connections guide were updated together.
 - **Real-row mutation coverage names the predicate it kills.** `dueRequestFinderIncludesTheExactBoundaryAndOnlyPendingRows` kills `<= → <`, a dropped `PENDING` filter, and a future-row match; `markExpiredIfPendingTransitionsOnlyItsPendingTarget` kills `'PENDING' → 'ACCEPTED'` and removal of the transition's status predicate; `acceptingPendingRelationshipClearsItsExpiryDeadline` kills removal of `expires_at = null`; and `expiredPairCanCreateANewRelationshipWhileInvitationStatusVocabularyStaysClosed` pins both the live-pair predicate and the unchanged invitation constraint.
+- **A provisional birth year now appears in the account data export (item 2).** `AccountDataExportService`
+  exported `users.birth_year` only, so between redemption and confirmation the year a person declared was
+  **held but never disclosed to them**. Owner ruled INCLUDE IT on **completeness, not user value** — the
+  export is a compliance surface and it tells the redeemer nothing they did not type.
+- **⚠️ IT IS A DISTINCT FIELD, never merged into `birthYear`, and a test pins the separation.**
+  `users.birth_year` is account-global and write-once; a provisional declaration is neither, and becomes the
+  account year only if the link's creator confirms. Merging them would make **the one surface that exists to
+  state what is held accurately** assert an account-global value that was never written.
+  `exportForUser_reportsProvisionalBirthYearsSeparatelyFromTheAccountYear` asserts `birthYear` is still null
+  while the declaration is present.
+- **⚠️ THE PRIVACY BOUNDARY IS A JOIN, NOT A JAVA FILTER — and the repo had already written the warning.**
+  `findEffectiveBirthYear`'s Javadoc records that reaching a provisional row by `relationship_id` alone would
+  *"coalesce a STRANGER'S declared birth year"*, and that every caller passed a matched pair *"which is
+  exactly why the mismatch would never announce itself."* **The export is a NEW caller**, so it joins
+  `linked_learner_relationships` on `learner_user_id`: the read itself is unable to see another learner's
+  row, rather than seeing it and discarding it later. **Mutation-verified against real rows:** dropping the
+  join fails `provisionalExportReturnsOnlyDeclarationsWhereTheCallerIsTheLearner` and
+  `aLearnerWithTwoUnconfirmedRedemptionsExportsBothDeclarations`.
+- **⚠️ THE FIELD IS A LIST, AND THAT WAS CHECKED RATHER THAN ASSUMED.** The table's primary key is
+  `relationship_id` and the insert is guarded only on the relationship being `PENDING` and the account year
+  being absent — so **a learner who redeems two links before either creator confirms holds two independent
+  declarations**, each with its own `declared_at`. A single scalar would have silently dropped one from a
+  compliance surface; a real-row test pins the two-declaration case.
+- **The export schema version moves `1.1` → `1.2`**, and the existing assertion that pinned `1.1` is what
+  caught the shape change. It is versioned deliberately: this payload is something a person downloads and
+  keeps. `docs/features/data-export.md` records the field, the separation, the list cardinality and the join.
 - **⚠️ FOUND AT `/audit-diff` AND FIXED IN SCOPE — THE SWEEP TERMINATED CONSENT-PAUSED CONNECTIONS, AND A
   DELIVERED TEST WAS BLESSING IT.** `markExpiredIfPending` guarded on `status = 'PENDING'` **alone**. But
   `pauseAcceptedForConsent` returns an `ACCEPTED` row to `PENDING` for a `v0.89.1` birth-year correction and

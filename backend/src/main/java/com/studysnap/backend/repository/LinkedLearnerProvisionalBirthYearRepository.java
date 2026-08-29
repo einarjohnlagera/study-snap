@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -85,6 +86,34 @@ public interface LinkedLearnerProvisionalBirthYearRepository
             @Param("relationshipId") UUID relationshipId,
             @Param("learnerUserId") UUID learnerUserId,
             @Param("updatedAt") OffsetDateTime updatedAt
+    );
+
+    /**
+     * Every provisional declaration this user made AS THE LEARNER, for the account data export.
+     *
+     * <p>⚠️ THE JOIN THROUGH THE RELATIONSHIP IS THE PRIVACY BOUNDARY, and it is the same structural
+     * guard {@link #findEffectiveBirthYear} documents. This table is keyed by RELATIONSHIP, not by
+     * user, so there is no user column to filter on: reaching rows by any path that does not join
+     * {@code linked_learner_relationships} on {@code learner_user_id} would export a declaration
+     * belonging to somebody else. Filtering in Java after a broader read is the same defect with a
+     * later boundary — the read itself must be unable to see another learner's row.
+     *
+     * <p>⚠️ A LEARNER CAN HOLD MORE THAN ONE. The primary key is {@code relationship_id}, and the
+     * insert is guarded only on the relationship being PENDING and the account year being absent, so
+     * a learner who redeems two links before either creator confirms has two independent
+     * declarations with their own {@code declared_at}. The export returns all of them; a single
+     * scalar would silently drop one.
+     */
+    @Query(value = """
+            select p.*
+              from linked_learner_provisional_birth_years p
+              join linked_learner_relationships r
+                on r.id = p.relationship_id
+             where r.learner_user_id = :learnerUserId
+             order by p.declared_at, p.relationship_id
+            """, nativeQuery = true)
+    List<LinkedLearnerProvisionalBirthYearEntity> findAllDeclaredByLearner(
+            @Param("learnerUserId") UUID learnerUserId
     );
 
     /** Scoped and idempotent cleanup; provisional declarations are not retained as history. */

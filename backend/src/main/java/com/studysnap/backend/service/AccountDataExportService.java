@@ -9,6 +9,7 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.UserNotFoundException;
+import com.studysnap.backend.repository.LinkedLearnerProvisionalBirthYearRepository;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -32,7 +33,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AccountDataExportService {
-    private static final String SCHEMA_VERSION = "1.1";
+    private static final String SCHEMA_VERSION = "1.2";
     private static final int SESSION_EXPORT_BATCH_SIZE = 100;
 
     private final UserRepository userRepository;
@@ -41,6 +42,7 @@ public class AccountDataExportService {
     private final NoteCollectionRepository noteCollectionRepository;
     private final NoteCollectionItemRepository noteCollectionItemRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
+    private final LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository;
 
     @Transactional(readOnly = true)
     public DataExportResponse exportForUser(UUID userId) {
@@ -55,7 +57,7 @@ public class AccountDataExportService {
 
         return new DataExportResponse(
                 new DataExportResponse.Meta(OffsetDateTime.now(), SCHEMA_VERSION),
-                toAccount(user),
+                toAccount(user, provisionalBirthYearRepository.findAllDeclaredByLearner(userId)),
                 notes.stream().map(this::toNote).toList(),
                 studyPacks.stream().map(this::toStudyPack).toList(),
                 collections.stream()
@@ -65,7 +67,10 @@ public class AccountDataExportService {
         );
     }
 
-    private DataExportResponse.Account toAccount(UserEntity user) {
+    private DataExportResponse.Account toAccount(
+            UserEntity user,
+            List<com.studysnap.backend.entity.LinkedLearnerProvisionalBirthYearEntity> provisional
+    ) {
         return new DataExportResponse.Account(
                 user.getEmail(),
                 user.getFirstName(),
@@ -79,6 +84,10 @@ public class AccountDataExportService {
                 toList(user.getFocusSubjects()),
                 user.getExamDate(),
                 user.getBirthYear(),
+                provisional.stream()
+                        .map(row -> new DataExportResponse.ProvisionalBirthYear(
+                                row.getRelationshipId(), row.getBirthYear(), row.getDeclaredAt()))
+                        .toList(),
                 user.getCreatedAt()
         );
     }

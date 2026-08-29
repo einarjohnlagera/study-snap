@@ -66,6 +66,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -93,7 +94,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 37;
+    private static final int EXPECTED_NATIVE_QUERIES = 38;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
@@ -841,6 +842,49 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
     }
 
+    /**
+     * ⚠️ The privacy predicate for the account data export. This table has no user column — it is
+     * keyed by relationship — so the join through {@code linked_learner_relationships} on
+     * {@code learner_user_id} is the only thing standing between a caller and a stranger's declared
+     * birth year. A mocked repository cannot test that, which is why this runs against real rows.
+     */
+    @Test
+    void provisionalExportReturnsOnlyDeclarationsWhereTheCallerIsTheLearner() {
+        UUID learner = seedUser("export-mine-learner");
+        UUID stranger = seedUser("export-stranger-learner");
+        UUID mine = seedRelationship(seedUser("export-mine-supporter"), learner, "PENDING");
+        UUID theirs = seedRelationship(seedUser("export-stranger-supporter"), stranger, "PENDING");
+        seedProvisional(mine, 2011);
+        seedProvisional(theirs, 2012);
+
+        assertThat(provisionalBirthYearRepository.findAllDeclaredByLearner(learner))
+                .extracting(row -> row.getRelationshipId(), row -> row.getBirthYear())
+                .containsExactly(tuple(mine, 2011));
+
+        // The supporter on the caller's own relationship is not the learner and must see nothing.
+        assertThat(provisionalBirthYearRepository.findAllDeclaredByLearner(
+                relationshipSupporter(mine))).isEmpty();
+    }
+
+    /**
+     * ⚠️ Proves the export field must be a LIST. The primary key is relationship_id, and the insert
+     * is guarded only on the relationship being PENDING and the account year being absent, so a
+     * learner who redeems two links before either creator confirms holds two declarations. A single
+     * scalar would silently drop one from a compliance surface.
+     */
+    @Test
+    void aLearnerWithTwoUnconfirmedRedemptionsExportsBothDeclarations() {
+        UUID learner = seedUser("export-two-learner");
+        UUID first = seedRelationship(seedUser("export-two-supporter-a"), learner, "PENDING");
+        UUID second = seedRelationship(seedUser("export-two-supporter-b"), learner, "PENDING");
+        seedProvisional(first, 2010);
+        seedProvisional(second, 2011);
+
+        assertThat(provisionalBirthYearRepository.findAllDeclaredByLearner(learner))
+                .extracting(row -> row.getBirthYear())
+                .containsExactlyInAnyOrder(2010, 2011);
+    }
+
     private LinkedLearnerService linkedLearnerService() {
         StudySnapProperties properties = new StudySnapProperties();
         return new LinkedLearnerService(
@@ -870,6 +914,13 @@ class NativeQueryPostgresIntegrationTest {
                 Integer.class,
                 relationshipId);
         return count == null ? 0 : count;
+    }
+
+    private UUID relationshipSupporter(UUID relationshipId) {
+        return jdbcTemplate.queryForObject(
+                "select supporter_user_id from linked_learner_relationships where id = ?",
+                UUID.class,
+                relationshipId);
     }
 
     private String relationshipStatus(UUID relationshipId) {
