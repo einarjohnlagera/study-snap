@@ -1,5 +1,84 @@
 # RELEASES.md - NoteLib
 
+## v0.95.1 - Rendering and Reorder Fixes
+
+**Status: In Progress** (kicked off 2026-08-29)
+
+Theme: a generated formula should look like a formula, and dragging a section should not fight the
+save that the last drag started.
+
+### Why this release exists
+
+**A patch, and the scope test is deliberate: only fixes that need no new interaction model and no
+frozen-path change.** Two owner reports from real use on the same afternoon, both investigated
+against code before scoping.
+
+**1. LaTeX renders as raw source, and it is a RENDERING gap rather than the corruption already on
+record.** ⚠️ **Do not close `v0.86.0-note-item-limit-mismatch.md`'s LaTeX item with this** — that one
+is about corrupted escapes in stored content; here the stored content is well-formed
+(`\frac{2}{3}`, `\sqrt{2g}`, `H^{3/2}` all carry correct single backslashes) and simply meets a
+renderer that does no math. **⚠️ THERE ARE TWO DISTINCT GAPS AND THEY NEED DIFFERENT FIXES:**
+`private-note-detail-page-client.tsx:2884` and the public library page render the note body in a bare
+`<p className="whitespace-pre-wrap">` — **no markdown, no math, nothing** — while
+`components/ui/summary-markdown.tsx` runs `react-markdown` + `remark-gfm` with **no math plugin**.
+**Only the first is in this patch.** The plain-text surfaces are the same situation the quiz
+components are already in, so `renderMathText` applies directly; `katex` is already a dependency and
+`normalizeBareMath` additionally repairs older notes stored without delimiters.
+
+**2. Dragging in the Study Plan Builder fights its own saves.** Every drop awaits
+`setCollectionItemOrder` **and then `refreshBuilder()`**, which fetches the collection plus
+**`listNotes()` — the user's entire note list** — then the goal and every child collection. Nothing
+gates dragging while that runs: `DndContext` has no disabled state and `handleLeafDragEnd` never
+checks `mutationKind`, so a second drag computes from current state, writes, and is then clobbered
+when the first drag's refresh lands. Owner-reported as *"reordering the sections much worse"*, and it
+is a genuine race. Both sensors also lack an `activationConstraint`, so a drag begins on the first
+pixel of movement and competes with clicking the section rename input inside the same row.
+
+### Planned Scope
+
+- **1. Render math on the plain-text note surfaces (frontend).** Apply the existing
+  `renderMathText` to the Full Notes body in `private-note-detail-page-client.tsx` and the public
+  library note page. **⚠️ No new dependency and no second math implementation** — this is the call
+  pattern `quiz-question-text.tsx` already uses. **⚠️ These surfaces are plain text, so there is no
+  markdown/emphasis conflict**; that is exactly why they can be fixed now and Summary cannot.
+- **2. Make dragging responsive and stop it racing its own save (frontend).** Add an
+  `activationConstraint` to **both** `PointerSensor` and `TouchSensor`; disable dragging **visibly**
+  while a save is in flight; and stop refetching `listNotes()` on the reorder path. **⚠️ This is
+  MITIGATION, not the agreed fix** — the owner chose a deferred *Save order* model (2026-08-29),
+  which is `v0.96.0`. Everything here survives that rework rather than being thrown away, which is
+  the test applied when choosing it.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Do NOT touch `components/ui/summary-markdown.tsx` in this release.** Fixing Summary math needs
+  `remark-math` for tokenization — `_` is markdown emphasis, so `$x_1 + x_2$` is mangled into `<em>`
+  before any post-processing could see it — and **`app/onboarding/page.tsx` renders
+  `SummaryMarkdown`**, so the change lands on the signup path `[CHECKPOINT — due 2026-09-11]`
+  measures against a 62.4% completion baseline. That freeze lifts 2026-09-11; this is `v0.96.0`.
+- **⚠️ Do NOT build the deferred *Save order* model here.** It is agreed and prompted, and it is a new
+  interaction model with unsaved state — not patch-shaped.
+- **⚠️ Do NOT change what `setCollectionItemOrder` sends or means**, and add no endpoint.
+- **⚠️ `UNGROUPED_SECTION_NAME` stays excluded from section drags**, both as source and as target.
+- **⚠️ Do NOT remove the 500ms debounced combobox writer** at `study-plan-builder-page-client.tsx:443`
+  or its comment — it is a `v0.88.0` mechanism with a recorded reason.
+- **⚠️ Do NOT wholesale-refactor `study-plan-builder-page-client.tsx`** (2282 lines).
+- **⚠️ Never surface the word "label" in UI copy**; the unsectioned bucket stays *"Not in a section"*.
+- **⚠️ No backend change, no migration, no analytics event.**
+
+### Pre-declared at kickoff
+
+- **Pressure test: a single `advisor()` call on the diff.** Two frontend items, no authorization or
+  privacy boundary, no money or quota semantics, no migration — the re-tiered gate in `CLAUDE.md`
+  resolves here without a cold agent.
+- **The `### Planned Scope` heading above is permanent**; delivery appends to `### Shipped`.
+- **No `[CHECKPOINT]` is owed.** Both items fix behaviour against a reported defect rather than
+  shipping ahead of evidence, and neither changes a measured surface.
+
+### Shipped
+
+_(nothing yet)_
+
+
 ## v0.95.0 - Redemption Integrity
 
 **Status: Released** (kicked off and signed off 2026-08-29)
