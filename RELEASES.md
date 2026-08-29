@@ -1,5 +1,250 @@
 # RELEASES.md - NoteLib
 
+## v0.97.0 - Connection Lifecycle
+
+**Status: In Progress** (kicked off 2026-08-29, base branch `releases/v0.97.0`, cut from `main` after
+`v0.96.0` merged and tagged)
+
+Theme: an unconfirmed connection request should not sit forever holding someone's declared birth year —
+and the connection surface should be honest about who it is waiting for, what it retains, and what it
+requires.
+
+### Why this release exists
+
+**The theme is again the scope filter, and the owner asked to fold widely (2026-08-29).** `v0.96.0` held
+three connection privacy/lifecycle items out on subject rather than merit; this release takes those three
+plus **four open findings already recorded in `v0.94.0`/`v0.95.0` Known limitations** — everything un-gated
+on the Learning Connections surface. What stays out stays out for a stated reason: the curated title
+policy's second half is **blocked on the unrun §5 production read**, and the Domain Context work shipped in
+`v0.96.0` with only its calibration read outstanding.
+
+**⚠️ TWO FINDINGS AT KICKOFF THAT THE SESSION HANDOFF DID NOT CARRY. Recorded so they are not re-derived.**
+
+1. **`v0.96.0`'s signoff owed TWO checkpoints and wrote ONE.** The Domain Context taxonomy row requires
+   *"a taxonomy calibration checkpoint, which must be dated after `2026-09-17`"*; `8aa8f7bc` added only the
+   title-debt row (`2026-09-28`). The calibration read therefore existed as prose in the Backlog row and in
+   `ADR-001:366` with **no date**, matching no scan pattern — and **kickoff step 9 scans for *overdue*
+   checkpoints, so it structurally cannot catch one that was never written.** It is written in this kickoff
+   commit, dated `2026-09-28` to match its twin because the trigger is shared and evaluated once. That row's
+   status also still read *"NOT SCOPED"* although the doctrine shipped; corrected in the same commit.
+2. **Item 1 collides with `[CHECKPOINT — due 2026-09-26]` more sharply than the Backlog row admits — and the
+   ARITHMETIC is what clears it, not a judgment call.** That row's kill criterion literally names
+   *"expiry for unconfirmed requests"* as its own prescribed response, and its metric is a `COUNT(*)` on
+   `linked_learner_provisional_birth_years` — **exactly the rows this sweep deletes.** So building item 1
+   ships the remedy ahead of the diagnosis *and* would delete the diagnosis. **It clears because the table
+   only exists from the `v0.95.0` deploy (2026-08-29):** the earliest provisional row is 2026-08-29, so a
+   **TTL of ≥30 days dated from relationship `created_at`** puts the earliest possible expiry at
+   **2026-09-28 — after the read.** This is the same reasoning `[CHECKPOINT — due 2026-10-13]` used
+   (*"no invitation can lapse before ~2026-09-25"*). **⚠️ THE TTL BOUND AND THE CLOCK ARE THEREFORE
+   ANTI-DRIFT RULES, NOT DEFAULTS.** The Backlog row for this item named only `2026-10-13` as the
+   sequencing risk; `2026-09-26` is the sharper one and is now recorded on both rows.
+
+### Planned Scope
+
+- **1. Unconfirmed connection requests expire — a new `EXPIRED` terminal status (backend + frontend +
+  migration).** An invitation LINK expires in 30 days and an email invitation expires in 30 days, but the
+  `PENDING` relationship a redemption creates has **no `expires_at` and no sweep** — verified: nothing on
+  `LinkedLearnerRelationshipEntity` (`id`, `supporter_user_id`, `learner_user_id`, `status`, `initiated_by`,
+  `created_at`, `accepted_at`, `revoked_at`), `LinkedLearnerStatus` is `PENDING | ACCEPTED | REVOKED`, and
+  the only `@Scheduled` job touching these tables is the rate limiter. So an unconfirmed request sits
+  indefinitely, **holding the redeemer's declared birth year**. **⚠️ OWNER DECISION 2026-08-29: a new
+  `EXPIRED` terminal status**, over reusing `REVOKED` — a timeout is not a deliberate act, and the redeemer
+  must be able to tell which happened. **⚠️ `ACCEPTED` relationships NEVER expire; only unconfirmed
+  `PENDING`.** **⚠️ `EXPIRED` is TERMINAL — no un-expire**, and re-inviting mints a NEW relationship exactly
+  as revoke does. **⚠️ Conditional updates, never read-modify-save** — `linked-learners.md` states the rule
+  and `markAcceptedIfPending` / `markRevokedIfLive` / `pauseAcceptedForConsent` are the shape to match; there
+  is no relationship-row lock in this codebase. **⚠️ The provisional row is DELETED on expiry**, honouring
+  `v0.89.1`'s rule that declared-value history is a minor's personal data and is not retained — the same
+  treatment promotion and revoke already give it. **⚠️ This is the REQUEST's clock, not the CARRIER's:** do
+  not change `invitation-ttl-days`, which `[CHECKPOINT — due 2026-10-13]` reads. **⚠️ Ship the request TTL as
+  CONFIGURATION, not a literal**, per that precedent.
+- **2. The provisional birth year appears in the account data export (backend).** `AccountDataExportService`
+  exports `user.getBirthYear()`; a provisional declaration lives in `linked_learner_provisional_birth_years`
+  (`relationship_id`, `birth_year`, `declared_at`) until acceptance promotes it, so between redemption and
+  confirmation the year a person declared is **held but not exported to them**. **⚠️ Owner ruled INCLUDE IT
+  2026-08-29, on COMPLETENESS, not user value** — the export is a compliance surface and it tells the
+  redeemer nothing they did not type. **⚠️ Export it as a DISTINCT PROVISIONAL field, never merged into
+  `birthYear`** — merging would falsify `users.birth_year`'s account-global, write-once meaning on the one
+  surface that exists to state it accurately. **⚠️ Export ONLY rows where the CALLER is the learner** — the
+  table is keyed by **relationship**, not by user, so a naive join hands the caller another person's
+  declaration. **⚠️ Once item 1 deletes the row on expiry, the export stops showing it — that is correct,
+  not a regression.**
+- **3. Supporter onboarding — the definition step (DOCS ONLY, no code).** **⚠️ It is UNDEFINED, not
+  gate-blocked, and lifting the onboarding freeze does not scope it.** *"Supporter onboarding"* has no
+  definition anywhere in `learning-connections-phase-plan.md`; grepping it for `onboard` returns a caller-gate
+  description and the Phase 4 row itself. The deliverable is the definition: what it means, which surfaces it
+  touches, and the answer to the Backlog row's own discriminating test — **does the work edit the
+  signup → verify-email → onboarding path?** **⚠️ Do NOT add, remove or reorder a step in the onboarding
+  FLOW** — `[CHECKPOINT — due 2026-09-11]` measures completion against a 62.4% baseline and **that read is
+  still owed**. **⚠️ Implementation waits on BOTH the definition and that read.**
+- **4. Terminal transitions cut grant rows — ONE rule for revoke and expiry (backend).** `revoke()` still does
+  not revoke grant rows, so a `REVOKED` relationship reports `*SharedByMe: true` with the panel hidden.
+  **⚠️ Today's gap is INERT and must stay described as inert** — `requireGrant` demands `ACCEPTED`, and a
+  re-invite mints a new relationship id, so no live grant is reachable. This is **defence-in-depth plus DTO
+  honesty**, NOT a live privilege escalation; describing it as one would misstate the release. It is in scope
+  now because **item 1 adds a second terminal transition**, and a rule written once for both is the only
+  version that does not drift. **⚠️ A PAUSE IS NOT A TERMINATION — this is the sharpest trap in the release:**
+  `v0.93.0` made the grant row **survive an `ACCEPTED → PENDING` consent pause by design**, so that a learner's
+  own toggle does not read OFF while the row is live and sharing resumes on re-acceptance. Cut grants on
+  **terminal** statuses only (`REVOKED`, `EXPIRED`) and **never** on the pause. **⚠️ `requireGrant` keeps
+  demanding `ACCEPTED`** — do not relax it because the rows are now cleaned up; the check is the guarantee and
+  the cleanup is the belt.
+- **5. `requireVerifiedOnboarded` actually requires onboarding (backend).** `assertProfileComplete` passes when
+  `onboardingCompletedAt` is null, so the stated property is **false** although nothing downstream breaks
+  today. **⚠️ IT TIGHTENS A GATE, so check who it locks out BEFORE shipping** — `v0.71.0`'s lesson is that an
+  onboarding guard on note-authoring paths made onboarding **uncompletable for every ADMIN account**, and this
+  release must not repeat it on the connection paths. **⚠️ The redemption page carries a token THROUGH
+  `/onboarding`** (`app/linked-learners/invite/[token]/page.tsx:45,56`), treating it as a waypoint rather than
+  a surface it edits — a mid-onboarding caller on that path must still be able to finish the flow.
+  **⚠️ Nothing downstream breaks today: this fixes a false stated property, not an exploited hole**, and the
+  release notes must not claim otherwise.
+- **6. A two-thread real-row harness for the provisional-row invariant (test).** *No `ACCEPTED` relationship
+  may exist whose learner has a provisional row but a null `users.birth_year`* — if one could,
+  `LinkedLearnerGrantAuthorizationService` denies access with **no remediation path**, since consent can only
+  be recorded on `PENDING`. `v0.95.0` recorded this as *"the natural first item for any future release that
+  touches this path"* — **and item 1 touches it: the sweep is a THIRD writer on that lock**, alongside
+  `accept()` and `revoke()`. **⚠️ `LinkedLearnerConcurrencyTest` MOCKS
+  `LinkedLearnerProvisionalBirthYearRepository`**, so the provisional-row consequence specifically has never
+  been exercised under real concurrency, and the real-PostgreSQL tests that use real rows run
+  **single-threaded**. The lock ORDERING is already pinned; the provisional-row consequence is not.
+- **7. Invitation-link endpoint security coverage, 1 of 5 → 5 of 5 (test).**
+  `LinkedLearnerInvitationLinkSecurityIntegrationTest` covers `/resolve` alone;
+  `.anyRequest().authenticated()` makes the rest safe today, **but a single canary is the whole guard**, and
+  item 1 adds surface to the same controller. **⚠️ The PostgreSQL harness produces ZERO signal here** — all
+  four link queries are JPQL, so the `nativeQuery = true` reflective scan never sees them, which is precisely
+  why real-row tests are the only coverage those predicates have.
+
+- **8. The `docs/claude-*` cleanup — DONE IN THIS KICKOFF COMMIT, at step 8, where the audit itself said it
+  belongs (docs only).** Full audit: `docs/claude-plans/claude-docs-staleness-audit.md`. **⚠️ It is recorded
+  as scope rather than done silently, and it moves the verification tier NOT AT ALL** — no code, no
+  migration, no behaviour change. **⚠️ THE AUDIT'S REFRAMING IS THE POINT: "stale" cannot mean
+  "unreferenced", because kickoff step 8's invariant GUARANTEES a reference exists.** Deletion is therefore
+  retiring a **row and its artifact together**, and **a struck-through row does not make its artifact
+  deletable** — `engineering-mathematics-section-recovery.sql` is struck as resolved while its own Gate
+  column keeps the file for an unrun step 2b. **Two owner principles taken 2026-08-29, each once rather than
+  per file:** (1) *a pressure test stays while any finding it records is unresolved*; (2) *delete a spent
+  file and leave dated scan notes naming it intact*. **THREE files deleted** — two answered `v0.71.0`
+  consultation prompts and the spent `v0.95.0` handoff. **⚠️ AND THE HEADLINE REDUCTION EVAPORATED, WHICH
+  IS THE RESULT WORTH RECORDING: applying the owner's own `claude-findings/` principle rigorously deletes
+  ZERO pressure tests.** The audit offered ~92 KB as *"the largest single reduction available"*; **all three
+  files carry an unresolved item and all three are kept.** **⚠️ FOUR OF THE AUDIT'S CLASSIFICATIONS WERE
+  WRONG, EVERY ONE CAUGHT BY READING THE FILE RATHER THAN COUNTING REFERENCES TO IT — that is the finding,
+  not the byte count.** `v0.71.0-pre-signoff-pressure-test.md` (63 KB) is **not closed**: **M9 and M12 carry
+  live `[DECISION]` markers** and five more findings feed the live Onboarding Intent Router row.
+  `v0.71.0-signoff-pressure-test.md` carries **Frontend #4, explicitly deferred and still carried**.
+  `v0.75.0-pre-signoff-pressure-test.md`'s *"ten findings, all fixed"* is true of its findings and **not of
+  the file** — it ends *"Still open … whether this release owes a `[CHECKPOINT]` row … Must not be left
+  silent"*, **and it was left silent**, so the file is the only record of an unmet obligation.
+  `v0.74.0-challenge-conversion-read.sql` is **the unrun read for `[CHECKPOINT — due 2026-09-30]`**, whose
+  header calls it a deploy blocker; **kept and given the row it never had**. **⚠️ THE METHOD LESSON, and the
+  audit stated it one section before violating it: a reference count cannot see a citation made by CONTENT,
+  and a Backlog row's status records what was TAKEN, never everything the file RECORDS. Read the header.**
+  **⚠️ SECOND SILENT-CHECKPOINT MISS FOUND AT THIS ONE KICKOFF** — with `v0.96.0`'s dateless calibration row.
+  Both are invisible to step 9, which scans for *overdue* rows: a dateless row and an absent row scan alike.
+  The `v0.75.0` gap is now indexed with its decision already reduced to a stated binary. **⚠️ Also actioned, and it is the
+  standing flag's third appearance: the untracked `docs/claude-plans/` files are COMMITTED** — an indexed
+  row does not survive `git clean`, and `hydraulics-fluid-mechanics-consolidation.sql`'s data-loss finding
+  existed in exactly one working tree. **⚠️ NOT AUDITED and explicitly not covered:** the 77 files inside
+  `docs/claude-prompt/*-out/`, which need their own pass — thinning a directory while keeping its row is a
+  different and riskier operation.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ AN ANTI-DRIFT RULE IS BEING AMENDED, AND IT IS RAISED HERE RATHER THAN REASONED PAST.** `v0.95.0`
+  locked, and `CLAUDE.md` still carries verbatim: *"Do NOT add a column to `linked_learner_relationships`,
+  `_invitations` or `_guardian_consents`, whose meaning `[CHECKPOINT — due 2026-09-19]`,
+  `[CHECKPOINT — due 2026-09-26]` and `[CHECKPOINT — due 2026-10-13]` read."* **Item 1 adds `expires_at` to
+  exactly that table and a fourth value to its status enum, so the LETTER of the rule forbids this release's
+  headline item.** This is the same letter-versus-reason shape `v0.96.0` hit with the
+  `note-generation-developer.txt` bar, and it is resolved the same way: **by an explicit owner amendment,
+  recorded with its reason, not by a delivery session concluding the rule did not apply.**
+  **THE AMENDMENT (owner, 2026-08-29, in ruling for a new `EXPIRED` terminal status):** the prohibition
+  exists to keep the **MEANING** of a relationship row stable for three dated reads — it was written to force
+  `v0.95.0`'s side-table design, so that a provisional birth year could not quietly redefine what a row
+  represents. **Item 1 changes a row's LIFECYCLE, not its meaning:** `PENDING`, `ACCEPTED` and `REVOKED` keep
+  their definitions exactly, and `EXPIRED` names a `PENDING` row that timed out rather than reinterpreting
+  any existing one. **⚠️ The amendment is CONDITIONAL and the conditions are the scope, not advice:** both
+  affected reads carry **re-specified queries recorded in this same kickoff commit, before they run**
+  (`2026-09-26` and `2026-09-19`), and `2026-10-13` reads the **carrier** clock, which this release does not
+  touch. **⚠️ THE PROHIBITION OTHERWISE STANDS IN FULL** — no column may be added to
+  `linked_learner_invitations` or `_guardian_consents`, and no further column to
+  `linked_learner_relationships` beyond `expires_at`, without the same explicit amendment.
+- **⚠️ THE REQUEST TTL MUST BE ≥30 DAYS AND DATED FROM RELATIONSHIP `created_at`.** This is not a default, it
+  is what keeps `[CHECKPOINT — due 2026-09-26]` answerable — see finding 2 above. A shorter TTL or a
+  different clock silently destroys a dated read.
+- **⚠️ `EXPIRED` must NOT become a distinguishable failure.** The single not-found contract for unknown,
+  revoked, expired and redeemed tokens is a `v0.90.0` property closing the account-existence oracle; a new
+  status must not leak through it.
+- **⚠️ A grant row surviving an `ACCEPTED → PENDING` consent pause is DESIGNED BEHAVIOUR** (`v0.93.0`) and
+  must survive this release. Terminal statuses only.
+- **⚠️ Do NOT change `invitation-ttl-days`, and do NOT conflate the request clock with the carrier clock.**
+  `[CHECKPOINT — due 2026-10-13]` reads the carrier.
+- **⚠️ Do NOT add, remove or reorder an onboarding FLOW step**, and no code lands under `frontend/app/onboarding`
+  in this release. `[CHECKPOINT — due 2026-09-11]`'s 62.4% baseline cannot be re-run.
+- **⚠️ Do NOT touch the curated title policy or `note-generation-developer.txt`.** Its second half is blocked
+  on the unrun §5 read in `docs/claude-plans/canonical-curated-note-title-policy-audit.md`, which an
+  assistant cannot run.
+- **⚠️ Do NOT amend `ADR-001`.** The Domain Context calibration row written in this kickoff commit records a
+  read, not a doctrine change.
+- **⚠️ `users.birth_year` stays account-global and WRITE-ONCE**, birth year is still collected from the
+  LEARNER never the inviter, and the email-keyed path is not changed.
+- **⚠️ Standing connection rules, unchanged:** acceptance stays LOAD-BEARING; guardian consent is not
+  bypassable and stays re-asserted inside the grant check, with fail-closed unknown-age behaviour;
+  absence of a live grant means NO ACCESS; every read re-verifies `ACCEPTED` with no cache and no grace; the
+  progress read stays UNIDIRECTIONAL with its explicit caller-is-supporter assertion; `PROGRESS` stays
+  learner-issued only while activity stays mutual; invitations stay ONE-AT-A-TIME and the quiz share link
+  stays the many-recipient mechanism; **no relationship-type column, no new profile type, nothing gated on
+  `ProfileType`**; `NoteVisibility` stays `PRIVATE | PUBLIC`; **no endpoint accepts a learner user id**;
+  **no public people search**.
+- **⚠️ Any predicate deciding whether a relationship expires, or whether a provisional year is promoted,
+  read, exported or discarded, needs a REAL-ROW test** in `NativeQueryPostgresIntegrationTest`,
+  mutation-verified with the killing test named. A mocked repository cannot test a predicate, and that class
+  has now recurred four times.
+- **⚠️ THE DOCS CLEANUP IS BOUNDED TO THE FILES NAMED IN ITEM 8.** No further deletion without applying the same test — **read the file's header, do not count references to its name** — and no pass over `docs/claude-prompt/*-out/` internals. **⚠️ Tier A is never eligible:** files cited from `CLAUDE.md`, `AGENTS.md` or source code, where a dangling path silently degrades every future session.
+- **⚠️ Explicitly OUT OF SCOPE:** `REVOKED`/`EXPIRED` card dismissal (accumulating terminal cards is its own
+  UX decision); the curated title policy's second half; and every Phase 5 item — mastery comparison between
+  people, scores, leaderboards, activity rings, social feed, reactions.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: ONE SCOPED COLD AGENT, framed as FALSIFICATION** — stated with its reasoning,
+  because seven items looks like a full-pressure-test release and is not. Item 4 is **inert by construction**
+  (`requireGrant` demands `ACCEPTED`) and item 5 **tightens an existing gate** rather than introducing a
+  permission substrate, so neither is an authorization-boundary *move*; there is no new cross-user read and
+  no money or quota semantics. **⚠️ TWO triggers fire, not one, and both resolve to this same tier — stated
+  this way deliberately, because resting the argument on inertness alone would leave the escalation
+  condition unable to fire:** item 1 changes **production-data lifecycle semantics on tables three
+  checkpoints read**, and items 1 and 4 are **two PRs touching the same shared authorization method** —
+  `requireGrant`'s `ACCEPTED` demand is precisely what makes the new `EXPIRED` status safe, so the new status
+  and the grant cleanup are one question asked in two places. Both are one-cold-agent triggers in
+  `CLAUDE.md`'s list; neither is a permission substrate or a first-of-kind cross-user read. This is the same
+  shape `v0.95.0` carried for a strictly larger change. **⚠️ ESCALATE TO THE FULL TEST IF** item 1's sweep
+  grows a second write path, **`requireGrant` itself needs changing to handle `EXPIRED`** (which would make
+  it a permission-substrate change rather than a new value the existing check already excludes), or item 5's
+  tightening is found to lock out a live account. **⚠️ Folding anything further
+  re-opens this decision** — `CLAUDE.md` requires saying what a fold does to the tier, and a second
+  independent trigger moves it.
+- **`advisor()` before any Codex prompt is written, and again on the diff.** This has been the
+  highest-yield check available across `v0.93.0`–`v0.96.0`; the recorded failure mode is skipping it, not
+  lacking a stronger option. **⚠️ ITEM 5 GETS THE PRE-PROMPT CALL WHETHER OR NOT IT GOES TO CODEX** — it is
+  small enough to be scoped inline, which is exactly how it would skip the check, and a gate-tightening on
+  the path the redemption flow traverses is the `v0.71.0` ADMIN-lockout class of defect that this check
+  catches cheaply.
+- **The `### Planned Scope` heading above is permanent**; delivery appends to `### Shipped`.
+- **A `[CHECKPOINT]` is owed at signoff for item 1** — it ships ahead of the very read that would justify it.
+  **⚠️ It JOINS `[CHECKPOINT — due 2026-10-13]` rather than minting a date** — same surface, same window,
+  and the 2026-08-16 consolidation rule says a conversion on a surface only a handful of learners reach does
+  not earn its own calendar entry. **⚠️ Its denominator clause is inherited and load-bearing:**
+  `linked_learner_relationships` was empty in production on 2026-08-26, so **no expiries at all is a re-date,
+  not a verdict.**
+- **Two deploy-split caveats are recorded in this kickoff commit, BEFORE their reads** — on
+  `[CHECKPOINT — due 2026-09-26]` (its `COUNT(*)` must become `PENDING` plus `EXPIRED`, or the sweep reads as
+  success) and on `[CHECKPOINT — due 2026-09-19]` (its status grouping gains a fourth value).
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.96.0 - Authoring Integrity
 
 **Status: Released** (kicked off and signed off 2026-08-29)
