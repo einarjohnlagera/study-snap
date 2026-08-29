@@ -159,6 +159,18 @@ is `v0.96.0` and not folded in beside a security migration.
   alongside the write, lookup, promotion and cleanup predicates. An unconfirmed redemption therefore
   leaves no account-level birth-year trace, and acceptance remains the consequential act.
 
+- **A pending connection stops promising that sharing will resume.** The paused banner told both
+  parties that *"existing sharing choices resume when the connection is active"* — false for a
+  `PENDING` row that was never accepted, which is exactly the state a link redemption newly creates:
+  nothing started, so nothing resumes. **⚠️ It cannot be fixed by discriminating on `acceptedAt`** —
+  `pauseAcceptedForConsent` writes `accepted_at = null`, so a genuinely paused relationship is
+  indistinguishable from a never-accepted one in the DTO, the same wall `v0.94.0` hit with
+  `*SharedWithMe`. The banner now describes the **status** and the caller's own choice and promises
+  nothing about what happens next, matching the two sibling strings in the same component that
+  `v0.94.0` already corrected. **The regression test pins the CLASS, not the string:** it asserts no
+  resumption promise renders on a pending connection at all, and is mutation-verified — re-adding a
+  resume sentence beside the correct status sentence fails it.
+
 ### Known limitations
 
 - **Two learner-self paths still write `users.birth_year` directly.** A learner creating their own

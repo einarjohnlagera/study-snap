@@ -155,7 +155,17 @@ function SharingPanel({
     <div className="space-y-3 rounded-lg border border-border p-3 sm:p-4">
       {paused ? (
         <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-          Access is paused while this connection is pending. Existing sharing choices resume when the connection is active; you can still turn yours off now.
+          {/*
+            ⚠️ STATUS, not access — the same rule the two strings below already follow. This banner
+            used to promise that "existing sharing choices resume when the connection is active",
+            which is false for a PENDING row that was never accepted at all — the state a link
+            redemption newly creates, where nothing ever started to resume. We cannot tell the two
+            apart: pauseAcceptedForConsent writes accepted_at = null, so a paused relationship is
+            indistinguishable from a never-accepted one in this DTO. So describe the status and the
+            caller's own choice, and promise nothing about what happens next.
+          */}
+          This connection is pending, so nothing is being shared right now. The switches below show
+          your own choices — you can turn them off at any time.
         </p>
       ) : null}
       <div className="flex items-center justify-between gap-4">
