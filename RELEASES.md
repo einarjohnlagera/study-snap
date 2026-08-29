@@ -267,7 +267,59 @@ id). Paying the heavy tier for a defect with no user-visible effect is the wrong
   message must appear before the next card begins — rather than a container the markup could reshape.
   **Mutation-verified:** routing it back to the page-level notice fails that test.
 
+**⚠️ Found by the pre-signoff cold-agent pressure test (one scoped agent, falsification-framed,
+2026-08-29), pre-declared at kickoff on a single trigger.**
+
+**The load-bearing negative results first.** **Every one of the eighteen claims put to it was
+CONFIRMED and none was disproved.** No authorization bypass, no privilege escalation, no reopened
+account-existence oracle. An unconfirmed redemption writes nothing to `users.birth_year`; guardian
+consent works end to end for a link-redeemed minor while `PENDING` (verified against real
+PostgreSQL, not by reading); promotion is write-once and status-scoped; revocation deletes without
+promoting; provisional rows cannot leak across relationships or users; the redemption marker is
+client-local and user-scoped; the single not-found contract is intact; and the standing anti-drift
+rules — unidirectional progress read, learner-issued `PROGRESS`, no relationship-type column, no
+`ProfileType` gating, `NoteVisibility` unchanged, no endpoint taking a learner user id — are
+untouched by the diff.
+
+- **⚠️ THE FIX FOR THIS RELEASE'S OWN HEADLINE AUDIT FINDING WAS NEVER PINNED, and that is the
+  finding.** `/audit-diff` caught the projection path taking a `PESSIMISTIC_WRITE` lock per
+  counterparty inside `list()`, and the fix shipped — but **reverting it left all 57 service and
+  concurrency tests green**, because every repository in that harness is a mock and *a mock cannot
+  observe a lock*. This is the "mocked repository proves nothing" class again, generalised from a
+  SQL predicate to a locking behaviour, and it happened in the one place this session had already
+  found the bug itself — the discipline applied to every other change was skipped exactly where it
+  felt least necessary. `listTakesNoRowLockOnAnyCounterparty` now asserts the call that would occur,
+  `verify(userRepository, never()).findByIdForUpdate(...)`. **Mutation-verified:** routing the
+  projection back through the locking resolver fails it and nothing else.
+- **⚠️ `findEffectiveBirthYear` had no structural tie between the relationship and the learner.** It
+  reached the provisional row by `relationship_id` alone while selecting the account row by a
+  separately-passed `learnerUserId`, with **no join predicate connecting them** — so a caller
+  passing a mismatched pair would coalesce a **stranger's declared birth year onto this learner's
+  consent decision**. Not reachable today, because every caller passes a matched pair — which is
+  precisely why it would never have announced itself. The query now joins through
+  `linked_learner_relationships` on `r.id = :relationshipId AND r.learner_user_id = u.id`, making the
+  fallback **unreachable** for a pair that does not belong together rather than merely unused.
+  **Mutation-verified against real rows:** removing the join fails
+  `a relationship that does not belong to this learner must not supply their year`.
+
+
 ### Known limitations
+
+- **⚠️ The load-bearing invariant holds by DESIGN and by its parts, but has no end-to-end
+  two-thread test.** *No `ACCEPTED` relationship may exist whose learner has a provisional row but a
+  null `users.birth_year`* — if one could, `LinkedLearnerGrantAuthorizationService` denies access
+  with **no remediation path**, since consent can only be recorded on `PENDING`. The cold agent
+  traced every interleaving it could construct (double-accept, accept-vs-revoke in both orders, two
+  provisional rows for one learner across different relationships, a birth-year correction racing
+  acceptance) and **found no path to that state**: `accept()` holds the learner lock across the
+  read, the conditional status transition, the promotion and the cleanup inside one transaction, and
+  `revoke()` takes the same lock, which serializes them. The lock ORDERING is pinned by
+  `LinkedLearnerConcurrencyTest`. **What is not covered:** that harness mocks
+  `LinkedLearnerProvisionalBirthYearRepository`, so the provisional-row consequence specifically is
+  never exercised under real concurrency, and the real-PostgreSQL tests that do use real rows run
+  single-threaded. **Recorded rather than fixed** — building a two-thread real-row harness is a
+  larger piece of work than this release should absorb at signoff, and the invariant is not known to
+  be violable. It is the natural first item for any future release that touches this path.
 
 - **Two learner-self paths still write `users.birth_year` directly.** A learner creating their own
   invitation link through `LinkedLearnerInvitationLinkService.create()` and a learner explicitly

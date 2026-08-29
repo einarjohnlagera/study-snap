@@ -450,6 +450,21 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(provisionalBirthYearRepository.findEffectiveBirthYear(UUID.randomUUID(), learner))
                 .as("an unrelated provisional declaration must not satisfy this relationship")
                 .isEmpty();
+
+        // ⚠️ A MISMATCHED PAIR must not resolve. Before the relationship join, the provisional row
+        // was reached by relationship_id alone while the account row came from a separately-passed
+        // learner id, with nothing tying them together — so a caller passing a real relationship
+        // belonging to SOMEONE ELSE would coalesce that stranger's declared year onto this user's
+        // consent decision. Every caller passes a matched pair today, which is precisely why such a
+        // mismatch would never announce itself.
+        UUID strangerLearner = seedUser("effective-stranger");
+        UUID strangerRelationshipId = seedRelationship(
+                seedUser("effective-stranger-supporter"), strangerLearner, "PENDING");
+        seedProvisional(strangerRelationshipId, 2009);
+        assertThat(provisionalBirthYearRepository
+                .findEffectiveBirthYear(strangerRelationshipId, learner))
+                .as("a relationship that does not belong to this learner must not supply their year")
+                .isEmpty();
     }
 
     /** Real rows pin the write predicate, promotion guard/write-once rule, and scoped cleanup. */
