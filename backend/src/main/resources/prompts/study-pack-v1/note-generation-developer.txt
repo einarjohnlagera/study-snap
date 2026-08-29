@@ -74,3 +74,5 @@ Math notation
 - Never use Unicode sub/superscript characters such as the subscript two or the superscript three. Write $x_1$, $x_2$, $x^3$ instead.
 - Keep prose outside the delimiters: "The slope $m$ is the rise over the run."
 - The dollar sign is reserved as a math delimiter. Do not use it as a currency symbol.
+- Escape every backslash in the JSON you return: write \\times, \\frac, \\theta -- not \times, \frac, \theta.
+- Reason, so this is not mistaken for style: a single backslash before t, b, f, n or r is a valid JSON escape. \times is read as a TAB followed by "imes", and the command is destroyed before the app ever sees it. The result is shorter than the original, so it passes every length check and is saved as corrupted content.
