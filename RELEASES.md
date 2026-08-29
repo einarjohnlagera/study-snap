@@ -117,6 +117,37 @@ does not scope it. It needs a definition step first, and belongs with the connec
 
 ### Shipped
 
+- **Summary renders maths, on all nine consumers including the SEO-indexed public pages.**
+  `remark-math` is added as a **TOKENIZER only**; its extracted TeX renders through
+  `renderExtractedMath`, a newly exported wrapper over the **same KaTeX call the quiz surfaces already
+  use**. **⚠️ `rehype-katex` was deliberately not used** — it would be a second rendering
+  configuration, free to drift from the first on `output`, `throwOnError` and the error fallback.
+  **⚠️ Implementation note that cost real time: `remark-math` emits math as
+  `<code class="language-math math-inline|math-display">`, NOT as a span or div**, and display math
+  arrives wrapped in `<pre>`, which is unwrapped so KaTeX's block element is not nested in
+  preformatted text.
+- **⚠️ `SummaryMarkdown` was GLOBALLY MOCKED in `jest.setup.ts` and therefore had no real test
+  coverage anywhere — on any of its nine consumers.** The mock existed for a real reason: react-markdown's
+  ESM chain threw under `next/jest`, which excludes `node_modules` from transformation. `jest.config.js`
+  now transpiles that chain and the mock is gone, so tests render the real component. **⚠️ Two things
+  about the fix are worth recording:** `transformIgnorePatterns` must be applied **after**
+  `createJestConfig`, because `next/jest` overwrites whatever the passed-in config sets — setting it
+  inside silently does nothing; and enumerating the ESM chain package-by-package **does not converge**
+  (react-markdown pulls in unified, remark, micromark, mdast/hast utils and a long tail of
+  single-purpose modules), so the pattern excludes the large CommonJS packages instead. **Full suite
+  runtime is unchanged at ~62s.**
+- **⚠️ Four tests were found asserting the MOCK rather than the component.** They queried
+  `data-testid="summary-markdown"` — an id only the mock produced — and one asserted raw markdown
+  source (`- [Reviewer archive](…)`) as visible text, which the real renderer never emits. They now
+  assert rendered output: `<strong>`, and a link with its `href`. They were not loosened to accommodate
+  the change; they were pointed at what they had always meant to check.
+- **⚠️ One of my own new tests initially passed for the wrong reason, and a mutation caught it.** The
+  display-math test asserted `.katex-display, .katex` — an OR that passes even with `displayMode`
+  hardcoded `false`. Tightened to require `.katex-display`, which then exposed that the test CONTENT was
+  also wrong: `$$x$$` on one line is **inline** math by `remark-math`'s spec, and block form needs `$$`
+  on its own lines. **Mutation-verified after both fixes:** dropping the tokenizer fails three tests;
+  forcing display math inline fails exactly the display test.
+
 - **Curated note titles name the knowledge, not the curriculum container.** One unconditional `Title`
   section added to the shared Study Pack prompt (`developer.txt`), which had **no title rules at all** —
   the schema declared the field and nothing governed it. Written in the file's existing register: bare

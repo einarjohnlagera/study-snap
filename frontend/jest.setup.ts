@@ -24,11 +24,7 @@ jest.mock("next/image", () => ({
   ),
 }));
 
-// react-markdown (and its remark/micromark deps) ship pure ESM that next/jest does
-// not transpile, so any suite rendering SummaryMarkdown crashes on import. Mock the
-// wrapper to render its content as plain text — text-based assertions still pass.
-jest.mock("@/components/ui/summary-markdown", () => ({
-  __esModule: true,
-  SummaryMarkdown: ({ content, className }: { content: string; className?: string }) =>
-    React.createElement("div", { className, "data-testid": "summary-markdown" }, content),
-}));
+// ⚠️ SummaryMarkdown is NO LONGER globally mocked. It was, because react-markdown's ESM chain threw
+// on import under next/jest -- which meant the component rendering summaries on nine surfaces,
+// including SEO-indexed public pages, had no real coverage anywhere. jest.config.ts now transpiles
+// that dependency chain instead, so tests render the real component and its math handling.

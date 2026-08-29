@@ -117,11 +117,16 @@ Error and empty states:
 `Full Notes` renders the note body as PLAIN TEXT (`whitespace-pre-wrap` preserves the generated
 layout), so it passes through `renderMathText` — the same helper the quiz surfaces use — which
 handles `$…$`, `$$…$$` and `\[…\]`, and repairs undelimited legacy content via `normalizeBareMath`.
-The public library note page does the same. **⚠️ `Summary` does NOT yet render math**, because it
-goes through `SummaryMarkdown` (`react-markdown` + `remark-gfm`), and markdown makes the naive fix
-wrong: `_` is emphasis, so `$x_1 + x_2$` becomes `<em>` before any post-processing could find the
-math. That needs `remark-math` at the tokenizer, and `app/onboarding/page.tsx` renders
-`SummaryMarkdown`, so the change lands on the signup path `[CHECKPOINT — due 2026-09-11]` measures.
+The public library note page does the same. **`Summary` now renders maths too, by a different
+mechanism, and the difference is load-bearing rather than incidental.** Summary is markdown, where `_`
+is emphasis — so `$x_1 + x_2$` is already `<em>` by the time any text scanner sees it, and the
+scanning approach cannot work there. `SummaryMarkdown` therefore runs **`remark-math` as a TOKENIZER**
+and renders the extracted TeX through `renderExtractedMath`, **the same KaTeX call the quiz surfaces
+use**. **⚠️ `rehype-katex` is deliberately NOT used** — it would be a second rendering configuration,
+free to drift from the first on `output`, `throwOnError` and the error fallback. **⚠️ remark-math emits
+math as `<code class="language-math …">`, not a span or div**, and block form requires `$$` on its own
+lines; `$$x$$` inline is inline math by spec.
+
 **⚠️ None of this is the corrupted-escape issue** in `v0.86.0-note-item-limit-mismatch.md`; the
 content here is well-formed and was simply never rendered.
 
