@@ -9,6 +9,7 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
 import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
+import com.studysnap.backend.repository.LinkedLearnerProvisionalBirthYearRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import com.studysnap.backend.repository.LinkedLearnerGrantRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -72,6 +73,7 @@ class LinkedLearnerConcurrencyTest {
     @Autowired private LinkedLearnerRelationshipRepository relationshipRepository;
     @Autowired private LinkedLearnerGuardianConsentRepository consentRepository;
     @Autowired private LinkedLearnerGrantRepository grantRepository;
+    @Autowired private LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository;
     @Autowired private PlatformTransactionManager transactionManager;
 
     private UUID learnerId;
@@ -225,21 +227,19 @@ class LinkedLearnerConcurrencyTest {
 
 
     @Test
-    void aRevocationCommittingMIDWAYThroughACorrectionIsNotResurrected() throws Exception {
-        // ⚠️ The fourth interleaving, and the reason the pause is a GUARDED update rather than the
-        // saveAll it used to be. The correction selects the accepted relationships, a revoke
-        // commits, and the correction then writes PENDING over the top — bringing a connection the
-        // learner had just ended back to life, in the very transaction meant to protect them.
+    void revocationWaitsForCorrectionAndStillEndsRevoked() throws Exception {
+        // Provisional cleanup makes revoke resolve the relationship's effective learner year. It
+        // therefore takes the learner lock BEFORE its relationship update, the same order as
+        // correction and acceptance. This prevents a learner-lock/relationship-lock cycle.
         seedRelationship(LinkedLearnerStatus.ACCEPTED);
         CountDownLatch correctionHasSelected = new CountDownLatch(1);
-        CountDownLatch revokeCommitted = new CountDownLatch(1);
-        AtomicReference<Boolean> sawRevokeCommit = new AtomicReference<>();
+        CountDownLatch releaseCorrection = new CountDownLatch(1);
 
         when(relationshipRepository.findByLearnerUserIdAndStatus(learnerId, LinkedLearnerStatus.ACCEPTED))
                 .thenAnswer(invocation -> {
                     List<LinkedLearnerRelationshipEntity> selected = readRelationships(LinkedLearnerStatus.ACCEPTED);
                     correctionHasSelected.countDown();
-                    sawRevokeCommit.set(revokeCommitted.await(5, TimeUnit.SECONDS));
+                    releaseCorrection.await(5, TimeUnit.SECONDS);
                     return selected;
                 });
 
@@ -249,40 +249,35 @@ class LinkedLearnerConcurrencyTest {
         correction.start();
         assertThat(correctionHasSelected.await(5, TimeUnit.SECONDS)).isTrue();
 
-        newTransaction.executeWithoutResult(status -> service.revoke(relationshipId, learnerId));
-        assertThat(persistedStatus()).isEqualTo(LinkedLearnerStatus.REVOKED.name());
-        revokeCommitted.countDown();
-        correction.join(10_000);
+        AtomicReference<Throwable> revokeError = new AtomicReference<>();
+        Thread revocation = run(revokeError,
+                () -> newTransaction.executeWithoutResult(status -> service.revoke(relationshipId, learnerId)));
+        revocation.start();
+        revocation.join(200);
+        assertThat(revocation.isAlive()).as("revoke waits on the learner lock").isTrue();
 
-        assertThat(sawRevokeCommit.get()).as("correction must resume BECAUSE the revoke committed").isTrue();
+        releaseCorrection.countDown();
+        correction.join(10_000);
+        revocation.join(10_000);
+
         assertThat(correctionError.get()).isNull();
-        // The correction still does its job on the learner...
+        assertThat(revokeError.get()).isNull();
         assertThat(persistedBirthYear()).isEqualTo(MINOR_YEAR);
-        // ...but must NOT drag the revoked relationship back to PENDING.
         assertThat(persistedStatus()).isEqualTo(LinkedLearnerStatus.REVOKED.name());
     }
 
     @Test
-    void aRevocationCommittingMIDWAYThroughAcceptanceIsNotOverwritten() throws Exception {
-        // ⚠️ THIS IS THE REAL RACE, and the first version of this test did not reproduce it.
-        // Revoking BEFORE calling accept proves nothing: accept's early "is it still PENDING?"
-        // check catches that, and the conditional update is never reached. The dangerous
-        // interleaving is a revoke that commits AFTER acceptance has already read PENDING —
-        // only the conditional update can catch that one.
+    void revocationWaitsForAcceptanceAndThenCutsTheAcceptedConnection() throws Exception {
         seedRelationship(LinkedLearnerStatus.PENDING);
         CountDownLatch acceptanceHasReadPending = new CountDownLatch(1);
-        CountDownLatch revokeCommitted = new CountDownLatch(1);
+        CountDownLatch releaseAcceptance = new CountDownLatch(1);
 
-        AtomicReference<Boolean> sawRevokeCommit = new AtomicReference<>();
-        // ⚠️ Pause the ACCEPTANCE only. toResponse() also consults this repository, so a stub that
-        // blocks on every call blocks the revoke too — on the acceptance's own latch — and the
-        // whole interleaving degrades into a 5-second timeout that still "passes".
         AtomicReference<Thread> pauseOn = new AtomicReference<>();
         when(consentRepository.findByRelationshipId(relationshipId)).thenAnswer(invocation -> {
             if (Thread.currentThread() == pauseOn.get()) {
                 pauseOn.set(null);
                 acceptanceHasReadPending.countDown();
-                sawRevokeCommit.set(revokeCommitted.await(5, TimeUnit.SECONDS));
+                releaseAcceptance.await(5, TimeUnit.SECONDS);
             }
             return Optional.empty();
         });
@@ -294,18 +289,20 @@ class LinkedLearnerConcurrencyTest {
         acceptance.start();
         assertThat(acceptanceHasReadPending.await(5, TimeUnit.SECONDS)).isTrue();
 
-        // Revocation commits while acceptance is mid-flight, having already seen PENDING.
-        newTransaction.executeWithoutResult(status -> service.revoke(relationshipId, learnerId));
-        assertThat(persistedStatus()).isEqualTo(LinkedLearnerStatus.REVOKED.name());
-        revokeCommitted.countDown();
-        acceptance.join(10_000);
+        AtomicReference<Throwable> revokeError = new AtomicReference<>();
+        Thread revocation = run(revokeError,
+                () -> newTransaction.executeWithoutResult(status -> service.revoke(relationshipId, learnerId)));
+        revocation.start();
+        revocation.join(200);
+        assertThat(revocation.isAlive()).as("revoke waits on acceptance's learner lock").isTrue();
 
-        // ⚠️ The stale acceptance must fail rather than resurrect the relationship, and must not
-        // report success from the entity it loaded before the revoke.
-        assertThat(sawRevokeCommit.get()).as("acceptance must resume BECAUSE the revoke committed").isTrue();
-        assertThat(acceptError.get()).isInstanceOf(LinkedLearnerInvalidStateException.class);
+        releaseAcceptance.countDown();
+        acceptance.join(10_000);
+        revocation.join(10_000);
+
+        assertThat(acceptError.get()).isNull();
+        assertThat(revokeError.get()).isNull();
         assertThat(persistedStatus()).isEqualTo(LinkedLearnerStatus.REVOKED.name());
-        assertThat(persistedAcceptedAt()).isNull();
     }
 
     @Test
@@ -476,6 +473,10 @@ class LinkedLearnerConcurrencyTest {
                 .thenAnswer(invocation -> Optional.ofNullable(jdbcTemplate.queryForObject(
                         "select birth_year from users where id = ?",
                         Integer.class, (Object) invocation.getArgument(0))));
+        when(provisionalBirthYearRepository.findEffectiveBirthYear(any(UUID.class), any(UUID.class)))
+                .thenAnswer(invocation -> Optional.ofNullable(jdbcTemplate.queryForObject(
+                        "select birth_year from users where id = ?",
+                        Integer.class, (Object) invocation.getArgument(1))));
         when(userRepository.writeBirthYear(any(UUID.class), any(), any()))
                 .thenAnswer(invocation -> jdbcTemplate.update(
                         "update users set birth_year = ?, birth_year_updated_at = ?, updated_at = ? where id = ?",
@@ -545,6 +546,11 @@ class LinkedLearnerConcurrencyTest {
         }
 
         @Bean
+        LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository() {
+            return mock(LinkedLearnerProvisionalBirthYearRepository.class);
+        }
+
+        @Bean
         UserRepository userRepository() {
             return mock(UserRepository.class);
         }
@@ -555,6 +561,7 @@ class LinkedLearnerConcurrencyTest {
                 LinkedLearnerInvitationRepository invitationRepository,
                 LinkedLearnerGuardianConsentRepository consentRepository,
                 LinkedLearnerGrantRepository grantRepository,
+                LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository,
                 UserRepository userRepository
         ) {
             return new LinkedLearnerService(
@@ -562,6 +569,7 @@ class LinkedLearnerConcurrencyTest {
                     invitationRepository,
                     consentRepository,
                     grantRepository,
+                    provisionalBirthYearRepository,
                     userRepository,
                     mock(OnboardingGuardService.class),
                     mock(AuthService.class),

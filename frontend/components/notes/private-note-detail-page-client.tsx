@@ -3193,7 +3193,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           </div>
         )}
       >
-        <div className="space-y-3">
+          <div className="space-y-3">
+          {/*
+            ⚠️ Unconditional, deliberately. The quota block below renders only when usageSummary has
+            loaded, so hanging this off it would drop the disclosure exactly when the network is
+            failing. This quiz is generated for SOMEONE ELSE, so the person who checks it is not the
+            person who will sit it — that is why it is disclosed here and not only in the meter name.
+          */}
+          <p className="text-xs text-foreground/60">
+            Questions and answers are AI-generated from your note. Review them before you share this
+            quiz with someone.
+          </p>
           {usageSummary ? (
             <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3" aria-label="Quiz allowances">
               <div className="flex items-center justify-between gap-3 text-sm">

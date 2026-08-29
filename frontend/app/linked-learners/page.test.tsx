@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LinkedLearnersPage from "./page";
 import {
   acceptLinkedLearner,
@@ -95,6 +95,9 @@ it("loads live invitation links on refresh", async () => {
 
 it("creates a single-use invitation link", async () => {
   jest.mocked(createLinkedLearnerInvitationLink).mockResolvedValue(invitationLink);
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([invitationLink]);
   render(<LinkedLearnersPage />);
   await screen.findByText("No live invitation links.");
 
@@ -103,6 +106,86 @@ it("creates a single-use invitation link", async () => {
   await waitFor(() => expect(createLinkedLearnerInvitationLink)
     .toHaveBeenCalledWith("SUPPORTER", null));
   expect(await screen.findByDisplayValue(invitationLink.url)).toBeInTheDocument();
+  expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2);
+});
+
+it("refetches live invitation links after revocation", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockResolvedValueOnce([]);
+  jest.mocked(revokeLinkedLearnerInvitationLink).mockResolvedValue({ message: "Revoked" });
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  fireEvent.click(screen.getByRole("button", { name: "Revoke link" }));
+
+  await waitFor(() => expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2));
+  expect(screen.queryByDisplayValue(invitationLink.url)).not.toBeInTheDocument();
+  expect(screen.getByText("Invitation link revoked.")).toBeInTheDocument();
+});
+
+it("refetches live invitation links on focus and removes the listener on unmount", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockResolvedValueOnce([]);
+  const { unmount } = render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  act(() => globalThis.dispatchEvent(new Event("focus")));
+
+  await waitFor(() => expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText("No live invitation links.")).toBeInTheDocument();
+
+  unmount();
+  act(() => globalThis.dispatchEvent(new Event("focus")));
+  expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2);
+});
+
+it("keeps the last loaded links visible when a focus refresh fails", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockRejectedValueOnce(new Error("Network unavailable."));
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  act(() => globalThis.dispatchEvent(new Event("focus")));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Network unavailable. Showing the last loaded list.",
+  );
+  expect(screen.getByDisplayValue(invitationLink.url)).toBeInTheDocument();
+});
+
+it("clears a stale links list when a foreground refetch fails", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockRejectedValueOnce(new Error("Refresh failed"));
+  jest.mocked(createLinkedLearnerInvitationLink).mockResolvedValue(invitationLink);
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Refresh failed");
+  expect(screen.queryByDisplayValue(invitationLink.url)).not.toBeInTheDocument();
+});
+
+it("treats a revoke 404 as an already-completed outcome and refetches", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockResolvedValueOnce([]);
+  jest.mocked(revokeLinkedLearnerInvitationLink).mockRejectedValue(
+    new ApiRequestError("Not found", { status: 404 }),
+  );
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  fireEvent.click(screen.getByRole("button", { name: "Revoke link" }));
+
+  expect(await screen.findByText("Invitation link was already gone.")).toBeInTheDocument();
+  expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue(invitationLink.url)).not.toBeInTheDocument();
 });
 
 it("keeps a live link visible when revocation fails", async () => {
@@ -151,11 +234,12 @@ it("accepts an incoming invitation", async () => {
   expect(await screen.findByText("accepted")).toBeInTheDocument();
 });
 
-it("shows consent only when required and blocks recording until attested", async () => {
+it("loads a link-redeemed provisional minor as confirmable and completes guardian consent", async () => {
   const minorLink: LinkedLearnerResponse = {
     ...baseLink,
     callerRole: "SUPPORTER",
     initiatedBy: "LEARNER",
+    birthYearRequired: false,
     guardianConsentRequired: true,
   };
   jest.mocked(getLinkedLearners).mockResolvedValue([minorLink]);
@@ -203,6 +287,31 @@ it("offers progress only when the counterparty has granted progress access", asy
   );
   expect(screen.getAllByText("pending")).toHaveLength(1);
   expect(screen.getAllByRole("link", { name: "View progress" })).toHaveLength(1);
+});
+
+it("keeps an unavailable sharing switch reachable instead of removing it from the tab order", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([{
+    ...baseLink,
+    callerRole: "LEARNER",
+    status: "PENDING",
+    incomingInvitation: false,
+    activitySharedByMe: false,
+    progressSharedByMe: false,
+  }]);
+
+  render(<LinkedLearnersPage />);
+
+  const toggle = await screen.findByRole("switch", { name: /share my study activity/i });
+  // ⚠️ A native `disabled` button is removed from the tab order entirely, so a keyboard or
+  // screen-reader user cannot reach the switch, hear that it exists, or learn why it is
+  // unavailable. aria-disabled keeps it discoverable and announced while still refusing the action.
+  expect(toggle).not.toBeDisabled();
+  expect(toggle).toHaveAttribute("aria-disabled", "true");
+  toggle.focus();
+  expect(toggle).toHaveFocus();
+
+  fireEvent.click(toggle);
+  expect(setLinkedLearnerActivityGrant).not.toHaveBeenCalled();
 });
 
 it("renders activity in both directions and progress control only for the learner", async () => {
@@ -292,7 +401,10 @@ it("lets a learner withdraw live grants while a paused connection explains the p
   jest.mocked(setLinkedLearnerProgressGrant).mockResolvedValue({ granted: false });
   render(<LinkedLearnersPage />);
 
-  expect(await screen.findByText(/Access is paused while this connection is pending/i)).toBeInTheDocument();
+  // Pin the CLASS, not the string: nothing on a pending connection may promise that sharing
+  // resumes, because a link-redeemed PENDING was never accepted and has nothing to resume.
+  expect(await screen.findByText(/pending, so nothing is being shared right now/i)).toBeInTheDocument();
+  expect(screen.queryByText(/resume/i)).not.toBeInTheDocument();
   const progressToggle = screen.getByRole("switch", { name: /share my study progress/i });
   expect(progressToggle).toBeEnabled();
   fireEvent.click(progressToggle);
@@ -651,6 +763,58 @@ it("removes an expired invitation through the existing revoke action", async () 
 
   await waitFor(() => expect(revokeLinkedLearnerInvitation).toHaveBeenCalledWith("inv-expired-revoke"));
   await waitFor(() => expect(screen.queryByText(/You invited learner@example.com/)).not.toBeInTheDocument());
+});
+
+it("reports the server's withdrawal outcome and refreshes the connection list too", async () => {
+  jest.mocked(listLinkedLearnerInvitations)
+    .mockResolvedValueOnce([{
+      id: "inv-accepted-race",
+      incoming: false,
+      inviterRole: "SUPPORTER",
+      invitedEmail: "learner@example.com",
+      inviterName: null,
+      createdAt: "2026-08-01T00:00:00Z",
+      expiresAt: "2026-09-01T00:00:00Z",
+      expired: false,
+    }])
+    .mockResolvedValueOnce([]);
+  // ⚠️ The counterparty may have accepted between render and click, in which case a relationship
+  // now exists and "Invitation withdrawn." is a claim the client never verified.
+  jest.mocked(revokeLinkedLearnerInvitation).mockResolvedValue({
+    message: "That invitation was already accepted.",
+  });
+
+  render(<LinkedLearnersPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Withdraw" }));
+
+  await waitFor(() => expect(screen.getByRole("status"))
+    .toHaveTextContent("That invitation was already accepted."));
+  expect(screen.queryByText("Invitation withdrawn.")).not.toBeInTheDocument();
+  // Withdrawing only reloaded invitations, so a connection created in that window stayed invisible.
+  await waitFor(() => expect(getLinkedLearners).toHaveBeenCalledTimes(2));
+});
+
+it("puts invitation-link feedback inside the link card, not two cards below it", async () => {
+  jest.mocked(createLinkedLearnerInvitationLink).mockResolvedValue({
+    id: "new-link",
+    token: "AbCdEf0123456789GhIjKl",
+    url: "https://notelib.test/linked-learners/invite/AbCdEf0123456789GhIjKl",
+    creatorRole: "SUPPORTER",
+    createdAt: "2026-08-29T10:00:00Z",
+    expiresAt: "2026-09-28T10:00:00Z",
+  });
+
+  render(<LinkedLearnersPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Create invitation link" }));
+
+  const feedback = await screen.findByText("Invitation link created. It can be used once.");
+  // ⚠️ Feedback rendered two cards below the action reads as no feedback at all. Assert the
+  // PROPERTY that was wrong — document position — rather than a container the markup may reshape:
+  // the message must appear before the next card begins, not after it.
+  const nextCard = screen.getByRole("heading", { name: "Send an invitation" });
+  const feedbackPrecedesNextCard =
+    feedback.compareDocumentPosition(nextCard) & Node.DOCUMENT_POSITION_FOLLOWING;
+  expect(feedbackPrecedesNextCard).toBeTruthy();
 });
 
 it("surfaces an invitation list load failure instead of rendering it as an empty list", async () => {

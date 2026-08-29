@@ -155,7 +155,17 @@ function SharingPanel({
     <div className="space-y-3 rounded-lg border border-border p-3 sm:p-4">
       {paused ? (
         <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-          Access is paused while this connection is pending. Existing sharing choices resume when the connection is active; you can still turn yours off now.
+          {/*
+            ⚠️ STATUS, not access — the same rule the two strings below already follow. This banner
+            used to promise that "existing sharing choices resume when the connection is active",
+            which is false for a PENDING row that was never accepted at all — the state a link
+            redemption newly creates, where nothing ever started to resume. We cannot tell the two
+            apart: pauseAcceptedForConsent writes accepted_at = null, so a paused relationship is
+            indistinguishable from a never-accepted one in this DTO. So describe the status and the
+            caller's own choice, and promise nothing about what happens next.
+          */}
+          This connection is pending, so nothing is being shared right now. The switches below show
+          your own choices — you can turn them off at any time.
         </p>
       ) : null}
       <div className="flex items-center justify-between gap-4">
@@ -293,6 +303,9 @@ export default function LinkedLearnersPage() {
   const [invitationLinks, setInvitationLinks] = useState<LinkedLearnerInvitationLinkResponse[]>([]);
   const [invitationLinksLoading, setInvitationLinksLoading] = useState(true);
   const [invitationLinkError, setInvitationLinkError] = useState<string | null>(null);
+  // ⚠️ Separate from the page-level `notice`, which renders two cards below this one — far enough
+  // that feedback for a link action read as no feedback at all.
+  const [invitationLinkNotice, setInvitationLinkNotice] = useState<string | null>(null);
   const [linkCreatorRole, setLinkCreatorRole] = useState<LinkedLearnerSide>("SUPPORTER");
   const [linkBirthYear, setLinkBirthYear] = useState("");
   const [creatingInvitationLink, setCreatingInvitationLink] = useState(false);
@@ -318,12 +331,21 @@ export default function LinkedLearnersPage() {
     void loadInvitations();
   }, [loadInvitations]);
 
-  const loadInvitationLinks = useCallback(async () => {
+  const loadInvitationLinks = useCallback(async (preserveOnError = false) => {
     try {
       setInvitationLinks(await listLinkedLearnerInvitationLinks());
       setInvitationLinkError(null);
     } catch (loadError) {
-      setInvitationLinkError(errorMessage(loadError, "Could not load invitation links."));
+      if (preserveOnError) {
+        // A focus refresh is opportunistic. Keep the last server-confirmed list visible through a
+        // transient background failure, and say plainly that it may now be stale.
+        const message = errorMessage(loadError, "Could not refresh invitation links.");
+        setInvitationLinkError(`${message} Showing the last loaded list.`);
+      } else {
+        // A failed invitation-link load must not render an empty or partial list as if complete.
+        setInvitationLinks([]);
+        setInvitationLinkError(errorMessage(loadError, "Could not load invitation links."));
+      }
     } finally {
       setInvitationLinksLoading(false);
     }
@@ -331,6 +353,16 @@ export default function LinkedLearnersPage() {
 
   useEffect(() => {
     void loadInvitationLinks();
+  }, [loadInvitationLinks]);
+
+  useEffect(() => {
+    const refreshInvitationLinks = () => {
+      void loadInvitationLinks(true);
+    };
+    globalThis.addEventListener("focus", refreshInvitationLinks);
+    return () => {
+      globalThis.removeEventListener("focus", refreshInvitationLinks);
+    };
   }, [loadInvitationLinks]);
 
   const handleCreateInvitationLink = async (event: React.FormEvent) => {
@@ -345,14 +377,15 @@ export default function LinkedLearnersPage() {
     }
     setCreatingInvitationLink(true);
     setInvitationLinkError(null);
+    setInvitationLinkNotice(null);
     try {
-      const created = await createLinkedLearnerInvitationLink(
+      await createLinkedLearnerInvitationLink(
         linkCreatorRole,
         linkCreatorRole === "LEARNER" && rawYear ? Number(rawYear) : null,
       );
-      setInvitationLinks((current) => [created, ...current]);
+      await loadInvitationLinks();
       setLinkBirthYear("");
-      setNotice("Invitation link created. It can be used once.");
+      setInvitationLinkNotice("Invitation link created. It can be used once.");
     } catch (createError) {
       setInvitationLinkError(errorMessage(createError, "Could not create the invitation link."));
     } finally {
@@ -361,9 +394,11 @@ export default function LinkedLearnersPage() {
   };
 
   const handleCopyInvitationLink = async (link: LinkedLearnerInvitationLinkResponse) => {
+    setInvitationLinkError(null);
+    setInvitationLinkNotice(null);
     try {
       await globalThis.navigator.clipboard.writeText(link.url);
-      setNotice("Invitation link copied.");
+      setInvitationLinkNotice("Invitation link copied.");
     } catch {
       setInvitationLinkError("Could not copy the link. Select the URL and copy it manually.");
     }
@@ -372,13 +407,19 @@ export default function LinkedLearnersPage() {
   const handleRevokeInvitationLink = async (link: LinkedLearnerInvitationLinkResponse) => {
     setBusyInvitationLinkId(link.id);
     setInvitationLinkError(null);
+    setInvitationLinkNotice(null);
     try {
       await revokeLinkedLearnerInvitationLink(link.id);
-      // No optimistic removal: a failed privacy write must leave the last server-confirmed state.
-      setInvitationLinks((current) => current.filter((item) => item.id !== link.id));
-      setNotice("Invitation link revoked.");
+      await loadInvitationLinks();
+      setInvitationLinkNotice("Invitation link revoked.");
     } catch (revokeError) {
-      setInvitationLinkError(errorMessage(revokeError, "Could not revoke the invitation link."));
+      if (revokeError instanceof ApiRequestError && revokeError.status === 404) {
+        await loadInvitationLinks();
+        setInvitationLinkNotice("Invitation link was already gone.");
+      } else {
+        // No optimistic removal: a failed privacy write leaves the last server-confirmed list.
+        setInvitationLinkError(errorMessage(revokeError, "Could not revoke the invitation link."));
+      }
     } finally {
       setBusyInvitationLinkId(null);
     }
@@ -409,9 +450,14 @@ export default function LinkedLearnersPage() {
     setBusyId(invitation.id);
     setError(null);
     try {
-      await revokeLinkedLearnerInvitation(invitation.id);
-      setNotice("Invitation withdrawn.");
-      await loadInvitations();
+      // ⚠️ Report the SERVER's outcome, not an assumed one. The counterparty may have accepted
+      // between render and click, in which case a relationship now exists and "Invitation
+      // withdrawn." would be a claim this client never verified. Refresh BOTH lists for the same
+      // reason: withdrawing only reloaded invitations, so a connection created in that window
+      // stayed invisible until a manual reload.
+      const result = await revokeLinkedLearnerInvitation(invitation.id);
+      setNotice(result.message ?? "Invitation withdrawn.");
+      await Promise.all([loadInvitations(), loadLinks()]);
     } catch (revokeError) {
       setError(errorMessage(revokeError, "Could not withdraw the invitation."));
     } finally {
@@ -670,8 +716,8 @@ export default function LinkedLearnersPage() {
             </button>
           </div>
           {linkCreatorRole === "LEARNER" ? (
-            <label className="block space-y-1.5 text-sm font-medium" htmlFor="invitation-link-birth-year">
-              Your birth year
+            <div className="space-y-1.5 text-sm font-medium">
+              <label className="block" htmlFor="invitation-link-birth-year">Your birth year</label>
               <BirthYearInput
                 id="invitation-link-birth-year"
                 value={linkBirthYear}
@@ -680,13 +726,18 @@ export default function LinkedLearnersPage() {
               <span className="block text-xs font-normal text-foreground/60">
                 Needed only if you have not recorded it before, so guardian consent cannot be bypassed through a link.
               </span>
-            </label>
+            </div>
           ) : null}
           <Button type="submit" loading={creatingInvitationLink} loadingText="Creating link…">
             Create invitation link
           </Button>
         </form>
 
+        {invitationLinkNotice ? (
+          <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
+            {invitationLinkNotice}
+          </p>
+        ) : null}
         {invitationLinkError ? (
           <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
             {invitationLinkError}
@@ -753,8 +804,8 @@ export default function LinkedLearnersPage() {
             ) : null}
           </label>
           {inviterRole === "LEARNER" ? (
-            <label className="block space-y-1.5 text-sm font-medium" htmlFor="invite-birth-year">
-              Your birth year
+            <div className="space-y-1.5 text-sm font-medium">
+              <label className="block" htmlFor="invite-birth-year">Your birth year</label>
               <BirthYearInput
                 id="invite-birth-year"
                 value={inviteBirthYear}
@@ -782,7 +833,7 @@ export default function LinkedLearnersPage() {
                 Needed now so the person you invite can accept. If you are under the guardian-consent
                 age, a guardian confirms before the connection becomes active.
               </p>
-            </label>
+            </div>
           ) : null}
           <Button type="submit" loading={inviting} loadingText="Sending invitation…">Send invitation</Button>
         </form>
@@ -804,8 +855,8 @@ export default function LinkedLearnersPage() {
             <p className="mt-1 text-sm text-foreground/70">This is your account-level birth year used for guardian consent across all learning connections.</p>
           </div>
           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={handleBirthYearCorrection} noValidate>
-            <label className="block flex-1 space-y-1.5 text-sm font-medium">
-              Corrected birth year
+            <div className="flex-1 space-y-1.5 text-sm font-medium">
+              <label className="block" htmlFor="corrected-birth-year">Corrected birth year</label>
               <BirthYearInput
                 id="corrected-birth-year"
                 value={correctedBirthYear}
@@ -822,7 +873,7 @@ export default function LinkedLearnersPage() {
                   {correctionYearError}
                 </p>
               ) : null}
-            </label>
+            </div>
             <Button type="submit" variant="outline" loading={correctingBirthYear}>Review correction</Button>
           </form>
           {correctionWarningCount !== null ? (
@@ -898,16 +949,19 @@ export default function LinkedLearnersPage() {
                         ...current, [invitation.id]: next,
                       }))}
                     />
-                    <label className="flex items-center gap-2 text-xs text-foreground/70">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center gap-2 text-xs text-foreground/70">
+                      <Checkbox
+                        id={`consent-invitation-${invitation.id}`}
                         checked={consentChecked[invitation.id] === true}
-                        onChange={(event) => setConsentChecked((current) => ({
-                          ...current, [invitation.id]: event.target.checked,
+                        onChange={(checked) => setConsentChecked((current) => ({
+                          ...current, [invitation.id]: checked,
                         }))}
+                        ariaLabel="Confirm guardian consent attestation"
                       />
-                      A guardian confirms this connection
-                    </label>
+                      <label htmlFor={`consent-invitation-${invitation.id}`}>
+                        A guardian confirms this connection
+                      </label>
+                    </div>
                     <Button
                       type="button"
                       disabled={busyId === invitation.id}
@@ -964,14 +1018,14 @@ export default function LinkedLearnersPage() {
 
               {learnerCanSupplyYear ? (
                 <div className="space-y-2 rounded-lg border border-border p-3">
-                  <label className="block space-y-1.5 text-sm font-medium">
-                    Your birth year
+                  <div className="space-y-1.5 text-sm font-medium">
+                    <label className="block" htmlFor={`birth-year-link-${link.id}`}>Your birth year</label>
                     <BirthYearInput
                       id={`birth-year-link-${link.id}`}
                       value={birthYears[link.id] ?? ""}
                       onChange={(next) => setBirthYears((current) => ({ ...current, [link.id]: next }))}
                     />
-                  </label>
+                  </div>
                   {!canAccept ? <Button type="button" variant="outline" onClick={() => void handleBirthYear(link)} loading={busyId === link.id}>Save birth year</Button> : null}
                   <p className="text-xs text-foreground/60">We collect the year only, for the consent decision on this connection. It is not part of signup or your public profile.</p>
                 </div>

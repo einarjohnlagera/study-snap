@@ -28,6 +28,7 @@ import com.studysnap.backend.repository.LinkedLearnerGuardianConsentRepository;
 import com.studysnap.backend.repository.LinkedLearnerGrantRepository;
 import com.studysnap.backend.entity.LinkedLearnerInvitationEntity;
 import com.studysnap.backend.repository.LinkedLearnerInvitationRepository;
+import com.studysnap.backend.repository.LinkedLearnerProvisionalBirthYearRepository;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +67,7 @@ public class LinkedLearnerService {
     private final LinkedLearnerInvitationRepository invitationRepository;
     private final LinkedLearnerGuardianConsentRepository consentRepository;
     private final LinkedLearnerGrantRepository grantRepository;
+    private final LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository;
     private final UserRepository userRepository;
     private final OnboardingGuardService onboardingGuardService;
     private final AuthService authService;
@@ -361,7 +363,7 @@ public class LinkedLearnerService {
         // correctBirthYear's own lock makes it observe this acceptance and pause it; if it wins,
         // this read returns the corrected year and consent is required below.
         UUID learnerUserId = relationship.getLearnerUserId();
-        Integer birthYear = lockAndReadBirthYear(learnerUserId);
+        Integer birthYear = resolveEffectiveBirthYearForDecision(relationship);
         if (birthYear == null) {
             if (!callerUserId.equals(learnerUserId) || request.learnerBirthYear() == null) {
                 throw new LinkedLearnerBirthYearRequiredException();
@@ -388,6 +390,11 @@ public class LinkedLearnerService {
         if (relationshipRepository.markAcceptedIfPending(relationshipId, now) == 0) {
             throw new LinkedLearnerInvalidStateException();
         }
+        // Promotion belongs to the successful transition, never the consent-pending early return.
+        // The native update is write-once and relationship/status scoped; cleanup is idempotent.
+        provisionalBirthYearRepository.promoteIfAccountBirthYearMissing(
+                relationshipId, learnerUserId, now);
+        provisionalBirthYearRepository.deleteForRelationship(relationshipId);
         // The conditional update cleared the persistence context, so re-read rather than trust the
         // detached copy — status is exactly the field that changed.
         return toResponse(requireRelationship(relationshipId), callerUserId);
@@ -423,11 +430,11 @@ public class LinkedLearnerService {
         if (!callerUserId.equals(relationship.getSupporterUserId())) {
             throw new LinkedLearnerNotAllowedException();
         }
-        UserEntity learner = requireUser(relationship.getLearnerUserId());
-        if (learner.getBirthYear() == null) {
+        Integer birthYear = resolveEffectiveBirthYearForDecision(relationship);
+        if (birthYear == null) {
             throw new LinkedLearnerBirthYearRequiredException();
         }
-        if (!guardianConsentPolicy.requiresGuardianConsent(learner.getBirthYear())) {
+        if (!guardianConsentPolicy.requiresGuardianConsent(birthYear)) {
             throw new LinkedLearnerNotAllowedException();
         }
         if (consentRepository.findByRelationshipId(relationshipId).isEmpty()) {
@@ -441,13 +448,19 @@ public class LinkedLearnerService {
         onboardingGuardService.assertProfileComplete(callerUserId);
         LinkedLearnerRelationshipEntity relationship = requireRelationship(relationshipId);
         requireParty(relationship, callerUserId);
-        if (relationship.getStatus() == LinkedLearnerStatus.REVOKED) {
-            return toResponse(relationship, callerUserId);
+        // Take the learner lock EXPLICITLY, for ordering rather than for the value. Revocation is
+        // now part of the provisional-year lifecycle, and acceptance holds this same lock while it
+        // promotes then deletes; without it a revoke could delete the provisional row between
+        // acceptance's read and its promotion, leaving an ACCEPTED relationship whose learner has no
+        // account-global year — the state requireGrant denies with no remediation path.
+        lockAndReadBirthYear(relationship.getLearnerUserId());
+        if (relationship.getStatus() != LinkedLearnerStatus.REVOKED) {
+            // ⚠️ Conditional on BOTH live statuses, so revocation still wins when an acceptance
+            // committed first. Zero rows means it was already REVOKED, which is not an error — revoke
+            // is idempotent — so report the persisted state rather than the stale one.
+            relationshipRepository.markRevokedIfLive(relationshipId, OffsetDateTime.now());
         }
-        // ⚠️ Conditional on BOTH live statuses, so revocation still wins when an acceptance
-        // committed first. Zero rows means it was already REVOKED, which is not an error — revoke
-        // is idempotent — so report the persisted state rather than the stale one.
-        relationshipRepository.markRevokedIfLive(relationshipId, OffsetDateTime.now());
+        provisionalBirthYearRepository.deleteForRelationship(relationshipId);
         return toResponse(requireRelationship(relationshipId), callerUserId);
     }
 
@@ -475,7 +488,10 @@ public class LinkedLearnerService {
         return new PendingRelationshipCreation(relationship, inserted == 1);
     }
 
-    /** Uses the same lock and write-once validation as every existing learner birth-year path. */
+    /**
+     * Creator-side capture only: a learner creating a link deliberately acts on their own account.
+     * Link redemption must use the provisional methods below and must never reuse this writer.
+     */
     void captureLearnerBirthYearIfMissing(UUID learnerUserId, Integer suppliedBirthYear) {
         if (lockAndReadBirthYear(learnerUserId) != null) {
             return;
@@ -484,6 +500,38 @@ public class LinkedLearnerService {
             throw new LinkedLearnerBirthYearRequiredException();
         }
         persistBirthYear(learnerUserId, suppliedBirthYear);
+    }
+
+    /**
+     * Validate before the link is claimed, then lock the learner row for the rest of redemption.
+     * A null return means the account-global year already exists and no provisional row is needed.
+     */
+    Integer prepareProvisionalBirthYearForLinkRedemption(
+            UUID learnerUserId,
+            Integer suppliedBirthYear
+    ) {
+        if (suppliedBirthYear != null) {
+            validateBirthYear(suppliedBirthYear);
+        }
+        if (lockAndReadBirthYear(learnerUserId) != null) {
+            return null;
+        }
+        if (suppliedBirthYear == null) {
+            throw new LinkedLearnerBirthYearRequiredException();
+        }
+        return suppliedBirthYear;
+    }
+
+    void storeProvisionalBirthYear(
+            UUID relationshipId,
+            UUID learnerUserId,
+            int birthYear,
+            OffsetDateTime declaredAt
+    ) {
+        if (provisionalBirthYearRepository.insertIfAccountBirthYearMissing(
+                relationshipId, learnerUserId, birthYear, declaredAt) != 1) {
+            throw new LinkedLearnerInvalidStateException();
+        }
     }
 
     record PendingRelationshipCreation(
@@ -514,14 +562,48 @@ public class LinkedLearnerService {
         return userRepository.findBirthYearById(learnerUserId).orElse(null);
     }
 
+    /**
+     * The single path for relationship-scoped consent DECISIONS. The learner lock and its separate
+     * scalar read MUST remain before the effective lookup; the repository then gives the
+     * account-global value precedence over this relationship's provisional declaration.
+     *
+     * <p>⚠️ DECISIONS ONLY — never call this from a projection. {@link #lockAndReadBirthYear} takes a
+     * PESSIMISTIC_WRITE lock, and {@code toResponse} runs once per relationship inside
+     * {@code list()}. Routing the DTO through here made a plain list take a row-level write lock on
+     * every counterparty, in list order, which breaks the one-row invariant that lock's Javadoc
+     * states and lets two concurrent listers with overlapping learners deadlock. Projections use
+     * {@link #readEffectiveBirthYear}.
+     */
+    private Integer resolveEffectiveBirthYearForDecision(
+            LinkedLearnerRelationshipEntity relationship
+    ) {
+        UUID learnerUserId = relationship.getLearnerUserId();
+        lockAndReadBirthYear(learnerUserId);
+        return readEffectiveBirthYear(relationship);
+    }
+
+    /**
+     * Unlocked read for PROJECTION. Same precedence as the decision path — account-global first,
+     * this relationship's provisional declaration second — but it takes no lock, because rendering
+     * a connection list must not serialize against acceptance or birth-year correction.
+     */
+    private Integer readEffectiveBirthYear(LinkedLearnerRelationshipEntity relationship) {
+        return provisionalBirthYearRepository.findEffectiveBirthYear(
+                relationship.getId(), relationship.getLearnerUserId()).orElse(null);
+    }
+
     private void persistBirthYear(UUID learnerUserId, int birthYear) {
+        validateBirthYear(birthYear);
+        // Targeted update rather than save() on a loaded entity: UserEntity has no @DynamicUpdate,
+        // so writing a snapshot taken before a blocking lock wait would rewrite every column.
+        userRepository.writeBirthYear(learnerUserId, birthYear, OffsetDateTime.now());
+    }
+
+    private void validateBirthYear(int birthYear) {
         int currentYear = Year.now().getValue();
         if (birthYear < MINIMUM_BIRTH_YEAR || birthYear > currentYear) {
             throw new InvalidLinkedLearnerBirthYearException();
         }
-        // Targeted update rather than save() on a loaded entity: UserEntity has no @DynamicUpdate,
-        // so writing a snapshot taken before a blocking lock wait would rewrite every column.
-        userRepository.writeBirthYear(learnerUserId, birthYear, OffsetDateTime.now());
     }
 
     private void validateCorrectionBirthYear(int birthYear) {
@@ -609,8 +691,9 @@ public class LinkedLearnerService {
                 ? relationship.getLearnerUserId() : relationship.getSupporterUserId();
         UserEntity counterparty = requireUser(counterpartyId);
         UserEntity learner = callerRole == LinkedLearnerSide.LEARNER ? requireUser(callerUserId) : counterparty;
-        boolean consentRequired = learner.getBirthYear() != null
-                && guardianConsentPolicy.requiresGuardianConsent(learner.getBirthYear());
+        Integer learnerBirthYear = readEffectiveBirthYear(relationship);
+        boolean consentRequired = learnerBirthYear != null
+                && guardianConsentPolicy.requiresGuardianConsent(learnerBirthYear);
         boolean consentRecorded = consentRepository.findByRelationshipId(relationship.getId()).isPresent();
         boolean invitedParty = relationship.getInitiatedBy() != callerRole;
         boolean accepted = relationship.getStatus() == LinkedLearnerStatus.ACCEPTED;
@@ -634,7 +717,7 @@ public class LinkedLearnerService {
         // this predicate exists to remove — because `consentRequired` is false when the year is null.
         // Found by the v0.94.0 cold-agent pressure test, in code added by v0.94.0 item 5 whose own
         // comment claimed to mirror that gate.
-        boolean learnerAgeUnknown = counterpartyIsLearner && learner.getBirthYear() == null;
+        boolean learnerAgeUnknown = counterpartyIsLearner && learnerBirthYear == null;
         boolean counterpartyDataWithheldForConsent =
                 learnerAgeUnknown || (counterpartyIsLearner && consentRequired && !consentRecorded);
         boolean readableFromCounterparty = accepted && !counterpartyDataWithheldForConsent;
@@ -658,7 +741,7 @@ public class LinkedLearnerService {
                 relationship.getCreatedAt(),
                 relationship.getAcceptedAt(),
                 relationship.getRevokedAt(),
-                learner.getBirthYear() == null,
+                learnerBirthYear == null,
                 consentRequired,
                 consentRecorded,
                 activitySharedFromUserIds.contains(callerUserId),

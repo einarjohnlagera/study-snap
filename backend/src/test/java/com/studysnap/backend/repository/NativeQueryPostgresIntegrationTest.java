@@ -3,7 +3,18 @@ package com.studysnap.backend.repository;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.LinkedLearnerGrantScope;
 import com.studysnap.backend.entity.LinkedLearnerInvitationLinkEntity;
+import com.studysnap.backend.entity.LinkedLearnerSide;
+import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
+import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.EmailService;
+import com.studysnap.backend.service.EmailTemplateService;
+import com.studysnap.backend.service.GuardianConsentPolicy;
+import com.studysnap.backend.service.LinkedLearnerService;
+import com.studysnap.backend.service.OnboardingGuardService;
+import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.model.NoteLibraryReadiness;
 import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.model.NoteLibrarySort;
@@ -37,6 +48,7 @@ import java.lang.reflect.Method;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -49,6 +61,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 /**
  * Executes the repository's native SQL against the production database engine and the full Flyway schema.
@@ -74,7 +87,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 31;
+    private static final int EXPECTED_NATIVE_QUERIES = 35;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
@@ -93,6 +106,21 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private LinkedLearnerGrantRepository grantRepository;
+
+    @Autowired
+    private LinkedLearnerRelationshipRepository relationshipRepository;
+
+    @Autowired
+    private LinkedLearnerInvitationRepository invitationRepository;
+
+    @Autowired
+    private LinkedLearnerGuardianConsentRepository consentRepository;
+
+    @Autowired
+    private LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
     private LinkedLearnerInvitationLinkRepository invitationLinkRepository;
@@ -344,6 +372,156 @@ class NativeQueryPostgresIntegrationTest {
                 .as("single-threaded second claim on an already-redeemed row").isZero();
     }
 
+    /**
+     * Headline acceptance test: consent remains reachable while the learner's account has no year,
+     * then real acceptance promotes and erases the relationship-scoped declaration atomically.
+     */
+    @Test
+    void supporterCanConsentAndAcceptALinkRedeemedMinorWithOnlyAProvisionalBirthYear() {
+        UUID supporter = seedUser("provisional-supporter");
+        UUID learner = seedUser("provisional-minor");
+        UUID relationshipId = seedRelationship(
+                supporter, learner, "PENDING", LinkedLearnerSide.LEARNER.name());
+        int minorYear = Year.now().getValue() - 10;
+
+        assertThat(provisionalBirthYearRepository.insertIfAccountBirthYearMissing(
+                relationshipId, learner, minorYear, OffsetDateTime.now(ZoneOffset.UTC))).isEqualTo(1);
+        assertThat(accountBirthYear(learner)).isNull();
+
+        LinkedLearnerService service = linkedLearnerService();
+        assertThat(service.recordGuardianConsent(relationshipId, supporter).guardianConsentRecorded()).isTrue();
+        assertThat(accountBirthYear(learner))
+                .as("guardian consent must not promote before creator confirmation").isNull();
+
+        var accepted = service.accept(
+                relationshipId, supporter, new AcceptLinkedLearnerRequest(null, false));
+
+        assertThat(accepted.status()).isEqualTo(LinkedLearnerStatus.ACCEPTED);
+        assertThat(accountBirthYear(learner)).isEqualTo(minorYear);
+        assertThat(provisionalRows(relationshipId)).isZero();
+        // ⚠️ Assert the RETURNED DTO, not just the columns. toResponse reads the effective year
+        // AFTER promotion has written users.birth_year and cleanup has removed the provisional row,
+        // so this is the one moment the projection could report a momentarily-absent year and tell
+        // the supporter the learner's age is unknown on the very response that accepted them.
+        assertThat(accepted.birthYearRequired())
+                .as("promotion must be visible to the acceptance response").isFalse();
+        assertThat(accepted.guardianConsentRequired()).isTrue();
+        assertThat(accepted.guardianConsentRecorded()).isTrue();
+    }
+
+    /** Killing test for deleting provisional-row cleanup from LinkedLearnerService.revoke. */
+    @Test
+    void revokingAnUnconfirmedRedemptionDeletesItsProvisionalYearWithoutTouchingTheAccount() {
+        UUID supporter = seedUser("revoke-provisional-supporter");
+        UUID learner = seedUser("revoke-provisional-learner");
+        UUID relationshipId = seedRelationship(
+                supporter, learner, "PENDING", LinkedLearnerSide.LEARNER.name());
+        provisionalBirthYearRepository.insertIfAccountBirthYearMissing(
+                relationshipId, learner, Year.now().getValue() - 10, OffsetDateTime.now(ZoneOffset.UTC));
+
+        linkedLearnerService().revoke(relationshipId, learner);
+
+        assertThat(provisionalRows(relationshipId)).isZero();
+        assertThat(accountBirthYear(learner)).isNull();
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("REVOKED");
+    }
+
+    /**
+     * Kills both precedence inversion and a missing relationship-id predicate in effective lookup.
+     * The unrelated provisional row is deliberately present when the selected relationship has one.
+     */
+    @Test
+    void effectiveBirthYearPrefersTheAccountAndScopesTheFallbackToTheRelationship() {
+        UUID supporter = seedUser("effective-supporter");
+        UUID learner = seedUser("effective-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "PENDING");
+        UUID otherRelationshipId = seedRelationship(
+                seedUser("effective-other-supporter"), learner, "PENDING");
+        jdbcTemplate.update("update users set birth_year = 1998 where id = ?", learner);
+        seedProvisional(relationshipId, 2011);
+        seedProvisional(otherRelationshipId, 2013);
+
+        assertThat(provisionalBirthYearRepository.findEffectiveBirthYear(relationshipId, learner))
+                .contains(1998);
+
+        jdbcTemplate.update("update users set birth_year = null where id = ?", learner);
+        assertThat(provisionalBirthYearRepository.findEffectiveBirthYear(relationshipId, learner))
+                .contains(2011);
+        assertThat(provisionalBirthYearRepository.findEffectiveBirthYear(UUID.randomUUID(), learner))
+                .as("an unrelated provisional declaration must not satisfy this relationship")
+                .isEmpty();
+
+        // ⚠️ A MISMATCHED PAIR must not resolve. Before the relationship join, the provisional row
+        // was reached by relationship_id alone while the account row came from a separately-passed
+        // learner id, with nothing tying them together — so a caller passing a real relationship
+        // belonging to SOMEONE ELSE would coalesce that stranger's declared year onto this user's
+        // consent decision. Every caller passes a matched pair today, which is precisely why such a
+        // mismatch would never announce itself.
+        UUID strangerLearner = seedUser("effective-stranger");
+        UUID strangerRelationshipId = seedRelationship(
+                seedUser("effective-stranger-supporter"), strangerLearner, "PENDING");
+        seedProvisional(strangerRelationshipId, 2009);
+        assertThat(provisionalBirthYearRepository
+                .findEffectiveBirthYear(strangerRelationshipId, learner))
+                .as("a relationship that does not belong to this learner must not supply their year")
+                .isEmpty();
+    }
+
+    /** Real rows pin the write predicate, promotion guard/write-once rule, and scoped cleanup. */
+    @Test
+    void provisionalWritePromotionAndDeletionPredicatesAreRelationshipScopedAndWriteOnce() {
+        UUID supporter = seedUser("predicate-supporter");
+        UUID learner = seedUser("predicate-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "PENDING");
+        UUID otherRelationshipId = seedRelationship(
+                seedUser("predicate-other-supporter"), seedUser("predicate-other-learner"), "PENDING");
+        int declaredYear = Year.now().getValue() - 12;
+
+        assertThat(provisionalBirthYearRepository.insertIfAccountBirthYearMissing(
+                relationshipId, learner, declaredYear, OffsetDateTime.now(ZoneOffset.UTC))).isEqualTo(1);
+        seedProvisional(otherRelationshipId, Year.now().getValue() - 13);
+        assertThat(provisionalBirthYearRepository.promoteIfAccountBirthYearMissing(
+                relationshipId, learner, OffsetDateTime.now(ZoneOffset.UTC)))
+                .as("PENDING is not real acceptance").isZero();
+
+        jdbcTemplate.update(
+                "update linked_learner_relationships set status = 'ACCEPTED' where id = ?", relationshipId);
+        assertThat(provisionalBirthYearRepository.promoteIfAccountBirthYearMissing(
+                relationshipId, learner, OffsetDateTime.now(ZoneOffset.UTC))).isEqualTo(1);
+        assertThat(accountBirthYear(learner)).isEqualTo(declaredYear);
+        assertThat(provisionalBirthYearRepository.promoteIfAccountBirthYearMissing(
+                relationshipId, learner, OffsetDateTime.now(ZoneOffset.UTC)))
+                .as("a second promotion cannot overwrite the account-global value").isZero();
+
+        assertThat(provisionalBirthYearRepository.deleteForRelationship(relationshipId)).isEqualTo(1);
+        assertThat(provisionalRows(relationshipId)).isZero();
+        assertThat(provisionalRows(otherRelationshipId))
+                .as("cleanup must retain a different relationship's declaration").isOne();
+        assertThat(provisionalBirthYearRepository.deleteForRelationship(relationshipId))
+                .as("cleanup is idempotent").isZero();
+    }
+
+    @Test
+    void existingAccountBirthYearPreventsAProvisionalWriteAndWinsAConcurrentPromotion() {
+        UUID supporter = seedUser("existing-year-supporter");
+        UUID learner = seedUser("existing-year-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "PENDING");
+        jdbcTemplate.update("update users set birth_year = 1997 where id = ?", learner);
+
+        assertThat(provisionalBirthYearRepository.insertIfAccountBirthYearMissing(
+                relationshipId, learner, 2012, OffsetDateTime.now(ZoneOffset.UTC))).isZero();
+        assertThat(provisionalRows(relationshipId)).isZero();
+
+        // Model a year becoming non-null after an older provisional row existed but before promote.
+        seedProvisional(relationshipId, 2012);
+        jdbcTemplate.update(
+                "update linked_learner_relationships set status = 'ACCEPTED' where id = ?", relationshipId);
+        assertThat(provisionalBirthYearRepository.promoteIfAccountBirthYearMissing(
+                relationshipId, learner, OffsetDateTime.now(ZoneOffset.UTC))).isZero();
+        assertThat(accountBirthYear(learner)).isEqualTo(1997);
+        assertThat(provisionalBirthYearRepository.deleteForRelationship(relationshipId)).isOne();
+    }
+
     private void seedInvitationLink(String token, UUID creatorUserId) {
         seedInvitationLink(UUID.randomUUID(), token, creatorUserId);
     }
@@ -381,24 +559,79 @@ class NativeQueryPostgresIntegrationTest {
         return count == null ? 0 : count;
     }
 
+    private LinkedLearnerService linkedLearnerService() {
+        StudySnapProperties properties = new StudySnapProperties();
+        return new LinkedLearnerService(
+                relationshipRepository,
+                invitationRepository,
+                consentRepository,
+                grantRepository,
+                provisionalBirthYearRepository,
+                userRepository,
+                mock(OnboardingGuardService.class),
+                mock(AuthService.class),
+                mock(EmailService.class),
+                mock(EmailTemplateService.class),
+                properties,
+                new GuardianConsentPolicy(properties),
+                mock(InvitationRateLimitService.class));
+    }
+
+    private Integer accountBirthYear(UUID userId) {
+        return jdbcTemplate.queryForObject(
+                "select birth_year from users where id = ?", Integer.class, userId);
+    }
+
+    private int provisionalRows(UUID relationshipId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from linked_learner_provisional_birth_years where relationship_id = ?",
+                Integer.class,
+                relationshipId);
+        return count == null ? 0 : count;
+    }
+
+    private String relationshipStatus(UUID relationshipId) {
+        return jdbcTemplate.queryForObject(
+                "select status from linked_learner_relationships where id = ?", String.class, relationshipId);
+    }
+
+    private void seedProvisional(UUID relationshipId, int birthYear) {
+        jdbcTemplate.update(
+                "insert into linked_learner_provisional_birth_years"
+                        + " (relationship_id, birth_year, declared_at) values (?, ?, now())",
+                relationshipId,
+                birthYear);
+    }
+
     private UUID seedUser(String handle) {
         UUID id = UUID.randomUUID();
+        String usernamePrefix = handle.substring(0, Math.min(handle.length(), 18));
         jdbcTemplate.update(
                 "insert into users (id, email, username, password_hash, role, first_name, last_name,"
                         + " created_at, updated_at)"
                         + " values (?, ?, ?, 'x', 'USER', 'Test', 'User', now(), now())",
-                id, handle + "-" + id + "@example.test", handle + "-" + id.toString().substring(0, 8)
+                id, handle + "-" + id + "@example.test",
+                usernamePrefix + "-" + id.toString().substring(0, 8)
         );
         return id;
     }
 
     private UUID seedRelationship(UUID supporterUserId, UUID learnerUserId, String status) {
+        return seedRelationship(supporterUserId, learnerUserId, status, LinkedLearnerSide.SUPPORTER.name());
+    }
+
+    private UUID seedRelationship(
+            UUID supporterUserId,
+            UUID learnerUserId,
+            String status,
+            String initiatedBy
+    ) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
                 "insert into linked_learner_relationships"
                         + " (id, supporter_user_id, learner_user_id, status, initiated_by, created_at)"
-                        + " values (?, ?, ?, ?, 'SUPPORTER', now())",
-                id, supporterUserId, learnerUserId, status
+                        + " values (?, ?, ?, ?, ?, now())",
+                id, supporterUserId, learnerUserId, status, initiatedBy
         );
         return id;
     }
