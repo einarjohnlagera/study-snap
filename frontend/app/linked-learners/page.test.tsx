@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LinkedLearnersPage from "./page";
 import {
   acceptLinkedLearner,
@@ -95,6 +95,9 @@ it("loads live invitation links on refresh", async () => {
 
 it("creates a single-use invitation link", async () => {
   jest.mocked(createLinkedLearnerInvitationLink).mockResolvedValue(invitationLink);
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([invitationLink]);
   render(<LinkedLearnersPage />);
   await screen.findByText("No live invitation links.");
 
@@ -103,6 +106,86 @@ it("creates a single-use invitation link", async () => {
   await waitFor(() => expect(createLinkedLearnerInvitationLink)
     .toHaveBeenCalledWith("SUPPORTER", null));
   expect(await screen.findByDisplayValue(invitationLink.url)).toBeInTheDocument();
+  expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2);
+});
+
+it("refetches live invitation links after revocation", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockResolvedValueOnce([]);
+  jest.mocked(revokeLinkedLearnerInvitationLink).mockResolvedValue({ message: "Revoked" });
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  fireEvent.click(screen.getByRole("button", { name: "Revoke link" }));
+
+  await waitFor(() => expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2));
+  expect(screen.queryByDisplayValue(invitationLink.url)).not.toBeInTheDocument();
+  expect(screen.getByText("Invitation link revoked.")).toBeInTheDocument();
+});
+
+it("refetches live invitation links on focus and removes the listener on unmount", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockResolvedValueOnce([]);
+  const { unmount } = render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  act(() => globalThis.dispatchEvent(new Event("focus")));
+
+  await waitFor(() => expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText("No live invitation links.")).toBeInTheDocument();
+
+  unmount();
+  act(() => globalThis.dispatchEvent(new Event("focus")));
+  expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2);
+});
+
+it("keeps the last loaded links visible when a focus refresh fails", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockRejectedValueOnce(new Error("Network unavailable."));
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  act(() => globalThis.dispatchEvent(new Event("focus")));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Network unavailable. Showing the last loaded list.",
+  );
+  expect(screen.getByDisplayValue(invitationLink.url)).toBeInTheDocument();
+});
+
+it("clears a stale links list when a foreground refetch fails", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockRejectedValueOnce(new Error("Refresh failed"));
+  jest.mocked(createLinkedLearnerInvitationLink).mockResolvedValue(invitationLink);
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Refresh failed");
+  expect(screen.queryByDisplayValue(invitationLink.url)).not.toBeInTheDocument();
+});
+
+it("treats a revoke 404 as an already-completed outcome and refetches", async () => {
+  jest.mocked(listLinkedLearnerInvitationLinks)
+    .mockResolvedValueOnce([invitationLink])
+    .mockResolvedValueOnce([]);
+  jest.mocked(revokeLinkedLearnerInvitationLink).mockRejectedValue(
+    new ApiRequestError("Not found", { status: 404 }),
+  );
+  render(<LinkedLearnersPage />);
+  await screen.findByDisplayValue(invitationLink.url);
+
+  fireEvent.click(screen.getByRole("button", { name: "Revoke link" }));
+
+  expect(await screen.findByText("Invitation link was already gone.")).toBeInTheDocument();
+  expect(listLinkedLearnerInvitationLinks).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue(invitationLink.url)).not.toBeInTheDocument();
 });
 
 it("keeps a live link visible when revocation fails", async () => {
