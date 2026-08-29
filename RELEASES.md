@@ -48,6 +48,26 @@ pixel of movement and competes with clicking the section rename input inside the
   which is `v0.96.0`. Everything here survives that rework rather than being thrown away, which is
   the test applied when choosing it.
 
+#### Added mid-release 2026-08-29, after items 1-2 shipped
+
+**⚠️ Appended when agreed, per this release's own rule.** Two more owner reports from real use, both
+audited before scoping at the owner's explicit request. Both are frontend and neither changes the
+verification tier.
+
+- **3. Deleting a note returns to where the reader came from (frontend).** `handleDeleteNote`
+  hardcodes `navigateTo("/library")` while `backHref` in the **same file** already reads the `ref`
+  param, validates it against a `/library` or `/collections/` prefix and falls back — which is
+  exactly why *Back* preserves an active Library filter and delete discards it.
+- **4. A filter that matches nothing stays a filter (frontend).** Three effects stripped a selected
+  subject, course/program or tag whenever the value was absent from the facet options, so applying a
+  saved filter whose subject no longer has notes silently rendered the **whole library**.
+  **⚠️ The facets are GLOBAL** — `getLibraryFilterOptions()` takes no parameters — so this is not a
+  feedback loop; it fires when a value genuinely no longer exists, which is the state a curator
+  consolidating subjects lands in. **⚠️ The desired behaviour is already built** (*"No notes match
+  these filters"* plus a Clear filters button, and comboboxes rather than `<select>`s that can render
+  an off-list value), so the effects are the only thing preventing it.
+
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Do NOT touch `components/ui/summary-markdown.tsx` in this release.** Fixing Summary math needs
@@ -103,6 +123,29 @@ pixel of movement and competes with clicking the section rename input inside the
   removing it fails `says a save is running, because nothing on this surface used to say so`, and
   restoring the refetch fails `does not refetch every note the user owns just to reorder one plan`.
 
+- **Deleting a note no longer throws away the filter you came from.** Delete now navigates to
+  `backHref`, the same validated return target the BackLink uses — so an active Library filter
+  survives, and a note opened from a collection returns to that collection instead of dumping the
+  reader in the Library. **Mutation-verified:** restoring the hardcoded `/library` fails
+  `returns to the filtered library the reader came from after deleting a note`.
+- **A filter that matches nothing now shows an empty library rather than silently clearing itself.**
+  The three facet-pruning effects are removed, with a comment recording why they must not come back:
+  they predate `e47ed9a6`'s move to server-side filtering, when facets were derived client-side from
+  loaded notes and an off-list value could not be rendered meaningfully. Global facets turned that
+  pruning from a rendering constraint into a silent discard of an explicit choice.
+  **⚠️ Each filter control now also renders while its own filter is ACTIVE**, not only while its
+  facet list is non-empty — otherwise preserving a nothing-matching filter would hide the control for
+  the last subject in a library and leave its clear button unreachable.
+  **⚠️ `filterOptionsLoaded` went with the effects**: they were its only readers, leaving state
+  written twice and read nowhere. **Mutation-verified:** restoring the subject reset fails
+  `keeps a filter that matches nothing instead of falling back to the whole library`; restoring the
+  facet-only gate fails `keeps the subject control reachable while its filter is active but its
+  facet list is empty`.
+- **⚠️ That second test first PASSED FOR THE WRONG REASON and was corrected.** `availableSubjects`
+  merges `listSubjects("mine")` with the filter-option facets, and the shared test helper's
+  `mockLibrarySubject` falls back to `"General"` for a subject-less note — so a fixture of notes
+  without subjects still produced a non-empty list, and the gate mutation survived. Both inputs are
+  now emptied explicitly. Caught by mutation-testing the assertion rather than trusting it green.
 
 ## v0.95.0 - Redemption Integrity
 

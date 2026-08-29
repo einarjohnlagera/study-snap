@@ -590,7 +590,6 @@ export default function LibraryPage() {
   const [loadedPageCount, setLoadedPageCount] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filterOptions, setFilterOptions] = useState<NotesLibraryFilterOptionsResponse>(EMPTY_FILTER_OPTIONS);
-  const [filterOptionsLoaded, setFilterOptionsLoaded] = useState(false);
   const [subjectStats, setSubjectStats] = useState<SubjectStatsResponse>(EMPTY_SUBJECT_STATS);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
@@ -691,7 +690,6 @@ export default function LibraryPage() {
       setLoadedPageCount(1);
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setFilterOptions(filterOptionsResult.status === "fulfilled" ? filterOptionsResult.value : EMPTY_FILTER_OPTIONS);
-      setFilterOptionsLoaded(filterOptionsResult.status === "fulfilled");
       setSubjectStats(subjectStatsResult.status === "fulfilled" ? subjectStatsResult.value : EMPTY_SUBJECT_STATS);
     } catch (loadError) {
       if (requestToken !== listRequestTokenRef.current) {
@@ -781,7 +779,6 @@ export default function LibraryPage() {
   const refreshFilterOptionsSilently = useCallback(async () => {
     try {
       setFilterOptions(await getLibraryFilterOptions());
-      setFilterOptionsLoaded(true);
     } catch {
       // Keep the last usable option set; this must not block poll recovery.
     }
@@ -1053,31 +1050,26 @@ export default function LibraryPage() {
     return filterOptions.tags.map((facet) => facet.value);
   }, [filterOptions.tags]);
 
-  useEffect(() => {
-    if (loading || !filterOptionsLoaded) return;
-    if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
-      setSelectedSubject(ALL_SUBJECTS);
-    }
-  }, [availableSubjects, filterOptionsLoaded, loading, selectedSubject]);
-
-  useEffect(() => {
-    if (loading || !filterOptionsLoaded) return;
-    if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
-      setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
-    }
-  }, [availableCoursePrograms, filterOptionsLoaded, loading, selectedCourseProgram]);
-
-  useEffect(() => {
-    if (loading || !filterOptionsLoaded) return;
-    setSelectedTags((previous) => {
-      const next = previous.filter((tag) => availableTags.includes(tag));
-      return next.length === previous.length ? previous : next;
-    });
-    setTagDraft((previous) => {
-      const next = previous.filter((tag) => availableTags.includes(tag));
-      return next.length === previous.length ? previous : next;
-    });
-  }, [availableTags, filterOptionsLoaded, loading]);
+  // ⚠️ THREE EFFECTS WERE REMOVED HERE, and this comment exists so they are not re-added.
+  //
+  // They stripped a selected subject, course/program or tag whenever that value was absent from the
+  // facet options — so applying a saved filter whose subject no longer has any notes silently
+  // dropped the filter and rendered the whole library instead of an empty result. A filter that
+  // matches nothing must still be a filter.
+  //
+  // They made sense before `e47ed9a6` migrated the Library to server-side filtering: facets were
+  // then derived client-side from the loaded notes, so a selected value outside them could not be
+  // rendered meaningfully. `getLibraryFilterOptions()` now takes NO parameters and returns facets
+  // across the whole library, so the pruning stopped being a rendering constraint and became a
+  // silent discard of an explicit user choice.
+  //
+  // Nothing else has to change to support the empty case: the controls are comboboxes over a text
+  // input, not <select>s, so they render a value that is not in their option list; the empty state
+  // ("No notes match these filters") and its Clear filters button already exist; and each control
+  // keeps its own clear button.
+  //
+  // `filterOptionsLoaded` went with them: those effects were its only readers, so it became state
+  // that was written twice and read nowhere.
 
   useEffect(() => {
     if (tagSelectorOpen) {
@@ -2156,7 +2148,15 @@ export default function LibraryPage() {
             </div>
           </div>
 
-          {availableSubjects.length > 0 ? (
+          {/*
+            ⚠️ Each control also renders while its own filter is ACTIVE, not only while its facet
+            list is non-empty. Now that a filter matching nothing is preserved rather than silently
+            cleared, gating purely on the facet list would hide the control for the last subject in
+            a library — leaving the filter applied with its clear button unreachable. The empty
+            state's Clear filters button still works, but a filter you can see should be a filter
+            you can clear where you set it.
+          */}
+          {availableSubjects.length > 0 || selectedSubject !== ALL_SUBJECTS ? (
             <div className="space-y-2">
               <p className="text-sm font-medium">Subjects</p>
               <div className="relative">
@@ -2218,7 +2218,7 @@ export default function LibraryPage() {
             </div>
           ) : null}
 
-          {availableTags.length > 0 ? (
+          {availableTags.length > 0 || selectedTags.length > 0 ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium">Popular Tags</p>
@@ -2256,7 +2256,7 @@ export default function LibraryPage() {
             </div>
           ) : null}
 
-          {availableCoursePrograms.length > 0 ? (
+          {availableCoursePrograms.length > 0 || selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
             <div className="space-y-2">
               <p className="text-sm font-medium">Course / Program</p>
               <p className="text-xs leading-relaxed text-foreground/60">

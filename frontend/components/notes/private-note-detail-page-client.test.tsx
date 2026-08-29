@@ -2900,6 +2900,31 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(body?.textContent ?? "").toContain("varies");
   });
 
+  it("returns to the filtered library the reader came from after deleting a note", async () => {
+    // ⚠️ backHref already reads and validates the `ref` param, which is why the BackLink preserved
+    // an active Library filter — while delete hardcoded "/library" and threw it away. The two
+    // disagreed in the same file.
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (deleteNote as jest.Mock).mockResolvedValue(undefined);
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+    });
+    searchParamValues = { from: "library", ref: "/library?subject=Biology&sort=recent" };
+    searchParamsMock = createSearchParamsMock();
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete note" }));
+
+    await waitFor(() => expect(deleteNote).toHaveBeenCalledWith("note-1"));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/library?subject=Biology&sort=recent"));
+    expect(pushMock).not.toHaveBeenCalledWith("/library");
+  });
+
   it("sorts Key Concepts by readiness — struggling and due first, mastered last", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
