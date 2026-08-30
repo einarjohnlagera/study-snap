@@ -18,8 +18,15 @@ import {
   revokeLinkedLearner,
   setLinkedLearnerActivityGrant,
   setLinkedLearnerProgressGrant,
+  type LinkedLearnerInvitationResponse,
   type LinkedLearnerResponse,
 } from "@/lib/api";
+
+const replace = jest.fn();
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ replace, push: jest.fn(), refresh: jest.fn() }),
+}));
 
 jest.mock("@/lib/api", () => ({
   acceptLinkedLearner: jest.fn(),
@@ -107,6 +114,28 @@ it("shows no deadline once a request is accepted, because null means not on the 
 
   await screen.findByText(/Accepted/);
   expect(screen.queryByText(/if it is not confirmed/)).not.toBeInTheDocument();
+});
+
+it("routes a mid-onboarding caller to onboarding instead of a dead error", async () => {
+  // ⚠️ v0.98.0 item 1 requires finished onboarding to ACCEPT. This page's guard keys on
+  // needsOnboarding(), which treats two cohorts as onboarded while the server column is null, so
+  // this 403 is reachable by real accounts. Without the redirect they read "Could not accept the
+  // invitation" with no idea what to do.
+  jest.mocked(listLinkedLearnerInvitations).mockResolvedValue([{
+    id: "inv-onboarding", incoming: true, inviterRole: "SUPPORTER",
+    invitedEmail: "me@example.com", inviterName: "Aunt May", createdAt: "2026-08-20T00:00:00Z",
+    expiresAt: "2026-09-19T00:00:00Z", expired: false,
+  } as unknown as LinkedLearnerInvitationResponse]);
+  jest.mocked(acceptLinkedLearnerInvitation).mockRejectedValue(
+    Object.assign(new Error("Finish setting up your account before connecting with someone."), {
+      action: "COMPLETE_ONBOARDING",
+      status: 403,
+    }));
+
+  render(<LinkedLearnersPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/onboarding"));
 });
 
 it("loads live invitation links on refresh", async () => {

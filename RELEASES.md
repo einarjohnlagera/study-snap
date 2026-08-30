@@ -94,6 +94,38 @@ tail of a decision already taken.
   it is in scope because it is a doc-only correction with no code dependency: the cost is reading four
   migrations, not making a decision.
 
+### Shipped
+
+- **The email invitation path requires finished onboarding too (item 1).** `acceptInvitation` now rejects a
+  caller whose `onboardingCompletedAt` is null, so the two paths that form the **identical** relationship
+  answer to one bar. The `LinkedLearnerOnboardingRequiredException` message was generalised to name neither
+  path, because it now covers both.
+- **⚠️ SCOPED TO THE ACTING ENDPOINT ONLY — `listInvitations` and `list` are deliberately NOT tightened, and
+  this is a decision, not an omission.** The link-path symmetry argument does not transfer: `resolve` was
+  tightened because it is the recipient's read of a token they were handed, one step from redeeming it. The
+  invitation list is the recipient's own inbox. **Tightening it would convert an error into an ABSENCE — and
+  an absence gives them nothing to act on**, inverting `v0.90.0`'s deliberate choice to make an invitation
+  visible. Recorded because *"the link path tightened five endpoints, so the email path should tighten
+  three"* is exactly the reasoning a later session will apply.
+- **⚠️ THE TWO REJECTED COHORTS WERE VERIFIED, NOT ASSUMED.** Both markers that make the frontend treat an
+  account as onboarded are set on paths where the email is **already verified** — the deferred-completion
+  marker fires at the end of onboarding, and the copy-on-signup marker is set inside the verify-email
+  success path and on Google signup, which stamps `emailVerifiedAt`. So `requireEmailVerified` does **not**
+  already reject them, and the blast radius really is two cohorts rather than one.
+- **The self-heal ships with the item, and is simpler than the link path's — deliberately.** There is **no
+  token to preserve**: the invitation is server-side and `listInvitations` was left alone, so it is still
+  listed when the caller returns. The connections page routes a `COMPLETE_ONBOARDING` remedy to
+  `/onboarding` and Accept then simply works. **Mutation-verified:** removing the redirect fails
+  `routes a mid-onboarding caller to onboarding instead of a dead error`.
+- **⚠️ The gate runs BEFORE the invitation lookup, and the test proves it with an id that does not exist.**
+  A rejection discloses the caller's own account state and never whether an invitation exists, so it cannot
+  become a cheaper oracle beside `v0.90.0`'s single not-found contract. **Mutation-verified:** removing the
+  gate fails `acceptingAnEmailInvitationRequiresFinishedOnboardingAndSaysSoBeforeAnyLookup`, and **moving it
+  after the lookup fails the same test.**
+- **⚠️ The shared test fixture had every caller un-onboarded**, so four existing acceptance tests failed the
+  moment the gate became real — the same shape `v0.97.0` hit on the link path. They now build an onboarded
+  user by default, with the gate covered by its own test rather than incidentally by all of them.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW, and no code lands under
@@ -116,6 +148,11 @@ tail of a decision already taken.
   `PRIVATE | PUBLIC`; **no endpoint accepts a learner user id**; **no public people search**.
 - **⚠️ Any predicate deciding whether a grant is cut, or whether a caller may accept, needs a REAL-ROW
   test** in `NativeQueryPostgresIntegrationTest`, mutation-verified with the killing test named.
+- **⚠️ ITEM 2'S RETENTION WINDOW FOLLOWS `request-ttl-days` DELIBERATELY — do not hardcode 30 to "fix"
+  the coupling.** That key is load-bearing for `[CHECKPOINT — due 2026-09-26]`'s arithmetic, so a future
+  change to it will also change how long terminal cards stay visible. **That is intended**, and it mirrors
+  `linked-learners.md`'s existing rule for the invitation list — *the same configured duration for which it
+  was live, not a second hardcoded retention period.* Anyone decoupling them must say why.
 - **⚠️ Explicitly OUT OF SCOPE:** anything that changes what a supporter can see; Phase 5 items; and
   re-opening the `v0.97.0` expiry semantics.
 
