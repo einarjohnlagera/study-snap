@@ -131,6 +131,17 @@ at link time rather than at signup is pointless if the field answers itself.
 
 Because an invitation is addressed to a string rather than to an account, **proving control of that address is the whole basis for acting on it**. Accepting an invitation, listing invitations, revoking one, accepting a relationship, recording a birth year and recording guardian consent all require a verified email. Signup issues a session token without inbox access, so without this gate anyone who guessed or knew an invited address could register it and inherit the invitation.
 
+**Every invitation-link endpoint requires a FINISHED onboarding**, not merely a verified email — `create`,
+`list`, `revoke`, `resolve` and `redeem`. **⚠️ Until `v0.97.0` the wrapper's name promised this and its callee
+did not deliver it:** `assertProfileComplete` fires only when `profileType` is null **and** onboarding is
+already complete, an exemption that is **deliberate and must stay** so the activation funnel is never blocked.
+The onboarding requirement therefore lives in the link service's own wrapper, not in the shared guard.
+**⚠️ Nothing was open** — both routes already gated on onboarding in the frontend, so this makes the server
+enforce what the UI arranges. **⚠️ The check runs BEFORE any token lookup**, so a rejection discloses only the
+caller's own account state and never whether a token exists; moving it later would put a cheaper oracle beside
+the single not-found contract. A caller who arrives mid-onboarding carries the token through `/onboarding` in a
+first-party cookie and redeems it afterwards — the gate is a waypoint the flow passes, not a wall.
+
 Two paths are deliberately **left ungated**, because they cut or narrow access rather than granting it, and blocking them would disable a safety mechanism: **revoking a relationship**, and the learner's own **birth-year correction**.
 
 ### Expiry

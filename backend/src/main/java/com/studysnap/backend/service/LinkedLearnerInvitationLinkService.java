@@ -13,6 +13,7 @@ import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.LinkedLearnerInvitationLinkNotFoundException;
 import com.studysnap.backend.exception.LinkedLearnerInvitationLinkTokenGenerationException;
+import com.studysnap.backend.exception.LinkedLearnerOnboardingRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerRelationshipAlreadyExistsException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.exception.UserNotFoundException;
@@ -157,9 +158,31 @@ public class LinkedLearnerInvitationLinkService {
         return new SimpleMessageResponse(REVOKED_MESSAGE);
     }
 
+    /**
+     * ⚠️ THIS METHOD DID NOT DO WHAT ITS NAME SAID, AND THE CALLEE IS NOT THE BUG.
+     * {@code assertProfileComplete} fires only when {@code profileType} is null AND onboarding is
+     * already complete — its own comment records that users mid-onboarding are exempt **by design**,
+     * "so the activation funnel is never blocked". That exemption is load-bearing and is left
+     * untouched; it is this wrapper that claimed a property its callee never provided.
+     *
+     * <p>⚠️ NOTHING WAS OPEN. Both routes to these endpoints already gate on onboarding in the
+     * frontend: the invite page redirects to {@code /onboarding} without calling resolve, and the
+     * dashboard consumer only navigates and is itself behind
+     * {@code requireAuthenticatedOnboardedUser}. This makes the server enforce what the UI already
+     * arranges, so the stated property becomes true rather than merely intended.
+     *
+     * <p>⚠️ ORDER MATTERS AND IS NOT INCIDENTAL. Every caller runs this BEFORE any token lookup, so
+     * a rejection tells the caller about their own account and nothing about whether the token
+     * exists. Moving it after {@code requireUsable} would turn it into exactly the account-existence
+     * oracle v0.90.0 closed.
+     */
     private void requireVerifiedOnboarded(UUID callerUserId) {
         authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
+        UserEntity caller = requireUser(callerUserId);
+        if (caller.getOnboardingCompletedAt() == null) {
+            throw new LinkedLearnerOnboardingRequiredException();
+        }
     }
 
     private LinkedLearnerInvitationLinkEntity requireUsable(String token) {

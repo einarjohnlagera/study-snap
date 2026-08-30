@@ -338,6 +338,36 @@ cost of the test that is now committed** — `CLAUDE.md`'s size warning applies 
 - **The scheduled sweep preserves the learner-lock ordering without creating a lock storm.** The non-transactional job reads due IDs once, then a separate transactional worker handles exactly one relationship and one learner lock at a time. `markExpiredIfPending` is a conditional update with automatic clear/flush; only a one-row win deletes the provisional declaration. A zero-row race keeps it, and an exception rolls back that row alone while the job continues. Re-inviting an expired pair mints a new relationship; the spent link carrier remains terminal.
 - **Expired state is honest end to end.** Relationship responses expose `EXPIRED`, continue zeroing `*SharedWithMe` outside `ACCEPTED`, and authorization continues using the same not-found contract as `REVOKED`. Learning Connections renders a neutral timeout distinct from revocation and directs the person to send a new invitation; the shared Dashboard status vocabulary and Learning Connections guide were updated together.
 - **Real-row mutation coverage names the predicate it kills.** `dueRequestFinderIncludesTheExactBoundaryAndOnlyPendingRows` kills `<= → <`, a dropped `PENDING` filter, and a future-row match; `markExpiredIfPendingTransitionsOnlyItsPendingTarget` kills `'PENDING' → 'ACCEPTED'` and removal of the transition's status predicate; `acceptingPendingRelationshipClearsItsExpiryDeadline` kills removal of `expires_at = null`; and `expiredPairCanCreateANewRelationshipWhileInvitationStatusVocabularyStaysClosed` pins both the live-pair predicate and the unchanged invitation constraint.
+- **`requireVerifiedOnboarded` now actually requires onboarding (item 5) — and this is a MISNOMER FIX, not a
+  closed hole.** The method called `authService.requireEmailVerified` plus
+  `onboardingGuardService.assertProfileComplete`, and the latter fires only when `profileType` is null **AND
+  onboarding is already complete**. So the wrapper claimed a property its callee never provided.
+- **⚠️ `assertProfileComplete` IS NOT THE BUG AND WAS NOT TOUCHED.** Its own comment records the exemption as
+  deliberate — users mid-onboarding persist `profileType` at the final step and copy-on-signup runs before
+  onboarding completes, so **"both must remain exempt so the activation funnel is never blocked"**. It has
+  ~20 call sites across notes, Study Packs, quiz share links and bulk import; changing it would have been the
+  `v0.71.0` blast radius. The fix is confined to the **private wrapper and its five link endpoints**.
+- **⚠️ NOTHING WAS OPEN, and the release notes must not imply otherwise.** Both routes to these endpoints
+  already gate on onboarding in the frontend: the invite page redirects to `/onboarding` **without calling
+  resolve**, and the dashboard consumer only *navigates* and sits behind `requireAuthenticatedOnboardedUser`.
+  The server now enforces what the UI already arranges.
+- **⚠️ ORDER IS THE ORACLE PROPERTY, and it is pinned.** Every caller runs the gate **before any token
+  lookup**, so a rejection tells the caller about their own account and nothing about whether the token
+  exists — the `v0.90.0` single not-found contract is unaffected.
+  `anUnonboardedCallerIsRejectedBeforeTheTokenIsEvenLookedUp` asserts the rejection arrives for a token that
+  does not exist **and** that the link repository is never touched. **Mutation-verified:** moving the gate
+  after `requireUsable` fails it.
+- **⚠️ THE TEST THAT WOULD HAVE CAUGHT `v0.71.0` is the one about the flow, not the gate.** There, the guard
+  was correct in isolation and made onboarding uncompletable for every ADMIN account. So the assertion that
+  earns its place is that **the same caller, having finished onboarding, can redeem the token they arrived
+  with** — `aCallerBlockedMidOnboardingCanRedeemTheSameTokenOnceOnboardingCompletes`. **Mutation-verified:**
+  removing the check fails five tests.
+- **A dedicated `LinkedLearnerOnboardingRequiredException`, deliberately not `ProfileSetupRequiredException`**,
+  whose message and `COMPLETE_PROFILE_TYPE` action are about choosing a profile type before generating study
+  content — a different remedy that would send the caller to the wrong place.
+- **⚠️ Found while doing it: the mocked fixture had every caller un-onboarded**, so 13 existing tests failed
+  the moment the gate became real. They now build an onboarded user by default, with the gate covered by its
+  own two tests rather than incidentally by all of them.
 - **Terminal transitions cut grant rows — one rule for revoke and expiry (item 4).**
   `revokeAllLiveForRelationship` ends every live grant on a terminated relationship, **in both directions and
   every scope**, unlike the per-direction per-scope `revokeLive` that withdrawal uses. It runs inside the same
