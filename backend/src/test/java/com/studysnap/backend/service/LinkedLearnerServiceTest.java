@@ -18,6 +18,7 @@ import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.LinkedLearnerOnboardingRequiredException;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.LinkedLearnerNotAllowedException;
 import com.studysnap.backend.exception.InvalidLinkedLearnerBirthYearException;
@@ -62,6 +63,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
@@ -168,6 +170,29 @@ class LinkedLearnerServiceTest {
             row.setRevokedAt(null);
         }
         return 1;
+    }
+
+    /**
+     * ⚠️ v0.98.0 item 1. This path forms the IDENTICAL relationship as an invitation-link redemption,
+     * so it answers to the same bar. Asserted with an invitation id that does not exist, which proves
+     * the gate runs BEFORE the lookup — a rejection must disclose the caller's own account state and
+     * never whether an invitation exists, or it becomes a cheaper oracle beside v0.90.0's single
+     * not-found contract.
+     */
+    @Test
+    void acceptingAnEmailInvitationRequiresFinishedOnboardingAndSaysSoBeforeAnyLookup() {
+        UUID callerId = UUID.randomUUID();
+        UserEntity midOnboarding = new UserEntity();
+        midOnboarding.setId(callerId);
+        midOnboarding.setEmail("caller@example.test");
+        midOnboarding.setOnboardingCompletedAt(null);
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(midOnboarding));
+
+        assertThatThrownBy(() -> service.acceptInvitation(
+                UUID.randomUUID(), callerId, new AcceptLinkedLearnerRequest(null, false)))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+
+        verifyNoInteractions(invitationRepository);
     }
 
     @Test
@@ -1445,6 +1470,10 @@ class LinkedLearnerServiceTest {
         user.setFirstName(email.substring(0, email.indexOf('@')));
         user.setDisplayName(user.getFirstName());
         user.setStatus(UserStatus.ACTIVE);
+        // ⚠️ Onboarded by default since v0.98.0 item 1: accepting an email invitation now requires a
+        // finished onboarding, so a fixture without this tests the gate rather than the behaviour it
+        // means to test. The gate has its own test above.
+        user.setOnboardingCompletedAt(java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z"));
         return user;
     }
 

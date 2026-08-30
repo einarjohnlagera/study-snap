@@ -20,6 +20,7 @@ import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.exception.LinkedLearnerNotAllowedException;
 import com.studysnap.backend.exception.LinkedLearnerNotFoundException;
+import com.studysnap.backend.exception.LinkedLearnerOnboardingRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerInvitationExpiredException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.security.InvitationRateLimitService;
@@ -274,6 +275,27 @@ public class LinkedLearnerService {
         authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
+        // ⚠️ ONBOARDING IS REQUIRED HERE TOO, as of v0.98.0. This path forms the IDENTICAL relationship
+        // as an invitation-link redemption — same guardian-consent handling, same cross-user capacity —
+        // and until now answered to a lower bar, which the comment above already half-records:
+        // assertProfileComplete "passes for a brand-new account".
+        //
+        // ⚠️ IT REJECTS TWO LIVE COHORTS, KNOWN IN ADVANCE. The frontend gates on needsOnboarding(),
+        // which is NOT this predicate: a failed completeOnboarding POST (whose marker never retries) and
+        // the copy-on-signup cohort (whose dashboard prompt is dismissible) both read as onboarded
+        // client-side while this column stays null. Both have VERIFIED emails, so requireEmailVerified
+        // above does not already stop them — checked, not assumed. The connections page routes a
+        // COMPLETE_ONBOARDING remedy to /onboarding so this is a waypoint, not a wall.
+        //
+        // ⚠️ SCOPED TO THIS ACTING ENDPOINT ONLY. listInvitations and list are deliberately NOT
+        // tightened: making an invitation invisible to its recipient converts an error into an absence,
+        // and an absence gives them nothing to act on. v0.90.0 made invitations visible on purpose.
+        //
+        // ⚠️ BEFORE the invitation lookup below, so a rejection discloses only the caller's own account
+        // state and never whether an invitation exists.
+        if (caller.getOnboardingCompletedAt() == null) {
+            throw new LinkedLearnerOnboardingRequiredException();
+        }
         LinkedLearnerInvitationEntity invitation = invitationRepository.findById(invitationId)
                 .orElseThrow(LinkedLearnerNotFoundException::new);
         if (!normalizeEmail(caller.getEmail()).equalsIgnoreCase(invitation.getInvitedEmail())) {

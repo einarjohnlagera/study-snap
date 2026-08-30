@@ -3,7 +3,10 @@ package com.studysnap.backend.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * The caller has not finished onboarding, so they may not act on an invitation link.
+ * The caller has not finished onboarding, so they may not act on a connection invitation.
+ *
+ * <p>⚠️ Covers BOTH paths as of v0.98.0 — invitation-link actions and email invitation acceptance — which
+ * is why the message names neither. They form the identical relationship, so they answer to one bar.
  *
  * <p>⚠️ Deliberately NOT {@link ProfileSetupRequiredException}, whose message and
  * {@code COMPLETE_PROFILE_TYPE} action are specifically about choosing a profile type before
@@ -17,7 +20,7 @@ import org.springframework.http.HttpStatus;
  */
 public class LinkedLearnerOnboardingRequiredException extends AppException {
     private static final String CODE = "ONBOARDING_REQUIRED";
-    private static final String MESSAGE = "Finish setting up your account before using an invitation link.";
+    private static final String MESSAGE = "Finish setting up your account before connecting with someone.";
     private static final String DETAILS = "onboardingCompletedAt is required";
     private static final String ACTION = "COMPLETE_ONBOARDING";
 
