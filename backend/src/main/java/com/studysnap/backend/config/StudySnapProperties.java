@@ -300,6 +300,25 @@ public class StudySnapProperties {
             this.requestTtlDays = requestTtlDays;
         }
 
+        /**
+         * Cron for the unconfirmed-request expiry sweep.
+         *
+         * <p>⚠️ Present so the sweep has an ENV HOOK like its sibling {@code generation.recovery-cron}.
+         * Without a bound field the placeholder resolves but nothing can override it in an
+         * environment, which is only discovered when someone needs to stop the sweep in a hurry.
+         * The test profile disables it with Spring's {@code "-"}.
+         */
+        private String requestExpiryCron = "0 45 2 * * *";
+
+        /**
+         * Maximum relationships one expiry sweep run will process.
+         *
+         * <p>⚠️ A bound on WORK PER RUN, not on what may expire. Anything above the bound is picked up
+         * by the next run, since the due-id read is ordered oldest-deadline-first and expiry is
+         * idempotent.
+         */
+        private int expirySweepBatchSize = 500;
+
         /** Total invitations one account may send per window, capping mail volume. */
         private int invitesPerWindow = 20;
 

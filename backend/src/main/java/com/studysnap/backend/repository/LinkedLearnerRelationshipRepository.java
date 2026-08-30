@@ -32,14 +32,24 @@ public interface LinkedLearnerRelationshipRepository extends JpaRepository<Linke
             @Param("expiresAt") OffsetDateTime expiresAt
     );
 
+    /**
+     * Due unconfirmed requests, oldest deadline first, BOUNDED.
+     *
+     * <p>⚠️ The limit is not tuning. Without it the entire backlog materialises in memory in one
+     * read — harmless at today's volume and unbounded by construction, which is the shape that only
+     * becomes a problem on the day it is least convenient. Oldest-first ordering makes the bound
+     * safe rather than lossy: anything not swept this run is simply swept on the next, and expiry
+     * is idempotent, so a residue costs a day rather than correctness.
+     */
     @Query(value = """
             select id
               from linked_learner_relationships
              where status = 'PENDING'
                and expires_at <= :now
              order by expires_at, id
+             limit :maxRows
             """, nativeQuery = true)
-    List<UUID> findDuePendingIds(@Param("now") OffsetDateTime now);
+    List<UUID> findDuePendingIds(@Param("now") OffsetDateTime now, @Param("maxRows") int maxRows);
 
     Optional<LinkedLearnerRelationshipEntity> findFirstBySupporterUserIdAndLearnerUserIdAndStatusIn(
             UUID supporterUserId,
@@ -47,9 +57,35 @@ public interface LinkedLearnerRelationshipRepository extends JpaRepository<Linke
             Collection<LinkedLearnerStatus> statuses
     );
 
-    List<LinkedLearnerRelationshipEntity> findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-            UUID supporterUserId,
-            UUID learnerUserId
+    /**
+     * Every live relationship for this caller, plus terminal ones only while they are still recent.
+     *
+     * <p>⚠️ BOUNDED RETENTION, not dismissal — the design decision taken 2026-08-30 before any code.
+     * The previous derived query had NO status filter, so every REVOKED and now EXPIRED row was
+     * returned forever and terminal cards accumulated at the top of an ever-growing list.
+     *
+     * <p>⚠️ THIS IS THE INVITATION LIST'S EXISTING PATTERN. {@code listInvitations} already computes
+     * an {@code outgoingVisibilityCutoff} for the identical problem, and {@code linked-learners.md}
+     * records the rationale: bounded disclosure lets someone distinguish expiry from silence without
+     * accumulating every entry forever.
+     *
+     * <p>⚠️ The terminal clock differs per status and both are the ROW'S OWN timestamp:
+     * {@code revoked_at} for REVOKED, {@code expires_at} for EXPIRED — which is why v0.97.0 refused
+     * to overwrite {@code expires_at} with the sweep time. A terminal row missing its timestamp is
+     * retained rather than hidden, so a data oddity never silently removes a connection from view.
+     */
+    @Query(value = """
+            select *
+              from linked_learner_relationships
+             where (supporter_user_id = :userId or learner_user_id = :userId)
+               and (status in ('PENDING', 'ACCEPTED')
+                    or coalesce(revoked_at, expires_at) is null
+                    or coalesce(revoked_at, expires_at) > :terminalCutoff)
+             order by created_at desc
+            """, nativeQuery = true)
+    List<LinkedLearnerRelationshipEntity> findVisibleForUser(
+            @Param("userId") UUID userId,
+            @Param("terminalCutoff") OffsetDateTime terminalCutoff
     );
 
     List<LinkedLearnerRelationshipEntity> findByLearnerUserIdAndStatus(

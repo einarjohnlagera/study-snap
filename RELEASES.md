@@ -126,6 +126,33 @@ tail of a decision already taken.
   moment the gate became real — the same shape `v0.97.0` hit on the link path. They now build an onboarded
   user by default, with the gate covered by its own test rather than incidentally by all of them.
 
+- **Terminal connection cards stop accumulating (item 2).** `listRelationships` now calls
+  `findVisibleForUser`, which returns every live row plus terminal ones only while
+  `coalesce(revoked_at, expires_at)` is within `request-ttl-days`. The old derived query had **no status
+  filter at all**, so every `REVOKED` and `EXPIRED` row came back forever.
+- **⚠️ THE STATUS ALLOWLIST IS LOAD-BEARING, AND THE FIRST VERSION OF THE TESTS DID NOT PROVE IT.** A
+  mutation dropping `status in ('PENDING','ACCEPTED')` **survived**, because an `ACCEPTED` row has both
+  terminal timestamps null and stays visible through the null branch alone. The case that makes it matter
+  is a **PENDING request past its deadline but not yet swept** — the sweep runs daily, so that state
+  exists for up to a day, and without the allowlist such a request **disappears from its owner's list
+  before it has actually expired**. `aDueButUnsweptPendingRequestIsStillVisible` pins it, and the mutation
+  now fails.
+- **⚠️ A terminal row missing its timestamp is RETAINED, not hidden** — a data oddity must never silently
+  remove a connection from view.
+- **The sweep's operational gaps are closed (item 4).** `findDuePendingIds` takes a bound, so the backlog
+  no longer materialises in one read; **oldest-deadline-first ordering makes the bound safe rather than
+  lossy**, since anything deferred is swept next run and expiry is idempotent.
+  `request-expiry-cron` and `expiry-sweep-batch-size` are now bound `StudySnapProperties` fields with
+  `application.yaml` entries, so the sweep finally has the **env hook** its sibling
+  `generation.recovery-cron` always had — previously the placeholder resolved but nothing could override
+  it in an environment. And a learner deleted mid-sweep is now a **debug-level skip** rather than a bare
+  `NoSuchElementException` logged at `error`: account deletion cascades the relationship away, so there is
+  nothing left to expire and the noise was hiding real failures.
+- **⚠️ No change to what expires or when.** The TTL bound and the `created_at` clock are untouched; item 4
+  bounds **work per run**, not what is eligible.
+- **The exact-count tripwire fired again (38 → 39)**, acknowledging `findVisibleForUser` — which also
+  confirms the new SQL `PREPARE`s cleanly against PostgreSQL 16.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW, and no code lands under

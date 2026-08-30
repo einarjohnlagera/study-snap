@@ -3,6 +3,7 @@ package com.studysnap.backend.repository;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.LinkedLearnerGrantScope;
 import com.studysnap.backend.entity.LinkedLearnerInvitationLinkEntity;
+import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -94,7 +95,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 38;
+    private static final int EXPECTED_NATIVE_QUERIES = 39;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
@@ -154,7 +155,7 @@ class NativeQueryPostgresIntegrationTest {
         setRelationshipExpiry(future, boundary.plusSeconds(1));
         setRelationshipExpiry(accepted, boundary.minusDays(1));
 
-        assertThat(relationshipRepository.findDuePendingIds(boundary))
+        assertThat(relationshipRepository.findDuePendingIds(boundary, 500))
                 .containsExactly(due);
     }
 
@@ -899,6 +900,77 @@ class NativeQueryPostgresIntegrationTest {
      * and what resumes on re-acceptance. Cutting here would make a learner's own toggle read OFF
      * while they never touched it, and sharing would silently fail to resume.
      */
+    /**
+     * ⚠️ Item 2: bounded retention, against real rows. A terminal row stays visible only while recent,
+     * and the clock is the ROW'S OWN terminal timestamp — which is exactly why v0.97.0 refused to
+     * overwrite {@code expires_at} with the sweep time.
+     */
+    @Test
+    void terminalRelationshipsFallOutOfTheListOnceTheyAreOlderThanTheRetentionWindow() {
+        UUID supporter = seedUser("retention-supporter");
+        UUID learner = seedUser("retention-learner");
+        UUID recentlyRevoked = seedRelationship(supporter, learner, "REVOKED");
+        UUID longRevoked = seedRelationship(seedUser("old-supporter"), learner, "REVOKED");
+        UUID stillPending = seedRelationship(seedUser("live-supporter"), learner, "PENDING");
+        jdbcTemplate.update("update linked_learner_relationships set revoked_at = now() - interval '2 days' where id = ?", recentlyRevoked);
+        jdbcTemplate.update("update linked_learner_relationships set revoked_at = now() - interval '90 days' where id = ?", longRevoked);
+
+        OffsetDateTime cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusDays(30);
+        List<UUID> visible = relationshipRepository.findVisibleForUser(learner, cutoff).stream()
+                .map(LinkedLearnerRelationshipEntity::getId).toList();
+
+        assertThat(visible).contains(recentlyRevoked, stillPending);
+        assertThat(visible)
+                .as("a relationship revoked 90 days ago must stop cluttering the list")
+                .doesNotContain(longRevoked);
+    }
+
+    /**
+     * ⚠️ THE CASE THAT MAKES THE STATUS ALLOWLIST LOAD-BEARING, and the one the first version of these
+     * tests missed. An ACCEPTED row has both terminal timestamps null, so it stays visible through the
+     * null branch alone — the allowlist is redundant for it, and a mutation dropping the allowlist
+     * survived.
+     *
+     * <p>A PENDING row is different: it carries a real {@code expires_at}. The sweep runs daily, so for
+     * up to a day a request can be PAST its deadline and not yet swept. Without the status allowlist
+     * that row falls outside the retention window and DISAPPEARS FROM THE OWNER'S LIST BEFORE IT HAS
+     * ACTUALLY EXPIRED — a live request vanishing while it is still confirmable.
+     */
+    @Test
+    void aDueButUnsweptPendingRequestIsStillVisible() {
+        UUID supporter = seedUser("unswept-supporter");
+        UUID learner = seedUser("unswept-learner");
+        UUID due = seedRelationship(supporter, learner, "PENDING");
+        // Past its deadline by more than the retention window, and the sweep has not run yet.
+        setRelationshipExpiry(due, OffsetDateTime.now(ZoneOffset.UTC).minusDays(45));
+
+        List<UUID> visible = relationshipRepository
+                .findVisibleForUser(learner, OffsetDateTime.now(ZoneOffset.UTC).minusDays(30)).stream()
+                .map(LinkedLearnerRelationshipEntity::getId).toList();
+
+        assertThat(visible)
+                .as("a PENDING request must never be hidden by retention; only the sweep ends it")
+                .contains(due);
+    }
+
+    /**
+     * ⚠️ A LIVE row is never hidden, whatever its timestamps say. Retention bounds terminal clutter;
+     * it must never remove a connection someone still has.
+     */
+    @Test
+    void anAcceptedRelationshipIsNeverHiddenByTheRetentionWindow() {
+        UUID supporter = seedUser("never-hidden-supporter");
+        UUID learner = seedUser("never-hidden-learner");
+        UUID accepted = seedRelationship(supporter, learner, "ACCEPTED");
+        jdbcTemplate.update("update linked_learner_relationships set created_at = now() - interval '400 days' where id = ?", accepted);
+
+        List<UUID> visible = relationshipRepository
+                .findVisibleForUser(learner, OffsetDateTime.now(ZoneOffset.UTC).minusDays(30)).stream()
+                .map(LinkedLearnerRelationshipEntity::getId).toList();
+
+        assertThat(visible).contains(accepted);
+    }
+
     @Test
     void aConsentPauseLeavesEveryGrantLiveBecauseAPauseIsNotATermination() {
         UUID supporter = seedUser("pause-grant-supporter");
@@ -953,7 +1025,7 @@ class NativeQueryPostgresIntegrationTest {
         // greatest(created_at, now()) + 30 days, which passes a check at migration time and expires
         // the row a month later; only a future-dated sweep distinguishes a fix from a delay.
         OffsetDateTime longAfterAnyDeadline = OffsetDateTime.now(ZoneOffset.UTC).plusYears(5);
-        assertThat(relationshipRepository.findDuePendingIds(longAfterAnyDeadline))
+        assertThat(relationshipRepository.findDuePendingIds(longAfterAnyDeadline, 500))
                 .as("an inherited consent pause must never become due, at any future instant")
                 .doesNotContain(relationshipId);
         assertThat(requestExpiryWorker.expire(relationshipId, longAfterAnyDeadline))

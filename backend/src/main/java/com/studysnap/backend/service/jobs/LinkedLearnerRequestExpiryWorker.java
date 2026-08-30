@@ -34,7 +34,15 @@ public class LinkedLearnerRequestExpiryWorker {
                 .map(relationship -> {
                     // Lock for ordering, not for the value. Exactly one learner row is locked in
                     // this transaction, preserving the no-cycle argument used by the other writers.
-                    userRepository.findByIdForUpdate(relationship.getLearnerUserId()).orElseThrow();
+                    // ⚠️ A learner deleted between the job's read and this lock is a BENIGN race —
+                    // account deletion cascades the relationship away, so there is nothing left to
+                    // expire. A bare orElseThrow raised NoSuchElementException and the job logged it
+                    // at error, which turns an expected outcome into noise that hides real failures.
+                    if (userRepository.findByIdForUpdate(relationship.getLearnerUserId()).isEmpty()) {
+                        log.debug("linked-learners.request-expiry skipped relationshipId={} reason=learner-gone",
+                                relationshipId);
+                        return false;
+                    }
                     if (relationshipRepository.markExpiredIfPending(relationshipId, expiredAt) == 0) {
                         // Accept, revoke or correction may have changed the row after due-id selection.
                         // Its provisional declaration belongs to that winning state and must survive.

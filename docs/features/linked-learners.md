@@ -156,6 +156,8 @@ The two clocks must stay separate. Invitation/link expiry says whether a carrier
 Expiry is enforced at acceptance and in the recipient's incoming lookup. The incoming half deliberately remains
 live-only: a recipient cannot act on an expired invitation, and only the inviter can re-arm it.
 
+**⚠️ The RELATIONSHIP list applies the same bounded-retention rule as of `v0.98.0`:** live rows are always returned, and terminal (`REVOKED`, `EXPIRED`) rows only while `coalesce(revoked_at, expires_at)` is within `request-ttl-days` — the row's own terminal timestamp, which is why expiry does not overwrite `expires_at` with the sweep time. **⚠️ The status allowlist is load-bearing, not redundant:** a `PENDING` request past its deadline but not yet swept must stay visible, or a live request vanishes from its owner's list before it has actually expired. **⚠️ A terminal row missing its timestamp is retained, never hidden.** This is bounded retention, not dismissal — nothing deletes a relationship row, and re-inviting a hidden pair mints a new relationship as before.
+
 The inviter's outgoing list exposes both `expiresAt` and a server-computed expired state. A live invitation shows
 its expiry clock. After it lapses, it remains visible while
 `expires_at > now - studysnap.linked-learners.invitation-ttl-days` — the same configured duration for which it was

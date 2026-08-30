@@ -351,10 +351,8 @@ class LinkedLearnerServiceTest {
         LinkedLearnerRelationshipEntity relationship =
                 relationship(creatorSupporter, redeemerLearner, LinkedLearnerSide.LEARNER);
         stubRelationshipUsers(relationship, creatorSupporter, redeemerLearner);
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                creatorSupporter.getId(), creatorSupporter.getId())).thenReturn(List.of(relationship));
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                redeemerLearner.getId(), redeemerLearner.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(creatorSupporter.getId()), any())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(redeemerLearner.getId()), any())).thenReturn(List.of(relationship));
         when(provisionalBirthYearRepository.findEffectiveBirthYear(
                 relationship.getId(), redeemerLearner.getId()))
                 .thenReturn(Optional.of(Year.now().getValue() - 10));
@@ -636,8 +634,7 @@ class LinkedLearnerServiceTest {
         when(relationshipRepository.findByLearnerUserIdAndStatus(
                 learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of(relationship));
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of());
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of());
 
         service.correctBirthYear(learner.getId(), Year.now().getValue() - 10);
 
@@ -683,8 +680,7 @@ class LinkedLearnerServiceTest {
         when(relationshipRepository.findByLearnerUserIdAndStatus(
                 learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of(relationship));
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.of(consent));
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of());
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of());
 
         service.correctBirthYear(learner.getId(), Year.now().getValue() - 10);
 
@@ -706,8 +702,7 @@ class LinkedLearnerServiceTest {
         when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
         when(relationshipRepository.findByLearnerUserIdAndStatus(
                 learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of());
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of());
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of());
 
         service.correctBirthYear(learner.getId(), Year.now().getValue() - 10);
 
@@ -721,8 +716,7 @@ class LinkedLearnerServiceTest {
         UserEntity learner = user(LEARNER_EMAIL);
         learner.setBirthYear(Year.now().getValue() - 10);
         when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of());
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of());
 
         service.correctBirthYear(learner.getId(), Year.now().getValue() - 30);
 
@@ -738,8 +732,7 @@ class LinkedLearnerServiceTest {
         OffsetDateTime originalTimestamp = OffsetDateTime.now().minusDays(2);
         learner.setBirthYearUpdatedAt(originalTimestamp);
         when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of());
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of());
 
         service.correctBirthYear(learner.getId(), birthYear);
 
@@ -766,8 +759,7 @@ class LinkedLearnerServiceTest {
         UserEntity learner = user(LEARNER_EMAIL);
         learner.setBirthYear(2000);
         when(userRepository.findById(learner.getId())).thenReturn(Optional.of(learner));
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of());
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of());
 
         service.correctBirthYear(learner.getId(), 2001);
 
@@ -798,8 +790,7 @@ class LinkedLearnerServiceTest {
         when(relationshipRepository.findByLearnerUserIdAndStatus(
                 learner.getId(), LinkedLearnerStatus.ACCEPTED)).thenReturn(List.of(relationship));
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of());
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of());
         LinkedLearnerReadAuthorizationService readAuthorizationService =
                 new LinkedLearnerReadAuthorizationService(
                         relationshipRepository,
@@ -874,8 +865,7 @@ class LinkedLearnerServiceTest {
                 relationship(supporter, learner, LinkedLearnerSide.SUPPORTER);
         relationship.setStatus(LinkedLearnerStatus.ACCEPTED);
         stubRelationshipUsers(relationship, supporter, learner);
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(supporter.getId()), any())).thenReturn(List.of(relationship));
         when(consentRepository.findByRelationshipId(relationship.getId()))
                 .thenReturn(Optional.empty());
 
@@ -921,10 +911,8 @@ class LinkedLearnerServiceTest {
         learnerProgressToSupporter.setGrantedAt(OffsetDateTime.now());
         stubUser(supporter);
         stubUser(learner);
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of(relationship));
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(supporter.getId()), any())).thenReturn(List.of(relationship));
         when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
                 Set.of(relationship.getId()), List.of(
                         LinkedLearnerGrantScope.ACTIVITY, LinkedLearnerGrantScope.PROGRESS)))
@@ -971,8 +959,7 @@ class LinkedLearnerServiceTest {
                 relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.PROGRESS);
         stubUser(supporter);
         stubUser(learner);
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(supporter.getId()), any())).thenReturn(List.of(relationship));
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
         when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
                 Set.of(relationship.getId()), List.of(
@@ -997,8 +984,7 @@ class LinkedLearnerServiceTest {
                 relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.PROGRESS);
         stubUser(supporter);
         stubUser(learner);
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(supporter.getId()), any())).thenReturn(List.of(relationship));
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
         when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
                 Set.of(relationship.getId()), List.of(
@@ -1027,8 +1013,7 @@ class LinkedLearnerServiceTest {
                 relationship, supporter.getId(), learner.getId(), LinkedLearnerGrantScope.ACTIVITY);
         stubUser(supporter);
         stubUser(learner);
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of(relationship));
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
         when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
                 Set.of(relationship.getId()), List.of(
@@ -1053,10 +1038,8 @@ class LinkedLearnerServiceTest {
                 relationship, learner.getId(), supporter.getId(), LinkedLearnerGrantScope.PROGRESS);
         stubUser(supporter);
         stubUser(learner);
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of(relationship));
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                supporter.getId(), supporter.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(supporter.getId()), any())).thenReturn(List.of(relationship));
         when(consentRepository.findByRelationshipId(relationship.getId())).thenReturn(Optional.empty());
         when(grantRepository.findByRelationshipIdInAndScopeInAndRevokedAtIsNull(
                 Set.of(relationship.getId()), List.of(
@@ -1359,8 +1342,7 @@ class LinkedLearnerServiceTest {
         stubRelationshipUsers(relationship, supporter, learner);
         when(relationshipRepository.findByLearnerUserIdAndStatus(learner.getId(), LinkedLearnerStatus.ACCEPTED))
                 .thenReturn(List.of(relationship));
-        when(relationshipRepository.findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(
-                learner.getId(), learner.getId())).thenReturn(List.of(relationship));
+        when(relationshipRepository.findVisibleForUser(eq(learner.getId()), any())).thenReturn(List.of(relationship));
 
         service.correctBirthYear(learner.getId(), Year.now().getValue() - 10);
 

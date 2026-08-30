@@ -678,8 +678,14 @@ public class LinkedLearnerService {
     }
 
     private List<LinkedLearnerResponse> listRelationships(UUID callerUserId) {
+        // ⚠️ Terminal rows are retained only while recent. The window follows request-ttl-days
+        // deliberately, mirroring the invitation list's rule that retention uses the same configured
+        // duration the thing was live for rather than a second hardcoded number — so do not replace
+        // this with a literal 30 to "decouple" it.
+        OffsetDateTime terminalCutoff = OffsetDateTime.now()
+                .minusDays(properties.getLinkedLearners().getRequestTtlDays());
         List<LinkedLearnerRelationshipEntity> relationships = relationshipRepository
-                .findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(callerUserId, callerUserId);
+                .findVisibleForUser(callerUserId, terminalCutoff);
         Set<UUID> relationshipIds = relationships.stream()
                 .map(LinkedLearnerRelationshipEntity::getId)
                 .collect(Collectors.toSet());

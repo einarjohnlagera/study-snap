@@ -1,5 +1,6 @@
 package com.studysnap.backend.service.jobs;
 
+import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.repository.LinkedLearnerRelationshipRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,12 +18,16 @@ import java.util.UUID;
 public class LinkedLearnerRequestExpiryJob {
     private final LinkedLearnerRelationshipRepository relationshipRepository;
     private final LinkedLearnerRequestExpiryWorker expiryWorker;
+    private final StudySnapProperties properties;
 
     /** Not transactional: every id is delegated to its own worker transaction. */
-    @Scheduled(cron = "${studysnap.linked-learners.request-expiry-cron:0 45 2 * * *}")
+    @Scheduled(cron = "${studysnap.linked-learners.request-expiry-cron}")
     public void run() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        List<UUID> dueIds = relationshipRepository.findDuePendingIds(now);
+        // ⚠️ Bounded read. Oldest deadline first, so a residue is deferred to tomorrow's run rather
+        // than lost — expiry is idempotent, and an unbounded read is only harmless until it is not.
+        List<UUID> dueIds = relationshipRepository.findDuePendingIds(
+                now, properties.getLinkedLearners().getExpirySweepBatchSize());
         for (UUID relationshipId : dueIds) {
             try {
                 expiryWorker.expire(relationshipId, now);
