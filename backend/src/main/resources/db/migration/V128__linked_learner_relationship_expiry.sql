@@ -1,28 +1,35 @@
 ALTER TABLE linked_learner_relationships
     ADD COLUMN expires_at timestamptz;
 
--- ⚠️ greatest(created_at, now()), NOT created_at. Found by the pre-signoff pressure test, and the
--- naive form was a real defect rather than a style point.
+-- ⚠️ NO BACKFILL, DELIBERATELY. Inherited PENDING rows keep a NULL expires_at.
 --
--- The pause-safety mechanism for NEW rows is that acceptance clears expires_at to NULL and
--- pauseAcceptedForConsent leaves it NULL, so markExpiredIfPending's `expires_at is not null` guard
--- makes a consent-paused relationship structurally unexpirable. That argument does not reach rows
--- this migration inherits: a relationship paused BEFORE V128 is PENDING with a NULL expires_at
--- simply because the column did not exist, which is indistinguishable from an unconfirmed request.
--- Backfilling created_at + 30 days hands such a row a deadline already in the past, and the first
--- sweep terminates a connection that had been ACCEPTED and merely awaited re-consent — EXPIRED is
--- terminal, so the guardian-consent repair path would be gone.
+-- This was written twice and both earlier forms were wrong; the reasoning is recorded so a third
+-- attempt does not reintroduce them.
 --
--- greatest(created_at, now()) gives every inherited row a full window in which re-acceptance clears
--- the deadline, and prevents a zero-notice mass expiry of legitimate old requests on the first
--- sweep. It also moves the earliest possible expiry LATER, which is strictly safer for the
--- 2026-09-26 provisional-row read, not riskier.
+-- For rows created AFTER this migration, a consent-paused relationship is structurally unexpirable:
+-- acceptance clears expires_at, pauseAcceptedForConsent leaves it clear, and markExpiredIfPending
+-- requires `expires_at is not null`. The protection IS the NULL.
 --
--- ⚠️ This governs the MIGRATION only. The runtime clock for new requests stays
--- `created_at + request-ttl-days` in createPendingRelationship, which is the dated-read constraint.
-UPDATE linked_learner_relationships
-   SET expires_at = greatest(created_at, now()) + interval '30 days'
- WHERE status = 'PENDING';
+-- An inherited paused row is PENDING with a NULL expires_at only because the column did not exist,
+-- and it is indistinguishable from an unconfirmed request: pauseAcceptedForConsent nulls
+-- accepted_at too, so nothing on the row records that it was once ACCEPTED.
+--   * `created_at + interval '30 days'` gives it a deadline already in the PAST — the first sweep
+--     terminates a previously-ACCEPTED connection, cutting grants, with recordGuardianConsent
+--     requiring PENDING so the consent repair path is gone.
+--   * `greatest(created_at, now()) + interval '30 days'` merely DELAYS that by 30 days. It looks
+--     safe and is not: it still sets expires_at, which erases the one thing distinguishing a
+--     protected pause from an expirable request, permanently.
+--
+-- Writing nothing is what makes an inherited row behave exactly like a runtime paused row.
+--
+-- ⚠️ THE COST, STATED: an unconfirmed request created before this deploy never expires. That
+-- population is bounded by the gap between the v0.95.0 deploy (2026-08-29, when provisional rows
+-- first became possible) and this one, against a table that was EMPTY in production on 2026-08-26.
+-- A later targeted sweep can address any that exist; silently expiring confirmed connections to
+-- avoid that is the worse trade.
+--
+-- ⚠️ The runtime clock is unaffected: createPendingRelationship still sets
+-- created_at + request-ttl-days, which is the dated-read constraint.
 
 ALTER TABLE linked_learner_relationships
     DROP CONSTRAINT ck_linked_learner_status;

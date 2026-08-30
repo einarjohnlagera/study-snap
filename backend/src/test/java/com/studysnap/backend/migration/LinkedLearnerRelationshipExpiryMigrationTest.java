@@ -22,21 +22,22 @@ class LinkedLearnerRelationshipExpiryMigrationTest {
      *
      * <p>NOTE ON REACH: {@code src/test/resources/application.yaml} disables Flyway, so this
      * asserts on SQL TEXT and pins intent, not correctness. The executable counterpart is
-     * {@code NativeQueryPostgresIntegrationTest.aPreMigrationConsentPausedRowSurvivesTheV128Backfill},
+     * {@code NativeQueryPostgresIntegrationTest.aPreMigrationConsentPausedRowIsNeverExpirableAtAnyFutureInstant},
      * which runs this statement against real rows.
      */
     @Test
-    void theBackfillNeverDatesAnInheritedRowFromCreatedAtAlone() throws IOException {
+    void theMigrationNeverBackfillsADeadlineOntoAnInheritedRow() throws IOException {
         String migration = new ClassPathResource(
                 "db/migration/V128__linked_learner_relationship_expiry.sql"
         ).getContentAsString(StandardCharsets.UTF_8);
 
+        // ⚠️ NO backfill at all. Both earlier attempts set expires_at and both were wrong:
+        // created_at + 30d expires an inherited pause immediately; greatest(created_at, now()) + 30d
+        // merely delays it, because setting the column at all erases the NULL that IS the protection.
         assertThat(migration)
-                .contains("SET expires_at = greatest(created_at, now()) + interval '30 days'")
-                // The naive form. It expires pre-migration consent pauses on the first sweep.
-                .doesNotContain("SET expires_at = created_at + interval");
-        // Only unconfirmed requests get a deadline at all.
-        assertThat(migration).contains("WHERE status = 'PENDING'");
+                .doesNotContain("SET expires_at = created_at + interval")
+                .doesNotContain("SET expires_at = greatest")
+                .doesNotContain("UPDATE linked_learner_relationships");
         // ⚠️ The invitation table keeps its own three-value vocabulary; expiry there is expires_at.
         assertThat(migration).doesNotContain("ck_linked_learner_invitation_status");
     }

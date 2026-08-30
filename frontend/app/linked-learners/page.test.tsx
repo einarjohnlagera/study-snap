@@ -319,6 +319,12 @@ it("renders an expired request distinctly after loading it from the server", asy
     ...baseLink,
     status: "EXPIRED",
     incomingInvitation: false,
+    // ⚠️ NON-NULL on purpose, and this is the realistic shape: markExpiredIfPending and
+    // markRevokedIfLive deliberately do not clear expires_at, so a production terminal row carries
+    // a past deadline. A null fixture here made the PENDING gate untestable — the render could have
+    // been gated on `link.expiresAt` alone and every test still passed, showing an expired card
+    // that also said "Expires <past date> if it is not confirmed".
+    expiresAt: "2026-08-01T00:00:00Z",
   }]);
 
   render(<LinkedLearnersPage />);
@@ -326,6 +332,10 @@ it("renders an expired request distinctly after loading it from the server", asy
   expect(await screen.findByText(/connection request expired/i)).toBeInTheDocument();
   expect(screen.getByText(/new invitation/i)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+  // ⚠️ A terminal row carries a non-null expires_at in production, so the deadline line must be
+  // gated on PENDING and not merely on the field being present. Without this, gating on
+  // `link.expiresAt` alone passes while an expired card also reads "Expires <past date>".
+  expect(screen.queryByText(/if it is not confirmed/)).not.toBeInTheDocument();
   expect(getLinkedLearners).toHaveBeenCalledTimes(1);
 });
 

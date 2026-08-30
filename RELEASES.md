@@ -234,8 +234,20 @@ required code changes before signoff, and both were invisible to every existing 
   a relationship paused before `V128` is `PENDING` with a NULL deadline only because the column did not
   exist. `created_at + 30 days` hands it a deadline **already in the past**, and the first sweep terminates a
   connection that had been `ACCEPTED` and merely awaited re-consent — terminally, with grants cut and the
-  consent repair path gone. Now `greatest(created_at, now()) + interval '30 days'`, which also moves the
-  earliest possible expiry **later**, strictly safer for the `2026-09-26` read.
+  consent repair path gone.
+- **⚠️ AND THE FIRST FIX FOR IT WAS ALSO WRONG — caught by a scoped cold RE-AUDIT of the fixes themselves,
+  which is the reason that re-audit was commissioned.** The first attempt backfilled
+  `greatest(created_at, now()) + interval '30 days'`. That prevents the *immediate* mass expiry and looks
+  safe — but it still SETS `expires_at`, which erases the one thing distinguishing a protected pause from an
+  expirable request. It converted immediate termination into termination **30 days later**, for exactly the
+  rows it was written to protect, and contradicted the invariant the same commit wrote into
+  `linked-learners.md`. **The migration now backfills NOTHING: inherited `PENDING` rows keep a NULL
+  `expires_at`, which is what makes them behave exactly like runtime paused rows.** The stated cost — an
+  unconfirmed request created before this deploy never expires — is bounded by the gap between the
+  `v0.95.0` deploy and this one, against a table that was **empty in production on 2026-08-26**.
+- **⚠️ The test was strengthened in the same way it had been weak.** The first version asserted survival at
+  `now()`, which a 30-day delay passes. It now asserts at a **five-year-future instant**, so a fix and a
+  delay are distinguishable. **Mutation-verified:** either backfill form fails it.
 - **⚠️ AND IT FALSIFIED ONE OF THIS RELEASE'S OWN TEST JAVADOCS.**
   `aPendingRelationshipCannotReceiveAGrantWhichIsWhyExpiryNeverMeetsOne` argues the sweep can never meet a
   live grant because the only `ACCEPTED → PENDING` route leaves `expires_at` NULL. The backfill removed
@@ -249,8 +261,16 @@ required code changes before signoff, and both were invisible to every existing 
   **dismissible**) are both treated as onboarded client-side while the server value stays null. Item 5
   therefore **newly rejects a live account class**. Not a `v0.71.0` lockout — `/onboarding` gates on the
   server value, so they can finish — but the invite page cleared the resume cookie **before** resolving, so
-  a 403 destroyed the invitation with no route back. **It now clears only on success, so the 403
-  self-heals.** A third consumer was also missing from the original enumeration:
+  a 403 destroyed the invitation with no route back.
+- **⚠️ AND THE FIRST FIX FOR THAT WAS ALSO INCOMPLETE, same re-audit.** Clearing the cookie only on success
+  keeps the token past the first 403 — but the only automatic route onward is `/dashboard`, whose intent
+  consumer is **one-shot and clears before navigating**, so the second 403 burned it. The fix moved the
+  loss one hop, and the comment claiming it "self-heals" asserted a property the code did not provide —
+  **the very defect this release fixed in `requireVerifiedOnboarded`.** The invite page now routes a
+  `COMPLETE_ONBOARDING` remedy straight to `/onboarding` with the token intact, which genuinely recovers it.
+  **⚠️ The server had been sending `ACTION = "COMPLETE_ONBOARDING"` all along and nothing read it.**
+  **⚠️ Duck-typed on `action`, not `instanceof`** — class identity does not survive the api mock, where the
+  `instanceof` form threw and took four unrelated tests down with it. A third consumer was also missing from the original enumeration:
   `app/linked-learners/page.tsx` has no route guard of its own.
 - **The gate was tested on 2 of 5 endpoints.** Because the shared fixture now onboards callers by default,
   **deleting `requireVerifiedOnboarded` from create, list or revoke survived the entire suite.**
@@ -278,6 +298,12 @@ required code changes before signoff, and both were invisible to every existing 
   invitations — *"invitations stop dying in silence"* — and sharpest on the consent path, where a supporter
   had no way to learn the window existed. `expiresAt` is added and rendered on `PENDING` cards.
   **⚠️ Null means "not on the clock", not "unknown"**, so it renders as no deadline.
+- **⚠️ Its test fixture was unrealistic in the way that mattered, found by the re-audit.**
+  `markExpiredIfPending` and `markRevokedIfLive` deliberately do **not** clear `expires_at`, so a production
+  terminal row carries a **past** deadline — but the tests used `expiresAt: null` for those rows, which made
+  the `PENDING` gate untestable: gating the render on `link.expiresAt` alone passed everything, while an
+  expired card would have read *"Expires \<past date\> if it is not confirmed"*. The fixture is now
+  non-null and **mutation-verified** against exactly that gate.
 - **Also corrected:** a stale test Javadoc still saying note-generation is deliberately unasserted;
   `study-pack-generation.md` overstating the divergence test, which pins **presence per file, not equality
   between files** (the two blocks are byte-identical, verified by hand, not by the build);

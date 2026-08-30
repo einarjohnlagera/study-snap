@@ -929,7 +929,7 @@ class NativeQueryPostgresIntegrationTest {
      * not.
      */
     @Test
-    void aPreMigrationConsentPausedRowSurvivesTheV128Backfill() {
+    void aPreMigrationConsentPausedRowIsNeverExpirableAtAnyFutureInstant() {
         UUID supporter = seedUser("v128-pause-supporter");
         UUID learner = seedUser("v128-pause-learner");
         UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
@@ -948,16 +948,15 @@ class NativeQueryPostgresIntegrationTest {
                 "update linked_learner_relationships set expires_at = null where id = ?",
                 relationshipId);
 
-        // V128's backfill statement, verbatim.
-        jdbcTemplate.update(
-                "update linked_learner_relationships"
-                        + " set expires_at = greatest(created_at, now()) + interval '30 days'"
-                        + " where status = 'PENDING' and id = ?", relationshipId);
-
-        assertThat(relationshipRepository.findDuePendingIds(OffsetDateTime.now(ZoneOffset.UTC)))
-                .as("an inherited consent pause must not be due the moment the migration lands")
+        // V128 writes NOTHING here, so the NULL survives — and that is the whole protection.
+        // ⚠️ Asserted at a FAR-FUTURE instant, not just "now". An earlier fix backfilled
+        // greatest(created_at, now()) + 30 days, which passes a check at migration time and expires
+        // the row a month later; only a future-dated sweep distinguishes a fix from a delay.
+        OffsetDateTime longAfterAnyDeadline = OffsetDateTime.now(ZoneOffset.UTC).plusYears(5);
+        assertThat(relationshipRepository.findDuePendingIds(longAfterAnyDeadline))
+                .as("an inherited consent pause must never become due, at any future instant")
                 .doesNotContain(relationshipId);
-        assertThat(requestExpiryWorker.expire(relationshipId, OffsetDateTime.now(ZoneOffset.UTC)))
+        assertThat(requestExpiryWorker.expire(relationshipId, longAfterAnyDeadline))
                 .isFalse();
         assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
         assertThat(liveGrants(relationshipId))

@@ -80,6 +80,26 @@ export default function LinkedLearnerInvitationPage() {
       })
       .catch((resolveError) => {
         if (!cancelled) {
+          // ⚠️ THIS is what makes the token actually survive, and it was added after a cold re-audit
+          // showed the earlier fix only DELAYED the loss. Keeping the cookie past a 403 is not
+          // enough: the only automatic route onward is /dashboard, whose intent consumer is
+          // one-shot and clears the cookie before navigating — so the second 403 burned it.
+          // The server's ONBOARDING_REQUIRED carries ACTION=COMPLETE_ONBOARDING precisely so a
+          // client can route on it; nothing read it until now. Sending them to /onboarding with the
+          // cookie intact is the only path that genuinely self-heals: they finish, and auth routing
+          // reconstructs this exact invitation path.
+          // ⚠️ Duck-typed on `action`, NOT `instanceof ApiRequestError`. Class identity does not
+          // survive every module boundary — it is undefined under the api mock, where the
+          // instanceof form threw and took four unrelated tests down with it — and the remedy code
+          // is the actual contract here, not the class.
+          const remedy = resolveError instanceof Error
+            ? (resolveError as { action?: string | null }).action
+            : null;
+          if (remedy === "COMPLETE_ONBOARDING") {
+            setLinkedLearnerInvitationIntentCookie(token);
+            router.replace("/onboarding");
+            return;
+          }
           try {
             const completion = getLinkedLearnerRedemptionCompletion();
             if (completion?.token === token && completion.userId === authUser.id) {
