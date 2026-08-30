@@ -1094,7 +1094,7 @@ export type SimpleMessageResponse = {
 };
 
 export type LinkedLearnerSide = "SUPPORTER" | "LEARNER";
-export type LinkedLearnerStatus = "PENDING" | "ACCEPTED" | "REVOKED";
+export type LinkedLearnerStatus = "PENDING" | "ACCEPTED" | "REVOKED" | "EXPIRED";
 
 export type LinkedLearnerResponse = {
   id: string;
@@ -1107,6 +1107,12 @@ export type LinkedLearnerResponse = {
   createdAt: string;
   acceptedAt: string | null;
   revokedAt: string | null;
+  /**
+   * When an unconfirmed request lapses, or null when it cannot lapse.
+   * ⚠️ Null means "not on the expiry clock" — acceptance clears it and a consent pause leaves it
+   * clear — so render its absence as no deadline, never as a missing value.
+   */
+  expiresAt: string | null;
   birthYearRequired: boolean;
   guardianConsentRequired: boolean;
   guardianConsentRecorded: boolean;

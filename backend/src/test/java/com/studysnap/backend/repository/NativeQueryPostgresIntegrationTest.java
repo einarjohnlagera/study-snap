@@ -13,6 +13,9 @@ import com.studysnap.backend.service.EmailTemplateService;
 import com.studysnap.backend.service.GuardianConsentPolicy;
 import com.studysnap.backend.service.LinkedLearnerService;
 import com.studysnap.backend.service.OnboardingGuardService;
+import com.studysnap.backend.service.jobs.LinkedLearnerRequestExpiryWorker;
+import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
+import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.model.NoteLibraryReadiness;
@@ -32,6 +35,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -59,8 +63,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -76,6 +82,7 @@ import static org.mockito.Mockito.mock;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
 @ExtendWith(NativeQueryPostgresIntegrationTest.DockerRequiredUnlessOptedOut.class)
+@Import(LinkedLearnerRequestExpiryWorker.class)
 class NativeQueryPostgresIntegrationTest {
     private static final String SKIP_PROPERTY = "nativequery.pg.skip";
     private static final String SKIP_FLAG = "-D" + SKIP_PROPERTY + "=true";
@@ -87,7 +94,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 35;
+    private static final int EXPECTED_NATIVE_QUERIES = 38;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
@@ -127,6 +134,130 @@ class NativeQueryPostgresIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private LinkedLearnerRequestExpiryWorker requestExpiryWorker;
+
+    /**
+     * Killing test for changing {@code <=} to {@code <}, dropping the PENDING predicate, or selecting
+     * a future request. The exact-boundary row is deliberate: an "old enough" fixture cannot
+     * distinguish the two comparison operators.
+     */
+    @Test
+    void dueRequestFinderIncludesTheExactBoundaryAndOnlyPendingRows() {
+        OffsetDateTime boundary = OffsetDateTime.now(ZoneOffset.UTC).withNano(0);
+        UUID due = seedRelationship(seedUser("due-supporter"), seedUser("due-learner"), "PENDING");
+        UUID future = seedRelationship(seedUser("future-supporter"), seedUser("future-learner"), "PENDING");
+        UUID accepted = seedRelationship(
+                seedUser("accepted-due-supporter"), seedUser("accepted-due-learner"), "ACCEPTED");
+        setRelationshipExpiry(due, boundary);
+        setRelationshipExpiry(future, boundary.plusSeconds(1));
+        setRelationshipExpiry(accepted, boundary.minusDays(1));
+
+        assertThat(relationshipRepository.findDuePendingIds(boundary))
+                .containsExactly(due);
+    }
+
+    /**
+     * Killing test for changing the transition literal from PENDING to ACCEPTED and for deleting
+     * its status predicate. Both a target PENDING row and a different terminal row are required.
+     */
+    @Test
+    void markExpiredIfPendingTransitionsOnlyItsPendingTarget() {
+        OffsetDateTime expiredAt = OffsetDateTime.now(ZoneOffset.UTC).withNano(0);
+        UUID pending = seedRelationship(seedUser("expire-supporter"), seedUser("expire-learner"), "PENDING");
+        // A due deadline is part of the fixture, not scenery: the statement re-checks it, so a
+        // PENDING row with no deadline is deliberately unexpirable.
+        setRelationshipExpiry(pending, expiredAt.minusDays(1));
+        UUID accepted = seedRelationship(
+                seedUser("not-expire-supporter"), seedUser("not-expire-learner"), "ACCEPTED");
+        UUID undated = seedRelationship(
+                seedUser("undated-supporter"), seedUser("undated-learner"), "PENDING");
+
+        assertThat(relationshipRepository.markExpiredIfPending(accepted, expiredAt)).isZero();
+        assertThat(relationshipRepository.markExpiredIfPending(undated, expiredAt))
+                .as("a PENDING row with no deadline is a consent pause, not an unconfirmed request")
+                .isZero();
+        assertThat(relationshipRepository.markExpiredIfPending(pending, expiredAt)).isOne();
+        assertThat(relationshipStatus(pending)).isEqualTo("EXPIRED");
+        assertThat(relationshipStatus(accepted)).isEqualTo("ACCEPTED");
+        assertThat(relationshipStatus(undated)).isEqualTo("PENDING");
+    }
+
+    /** Killing test for removing expires_at = null from markAcceptedIfPending. */
+    @Test
+    void acceptingPendingRelationshipClearsItsExpiryDeadline() {
+        UUID relationshipId = seedRelationship(
+                seedUser("accept-expiry-supporter"), seedUser("accept-expiry-learner"), "PENDING");
+        setRelationshipExpiry(relationshipId, OffsetDateTime.now(ZoneOffset.UTC).plusDays(30));
+
+        assertThat(relationshipRepository.markAcceptedIfPending(
+                relationshipId, OffsetDateTime.now(ZoneOffset.UTC))).isOne();
+
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("ACCEPTED");
+        assertThat(jdbcTemplate.queryForObject(
+                "select expires_at is null from linked_learner_relationships where id = ?",
+                Boolean.class, relationshipId)).isTrue();
+    }
+
+    @Test
+    void expiredPairCanCreateANewRelationshipWhileInvitationStatusVocabularyStaysClosed() {
+        UUID supporter = seedUser("reinvite-supporter");
+        UUID learner = seedUser("reinvite-learner");
+        seedRelationship(supporter, learner, "EXPIRED");
+        UUID replacement = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now(ZoneOffset.UTC);
+
+        assertThat(relationshipRepository.insertPendingIfAbsent(
+                replacement, supporter, learner, LinkedLearnerSide.SUPPORTER.name(),
+                createdAt, createdAt.plusDays(30))).isOne();
+        assertThat(relationshipStatus(replacement)).isEqualTo("PENDING");
+
+        String invitationConstraint = jdbcTemplate.queryForObject("""
+                select pg_get_constraintdef(oid)
+                  from pg_constraint
+                 where conname = 'ck_linked_learner_invitation_status'
+                """, String.class);
+        assertThat(invitationConstraint)
+                .contains("PENDING", "ACCEPTED", "REVOKED")
+                .doesNotContain("EXPIRED");
+    }
+
+    @Test
+    void expiryWorkerDeletesProvisionalYearOnlyAfterWinningThePendingTransition() {
+        UUID pendingLearner = seedUser("worker-pending-learner");
+        UUID pending = seedRelationship(seedUser("worker-pending-supporter"), pendingLearner, "PENDING");
+        setRelationshipExpiry(pending, OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
+        seedProvisional(pending, Year.now().getValue() - 12);
+        UUID acceptedLearner = seedUser("worker-accepted-learner");
+        UUID accepted = seedRelationship(seedUser("worker-accepted-supporter"), acceptedLearner, "ACCEPTED");
+        seedProvisional(accepted, Year.now().getValue() - 13);
+
+        assertThat(requestExpiryWorker.expire(pending, OffsetDateTime.now(ZoneOffset.UTC))).isTrue();
+        assertThat(relationshipStatus(pending)).isEqualTo("EXPIRED");
+        assertThat(provisionalRows(pending)).isZero();
+
+        assertThat(requestExpiryWorker.expire(accepted, OffsetDateTime.now(ZoneOffset.UTC))).isFalse();
+        assertThat(relationshipStatus(accepted)).isEqualTo("ACCEPTED");
+        assertThat(provisionalRows(accepted))
+                .as("a zero-row conditional transition must not delete the declaration").isOne();
+    }
+
+    /**
+     * Item 6: real PostgreSQL rows, two real transactions and both commit orders for every writer
+     * sharing the learner lock. The invariant is checked after each interleaving, not inferred from
+     * affected-row counts: ACCEPTED + provisional + null account year is unremediable and forbidden.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void requestExpiryRacesCannotStrandAnAcceptedLearnerInEitherCommitOrder() throws Exception {
+        runAcceptExpiryRace(true, "accept-first");
+        runAcceptExpiryRace(false, "expiry-first");
+        runRevokeExpiryRace(true, "revoke-first");
+        runRevokeExpiryRace(false, "expiry-before-revoke");
+        runCorrectionExpiryRace(true, "correction-first");
+        runCorrectionExpiryRace(false, "expiry-before-correction");
+    }
 
     @Test
     void everyAnnotatedNativeQueryPreparesAgainstPostgres16() throws Exception {
@@ -266,6 +397,142 @@ class NativeQueryPostgresIntegrationTest {
                 throw new AssertionError("Conditional-write race was interrupted", interrupted);
             }
         });
+    }
+
+    private void runAcceptExpiryRace(boolean acceptCommitsFirst, String fixture) throws Exception {
+        UUID supporter = seedUser(fixture + "-supporter");
+        UUID learner = seedUser(fixture + "-learner");
+        UUID relationshipId = seedRelationship(
+                supporter, learner, "PENDING", LinkedLearnerSide.LEARNER.name());
+        seedProvisional(relationshipId, Year.now().getValue() - 25);
+        setRelationshipExpiry(relationshipId, OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(1));
+        LinkedLearnerService service = linkedLearnerService();
+        ThrowingRunnable accept = () -> {
+            try {
+                service.accept(relationshipId, supporter, new AcceptLinkedLearnerRequest(null, false));
+            } catch (LinkedLearnerInvalidStateException | LinkedLearnerBirthYearRequiredException expected) {
+                // Expiry won. The final-row invariant below distinguishes this legitimate loss from
+                // a swallowed acceptance defect.
+            }
+        };
+        ThrowingRunnable expire = () -> requestExpiryWorker.expire(
+                relationshipId, OffsetDateTime.now(ZoneOffset.UTC));
+
+        runWithFirstCommit(learner, acceptCommitsFirst ? accept : expire, acceptCommitsFirst ? expire : accept);
+        assertNoUnremediableAcceptedRelationship(relationshipId);
+        // ⚠️ runWithFirstCommit SERIALISES the two writers, so this is deterministic, not racy:
+        // accept() never inspects expires_at, so it wins unconditionally on a PENDING row.
+        // The old isIn("ACCEPTED","EXPIRED") permitted the exact regression this exists to
+        // catch — accept() throwing, the catch below swallowing it, expiry then winning.
+        assertThat(relationshipStatus(relationshipId))
+                .isEqualTo(acceptCommitsFirst ? "ACCEPTED" : "EXPIRED");
+    }
+
+    private void runRevokeExpiryRace(boolean revokeCommitsFirst, String fixture) throws Exception {
+        UUID supporter = seedUser(fixture + "-supporter");
+        UUID learner = seedUser(fixture + "-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "PENDING");
+        seedProvisional(relationshipId, Year.now().getValue() - 12);
+        setRelationshipExpiry(relationshipId, OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(1));
+        LinkedLearnerService service = linkedLearnerService();
+        ThrowingRunnable revoke = () -> service.revoke(relationshipId, learner);
+        ThrowingRunnable expire = () -> requestExpiryWorker.expire(
+                relationshipId, OffsetDateTime.now(ZoneOffset.UTC));
+
+        runWithFirstCommit(learner, revokeCommitsFirst ? revoke : expire, revokeCommitsFirst ? expire : revoke);
+        assertNoUnremediableAcceptedRelationship(relationshipId);
+        // Same determinism as the accept race above; revoke wins on both live statuses.
+        assertThat(relationshipStatus(relationshipId))
+                .isEqualTo(revokeCommitsFirst ? "REVOKED" : "EXPIRED");
+        assertThat(provisionalRows(relationshipId)).isZero();
+    }
+
+    private void runCorrectionExpiryRace(boolean correctionCommitsFirst, String fixture) throws Exception {
+        UUID supporter = seedUser(fixture + "-supporter");
+        UUID learner = seedUser(fixture + "-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
+        // A real row makes the cleanup consequence observable if expiry wins after correction
+        // pauses the relationship back to PENDING.
+        seedProvisional(relationshipId, Year.now().getValue() - 12);
+        LinkedLearnerService service = linkedLearnerService();
+        ThrowingRunnable correction = () -> service.correctBirthYear(
+                learner, Year.now().getValue() - 10);
+        ThrowingRunnable expire = () -> requestExpiryWorker.expire(
+                relationshipId, OffsetDateTime.now(ZoneOffset.UTC));
+
+        runWithFirstCommit(
+                learner,
+                correctionCommitsFirst ? correction : expire,
+                correctionCommitsFirst ? expire : correction);
+        assertNoUnremediableAcceptedRelationship(relationshipId);
+        assertThat(accountBirthYear(learner)).isEqualTo(Year.now().getValue() - 10);
+        // Both orders converge on PENDING: expiry loses to an ACCEPTED row, and a paused row has
+        // no deadline. Previously this permitted "EXPIRED", which is what let the defect pass.
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
+    }
+
+    /** Hold the first writer's learner lock through its write until the second thread is in-flight. */
+    private void runWithFirstCommit(
+            UUID learnerUserId,
+            ThrowingRunnable first,
+            ThrowingRunnable second
+    ) throws Exception {
+        CountDownLatch firstWritten = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> firstResult = executor.submit(() -> new TransactionTemplate(transactionManager)
+                    .executeWithoutResult(status -> {
+                        userRepository.findByIdForUpdate(learnerUserId).orElseThrow();
+                        first.run();
+                        firstWritten.countDown();
+                        await(releaseFirst, "release first expiry-race writer");
+                    }));
+            assertThat(firstWritten.await(5, TimeUnit.SECONDS)).isTrue();
+            Future<?> secondResult = executor.submit(() -> new TransactionTemplate(transactionManager)
+                    .executeWithoutResult(status -> {
+                        secondStarted.countDown();
+                        second.run();
+                    }));
+            assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(secondResult.isDone())
+                    .as("the second writer must wait behind the first writer's learner lock")
+                    .isFalse();
+            releaseFirst.countDown();
+            firstResult.get(10, TimeUnit.SECONDS);
+            secondResult.get(10, TimeUnit.SECONDS);
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private void await(CountDownLatch latch, String purpose) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new AssertionError("Timed out waiting to " + purpose);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while waiting to " + purpose, interrupted);
+        }
+    }
+
+    private void assertNoUnremediableAcceptedRelationship(UUID relationshipId) {
+        Integer forbiddenRows = jdbcTemplate.queryForObject("""
+                select count(*)
+                  from linked_learner_relationships r
+                  join users u on u.id = r.learner_user_id
+                  join linked_learner_provisional_birth_years p on p.relationship_id = r.id
+                 where r.id = ?
+                   and r.status = 'ACCEPTED'
+                   and u.birth_year is null
+                """, Integer.class, relationshipId);
+        assertThat(forbiddenRows)
+                .as("no ACCEPTED relationship may retain provisional data while account year is null")
+                .isZero();
     }
 
     /**
@@ -539,6 +806,11 @@ class NativeQueryPostgresIntegrationTest {
         int getAsInt();
     }
 
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run();
+    }
+
     private int insertGrant(UUID relationshipId, UUID fromUserId, UUID toUserId) {
         return grantRepository.insertLiveIfAbsent(
                 UUID.randomUUID(),
@@ -557,6 +829,199 @@ class NativeQueryPostgresIntegrationTest {
                 relationshipId
         );
         return count == null ? 0 : count;
+    }
+
+    @Test
+    void consentPausedRelationshipIsNeverExpiredBecauseAPauseIsNotATermination() {
+        UUID supporter = seedUser("paused-not-expired-supporter");
+        UUID learner = seedUser("paused-not-expired-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
+
+        // A v0.89.1 correction into the minor range pauses ACCEPTED -> PENDING.
+        linkedLearnerService().correctBirthYear(learner, java.time.Year.now().getValue() - 10);
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
+
+        // The sweep reaches this id (selection and execution are separate transactions by design).
+        requestExpiryWorker.expire(relationshipId, OffsetDateTime.now(ZoneOffset.UTC));
+
+        // A pause is not a termination: this connection was confirmed once.
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
+    }
+
+    /**
+     * ⚠️ The privacy predicate for the account data export. This table has no user column — it is
+     * keyed by relationship — so the join through {@code linked_learner_relationships} on
+     * {@code learner_user_id} is the only thing standing between a caller and a stranger's declared
+     * birth year. A mocked repository cannot test that, which is why this runs against real rows.
+     */
+    @Test
+    void provisionalExportReturnsOnlyDeclarationsWhereTheCallerIsTheLearner() {
+        UUID learner = seedUser("export-mine-learner");
+        UUID stranger = seedUser("export-stranger-learner");
+        UUID mine = seedRelationship(seedUser("export-mine-supporter"), learner, "PENDING");
+        UUID theirs = seedRelationship(seedUser("export-stranger-supporter"), stranger, "PENDING");
+        seedProvisional(mine, 2011);
+        seedProvisional(theirs, 2012);
+
+        assertThat(provisionalBirthYearRepository.findAllDeclaredByLearner(learner))
+                .extracting(row -> row.getRelationshipId(), row -> row.getBirthYear())
+                .containsExactly(tuple(mine, 2011));
+
+        // The supporter on the caller's own relationship is not the learner and must see nothing.
+        assertThat(provisionalBirthYearRepository.findAllDeclaredByLearner(
+                relationshipSupporter(mine))).isEmpty();
+    }
+
+    /**
+     * ⚠️ Proves the export field must be a LIST. The primary key is relationship_id, and the insert
+     * is guarded only on the relationship being PENDING and the account year being absent, so a
+     * learner who redeems two links before either creator confirms holds two declarations. A single
+     * scalar would silently drop one from a compliance surface.
+     */
+    @Test
+    void aLearnerWithTwoUnconfirmedRedemptionsExportsBothDeclarations() {
+        UUID learner = seedUser("export-two-learner");
+        UUID first = seedRelationship(seedUser("export-two-supporter-a"), learner, "PENDING");
+        UUID second = seedRelationship(seedUser("export-two-supporter-b"), learner, "PENDING");
+        seedProvisional(first, 2010);
+        seedProvisional(second, 2011);
+
+        assertThat(provisionalBirthYearRepository.findAllDeclaredByLearner(learner))
+                .extracting(row -> row.getBirthYear())
+                .containsExactlyInAnyOrder(2010, 2011);
+    }
+
+    /**
+     * ⚠️ THE LOAD-BEARING HALF OF ITEM 4. A consent pause is NOT a termination, so it must leave
+     * every grant row live. v0.93.0 made the row survive the ACCEPTED -> PENDING pause BY DESIGN:
+     * {@code *SharedByMe} reflects the ROW, so it reports the caller's own standing act of sharing
+     * and what resumes on re-acceptance. Cutting here would make a learner's own toggle read OFF
+     * while they never touched it, and sharing would silently fail to resume.
+     */
+    @Test
+    void aConsentPauseLeavesEveryGrantLiveBecauseAPauseIsNotATermination() {
+        UUID supporter = seedUser("pause-grant-supporter");
+        UUID learner = seedUser("pause-grant-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
+        insertGrant(relationshipId, learner, supporter);
+        assertThat(liveGrants(relationshipId)).isOne();
+
+        linkedLearnerService().correctBirthYear(learner, Year.now().getValue() - 10);
+
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
+        assertThat(liveGrants(relationshipId))
+                .as("the pause must leave sharing intact so it resumes on re-acceptance")
+                .isOne();
+    }
+
+    /**
+     * ⚠️ THE EXECUTABLE COUNTERPART to the V128 backfill fix, and the test whose ABSENCE let the
+     * defect through. Every other pause test rests on {@code expires_at} being NULL — and
+     * {@code seedRelationship} never sets it, so the one thing capable of removing that NULL, the
+     * migration backfill, was never exercised against a paused row.
+     *
+     * <p>This reproduces the inherited shape directly: a relationship that was ACCEPTED, then
+     * consent-paused back to PENDING, then handed a deadline by V128's backfill statement. Under
+     * the naive {@code created_at + interval '30 days'} the deadline lands in the past and the
+     * sweep terminates a confirmed connection. Under {@code greatest(created_at, now())} it does
+     * not.
+     */
+    @Test
+    void aPreMigrationConsentPausedRowIsNeverExpirableAtAnyFutureInstant() {
+        UUID supporter = seedUser("v128-pause-supporter");
+        UUID learner = seedUser("v128-pause-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        // Aged well beyond the TTL, exactly like a relationship formed before this release.
+        jdbcTemplate.update(
+                "update linked_learner_relationships set created_at = now() - interval '90 days'"
+                        + " where id = ?", relationshipId);
+        jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
+        insertGrant(relationshipId, learner, supporter);
+
+        // A v0.89.1 correction pauses it. Pre-V128 this left expires_at NULL because the column
+        // did not exist; the seed above reproduces that by never setting it.
+        linkedLearnerService().correctBirthYear(learner, Year.now().getValue() - 10);
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
+        jdbcTemplate.update(
+                "update linked_learner_relationships set expires_at = null where id = ?",
+                relationshipId);
+
+        // V128 writes NOTHING here, so the NULL survives — and that is the whole protection.
+        // ⚠️ Asserted at a FAR-FUTURE instant, not just "now". An earlier fix backfilled
+        // greatest(created_at, now()) + 30 days, which passes a check at migration time and expires
+        // the row a month later; only a future-dated sweep distinguishes a fix from a delay.
+        OffsetDateTime longAfterAnyDeadline = OffsetDateTime.now(ZoneOffset.UTC).plusYears(5);
+        assertThat(relationshipRepository.findDuePendingIds(longAfterAnyDeadline))
+                .as("an inherited consent pause must never become due, at any future instant")
+                .doesNotContain(relationshipId);
+        assertThat(requestExpiryWorker.expire(relationshipId, longAfterAnyDeadline))
+                .isFalse();
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
+        assertThat(liveGrants(relationshipId))
+                .as("a pause is not a termination, at migration time either").isOne();
+    }
+
+    @Test
+    void revokingARelationshipCutsEveryLiveGrantOnItInBothDirections() {
+        UUID supporter = seedUser("revoke-grant-supporter");
+        UUID learner = seedUser("revoke-grant-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
+        insertGrant(relationshipId, learner, supporter);
+        insertGrant(relationshipId, supporter, learner);
+        assertThat(liveGrants(relationshipId)).isEqualTo(2);
+
+        linkedLearnerService().revoke(relationshipId, supporter);
+
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("REVOKED");
+        assertThat(liveGrants(relationshipId)).isZero();
+    }
+
+    /**
+     * ⚠️ WHY EXPIRY'S GRANT CUT IS UNREACHABLE TODAY, established here rather than assumed. v0.93.0
+     * made {@code insertLiveIfAbsent} conditional on the relationship being ACCEPTED at write time,
+     * so a PENDING relationship can never receive a grant. Combined with the fact that the only
+     * route from ACCEPTED back to PENDING is the consent pause — which leaves {@code expires_at}
+     * NULL and is therefore unexpirable — the sweep can never MEET a live grant. The cut stays in
+     * the worker as one rule shared with revoke; this records that it is defence in depth, so
+     * nobody later reads its zero-row count as a defect.
+     */
+    @Test
+    void aPendingRelationshipCannotReceiveAGrantWhichIsWhyExpiryNeverMeetsOne() {
+        UUID supporter = seedUser("pending-grant-supporter");
+        UUID learner = seedUser("pending-grant-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "PENDING");
+
+        assertThat(insertGrant(relationshipId, learner, supporter))
+                .as("v0.93.0 conditions the live-grant insert on ACCEPTED")
+                .isZero();
+        assertThat(liveGrants(relationshipId)).isZero();
+    }
+
+    /**
+     * Defence in depth for the rule above: if any future path ever leaves a live grant on an
+     * expirable PENDING row, the sweep must cut it exactly as revoke does. The state is forced
+     * directly, because no supported path can produce it today.
+     */
+    @Test
+    void expiryStillCutsAGrantIfAPendingRelationshipEverHoldsOne() {
+        UUID supporter = seedUser("expire-grant-supporter");
+        UUID learner = seedUser("expire-grant-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        insertGrant(relationshipId, learner, supporter);
+        assertThat(liveGrants(relationshipId)).isOne();
+        jdbcTemplate.update(
+                "update linked_learner_relationships set status = 'PENDING' where id = ?",
+                relationshipId);
+        setRelationshipExpiry(relationshipId, OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
+
+        assertThat(requestExpiryWorker.expire(relationshipId, OffsetDateTime.now(ZoneOffset.UTC)))
+                .isTrue();
+
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("EXPIRED");
+        assertThat(liveGrants(relationshipId)).isZero();
     }
 
     private LinkedLearnerService linkedLearnerService() {
@@ -590,9 +1055,22 @@ class NativeQueryPostgresIntegrationTest {
         return count == null ? 0 : count;
     }
 
+    private UUID relationshipSupporter(UUID relationshipId) {
+        return jdbcTemplate.queryForObject(
+                "select supporter_user_id from linked_learner_relationships where id = ?",
+                UUID.class,
+                relationshipId);
+    }
+
     private String relationshipStatus(UUID relationshipId) {
         return jdbcTemplate.queryForObject(
                 "select status from linked_learner_relationships where id = ?", String.class, relationshipId);
+    }
+
+    private void setRelationshipExpiry(UUID relationshipId, OffsetDateTime expiresAt) {
+        jdbcTemplate.update(
+                "update linked_learner_relationships set expires_at = ? where id = ?",
+                expiresAt, relationshipId);
     }
 
     private void seedProvisional(UUID relationshipId, int birthYear) {

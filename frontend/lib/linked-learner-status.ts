@@ -44,6 +44,7 @@ export function resolvePendingReason(link: LinkedLearnerResponse): LinkedLearner
 
 export const LINKED_LEARNER_STATUS_COPY = {
   active: "Learning connection active",
+  expiredRequest: "This request timed out before it was confirmed. Send a new invitation to try again.",
   waitingForLearnerBirthYear: "Waiting for the learner to record their birth year.",
   pausedForConsentLearnerView: "This connection is paused until the supporter records guardian consent.",
   // ⚠️ These describe the connection's STATUS and must not assert anything about access.
@@ -66,6 +67,17 @@ export function describeSupportedLearnerStatus(link: LinkedLearnerResponse): {
 } {
   if (link.status === "ACCEPTED") {
     return { headline: LINKED_LEARNER_STATUS_COPY.active, detail: null };
+  }
+  if (link.status === "EXPIRED") {
+    // Neutral on purpose: expiry says only that the request timed out. It must not imply that
+    // either person withdrew it, or make claims about access that the status cannot establish.
+    return {
+      headline: "Connection request expired",
+      detail: LINKED_LEARNER_STATUS_COPY.expiredRequest,
+    };
+  }
+  if (link.status === "REVOKED") {
+    return { headline: "Connection ended", detail: null };
   }
   switch (resolvePendingReason(link)) {
     case "BIRTH_YEAR_REQUIRED":

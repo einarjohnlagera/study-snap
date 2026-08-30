@@ -10,6 +10,7 @@ import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.LinkedLearnerInvitationLinkNotFoundException;
+import com.studysnap.backend.exception.LinkedLearnerOnboardingRequiredException;
 import com.studysnap.backend.exception.InvalidLinkedLearnerBirthYearException;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerRelationshipAlreadyExistsException;
@@ -39,6 +40,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class LinkedLearnerInvitationLinkServiceTest {
@@ -104,6 +106,7 @@ class LinkedLearnerInvitationLinkServiceTest {
         UUID creatorId = UUID.randomUUID();
         LinkedLearnerInvitationLinkEntity link = link(creatorId, LinkedLearnerSide.LEARNER);
         when(linkRepository.findUsableByToken(eq(TOKEN), any())).thenReturn(Optional.of(link));
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(user(callerId, "Caller")));
         when(userRepository.findById(creatorId)).thenReturn(Optional.of(user(creatorId, "Taylor")));
 
         LinkedLearnerInvitationLinkResolveResponse response = service.resolve(callerId, TOKEN);
@@ -140,6 +143,47 @@ class LinkedLearnerInvitationLinkServiceTest {
         verify(linkedLearnerService).storeProvisionalBirthYear(
                 eq(relationship.getId()), eq(redeemerId), eq(2012), any());
         verify(linkedLearnerService, never()).accept(any(), any(), any());
+    }
+
+    /**
+     * ⚠️ THE TEST THAT WOULD HAVE CAUGHT v0.71.0. There, an onboarding guard was correct in
+     * isolation and broke the flow it sat on — onboarding became uncompletable for every ADMIN
+     * account. The valuable assertion is therefore not "an un-onboarded caller is rejected" but that
+     * the SAME caller, having finished onboarding, can still redeem the token they arrived with.
+     *
+     * <p>That is the supported path: the invite page carries the token through {@code /onboarding}
+     * in a first-party cookie and only resumes afterwards, so the gate must be a waypoint the flow
+     * passes rather than a wall it hits.
+     */
+    @Test
+    void aCallerBlockedMidOnboardingCanRedeemTheSameTokenOnceOnboardingCompletes() {
+        UUID creatorId = UUID.randomUUID();
+        UUID redeemerId = UUID.randomUUID();
+        UserEntity redeemer = user(redeemerId, "Redeemer");
+        redeemer.setOnboardingCompletedAt(null);
+        when(userRepository.findById(redeemerId)).thenReturn(Optional.of(redeemer));
+
+        assertThatThrownBy(() -> service.redeem(
+                redeemerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(2012)))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+        verifyNoInteractions(linkRepository);
+
+        // The learner finishes onboarding and the cookie resumes the same token.
+        redeemer.setOnboardingCompletedAt(OffsetDateTime.parse("2026-01-01T00:00:00Z"));
+        LinkedLearnerInvitationLinkEntity link = link(creatorId, LinkedLearnerSide.SUPPORTER);
+        LinkedLearnerRelationshipEntity relationship = relationship(creatorId, redeemerId);
+        when(linkRepository.findUsableByToken(eq(TOKEN), any())).thenReturn(Optional.of(link));
+        when(linkRepository.markRedeemedIfUsable(eq(TOKEN), eq(redeemerId), any())).thenReturn(1);
+        when(linkedLearnerService.prepareProvisionalBirthYearForLinkRedemption(redeemerId, 2012))
+                .thenReturn(2012);
+        when(linkedLearnerService.createPendingRelationship(
+                eq(redeemerId), eq(creatorId), eq(LinkedLearnerSide.LEARNER), any()))
+                .thenReturn(new LinkedLearnerService.PendingRelationshipCreation(relationship, true));
+
+        var response = service.redeem(
+                redeemerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(2012));
+
+        assertThat(response.status()).isEqualTo(LinkedLearnerStatus.PENDING);
     }
 
     @Test
@@ -264,6 +308,9 @@ class LinkedLearnerInvitationLinkServiceTest {
     @Test
     void theNotFoundExceptionItselfIsIdenticalWhicheverBranchRaisesIt() {
         UUID callerId = UUID.randomUUID();
+        // The caller must be a real onboarded account, or resolve fails on the caller's own gate
+        // before it ever reaches the token branches this test is comparing.
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(user(callerId, "Caller")));
         when(linkRepository.findUsableByToken(anyString(), any())).thenReturn(Optional.empty());
 
         LinkedLearnerInvitationLinkNotFoundException unknown = captureNotFound(callerId, "unknown");
@@ -277,6 +324,57 @@ class LinkedLearnerInvitationLinkServiceTest {
                 .isEqualTo(new Object[] {unknown.getStatus(), unknown.getCode(), unknown.getMessage()});
         assertThat(new Object[] {redeemed.getStatus(), redeemed.getCode(), redeemed.getMessage()})
                 .isEqualTo(new Object[] {unknown.getStatus(), unknown.getCode(), unknown.getMessage()});
+    }
+
+    /**
+     * ⚠️ THE GATE ON ALL FIVE ENDPOINTS, not just the two that are easy to reach. The pressure test
+     * found that because the shared fixture now onboards callers by default, deleting
+     * {@code requireVerifiedOnboarded} from create, list or revoke survived the ENTIRE suite — the
+     * two targeted tests below only exercise resolve and redeem, and the security integration test
+     * only asserts anonymous 401, which is a different property.
+     */
+    @Test
+    void everyInvitationLinkEndpointRequiresAFinishedOnboarding() {
+        UUID callerId = UUID.randomUUID();
+        UserEntity midOnboarding = user(callerId, "Newcomer");
+        midOnboarding.setOnboardingCompletedAt(null);
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(midOnboarding));
+
+        assertThatThrownBy(() -> service.create(
+                callerId, new CreateLinkedLearnerInvitationLinkRequest(LinkedLearnerSide.SUPPORTER, null)))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+        assertThatThrownBy(() -> service.list(callerId))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+        assertThatThrownBy(() -> service.revoke(callerId, UUID.randomUUID()))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+        assertThatThrownBy(() -> service.resolve(callerId, TOKEN))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+        assertThatThrownBy(() -> service.redeem(
+                callerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(2012)))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+
+        // None of the five reached its repository: the gate precedes every lookup and every write.
+        verifyNoInteractions(linkRepository);
+    }
+
+    /**
+     * ⚠️ THE ORACLE CHECK, not merely a gate check. The onboarding rejection must arrive for a token
+     * that does not exist at all — proving it is raised BEFORE any token lookup, so a caller learns
+     * something about their own account and nothing about whether the token exists. If this ever
+     * runs after resolution, the v0.90.0 single not-found contract has a cheaper oracle beside it.
+     */
+    @Test
+    void anUnonboardedCallerIsRejectedBeforeTheTokenIsEvenLookedUp() {
+        UUID callerId = UUID.randomUUID();
+        UserEntity midOnboarding = user(callerId, "Newcomer");
+        midOnboarding.setOnboardingCompletedAt(null);
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(midOnboarding));
+
+        assertThatThrownBy(() -> service.resolve(callerId, "a-token-that-does-not-exist"))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+
+        // The token was never resolved: no link lookup happened at all.
+        verifyNoInteractions(linkRepository);
     }
 
     private LinkedLearnerInvitationLinkNotFoundException captureNotFound(UUID callerId, String token) {
@@ -326,6 +424,7 @@ class LinkedLearnerInvitationLinkServiceTest {
         nameless.setEmail("private-address@example.test");
         when(linkRepository.findUsableByToken(eq(TOKEN), any()))
                 .thenReturn(Optional.of(link(creatorId, LinkedLearnerSide.SUPPORTER)));
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(user(callerId, "Caller")));
         when(userRepository.findById(creatorId)).thenReturn(Optional.of(nameless));
 
         LinkedLearnerInvitationLinkResolveResponse response = service.resolve(callerId, TOKEN);
@@ -365,6 +464,10 @@ class LinkedLearnerInvitationLinkServiceTest {
         user.setId(id);
         user.setDisplayName(name);
         user.setEmail(name.toLowerCase() + "@example.test");
+        // ⚠️ Onboarded by default since v0.97.0 item 5: every invitation-link endpoint now requires a
+        // finished onboarding, so a fixture without this is testing the gate rather than the
+        // behaviour it means to test. The gate itself is covered by the two tests above.
+        user.setOnboardingCompletedAt(OffsetDateTime.parse("2026-01-01T00:00:00Z"));
         return user;
     }
 }

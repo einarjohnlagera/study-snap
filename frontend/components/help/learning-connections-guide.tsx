@@ -48,6 +48,7 @@ const SECTIONS: Section[] = [
     bullets: [
       "An email invitation names one address and expires after 30 days; you can see its clock and invite again once it lapses",
       "A link is single-use: the first person to open it sends you a request, and you confirm before the connection exists",
+      "A connection request that is never confirmed expires after 30 days and its card shows the date — this includes a request still waiting on a guardian's permission, so record consent before then or send a new invitation",
       "You can invite someone who has not signed up yet — the invitation waits for them",
       "Nothing is shared just because you are connected",
     ],

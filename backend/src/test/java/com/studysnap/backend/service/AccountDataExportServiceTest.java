@@ -29,6 +29,8 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
+import com.studysnap.backend.entity.LinkedLearnerProvisionalBirthYearEntity;
+import com.studysnap.backend.repository.LinkedLearnerProvisionalBirthYearRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -68,6 +70,8 @@ class AccountDataExportServiceTest {
     private NoteCollectionItemRepository noteCollectionItemRepository;
     @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
+    @Mock
+    private LinkedLearnerProvisionalBirthYearRepository provisionalBirthYearRepository;
 
     @Test
     void exportForUser_includesOwnedContentAndPracticeSummaryOnly() throws Exception {
@@ -107,7 +111,9 @@ class AccountDataExportServiceTest {
                 eq(userId),
                 any(Pageable.class)
         );
-        assertThat(export.meta().schemaVersion()).isEqualTo("1.1");
+        // 1.2 adds Account.provisionalBirthYears. The version is pinned deliberately: this payload
+        // is a compliance surface a person can download and keep, so a shape change is versioned.
+        assertThat(export.meta().schemaVersion()).isEqualTo("1.2");
         assertThat(export.account().email()).isEqualTo("note@example.com");
         assertThat(export.account().birthYear()).isEqualTo(2001);
         assertThat(export.notes()).extracting(DataExportResponse.Note::id)
@@ -164,6 +170,42 @@ class AccountDataExportServiceTest {
         assertThat(export.practiceSummary().lastSessionCompletedAt()).isNull();
     }
 
+    /**
+     * ⚠️ A provisional declaration must appear in the export AND must stay separate from
+     * {@code birthYear}. {@code users.birth_year} is account-global and write-once; a provisional
+     * year is neither, and only becomes the account year if the link's creator confirms. Merging
+     * them would make the one surface that exists to state what is held accurately assert an
+     * account-global value that was never written.
+     */
+    @Test
+    void exportForUser_reportsProvisionalBirthYearsSeparatelyFromTheAccountYear() {
+        UUID userId = UUID.randomUUID();
+        UUID relationshipId = UUID.randomUUID();
+        UserEntity user = user(userId);
+        user.setBirthYear(null);
+        LinkedLearnerProvisionalBirthYearEntity declaration = new LinkedLearnerProvisionalBirthYearEntity();
+        declaration.setRelationshipId(relationshipId);
+        declaration.setBirthYear(2011);
+        declaration.setDeclaredAt(OffsetDateTime.parse("2026-08-29T10:00:00Z"));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(provisionalBirthYearRepository.findAllDeclaredByLearner(userId))
+                .thenReturn(List.of(declaration));
+
+        DataExportResponse export = service().exportForUser(userId);
+
+        assertThat(export.account().birthYear())
+                .as("the account-global write-once column is still unwritten")
+                .isNull();
+        assertThat(export.account().provisionalBirthYears())
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.relationshipId()).isEqualTo(relationshipId);
+                    assertThat(row.birthYear()).isEqualTo(2011);
+                    assertThat(row.declaredAt()).isEqualTo(OffsetDateTime.parse("2026-08-29T10:00:00Z"));
+                });
+    }
+
     private AccountDataExportService service() {
         return new AccountDataExportService(
                 userRepository,
@@ -171,7 +213,8 @@ class AccountDataExportServiceTest {
                 studyPackRepository,
                 noteCollectionRepository,
                 noteCollectionItemRepository,
-                quickReviewSessionRepository
+                quickReviewSessionRepository,
+                provisionalBirthYearRepository
         );
     }
 

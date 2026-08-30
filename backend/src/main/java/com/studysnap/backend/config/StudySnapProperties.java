@@ -286,6 +286,20 @@ public class StudySnapProperties {
          */
         private int invitationTtlDays = 30;
 
+        /**
+         * How long a PENDING relationship request may retain a relationship-scoped declaration.
+         * This is deliberately separate from the invitation carrier clock and may not be shorter
+         * than 30 days: the 2026-09-26 provisional-row production read depends on that bound.
+         */
+        private int requestTtlDays = 30;
+
+        public void setRequestTtlDays(int requestTtlDays) {
+            if (requestTtlDays < 30) {
+                throw new IllegalArgumentException("linked learner request TTL must be at least 30 days");
+            }
+            this.requestTtlDays = requestTtlDays;
+        }
+
         /** Total invitations one account may send per window, capping mail volume. */
         private int invitesPerWindow = 20;
 

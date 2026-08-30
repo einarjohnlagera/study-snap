@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.ProfileType;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StudySnapPropertiesTest {
 
@@ -15,6 +16,17 @@ class StudySnapPropertiesTest {
         assertThat(linkedLearners.getGuardianConsentMaxAge()).isEqualTo(17);
         linkedLearners.setGuardianConsentMaxAge(15);
         assertThat(linkedLearners.getGuardianConsentMaxAge()).isEqualTo(15);
+    }
+
+    @Test
+    void linkedLearnerRequestTtlCannotUndercutTheThirtyDayCheckpointBound() {
+        StudySnapProperties.LinkedLearners linkedLearners = new StudySnapProperties().getLinkedLearners();
+
+        assertThat(linkedLearners.getRequestTtlDays()).isEqualTo(30);
+        assertThatThrownBy(() -> linkedLearners.setRequestTtlDays(29))
+                .isInstanceOf(IllegalArgumentException.class);
+        linkedLearners.setRequestTtlDays(45);
+        assertThat(linkedLearners.getRequestTtlDays()).isEqualTo(45);
     }
 
     @Test

@@ -39,7 +39,25 @@ public record DataExportResponse(
             List<String> focusSubjects,
             LocalDate examDate,
             Integer birthYear,
+            List<ProvisionalBirthYear> provisionalBirthYears,
             OffsetDateTime createdAt
+    ) {
+    }
+
+    /**
+     * A birth year declared while redeeming an invitation link, held against ONE relationship and
+     * not yet promoted to the account.
+     *
+     * <p>⚠️ DELIBERATELY SEPARATE FROM {@code Account.birthYear}, never merged into it.
+     * {@code users.birth_year} is account-global and write-once; a provisional declaration is
+     * neither, and only becomes the account year if the link's creator confirms. Merging the two
+     * would make this export — the one surface that exists to state what is held accurately —
+     * assert an account-global value that was never written.
+     */
+    public record ProvisionalBirthYear(
+            UUID relationshipId,
+            Integer birthYear,
+            OffsetDateTime declaredAt
     ) {
     }
 

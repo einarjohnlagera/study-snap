@@ -57,7 +57,7 @@ The sentinel cannot log in, does not receive retention or marketing email, and i
 | Linked-learner relationships where the user is supporter or learner | Cascade-delete with the user. |
 | Linked-learner guardian-consent records tied to those relationships or to the user as learner/attestor | Cascade-delete; no consent record survives without all referenced users and its relationship. |
 | The user's current birth year and nullable last-corrected timestamp | Delete with the user row; no declaration history exists. |
-| A provisional birth year on an unconfirmed invitation-link redemption (`v0.95.0`) | Deletes through the foreign-key cascade — the row references `linked_learner_relationships(id)`, which references `users(id)`, both `ON DELETE CASCADE`. It is a live pending declaration rather than history, and acceptance or revocation removes it earlier. |
+| A provisional birth year on an unconfirmed invitation-link redemption (`v0.95.0`) | Deletes through the foreign-key cascade — the row references `linked_learner_relationships(id)`, which references `users(id)`, both `ON DELETE CASCADE`. It is a live pending declaration rather than history, and acceptance, revocation or request expiry removes it earlier. |
 | Auth providers, refresh tokens, verification tokens, password reset tokens, email logs, feedback, premium waitlist rows | Hard-delete. |
 | Payment transactions, subscriptions, voucher redemptions | Reassign `user_id` to the deleted-user sentinel and retain. Active subscriptions are marked canceled at purge time. |
 | Analytics events | Leave untouched. The `analytics_events.user_id` value may become orphaned and is retained for aggregate reporting. |

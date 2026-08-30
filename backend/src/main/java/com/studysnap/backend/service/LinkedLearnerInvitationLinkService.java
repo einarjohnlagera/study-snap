@@ -13,6 +13,7 @@ import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.LinkedLearnerInvitationLinkNotFoundException;
 import com.studysnap.backend.exception.LinkedLearnerInvitationLinkTokenGenerationException;
+import com.studysnap.backend.exception.LinkedLearnerOnboardingRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerRelationshipAlreadyExistsException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.exception.UserNotFoundException;
@@ -157,9 +158,37 @@ public class LinkedLearnerInvitationLinkService {
         return new SimpleMessageResponse(REVOKED_MESSAGE);
     }
 
+    /**
+     * ⚠️ THIS METHOD DID NOT DO WHAT ITS NAME SAID, AND THE CALLEE IS NOT THE BUG.
+     * {@code assertProfileComplete} fires only when {@code profileType} is null AND onboarding is
+     * already complete — its own comment records that users mid-onboarding are exempt **by design**,
+     * "so the activation funnel is never blocked". That exemption is load-bearing and is left
+     * untouched; it is this wrapper that claimed a property its callee never provided.
+     *
+     * <p>⚠️ THIS NEWLY REJECTS A LIVE ACCOUNT CLASS. An earlier version of this comment claimed
+     * "nothing was open" because the frontend already gated on onboarding; the pre-signoff pressure
+     * test disproved it. The frontend gates on {@code needsOnboarding()}, which is NOT
+     * {@code onboardingCompletedAt != null} — it deliberately treats two cohorts as onboarded while
+     * the server value is still null: a failed {@code completeOnboarding} POST, whose marker never
+     * retries, and the copy-on-signup cohort, whose dashboard prompt is dismissible without
+     * clearing the marker. Those accounts now receive a 403 here.
+     *
+     * <p>It is NOT a v0.71.0-class lockout: {@code /onboarding} gates on the SERVER value, so they
+     * can still finish and return. The invite page clears its resume cookie only AFTER a successful
+     * resolve, so the 403 self-heals rather than destroying the invitation token.
+     *
+     * <p>⚠️ ORDER MATTERS AND IS NOT INCIDENTAL. Every caller runs this BEFORE any token lookup, so
+     * a rejection tells the caller about their own account and nothing about whether the token
+     * exists. Moving it after {@code requireUsable} would turn it into exactly the account-existence
+     * oracle v0.90.0 closed.
+     */
     private void requireVerifiedOnboarded(UUID callerUserId) {
         authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
+        UserEntity caller = requireUser(callerUserId);
+        if (caller.getOnboardingCompletedAt() == null) {
+            throw new LinkedLearnerOnboardingRequiredException();
+        }
     }
 
     private LinkedLearnerInvitationLinkEntity requireUsable(String token) {
