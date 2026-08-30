@@ -2,8 +2,8 @@
 
 ## v0.97.0 - Connection Lifecycle
 
-**Status: In Progress** (kicked off 2026-08-29, base branch `releases/v0.97.0`, cut from `main` after
-`v0.96.0` merged and tagged)
+**Status: Released** (kicked off 2026-08-29, signed off 2026-08-30, base branch `releases/v0.97.0`, cut
+from `main` after `v0.96.0` merged and tagged)
 
 Theme: an unconfirmed connection request should not sit forever holding someone's declared birth year —
 and the connection surface should be honest about who it is waiting for, what it retains, and what it
