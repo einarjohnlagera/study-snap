@@ -2,8 +2,8 @@
 
 ## v0.98.0 - Connection Consistency
 
-**Status: In Progress** (kicked off 2026-08-30, base branch `releases/v0.98.0`, cut from `main` after
-`v0.97.0` merged and tagged)
+**Status: Released** (kicked off 2026-08-30, signed off 2026-08-31, base branch `releases/v0.98.0`, cut
+from `main` after `v0.97.0` merged and tagged)
 
 Theme: one property, one bar, everywhere — and a connection row that tells the truth about its own
 terminal state.
