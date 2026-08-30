@@ -145,6 +145,11 @@ studysnap:
     invitation-ttl-days: ${INVITATION_TTL_DAYS:30}
     # Separate from the invitation/link carrier clock: this dates a relationship request from creation.
     request-ttl-days: ${REQUEST_TTL_DAYS:30}
+    # Env hook for the expiry sweep, matching studysnap.generation.recovery-cron. Without a bound
+    # field the placeholder resolved but nothing could override it in an environment.
+    request-expiry-cron: ${REQUEST_EXPIRY_CRON:0 45 2 * * *}
+    # Work per sweep run, not a cap on what may expire: the remainder is picked up by the next run.
+    expiry-sweep-batch-size: ${EXPIRY_SWEEP_BATCH_SIZE:500}
     # Two keys on purpose: volume, and per-address so one victim cannot be hammered.
     invites-per-window: ${INVITES_PER_WINDOW:20}
     invites-per-address-per-window: ${INVITES_PER_ADDRESS_PER_WINDOW:3}
