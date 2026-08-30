@@ -761,6 +761,7 @@ public class LinkedLearnerService {
                 relationship.getCreatedAt(),
                 relationship.getAcceptedAt(),
                 relationship.getRevokedAt(),
+                relationship.getExpiresAt(),
                 learnerBirthYear == null,
                 consentRequired,
                 consentRecorded,

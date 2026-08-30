@@ -41,8 +41,12 @@ The LLM should produce:
   lives in BOTH title-emitting prompts** — `developer.txt` and `note-generation-developer.txt`, which also
   declares a `title` in its schema. **It must stay one rule, not two formulations:** two prompts stating
   one semantic idea in different words is exactly how it degrades into the banned *"'in X' is bad"* form,
-  and `bothTitleEmittingPromptsTeachTitleSemanticsRatherThanAWordingBan` asserts over both files so
-  divergence fails rather than drifts. Note generation additionally keeps a **topic-fidelity** bullet
+  and `bothTitleEmittingPromptsTeachTitleSemanticsRatherThanAWordingBan` asserts
+  the rule's phrases are **present in each file**. **⚠️ It pins PRESENCE PER FILE, not EQUALITY BETWEEN
+  FILES** — it kills a reversion or a wording ban, because those remove asserted phrases, but **additive**
+  divergence (appending a contradictory bullet to one prompt only) would pass. The two blocks are
+  byte-identical today, verified by hand at the `v0.97.0` pressure test; nothing in the build enforces it.
+  Note generation additionally keeps a **topic-fidelity** bullet
   (*"anchored to the topic"*), pinned by its own test — a **different** idea from knowledge-versus-container,
   kept separate so tightening one cannot silently drop the other.
 - summary (plain prose + optional markdown comparison table + optional Common Misconceptions paragraph)

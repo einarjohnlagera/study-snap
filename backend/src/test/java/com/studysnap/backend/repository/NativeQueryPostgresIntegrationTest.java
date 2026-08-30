@@ -420,7 +420,12 @@ class NativeQueryPostgresIntegrationTest {
 
         runWithFirstCommit(learner, acceptCommitsFirst ? accept : expire, acceptCommitsFirst ? expire : accept);
         assertNoUnremediableAcceptedRelationship(relationshipId);
-        assertThat(relationshipStatus(relationshipId)).isIn("ACCEPTED", "EXPIRED");
+        // ⚠️ runWithFirstCommit SERIALISES the two writers, so this is deterministic, not racy:
+        // accept() never inspects expires_at, so it wins unconditionally on a PENDING row.
+        // The old isIn("ACCEPTED","EXPIRED") permitted the exact regression this exists to
+        // catch — accept() throwing, the catch below swallowing it, expiry then winning.
+        assertThat(relationshipStatus(relationshipId))
+                .isEqualTo(acceptCommitsFirst ? "ACCEPTED" : "EXPIRED");
     }
 
     private void runRevokeExpiryRace(boolean revokeCommitsFirst, String fixture) throws Exception {
@@ -436,7 +441,9 @@ class NativeQueryPostgresIntegrationTest {
 
         runWithFirstCommit(learner, revokeCommitsFirst ? revoke : expire, revokeCommitsFirst ? expire : revoke);
         assertNoUnremediableAcceptedRelationship(relationshipId);
-        assertThat(relationshipStatus(relationshipId)).isIn("REVOKED", "EXPIRED");
+        // Same determinism as the accept race above; revoke wins on both live statuses.
+        assertThat(relationshipStatus(relationshipId))
+                .isEqualTo(revokeCommitsFirst ? "REVOKED" : "EXPIRED");
         assertThat(provisionalRows(relationshipId)).isZero();
     }
 
@@ -907,6 +914,54 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(liveGrants(relationshipId))
                 .as("the pause must leave sharing intact so it resumes on re-acceptance")
                 .isOne();
+    }
+
+    /**
+     * ⚠️ THE EXECUTABLE COUNTERPART to the V128 backfill fix, and the test whose ABSENCE let the
+     * defect through. Every other pause test rests on {@code expires_at} being NULL — and
+     * {@code seedRelationship} never sets it, so the one thing capable of removing that NULL, the
+     * migration backfill, was never exercised against a paused row.
+     *
+     * <p>This reproduces the inherited shape directly: a relationship that was ACCEPTED, then
+     * consent-paused back to PENDING, then handed a deadline by V128's backfill statement. Under
+     * the naive {@code created_at + interval '30 days'} the deadline lands in the past and the
+     * sweep terminates a confirmed connection. Under {@code greatest(created_at, now())} it does
+     * not.
+     */
+    @Test
+    void aPreMigrationConsentPausedRowSurvivesTheV128Backfill() {
+        UUID supporter = seedUser("v128-pause-supporter");
+        UUID learner = seedUser("v128-pause-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
+        // Aged well beyond the TTL, exactly like a relationship formed before this release.
+        jdbcTemplate.update(
+                "update linked_learner_relationships set created_at = now() - interval '90 days'"
+                        + " where id = ?", relationshipId);
+        jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
+        insertGrant(relationshipId, learner, supporter);
+
+        // A v0.89.1 correction pauses it. Pre-V128 this left expires_at NULL because the column
+        // did not exist; the seed above reproduces that by never setting it.
+        linkedLearnerService().correctBirthYear(learner, Year.now().getValue() - 10);
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
+        jdbcTemplate.update(
+                "update linked_learner_relationships set expires_at = null where id = ?",
+                relationshipId);
+
+        // V128's backfill statement, verbatim.
+        jdbcTemplate.update(
+                "update linked_learner_relationships"
+                        + " set expires_at = greatest(created_at, now()) + interval '30 days'"
+                        + " where status = 'PENDING' and id = ?", relationshipId);
+
+        assertThat(relationshipRepository.findDuePendingIds(OffsetDateTime.now(ZoneOffset.UTC)))
+                .as("an inherited consent pause must not be due the moment the migration lands")
+                .doesNotContain(relationshipId);
+        assertThat(requestExpiryWorker.expire(relationshipId, OffsetDateTime.now(ZoneOffset.UTC)))
+                .isFalse();
+        assertThat(relationshipStatus(relationshipId)).isEqualTo("PENDING");
+        assertThat(liveGrants(relationshipId))
+                .as("a pause is not a termination, at migration time either").isOne();
     }
 
     @Test

@@ -27,7 +27,7 @@ const supportCards = [
     icon: LineChart,
     title: "See whether it is working",
     description:
-      "Once they accept, you can see how ready they are, how often they study, and how their practice is going.",
+      "If they choose to share it, you can see how ready they are and how their practice is going.",
   },
   {
     icon: Lock,

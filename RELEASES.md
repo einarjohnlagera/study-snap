@@ -221,6 +221,94 @@ docs-vs-code — synthesised via `advisor()`). **⚠️ Budget for it deliberate
 across three agents.** **⚠️ Folding a tenth item does not raise the tier further, but it does raise the
 cost of the test that is now committed** — `CLAUDE.md`'s size warning applies from here, not later.
 
+#### Pre-signoff pressure test — three cold agents, and what they changed
+
+**⚠️ THE FULL THREE-AGENT COLD-CONTEXT TEST RAN as committed at the gate lift.** Non-overlapping thirds
+(lifecycle and authorization; privacy, export and the onboarding gate; docs-vs-code and prompts), spawned
+with no inherited context and instructed to distrust this session's summaries. **Fourteen findings; two
+required code changes before signoff, and both were invisible to every existing test.**
+
+- **⚠️ `V128`'s BACKFILL EXPIRED PRE-MIGRATION CONSENT-PAUSED RELATIONSHIPS — the same defect fixed at
+  runtime during `/audit-diff`, one layer down.** The runtime guard works because acceptance clears
+  `expires_at` and the pause leaves it clear. **That argument does not reach rows the migration inherits:**
+  a relationship paused before `V128` is `PENDING` with a NULL deadline only because the column did not
+  exist. `created_at + 30 days` hands it a deadline **already in the past**, and the first sweep terminates a
+  connection that had been `ACCEPTED` and merely awaited re-consent — terminally, with grants cut and the
+  consent repair path gone. Now `greatest(created_at, now()) + interval '30 days'`, which also moves the
+  earliest possible expiry **later**, strictly safer for the `2026-09-26` read.
+- **⚠️ AND IT FALSIFIED ONE OF THIS RELEASE'S OWN TEST JAVADOCS.**
+  `aPendingRelationshipCannotReceiveAGrantWhichIsWhyExpiryNeverMeetsOne` argues the sweep can never meet a
+  live grant because the only `ACCEPTED → PENDING` route leaves `expires_at` NULL. The backfill removed
+  exactly that half. **Why nothing caught it: `seedRelationship` never sets `expires_at`, so every pause test
+  rested on a NULL only the migration could remove.** Closed by
+  `aPreMigrationConsentPausedRowSurvivesTheV128Backfill`, which runs the backfill statement against a real
+  aged, paused row. **Mutation-verified:** restoring the naive form fails it.
+- **⚠️ "NOTHING WAS OPEN" WAS WRONG, and the correction is recorded in all three places it was asserted.**
+  The frontend gates on `needsOnboarding()`, **not** on the server's `onboardingCompletedAt`: a failed
+  `completeOnboarding` POST (whose marker never retries) and the copy-on-signup cohort (whose prompt is
+  **dismissible**) are both treated as onboarded client-side while the server value stays null. Item 5
+  therefore **newly rejects a live account class**. Not a `v0.71.0` lockout — `/onboarding` gates on the
+  server value, so they can finish — but the invite page cleared the resume cookie **before** resolving, so
+  a 403 destroyed the invitation with no route back. **It now clears only on success, so the 403
+  self-heals.** A third consumer was also missing from the original enumeration:
+  `app/linked-learners/page.tsx` has no route guard of its own.
+- **The gate was tested on 2 of 5 endpoints.** Because the shared fixture now onboards callers by default,
+  **deleting `requireVerifiedOnboarded` from create, list or revoke survived the entire suite.**
+  `everyInvitationLinkEndpointRequiresAFinishedOnboarding` covers all five and asserts none reaches its
+  repository. **Mutation-verified:** dropping the gate from `create` alone now fails.
+- **Two race assertions still permitted the defect they exist to catch.** `runAcceptExpiryRace` and
+  `runRevokeExpiryRace` used `isIn(...)`, but `runWithFirstCommit` **serialises** the writers, so the
+  outcome is deterministic. The lesson had already been learned on their sibling
+  (`runCorrectionExpiryRace`, tightened during `/audit-diff`) and **was not carried across**. Both now
+  assert the exact expected status per commit order.
+- **⚠️ THE LANDING PAGE HAD BEEN FALSE FOR FIVE RELEASES, and the feature doc was the mechanism.**
+  *"Once they accept, you can see how ready they are, how often they study…"* — false since `v0.93.0`
+  (acceptance grants nothing) and `v0.94.0` (streaks need a separate `ACTIVITY` grant). It survived because
+  `landing.md` instructed *"Do not add a claim for a later phase — per-scope progress permissions are not
+  built"*, which shipped in `v0.93.0` and then told every author to preserve it. **A rule that freezes copy
+  against a phase boundary outlives the phase**; it now states the checkable property instead.
+- **⚠️ DECIDED, NOT AN OVERSIGHT: a relationship awaiting GUARDIAN CONSENT does expire.** `accept()` returns
+  early when consent is required, leaving the deadline intact. Such a relationship has **never been
+  `ACCEPTED`**, so expiry ends a request nobody completed; the protective outcome for a minor is **no
+  connection**, not one pending indefinitely while their declared year is held; re-inviting is always
+  available. **⚠️ This is the exact opposite of the consent PAUSE, which is protected** — the two look
+  alike and are distinguished solely by whether `expires_at` is set.
+- **The request deadline is now surfaced (owner ruling, 2026-08-30).** Two agents independently found that
+  `LinkedLearnerResponse` carried no `expiresAt`, reintroducing the defect `v0.94.0` item 3 fixed for
+  invitations — *"invitations stop dying in silence"* — and sharpest on the consent path, where a supporter
+  had no way to learn the window existed. `expiresAt` is added and rendered on `PENDING` cards.
+  **⚠️ Null means "not on the clock", not "unknown"**, so it renders as no deadline.
+- **Also corrected:** a stale test Javadoc still saying note-generation is deliberately unasserted;
+  `study-pack-generation.md` overstating the divergence test, which pins **presence per file, not equality
+  between files** (the two blocks are byte-identical, verified by hand, not by the build);
+  `dashboard.md`'s "non-revoked"; and `account-deletion.md` omitting expiry as a deletion trigger.
+
+### Known limitations
+
+- **The email invitation path does NOT require finished onboarding**, while the link path now does.
+  `acceptInvitation` forms the identical relationship with identical guardian-consent handling and identical
+  cross-user capacity, gated only on `requireEmailVerified` + `assertProfileComplete` — whose own comment
+  records that it *"passes for a brand-new account"*. Recorded rather than fixed: tightening a second path
+  after the pressure test would ship unaudited code, and the exposure differs (an email invitation requires
+  controlling the invited address; a link is redeemable by any holder).
+- **No backfill heals grants on relationships revoked before `v0.97.0`.** `revoke()` cuts them on its
+  terminal early-return, but that path requires someone to call revoke *again*, and the UI stops offering it
+  on terminal rows. So a pre-`v0.97.0` `REVOKED` relationship can still report `*SharedByMe: true`
+  indefinitely. **Display-only — access is genuinely closed**, since every reader demands `ACCEPTED`.
+- **A provisional row survives its sibling's promotion.** `accept()` promotes and deletes only the accepted
+  relationship's row, so a learner with two unconfirmed redemptions who confirms one keeps the other's
+  declared year after the account-global value exists. Bounded by the 30-day sweep. Learner's own data only.
+- **Operational gaps in the sweep:** `findDuePendingIds` has no `LIMIT`; `request-expiry-cron` has no
+  `StudySnapProperties` field or production `application.yaml` entry, so there is no env hook; and a learner
+  deleted mid-sweep produces a bare `NoSuchElementException` logged at `error` for a benign race.
+- **Three jobs carry hardcoded crons** (`BillingUsageResetJob`, `SubscriptionExpiryJob`,
+  `BulkGenerationResultCleanupJob`) and cannot be disabled in tests by configuration, so the wall-clock
+  flake class remains theoretically reachable for them.
+- **`DATA_MODEL.md`'s linked-learner section is frozen at `v0.89.1`** — it describes three statuses and
+  mentions none of `linked_learner_grants`, `_invitations`, `_invitation_links` or
+  `_provisional_birth_years`. **Not this release's drift**, and too large to fix at signoff; it gets a
+  Backlog Index row rather than a note buried here.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ AN ANTI-DRIFT RULE IS BEING AMENDED, AND IT IS RAISED HERE RATHER THAN REASONED PAST.** `v0.95.0`
@@ -347,10 +435,7 @@ cost of the test that is now committed** — `CLAUDE.md`'s size warning applies 
   onboarding completes, so **"both must remain exempt so the activation funnel is never blocked"**. It has
   ~20 call sites across notes, Study Packs, quiz share links and bulk import; changing it would have been the
   `v0.71.0` blast radius. The fix is confined to the **private wrapper and its five link endpoints**.
-- **⚠️ NOTHING WAS OPEN, and the release notes must not imply otherwise.** Both routes to these endpoints
-  already gate on onboarding in the frontend: the invite page redirects to `/onboarding` **without calling
-  resolve**, and the dashboard consumer only *navigates* and sits behind `requireAuthenticatedOnboardedUser`.
-  The server now enforces what the UI already arranges.
+- **⚠️ IT DOES NOT MERELY FORMALISE WHAT THE UI ARRANGED — it newly rejects a live account class, and the original claim that "nothing was open" was WRONG. Found by the pre-signoff pressure test.** The frontend gates on `needsOnboarding()`, which is NOT `onboardingCompletedAt != null`: it deliberately treats two cohorts as onboarded while the server value is still null — a **failed `completeOnboarding` POST** (whose marker never retries, `app/onboarding/page.tsx:896`) and the **copy-on-signup cohort**, whose dashboard prompt is **dismissible** without clearing the marker. Those accounts now get a 403 from these endpoints. **It is not a `v0.71.0` lockout — `/onboarding` gates on the SERVER value, so they can still finish** — but the invite page previously cleared the resume cookie BEFORE resolving, so the token was destroyed with no route back; it now clears only on success, letting the 403 self-heal. **⚠️ A third consumer was also missing from the original enumeration:** `app/linked-learners/page.tsx` (create/list/revoke) has no route guard of its own and relies on the app shell, which exempts the same cohort.
 - **⚠️ ORDER IS THE ORACLE PROPERTY, and it is pinned.** Every caller runs the gate **before any token
   lookup**, so a rejection tells the caller about their own account and nothing about whether the token
   exists — the `v0.90.0` single not-found contract is unaffected.

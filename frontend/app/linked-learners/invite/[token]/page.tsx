@@ -65,10 +65,17 @@ export default function LinkedLearnerInvitationPage() {
       return;
     }
 
-    clearLinkedLearnerInvitationIntentCookie();
+    // ⚠️ Do NOT clear the resume cookie before resolving. Found by the pre-signoff pressure test:
+    // the route guard above keys on `needsOnboarding`, which deliberately treats two account
+    // classes as onboarded while the SERVER's onboardingCompletedAt is still null — a failed
+    // completeOnboarding POST, and the copy-on-signup cohort whose dashboard prompt is dismissible.
+    // For those, resolve now returns 403 ONBOARDING_REQUIRED. Clearing first destroyed the token,
+    // so the person lost the invitation with no route back. Clearing on success instead lets the
+    // 403 self-heal: they finish onboarding and the dashboard consumer resumes this same token.
     let cancelled = false;
     void resolveLinkedLearnerInvitationLink(token)
       .then((resolved) => {
+        clearLinkedLearnerInvitationIntentCookie();
         if (!cancelled) setInvitation(resolved);
       })
       .catch((resolveError) => {

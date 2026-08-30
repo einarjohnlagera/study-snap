@@ -17,6 +17,15 @@ public record LinkedLearnerResponse(
         OffsetDateTime createdAt,
         OffsetDateTime acceptedAt,
         OffsetDateTime revokedAt,
+        /**
+         * When an unconfirmed request lapses, or null when it cannot lapse.
+         *
+         * <p>⚠️ Null carries MEANING and is not "unknown": acceptance clears the deadline, and a
+         * consent pause leaves it clear, so a null here means this relationship is not on the
+         * expiry clock at all. Surfaces must render the absence as "no deadline", never as a
+         * missing value.
+         */
+        OffsetDateTime expiresAt,
         boolean birthYearRequired,
         boolean guardianConsentRequired,
         boolean guardianConsentRecorded,

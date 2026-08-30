@@ -253,14 +253,12 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     /**
-     * The curated-title rule is SEMANTIC, and the failure mode is a later edit compressing it into a
-     * wording ban. "Name the knowledge, not the curriculum container" must never become "'in X' is bad":
-     * "Nursing Management of Acute Asthma" and "Structural Applications of Differential Equations" are
-     * CORRECT titles, and a model taught to strip prepositional phrases would break both.
-     *
-     * <p>Note-generation is deliberately NOT asserted here. The rule lives only in the Study Pack prompt
-     * until the feedback-loop read decides whether the note body's first line reaches the title; adding
-     * it there later is correct work, so this test must not block it.
+     * ⚠️ Superseded by `bothTitleEmittingPromptsTeachTitleSemanticsRatherThanAWordingBan` below.
+     * This comment previously said note-generation was deliberately NOT asserted here, because the
+     * rule lived only in the Study Pack prompt until the feedback-loop read decided whether the note
+     * body's first line reaches the title. v0.97.0 lifted that gate and put the SAME rule in both
+     * files, so the reason no longer holds. Corrected rather than deleted, because a future reader
+     * finding the old text would conclude the second prompt must stay untouched.
      */
     @Test
     void noteGenerationPromptRequiresEscapedBackslashesWithItsReason() throws IOException {

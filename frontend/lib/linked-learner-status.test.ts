@@ -15,6 +15,7 @@ const baseLink: LinkedLearnerResponse = {
   createdAt: "2026-08-29T10:00:00Z",
   acceptedAt: null,
   revokedAt: null,
+  expiresAt: null,
   birthYearRequired: false,
   guardianConsentRequired: false,
   guardianConsentRecorded: false,
