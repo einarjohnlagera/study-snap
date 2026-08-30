@@ -185,6 +185,83 @@ tail of a decision already taken.
 - **⚠️ The drift itself is recorded in the doc**, because a schema section that is not updated alongside a
   migration becomes confidently wrong rather than merely incomplete — which is what makes it dangerous.
 
+#### Amended 2026-08-30, after items 1-5 shipped — four items folded, tier unchanged
+
+**⚠️ FOLDED BEFORE THE PRESSURE TEST RAN, DELIBERATELY.** Adding after it would mean the shipped code is
+no longer the audited code — the reason `v0.95.0` deferred its own item 2 — so this was fold-now-or-not-at-all.
+**All four are `v0.97.0` Known limitations or carried decisions, and none introduces a new verification
+trigger**, so the tier stays at **one scoped cold agent**. With these, every remaining `v0.97.0` Known
+limitation is closed and the release ends with a clean carried-forward list.
+
+- **6. A learner's OTHER provisional rows are cleared when one is promoted (backend).** `accept()` promotes
+  the declared year to `users.birth_year` and then deletes **only that relationship's** row. A learner with
+  two unconfirmed redemptions who confirms one therefore keeps the second declaration **after the
+  account-global value already exists** — which sits directly against `v0.89.1`'s rule that a declared-value
+  history is a minor's personal data and is not retained. Found by the `v0.97.0` pressure test and recorded
+  rather than fixed there. **⚠️ THE OTHER ROW IS ALREADY REDUNDANT, which is why deleting it is correct and
+  not a behaviour change:** `findEffectiveBirthYear` coalesces `users.birth_year` FIRST, so once the account
+  column is written no provisional row can affect any decision. **⚠️ THIS IS THE HIGHEST-RISK SMALL CHANGE
+  IN THE RELEASE and must be treated as such:** it edits `accept()`'s promote-then-delete sequence, which
+  the two-thread real-row harness pins and which guards the **unremediable state** — an `ACCEPTED`
+  relationship whose learner has a provisional row but a null account year, which `requireGrant` denies with
+  no remediation path. **⚠️ The deletion must be scoped by LEARNER through the relationship join**, never by
+  a bare user id, for the same structural reason the export query is: the table has no user column.
+- **7. Three hardcoded crons become configurable (backend).** `BillingUsageResetJob`,
+  `SubscriptionExpiryJob` and `BulkGenerationResultCleanupJob` carry literal cron expressions, so the test
+  profile cannot disable them — leaving the wall-clock flake class `v0.97.0` closed for the other jobs still
+  reachable for these three. `BulkGenerationResultCleanupJob` runs at `0 45 * * * *`, hourly, so it is the
+  live one. **⚠️ Schedules are UNCHANGED — the defaults are the current literals**; this adds an override
+  point, nothing else.
+- **8. `v0.75.0`'s never-answered checkpoint question is answered (docs).** Its pre-signoff pressure test
+  closed with *"Still open — an owner decision, not a defect: whether this release owes a `[CHECKPOINT]`
+  row… **Must not be left silent.**"* It was left silent; there is no `v0.75.0` checkpoint anywhere in the
+  Backlog Index. **⚠️ The reasoning is already reduced to a binary and must not be re-derived:** the value
+  claim has **no metric without new instrumentation**, and this repo's gate **forbids a dated checkpoint
+  whose metric does not fire** — so it is either ship an event now, or record that none is owed because
+  `v0.75.0` implements a **ratified `ADR-001` direction rather than a bet**. **Recording it is the answer**;
+  inventing instrumentation three releases later to measure a shipped ADR direction is the expensive branch,
+  and the gate explicitly prefers no row to a decorative one.
+- **9. The revoke/redeem race test stops being a nondeterministic detector (test).** `v0.94.0` recorded that
+  dropping `redeemedAt is null` from `markRevokedIfUsable` **survived four targeted runs** and was caught
+  only once under full-suite load — and then only as a `DataIntegrityViolationException` from the CHECK
+  constraint. **⚠️ In production that CHECK is the real guard**, so the JPQL clause is defence in depth and
+  the finding is about the TEST, not the code. Make the interleaving deterministic the way
+  `runWithFirstCommit` does, so the predicate is pinned rather than sampled.
+
+- **A learner's other provisional declarations are cleared on promotion (item 6).**
+  `deleteAllForLearnerOncePromoted` runs after `promoteIfAccountBirthYearMissing`, so a learner who held
+  two unconfirmed redemptions no longer keeps the second declared year once the account-global column
+  exists — which is what `v0.89.1` forbids.
+- **⚠️ The statement is guarded on `users.birth_year IS NOT NULL`, which makes the ORDER impossible to get
+  wrong rather than merely documented.** Calling it before promotion would discard a declaration that is
+  still deciding consent; the guard makes that a no-op instead of a bug, and the test asserts the pre-promotion
+  call returns **zero** before asserting the post-promotion sweep.
+- **⚠️ Scoped through the relationship join, never a bare user id** — the same structural guard every other
+  statement in that class uses, because the table has no user column of its own.
+- **⚠️ It is a RETENTION fix, not a behaviour change, and that is checkable:** `findEffectiveBirthYear`
+  coalesces `users.birth_year` first, so once the account column is written no provisional row can affect
+  consent, acceptance or the export. The sibling row was inert — it was simply still there.
+- **All scheduled jobs are now disableable in tests (item 7).** `BillingUsageResetJob`,
+  `SubscriptionExpiryJob` and `BulkGenerationResultCleanupJob` carried literal crons, so `v0.97.0`'s fix for
+  the wall-clock flake class did not reach them. **⚠️ `BulkGenerationResultCleanupJob` runs hourly at `:45`,
+  so it was the genuinely live one.** **⚠️ Schedules are unchanged — every default is the previous
+  literal**; this adds an override point and nothing else.
+- **`v0.75.0`'s never-answered checkpoint question is answered (item 8): NO CHECKPOINT IS OWED.**
+  `v0.75.0` implements a **ratified `ADR-001` direction** rather than a bet, and its value claim has **no
+  metric without new instrumentation** — which this repo's gate forbids a dated checkpoint from depending
+  on. **⚠️ The finding was never that the answer was wrong; it was that the question was LEFT SILENT**, for
+  three releases, invisible to kickoff step 9 because an absent row and a dateless row scan identically.
+- **The revoke/redeem terminal predicate is pinned deterministically (item 9).** `v0.94.0` recorded that
+  dropping `redeemedAt is null` **survived four targeted runs** of the race and was caught once under
+  full-suite load — a sampler, not a guard. A new test redeems, then revokes, and asserts the revoke is a
+  no-op with the redemption intact. No threads, no timing. **The race test is kept**: it tests the
+  concurrent property, which is a different claim.
+- **⚠️ Recorded precisely because it would be easy to overstate: the mutation is now killed EVERY run, but
+  it surfaces as a `DataIntegrityViolationException` from the terminal-state CHECK constraint rather than
+  as the assertion failing.** That is expected and correct — in production the CHECK is the real guard and
+  the JPQL clause is defence in depth, exactly as `v0.94.0` said. What changed is determinism, not the
+  detection mechanism.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW, and no code lands under
@@ -233,8 +310,11 @@ tail of a decision already taken.
   the rule outlives this instance.
 - **The `### Planned Scope` heading is permanent**; delivery appends to `### Shipped`.
 - **⚠️ A `[CHECKPOINT]` is owed only if something ships ahead of its evidence.** On current scope nothing
-  does — every item closes a recorded defect or corrects a stale document. **Stated now so the signoff gate
-  is answered deliberately rather than skipped**, and revisited if scope grows.
+  does — every item closes a recorded defect, corrects a stale document, or answers a question already
+  owed. **Stated now so the signoff gate is answered deliberately rather than skipped.**
+  **⚠️ RE-EVALUATED after the 2026-08-30 fold to nine items: still none owed**, and item 8 is the reason to
+  be careful here rather than the reason to relax — it exists precisely because a release once left this
+  question unanswered.
 
 ### Shipped
 

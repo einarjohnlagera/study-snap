@@ -19,7 +19,7 @@ public class BillingUsageResetJob {
     private final UserRepository userRepository;
     private final UserUsageService userUsageService;
 
-    @Scheduled(cron = "0 15 1 * * *")
+    @Scheduled(cron = "${studysnap.billing.usage-reset-cron:0 15 1 * * *}")
     public void run() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         List<UUID> userIds = userRepository.findAllUserIds();

@@ -13,6 +13,8 @@ server:
   servlet:
     context-path: /api
 
+# ⚠️ EVERY scheduled job is DISABLED IN TESTS as of v0.98.0 — three carried hardcoded crons
+# until then, so the class below stayed reachable for them.
 # ⚠️ Scheduled jobs are DISABLED IN TESTS ("-" is Spring's Scheduled.CRON_DISABLED).
 # GenerationRecoveryJob runs every 10 minutes in production, so on any full-suite run that spans a
 # 10-minute boundary it fired mid-test and its queries landed in
@@ -22,5 +24,10 @@ server:
 studysnap:
   generation:
     recovery-cron: "-"
+    # ⚠️ Hourly at :45 in production, so this is the one that actually fired during a full suite.
+    bulk-result-cleanup-cron: "-"
+  billing:
+    usage-reset-cron: "-"
+    subscription-expiry-cron: "-"
   linked-learners:
     request-expiry-cron: "-"
