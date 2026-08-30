@@ -165,11 +165,17 @@ public class LinkedLearnerInvitationLinkService {
      * "so the activation funnel is never blocked". That exemption is load-bearing and is left
      * untouched; it is this wrapper that claimed a property its callee never provided.
      *
-     * <p>⚠️ NOTHING WAS OPEN. Both routes to these endpoints already gate on onboarding in the
-     * frontend: the invite page redirects to {@code /onboarding} without calling resolve, and the
-     * dashboard consumer only navigates and is itself behind
-     * {@code requireAuthenticatedOnboardedUser}. This makes the server enforce what the UI already
-     * arranges, so the stated property becomes true rather than merely intended.
+     * <p>⚠️ THIS NEWLY REJECTS A LIVE ACCOUNT CLASS. An earlier version of this comment claimed
+     * "nothing was open" because the frontend already gated on onboarding; the pre-signoff pressure
+     * test disproved it. The frontend gates on {@code needsOnboarding()}, which is NOT
+     * {@code onboardingCompletedAt != null} — it deliberately treats two cohorts as onboarded while
+     * the server value is still null: a failed {@code completeOnboarding} POST, whose marker never
+     * retries, and the copy-on-signup cohort, whose dashboard prompt is dismissible without
+     * clearing the marker. Those accounts now receive a 403 here.
+     *
+     * <p>It is NOT a v0.71.0-class lockout: {@code /onboarding} gates on the SERVER value, so they
+     * can still finish and return. The invite page clears its resume cookie only AFTER a successful
+     * resolve, so the 403 self-heals rather than destroying the invitation token.
      *
      * <p>⚠️ ORDER MATTERS AND IS NOT INCIDENTAL. Every caller runs this BEFORE any token lookup, so
      * a rejection tells the caller about their own account and nothing about whether the token

@@ -65,14 +65,41 @@ export default function LinkedLearnerInvitationPage() {
       return;
     }
 
-    clearLinkedLearnerInvitationIntentCookie();
+    // ⚠️ Do NOT clear the resume cookie before resolving. Found by the pre-signoff pressure test:
+    // the route guard above keys on `needsOnboarding`, which deliberately treats two account
+    // classes as onboarded while the SERVER's onboardingCompletedAt is still null — a failed
+    // completeOnboarding POST, and the copy-on-signup cohort whose dashboard prompt is dismissible.
+    // For those, resolve now returns 403 ONBOARDING_REQUIRED. Clearing first destroyed the token,
+    // so the person lost the invitation with no route back. Clearing on success instead lets the
+    // 403 self-heal: they finish onboarding and the dashboard consumer resumes this same token.
     let cancelled = false;
     void resolveLinkedLearnerInvitationLink(token)
       .then((resolved) => {
+        clearLinkedLearnerInvitationIntentCookie();
         if (!cancelled) setInvitation(resolved);
       })
       .catch((resolveError) => {
         if (!cancelled) {
+          // ⚠️ THIS is what makes the token actually survive, and it was added after a cold re-audit
+          // showed the earlier fix only DELAYED the loss. Keeping the cookie past a 403 is not
+          // enough: the only automatic route onward is /dashboard, whose intent consumer is
+          // one-shot and clears the cookie before navigating — so the second 403 burned it.
+          // The server's ONBOARDING_REQUIRED carries ACTION=COMPLETE_ONBOARDING precisely so a
+          // client can route on it; nothing read it until now. Sending them to /onboarding with the
+          // cookie intact is the only path that genuinely self-heals: they finish, and auth routing
+          // reconstructs this exact invitation path.
+          // ⚠️ Duck-typed on `action`, NOT `instanceof ApiRequestError`. Class identity does not
+          // survive every module boundary — it is undefined under the api mock, where the
+          // instanceof form threw and took four unrelated tests down with it — and the remedy code
+          // is the actual contract here, not the class.
+          const remedy = resolveError instanceof Error
+            ? (resolveError as { action?: string | null }).action
+            : null;
+          if (remedy === "COMPLETE_ONBOARDING") {
+            setLinkedLearnerInvitationIntentCookie(token);
+            router.replace("/onboarding");
+            return;
+          }
           try {
             const completion = getLinkedLearnerRedemptionCompletion();
             if (completion?.token === token && completion.userId === authUser.id) {

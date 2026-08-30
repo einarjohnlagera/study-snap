@@ -54,6 +54,23 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+it("sends a mid-onboarding caller to onboarding with the invitation token intact", async () => {
+  // ⚠️ The token must SURVIVE a 403. The frontend route guard keys on needsOnboarding, which
+  // treats two cohorts as onboarded while the server's onboardingCompletedAt is still null, so
+  // resolve can legitimately return ONBOARDING_REQUIRED here. Merely keeping the cookie is not
+  // enough — the dashboard consumer is one-shot and would burn it on the next hop — so this
+  // routes to /onboarding directly, which is the only path that actually recovers the invitation.
+  const onboardingRequired = Object.assign(new Error("Finish setting up your account."), {
+    action: "COMPLETE_ONBOARDING",
+    status: 403,
+  });
+  jest.mocked(resolveLinkedLearnerInvitationLink).mockRejectedValue(onboardingRequired);
+
+  render(<LinkedLearnerInvitationPage />);
+
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/onboarding"));
+});
+
 it("requires authentication and stores the token before redirecting", async () => {
   jest.mocked(getAuthUser).mockReturnValue(null);
 

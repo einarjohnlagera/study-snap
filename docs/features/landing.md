@@ -92,12 +92,21 @@ product's sole pre-launch interest baseline.
 
 Rules:
 
-- **Every claim must be live.** The section currently promises three things, all shipping: share a note and
-  its Study Pack with someone you choose; see their readiness, study frequency and practice once they accept;
-  and never see their notes. **Do not add a claim for a later phase** — per-scope progress permissions are not
-  built. **⚠️ Activity sharing IS built as of `v0.92.0` and may be described.** This line previously named it as
-  unbuilt and outlived the feature by a release — the same failure as the *Coming Soon* teaser four lines above,
-  which is why the rule is stated here rather than assumed.
+- **Every claim must be live.** The section promises three things: share a note and its Study Pack with
+  someone you choose; see their readiness and practice **if they choose to share it**; and never see their
+  notes.
+- **⚠️ ACCEPTANCE GRANTS NOTHING, and the copy must never say it does.** Since `v0.93.0` a supporter needs a
+  live per-scope grant: `requireAcceptedLearnerId` delegates to `requireGrant(caller, relationshipId,
+  PROGRESS)`. Since `v0.94.0` streaks and study frequency were split out of the progress payload entirely and
+  need a separate live `ACTIVITY` grant.
+- **⚠️ THIS EXACT LINE PREVIOUSLY SAID *"once they accept"* AND *"how often they study"*, AND SHIPPED FALSE
+  THROUGH FIVE RELEASES** — `v0.93.0` through `v0.97.0` — found only by a cold agent reading the surface.
+  **The mechanism was this doc, not the component:** the instruction here used to read *"Do not add a claim
+  for a later phase — per-scope progress permissions are not built"*, which shipped in `v0.93.0` and then
+  told every subsequent author to preserve the false claim. **A rule that freezes copy against a phase
+  boundary outlives the phase; state the PROPERTY instead, so it stays checkable against code.**
+- **The property, checkable:** describe access as conditional on the learner sharing, never on acceptance;
+  do not name streaks or study frequency unless the copy also makes the `ACTIVITY` grant explicit.
 - **Relationship-neutral copy.** Marketing may lead with the parent case because it is the clearest real-world
   pain point, but the product gates nothing on who someone is to you. Name several relationships — parents,
   tutors, siblings, study partners — and never imply a guardian mode, a supporter profile, or any account type

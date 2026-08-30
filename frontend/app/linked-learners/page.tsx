@@ -1077,6 +1077,17 @@ export default function LinkedLearnersPage() {
               </div>
               {link.acceptedAt ? <p className="text-xs text-foreground/55">Accepted {formatDate(link.acceptedAt)}</p> : null}
               {link.revokedAt ? <p className="text-xs text-foreground/55">Revoked {formatDate(link.revokedAt)}</p> : null}
+              {/*
+                ⚠️ A request now has a hard deadline, so it must be visible — otherwise this repeats
+                the defect v0.94.0 item 3 fixed for invitations, where an expiry nobody could see
+                made requests die in silence. Sharpest on the consent path: a supporter who must
+                record guardian consent otherwise has no way to learn the window exists.
+                ⚠️ Gated on PENDING because a null expiresAt means "not on the clock" (acceptance
+                clears it; a consent pause leaves it clear), not "unknown".
+              */}
+              {link.status === "PENDING" && link.expiresAt
+                ? <p className="text-xs text-foreground/55">Expires {formatDate(link.expiresAt)} if it is not confirmed</p>
+                : null}
             </Card>
           );
         })}

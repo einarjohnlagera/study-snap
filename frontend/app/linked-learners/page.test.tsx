@@ -59,6 +59,7 @@ const baseLink: LinkedLearnerResponse = {
   createdAt: "2026-08-19T10:00:00Z",
   acceptedAt: null,
   revokedAt: null,
+  expiresAt: null,
   birthYearRequired: false,
   guardianConsentRequired: false,
   guardianConsentRecorded: false,
@@ -82,6 +83,30 @@ beforeEach(() => {
   (listLinkedLearnerInvitationLinks as jest.Mock).mockResolvedValue([]);
   jest.clearAllMocks();
   jest.mocked(getLinkedLearners).mockResolvedValue([]);
+});
+
+it("shows a pending request's deadline so requests cannot die in silence", async () => {
+  // ⚠️ v0.97.0 added a hard 30-day request deadline. Without a surface for it this repeats the
+  // defect v0.94.0 item 3 fixed for invitations — sharpest on the consent path, where a supporter
+  // who must record guardian consent would otherwise never learn the window exists.
+  jest.mocked(getLinkedLearners).mockResolvedValue([
+    { ...baseLink, status: "PENDING", expiresAt: "2026-09-28T00:00:00Z" },
+  ]);
+
+  render(<LinkedLearnersPage />);
+
+  expect(await screen.findByText(/Expires .*if it is not confirmed/)).toBeInTheDocument();
+});
+
+it("shows no deadline once a request is accepted, because null means not on the clock", async () => {
+  jest.mocked(getLinkedLearners).mockResolvedValue([
+    { ...baseLink, status: "ACCEPTED", acceptedAt: "2026-08-20T10:00:00Z", expiresAt: null },
+  ]);
+
+  render(<LinkedLearnersPage />);
+
+  await screen.findByText(/Accepted/);
+  expect(screen.queryByText(/if it is not confirmed/)).not.toBeInTheDocument();
 });
 
 it("loads live invitation links on refresh", async () => {
@@ -294,6 +319,12 @@ it("renders an expired request distinctly after loading it from the server", asy
     ...baseLink,
     status: "EXPIRED",
     incomingInvitation: false,
+    // ⚠️ NON-NULL on purpose, and this is the realistic shape: markExpiredIfPending and
+    // markRevokedIfLive deliberately do not clear expires_at, so a production terminal row carries
+    // a past deadline. A null fixture here made the PENDING gate untestable — the render could have
+    // been gated on `link.expiresAt` alone and every test still passed, showing an expired card
+    // that also said "Expires <past date> if it is not confirmed".
+    expiresAt: "2026-08-01T00:00:00Z",
   }]);
 
   render(<LinkedLearnersPage />);
@@ -301,6 +332,10 @@ it("renders an expired request distinctly after loading it from the server", asy
   expect(await screen.findByText(/connection request expired/i)).toBeInTheDocument();
   expect(screen.getByText(/new invitation/i)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Revoke" })).not.toBeInTheDocument();
+  // ⚠️ A terminal row carries a non-null expires_at in production, so the deadline line must be
+  // gated on PENDING and not merely on the field being present. Without this, gating on
+  // `link.expiresAt` alone passes while an expired card also reads "Expires <past date>".
+  expect(screen.queryByText(/if it is not confirmed/)).not.toBeInTheDocument();
   expect(getLinkedLearners).toHaveBeenCalledTimes(1);
 });
 

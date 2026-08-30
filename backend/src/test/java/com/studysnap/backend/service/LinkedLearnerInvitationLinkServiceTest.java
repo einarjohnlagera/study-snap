@@ -327,6 +327,37 @@ class LinkedLearnerInvitationLinkServiceTest {
     }
 
     /**
+     * ⚠️ THE GATE ON ALL FIVE ENDPOINTS, not just the two that are easy to reach. The pressure test
+     * found that because the shared fixture now onboards callers by default, deleting
+     * {@code requireVerifiedOnboarded} from create, list or revoke survived the ENTIRE suite — the
+     * two targeted tests below only exercise resolve and redeem, and the security integration test
+     * only asserts anonymous 401, which is a different property.
+     */
+    @Test
+    void everyInvitationLinkEndpointRequiresAFinishedOnboarding() {
+        UUID callerId = UUID.randomUUID();
+        UserEntity midOnboarding = user(callerId, "Newcomer");
+        midOnboarding.setOnboardingCompletedAt(null);
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(midOnboarding));
+
+        assertThatThrownBy(() -> service.create(
+                callerId, new CreateLinkedLearnerInvitationLinkRequest(LinkedLearnerSide.SUPPORTER, null)))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+        assertThatThrownBy(() -> service.list(callerId))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+        assertThatThrownBy(() -> service.revoke(callerId, UUID.randomUUID()))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+        assertThatThrownBy(() -> service.resolve(callerId, TOKEN))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+        assertThatThrownBy(() -> service.redeem(
+                callerId, TOKEN, new RedeemLinkedLearnerInvitationLinkRequest(2012)))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+
+        // None of the five reached its repository: the gate precedes every lookup and every write.
+        verifyNoInteractions(linkRepository);
+    }
+
+    /**
      * ⚠️ THE ORACLE CHECK, not merely a gate check. The onboarding rejection must arrive for a token
      * that does not exist at all — proving it is raised BEFORE any token lookup, so a caller learns
      * something about their own account and nothing about whether the token exists. If this ever
