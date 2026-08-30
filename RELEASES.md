@@ -41,13 +41,36 @@ tail of a decision already taken.
   bulk import. **⚠️ The gate must run BEFORE any invitation lookup**, or it becomes a cheaper oracle beside
   the `v0.90.0` single not-found contract. **⚠️ Acceptance authorizes on owning the invited ADDRESS**
   (`v0.90.0` email-keying); that property is unchanged.
-- **2. A terminal connection card can be dismissed (frontend).** `REVOKED` and now `EXPIRED` rows
-  accumulate with no way to clear them, which `v0.97.0` held out deliberately as its own UX decision.
-  **⚠️ THE DESIGN QUESTION IS OPEN AND MUST BE SETTLED BEFORE IMPLEMENTATION, not during it:** whether
-  dismissal is **per-viewer client state** or a **persisted server field** changes the data model. Client
-  state is cheaper and reversible; a server field means a migration and a new column whose meaning three
-  dated checkpoints would then read. **⚠️ Dismissal must never delete the relationship row** — it hides a
-  card, and revoke/expiry remain the only terminal transitions.
+- **2. Terminal connection cards stop accumulating — BOUNDED RETENTION, not dismissal (backend).**
+  **⚠️ DESIGN DECISION SETTLED 2026-08-30, before any code, as the kickoff required.** `listRelationships`
+  (`LinkedLearnerService:658-660`) calls `findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc` with
+  **no status filter at all**, so every `REVOKED` and `EXPIRED` row is returned forever. Terminal rows
+  become visible only while their terminal timestamp is within `request-ttl-days` of now — `revoked_at`
+  for `REVOKED`, `expires_at` for `EXPIRED`. Live `PENDING` and `ACCEPTED` rows are always returned.
+  **⚠️ THIS IS THE INVITATION LIST'S EXISTING PATTERN, NOT A NEW ONE.** `listInvitations` already computes
+  `outgoingVisibilityCutoff = now.minusDays(invitationTtlDays)` (`:163-168`) for the identical problem,
+  and `linked-learners.md:161-162` records the rationale: *"This bounded disclosure lets the inviter
+  distinguish expiry from silence without accumulating every address ever invited forever."* Reusing
+  `request-ttl-days` also honours that doc's *"the same configured duration for which it was live, not a
+  second hardcoded retention period."*
+- **⚠️ WHY NOT A PERSISTED `dismissed` FIELD — the option that looked obvious and is the expensive one.**
+  A relationship has **TWO parties**, so a single boolean is ambiguous by construction: it would have to
+  be per-side (`dismissed_by_supporter` / `dismissed_by_learner`) or a side table. Worse, it needs an
+  explicit amendment to the `v0.95.0` prohibition on adding columns to `linked_learner_relationships` —
+  a rule `[CHECKPOINT — due 2026-09-19]`, `[2026-09-26]` and `[2026-10-13]` depend on, and which
+  `v0.97.0` amended **once, narrowly**, for `expires_at`. Amending it a second time inside two releases
+  to hide a card is not a trade worth making.
+- **⚠️ WHY NOT CLIENT STATE.** `localStorage` is per-device: dismiss on a laptop and the card is still
+  there on a phone. It also fails silently in a private window. For a list that is the same on every
+  device, per-device state is the wrong shape.
+- **⚠️ THE TRADE-OFF, STATED: this is AUTOMATIC, not MANUAL.** Someone who wants one specific card gone
+  *right now* still cannot do that. Judged acceptable — it requires no user action at all, which is
+  strictly better for the reported problem (*"cards accumulate"*), and manual dismissal remains available
+  as a later, additive decision that bounded retention does not block. **⚠️ Nothing here deletes a
+  relationship row**; revoke and expiry remain the only terminal transitions, and re-inviting a hidden
+  pair mints a new relationship exactly as before.
+- **⚠️ CONSEQUENCE FOR THE TIER, and it closes a pre-declared escalation condition:** this item now needs
+  **no migration, no new column and no client state** — it is one query predicate.
 - **3. Heal grant rows on relationships terminated before `v0.97.0` (backend + migration).** `revoke()`
   did not cut grants before `v0.97.0`, and its terminal early-return only heals a row someone revokes
   *again* — which the UI stops offering on terminal rows. So a pre-`v0.97.0` `REVOKED` relationship still
@@ -101,14 +124,17 @@ tail of a decision already taken.
 - **Pre-signoff pressure test: ONE SCOPED COLD AGENT, framed as FALSIFICATION.** Two triggers fire and
   both are one-cold-agent class: item 1 **moves an authorization boundary**, and item 3 changes
   **production-data semantics** via a migration. Neither is a permission substrate, a first-of-kind
-  cross-user read, nor a money/quota change. **⚠️ ESCALATE TO THE FULL TEST IF** item 2's design turns out
-  to need a server field (a new column three dated checkpoints would read), or if item 1's tightening is
-  found to reach beyond the two cohorts already identified.
+  cross-user read, nor a money/quota change. **⚠️ ESCALATE TO THE FULL TEST IF** item 1's tightening is
+  found to reach beyond the two cohorts already identified. **⚠️ The other condition — item 2 needing a
+  server field — is CLOSED as of 2026-08-30**, not merely unfired: that design resolved to a query
+  predicate with no schema change.
 - **⚠️ ITEM 1 GETS ITS `advisor()` CALL BEFORE IMPLEMENTATION, not only on the diff** — it is the same
   gate-tightening class as `v0.97.0` item 5 and `v0.71.0`'s ADMIN lockout, and both were caught late.
-- **⚠️ ITEM 2'S DESIGN DECISION IS OWED BEFORE ANY CODE.** Client state versus persisted field is a data
-  model choice, and deciding it during implementation is how a migration appears in a release that did not
-  plan one.
+- **⚠️ ~~ITEM 2'S DESIGN DECISION IS OWED BEFORE ANY CODE~~ — TAKEN 2026-08-30, before any code.**
+  Resolved to bounded retention reusing the invitation list's existing pattern: no schema change, no
+  client state. Retained struck through rather than deleted, because the reason it was pre-declared —
+  deciding a data model during implementation is how an unplanned migration appears — is the rule, and
+  the rule outlives this instance.
 - **The `### Planned Scope` heading is permanent**; delivery appends to `### Shipped`.
 - **⚠️ A `[CHECKPOINT]` is owed only if something ships ahead of its evidence.** On current scope nothing
   does — every item closes a recorded defect or corrects a stale document. **Stated now so the signoff gate
