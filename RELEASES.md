@@ -1,5 +1,123 @@
 # RELEASES.md - NoteLib
 
+## v0.98.0 - Connection Consistency
+
+**Status: In Progress** (kicked off 2026-08-30, base branch `releases/v0.98.0`, cut from `main` after
+`v0.97.0` merged and tagged)
+
+Theme: one property, one bar, everywhere — and a connection row that tells the truth about its own
+terminal state.
+
+### Why this release exists
+
+**Every item is a `v0.97.0` Known limitation or Backlog row. Nothing new is un-gated**, and that is the
+point: `v0.97.0` shipped nine items and paid for it with the full three-agent pressure test **plus** a
+re-audit that found two of its own fixes weaker than claimed. **⚠️ FIVE ITEMS IS A DELIBERATE CEILING**,
+chosen so the tier resolves to one scoped cold agent rather than the full test.
+
+**The through-line is consistency:** `v0.97.0` made invitation links require finished onboarding and left
+the email path requiring only a verified email — the same resulting relationship behind two different bars.
+It cut grants on terminal transitions going forward and left every pre-`v0.97.0` revoked relationship still
+reporting that it shares. It added a terminal `EXPIRED` state and no way to clear the card. Each is the
+tail of a decision already taken.
+
+### Planned Scope
+
+- **1. The email invitation path requires finished onboarding too (backend).** `LinkedLearnerService
+  .acceptInvitation` forms the **identical** relationship as a link redemption, with identical
+  guardian-consent handling and identical cross-user capacity, but gates on `requireEmailVerified` +
+  `assertProfileComplete` only — and that method's own comment records it *"passes for a brand-new
+  account."* **⚠️ OWNER RULED 2026-08-30: tighten it to match**, over documenting the asymmetry, because an
+  undecided inconsistency in authorization code gets resolved silently by whoever touches it next.
+  **⚠️ THIS TIGHTENS A GATE AND WILL NEWLY REJECT LIVE ACCOUNTS — and unlike `v0.97.0`, that is known
+  BEFORE writing the code rather than found by a pressure test afterwards.** The frontend gates on
+  `needsOnboarding()`, which is **NOT** `onboardingCompletedAt != null`: a **failed `completeOnboarding`
+  POST** (whose marker never retries) and the **copy-on-signup cohort** (whose dashboard prompt is
+  **dismissible**) are both treated as onboarded client-side while the server value stays null.
+  **⚠️ SO THE SELF-HEAL IS PART OF THE ITEM, NOT A FOLLOW-UP:** the accept path must route a
+  `COMPLETE_ONBOARDING` remedy to `/onboarding` the way `v0.97.0` taught the invite page to, or this ships
+  a dead end. **⚠️ Do NOT touch `assertProfileComplete`** — its mid-onboarding exemption is deliberate,
+  protects the activation funnel, and has ~20 call sites across notes, Study Packs, quiz share links and
+  bulk import. **⚠️ The gate must run BEFORE any invitation lookup**, or it becomes a cheaper oracle beside
+  the `v0.90.0` single not-found contract. **⚠️ Acceptance authorizes on owning the invited ADDRESS**
+  (`v0.90.0` email-keying); that property is unchanged.
+- **2. A terminal connection card can be dismissed (frontend).** `REVOKED` and now `EXPIRED` rows
+  accumulate with no way to clear them, which `v0.97.0` held out deliberately as its own UX decision.
+  **⚠️ THE DESIGN QUESTION IS OPEN AND MUST BE SETTLED BEFORE IMPLEMENTATION, not during it:** whether
+  dismissal is **per-viewer client state** or a **persisted server field** changes the data model. Client
+  state is cheaper and reversible; a server field means a migration and a new column whose meaning three
+  dated checkpoints would then read. **⚠️ Dismissal must never delete the relationship row** — it hides a
+  card, and revoke/expiry remain the only terminal transitions.
+- **3. Heal grant rows on relationships terminated before `v0.97.0` (backend + migration).** `revoke()`
+  did not cut grants before `v0.97.0`, and its terminal early-return only heals a row someone revokes
+  *again* — which the UI stops offering on terminal rows. So a pre-`v0.97.0` `REVOKED` relationship still
+  reports `*SharedByMe: true` indefinitely. **⚠️ DISPLAY-ONLY, and it must stay described that way** —
+  every reader demands `ACCEPTED`, so no access is or was open. **⚠️ TERMINAL STATUSES ONLY
+  (`REVOKED`, `EXPIRED`) — NEVER the `ACCEPTED → PENDING` consent pause**, where `v0.93.0` made the grant
+  row survive by design. This is the same rule `v0.97.0` item 4 applied at runtime, now applied once to
+  history.
+- **4. The sweep's operational gaps (backend).** `findDuePendingIds` has **no `LIMIT`**, so the whole
+  backlog materialises in memory — harmless now, unbounded by construction.
+  `studysnap.linked-learners.request-expiry-cron` has **no `StudySnapProperties` field and no production
+  `application.yaml` entry**, so there is no env hook, unlike its sibling `studysnap.generation
+  .recovery-cron`. And a learner deleted mid-sweep produces a bare `NoSuchElementException` logged at
+  `error` for a benign race. **⚠️ No behaviour change to what expires or when** — the TTL bound and the
+  `created_at` clock are dated-read constraints and stay exactly as they are.
+- **5. `DATA_MODEL.md`'s linked-learner section (docs only).** Frozen at `v0.89.1`: it describes three
+  statuses where there are now four plus `expires_at`, says *"Only `ACCEPTED` authorizes the
+  relationship-scoped progress read"* — **false since `v0.93.0`, because acceptance authorizes nothing
+  without a live grant** — and mentions **none** of `linked_learner_grants`, `_invitations`,
+  `_invitation_links` or `_provisional_birth_years`. **⚠️ Five releases of drift, not this release's**, and
+  it is in scope because it is a doc-only correction with no code dependency: the cost is reading four
+  migrations, not making a decision.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW, and no code lands under
+  `frontend/app/onboarding`.** `[CHECKPOINT — due 2026-09-11]` is **12 days out** and measures completion
+  against a 62.4% baseline. Item 1 is adjacent to onboarding and must stay adjacent.
+- **⚠️ Do NOT change `assertProfileComplete`.** Item 1 lives in the accept path's own guard.
+- **⚠️ Do NOT change what expires, when, or from which clock.** The ≥30-day TTL dated from relationship
+  `created_at` protects `[CHECKPOINT — due 2026-09-26]`, and `invitation-ttl-days` is the separate carrier
+  clock `[CHECKPOINT — due 2026-10-13]` reads.
+- **⚠️ Do NOT backfill `expires_at` onto inherited rows.** `v0.97.0` established, after two wrong
+  attempts, that a NULL deadline **is** the protection for a consent-paused relationship; setting it at all
+  erases the distinction.
+- **⚠️ Terminal-only grant cutting, never on the consent pause** — for item 3's migration exactly as for
+  `v0.97.0`'s runtime rule.
+- **⚠️ Standing connection rules unchanged:** acceptance stays LOAD-BEARING; guardian consent stays
+  re-asserted inside the grant check, fail-closed on unknown age; **no account-existence oracle** and the
+  single not-found contract is preserved; absence of a live grant means NO ACCESS; every read re-verifies
+  `ACCEPTED`; the progress read stays UNIDIRECTIONAL; invitations stay ONE-AT-A-TIME; **no
+  relationship-type column, no new profile type, nothing gated on `ProfileType`**; `NoteVisibility` stays
+  `PRIVATE | PUBLIC`; **no endpoint accepts a learner user id**; **no public people search**.
+- **⚠️ Any predicate deciding whether a grant is cut, or whether a caller may accept, needs a REAL-ROW
+  test** in `NativeQueryPostgresIntegrationTest`, mutation-verified with the killing test named.
+- **⚠️ Explicitly OUT OF SCOPE:** anything that changes what a supporter can see; Phase 5 items; and
+  re-opening the `v0.97.0` expiry semantics.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: ONE SCOPED COLD AGENT, framed as FALSIFICATION.** Two triggers fire and
+  both are one-cold-agent class: item 1 **moves an authorization boundary**, and item 3 changes
+  **production-data semantics** via a migration. Neither is a permission substrate, a first-of-kind
+  cross-user read, nor a money/quota change. **⚠️ ESCALATE TO THE FULL TEST IF** item 2's design turns out
+  to need a server field (a new column three dated checkpoints would read), or if item 1's tightening is
+  found to reach beyond the two cohorts already identified.
+- **⚠️ ITEM 1 GETS ITS `advisor()` CALL BEFORE IMPLEMENTATION, not only on the diff** — it is the same
+  gate-tightening class as `v0.97.0` item 5 and `v0.71.0`'s ADMIN lockout, and both were caught late.
+- **⚠️ ITEM 2'S DESIGN DECISION IS OWED BEFORE ANY CODE.** Client state versus persisted field is a data
+  model choice, and deciding it during implementation is how a migration appears in a release that did not
+  plan one.
+- **The `### Planned Scope` heading is permanent**; delivery appends to `### Shipped`.
+- **⚠️ A `[CHECKPOINT]` is owed only if something ships ahead of its evidence.** On current scope nothing
+  does — every item closes a recorded defect or corrects a stale document. **Stated now so the signoff gate
+  is answered deliberately rather than skipped**, and revisited if scope grows.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.97.0 - Connection Lifecycle
 
 **Status: Released** (kicked off 2026-08-29, signed off 2026-08-30, base branch `releases/v0.97.0`, cut
