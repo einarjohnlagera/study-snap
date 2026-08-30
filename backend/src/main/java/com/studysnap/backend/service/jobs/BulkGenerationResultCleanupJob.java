@@ -15,7 +15,7 @@ import java.time.ZoneOffset;
 public class BulkGenerationResultCleanupJob {
     private final BulkGenerationResultService bulkGenerationResultService;
 
-    @Scheduled(cron = "0 45 * * * *")
+    @Scheduled(cron = "${studysnap.generation.bulk-result-cleanup-cron:0 45 * * * *}")
     public void run() {
         long deletedCount = bulkGenerationResultService.deleteExpiredReceipts(OffsetDateTime.now(ZoneOffset.UTC));
         log.info("bulk.generation.result.cleanup deleted {} expired receipts", deletedCount);

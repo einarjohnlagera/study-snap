@@ -228,6 +228,40 @@ limitation is closed and the release ends with a clean carried-forward list.
   the finding is about the TEST, not the code. Make the interleaving deterministic the way
   `runWithFirstCommit` does, so the predicate is pinned rather than sampled.
 
+- **A learner's other provisional declarations are cleared on promotion (item 6).**
+  `deleteAllForLearnerOncePromoted` runs after `promoteIfAccountBirthYearMissing`, so a learner who held
+  two unconfirmed redemptions no longer keeps the second declared year once the account-global column
+  exists — which is what `v0.89.1` forbids.
+- **⚠️ The statement is guarded on `users.birth_year IS NOT NULL`, which makes the ORDER impossible to get
+  wrong rather than merely documented.** Calling it before promotion would discard a declaration that is
+  still deciding consent; the guard makes that a no-op instead of a bug, and the test asserts the pre-promotion
+  call returns **zero** before asserting the post-promotion sweep.
+- **⚠️ Scoped through the relationship join, never a bare user id** — the same structural guard every other
+  statement in that class uses, because the table has no user column of its own.
+- **⚠️ It is a RETENTION fix, not a behaviour change, and that is checkable:** `findEffectiveBirthYear`
+  coalesces `users.birth_year` first, so once the account column is written no provisional row can affect
+  consent, acceptance or the export. The sibling row was inert — it was simply still there.
+- **All scheduled jobs are now disableable in tests (item 7).** `BillingUsageResetJob`,
+  `SubscriptionExpiryJob` and `BulkGenerationResultCleanupJob` carried literal crons, so `v0.97.0`'s fix for
+  the wall-clock flake class did not reach them. **⚠️ `BulkGenerationResultCleanupJob` runs hourly at `:45`,
+  so it was the genuinely live one.** **⚠️ Schedules are unchanged — every default is the previous
+  literal**; this adds an override point and nothing else.
+- **`v0.75.0`'s never-answered checkpoint question is answered (item 8): NO CHECKPOINT IS OWED.**
+  `v0.75.0` implements a **ratified `ADR-001` direction** rather than a bet, and its value claim has **no
+  metric without new instrumentation** — which this repo's gate forbids a dated checkpoint from depending
+  on. **⚠️ The finding was never that the answer was wrong; it was that the question was LEFT SILENT**, for
+  three releases, invisible to kickoff step 9 because an absent row and a dateless row scan identically.
+- **The revoke/redeem terminal predicate is pinned deterministically (item 9).** `v0.94.0` recorded that
+  dropping `redeemedAt is null` **survived four targeted runs** of the race and was caught once under
+  full-suite load — a sampler, not a guard. A new test redeems, then revokes, and asserts the revoke is a
+  no-op with the redemption intact. No threads, no timing. **The race test is kept**: it tests the
+  concurrent property, which is a different claim.
+- **⚠️ Recorded precisely because it would be easy to overstate: the mutation is now killed EVERY run, but
+  it surfaces as a `DataIntegrityViolationException` from the terminal-state CHECK constraint rather than
+  as the assertion failing.** That is expected and correct — in production the CHECK is the real guard and
+  the JPQL clause is defence in depth, exactly as `v0.94.0` said. What changed is determinism, not the
+  detection mechanism.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW, and no code lands under

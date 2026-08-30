@@ -95,7 +95,7 @@ class NativeQueryPostgresIntegrationTest {
      * v0.93.0 pressure test: at 25 against an actual 31, the reflective scan could silently degrade by
      * six queries and stay green, which is the same false comfort the harness exists to remove.
      */
-    private static final int EXPECTED_NATIVE_QUERIES = 39;
+    private static final int EXPECTED_NATIVE_QUERIES = 40;
     private static final String REPOSITORY_CLASSES =
             "classpath*:com/studysnap/backend/repository/**/*.class";
 
@@ -344,6 +344,40 @@ class NativeQueryPostgresIntegrationTest {
                 Integer.class,
                 token
         )).isEqualTo(1);
+    }
+
+    /**
+     * ⚠️ THE DETERMINISTIC COUNTERPART to the race below, and the reason it exists is recorded in
+     * v0.94.0: dropping {@code redeemedAt is null} from {@code markRevokedIfUsable} SURVIVED FOUR
+     * TARGETED RUNS of that race and was caught once under full-suite load — and then only as a
+     * DataIntegrityViolationException from the terminal-state CHECK constraint, not as the assertion
+     * failing. A test that detects a defect one time in five is a sampler, not a guard.
+     *
+     * <p>This pins the predicate directly: once a link is redeemed it is TERMINAL, so revoking it
+     * must affect zero rows and must not disturb the redemption. No threads, no timing.
+     *
+     * <p>⚠️ In production the CHECK constraint is the real guard, so the JPQL clause is defence in
+     * depth — which is exactly why it needs its own test rather than relying on a race to notice it.
+     */
+    @Test
+    void revokingAnAlreadyRedeemedLinkAffectsNothingAndLeavesTheRedemptionIntact() {
+        UUID creator = seedUser("terminal-revoke-creator");
+        UUID redeemer = seedUser("terminal-revoke-redeemer");
+        UUID linkId = UUID.randomUUID();
+        String token = "TerminalRvk123456789Ab";
+        seedInvitationLink(linkId, token, creator);
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        assertThat(invitationLinkRepository.markRedeemedIfUsable(token, redeemer, now)).isOne();
+
+        assertThat(invitationLinkRepository.markRevokedIfUsable(linkId, creator, now))
+                .as("a redeemed link is terminal; revoking it must be a no-op")
+                .isZero();
+
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                "select revoked_at, redeemed_at from linked_learner_invitation_links where id = ?", linkId);
+        assertThat(row.get("redeemed_at")).as("the redemption must survive").isNotNull();
+        assertThat(row.get("revoked_at")).as("and must not be overwritten by a late revoke").isNull();
     }
 
     @Test
@@ -983,6 +1017,46 @@ class NativeQueryPostgresIntegrationTest {
      * <p>The migration has already run against this container, so its statement is exercised directly
      * here against rows seeded afterwards — the same technique the V128 backfill test uses.
      */
+    /**
+     * ⚠️ Item 6, and the assertion that matters is that the SIBLING row goes too. A learner can hold
+     * more than one declaration; deleting only the promoted relationship's row retains a declared
+     * value after the account-global column exists, which v0.89.1 forbids.
+     *
+     * <p>Also pins the load-bearing ORDER: the sweep-all statement is guarded on the account year
+     * being present, so it cannot delete a declaration that is still deciding consent.
+     */
+    @Test
+    void promotingOneDeclarationClearsEveryOtherOneThatLearnerHolds() {
+        UUID learner = seedUser("two-decl-learner");
+        UUID first = seedRelationship(seedUser("two-decl-supporter-a"), learner, "PENDING",
+                LinkedLearnerSide.LEARNER.name());
+        UUID second = seedRelationship(seedUser("two-decl-supporter-b"), learner, "PENDING",
+                LinkedLearnerSide.LEARNER.name());
+        int minorYear = Year.now().getValue() - 10;
+        assertThat(provisionalBirthYearRepository.insertIfAccountBirthYearMissing(
+                first, learner, minorYear, OffsetDateTime.now(ZoneOffset.UTC))).isOne();
+        assertThat(provisionalBirthYearRepository.insertIfAccountBirthYearMissing(
+                second, learner, minorYear, OffsetDateTime.now(ZoneOffset.UTC))).isOne();
+        assertThat(accountBirthYear(learner)).isNull();
+
+        // ⚠️ Before promotion the sweep must be a NO-OP: the declarations are still load-bearing.
+        assertThat(provisionalBirthYearRepository.deleteAllForLearnerOncePromoted(learner))
+                .as("a declaration may not be discarded while it is still deciding consent")
+                .isZero();
+        assertThat(provisionalRows(first)).isOne();
+
+        LinkedLearnerService service = linkedLearnerService();
+        service.recordGuardianConsent(first, relationshipSupporter(first));
+        service.accept(first, relationshipSupporter(first),
+                new AcceptLinkedLearnerRequest(null, false));
+
+        assertThat(accountBirthYear(learner)).isEqualTo(minorYear);
+        assertThat(provisionalRows(first)).as("the promoted relationship's row").isZero();
+        assertThat(provisionalRows(second))
+                .as("⚠️ the SIBLING too — v0.89.1 does not retain a declared-value history")
+                .isZero();
+    }
+
     @Test
     void theTerminalGrantHealNeverTouchesAConsentPause() {
         UUID learner = seedUser("heal-learner");

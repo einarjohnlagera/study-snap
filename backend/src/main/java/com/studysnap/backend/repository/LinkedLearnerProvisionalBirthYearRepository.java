@@ -116,6 +116,38 @@ public interface LinkedLearnerProvisionalBirthYearRepository
             @Param("learnerUserId") UUID learnerUserId
     );
 
+    /**
+     * Delete every provisional declaration this learner holds, once their account-global year exists.
+     *
+     * <p>⚠️ WHY ALL OF THEM, not just the promoted relationship's. A learner can hold more than one
+     * declaration — the primary key is {@code relationship_id} and the insert is guarded only on the
+     * relationship being PENDING with a null account year, so redeeming two links before either
+     * creator confirms produces two rows. Deleting only the promoted one leaves the sibling behind
+     * **after the account-global value already exists**, which is a retained declared-value history
+     * and is exactly what v0.89.1 forbids.
+     *
+     * <p>⚠️ THE SIBLING IS ALREADY INERT, which is why this is a retention fix and not a behaviour
+     * change: {@link #findEffectiveBirthYear} coalesces {@code users.birth_year} FIRST, so once the
+     * account column is written no provisional row can affect consent, acceptance or the export.
+     *
+     * <p>⚠️ SCOPED THROUGH THE RELATIONSHIP JOIN, never by a bare user id — the same structural guard
+     * every other statement in this class uses, because the table has no user column of its own.
+     *
+     * <p>⚠️ Guarded on the account year being PRESENT. Calling it before promotion would delete a
+     * declaration that is still load-bearing, so the guard makes the ordering impossible to get
+     * wrong rather than merely documented.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            delete from linked_learner_provisional_birth_years p
+             using linked_learner_relationships r, users u
+             where r.id = p.relationship_id
+               and u.id = r.learner_user_id
+               and u.id = :learnerUserId
+               and u.birth_year is not null
+            """, nativeQuery = true)
+    int deleteAllForLearnerOncePromoted(@Param("learnerUserId") UUID learnerUserId);
+
     /** Scoped and idempotent cleanup; provisional declarations are not retained as history. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """

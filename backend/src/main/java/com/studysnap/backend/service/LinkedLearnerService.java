@@ -417,6 +417,15 @@ public class LinkedLearnerService {
         provisionalBirthYearRepository.promoteIfAccountBirthYearMissing(
                 relationshipId, learnerUserId, now);
         provisionalBirthYearRepository.deleteForRelationship(relationshipId);
+        // ⚠️ AND every OTHER declaration this learner holds, now that the account-global year exists.
+        // A learner can hold more than one — two link redemptions before either creator confirms —
+        // and deleting only this relationship's row leaves a declared value retained after the
+        // account column is written, which v0.89.1 forbids. The statement is guarded on
+        // users.birth_year being present, so it cannot run before promotion has succeeded.
+        // ⚠️ ORDER MATTERS: this runs AFTER promotion, never before. The sibling row is inert by then
+        // because findEffectiveBirthYear coalesces the account column first, so this is a retention
+        // fix rather than a behaviour change.
+        provisionalBirthYearRepository.deleteAllForLearnerOncePromoted(learnerUserId);
         // The conditional update cleared the persistence context, so re-read rather than trust the
         // detached copy — status is exactly the field that changed.
         return toResponse(requireRelationship(relationshipId), callerUserId);
