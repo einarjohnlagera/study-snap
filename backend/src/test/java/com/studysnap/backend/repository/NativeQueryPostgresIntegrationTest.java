@@ -31,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionConfigurationException;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -1081,15 +1082,11 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(relationshipStatus(pausedRel)).isEqualTo("PENDING");
         assertThat(liveGrants(pausedRel)).as("v0.93.0: the pause leaves the row live").isOne();
 
-        // V129's statement, verbatim.
-        jdbcTemplate.update("""
-                update linked_learner_grants g
-                   set revoked_at = now()
-                  from linked_learner_relationships r
-                 where r.id = g.relationship_id
-                   and g.revoked_at is null
-                   and r.status in ('REVOKED', 'EXPIRED')
-                """);
+        // ⚠️ The migration's ACTUAL SQL, read from the file, not a hand-copied string. Flyway has
+        // already run V129 against this container, so it is replayed here — but replaying a COPY
+        // means the test and the migration can drift apart silently, which is the one thing this
+        // test exists to prevent.
+        jdbcTemplate.update(migrationSql("V129__revoke_grants_on_terminal_relationships.sql"));
 
         assertThat(liveGrants(revokedRel)).as("a revoked relationship shares nothing").isZero();
         assertThat(liveGrants(expiredRel)).as("an expired relationship shares nothing").isZero();
@@ -1106,14 +1103,7 @@ class NativeQueryPostgresIntegrationTest {
         UUID revokedRel = seedRelationship(seedUser("heal-idem-supporter"), learner, "ACCEPTED");
         assertThat(insertGrant(revokedRel, learner, relationshipSupporter(revokedRel))).isOne();
         jdbcTemplate.update("update linked_learner_relationships set status = 'REVOKED', revoked_at = now() where id = ?", revokedRel);
-        String heal = """
-                update linked_learner_grants g
-                   set revoked_at = now()
-                  from linked_learner_relationships r
-                 where r.id = g.relationship_id
-                   and g.revoked_at is null
-                   and r.status in ('REVOKED', 'EXPIRED')
-                """;
+        String heal = migrationSql("V129__revoke_grants_on_terminal_relationships.sql");
 
         assertThat(jdbcTemplate.update(heal)).isOne();
         assertThat(jdbcTemplate.update(heal)).as("second run is a no-op").isZero();
@@ -1273,6 +1263,16 @@ class NativeQueryPostgresIntegrationTest {
                 Integer.class,
                 relationshipId);
         return count == null ? 0 : count;
+    }
+
+    /** Read a migration's real SQL, so a test replaying it cannot drift from what actually ships. */
+    private String migrationSql(String fileName) {
+        try {
+            return new ClassPathResource("db/migration/" + fileName)
+                    .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("migration not readable: " + fileName, exception);
+        }
     }
 
     private UUID relationshipSupporter(UUID relationshipId) {

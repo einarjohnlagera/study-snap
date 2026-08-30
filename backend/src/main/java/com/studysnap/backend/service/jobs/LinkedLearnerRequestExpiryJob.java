@@ -21,7 +21,7 @@ public class LinkedLearnerRequestExpiryJob {
     private final StudySnapProperties properties;
 
     /** Not transactional: every id is delegated to its own worker transaction. */
-    @Scheduled(cron = "${studysnap.linked-learners.request-expiry-cron}")
+    @Scheduled(cron = "${studysnap.linked-learners.request-expiry-cron:0 45 2 * * *}")
     public void run() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         // ⚠️ Bounded read. Oldest deadline first, so a residue is deferred to tomorrow's run rather

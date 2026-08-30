@@ -262,6 +262,61 @@ limitation is closed and the release ends with a clean carried-forward list.
   the JPQL clause is defence in depth, exactly as `v0.94.0` said. What changed is determinism, not the
   detection mechanism.
 
+#### Pre-signoff pressure test — one scoped cold agent, and the worst finding was ours
+
+**⚠️ THE FIVE HEADLINE CLAIMS WERE CONFIRMED; THE DEFECTS WERE ALL IN VERIFICATION, NOT BEHAVIOUR.** The
+agent executed tests rather than reading source, which is what found the first one.
+
+- **⚠️ A TEST HAD SILENTLY STOPPED RUNNING, AND THE BUILD STAYED GREEN.** In
+  `LinkedLearnerRequestExpiryJobTest`, a helper was inserted **between the `@Test` annotation and its
+  method**, so the annotation landed on a `private static` helper. JUnit warned, skipped it, and the class
+  reported **"Tests run: 0"** while the suite passed. The only guard on *a poisoned relationship does not
+  stop the sweep* was gone with no signal. **⚠️ This is a NEW variant of the failure mode this release
+  already knew about** — not a test passing for the wrong reason, but a test **not existing** — and the
+  only reason it surfaced is that the agent counted executed tests instead of trusting the file.
+- **⚠️ "EVERY SCHEDULED JOB IS DISABLED IN TESTS" WAS FALSE WHEN WRITTEN.** Item 7 fixed the three jobs
+  with **hardcoded** crons and the comment claimed completeness — but **five others were already
+  placeholder-driven and simply were not listed**, including `AccountPurgeScheduler`, which **deletes
+  data**. All ten are now disabled, and the list was verified by **enumerating every `@Scheduled`
+  annotation** rather than by re-reading the comment. **The claim was made one commit before it was true.**
+- **⚠️ Item 4's stated rationale was wrong, and acting on it introduced a small regression.** A bound
+  `requestExpiryCron` property was added on the reasoning that *"without a bound field the placeholder
+  resolves but nothing can override it in an environment."* **That is not how `@Scheduled` works** — it
+  resolves from the `Environment`, so `REQUEST_EXPIRY_CRON` already worked. The field was **never read by
+  anything**, and removing the annotation's inline default made that job **the only one of ten that fails
+  startup on a missing key**. The dead field is removed and the default restored. **The `application.yaml`
+  entry stays** — it is the discoverable override point, which was the real gap.
+- **A test replaying `V129` hand-copied its SQL**, so the migration and the test could drift apart
+  silently — the one thing that test exists to prevent. It now **reads the migration file**.
+  **Mutation-verified:** adding `'PENDING'` to `V129` itself now fails
+  `theTerminalGrantHealNeverTouchesAConsentPause`.
+- Two Javadoc blocks orphaned by earlier insertions were re-attached to the tests they describe.
+
+### Known limitations
+
+- **⚠️ A LONG SWEEP BACKLOG CAN MAKE AN EXPIRY INVISIBLE — an interaction between two of this release's
+  own items, found by the cold agent.** Retention (item 2) is keyed on the **deadline**, not on when the
+  sweep ran, and under a daily sweep those coincide. But item 4 added a **500-row batch bound** and a
+  **pause hook**, and both create backlogs. A request swept more than `request-ttl-days` after its deadline
+  becomes `EXPIRED` with an `expires_at` **already outside the retention window**, so it vanishes from both
+  parties' lists immediately and is never shown as expired at all. **Concretely:** sweep paused 40 days,
+  then resumed — a user sees *"pending, overdue"* one day and **nothing** the next. That defeats the
+  purpose retention exists for, which is distinguishing expiry from silence. **Recorded rather than fixed:**
+  the correct fix is to key retention on when a row became terminal rather than on its deadline, which
+  changes what `expires_at` means for `EXPIRED` rows — and `v0.97.0` established, after two wrong attempts,
+  that changing that column's meaning is exactly where this area goes wrong. It deserves its own release.
+- **⚠️ Item 1 secures the RECIPIENT only, so "forming a connection requires finished onboarding" is NOT
+  yet true.** `invite()` and `accept()` remain gated on `assertProfileComplete` alone, which passes for a
+  brand-new account. A verified-but-not-onboarded account can therefore still **invite** as a supporter,
+  have an onboarded learner accept, and reach an `ACCEPTED` relationship with cross-user read capacity.
+  **The release's scoping decision was deliberate and stands** — gating the recipient's *reading* surfaces
+  would convert an error into an absence — but the property as a whole is half-built, and this records
+  which half. Closing it is a gate tightening on two more endpoints and belongs in a release that plans for
+  it.
+- **The three jobs made configurable in item 7 have no test asserting their defaults match production.**
+  The cold agent verified them against `origin/main` by hand; nothing in the build would catch a future
+  edit that silently changed a schedule.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW, and no code lands under

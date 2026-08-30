@@ -17,11 +17,19 @@ import static org.mockito.Mockito.when;
 
 class LinkedLearnerRequestExpiryJobTest {
 
-    @Test
     private static StudySnapProperties properties() {
         return new StudySnapProperties();
     }
 
+    /**
+     * ⚠️ This test silently stopped running for one release. A helper was inserted BETWEEN the
+     * {@code @Test} annotation and the method, so the annotation landed on a private static helper —
+     * JUnit warned and skipped it, the class reported "Tests run: 0", and the build stayed GREEN.
+     * The only guard on "a poisoned relationship does not stop the sweep" was gone with no signal.
+     * Found by the v0.98.0 pre-signoff cold agent, which counted executed tests rather than reading
+     * the source.
+     */
+    @Test
     void oneFailedRelationshipDoesNotStopTheSweep() {
         LinkedLearnerRelationshipRepository repository = mock(LinkedLearnerRelationshipRepository.class);
         LinkedLearnerRequestExpiryWorker worker = mock(LinkedLearnerRequestExpiryWorker.class);

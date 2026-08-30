@@ -13,8 +13,11 @@ server:
   servlet:
     context-path: /api
 
-# ⚠️ EVERY scheduled job is DISABLED IN TESTS as of v0.98.0 — three carried hardcoded crons
-# until then, so the class below stayed reachable for them.
+# ⚠️ EVERY scheduled job is DISABLED IN TESTS as of v0.98.0. Three carried HARDCODED crons until
+# then and needed code changes; five others were already placeholder-driven and simply were not
+# listed here — including account.purge-cron, which DELETES DATA. The claim that every job was
+# disabled was made once before it was true, and a cold agent caught it by ENUMERATING the
+# @Scheduled annotations rather than reading this comment. Add new jobs to this list.
 # ⚠️ Scheduled jobs are DISABLED IN TESTS ("-" is Spring's Scheduled.CRON_DISABLED).
 # GenerationRecoveryJob runs every 10 minutes in production, so on any full-suite run that spans a
 # 10-minute boundary it fired mid-test and its queries landed in
@@ -29,5 +32,15 @@ studysnap:
   billing:
     usage-reset-cron: "-"
     subscription-expiry-cron: "-"
+    expiry-email-cron: "-"
   linked-learners:
     request-expiry-cron: "-"
+  retention:
+    daily-cron: "-"
+    weekly-cron: "-"
+    knowledge-impact-digest-monthly-cron: "-"
+  account:
+    # ⚠️ THIS ONE DELETES DATA. It was already placeholder-driven and therefore always disableable,
+    # but it was armed during every test run until v0.98.0's signoff audit counted the jobs rather
+    # than trusting the comment above.
+    purge-cron: "-"
