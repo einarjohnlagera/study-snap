@@ -971,6 +971,80 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(visible).contains(accepted);
     }
 
+    /**
+     * ⚠️ THE EXECUTABLE COUNTERPART TO V129, and the assertion that matters is the NEGATIVE one.
+     *
+     * <p>Healing grants on terminated relationships is the easy half. The half that would be a real
+     * defect is sweeping a CONSENT PAUSE: a v0.89.1 birth-year correction returns an ACCEPTED
+     * relationship to PENDING, and v0.93.0 made the grant row survive that BY DESIGN. A migration that
+     * caught PENDING would turn a learner's own sharing toggle OFF without them touching it, and
+     * sharing would not resume on re-acceptance.
+     *
+     * <p>The migration has already run against this container, so its statement is exercised directly
+     * here against rows seeded afterwards — the same technique the V128 backfill test uses.
+     */
+    @Test
+    void theTerminalGrantHealNeverTouchesAConsentPause() {
+        UUID learner = seedUser("heal-learner");
+        // ⚠️ EVERY relationship is seeded ACCEPTED and granted FIRST, then moved to its terminal
+        // status. insertLiveIfAbsent is conditional on ACCEPTED (v0.93.0), so seeding a REVOKED row
+        // and calling insertGrant inserts NOTHING — and the zero-grant assertions below would then
+        // pass without the heal doing any work at all. Found by the idempotency test returning 0.
+        UUID revokedRel = seedRelationship(seedUser("heal-revoked-supporter"), learner, "ACCEPTED");
+        UUID expiredRel = seedRelationship(seedUser("heal-expired-supporter"), learner, "ACCEPTED");
+        UUID acceptedRel = seedRelationship(seedUser("heal-accepted-supporter"), learner, "ACCEPTED");
+        // A paused relationship: ACCEPTED, granted, then returned to PENDING by a correction.
+        UUID pausedRel = seedRelationship(seedUser("heal-paused-supporter"), learner, "ACCEPTED");
+        for (UUID id : List.of(revokedRel, expiredRel, acceptedRel, pausedRel)) {
+            assertThat(insertGrant(id, learner, relationshipSupporter(id)))
+                    .as("the fixture must actually create a grant, or the heal has nothing to cut")
+                    .isOne();
+        }
+        jdbcTemplate.update("update linked_learner_relationships set status = 'REVOKED', revoked_at = now() where id = ?", revokedRel);
+        jdbcTemplate.update("update linked_learner_relationships set status = 'EXPIRED' where id = ?", expiredRel);
+        jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
+        linkedLearnerService().correctBirthYear(learner, Year.now().getValue() - 10);
+        assertThat(relationshipStatus(pausedRel)).isEqualTo("PENDING");
+        assertThat(liveGrants(pausedRel)).as("v0.93.0: the pause leaves the row live").isOne();
+
+        // V129's statement, verbatim.
+        jdbcTemplate.update("""
+                update linked_learner_grants g
+                   set revoked_at = now()
+                  from linked_learner_relationships r
+                 where r.id = g.relationship_id
+                   and g.revoked_at is null
+                   and r.status in ('REVOKED', 'EXPIRED')
+                """);
+
+        assertThat(liveGrants(revokedRel)).as("a revoked relationship shares nothing").isZero();
+        assertThat(liveGrants(expiredRel)).as("an expired relationship shares nothing").isZero();
+        assertThat(liveGrants(pausedRel))
+                .as("⚠️ A PAUSE IS NOT A TERMINATION — sharing must resume on re-acceptance")
+                .isOne();
+        assertThat(liveGrants(acceptedRel)).as("a live connection is untouched").isOne();
+    }
+
+    /** Re-running the heal must change nothing, so a repeated deploy cannot re-stamp revoked_at. */
+    @Test
+    void theTerminalGrantHealIsIdempotent() {
+        UUID learner = seedUser("heal-idem-learner");
+        UUID revokedRel = seedRelationship(seedUser("heal-idem-supporter"), learner, "ACCEPTED");
+        assertThat(insertGrant(revokedRel, learner, relationshipSupporter(revokedRel))).isOne();
+        jdbcTemplate.update("update linked_learner_relationships set status = 'REVOKED', revoked_at = now() where id = ?", revokedRel);
+        String heal = """
+                update linked_learner_grants g
+                   set revoked_at = now()
+                  from linked_learner_relationships r
+                 where r.id = g.relationship_id
+                   and g.revoked_at is null
+                   and r.status in ('REVOKED', 'EXPIRED')
+                """;
+
+        assertThat(jdbcTemplate.update(heal)).isOne();
+        assertThat(jdbcTemplate.update(heal)).as("second run is a no-op").isZero();
+    }
+
     @Test
     void aConsentPauseLeavesEveryGrantLiveBecauseAPauseIsNotATermination() {
         UUID supporter = seedUser("pause-grant-supporter");

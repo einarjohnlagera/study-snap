@@ -153,6 +153,38 @@ tail of a decision already taken.
 - **The exact-count tripwire fired again (38 → 39)**, acknowledging `findVisibleForUser` — which also
   confirms the new SQL `PREPARE`s cleanly against PostgreSQL 16.
 
+- **Grant rows on relationships terminated before `v0.97.0` are healed (item 3).** `V129` revokes every
+  live grant whose relationship is `REVOKED` or `EXPIRED`. **⚠️ DISPLAY-ONLY — no access was open at any
+  point**, since `requireGrant` and every other reader demand `ACCEPTED`; what was broken is the connection
+  list asserting a sharing act on a relationship that no longer exists.
+- **⚠️ `PENDING` IS ABSENT FROM THE HEAL, DELIBERATELY, AND IT IS THE ONLY LINE THAT COULD HAVE BEEN
+  ACTIVELY WRONG.** A `v0.89.1` correction returns an `ACCEPTED` relationship to `PENDING`, and `v0.93.0`
+  made the grant row survive that pause **by design** — so sweeping it would turn a learner's own toggle
+  OFF without them touching it, and sharing would not resume on re-acceptance. **Mutation-verified against
+  real rows:** adding `'PENDING'` to the status list fails
+  `theTerminalGrantHealNeverTouchesAConsentPause` on exactly that assertion.
+- **⚠️ THE FIRST VERSION OF THAT TEST PASSED FOR THE WRONG REASON, and the idempotency test is what
+  exposed it.** The fixtures seeded relationships already `REVOKED`/`EXPIRED` and then called
+  `insertGrant` — but `insertLiveIfAbsent` is conditional on `ACCEPTED` (`v0.93.0`), so **no grant was
+  ever created** and the zero-grant assertions passed with the heal doing no work at all. The second heal
+  run returning 0 rows is what surfaced it. Every fixture now seeds `ACCEPTED`, **asserts the grant was
+  actually created**, and only then moves the row to its terminal status.
+- **One-time repair of history, not a mechanism.** The runtime rule in `revoke()` and the expiry worker
+  already does this at the moment of transition; `V129` exists only because those rows predate it.
+  Idempotent via `revoked_at IS NULL`.
+- **`DATA_MODEL.md`'s linked-learner section corrected (item 5) — five releases of drift, not this
+  release's.** It described three statuses where there are four, asserted that **acceptance authorizes the
+  progress read** (false since `v0.93.0`), and omitted `linked_learner_invitations`, `_invitation_links`,
+  `_grants` and `_provisional_birth_years` entirely. All four are now documented with the properties that
+  are easy to get wrong: the invitation table's status vocabulary deliberately **excludes `EXPIRED`** while
+  sharing a Java enum with relationships; a link row is **terminal the moment it is redeemed** and carries
+  no relationship id; grant creation is `ACCEPTED`-conditional while **withdrawal deliberately is not**;
+  the provisional table is **keyed by relationship with no user column**, so the `learner_user_id` join is
+  the privacy boundary; and `expires_at` **means the deadline for every status**, with NULL carrying the
+  meaning that a row is not on the clock at all.
+- **⚠️ The drift itself is recorded in the doc**, because a schema section that is not updated alongside a
+  migration becomes confidently wrong rather than merely incomplete — which is what makes it dangerous.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW, and no code lands under
