@@ -547,82 +547,244 @@ instrumentation of the product's central retention claim, and today the claim is
 
 ---
 
-# Stage 2 — proposed sequencing
+# Stage 2 — sequencing (REVISED 2026-08-31 on owner decisions)
 
-Four slices. Each is independently shippable, each closes something real, and **none bundles a permission
-change with a data-model change**. Sizing follows CLAUDE.md's rule that verification cost scales worse than
-linearly — three to four items per release keeps the gate at a single `advisor()` call.
+**⚠️ This section was rewritten after the owner ruled on the four open questions. The four-slice draft it
+replaces is gone deliberately — it is superseded, not an alternative.** What the owner locked, verbatim in
+effect: five slices not four; **Subject Plan first, whole Review Set explicitly deferred**; **plan membership,
+never `notes.subject`, as the plan-sourced predicate**; Challenge Quiz unchanged; Adaptive Practice additive;
+no new meter; "AI critique" and the `Collection` label both left alone.
 
-### Slice 1 — Language and legibility *(smallest, zero behavioural risk, ships first)*
-1. `AI quizzes` → `Quiz generations`, **and correct the description to include Board Exam** (§G1). Update
-   `quiz-session-history.test.ts:86`; `:87` must keep passing.
-2. Category A copy sweep — the six-site Domain Context string, `ai-suggestion-modal`'s eight strings, the
-   study-packs guide, the two landing strings.
-3. Add `NOTE_ADDED_TO_COLLECTION` (**M1**).
-
-*Explicitly excluded:* the "AI critique" rename (needs its own owner decision — locked `EXAM_MODES.md` table
-plus indexed learn guides), every Category B disclosure, every Category C identifier.
-*Verification tier:* single `advisor()` call. No authorization, quota or data-model change.
-
-### Slice 2 — Assessment can be sourced from a plan *(the load-bearing slice)*
-1. Accept a **collection id** as a multi-note exam source, alongside `additionalStudyPackIds` (**G1**).
-2. **For plan-sourced exams only**, replace the same-`subject` rule with plan membership (**G3**) — a Review
-   Set is multi-subject by construction. Note-selected exams keep today's rule unchanged.
-3. Raise the source cap for plan-sourced exams (**G2**); keep `MIN_QUESTIONS_PER_SOURCE = 3` as the real bound.
-4. `M2` + `M3` instrumentation.
-
-*⚠️ Anti-drift for this slice:* no new session mode (`EXAM_MODES.md` is a locked 5-mode contract — this is a
-**capability on Long Exam**, which that doc already anticipates by name); no new meter; standalone
-note-selected exams behave identically to today; `study-plans-guide.tsx:23` must be corrected in the same
-release, since this is the change that falsifies it.
-*Verification tier:* **one scoped cold agent, framed as falsification.** Changes production-data semantics on
-the exam path and touches shared `ConceptHealth` writers.
-
-### Slice 3 — Mixed retrieval reaches Free and Plus
-1. Gate change in `FeatureGateService.hasFeatureAccess` + config: limited multi-note exam on Free and Plus
-   (§F). Reuse `challenge_quiz_generations`; **no new meter**.
-2. Make the Review Set's terminal action honest (**B3**) — today it resolves on **profile** while the gate
-   fires on **plan**, so a Free/Plus learner's concluding CTA is a paywall, and a `PARENT` profile gets no
-   terminal action at all.
-
-*⚠️ Depends on Slice 2 and on M3 data.* If M3 shows multi-note exams are essentially unused even on Pro, that
-is evidence about *discoverability*, not about demand, and this slice should still ship — but the reasoning
-must be recorded before the read, not after.
-*Verification tier:* one scoped cold agent — money/quota semantics change.
-
-### Slice 4 — Supporter step 6, and remediation scope
-1. A **combined generated quiz** across selected notes that a share link can point at (§E) — reusing
-   `exportCombinedDocx`'s combining logic and `QuizShareLinkService`. **Not TEACHER-gated**; not requiring a
-   Learning Connection.
-2. **Add** subject/plan-scoped Adaptive Practice as a *separate* entry point from Progress and the plan
-   surface (**G4**). **Note-scoped Adaptive Practice from Note Detail is unchanged** — per §C's challenge.
-
-*⚠️ No new evidence model.* `TWICE_MISSED_STREAK_THRESHOLD = 2` already accumulates across sessions and
-across modes, including multi-note exams; what changes is the **scope of the query**, not the threshold.
-
-### Not sequenced — deliberately
-- **Shrinking Challenge Quiz** (§11) — recommended against, on the three grounds in §D4. Revisit only with
-  abandonment data, which does not exist today.
-- **Any rename** of Review Set / Study Plan / Subject Plan / Collection (§H) — inconsistencies flagged,
-  approval not sought.
-- **The `PROFESSIONAL` → "Collection" label fix** — a one-line change but still a rename; owner call.
-- **Anything under `frontend/app/onboarding`** — frozen until 2026-09-11.
-- **"AI critique"** — its own decision, touching a locked contract doc and indexed public content.
+**⚠️ FIVE CONTRADICTIONS WITH THE AUDITED CODE WERE FOUND WHILE REVISING. They are recorded in full at the
+end of this section (§S2-X) and each is reflected in the slice it affects.** The largest: **a ~10-note source
+cap is arithmetically impossible for most learners today**, and **the plan-scoped remediation read Slice 4
+needs already exists** and already made its scoping decision.
 
 ---
 
-## Open questions for the owner
+## S2-1 · Slice 1 — Language + observability
 
-1. **Slice 2's source rule — this is ONE question with two halves, not two questions.**
-   **(a) Breadth:** should a plan-sourced exam draw from the whole Review Set (Goal + all Subject Plans) or
-   one Subject Plan at a time? §9's hierarchy implies both exist (*Subject Exam* vs *Review Set Exam*) — that
-   is two capabilities, and the smaller one is the Subject Plan exam.
-   **(b) Predicate:** if it draws from a Subject Plan, does "the notes in it" mean **plan membership** or the
-   notes' **`subject` field**? These give different note sets, and today's exams use the second
-   (§G3a) while a Subject Plan *is* the first. **§H's flagged collision — "Subject Plan" the child collection
-   vs. `notes.subject` the matching field — is this same question**, and answering (a) without answering (b)
-   would ship an exam whose contents nobody can predict.
-2. **"AI critique"** — rename, or keep as a feature name?
-3. **Free/Plus multi-note limits** — the shape in §F is a proposal, not a decision. Every number is
-   config-backed and reversible.
-4. **`PROFESSIONAL` label** — leave as "Collection", or give it a learning-journey name?
+**Unchanged from the draft, and it ships first because instrumentation should predate behaviour change.**
+
+1. `AI quizzes` → **`Quiz generations`**; description → *"Challenge Quiz and Board Exam sessions, plus quizzes
+   you make for someone."* Update `quiz-session-history.test.ts:86`; `:87` (label ≠ mode name) must keep passing.
+2. Category A copy sweep — the six-site Domain Context string, `ai-suggestion-modal`'s eight strings, the
+   study-packs guide, the two landing strings, the applicable-programs explainer.
+3. Add **`NOTE_ADDED_TO_COLLECTION`** — the transition the whole retention hypothesis rests on, currently invisible.
+
+**⚠️ The new description is knowingly temporary and Slice 3 falsifies it** (§S2-X4). That is accepted, not
+overlooked: Slice 3 must correct it in the same release.
+
+*Excluded:* "AI critique" (owner: separate decision), all Category B disclosures, all Category C identifiers.
+*Verification tier:* single `advisor()` call.
+
+---
+
+## S2-2 · Slice 2 — Subject Plan becomes an assessment source
+
+1. A **Subject Plan** can source the existing multi-note assessment capability.
+2. **The source set is Subject Plan MEMBERSHIP.** `notes.subject` is not the predicate — it is free text and
+   already rejects valid pairings (§G3a).
+3. Raise the source cap **on the plan-sourced path** — **but see §S2-X1: the cap is not a free constant.**
+4. **The learner is told what is in scope before starting** — *"Architectural Design · Testing material from
+   8 Notes in this Subject Plan."* **Eligible** notes only: a source must have a generated Study Pack
+   (`LongExamService:799-802`). The collection detail page already computes exactly this set as
+   `quizReadyNoteIds` (`collection-detail-page-client.tsx:3046`), so the count is cheap and already correct.
+5. Add `BOARD_EXAM_COMPLETED` (**M2**) and source-count/source-scope metadata on exam start events (**M3**).
+6. **Correct `study-plans-guide.tsx:23`** — *"nothing is AI-generated for the set itself"* becomes false in
+   this release. It has never once been in a diff when the behaviour it describes changed.
+
+**⚠️ Whole-Review-Set sourcing is DEFERRED BY DECISION, not unsupported by accident** (owner, 2026-08-31).
+The hierarchy stays: Note → topic; Subject Plan → mixed retrieval; Review Set → readiness, where it will
+overlap Board Exam Mode and should be decided together with it.
+
+**⚠️ The manual note-selected path keeps its same-subject rule — and that is now a KNOWN defect consciously
+deferred, not an unexamined one** (§S2-X3).
+
+*Verification tier:* **one scoped cold agent, framed as falsification.**
+
+---
+
+## S2-3 · Slice 3 — Mixed retrieval reaches Free and Plus
+
+**The ladder is the locked part; every number is tunable configuration.**
+
+| | Capability | Source cap | Allowance |
+|---|---|---|---|
+| **Free** | *experience the principle* — manual multi-note selection | ~3 notes | ~2/month |
+| **Plus** | *structured* — manual **plus Subject Plan-sourced** | see §S2-X1 — **8, not 10, for a College learner** | ~10/month |
+| **Pro** | *readiness simulation* — Long Exam, Board Exam Mode, larger sets, difficulty control, 30 Adaptive Practice | unchanged | unchanged |
+
+Also in this slice: **fix the dishonest terminal CTA.** It resolves on **profile**
+(`exam-mode-visibility.ts:71-84`) while the paywall fires on **plan**, so Free/Plus learners are shown a
+concluding action they cannot use and a `PARENT` profile is shown none. Fixing it means the resolver takes
+plan as well as profile.
+
+**⚠️ Two things this slice must settle that the draft did not (§S2-X2, §S2-X4):** which engine carries a
+non-Pro multi-note session — the answer is the **Board Exam pattern, a `mode` string on the `CHALLENGE`
+discriminator**, which is proven and adds no mode — and the consequence that it therefore spends
+`challenge_quiz_generations` automatically, **falsifying Slice 1's meter description**, which must be
+re-corrected here.
+
+*Verification tier:* **one scoped cold agent** — quota semantics change.
+
+---
+
+## S2-4 · Slice 4 — Broader remediation
+
+Add a **plan/subject-scoped Adaptive Practice entry point** from Progress and the plan surface.
+
+**⚠️ Do NOT widen the Note Detail entry point.** *"Note Detail → Adaptive Practice"* keeps meaning exactly
+what the learner asked for. Broader remediation is entered from a broader surface and labelled for it —
+*"Practice weak areas in Architectural Design."*
+
+**⚠️ This slice is materially smaller than it looks, and its scoping decision is already made
+(§S2-X5): `ConceptHealthService.getPersistentlyWeakConceptsByStudyPackIds(userId, studyPackIds)` already
+exists**, already takes a plan's worth of packs, already applies `TWICE_MISSED_STREAK_THRESHOLD = 2`, and
+**already returns results keyed per pack rather than merged** — with the reason documented in the method:
+*"there is no canonical concept identity, so the same idea in two packs cannot be related and must not be
+summed."*
+
+**So the invariant is inherited, not invented: union across packs is SAFE; merging concepts across packs is
+the ADR-sized work `v0.77.0` named and is NOT in this slice.** Plan-scoped remediation presents weakness
+grouped by note, never as one flat merged list.
+
+No new threshold. The durable signal stays the source of truth.
+
+*Verification tier:* single `advisor()` call — no new evidence model, no permission change.
+
+---
+
+## S2-5 · Slice 5 — Supporter multi-note quiz
+
+One combined quiz across selected notes, shareable by link, taken through the existing anonymous surface.
+**Not TEACHER-gated. Does not require a Learning Connection** — connections may use it, they do not own it.
+Lightweight one-off sharing is preserved.
+
+**⚠️ This is the largest data-model change of the five, and the audit's phrase "one gate plus one missing
+artifact" should not be read as trivial.** `GeneratedQuizEntity` is keyed per note and
+`QuizShareLinkService.createShareLink` takes a single `generatedQuizId`, so a combined quiz is a **new
+persisted artifact**, not a flag. The combining logic (`exportCombinedDocx:220-292`), the share mechanism and
+the anonymous take-surface all exist; what does not exist is a thing for a link to point at.
+
+*Verification tier:* **one scoped cold agent** — new persisted artifact reachable by an unauthenticated path.
+
+---
+
+## S2-D · Dependencies
+
+```
+Slice 1 ──────────────────────────────────────────────►  (independent; ships first for lead time on M1)
+                │
+                └── meter copy is re-corrected by ──┐
+                                                    │
+Slice 2 ─────────────────────────────────────────►  │     (independent of 1; needs no other slice)
+   │                                                │
+   ├── Plus tier consumes it ────► Slice 3 ◄────────┘     (HARD dependency on 2)
+   │                                   │
+   └── evidence at plan scope ─────────┴────► Slice 4      (SOFT — see below)
+
+Slice 5 ────────────────────────────────────────────►     (independent of ALL — orderable anywhere)
+```
+
+- **Slice 3 hard-depends on Slice 2.** Its Plus tier *is* plan-sourced assessment.
+- **Slice 4's dependency on Slice 2 is SOFT, and its real dependency is Slice 3.** Cross-note evidence already
+  exists today — Long Exam has always written `ConceptHealth` (`:473,481`) — but only for Pro users. What makes
+  plan-scoped remediation worth entering is a *population* that has cross-note weakness, and Slice 3 creates it.
+- **Slice 5 depends on nothing.** It could ship second. It is placed fifth by owner preference, not by
+  constraint — worth knowing if the supporter use case becomes urgent.
+
+## S2-L · Locked vs tunable
+
+| Locked (owner, 2026-08-31) | Tunable |
+|---|---|
+| Five slices; supporter quiz and remediation are separate | Slice order beyond the 2→3 dependency |
+| **Subject Plan first; whole Review Set deferred by decision** | When whole-Review-Set sourcing is revisited |
+| **Plan MEMBERSHIP is the plan-sourced predicate** | — (this one is not tunable at all) |
+| The Free/Plus/Pro ladder — *experience / structured / readiness* | Every number in it: 3, 2/mo, 10/mo, and the Plus cap |
+| No new usage meter | Which existing meter carries it |
+| Challenge Quiz length unchanged | Revisit on abandonment evidence, which does not exist yet |
+| Note-scoped Adaptive Practice unchanged | Which surfaces host the broader entry point |
+| "AI critique" unchanged; `Collection` label unchanged | Both are open, both deferred |
+| Learner sees assessment scope before starting | Copy and visual treatment |
+
+## S2-B · Release-boundary concern from splitting the old Slice 4
+
+**The split is right — the two capabilities share no users, no success criteria and no risk surface.** Two
+consequences worth stating before they are discovered:
+
+1. **Three of five slices now fire a cold-agent trigger** (2, 3, 5), where the four-slice draft fired two.
+   Splitting did not create risk; it *revealed* that Slice 5 carries a data-model change that was previously
+   hidden behind a remediation item. That is the split working.
+2. **Slice 2 ships a capability almost nobody can reach.** Plan-sourced assessment lands while Long Exam and
+   Board Exam are still Pro-only, so its own instrumentation (M2, M3) reports on the Pro population — and
+   `linked_learner_relationships` was empty in production as recently as 2026-08-26, so Pro usage should be
+   assumed near zero. **Slice 2's instrumentation will look like a null result until Slice 3 ships.** Do not
+   read that as evidence against the capability; record the deploy split before the read, as this repo's
+   checkpoint discipline already requires.
+
+---
+
+## S2-X · Contradictions between the revised sequencing and the audited code
+
+**Five. None invalidates a decision; each changes an implementation constraint or a number.**
+
+### S2-X1 — ⚠️ "up to ~10 Notes" for Plus is arithmetically impossible for most learners
+
+The source cap is **not a free constant.** `MIN_QUESTIONS_PER_SOURCE = 3` (`LongExamService:111`) is checked
+against `baseQuestionCount = questionCount / sourceCount`, and **`questionCount` is derived from the learner's
+LEVEL, not from how many sources they picked** (`resolveQuestionCount:543-550`):
+
+| Learner level | questionCount | **max sources today** |
+|---|---|---|
+| `GRADE_SCHOOL`, `JUNIOR_HIGH` | 20 | **6** |
+| `SENIOR_HIGH`, `COLLEGE`, `PERSONAL_LEARNING` | 25 | **8** |
+| `BOARD_EXAM_REVIEW`, `PROFESSIONAL` | 30 | **10** |
+
+So a 10-source Plus cap works **only** for board-exam and professional learners. A College learner — the
+default level and the most common — **fails at 9**, and a junior-high learner fails at 7. Raising the cap
+therefore forces one of three choices, and it is a real decision rather than a constant edit:
+**(a)** scale `questionCount` with source count on the plan-sourced path; **(b)** lower
+`MIN_QUESTIONS_PER_SOURCE`, which weakens per-note coverage; or **(c)** state the cap as
+`floor(questionCount / 3)` and surface it honestly — *"you can include up to 8 notes at your level."*
+**(c) is the smallest and is recommended**, since it also satisfies the owner's §12 requirement that the
+learner can predict what is in scope.
+
+### S2-X2 — the engine for a non-Pro multi-note session is undecided, and there is a proven answer
+
+Both multi-note paths are Pro-only *modes*, and the owner ruled Pro is not weakened — so Free/Plus multi-note
+cannot simply be "Long Exam, unlocked." The fenced-off rule forbids a new mode.
+**The precedent already exists: Board Exam Mode is a `mode` string on the `CHALLENGE` discriminator**, sharing
+the Challenge engine with different constants and `+5` explicitly blocked (`ChallengeQuizService:685-688`).
+A Free/Plus multi-note assessment should follow that exact shape. It adds no mode, honours the locked
+five-mode contract, and reuses a path that already works.
+
+### S2-X3 — the deferred manual predicate gets *more* visible after Slice 2, not less
+
+The owner keeps the same-subject rule on the manual path as the compatibility-preserving choice, "unless the
+implementation audit finds a separate bug." **§G3a is that finding** — it is a known defect being consciously
+deferred. Worth recording because Slice 2 makes it *worse*: afterwards, a learner can run a plan-sourced exam
+across mixed subjects while manual selection of the same notes still rejects them. **One product, two answers
+to the same question.** Not a blocker; it should be a named Known limitation on Slice 2 rather than discovered
+as a bug report.
+
+### S2-X4 — Slice 3 falsifies Slice 1's meter copy, by construction
+
+If the Free/Plus path rides the Challenge engine (S2-X2), it spends `challenge_quiz_generations` — the
+increment at `ChallengeQuizService:343` is unconditional. So Slice 1's corrected description
+(*"Challenge Quiz and Board Exam sessions, plus quizzes you make for someone"*) becomes incomplete the moment
+Slice 3 ships. The owner already required this be re-checked; recording it as **certain rather than
+conditional.** Either accept two copy edits, or write Slice 1's description in a form that survives —
+*"Sessions and quizzes we generate for you"* is true across both, at some cost in specificity.
+
+### S2-X5 — Slice 4's evidence read already exists, and its scoping decision is already made
+
+`ConceptHealthService.getPersistentlyWeakConceptsByStudyPackIds(userId, studyPackIds)` (`:211-228`) already
+does what plan-scoped remediation needs, and its Javadoc already settles the question Slice 4 would otherwise
+re-litigate: results are **keyed per pack and deliberately not summed**, because *"`concept` is free text keyed
+per pack — there is no canonical concept identity, so the same idea in two packs cannot be related and must
+not be summed."*
+
+**This is the same free-text hazard as §G3a, one layer down.** It de-risks Slice 4 (the read is built) and
+constrains it (weakness must be presented grouped by note; a single merged list would violate a documented
+invariant and is the ADR-sized work `v0.77.0` deferred).
