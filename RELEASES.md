@@ -44,6 +44,35 @@ never starting them.
   agent verified the defaults by hand against `origin/main`, and **nothing in the build would catch a future
   edit that silently changed a production schedule.**
 
+- **An expiry stays visible after a paused or backlogged sweep (item 1).** `V130` adds `expired_at`, the
+  sweep records it on the transition, and `findVisibleForUser` retains terminal rows on
+  `coalesce(revoked_at, expired_at)` instead of the deadline. A request swept 90 days late is now still
+  shown as expired rather than vanishing the moment it is swept.
+- **⚠️ `expires_at` IS UNTOUCHED, AND THAT IS THE ENTIRE REASON A SEPARATE COLUMN WAS CHOSEN.** It means
+  the deadline, for every status. `v0.97.0` got this area wrong twice — once overwriting it with the sweep
+  time, once backfilling it onto inherited rows and merely delaying a defect by 30 days — and the lesson
+  that survived both is that a **NULL `expires_at` is meaningful**: it says the row is not on the expiry
+  clock at all, and that NULL protects a consent-paused relationship.
+- **⚠️ The backfill is `EXPIRED` rows only, from `expires_at`.** Those rows did expire at approximately
+  their deadline, because **no backlog could exist before this release** — the sweep ran daily and
+  unbounded — so it is honest and preserves their current retention behaviour exactly. **Nothing is written
+  for any other status**, since both of `v0.97.0`'s wrong attempts came from writing a timestamp onto rows
+  that should have had none.
+- **⚠️ THE FIRST VERSION OF THE TEST PASSED FOR THE WRONG REASON, and a mutation caught it — the sixth
+  instance of this shape in four releases.** Removing `expired_at = :expiredAt` from the transition
+  **survived**: an unwritten column stays NULL, the safe-retain branch keeps the row visible, and the
+  assertion about visibility was satisfied by the null path rather than by the fix. The test now also
+  asserts the sweep **records** the moment, and that the recorded moment is **now rather than the long-past
+  deadline** — that difference *is* the fix. **Mutation-verified:** reverting retention to `expires_at`
+  fails it, and so does removing the write.
+- **⚠️ The safe-retain branch has its own test now**, because it is the branch that goes untested and then
+  quietly does someone else's work: a terminal row with no terminal timestamp — expired between deploy and
+  backfill, or any data oddity — is **retained, never hidden**.
+- **The third amendment to `v0.95.0`'s column prohibition, raised at kickoff rather than reasoned past.**
+  It **adds a new fact rather than reinterpreting an existing one**, and none of the three dated reads is
+  affected: `2026-09-19` groups by `status`, `2026-09-26` counts provisional rows plus `PENDING`+`EXPIRED`
+  relationships, `2026-10-13` reads the carrier clock.
+
 - **Inviting requires a finished onboarding (item 2) — the LAST ungated way to form a connection.**
   `invite()` gated on `assertProfileComplete` alone, which *"passes for a brand-new account"* as the
   neighbouring `acceptInvitation` comment already recorded. A verified-but-not-onboarded account could
