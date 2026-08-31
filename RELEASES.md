@@ -1,5 +1,143 @@
 # RELEASES.md - NoteLib
 
+## v0.100.0 - Domain Context Resolution
+
+**Status: In Progress** (kicked off 2026-09-01, base branch `releases/v0.100.0`, cut from `main` after
+`v0.99.0` merged and tagged)
+
+Theme: a curator should be able to see which authoring domain a note will actually generate under, and the
+product should stop deciding that from the curator's own profile.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** The reservation is
+**conjunctive** — tag it only once the redefinition's user-visible core is **live** *and* the product
+**succeeds** — and **both halves are unmet**: the Stage 2 slices are recorded as *targeting* `v1.0.0`+, so
+the core is not built, and no success read exists. **So the minor rolls to three digits.** Checked before
+the bump rather than discovered after: `/version-check` matches literal strings and carries no
+two-digit-minor assumption, there are no CI workflows, and nothing in the repo sorts tags lexically — which
+is the one place `v0.100.0` would sort *before* `v0.99.0`.
+
+### Why this release exists
+
+**⚠️ THIS IS THE FIRST RELEASE OFF THE CONNECTION SURFACE IN SIX, and the backlog is still gated.** Nothing
+unlocks until `2026-09-10`; `[CHECKPOINT — due 2026-09-11]` has **10 days** left. So this release again
+chooses from what is un-gated — but unlike the last five, the choice was forced by a **deadline that closes
+on its own**, not by theme preference.
+
+**The forcing function is Decision 11.** Domain Context authoring emits **zero analytics events**, and
+nothing records what `Automatic` *would have* resolved at the moment a curator chose. So *"did the curator
+accept or override Automatic?"* — the strongest signal the September read has — **cannot be reconstructed
+retroactively at all.** `[CHECKPOINT — due 2026-09-28]` is **27 days out**. Instrumentation that must exist
+*before* the behaviour it measures is the one kind of work that cannot slip a release without being lost.
+
+**The taxonomy questions are settled and are NOT re-opened here.** Stage 1's audit and the 13 ratified
+decisions agree: no `ARCHITECTURE`, no catch-all, no removals, no multi-valued Domain Context, no program
+list to the LLM. **The work is resolver + UX + mental model.**
+
+### Planned Scope
+
+- **1. Decisions 1 and 4, which are COUPLED and must ship together (frontend + backend).** Replace
+  `Automatic — based on the program` with **`Automatic — use note context`** *and* remove the profile
+  fallback for **canonical curated generation**. **⚠️ SHIPPING THE COPY ALONE MAKES THE LABEL WRONG AGAIN,
+  IN A NEW WAY** — until the fallback goes, "note context" can still resolve to the curator's own account
+  setting, which is not note context at all. The invariant being bought: **two curators generating the same
+  canonical note must not get different authoring-domain instructions because their personal profiles
+  differ.** **⚠️ LEARNER PERSONALIZATION IS NOT REMOVED** — profile fallback legitimately survives on the
+  learner path, and the label is curator-only (`showAuthoringMetadataFields` / `canEditAuthoringMetadata`).
+  **⚠️ The boundary predicate ALREADY EXISTS and must not be re-invented** — `isTeacherSelectableOwner` /
+  `isCurator` is `TEACHER || ADMIN` behind an onboarding guard, and `NoteService:182` **already uses it for
+  exactly this field**. The `ADMIN`-alone concern is moot.
+- **2. Decision 2 — show the EFFECTIVE writing domain as derived state (backend + frontend).**
+  `Writing domain: Architecture`, or `Writing domain needs attention`. **⚠️ NO NEW PERSISTED FIELD**, and
+  **⚠️ it must reuse the BACKEND resolver — never a frontend re-implementation of precedence**, which is a
+  guaranteed drift source. **⚠️ Decision 12: the UI shows the OUTCOME, never the resolver's five precedence
+  levels.**
+- **3. Decision 6 — block ambiguity at GENERATION, not at note save. ⚠️ OWNER RULED 2026-09-01: MOVE THE
+  EXISTING SAVE-TIME BLOCK, do not except it (backend).** `NoteService:181` calls
+  `assertMultiProgramHasDomainContext` and `NoteApplicableProgramsService:74-76` throws
+  `MultiProgramDomainContextRequiredException`, so a note with **2+ Applicable Programs and no Domain
+  Context is hard-blocked at save today, across four independent write paths.** The ruling takes the larger
+  of the two options offered: **one uniform rule — *note validity ≠ generation readiness*** — rather than
+  carving multi-program out as a data-integrity exception. **⚠️ THIS RULING WIDENED THE RELEASE AND THE
+  AUDIT NAMED IT AS THE TRIGGER TO RE-EVALUATE THE VERIFICATION TIER; see Pre-declared below.**
+- **4. Decision 11 — the override signal becomes observable (backend + frontend).** **The smallest honest
+  addition:** one authoring event capturing *(what `Automatic` resolved, what was persisted)*. **⚠️ NOT a
+  large analytics system** — Decision 9 forbids that explicitly. **⚠️ THIS IS THE ITEM WITH THE DEADLINE**;
+  if it does not ship, Decisions 10-B and 11 are simply **not answerable this cycle, and the September read
+  must say so rather than infer.**
+- **5. Decisions 3, 12 and 13 — the copy that carries the mental model (frontend).** Applicable Programs
+  helper copy states the boundary: *they determine where this note applies and is discoverable; they do not
+  determine its Domain Context.* Plus **audit every remaining Domain Context description for the same
+  narrowing failure `v0.99.0` fixed in two values** — an enumeration of a narrower value than the one it
+  names. **⚠️ Verified at kickoff: `frontend/app/onboarding/` contains ZERO `AI`/domain strings**, so no
+  copy in this release can land on the frozen path.
+
+**⚠️ THE A–F IMPLEMENTATION AUDIT HAS NOT BEEN RUN AND IS OWED BEFORE ANY CODE.** The decisions request it
+by name: **A** resolver boundary (partly answered — see item 1's note), **B** effective-domain exposure,
+**C** generation readiness, **D** exact copy, **E** observability (partly answered — see item 4), **F**
+tests. **It runs first, and its findings may re-shape items 1-3 before a Codex prompt is written.**
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ NO TAXONOMY CHANGE. The Stage 1 verdict is ACCEPTED, not re-litigated.** Do **NOT** add
+  `ARCHITECTURE` — **it PASSED the governance floor and the exclusion trap and is STILL a provable no-op**,
+  because a value's entire generation payload is its **label string plus one `quantitative` boolean** and
+  the resolver already falls back to the single joined catalog program name, so a single-program
+  Architecture note **already sends `Domain: Architecture`**. **⚠️ "Architecture didn't qualify" is the
+  WRONG takeaway and costs a release to re-derive.**
+- **⚠️ Do NOT add `GENERAL_ENGINEERING` or any catch-all** — an honest NULL beats a false classification.
+- **⚠️ Do NOT extend `QUANTITATIVE_KEYWORDS`** — that restores the guess the declared flag replaced.
+- **⚠️ Do NOT create one Domain Context per Course/Program.** The ratio is watched at every kickoff: **8:21**.
+- **⚠️ Do NOT remove `NURSING`, `ACCOUNTANCY` or `PROFESSIONAL_EDUCATION` on zero usage, and do NOT resolve
+  the zero-usage question by reasoning** — it is precisely what `[CHECKPOINT — due 2026-09-28]` reads.
+- **⚠️ Do NOT bulk-rewrite notes or retroactively regenerate Study Packs.** Domain Context changes affect
+  **future generation only**.
+- **⚠️ Do NOT invent a second evaluation rubric** — R4's runbook exists.
+- **⚠️ Do NOT add, remove or reorder an onboarding FLOW step, and no code under `frontend/app/onboarding`.**
+  `[CHECKPOINT — due 2026-09-11]` is **10 days out** and measures completion against a 62.4% baseline.
+- **⚠️ Item 3 RELAXES A SAVE-TIME INVARIANT, which creates a production data state that has never existed:
+  a note with 2+ Applicable Programs and a NULL Domain Context.** Q6 of the audit's read is an **invariant
+  check whose non-zero result currently means a live bug**; after this release it means legacy-or-legal, so
+  **that query's interpretation must be updated in the same release or it will be misread in September.**
+- **⚠️ `MultiProgramDomainContextRequiredException` is an EXISTING ERROR CONTRACT across four write paths.**
+  Moving it is not deleting it; the generation path must fail just as loudly, and the four call sites must
+  be enumerated mechanically rather than found by grep-and-hope.
+- **⚠️ Item 1 must not touch the LEARNER resolution path.** The change is scoped to canonical curated
+  generation; a thin edit to the shared resolver would silently remove learner personalization.
+- **⚠️ Every standing connection rule is unchanged** — this release does not touch that surface.
+
+### Pre-declared at kickoff
+
+- **⚠️ VERIFICATION TIER: ONE SCOPED COLD AGENT, framed as FALSIFICATION — and this was RE-EVALUATED, not
+  inherited.** The audit set the tier *"one scoped cold agent at minimum; re-evaluate if the Decision 6
+  ruling widens to moving the existing save-block."* **The ruling DID widen it.** Re-evaluated against the
+  gate in `CLAUDE.md`: the full three-agent test is reserved for a **permission substrate** or a
+  **first-of-kind cross-user read**, and this release has neither. It fires the one-agent trigger three
+  times over — **production-data semantics change** (item 3), a **changed error contract across four write
+  paths**, and a **change to what reaches the LLM** on the canonical authoring path (item 1). That is the
+  same shape `v0.95.0` and `v0.99.0` both carried at one agent. **⚠️ ESCALATE TO THE FULL TEST IF** the A–F
+  audit finds item 1's boundary is not cleanly separable from the learner path, or if item 3's four write
+  paths turn out not to be four.
+- **⚠️ ITEM 1 GETS ITS `advisor()` CALL BEFORE IMPLEMENTATION** — it changes what reaches the LLM on the
+  canonical authoring path, and `v0.99.0` measured that the earliest checks are where the yield is.
+- **⚠️ THE COLD AGENT MUST BE ASKED TO COUNT EXECUTED TESTS, NOT READ THEM.** Seventh instance in five
+  releases of a guard that looks present and does nothing — and `v0.99.0`'s was **inside the guard built to
+  prevent exactly that.** Also required: **name which test killed each mutant**, and **assert the fixture
+  worked before asserting behaviour.**
+- **⚠️ A `[CHECKPOINT]` IS OWED, and it is a DEPLOY-SPLIT CAVEAT rather than a new date.** This release
+  changes the resolver **inside `[CHECKPOINT — due 2026-09-28]`'s own window**, and item 4 adds the
+  instrumentation that read depends on. So the read spans two behaviours. **Per the consolidation rule this
+  JOINS `2026-09-28` rather than minting a date** — same trigger, same surface, evaluated once — and the
+  caveat is recorded **before** the read, not discovered during it.
+- **⚠️ Item 4 itself owes NO checkpoint.** Adding an event is instrumentation, not shipping ahead of
+  evidence. Stated so the signoff gate is answered deliberately rather than skipped.
+- **The `### Planned Scope` heading is permanent**; delivery appends to `### Shipped`.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.99.0 - Connection Completeness
 
 **Status: Released** (kicked off 2026-08-31, signed off 2026-08-31, base branch `releases/v0.99.0`,
