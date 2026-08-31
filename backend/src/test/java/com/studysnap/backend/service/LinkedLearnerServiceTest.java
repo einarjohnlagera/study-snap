@@ -198,6 +198,36 @@ class LinkedLearnerServiceTest {
     }
 
     /**
+     * ⚠️ THE GATE MUST OUTRANK THE WRITE-ONCE BIRTH-YEAR WRITE, and nothing pinned that until a cold
+     * agent falsified it at the v0.99.0 signoff: moving the gate below {@code persistBirthYear} left
+     * all 57 tests green, because the sibling test above asserts only
+     * {@code verifyNoInteractions(invitationRepository)} — which pins the gate above the LOOKUP, not
+     * above the write.
+     *
+     * <p>The scenario a reorder allows: a non-onboarded caller invites as the LEARNER with a birth
+     * year. {@code users.birth_year} is account-global and WRITE-ONCE, so it is burned permanently —
+     * for an invitation that is then rejected and never existed. v0.89.1's correction path is the
+     * only recovery, and it works by re-evaluating existing links, of which there are none.
+     */
+    @Test
+    void aRejectedMidOnboardingInviteNeverBurnsTheWriteOnceBirthYear() {
+        UUID callerId = UUID.randomUUID();
+        UserEntity midOnboarding = user("newcomer@example.test");
+        midOnboarding.setId(callerId);
+        midOnboarding.setBirthYear(null);
+        midOnboarding.setOnboardingCompletedAt(null);
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(midOnboarding));
+
+        assertThatThrownBy(() -> service.invite(callerId,
+                new InviteLinkedLearnerRequest("stranger@example.test", LinkedLearnerSide.LEARNER,
+                        Year.now().getValue() - 12)))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+
+        verify(userRepository, never()).findByIdForUpdate(any(UUID.class));
+        assertThat(midOnboarding.getBirthYear()).isNull();
+    }
+
+    /**
      * ⚠️ v0.98.0 item 1. This path forms the IDENTICAL relationship as an invitation-link redemption,
      * so it answers to the same bar. Asserted with an invitation id that does not exist, which proves
      * the gate runs BEFORE the lookup — a rejection must disclose the caller's own account state and

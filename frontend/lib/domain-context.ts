@@ -34,9 +34,15 @@ export const DOMAIN_CONTEXT_OPTIONS: Array<{ value: DomainContext; label: string
   {
     value: "PROFESSIONAL_PRACTICE_AND_REGULATION",
     label: "Professional Practice & Regulation",
-    // ⚠️ Corrected in v0.99.0. "BP 334" was a typo for BP 344, the accessibility law: the ratified
-    // spec (08-taxonomy-validation-and-final-recommendation.md, quoted at RELEASES.md:3710) and
-    // every other reference in the repo say 344. The description also read as an
+    // ⚠️ Corrected in v0.99.0 to BP 344, the accessibility law (Batas Pambansa Blg. 344).
+    // ⚠️ THE RATIFIED SPEC ITSELF SAYS "BP 334" AND IS ALSO WRONG -- do not "restore" it. A cold
+    // agent falsified this comment's first draft, which claimed the spec said 344: it does not.
+    // 08-taxonomy-validation-and-final-recommendation.md:41 and :60 both say 334 (attributing 32
+    // notes to it), and RELEASES.md silently misquoted that as 344, which the first draft then
+    // cited as proof. The evidence is the CURRICULUM sources, not the taxonomy spec:
+    // docs/gpt-contexts/archi-comprehensive-set-1.md:995 ("BP 344-related accessibility") and
+    // set-2:1056 ("Subject: BP 344"), plus the audit's own reuse table. BP 334 is not a building
+    // or accessibility law. The description also read as an
     // Engineering-union-Architecture list and omitted National Building Code and Construction
     // Safety, which the ALE reuse data places here -- 19 of the 47 cross-program reused rows.
     // ⚠️ `quantitative` STAYS FALSE, and that is a decision rather than an oversight. Widening a
