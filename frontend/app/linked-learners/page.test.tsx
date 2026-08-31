@@ -116,6 +116,24 @@ it("shows no deadline once a request is accepted, because null means not on the 
   expect(screen.queryByText(/if it is not confirmed/)).not.toBeInTheDocument();
 });
 
+it("routes a mid-onboarding inviter to onboarding instead of a dead error", async () => {
+  // ⚠️ v0.99.0 item 2 closes the LAST ungated way to form a connection. The self-heal ships with
+  // the gate: this page's guard keys on needsOnboarding(), so two cohorts reach a 403 here.
+  jest.mocked(inviteLinkedLearner).mockRejectedValue(
+    Object.assign(new Error("Finish setting up your account before connecting with someone."), {
+      action: "COMPLETE_ONBOARDING",
+      status: 403,
+    }));
+
+  render(<LinkedLearnersPage />);
+  fireEvent.change(await screen.findByLabelText(/email/i), {
+    target: { value: "learner@example.com" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /send invitation/i }));
+
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/onboarding"));
+});
+
 it("routes a mid-onboarding caller to onboarding instead of a dead error", async () => {
   // ⚠️ v0.98.0 item 1 requires finished onboarding to ACCEPT. This page's guard keys on
   // needsOnboarding(), which treats two cohorts as onboarded while the server column is null, so

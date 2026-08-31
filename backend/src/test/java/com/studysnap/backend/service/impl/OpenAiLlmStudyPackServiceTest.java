@@ -496,13 +496,28 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(invokeIsQuantitativeContext(nonQuantitativeDomain)).isFalse();
     }
 
+    // Pins that all three engineering domains produce computation guidance -- by the declared flag
+    // OR by their own label tripping the keyword scan. It CANNOT distinguish the two, and its
+    // previous name (`preservesEveryPreviouslyQuantitativeEngineeringDomain`) claimed it could.
+    // ⚠️ Verified empirically in v0.99.0: flipping all three enum values to `quantitative = false`
+    // leaves this GREEN. isQuantitativeContext short-circuits on the declared flag at
+    // OpenAiLlmStudyPackService:1642, but its fallback haystack leads with effectiveAuthoringDomain
+    // (:1648) -- the domain LABEL -- and "Engineering Mathematics", "Engineering Sciences" and
+    // "Civil Engineering" each contain a QUANTITATIVE_KEYWORD. The flag half is therefore
+    // unobservable at this level for exactly these three, and is pinned instead by
+    // DomainContextTest.declaresWhetherEachDomainContextIsQuantitative.
+    // ⚠️ Kept rather than deleted: this is the only SERVICE-level assertion for these three, so it
+    // still fails if the keyword scan loses `engineering` and a flag is flipped. Overdetermined is
+    // not the same as worthless -- the false coverage was in the name, not the assertion.
+    // ACCOUNTANCY and NURSING are the values that DO isolate the flag, since their labels trip
+    // nothing; declaredQuantitativeDomainsProduceComputationGuidance below covers that half.
     @ParameterizedTest
     @EnumSource(value = DomainContext.class, names = {
             "ENGINEERING_MATHEMATICS",
             "ENGINEERING_SCIENCES",
             "CIVIL_ENGINEERING"
     })
-    void isQuantitativeContext_preservesEveryPreviouslyQuantitativeEngineeringDomain(
+    void isQuantitativeContext_isTrueForEveryEngineeringDomainByFlagOrLabel(
             DomainContext domainContext
     ) throws Exception {
         StudyPackGenerationContext context = new StudyPackGenerationContext(

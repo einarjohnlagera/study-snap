@@ -86,6 +86,28 @@ public class LinkedLearnerService {
         authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
+        // ⚠️ ONBOARDING IS REQUIRED TO INVITE, as of v0.99.0, and this is the LAST ungated way to form
+        // a connection. v0.97.0 gated the invitation-link endpoints and v0.98.0 gated email
+        // acceptance, but inviting stayed on assertProfileComplete alone — which "passes for a
+        // brand-new account", as the acceptInvitation comment below already records. So a
+        // verified-but-not-onboarded account could invite as a SUPPORTER, have an onboarded learner
+        // accept, and reach an ACCEPTED relationship with cross-user read capacity.
+        //
+        // ⚠️ accept() IS DELIBERATELY NOT GATED, and the call graph is why rather than an oversight.
+        // Every path that creates a PENDING relationship now requires onboarding at creation time:
+        // link creation and redemption (v0.97.0), email acceptance (v0.98.0), and inviting (here).
+        // acceptInvitation calls accept() internally and is itself gated. And onboardingCompletedAt
+        // is never cleared on a live account — the only writers that null it are signup() and
+        // createGoogleUser(), which initialise a new row. So accept() cannot be reached by a
+        // non-onboarded caller, and gating it would put a third gate on the guardian-consent path,
+        // whose end-to-end working v0.95.0 called "the acceptance test for this item, not a side
+        // condition".
+        //
+        // ⚠️ BEFORE any address lookup, so a rejection discloses only the caller's own account state
+        // and never whether an address has an account — the v0.90.0 oracle property.
+        if (caller.getOnboardingCompletedAt() == null) {
+            throw new LinkedLearnerOnboardingRequiredException();
+        }
         String normalizedEmail = normalizeEmail(request.email());
 
         // ⚠️ Self-invite is refused BEFORE any account lookup, and deliberately so: the caller

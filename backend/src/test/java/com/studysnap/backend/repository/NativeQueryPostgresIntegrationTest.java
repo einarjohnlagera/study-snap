@@ -940,6 +940,65 @@ class NativeQueryPostgresIntegrationTest {
      * and the clock is the ROW'S OWN terminal timestamp — which is exactly why v0.97.0 refused to
      * overwrite {@code expires_at} with the sweep time.
      */
+    /**
+     * ⚠️ THE DEFECT v0.99.0 ITEM 1 EXISTS TO FIX, reproduced directly. Retention used to key on the
+     * DEADLINE, so a request swept long after it — which v0.98.0's batch bound and pause hook made
+     * possible — arrived already outside the window and vanished without ever being shown as expired.
+     */
+    @Test
+    void aLateSweptRequestIsStillShownAsExpiredRatherThanVanishing() {
+        UUID supporter = seedUser("late-sweep-supporter");
+        UUID learner = seedUser("late-sweep-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "PENDING");
+        // Deadline 90 days ago: the sweep was paused, and is only running now.
+        setRelationshipExpiry(relationshipId, OffsetDateTime.now(ZoneOffset.UTC).minusDays(90));
+
+        assertThat(requestExpiryWorker.expire(relationshipId, OffsetDateTime.now(ZoneOffset.UTC)))
+                .isTrue();
+
+        List<UUID> visible = relationshipRepository
+                .findVisibleForUser(learner, OffsetDateTime.now(ZoneOffset.UTC).minusDays(30)).stream()
+                .map(LinkedLearnerRelationshipEntity::getId).toList();
+        assertThat(visible)
+                .as("it expired just now, so both parties must still see that it expired")
+                .contains(relationshipId);
+        // ⚠️ AND the transition must actually RECORD when it expired. Without this the test passes
+        // for the wrong reason: an unwritten expired_at stays NULL, the safe-retain branch keeps the
+        // row visible, and a mutation removing the write survives — which it did, until this line.
+        // The recorded moment must be NOW, not the 90-day-old deadline; that difference IS the fix.
+        Map<String, Object> stamps = jdbcTemplate.queryForMap(
+                "select expired_at, expires_at from linked_learner_relationships where id = ?",
+                relationshipId);
+        assertThat(stamps.get("expired_at")).as("the sweep must record when it expired").isNotNull();
+        assertThat(((java.sql.Timestamp) stamps.get("expired_at")).toInstant())
+                .as("recorded at sweep time, not at the long-past deadline")
+                .isAfter(((java.sql.Timestamp) stamps.get("expires_at")).toInstant().plusSeconds(86400));
+    }
+
+    /**
+     * ⚠️ THE SAFE-RETAIN BRANCH, which is the one that goes untested and then breaks. A terminal row
+     * with no terminal timestamp — expired between deploy and backfill, or any data oddity — must be
+     * RETAINED, never hidden. v0.98.0 shipped a mutation that survived precisely because a null
+     * branch was quietly doing the work an assertion claimed a different clause was doing.
+     */
+    @Test
+    void aTerminalRowWithNoTerminalTimestampIsRetainedNotHidden() {
+        UUID supporter = seedUser("no-stamp-supporter");
+        UUID learner = seedUser("no-stamp-learner");
+        UUID relationshipId = seedRelationship(supporter, learner, "EXPIRED");
+        jdbcTemplate.update(
+                "update linked_learner_relationships set expired_at = null, revoked_at = null,"
+                        + " expires_at = now() - interval '90 days' where id = ?", relationshipId);
+
+        List<UUID> visible = relationshipRepository
+                .findVisibleForUser(learner, OffsetDateTime.now(ZoneOffset.UTC).minusDays(30)).stream()
+                .map(LinkedLearnerRelationshipEntity::getId).toList();
+
+        assertThat(visible)
+                .as("no terminal timestamp must fail SAFE — retain, never hide")
+                .contains(relationshipId);
+    }
+
     @Test
     void terminalRelationshipsFallOutOfTheListOnceTheyAreOlderThanTheRetentionWindow() {
         UUID supporter = seedUser("retention-supporter");
@@ -1076,7 +1135,7 @@ class NativeQueryPostgresIntegrationTest {
                     .isOne();
         }
         jdbcTemplate.update("update linked_learner_relationships set status = 'REVOKED', revoked_at = now() where id = ?", revokedRel);
-        jdbcTemplate.update("update linked_learner_relationships set status = 'EXPIRED' where id = ?", expiredRel);
+        jdbcTemplate.update("update linked_learner_relationships set status = 'EXPIRED', expired_at = now() where id = ?", expiredRel);
         jdbcTemplate.update("update users set birth_year = 2000 where id = ?", learner);
         linkedLearnerService().correctBirthYear(learner, Year.now().getValue() - 10);
         assertThat(relationshipStatus(pausedRel)).isEqualTo("PENDING");

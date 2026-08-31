@@ -1,5 +1,413 @@
 # RELEASES.md - NoteLib
 
+## v0.99.0 - Connection Completeness
+
+**Status: Released** (kicked off 2026-08-31, signed off 2026-08-31, base branch `releases/v0.99.0`,
+cut from `main` after `v0.98.0` merged and tagged)
+
+Theme: finish the two connection properties `v0.98.0` shipped half-built, and stop a paused sweep from
+hiding the expiries it later performs.
+
+### Why this release exists
+
+**⚠️ THIS IS THE FIFTH CONSECUTIVE RELEASE ON THE CONNECTION SURFACE, and that was named at kickoff rather
+than allowed to happen by drift.** The wider backlog is checkpoint-gated until `2026-09-11` and
+`2026-09-16`, so a release opened today is choosing from what is un-gated rather than from what is most
+valuable. **The owner chose to finish the surface (2026-08-31)** over a maintenance release or waiting for
+the checkpoint batch — on the reasoning that two half-built properties are worse than either finishing or
+never starting them.
+
+**Both items close a `v0.98.0` Known limitation that release recorded rather than fixed.**
+
+### Planned Scope
+
+- **1. An expiry stays visible even after a paused or backlogged sweep (backend + migration).**
+  `findVisibleForUser` retains terminal rows on `coalesce(revoked_at, expires_at)` — the **deadline**, not
+  the moment the row became terminal. Under a daily sweep those coincide, which is why it shipped. But
+  `v0.98.0` itself added a **500-row batch bound** and a **pause hook**, and both create backlogs: a request
+  swept more than `request-ttl-days` after its deadline becomes `EXPIRED` with a timestamp **already
+  outside the retention window**, so it vanishes from both parties' lists instantly and is **never shown as
+  expired at all**. Concretely: sweep paused 40 days, then resumed — a user sees *"pending, overdue"* one
+  day and **nothing** the next, which defeats the exact purpose retention exists for.
+  **⚠️ OWNER DECISION 2026-08-31: a separate `expired_at` column**, over re-keying retention on a recorded
+  sweep time. `expires_at` therefore keeps meaning **the deadline, for every status**, unchanged — and the
+  table already carries a distinct terminal timestamp per status (`accepted_at`, `revoked_at`), so this
+  completes an existing pattern rather than inventing one.
+- **2. The onboarding bar covers the whole connection-forming path (backend).** `v0.98.0` gated
+  `acceptInvitation`, but `invite()` (`LinkedLearnerService:87`) and `accept()` (`:373`) still require only
+  `assertProfileComplete`, **which passes for a brand-new account**. So a verified-but-not-onboarded account
+  can still invite as a SUPPORTER, have an onboarded learner accept, and reach an `ACCEPTED` relationship
+  with cross-user read capacity. **⚠️ The property *"forming a connection requires finished onboarding"* is
+  currently HALF TRUE, and half-true is the worst state** — it reads as enforced and is not.
+- **3. A test pins the three configurable crons to their production defaults (test).** `v0.98.0` made
+  `BillingUsageResetJob`, `SubscriptionExpiryJob` and `BulkGenerationResultCleanupJob` overridable; a cold
+  agent verified the defaults by hand against `origin/main`, and **nothing in the build would catch a future
+  edit that silently changed a production schedule.**
+
+- **Every cron job's production schedule is pinned (item 3).** `v0.98.0` made three hardcoded crons
+  configurable, and its cold agent verified the defaults **by hand** against `origin/main` — because
+  nothing in the build could. A later edit that silently moved a production schedule would have
+  shipped green. **Hand verification does not survive the session that performed it.**
+- **⚠️ IT ALSO CATCHES THE GAP THAT ACTUALLY SHIPPED, which is the better half.** That same audit found
+  the claim *"every scheduled job is disabled in tests"* was made **one commit before it was true**:
+  three jobs had been fixed and **five others were already configurable but simply never listed** —
+  including `account.purge-cron`, which **deletes data** and was armed during every test run. A human
+  found it by enumerating annotations. `everyCronJobIsDisabledInTheTestProfile` now enumerates them
+  mechanically, so **a new job added without a test-profile entry fails immediately** rather than
+  waiting for someone to notice.
+- **The test covers all TEN cron jobs, not the three item 3 named.** Scoping it to the three would
+  have pinned exactly the jobs least likely to drift — the ones just audited — and left the other
+  seven in the state that produced the defect.
+- **A third property is pinned: the `${key:default}` form itself.** A bare literal cannot be
+  overridden or disabled; a bare `${key}` fails startup on a missing key — the small regression
+  `v0.98.0` introduced and then corrected. **Mutation-verified, three mutants, each killed with a
+  message naming the rule:** moving a schedule fails
+  `everyCronJobDeclaresItsProductionScheduleAsAnOverridableDefault`; reverting to a hardcoded literal
+  fails it with the form message; dropping a job from the disable list fails
+  `everyCronJobIsDisabledInTheTestProfile`.
+- **⚠️ Two tests were confirmed to RUN by counting, not by reading the file** — `v0.98.0`'s worst
+  finding was a test that reported *"Tests run: 0"* while the build stayed green.
+
+- **The curator-facing Domain Context copy stops blocking classification (item 4).**
+  `ENGINEERING_SCIENCES`'s description now names **building services** — plumbing, HVAC, electrical
+  distribution, lighting, acoustics, fire protection, vertical transportation — plus construction
+  materials, testing and management. It previously listed only the Civil-flavoured half, which is an
+  **enumeration of a narrower value than the one it names**, and is why ~41 Building Utilities notes
+  sat unclassified and generated with **computation guidance silently off**.
+- **`CIVIL_ENGINEERING`'s description drops `Surveying` and `Construction Management`**, which
+  production practice places in `ENGINEERING_SCIENCES` — those notes are authored for Civil
+  Engineering and reused **unchanged** in Architecture, which is `ADR-001`'s binary test resolving to
+  the shared bundle. **⚠️ Surveying is INSUFFICIENT EVIDENCE rather than reassigned** — no Surveying
+  notes exist in the ALE set, so it is claimed by neither value until evidence arrives.
+- **⚠️ The strategist brief stops pre-committing the answer.** `REVIEW_SET_SHAPING_CONTEXT.md` told it
+  *"Some programs (Architecture, notably) deliberately have no Domain Context"* — and **that
+  instruction produced 215 `(unset)` rows in the ALE plan**, a pre-committed answer reproduced rather
+  than a per-note assessment. It now states the rule, warns against expecting any program to come
+  back unset, and names building services explicitly.
+- **`ADR-001`'s failure-condition baseline is corrected from "27+ programs" to 21.** That figure was
+  the **pre-catalog free-text spread**, not catalog rows — and the whole condition is a **ratio**, so
+  it was being read against the wrong denominator. The real ratio is **8:21**.
+- **⚠️ NO ENUM VALUE WAS ADDED, AND `ARCHITECTURE` SPECIFICALLY WAS NOT.** It **passes** the
+  governance floor and the exclusion trap and is still a **provable no-op**: a value's entire
+  generation payload is its **label string plus one boolean**, and the resolver already falls back to
+  the single joined catalog program name, so a single-program Architecture note **already sends
+  `Domain: Architecture`**. Full audit, counter-argument and unrun production SQL:
+  `docs/claude-plans/domain-context-taxonomy-calibration-audit.md`.
+- **Nothing here is pinned by a test, and that is stated rather than assumed** — grepped: no test
+  asserts any description string. These are curator-facing copy, verified by `tsc` and the full
+  frontend suite (2,065 tests) rather than by a new assertion, because pinning marketing-style copy
+  would make it harder to correct next time it is wrong.
+
+- **An expiry stays visible after a paused or backlogged sweep (item 1).** `V130` adds `expired_at`, the
+  sweep records it on the transition, and `findVisibleForUser` retains terminal rows on
+  `coalesce(revoked_at, expired_at)` instead of the deadline. A request swept 90 days late is now still
+  shown as expired rather than vanishing the moment it is swept.
+- **⚠️ `expires_at` IS UNTOUCHED, AND THAT IS THE ENTIRE REASON A SEPARATE COLUMN WAS CHOSEN.** It means
+  the deadline, for every status. `v0.97.0` got this area wrong twice — once overwriting it with the sweep
+  time, once backfilling it onto inherited rows and merely delaying a defect by 30 days — and the lesson
+  that survived both is that a **NULL `expires_at` is meaningful**: it says the row is not on the expiry
+  clock at all, and that NULL protects a consent-paused relationship.
+- **⚠️ The backfill is `EXPIRED` rows only, from `expires_at`.** Those rows did expire at approximately
+  their deadline, because **no backlog could exist before this release** — the sweep ran daily and
+  unbounded — so it is honest and preserves their current retention behaviour exactly. **Nothing is written
+  for any other status**, since both of `v0.97.0`'s wrong attempts came from writing a timestamp onto rows
+  that should have had none.
+- **⚠️ THE FIRST VERSION OF THE TEST PASSED FOR THE WRONG REASON, and a mutation caught it — the sixth
+  instance of this shape in four releases.** Removing `expired_at = :expiredAt` from the transition
+  **survived**: an unwritten column stays NULL, the safe-retain branch keeps the row visible, and the
+  assertion about visibility was satisfied by the null path rather than by the fix. The test now also
+  asserts the sweep **records** the moment, and that the recorded moment is **now rather than the long-past
+  deadline** — that difference *is* the fix. **Mutation-verified:** reverting retention to `expires_at`
+  fails it, and so does removing the write.
+- **⚠️ The safe-retain branch has its own test now**, because it is the branch that goes untested and then
+  quietly does someone else's work: a terminal row with no terminal timestamp — expired between deploy and
+  backfill, or any data oddity — is **retained, never hidden**.
+- **The third amendment to `v0.95.0`'s column prohibition, raised at kickoff rather than reasoned past.**
+  It **adds a new fact rather than reinterpreting an existing one**, and none of the three dated reads is
+  affected: `2026-09-19` groups by `status`, `2026-09-26` counts provisional rows plus `PENDING`+`EXPIRED`
+  relationships, `2026-10-13` reads the carrier clock.
+
+- **Inviting requires a finished onboarding (item 2) — the LAST ungated way to form a connection.**
+  `invite()` gated on `assertProfileComplete` alone, which *"passes for a brand-new account"* as the
+  neighbouring `acceptInvitation` comment already recorded. A verified-but-not-onboarded account could
+  invite as a SUPPORTER, have an onboarded learner accept, and reach an `ACCEPTED` relationship with
+  cross-user read capacity.
+- **⚠️ THE SCOPE NARROWED FROM THE KICKOFF, AND THE PROPERTY IS RESTATED RATHER THAN QUIETLY SHRUNK.**
+  The kickoff said the bar should cover *"`invite()` and `accept()`"*. **`accept()` is deliberately NOT
+  gated**, because the call graph makes it unreachable by a non-onboarded caller: every path that creates a
+  `PENDING` relationship now gates onboarding at creation — link creation and redemption (`v0.97.0`), email
+  acceptance (`v0.98.0`), and inviting (here) — `acceptInvitation` calls `accept()` internally and is
+  itself gated, and **`onboardingCompletedAt` is never cleared on a live account** (the only writers that
+  null it are `signup()` and `createGoogleUser()`, which initialise a new row — checked, not assumed).
+  **The honest statement of the property: inviting requires onboarding; accepting INHERITS the requirement
+  from whichever path created the relationship.**
+- **⚠️ Gating `accept()` anyway would have put a THIRD gate on the guardian-consent path**, whose
+  end-to-end working `v0.95.0` called *"the acceptance test for this item, not a side condition"* — cost
+  with no coverage gained.
+- **⚠️ The gate runs BEFORE any address lookup**, and the test proves it with an address that has no
+  account, so a rejection cannot become a cheaper oracle beside `v0.90.0`'s account-existence property.
+- **The `/onboarding` self-heal ships WITH the gate**, as `v0.98.0` established — this page's guard keys on
+  `needsOnboarding()`, so the same two cohorts reach a 403 here. **Mutation-verified:** removing the gate
+  fails `invitingRequiresFinishedOnboardingAndSaysSoBeforeAnyAddressLookup`; removing the redirect fails
+  `routes a mid-onboarding inviter to onboarding instead of a dead error`.
+
+#### Added 2026-08-31, after items 1-2 shipped — item 4, folded on the owner's instruction
+
+**⚠️ FOLDED BECAUSE IT BLOCKS CURRICULUM WORK, and the theme mismatch is acknowledged rather than
+argued away.** `v0.99.0`'s theme is connection lifecycle; this is authoring metadata. The owner ruled
+2026-08-31: *"it blocks my building of ALE review set so it must be shipped as soon as possible."*
+Folding here is genuinely the soonest — three string edits, **no code logic, no schema, no prompt
+change** — so the verification tier does not move.
+
+- **4. The curator-facing Domain Context copy stops blocking classification (frontend copy + docs).**
+  Output of a Stage 1 calibration audit run 2026-08-31 by two cold-context agents; full findings,
+  counter-argument and unrun production SQL in
+  `docs/claude-plans/domain-context-taxonomy-calibration-audit.md`.
+  **⚠️ THIS IS NOT A TAXONOMY CHANGE. The audit's verdict is that NO enum value is added** — see the
+  anti-drift block below, which states why in the form least likely to be misread.
+  Three edits:
+  - **`ENGINEERING_SCIENCES`'s description is widened.** It reads *"Strength of Materials,
+    Engineering Mechanics, Hydraulics or Fluid Mechanics, Thermodynamics, and Engineering
+    Materials"* — a **Civil-Engineering-flavoured enumeration of a broader ratified value**, omitting
+    plumbing, HVAC, electrical distribution, lighting, acoustics, fire protection and vertical
+    transport. **⚠️ THIS IS THE ACTUAL BLOCKER:** ~41 Building Utilities notes generate with
+    **computation guidance silently OFF** — `QUANTITATIVE_KEYWORDS` has no `architecture`, so
+    *"Air-Conditioning Systems"*, *"Room Acoustics"*, *"Automatic Sprinkler Systems"* trip nothing —
+    and the remedy is classifying them `ENGINEERING_SCIENCES`, which is `quantitative=true`. **A
+    curator reading the current description would never pick it.** Precedent is ratified:
+    `ADR-001`'s *Water Supply Engineering* worked example is the same family.
+  - **`CIVIL_ENGINEERING`'s description is corrected.** It claims *Surveying* and *Construction
+    Management*, which production practice places elsewhere — 7 Construction Materials and 6
+    Construction/Project Management notes carry `ENGINEERING_SCIENCES` and cross CE → Architecture
+    **unchanged**.
+  - **`REVIEW_SET_SHAPING_CONTEXT.md` stops pre-committing the answer.** It tells the strategist
+    *"Some programs (Architecture, notably) deliberately have no Domain Context and rely on this
+    fallback"* — which **produced 215 `(unset)` rows in the ALE plan** and pre-empts the exact
+    question `[CHECKPOINT — due 2026-09-28]` exists to ask. State the rule; drop the worked answer.
+- **⚠️ `ADR-001`'s program baseline is corrected from "27+" to 21** in the same edit. That figure is
+  the **pre-catalog free-text spread**, not catalog rows, and the ADR's own failure-condition ratio
+  depends on the denominator. The real ratio is **8:21**.
+
+### Known limitations
+
+- **⚠️ "Every `ACCEPTED` relationship has two onboarded parties" is PERMANENTLY FALSE for
+  relationships formed before the gates.** `v0.97.0`, `v0.98.0` and `v0.99.0` closed link creation and
+  redemption, email acceptance, and inviting — **going forward only**. No migration heals rows created
+  earlier, and none is proposed: retroactively severing a connection both people agreed to is a larger
+  decision than the gate itself. **⚠️ A SECOND, SELF-HEALING WINDOW closes on its own:** a `PENDING`
+  invitation written by a non-onboarded inviter *before* this deploy still yields an `ACCEPTED`
+  relationship when its onboarded recipient accepts, because the acceptor is the only gated party
+  there. Bounded by `invitation-ttl-days` — **30 days** — after which no such invitation survives.
+- **`V130`'s index comment describes a read the index cannot serve.** It creates
+  `(status, expired_at, revoked_at)` under *"retention reads this per terminal status"*, but
+  `findVisibleForUser`'s selective predicate is `supporter_user_id = :userId or learner_user_id
+  = :userId`, which a `status`-leading index over four values will not serve. **Comment defect and a
+  probably-dead index, not a correctness bug** — recorded rather than fixed because confirming it needs
+  `EXPLAIN` against production volume, which is a read this release did not run.
+- **`V130`'s backfill predicate is unexercised by any test.** `NativeQueryPostgresIntegrationTest`
+  migrates an EMPTY database, so `UPDATE … WHERE status = 'EXPIRED'` runs against zero rows. Verified
+  by reading only. **⚠️ This is the shape the repo has been burned by** — a predicate with no real-row
+  test — and it is accepted here solely because the statement is a one-time backfill that cannot run
+  again, not because reading it is sufficient in general.
+- **A rolling deploy leaves a small set of rows retained forever.** A relationship expired by old code
+  between the Flyway run and the new code serving traffic gets `expired_at IS NULL` and is then kept by
+  the safe-retain branch, where previously it would have aged out on `expires_at`. **Fails safe** — a
+  visible ended connection, never a hidden live one — and the migration comment says so.
+- **`consentPausedRelationshipIsNeverExpiredBecauseAPauseIsNotATermination` does not prove what its
+  name implies.** It relies on `seedRelationship` never setting `expires_at`, so it cannot show that
+  `pauseAcceptedForConsent` leaves the deadline NULL. **The property IS covered** — by
+  `aPreMigrationConsentPausedRowIsNeverExpirableAtAnyFutureInstant`, which nulls the column explicitly
+  and asserts the intermediate state — just not by the test whose name claims it.
+- **`RetentionEmailScheduler`'s `zone = DISPATCH_ZONE` is unpinned.** The cron contract test pins the
+  expression, not the timezone, so a zone change would move all three retention dispatches with a green
+  build. Same class of gap as the yaml shadowing fixed above, at lower stakes.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ AN ANTI-DRIFT RULE NEEDS ITS THIRD AMENDMENT, AND IT IS RAISED HERE RATHER THAN REASONED PAST.**
+  `v0.95.0` prohibits adding a column to `linked_learner_relationships`, whose meaning
+  `[CHECKPOINT — due 2026-09-19]`, `[2026-09-26]` and `[2026-10-13]` read. It was amended once for
+  `expires_at` (`v0.97.0`). Item 1 adds `expired_at`. **THE AMENDMENT, with its reason:** the prohibition
+  protects a row's **MEANING** for three dated reads, and this **adds a new fact rather than reinterpreting
+  an existing one** — `expires_at` keeps its definition exactly, which is the whole point of choosing a
+  separate column over re-keying. **⚠️ None of the three reads is affected:** `2026-09-19` groups by
+  `status`, `2026-09-26` counts provisional rows and `PENDING`+`EXPIRED` relationships, and `2026-10-13`
+  reads the carrier clock. **⚠️ THE PROHIBITION OTHERWISE STANDS IN FULL** — nothing may be added to
+  `_invitations` or `_guardian_consents`, and no fourth column here, without the same explicit amendment.
+- **⚠️ `expires_at` MUST NOT BE OVERWRITTEN, RE-PURPOSED, OR BACKFILLED. `v0.97.0` GOT THIS WRONG TWICE.**
+  It means the deadline for every status. The first attempt there set it to the sweep time; the second
+  backfilled it onto inherited rows and merely delayed a defect by 30 days. **The lesson that survived: a
+  NULL `expires_at` is MEANINGFUL — it says the row is not on the expiry clock at all, and that NULL is the
+  entire mechanism protecting a consent-paused relationship.** Item 1 must not disturb it.
+- **⚠️ V130's BACKFILL OF `expired_at` IS THE TRAP, and the shape is decided at kickoff.** Existing
+  `EXPIRED` rows have no `expired_at`. **Set it to `expires_at` for those rows only** — they did expire at
+  approximately their deadline, because no backlog existed before this release, so it is honest and
+  preserves their current retention behaviour exactly. **⚠️ Backfill NOTHING for any other status**, and
+  never write `expired_at` on a `PENDING` row: `v0.97.0`'s two wrong attempts both came from writing a
+  timestamp onto rows that should have had none.
+- **⚠️ ITEM 2 TIGHTENS TWO MORE GATES AND WILL REJECT THE SAME TWO LIVE COHORTS — known in advance, for the
+  third release running.** The frontend gates on `needsOnboarding()`, not `onboardingCompletedAt`: a failed
+  `completeOnboarding` POST and the copy-on-signup cohort read as onboarded client-side while the server
+  column is null. **⚠️ The `/onboarding` self-heal ships WITH the gates, not after** — `v0.98.0` established
+  the pattern on the accept path.
+- **⚠️ `accept()` IS CALLED INTERNALLY BY `acceptInvitation`, so check for double-gating** — and it is also
+  the guardian-consent path a supporter uses to confirm a minor's connection. **Verify who each gate locks
+  out before shipping**, per `v0.71.0`'s ADMIN lockout.
+- **⚠️ Do NOT touch `assertProfileComplete`** — its mid-onboarding exemption is deliberate, protects the
+  activation funnel, and has ~20 call sites.
+- **⚠️ Do NOT add, remove or reorder an onboarding FLOW step, and no code under `frontend/app/onboarding`.**
+  `[CHECKPOINT — due 2026-09-11]` is **11 days out** and measures completion against a 62.4% baseline.
+- **⚠️ Do NOT change what expires, when, or from which clock.** The `≥30`-day TTL from relationship
+  `created_at` and the separate `invitation-ttl-days` carrier clock are both dated-read constraints.
+- **⚠️ Terminal-only grant cutting, never on the consent pause** — unchanged from `v0.97.0`/`v0.98.0`.
+- **⚠️ Standing connection rules unchanged:** acceptance stays LOAD-BEARING; guardian consent stays
+  re-asserted inside the grant check, fail-closed on unknown age; **no account-existence oracle** and the
+  single not-found contract is preserved; absence of a live grant means NO ACCESS; every read re-verifies
+  `ACCEPTED`; the progress read stays UNIDIRECTIONAL; invitations stay ONE-AT-A-TIME; **no relationship-type
+  column, no new profile type, nothing gated on `ProfileType`**; `NoteVisibility` stays `PRIVATE | PUBLIC`;
+  **no endpoint accepts a learner user id**; **no public people search**.
+- **⚠️ Any predicate deciding whether a row is retained, or whether a caller may form a connection, needs a
+  REAL-ROW test** in `NativeQueryPostgresIntegrationTest`, mutation-verified with the killing test named.
+- **⚠️ ITEM 4 ADDS NO DOMAIN CONTEXT VALUE, AND THE REASON MUST NOT BE COMPRESSED.** The Stage 1 audit
+  found that **`ARCHITECTURE` PASSES the governance floor and the exclusion trap and is STILL a
+  provable no-op** — a value's entire generation payload is its **label string plus one `quantitative`
+  boolean**, and the resolver already falls back to the single joined catalog program name, so a
+  single-program Architecture note **already sends `Domain: Architecture`**. A new value would emit a
+  byte-identical line. **⚠️ "Architecture didn't qualify" is the WRONG takeaway** and would cost a
+  release to re-derive; the counter-argument and what un-parks it are in the audit.
+- **⚠️ Item 4 is EXPLICITLY NOT GATED on `[CHECKPOINT — due 2026-09-28]`** (owner, 2026-08-31) **and
+  does not pre-empt it.** Classifying under existing values is not a taxonomy action, and `ADR-001`
+  records the multi-program rule as **itself the forcing function** generating the calibration
+  evidence. Good output confirms the vocabulary; consistently mis-framed building-services output
+  promotes the `Building Services` hypothesis the audit records.
+- **⚠️ Item 4 must NOT: add any enum value; add `GENERAL_ENGINEERING`; extend
+  `QUANTITATIVE_KEYWORDS`; remove `NURSING`, `ACCOUNTANCY` or `PROFESSIONAL_EDUCATION` on zero usage;
+  resolve the zero-usage question by reasoning; change the resolver; touch any prompt file; or
+  bulk-rewrite notes.** Domain Context changes affect **future generation only**.
+- **⚠️ Explicitly OUT OF SCOPE:** manual dismissal of terminal cards; anything changing what a supporter can
+  see; Phase 5 items.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: ONE SCOPED COLD AGENT, framed as FALSIFICATION.** Two triggers, both
+  one-agent class: item 1 changes **production-data semantics via a migration**, item 2 **moves an
+  authorization boundary**. Neither is a permission substrate nor a first-of-kind cross-user read — the
+  same shape `v0.98.0` carried at nine items. **⚠️ ESCALATE TO THE FULL TEST IF** item 2's tightening
+  reaches beyond the two cohorts already identified, or if item 1's backfill turns out to need a rule
+  beyond *"`EXPIRED` rows only"*.
+- **⚠️ ITEM 2 GETS ITS `advisor()` CALL BEFORE IMPLEMENTATION** — third gate tightening in three releases,
+  and the previous two both had their blast radius mis-stated until something checked.
+- **⚠️ THE COLD AGENT MUST BE ASKED TO COUNT EXECUTED TESTS, NOT READ THEM.** `v0.98.0`'s worst finding was
+  a test that had silently stopped running while the build stayed green — the fifth instance in three
+  releases of a guard that looks present and does nothing.
+- **The `### Planned Scope` heading is permanent**; delivery appends to `### Shipped`.
+- **⚠️ A `[CHECKPOINT]` is owed only if something ships ahead of its evidence. On current scope nothing
+  does** — all three items close recorded defects. Stated now so the signoff gate is answered deliberately
+  rather than skipped, and revisited if scope grows.
+
+### Shipped
+
+**⚠️ Per-item delivery notes for items 1-4 are recorded inline above, beneath the scope
+item each one closes** — kept there deliberately, because each is only legible next to the defect it
+names and the release shipped them in that order. This section carries what was added after item 4.
+**⚠️ The `v0.98.0` section carried a stale `### Shipped` / `_(nothing yet)_` placeholder from its own
+kickoff, left behind at signoff beside its real Shipped section — removed here.**
+
+- **`BP 334` was a typo for `BP 344`, and `PROFESSIONAL_PRACTICE_AND_REGULATION`'s description was
+  program-shaped (item 4, folded after the first three landed).** BP 344 is the accessibility law;
+  the curriculum sources say 344 (`archi-comprehensive-set-1.md:995`, `set-2:1056`) and BP 334 is not
+  a building or accessibility law. **⚠️ THE FIRST DRAFT OF THIS BULLET AND ITS CODE COMMENT CITED THE
+  RATIFIED SPEC AS SAYING 344, AND THE SIGNOFF COLD AGENT FALSIFIED THAT.** `08-taxonomy-validation-
+  and-final-recommendation.md:41` and `:60` **both say `BP 334`** (attributing 32 notes to it), and a
+  later `RELEASES.md` paragraph misquoted the spec as 344 — which the first draft then cited as proof
+  of what the spec said. **A circular citation, corrected in place rather than quietly dropped.**
+  **⚠️ THE SPEC IS STILL WRONG AND IS DELIBERATELY NOT EDITED HERE** — it is a ratified artifact, the
+  code comment now records that it says 334, and nobody should "restore" 334 from it. The same description also read as an **Engineering-union-Architecture
+  list** and omitted the two families the audit's own reuse table places there — **National Building
+  Code** and **Construction Safety**, which account for 19 of the 47 cross-program reused ALE rows.
+  It is now *"Codes, laws, ethics and licensure shared across programs."*
+- **⚠️ THE `quantitative` FLAG STAYS `false`, RECORDED AS A DECISION RATHER THAN LEFT UNSAID.**
+  Widening a description changes **which notes land there** — that is precisely what item 4 did to
+  `ENGINEERING_SCIENCES`, where the newly-landing notes *needed* computation guidance. Here the
+  answer is the opposite: codes, laws, ethics and accessibility compliance are **prose treatment**.
+  Per `v0.85.0`, `false` is a **no-op** that falls through to the untouched keyword scan while
+  `true` is a new signal that is **permanent per note**, since Study Packs never auto-regenerate.
+  Flipping it would also disturb the September zero-usage read.
+- **⚠️ `ENGINEERING_MATHEMATICS` was examined and deliberately NOT changed.** Its description
+  enumerates subjects and never states the rule the audit's existing-value review turns on — a note
+  belongs there when it **teaches** the computational method, not when it **uses** one. That is the
+  **opposite** failure mode from the one Decision 13 scopes (*"does the description make a broad
+  tradition look narrower?"*), and adding a selection rule to a dropdown is **taxonomy guidance, not
+  copy**, which Decision 13 explicitly excluded. Recorded in the audit doc for the A–F pass.
+- **The vacuous quantitative test was RENAMED, not deleted — and the distinction is the point.**
+  `isQuantitativeContext_preservesEveryPreviouslyQuantitativeEngineeringDomain` claimed to pin the
+  declared flag for the three engineering domains. **Verified empirically: flipping all three enum
+  values to `quantitative = false` leaves it GREEN.** `isQuantitativeContext` short-circuits on the
+  flag at `OpenAiLlmStudyPackService:1642`, but its fallback haystack **leads with the domain
+  LABEL** (`effectiveAuthoringDomain`, `:1648`) — and *"Engineering Mathematics"*, *"Engineering
+  Sciences"* and *"Civil Engineering"* each contain a `QUANTITATIVE_KEYWORD`. The flag half is
+  **unobservable at this level for exactly these three**; `ACCOUNTANCY` and `NURSING` are the values
+  that isolate it, and `declaredQuantitativeDomainsProduceComputationGuidance` already covers them.
+- **⚠️ DELETING IT WOULD HAVE LOST COVERAGE — the kill set is OVERDETERMINED, not empty.** It is the
+  only **service-level** assertion for those three (`DomainContextTest
+  .declaresWhetherEachDomainContextIsQuantitative` pins the *declaration* only, for all eight), so it
+  still fails if the keyword scan loses `engineering` **and** a flag is flipped. **The false coverage
+  was in the NAME, not the assertion** — now
+  `isQuantitativeContext_isTrueForEveryEngineeringDomainByFlagOrLabel`, with the mechanism and both
+  line references recorded beside it. **This is the seventh guard-that-looks-present found in five
+  releases, and the first whose correct fix was NOT to strengthen it.**
+- **Review Set curriculum work is now routed to its pipeline (`125b4cd7`, docs only, committed
+  directly on the release branch by a parallel session).** Nothing auto-loaded pointed at
+  `docs/curriculum/`, so a fresh session asked to build or reshape a Review Set would not have found
+  the pipeline that shipped in #1188 and would have **hand-transcribed the strategist's proposal —
+  the exact step that pipeline removes.** Adds one `CLAUDE.md` source-of-truth bullet naming the
+  three steps, plus a query-by-query table in `review-set-workbook-spec.md`. **⚠️ `docs/curriculum/`
+  is NOT covered by the kickoff step-8 scan** (which walks `docs/claude-plans/` and
+  `docs/claude-prompt/*-out/` only); its README records that the files there are durable tools rather
+  than plans with open loops, and that a later file carrying an unrun query or open decision **does**
+  need a Backlog Index row.
+- **⚠️ THE SIGNOFF COLD AGENT FOUND THREE OF ITS FOUR CONFIRMED DEFECTS INSIDE ITEM 3'S OWN GUARD —
+  the test written to stop guards from looking present and doing nothing.** All three are fixed and
+  each mutant is re-killed with the killing test named. **(a) The annotation default is NOT the
+  production schedule where `application.yaml` declares the key**, and it declares 8 of the 10 — a
+  present property WINS over the `${key:default}` fallback, so the old test pinned dead text. Moving
+  `retention.daily-cron` in the yaml left the suite GREEN, which is verbatim the failure the class
+  exists to prevent, while `RELEASES.md` shipped the claim *"every cron job's production schedule is
+  pinned."* Now `everyCronKeyDeclaredInProductionYamlPinsTheSameScheduleAsItsAnnotation` pins both
+  declarations to one expected value, so drift in either — or disagreement between them — fails.
+  **(b) Discovery was scoped to `service/jobs`, so it was true by FILE PLACEMENT, not construction.**
+  A `@Scheduled` cron one package up, written as a bare literal, passed **both** assertions at once:
+  the form check never saw it and the disablement check never saw it, so it would have run on the wall
+  clock through the whole suite with no way to turn it off. The scan is now the entire
+  `com/studysnap/backend` tree; the four `fixedDelay` rate-limit sweepers stay correctly out of scope.
+  **(c) The disablement assertion was satisfied by a COMMENT.** `contains(leaf + ": \"-\"")` was an
+  unanchored, leaf-only substring match over the whole file, so an armed `purge-cron: "0 0 1 * * *"`
+  plus a commented-out `# purge-cron: "-"` passed — **arming the job that DELETES DATA for every test
+  run.** Leaf-only matching also made `retention.daily-cron` interchangeable with any other
+  `daily-cron`. Both profiles are now parsed by indentation into full dotted keys, ignoring comments.
+- **⚠️ `EXPECTED_DEFAULTS` was `Map.of(...)` at exactly 10 pairs — its hard ceiling.** An eleventh job
+  would not compile into the map, adding friction to the one workflow the test exists to enforce. Now
+  `Map.ofEntries`.
+- **Mutation-verified, three mutants, each re-killed after the fix:** moving a schedule in
+  `application.yaml` alone fails `everyCronKeyDeclaredInProductionYamlPinsTheSameScheduleAsItsAnnotation`
+  (survived before); a rogue bare-literal cron outside `service/jobs` fails **both**
+  `everyCronJobDeclaresItsProductionScheduleAsAnOverridableDefault` and
+  `everyCronJobIsDisabledInTheTestProfile` (survived before); an armed `purge-cron` beside a commented
+  disable line fails `everyCronJobIsDisabledInTheTestProfile` (survived before).
+- **⚠️ THE FOURTH DEFECT: nothing pinned the onboarding gate above the WRITE-ONCE birth-year write.**
+  `invitingRequiresFinishedOnboardingAndSaysSoBeforeAnyAddressLookup` asserts
+  `verifyNoInteractions(invitationRepository)`, which pins the gate above the **lookup** and nothing
+  else. Moving the gate below `persistBirthYear` left **all 57 tests green**. The reachable scenario:
+  a non-onboarded caller invites as the LEARNER with a birth year, `users.birth_year` is burned
+  **permanently** — account-global and write-once — and the invite is then rejected and never existed.
+  **Mutation-verified:** that exact reorder now fails
+  `aRejectedMidOnboardingInviteNeverBurnsTheWriteOnceBirthYear`. The shipped ordering was always
+  correct; it was simply unprotected, in a method whose own comment argues ordering is load-bearing.
+- **⚠️ Verified by COUNTING, not reading:** the renamed test executes **3 times** (one per enum value)
+  in `TEST-…OpenAiLlmStudyPackServiceTest.xml`, the old name appears nowhere in the reports, and the
+  two classes report **96** and **10** tests run, 0 failures. **No test pins any description string**
+  — re-grepped, as item 4 claimed — so the copy edit is covered by `tsc` and the frontend suite.
+
 ## v0.98.0 - Connection Consistency
 
 **Status: Released** (kicked off 2026-08-30, signed off 2026-08-31, base branch `releases/v0.98.0`, cut
@@ -370,10 +778,6 @@ agent executed tests rather than reading source, which is what found the first o
   **⚠️ RE-EVALUATED after the 2026-08-30 fold to nine items: still none owed**, and item 8 is the reason to
   be careful here rather than the reason to relax — it exists precisely because a release once left this
   question unanswered.
-
-### Shipped
-
-_(nothing yet)_
 
 ## v0.97.0 - Connection Lifecycle
 
