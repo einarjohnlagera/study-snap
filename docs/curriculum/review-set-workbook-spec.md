@@ -55,6 +55,7 @@ collection id at the top; the benchmark set resolves itself by title.
 | **Q4** | **notes already tagged for the program but NOT in the set** | always — the ready-to-add pool, the cheapest coverage available |
 | **Q5** | per benchmark subject: note count, how many are tagged for the target program, how many are already in the set | always |
 | **Q6** | exact catalog program names | yes, trimmed to programs with real counts |
+| **Q7** | existing notes in the set, grouped by Subject | not to the strategist — this is for RECONCILIATION afterwards, see below |
 
 **⚠️ Q4 is a candidate pool, not an answer.** Program tags were partly produced by an authoring
 surface that defaulted the program from the curator's own profile — one such default wrongly tagged
@@ -67,6 +68,22 @@ for the subjects where placement decisions are immediate.
 
 **⚠️ Check Q0 returns exactly one benchmark root.** The benchmark resolves by title match, so two
 matching roots would silently union both trees and inflate every count in Q3 and Q5.
+
+## Reshapes: the `Unmapped` status
+
+A **build** (ALE) gets `Existing`/`Reuse`/`New` from the strategist, who was shown the note pool.
+A **reshape** (CE) does not: the notes already exist, and the proposal is a target *structure*, so
+the strategist has no basis for a per-note status.
+
+**Use `status = Unmapped` for those rows.** It means *proposed; existence not yet checked*. It is
+honest, it is visible in the workbook's Flags column, and it keeps the Overview's counts truthful.
+**Do not guess `New`** — on a reshape that would report a fully-authored curriculum as unwritten.
+
+Reconcile afterwards with **Q7** of the reshape read, subject block by subject block, and rewrite
+the `status` values in the TSV. **⚠️ Match on knowledge, not on string equality:** a strategist
+proposes knowledge-first titles ("Normal Stress") while existing notes often carry the older
+suffixed form ("Normal Stress in Strength of Materials"). Those are the same note — reuse it and
+normalise the title on touch. A string join manufactures phantom `New` rows at scale.
 
 ## Sheet contract, and why each sheet exists
 

@@ -8,6 +8,7 @@ CPALE, PNLE) that the curator builds and publishes.
 | `review-set-workbook-spec.md` | how a strategist's proposal becomes a working workbook; the sheet contract; the layout rules and why they are not cosmetic |
 | `review-set-reshape-read.sql` | read-only production queries that gather the inputs a strategist needs: current shape, the benchmark set, the ready-to-add pool, and the overlap map. Parameterised by collection id — works for any Review Set |
 | `build_review_set_workbook.py` | the builder — takes a TSV of rows, emits the .xlsx. No per-set logic |
+| `civil-engineering-comprehensive-review.tsv` / `-target-shape.xlsx` | the CE reshape target: 10 plans, 75 sections, 568 notes, all `Unmapped` pending Q7 reconciliation |
 | `<set>.tsv` | the source rows for one Review Set. **Edit this, then regenerate** — never hand-edit the workbook |
 | `<set>-target-shape.xlsx` | the generated deliverable the curator builds from |
 
