@@ -62,10 +62,18 @@ list to the LLM. **The work is resolver + UX + mental model.**
   carving multi-program out as a data-integrity exception. **⚠️ THIS RULING WIDENED THE RELEASE AND THE
   AUDIT NAMED IT AS THE TRIGGER TO RE-EVALUATE THE VERIFICATION TIER; see Pre-declared below.**
 - **4. Decision 11 — the override signal becomes observable (backend + frontend).** **The smallest honest
-  addition:** one authoring event capturing *(what `Automatic` resolved, what was persisted)*. **⚠️ NOT a
-  large analytics system** — Decision 9 forbids that explicitly. **⚠️ THIS IS THE ITEM WITH THE DEADLINE**;
-  if it does not ship, Decisions 10-B and 11 are simply **not answerable this cycle, and the September read
-  must say so rather than infer.**
+  addition:** an authoring event capturing *(what `Automatic` resolved, what was persisted)* — equal means
+  accepted, different means overridden, null means declined. **⚠️ NOT a large analytics system** — Decision
+  9 forbids that explicitly. `NOTE_CREATED` already writes a `jsonb` `metadata_json`, so **adding keys costs
+  no migration and no enum value**, and it already fires *after* the join rows are written, which is the
+  only ordering at which the resolved value is correct.
+  **⚠️ WIDENED BY THE A–F AUDIT: `create`-ONLY INSTRUMENTATION CANNOT ANSWER DECISION 11.** There is **no
+  `NOTE_UPDATED` event** (confirmed absent from the 146-line enum), and **both surfaces that let a curator
+  CHANGE Domain Context — the note editor and note detail — are `update` paths.** Instrumenting `create`
+  alone measures *first-authoring choice*; Decision 11 asks about *override behaviour*. **Ship create-only
+  and the September read returns empty for the exact question it exists to answer.** The update path is in
+  scope. **⚠️ THIS IS THE ITEM WITH THE DEADLINE** — if it does not ship, Decisions 10-B and 11 are **not
+  answerable this cycle, and the read must say so rather than infer.**
 - **5. Decisions 3, 12 and 13 — the copy that carries the mental model (frontend).** Applicable Programs
   helper copy states the boundary: *they determine where this note applies and is discoverable; they do not
   determine its Domain Context.* Plus **audit every remaining Domain Context description for the same
@@ -73,10 +81,46 @@ list to the LLM. **The work is resolver + UX + mental model.**
   names. **⚠️ Verified at kickoff: `frontend/app/onboarding/` contains ZERO `AI`/domain strings**, so no
   copy in this release can land on the frozen path.
 
-**⚠️ THE A–F IMPLEMENTATION AUDIT HAS NOT BEEN RUN AND IS OWED BEFORE ANY CODE.** The decisions request it
-by name: **A** resolver boundary (partly answered — see item 1's note), **B** effective-domain exposure,
-**C** generation readiness, **D** exact copy, **E** observability (partly answered — see item 4), **F**
-tests. **It runs first, and its findings may re-shape items 1-3 before a Codex prompt is written.**
+- **6. The authoring domain stops depending on WHO IS READING (backend). ⚠️ ADDED 2026-09-01 BY OWNER
+  RULING, after the A–F audit found it; it was NOT in the kickoff scope.** All 18 resolver call sites were
+  enumerated: `AdminStudyPackTransactionHelper:147` passes the **note owner**, every other passes the
+  **caller**. On the twelve `resolveForStudyPack(callerId, studyPack)` sites that drive quiz, exam,
+  interview and adaptive-practice generation, `findSourceNote` is `findByIdAndOwnerUserId` — so **when a
+  learner practises a curator's public Study Pack the lookup returns empty**, falls to
+  `buildFromStudyPackFallback:159`, and the authoring domain becomes **that learner's own profile course
+  program.** **⚠️ THIS IS DECISION 4's INVARIANT BROKEN ON THE READER AXIS, and by volume it is the LARGER
+  of the two leaks** — two learners generating from the *same canonical pack* get **different**
+  authoring-domain instructions because their personal profiles differ.
+  **⚠️ THE RULE, decided here and not by delivery: the profile fallback is legitimate ONLY when the caller
+  OWNS the pack.** A learner's own material personalizing to their own profile is Decision 4's explicitly
+  preserved behaviour; substituting a *stranger's* profile is the defect.
+  **⚠️ THE FIX SHAPE IS DECIDED AT KICKOFF TOO, because the obvious one is wrong.** Do **NOT** simply drop
+  the fallback — that returns null and **silently removes the `Domain:` line for every public-pack quiz**,
+  degrading output for the most-trafficked path in the product. **Resolve the source note through
+  `studyPack.getOwnerUserId()` instead**, which `StudyPackEntity:32` already carries: the domain is a
+  property of the **material**, not of the reader. **⚠️ `StudyPackEntity` carries only `subject` and `tags`
+  — no `domain_context`, no `course_program`, no level — so the note is the only source and NO column is
+  added to fix this.**
+  **⚠️ THIS INTRODUCES A CROSS-OWNER ROW READ AND THAT IS NAMED, NOT SLIPPED IN.** The resolver would read
+  the pack owner's note to obtain **authoring axes only** — `domainContext`, `courseProgram`, `subject`,
+  `tags`, `learnerLevel`. **⚠️ It must NEVER widen to note CONTENT**, and it is strictly less than the pack
+  content the caller can already see. **⚠️ It is not a first-of-kind cross-user read** — the product has had
+  those since `v0.89.0` — so it does not by itself move the verification tier; see below.
+
+**⚠️ THE A–F IMPLEMENTATION AUDIT HAS BEEN RUN (2026-09-01): `docs/claude-plans/v0.100.0-domain-context-implementation-audit.md`.** **It re-shaped the release and its
+findings are binding:** **(a)** only **three** save-time sites move, because `NoteGenerationService:75` and
+`NoteBulkGenerationService:466` are **already at generation time**; **(b)** **`StudyPackService.startAsyncGenerationFromNote`
+— the primary note → Study Pack path — VALIDATES NOTHING**, so removing the save-time block without adding a
+gate there **deletes the invariant rather than moving it**, and the failure is **silent** (a null authoring
+domain makes `OpenAiLlmStudyPackService:1577-1581` drop the `Domain:` line and its constraint with no error
+and no log); **(c)** **Decisions 4 and 6 are COUPLED too** — a naive item 3 re-opens item 1's defect through
+a new door and makes it legal going forward; **(d)** item 2 **shrinks**, because
+`effectiveAuthoringDomain` already exists as a public static and is the same function the prompt builder
+uses, so *"never a frontend re-implementation"* holds **by construction**; **(e)** item 4 as scoped was
+**insufficient** — see its own bullet; **(f)** the curator predicate exists but is **private or inlined in
+all four copies**, so the resolver cannot call it and a **fifth copy is the wrong move**.
+**⚠️ ORDERING IS PART OF THE FIX: add the generation gate FIRST, then remove the three save-time blocks**,
+so the invariant is never unprotected between commits.
 
 ### Anti-drift — locked rules for this release
 
@@ -105,12 +149,35 @@ tests. **It runs first, and its findings may re-shape items 1-3 before a Codex p
   be enumerated mechanically rather than found by grep-and-hope.
 - **⚠️ Item 1 must not touch the LEARNER resolution path.** The change is scoped to canonical curated
   generation; a thin edit to the shared resolver would silently remove learner personalization.
+- **⚠️ ITEM 6's READ IS BOUNDED TO FIVE AUTHORING AXES** — `domainContext`, `courseProgram`, `subject`,
+  `tags`, `learnerLevel`. **It must never widen to note CONTENT**, and it adds no endpoint and no column.
+- **⚠️ THE PROFILE FALLBACK IS NOT DELETED, IT IS BOUNDED.** A caller's own profile program remains the
+  correct fallback for their **own** material — Decision 4 preserves learner personalization explicitly, and
+  a fix that removes it everywhere fails the decision it is implementing.
+- **⚠️ DECISION 13's DESCRIPTION SWEEP TOUCHES THE CHECKPOINT'S OWN INPUT.** Three descriptions were revised
+  in `v0.99.0`; **five have never been reviewed**, and **three of those five — `NURSING`, `ACCOUNTANCY`,
+  `PROFESSIONAL_EDUCATION` — are exactly the zero-usage values `[CHECKPOINT — due 2026-09-28]` reads.**
+  Revising them is legitimate, but the deploy-split caveat must be recorded **with the checkpoint, before
+  the read**, or September cannot separate *"curators finally understood the value"* from *"the description
+  changed."*
 - **⚠️ Every standing connection rule is unchanged** — this release does not touch that surface.
 
 ### Pre-declared at kickoff
 
-- **⚠️ VERIFICATION TIER: ONE SCOPED COLD AGENT, framed as FALSIFICATION — and this was RE-EVALUATED, not
-  inherited.** The audit set the tier *"one scoped cold agent at minimum; re-evaluate if the Decision 6
+- **⚠️ TIER RE-EVALUATED A SECOND TIME AFTER ITEM 6 WAS ADDED (2026-09-01), AND IT HOLDS AT ONE SCOPED COLD
+  AGENT.** Item 6 introduces a **cross-owner row read**, which is the loudest-sounding thing in this release
+  — but the full-test trigger is a ***first-of-kind*** cross-user read, and the product has had cross-user
+  reads since `v0.89.0`. It reads **authoring axes only**, from a note whose generated content the caller
+  can already see, on a path with no permission substrate. **⚠️ THE LITERAL ESCALATION TRIGGER DID FIRE ON
+  ITEM 3 — *"escalate if the four write paths turn out not to be four"* — and it is recorded as fired rather
+  than quietly re-interpreted.** It resolves to *no escalation* because the count moved for the **opposite**
+  reason to the one the trigger anticipated: two sites were **already correct**, and the newly-found risk is
+  a **gap inside one method with a nameable falsification claim** — precisely what a scoped agent is best
+  at. **⚠️ NEW ESCALATION TRIGGERS, replacing the spent one:** escalate if item 6's read cannot be confined
+  to the five authoring axes; if the predicate extraction changes behaviour at any of its four existing call
+  sites; or if the generation gate turns out to need a second write path.
+- **⚠️ VERIFICATION TIER: ONE SCOPED COLD AGENT, framed as FALSIFICATION — first set at kickoff, RE-EVALUATED
+  TWICE.** The audit set the tier *"one scoped cold agent at minimum; re-evaluate if the Decision 6
   ruling widens to moving the existing save-block."* **The ruling DID widen it.** Re-evaluated against the
   gate in `CLAUDE.md`: the full three-agent test is reserved for a **permission substrate** or a
   **first-of-kind cross-user read**, and this release has neither. It fires the one-agent trigger three
@@ -119,6 +186,16 @@ tests. **It runs first, and its findings may re-shape items 1-3 before a Codex p
   same shape `v0.95.0` and `v0.99.0` both carried at one agent. **⚠️ ESCALATE TO THE FULL TEST IF** the A–F
   audit finds item 1's boundary is not cleanly separable from the learner path, or if item 3's four write
   paths turn out not to be four.
+- **⚠️ THE COLD AGENT'S FALSIFICATION CLAIM IS STATED NOW, not composed at signoff:** *after this release,
+  no path can generate a Study Pack for a multi-program note with no Domain Context; no curator's profile
+  program can reach a prompt on the canonical authoring path; and no reader's profile program can reach a
+  prompt for a pack they do not own.* Hand it the A–F audit with the release.
+- **⚠️ TWO TESTS MUST BE CONSCIOUSLY REWRITTEN, NEVER DELETED, and one is a trap.**
+  `NoteServiceTest:858` (`update_byLearnerOwner_rejectsClearingDomainContextOnAMultiProgramNote`) pins the
+  save-time rejection Decision 6 removes; it becomes *cleared at save, rejected at generation*.
+  `StudyPackGenerationContextResolverTest:146` asserts the profile fallback Decision 4 removes — **and it
+  will KEEP PASSING under a correct curator-scoped fix, because its fixture has no role and reads as a
+  learner. A green result there is not evidence the fix works**; it needs a curator-owner twin.
 - **⚠️ ITEM 1 GETS ITS `advisor()` CALL BEFORE IMPLEMENTATION** — it changes what reaches the LLM on the
   canonical authoring path, and `v0.99.0` measured that the earliest checks are where the yield is.
 - **⚠️ THE COLD AGENT MUST BE ASKED TO COUNT EXECUTED TESTS, NOT READ THEM.** Seventh instance in five
