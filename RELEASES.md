@@ -188,6 +188,40 @@ change** — so the verification tier does not move.
   the **pre-catalog free-text spread**, not catalog rows, and the ADR's own failure-condition ratio
   depends on the denominator. The real ratio is **8:21**.
 
+### Known limitations
+
+- **⚠️ "Every `ACCEPTED` relationship has two onboarded parties" is PERMANENTLY FALSE for
+  relationships formed before the gates.** `v0.97.0`, `v0.98.0` and `v0.99.0` closed link creation and
+  redemption, email acceptance, and inviting — **going forward only**. No migration heals rows created
+  earlier, and none is proposed: retroactively severing a connection both people agreed to is a larger
+  decision than the gate itself. **⚠️ A SECOND, SELF-HEALING WINDOW closes on its own:** a `PENDING`
+  invitation written by a non-onboarded inviter *before* this deploy still yields an `ACCEPTED`
+  relationship when its onboarded recipient accepts, because the acceptor is the only gated party
+  there. Bounded by `invitation-ttl-days` — **30 days** — after which no such invitation survives.
+- **`V130`'s index comment describes a read the index cannot serve.** It creates
+  `(status, expired_at, revoked_at)` under *"retention reads this per terminal status"*, but
+  `findVisibleForUser`'s selective predicate is `supporter_user_id = :userId or learner_user_id
+  = :userId`, which a `status`-leading index over four values will not serve. **Comment defect and a
+  probably-dead index, not a correctness bug** — recorded rather than fixed because confirming it needs
+  `EXPLAIN` against production volume, which is a read this release did not run.
+- **`V130`'s backfill predicate is unexercised by any test.** `NativeQueryPostgresIntegrationTest`
+  migrates an EMPTY database, so `UPDATE … WHERE status = 'EXPIRED'` runs against zero rows. Verified
+  by reading only. **⚠️ This is the shape the repo has been burned by** — a predicate with no real-row
+  test — and it is accepted here solely because the statement is a one-time backfill that cannot run
+  again, not because reading it is sufficient in general.
+- **A rolling deploy leaves a small set of rows retained forever.** A relationship expired by old code
+  between the Flyway run and the new code serving traffic gets `expired_at IS NULL` and is then kept by
+  the safe-retain branch, where previously it would have aged out on `expires_at`. **Fails safe** — a
+  visible ended connection, never a hidden live one — and the migration comment says so.
+- **`consentPausedRelationshipIsNeverExpiredBecauseAPauseIsNotATermination` does not prove what its
+  name implies.** It relies on `seedRelationship` never setting `expires_at`, so it cannot show that
+  `pauseAcceptedForConsent` leaves the deadline NULL. **The property IS covered** — by
+  `aPreMigrationConsentPausedRowIsNeverExpirableAtAnyFutureInstant`, which nulls the column explicitly
+  and asserts the intermediate state — just not by the test whose name claims it.
+- **`RetentionEmailScheduler`'s `zone = DISPATCH_ZONE` is unpinned.** The cron contract test pins the
+  expression, not the timezone, so a zone change would move all three retention dispatches with a green
+  build. Same class of gap as the yaml shadowing fixed above, at lower stakes.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ AN ANTI-DRIFT RULE NEEDS ITS THIRD AMENDMENT, AND IT IS RAISED HERE RATHER THAN REASONED PAST.**
@@ -273,12 +307,22 @@ change** — so the verification tier does not move.
 
 ### Shipped
 
+**⚠️ Per-item delivery notes for items 1-4 are recorded inline above, beneath the scope
+item each one closes** — kept there deliberately, because each is only legible next to the defect it
+names and the release shipped them in that order. This section carries what was added after item 4.
+**⚠️ The `v0.98.0` section carried a stale `### Shipped` / `_(nothing yet)_` placeholder from its own
+kickoff, left behind at signoff beside its real Shipped section — removed here.**
+
 - **`BP 334` was a typo for `BP 344`, and `PROFESSIONAL_PRACTICE_AND_REGULATION`'s description was
   program-shaped (item 4, folded after the first three landed).** BP 344 is the accessibility law;
-  the ratified spec
-  (`docs/claude-prompt/canonical-knowledge-architecture-out/08-taxonomy-validation-and-final-recommendation.md`,
-  quoted at `RELEASES.md:3710`) and **every other reference in the repo** say 344 — only the shipped
-  curator string said 334. The same description also read as an **Engineering-union-Architecture
+  the curriculum sources say 344 (`archi-comprehensive-set-1.md:995`, `set-2:1056`) and BP 334 is not
+  a building or accessibility law. **⚠️ THE FIRST DRAFT OF THIS BULLET AND ITS CODE COMMENT CITED THE
+  RATIFIED SPEC AS SAYING 344, AND THE SIGNOFF COLD AGENT FALSIFIED THAT.** `08-taxonomy-validation-
+  and-final-recommendation.md:41` and `:60` **both say `BP 334`** (attributing 32 notes to it), and a
+  later `RELEASES.md` paragraph misquoted the spec as 344 — which the first draft then cited as proof
+  of what the spec said. **A circular citation, corrected in place rather than quietly dropped.**
+  **⚠️ THE SPEC IS STILL WRONG AND IS DELIBERATELY NOT EDITED HERE** — it is a ratified artifact, the
+  code comment now records that it says 334, and nobody should "restore" 334 from it. The same description also read as an **Engineering-union-Architecture
   list** and omitted the two families the audit's own reuse table places there — **National Building
   Code** and **Construction Safety**, which account for 19 of the 47 cross-program reused ALE rows.
   It is now *"Codes, laws, ethics and licensure shared across programs."*
@@ -312,6 +356,53 @@ change** — so the verification tier does not move.
   `isQuantitativeContext_isTrueForEveryEngineeringDomainByFlagOrLabel`, with the mechanism and both
   line references recorded beside it. **This is the seventh guard-that-looks-present found in five
   releases, and the first whose correct fix was NOT to strengthen it.**
+- **Review Set curriculum work is now routed to its pipeline (`125b4cd7`, docs only, committed
+  directly on the release branch by a parallel session).** Nothing auto-loaded pointed at
+  `docs/curriculum/`, so a fresh session asked to build or reshape a Review Set would not have found
+  the pipeline that shipped in #1188 and would have **hand-transcribed the strategist's proposal —
+  the exact step that pipeline removes.** Adds one `CLAUDE.md` source-of-truth bullet naming the
+  three steps, plus a query-by-query table in `review-set-workbook-spec.md`. **⚠️ `docs/curriculum/`
+  is NOT covered by the kickoff step-8 scan** (which walks `docs/claude-plans/` and
+  `docs/claude-prompt/*-out/` only); its README records that the files there are durable tools rather
+  than plans with open loops, and that a later file carrying an unrun query or open decision **does**
+  need a Backlog Index row.
+- **⚠️ THE SIGNOFF COLD AGENT FOUND THREE OF ITS FOUR CONFIRMED DEFECTS INSIDE ITEM 3'S OWN GUARD —
+  the test written to stop guards from looking present and doing nothing.** All three are fixed and
+  each mutant is re-killed with the killing test named. **(a) The annotation default is NOT the
+  production schedule where `application.yaml` declares the key**, and it declares 8 of the 10 — a
+  present property WINS over the `${key:default}` fallback, so the old test pinned dead text. Moving
+  `retention.daily-cron` in the yaml left the suite GREEN, which is verbatim the failure the class
+  exists to prevent, while `RELEASES.md` shipped the claim *"every cron job's production schedule is
+  pinned."* Now `everyCronKeyDeclaredInProductionYamlPinsTheSameScheduleAsItsAnnotation` pins both
+  declarations to one expected value, so drift in either — or disagreement between them — fails.
+  **(b) Discovery was scoped to `service/jobs`, so it was true by FILE PLACEMENT, not construction.**
+  A `@Scheduled` cron one package up, written as a bare literal, passed **both** assertions at once:
+  the form check never saw it and the disablement check never saw it, so it would have run on the wall
+  clock through the whole suite with no way to turn it off. The scan is now the entire
+  `com/studysnap/backend` tree; the four `fixedDelay` rate-limit sweepers stay correctly out of scope.
+  **(c) The disablement assertion was satisfied by a COMMENT.** `contains(leaf + ": \"-\"")` was an
+  unanchored, leaf-only substring match over the whole file, so an armed `purge-cron: "0 0 1 * * *"`
+  plus a commented-out `# purge-cron: "-"` passed — **arming the job that DELETES DATA for every test
+  run.** Leaf-only matching also made `retention.daily-cron` interchangeable with any other
+  `daily-cron`. Both profiles are now parsed by indentation into full dotted keys, ignoring comments.
+- **⚠️ `EXPECTED_DEFAULTS` was `Map.of(...)` at exactly 10 pairs — its hard ceiling.** An eleventh job
+  would not compile into the map, adding friction to the one workflow the test exists to enforce. Now
+  `Map.ofEntries`.
+- **Mutation-verified, three mutants, each re-killed after the fix:** moving a schedule in
+  `application.yaml` alone fails `everyCronKeyDeclaredInProductionYamlPinsTheSameScheduleAsItsAnnotation`
+  (survived before); a rogue bare-literal cron outside `service/jobs` fails **both**
+  `everyCronJobDeclaresItsProductionScheduleAsAnOverridableDefault` and
+  `everyCronJobIsDisabledInTheTestProfile` (survived before); an armed `purge-cron` beside a commented
+  disable line fails `everyCronJobIsDisabledInTheTestProfile` (survived before).
+- **⚠️ THE FOURTH DEFECT: nothing pinned the onboarding gate above the WRITE-ONCE birth-year write.**
+  `invitingRequiresFinishedOnboardingAndSaysSoBeforeAnyAddressLookup` asserts
+  `verifyNoInteractions(invitationRepository)`, which pins the gate above the **lookup** and nothing
+  else. Moving the gate below `persistBirthYear` left **all 57 tests green**. The reachable scenario:
+  a non-onboarded caller invites as the LEARNER with a birth year, `users.birth_year` is burned
+  **permanently** — account-global and write-once — and the invite is then rejected and never existed.
+  **Mutation-verified:** that exact reorder now fails
+  `aRejectedMidOnboardingInviteNeverBurnsTheWriteOnceBirthYear`. The shipped ordering was always
+  correct; it was simply unprotected, in a method whose own comment argues ordering is load-bearing.
 - **⚠️ Verified by COUNTING, not reading:** the renamed test executes **3 times** (one per enum value)
   in `TEST-…OpenAiLlmStudyPackServiceTest.xml`, the old name appears nowhere in the reports, and the
   two classes report **96** and **10** tests run, 0 failures. **No test pins any description string**
@@ -687,10 +778,6 @@ agent executed tests rather than reading source, which is what found the first o
   **⚠️ RE-EVALUATED after the 2026-08-30 fold to nine items: still none owed**, and item 8 is the reason to
   be careful here rather than the reason to relax — it exists precisely because a release once left this
   question unanswered.
-
-### Shipped
-
-_(nothing yet)_
 
 ## v0.97.0 - Connection Lifecycle
 
