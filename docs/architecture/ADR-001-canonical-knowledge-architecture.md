@@ -375,7 +375,7 @@ one explanation as settled would make that read unfalsifiable before it runs. **
 >
 > **⚠️ A new Course / Program does NOT imply a new Domain Context (owner, 2026-08-29).** This ADR governs promotion by *shared treatment*, and never stated the converse — which matters now that the catalog is expanding. Programs are added as curriculum and discovery facts; a Domain Context is added only on the evidence bar above. **The catalog growing is not evidence for the taxonomy growing.**
 >
-> **Failure condition, reviewed at every `/kickoff`:** if the number of Domain Context values ever approaches the number of course programs, the taxonomy has failed and has collapsed back into the free-text field it replaced. Baseline at ratification: **8 contexts against 27+ programs.** A ratio trending toward 1:1 is the signal to stop and consolidate, not to keep adding.
+> **Failure condition, reviewed at every `/kickoff`:** if the number of Domain Context values ever approaches the number of course programs, the taxonomy has failed and has collapsed back into the free-text field it replaced. Baseline at ratification: **8 contexts against 27+ programs.** **⚠️ Corrected 2026-08-31: that figure is the PRE-CATALOG FREE-TEXT SPREAD** (32 distinct values audited at ratification), **not catalog rows.** `V106` seeds a **21-row** catalog, so the ratio this condition actually watches is **8:21**. The correction matters because the whole condition is a ratio and it was being read against the wrong denominator. A ratio trending toward 1:1 is the signal to stop and consolidate, not to keep adding.
 
 ### Program-name fallback is a transitional state, not the end state
 

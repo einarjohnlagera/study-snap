@@ -44,6 +44,36 @@ never starting them.
   agent verified the defaults by hand against `origin/main`, and **nothing in the build would catch a future
   edit that silently changed a production schedule.**
 
+- **The curator-facing Domain Context copy stops blocking classification (item 4).**
+  `ENGINEERING_SCIENCES`'s description now names **building services** — plumbing, HVAC, electrical
+  distribution, lighting, acoustics, fire protection, vertical transportation — plus construction
+  materials, testing and management. It previously listed only the Civil-flavoured half, which is an
+  **enumeration of a narrower value than the one it names**, and is why ~41 Building Utilities notes
+  sat unclassified and generated with **computation guidance silently off**.
+- **`CIVIL_ENGINEERING`'s description drops `Surveying` and `Construction Management`**, which
+  production practice places in `ENGINEERING_SCIENCES` — those notes are authored for Civil
+  Engineering and reused **unchanged** in Architecture, which is `ADR-001`'s binary test resolving to
+  the shared bundle. **⚠️ Surveying is INSUFFICIENT EVIDENCE rather than reassigned** — no Surveying
+  notes exist in the ALE set, so it is claimed by neither value until evidence arrives.
+- **⚠️ The strategist brief stops pre-committing the answer.** `REVIEW_SET_SHAPING_CONTEXT.md` told it
+  *"Some programs (Architecture, notably) deliberately have no Domain Context"* — and **that
+  instruction produced 215 `(unset)` rows in the ALE plan**, a pre-committed answer reproduced rather
+  than a per-note assessment. It now states the rule, warns against expecting any program to come
+  back unset, and names building services explicitly.
+- **`ADR-001`'s failure-condition baseline is corrected from "27+ programs" to 21.** That figure was
+  the **pre-catalog free-text spread**, not catalog rows — and the whole condition is a **ratio**, so
+  it was being read against the wrong denominator. The real ratio is **8:21**.
+- **⚠️ NO ENUM VALUE WAS ADDED, AND `ARCHITECTURE` SPECIFICALLY WAS NOT.** It **passes** the
+  governance floor and the exclusion trap and is still a **provable no-op**: a value's entire
+  generation payload is its **label string plus one boolean**, and the resolver already falls back to
+  the single joined catalog program name, so a single-program Architecture note **already sends
+  `Domain: Architecture`**. Full audit, counter-argument and unrun production SQL:
+  `docs/claude-plans/domain-context-taxonomy-calibration-audit.md`.
+- **Nothing here is pinned by a test, and that is stated rather than assumed** — grepped: no test
+  asserts any description string. These are curator-facing copy, verified by `tsc` and the full
+  frontend suite (2,065 tests) rather than by a new assertion, because pinning marketing-style copy
+  would make it harder to correct next time it is wrong.
+
 - **An expiry stays visible after a paused or backlogged sweep (item 1).** `V130` adds `expired_at`, the
   sweep records it on the transition, and `findVisibleForUser` retains terminal rows on
   `coalesce(revoked_at, expired_at)` instead of the deadline. A request swept 90 days late is now still
