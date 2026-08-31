@@ -1,5 +1,120 @@
 # RELEASES.md - NoteLib
 
+## v0.99.0 - Connection Completeness
+
+**Status: In Progress** (kicked off 2026-08-31, base branch `releases/v0.99.0`, cut from `main` after
+`v0.98.0` merged and tagged)
+
+Theme: finish the two connection properties `v0.98.0` shipped half-built, and stop a paused sweep from
+hiding the expiries it later performs.
+
+### Why this release exists
+
+**⚠️ THIS IS THE FIFTH CONSECUTIVE RELEASE ON THE CONNECTION SURFACE, and that was named at kickoff rather
+than allowed to happen by drift.** The wider backlog is checkpoint-gated until `2026-09-11` and
+`2026-09-16`, so a release opened today is choosing from what is un-gated rather than from what is most
+valuable. **The owner chose to finish the surface (2026-08-31)** over a maintenance release or waiting for
+the checkpoint batch — on the reasoning that two half-built properties are worse than either finishing or
+never starting them.
+
+**Both items close a `v0.98.0` Known limitation that release recorded rather than fixed.**
+
+### Planned Scope
+
+- **1. An expiry stays visible even after a paused or backlogged sweep (backend + migration).**
+  `findVisibleForUser` retains terminal rows on `coalesce(revoked_at, expires_at)` — the **deadline**, not
+  the moment the row became terminal. Under a daily sweep those coincide, which is why it shipped. But
+  `v0.98.0` itself added a **500-row batch bound** and a **pause hook**, and both create backlogs: a request
+  swept more than `request-ttl-days` after its deadline becomes `EXPIRED` with a timestamp **already
+  outside the retention window**, so it vanishes from both parties' lists instantly and is **never shown as
+  expired at all**. Concretely: sweep paused 40 days, then resumed — a user sees *"pending, overdue"* one
+  day and **nothing** the next, which defeats the exact purpose retention exists for.
+  **⚠️ OWNER DECISION 2026-08-31: a separate `expired_at` column**, over re-keying retention on a recorded
+  sweep time. `expires_at` therefore keeps meaning **the deadline, for every status**, unchanged — and the
+  table already carries a distinct terminal timestamp per status (`accepted_at`, `revoked_at`), so this
+  completes an existing pattern rather than inventing one.
+- **2. The onboarding bar covers the whole connection-forming path (backend).** `v0.98.0` gated
+  `acceptInvitation`, but `invite()` (`LinkedLearnerService:87`) and `accept()` (`:373`) still require only
+  `assertProfileComplete`, **which passes for a brand-new account**. So a verified-but-not-onboarded account
+  can still invite as a SUPPORTER, have an onboarded learner accept, and reach an `ACCEPTED` relationship
+  with cross-user read capacity. **⚠️ The property *"forming a connection requires finished onboarding"* is
+  currently HALF TRUE, and half-true is the worst state** — it reads as enforced and is not.
+- **3. A test pins the three configurable crons to their production defaults (test).** `v0.98.0` made
+  `BillingUsageResetJob`, `SubscriptionExpiryJob` and `BulkGenerationResultCleanupJob` overridable; a cold
+  agent verified the defaults by hand against `origin/main`, and **nothing in the build would catch a future
+  edit that silently changed a production schedule.**
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ AN ANTI-DRIFT RULE NEEDS ITS THIRD AMENDMENT, AND IT IS RAISED HERE RATHER THAN REASONED PAST.**
+  `v0.95.0` prohibits adding a column to `linked_learner_relationships`, whose meaning
+  `[CHECKPOINT — due 2026-09-19]`, `[2026-09-26]` and `[2026-10-13]` read. It was amended once for
+  `expires_at` (`v0.97.0`). Item 1 adds `expired_at`. **THE AMENDMENT, with its reason:** the prohibition
+  protects a row's **MEANING** for three dated reads, and this **adds a new fact rather than reinterpreting
+  an existing one** — `expires_at` keeps its definition exactly, which is the whole point of choosing a
+  separate column over re-keying. **⚠️ None of the three reads is affected:** `2026-09-19` groups by
+  `status`, `2026-09-26` counts provisional rows and `PENDING`+`EXPIRED` relationships, and `2026-10-13`
+  reads the carrier clock. **⚠️ THE PROHIBITION OTHERWISE STANDS IN FULL** — nothing may be added to
+  `_invitations` or `_guardian_consents`, and no fourth column here, without the same explicit amendment.
+- **⚠️ `expires_at` MUST NOT BE OVERWRITTEN, RE-PURPOSED, OR BACKFILLED. `v0.97.0` GOT THIS WRONG TWICE.**
+  It means the deadline for every status. The first attempt there set it to the sweep time; the second
+  backfilled it onto inherited rows and merely delayed a defect by 30 days. **The lesson that survived: a
+  NULL `expires_at` is MEANINGFUL — it says the row is not on the expiry clock at all, and that NULL is the
+  entire mechanism protecting a consent-paused relationship.** Item 1 must not disturb it.
+- **⚠️ V130's BACKFILL OF `expired_at` IS THE TRAP, and the shape is decided at kickoff.** Existing
+  `EXPIRED` rows have no `expired_at`. **Set it to `expires_at` for those rows only** — they did expire at
+  approximately their deadline, because no backlog existed before this release, so it is honest and
+  preserves their current retention behaviour exactly. **⚠️ Backfill NOTHING for any other status**, and
+  never write `expired_at` on a `PENDING` row: `v0.97.0`'s two wrong attempts both came from writing a
+  timestamp onto rows that should have had none.
+- **⚠️ ITEM 2 TIGHTENS TWO MORE GATES AND WILL REJECT THE SAME TWO LIVE COHORTS — known in advance, for the
+  third release running.** The frontend gates on `needsOnboarding()`, not `onboardingCompletedAt`: a failed
+  `completeOnboarding` POST and the copy-on-signup cohort read as onboarded client-side while the server
+  column is null. **⚠️ The `/onboarding` self-heal ships WITH the gates, not after** — `v0.98.0` established
+  the pattern on the accept path.
+- **⚠️ `accept()` IS CALLED INTERNALLY BY `acceptInvitation`, so check for double-gating** — and it is also
+  the guardian-consent path a supporter uses to confirm a minor's connection. **Verify who each gate locks
+  out before shipping**, per `v0.71.0`'s ADMIN lockout.
+- **⚠️ Do NOT touch `assertProfileComplete`** — its mid-onboarding exemption is deliberate, protects the
+  activation funnel, and has ~20 call sites.
+- **⚠️ Do NOT add, remove or reorder an onboarding FLOW step, and no code under `frontend/app/onboarding`.**
+  `[CHECKPOINT — due 2026-09-11]` is **11 days out** and measures completion against a 62.4% baseline.
+- **⚠️ Do NOT change what expires, when, or from which clock.** The `≥30`-day TTL from relationship
+  `created_at` and the separate `invitation-ttl-days` carrier clock are both dated-read constraints.
+- **⚠️ Terminal-only grant cutting, never on the consent pause** — unchanged from `v0.97.0`/`v0.98.0`.
+- **⚠️ Standing connection rules unchanged:** acceptance stays LOAD-BEARING; guardian consent stays
+  re-asserted inside the grant check, fail-closed on unknown age; **no account-existence oracle** and the
+  single not-found contract is preserved; absence of a live grant means NO ACCESS; every read re-verifies
+  `ACCEPTED`; the progress read stays UNIDIRECTIONAL; invitations stay ONE-AT-A-TIME; **no relationship-type
+  column, no new profile type, nothing gated on `ProfileType`**; `NoteVisibility` stays `PRIVATE | PUBLIC`;
+  **no endpoint accepts a learner user id**; **no public people search**.
+- **⚠️ Any predicate deciding whether a row is retained, or whether a caller may form a connection, needs a
+  REAL-ROW test** in `NativeQueryPostgresIntegrationTest`, mutation-verified with the killing test named.
+- **⚠️ Explicitly OUT OF SCOPE:** manual dismissal of terminal cards; anything changing what a supporter can
+  see; Phase 5 items.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: ONE SCOPED COLD AGENT, framed as FALSIFICATION.** Two triggers, both
+  one-agent class: item 1 changes **production-data semantics via a migration**, item 2 **moves an
+  authorization boundary**. Neither is a permission substrate nor a first-of-kind cross-user read — the
+  same shape `v0.98.0` carried at nine items. **⚠️ ESCALATE TO THE FULL TEST IF** item 2's tightening
+  reaches beyond the two cohorts already identified, or if item 1's backfill turns out to need a rule
+  beyond *"`EXPIRED` rows only"*.
+- **⚠️ ITEM 2 GETS ITS `advisor()` CALL BEFORE IMPLEMENTATION** — third gate tightening in three releases,
+  and the previous two both had their blast radius mis-stated until something checked.
+- **⚠️ THE COLD AGENT MUST BE ASKED TO COUNT EXECUTED TESTS, NOT READ THEM.** `v0.98.0`'s worst finding was
+  a test that had silently stopped running while the build stayed green — the fifth instance in three
+  releases of a guard that looks present and does nothing.
+- **The `### Planned Scope` heading is permanent**; delivery appends to `### Shipped`.
+- **⚠️ A `[CHECKPOINT]` is owed only if something ships ahead of its evidence. On current scope nothing
+  does** — all three items close recorded defects. Stated now so the signoff gate is answered deliberately
+  rather than skipped, and revisited if scope grows.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.98.0 - Connection Consistency
 
 **Status: Released** (kicked off 2026-08-30, signed off 2026-08-31, base branch `releases/v0.98.0`, cut
