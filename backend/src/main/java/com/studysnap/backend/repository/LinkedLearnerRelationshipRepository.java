@@ -70,17 +70,21 @@ public interface LinkedLearnerRelationshipRepository extends JpaRepository<Linke
      * accumulating every entry forever.
      *
      * <p>⚠️ The terminal clock differs per status and both are the ROW'S OWN timestamp:
-     * {@code revoked_at} for REVOKED, {@code expires_at} for EXPIRED — which is why v0.97.0 refused
-     * to overwrite {@code expires_at} with the sweep time. A terminal row missing its timestamp is
-     * retained rather than hidden, so a data oddity never silently removes a connection from view.
+     * {@code revoked_at} for REVOKED, {@code expired_at} for EXPIRED. It was {@code expires_at}
+     * until v0.99.0 — the DEADLINE — which is equal to the terminal moment only while the sweep runs
+     * daily and unbacklogged. v0.98.0's own batch bound and pause hook broke that, so a late-swept
+     * request arrived already outside the window and vanished without ever being shown as expired.
+     *
+     * <p>⚠️ A terminal row missing its timestamp is RETAINED rather than hidden, so a data oddity —
+     * or a row expired between deploy and backfill — never silently removes a connection from view.
      */
     @Query(value = """
             select *
               from linked_learner_relationships
              where (supporter_user_id = :userId or learner_user_id = :userId)
                and (status in ('PENDING', 'ACCEPTED')
-                    or coalesce(revoked_at, expires_at) is null
-                    or coalesce(revoked_at, expires_at) > :terminalCutoff)
+                    or coalesce(revoked_at, expired_at) is null
+                    or coalesce(revoked_at, expired_at) > :terminalCutoff)
              order by created_at desc
             """, nativeQuery = true)
     List<LinkedLearnerRelationshipEntity> findVisibleForUser(
@@ -134,7 +138,7 @@ public interface LinkedLearnerRelationshipRepository extends JpaRepository<Linke
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
             update linked_learner_relationships
-               set status = 'EXPIRED'
+               set status = 'EXPIRED', expired_at = :expiredAt
              where id = :id
                and status = 'PENDING'
                and expires_at is not null

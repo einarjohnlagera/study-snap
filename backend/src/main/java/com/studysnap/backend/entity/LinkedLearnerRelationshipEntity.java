@@ -45,6 +45,16 @@ public class LinkedLearnerRelationshipEntity {
     @Column(name = "revoked_at")
     private OffsetDateTime revokedAt;
 
+    /**
+     * When the sweep actually expired this request — distinct from {@code expiresAt}, the DEADLINE.
+     *
+     * <p>⚠️ They are equal under a daily unbacklogged sweep, which is why retention originally used
+     * the deadline. They diverge the moment the sweep is paused or bounded, and retention must
+     * follow THIS one or a late-swept request vanishes without ever being shown as expired.
+     */
+    @Column(name = "expired_at")
+    private OffsetDateTime expiredAt;
+
     @Column(name = "expires_at")
     private OffsetDateTime expiresAt;
 }
