@@ -55,8 +55,18 @@ note, unchanged?* Yes → the shared value. No → the program-specific one.
 - Computational method, including engineering economics and cost → `ENGINEERING_MATHEMATICS`
 - Codes, law, ethics, contracts, licensure, safety → `PROFESSIONAL_PRACTICE_AND_REGULATION`
 - Material genuinely specific to one program that has a value → that value
-- **No honest fit → leave it unset**, which falls back to the program name. Some programs
-  (Architecture, notably) deliberately have no Domain Context and rely on this fallback.
+- **No honest fit → leave it unset**, which falls back to the program name. An honest unset is a
+  findable backlog marker; a forced value is a decision that only looks made.
+  **⚠️ Do NOT assume any particular program is expected to come back unset.** An earlier version
+  of this line named Architecture as deliberately having no Domain Context, and that instruction
+  produced 215 `(unset)` rows in the ALE plan — the strategist reproducing a pre-committed answer
+  rather than assessing each note. That pre-empts the exact question
+  `[CHECKPOINT — due 2026-09-28]` exists to ask. Apply the rules above per note and let the
+  distribution fall where it falls.
+  **⚠️ Building services — plumbing, HVAC, electrical distribution, lighting, acoustics, fire
+  protection, vertical transportation — and construction materials, testing and management are
+  `ENGINEERING_SCIENCES`, not unset.** They are shared engineering knowledge, and the value is
+  quantitative, which switches on computation guidance those subjects need.
 
 **Two hard constraints:**
 
