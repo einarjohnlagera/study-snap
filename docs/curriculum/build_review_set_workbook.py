@@ -15,7 +15,10 @@ INPUT COLUMNS (tab-separated, header row required, order irrelevant):
     note_title         the note
     note_subject       canonical Subject metadata (NOT the section name)
     domain_context     enum value, or "(unset)"
-    status             Existing | Reuse | New | Excluded
+    status             Existing | Reuse | New | Excluded | Unmapped
+                       Unmapped = a target shape not yet reconciled against production. Use it
+                       when reshaping a set whose notes already exist but have not been matched
+                       title-by-title. It is honest; guessing "New" is not.
 
 Row ORDER is authoritative: sections appear in first-seen order, notes in file order.
 Nothing is sorted, so the strategist's sequencing survives into the workbook.
@@ -26,7 +29,7 @@ import sys, csv, collections
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
-STATUS_FILL = {"Existing":"D5E8D4","Reuse":"DAE8FC","New":"FFF2CC","Excluded":"F8CECC"}
+STATUS_FILL = {"Existing":"D5E8D4","Reuse":"DAE8FC","New":"FFF2CC","Excluded":"F8CECC","Unmapped":"FFE6CC"}
 DC_FILL = {"(unset)":"EAEAEA","ENGINEERING_SCIENCES":"E1D5E7","ENGINEERING_MATHEMATICS":"D5E8D4",
            "CIVIL_ENGINEERING":"FFE6CC","PROFESSIONAL_PRACTICE_AND_REGULATION":"DAE8FC",
            "ENGINEERING_MATHEMATICS ":"D5E8D4"}
@@ -82,21 +85,21 @@ def build(rows, out, set_title, set_desc):
                       "New = needs authoring · Excluded = deliberately held out.  "
                       "See the Domain Context sheet for the two hard rules on that column.",
             "A4:H4", 16, italic=True, color="B06000")
-    _head(ov, 6, ["#", "Subject Plan", "Sections", "In set", "Existing", "Reuse", "New", "Excluded"])
+    _head(ov, 6, ["#", "Subject Plan", "Sections", "In set", "Existing", "Reuse", "New", "Unmapped", "Excluded"])
     r, tot = 7, collections.Counter()
     for pno, p in plans.items():
         st = collections.Counter(n["status"] for ns in p["sections"].values() for n in ns)
         tot.update(st)
         vals = [pno, p["title"], len(p["sections"]),
                 sum(v for k, v in st.items() if k != EXCLUDED),
-                st["Existing"], st["Reuse"], st["New"], st[EXCLUDED]]
+                st["Existing"], st["Reuse"], st["New"], st["Unmapped"], st[EXCLUDED]]
         for i, v in enumerate(vals, 1):
             ov.cell(row=r, column=i, value=v).border = BOX
         r += 1
     for i, v in enumerate(["", "TOTAL", "", sum(v for k, v in tot.items() if k != EXCLUDED),
-                           tot["Existing"], tot["Reuse"], tot["New"], tot[EXCLUDED]], 1):
+                           tot["Existing"], tot["Reuse"], tot["New"], tot["Unmapped"], tot[EXCLUDED]], 1):
         c = ov.cell(row=r, column=i, value=v); c.font = Font(bold=True); c.border = BOX
-    _widths(ov, [5, 42, 10, 10, 10, 9, 8, 10]); ov.freeze_panes = "A7"
+    _widths(ov, [5, 40, 9, 8, 9, 8, 7, 10, 9]); ov.freeze_panes = "A7"
 
     dc = wb.create_sheet("Domain Context")
     dc["A1"] = "Domain Context by Subject"; dc["A1"].font = Font(size=14, bold=True)
@@ -134,7 +137,9 @@ def build(rows, out, set_title, set_desc):
                 flags = []
                 if shared[n["note_title"]] > 1:
                     flags.append("same canonical note in another plan — do not duplicate")
-                if n["status"] in ("Reuse", "Existing"):
+                if n["status"] == "Unmapped":
+                    flags.append("existence not yet checked — reconcile against production")
+                elif n["status"] in ("Reuse", "Existing"):
                     flags.append("context already set — verify before changing")
                 elif n["domain_context"] == "(unset)":
                     flags.append("unset requires a SINGLE applicable program")
@@ -154,14 +159,14 @@ def build(rows, out, set_title, set_desc):
     bs = wb.create_sheet("By Subject (bulk generate)")
     bs["A1"] = "Generation batches — Bulk Generate applies ONE subject and ONE Domain Context per batch"
     bs["A1"].font = Font(size=13, bold=True); bs.merge_cells("A1:F1")
-    _banner(bs, "A2", "Only 'New' notes appear. Each block is one Bulk Generate run: set the Subject and Domain "
+    _banner(bs, "A2", "Only 'New' and 'Unmapped' notes appear. Each block is one Bulk Generate run: set the Subject and Domain "
             "Context shown, paste the titles as topics.", "A2:F2", 16, italic=True, color="666666")
     _head(bs, 4, ["Note subject", "Domain Context", "New notes", "Subject Plan", "Section", "Note title"])
     by = collections.defaultdict(list)
     for pno, p in plans.items():
         for sec, notes in p["sections"].items():
             for n in notes:
-                if n["status"] == "New":
+                if n["status"] in ("New", "Unmapped"):
                     by[(n["note_subject"], n["domain_context"])].append((p["title"], sec, n["note_title"]))
     r = 5
     for key in sorted(by, key=lambda k: (-len(by[k]), k[0])):
