@@ -41,6 +41,33 @@ python3 -m venv /tmp/xlsxvenv && /tmp/xlsxvenv/bin/pip install openpyxl
 The builder validates its input: it fails on a missing required column and on an unknown `status`
 value, rather than emitting a plausible-looking workbook with a silent gap.
 
+## Step 1 in detail — what to run, and what to hand over
+
+`review-set-reshape-read.sql` is read-only and safe against production. Set the target set's
+collection id at the top; the benchmark set resolves itself by title.
+
+| Query | Produces | Paste to the strategist? |
+|---|---|---|
+| **Q0** | every root Review Set with child-plan and note counts | yes — the two relevant rows; it is the size gap being closed |
+| **Q1** | the target set today, note by note | yes if under ~200 rows |
+| **Q2** | the target set's skeleton: plan → section → counts | always |
+| **Q3** | a comprehensive set as the benchmark | always — this is what "comprehensive" means concretely |
+| **Q4** | **notes already tagged for the program but NOT in the set** | always — the ready-to-add pool, the cheapest coverage available |
+| **Q5** | per benchmark subject: note count, how many are tagged for the target program, how many are already in the set | always |
+| **Q6** | exact catalog program names | yes, trimmed to programs with real counts |
+
+**⚠️ Q4 is a candidate pool, not an answer.** Program tags were partly produced by an authoring
+surface that defaulted the program from the curator's own profile — one such default wrongly tagged
+106 notes. Expect roughly a third of Q4 to be material that shares a jobsite with the discipline
+without belonging in its licensure review. The GPT module already asks the strategist to split the
+pool three ways and to recommend tag removals; do not pre-filter it yourself.
+
+**⚠️ Q4's `titles` column can be very long.** Paste `subject` + count for everything, and titles only
+for the subjects where placement decisions are immediate.
+
+**⚠️ Check Q0 returns exactly one benchmark root.** The benchmark resolves by title match, so two
+matching roots would silently union both trees and inflate every count in Q3 and Q5.
+
 ## Sheet contract, and why each sheet exists
 
 | Sheet | Contents | Why |
