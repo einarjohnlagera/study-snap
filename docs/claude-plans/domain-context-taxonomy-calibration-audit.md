@@ -332,3 +332,89 @@ read: good output confirms the vocabulary, consistently mis-framed output promot
 - **Do NOT bulk-rewrite notes or retroactively regenerate Study Packs.** Domain Context changes affect
   **future generation only**; classify during meaningful review. Curator time is the binding constraint.
 - **Do NOT invent a second evaluation rubric** — R4's runbook exists.
+
+
+---
+
+# Stage 2 — owner/product decisions, 2026-08-31
+
+The Stage 1 findings above went to the product-UX consultation and came back as **13 ratified
+decisions**. They **accept** the audit: no taxonomy expansion, no `ARCHITECTURE`, no catch-all, no
+removals, and the shipped description corrections stand. **The work is reframed as resolver + UX +
+mental model.** Full decision text is in the owner's consultation record; the operative summary:
+
+| # | Decision |
+|---|---|
+| 1 | Replace `Automatic — based on the program` with **`Automatic — use note context`**. NOT "infer from context" (implies AI classification the resolver does not do); NOT "Not set" (Automatic is not a no-op) |
+| 2 | **Show the EFFECTIVE writing domain** as derived UI state (`Writing domain: Architecture`), or `Writing domain needs attention`. **No new persisted field.** Must reuse the backend resolver, never a frontend re-implementation that can drift |
+| 3 | Applicable Programs helper copy states the boundary: *they determine where this note applies and is discoverable; they do not determine its Domain Context* |
+| 4 | **Canonical curated generation must NOT silently inherit the curator's profile program.** Invariant: *two curators generating the same canonical note must not get different authoring-domain instructions because their personal profiles differ.* **Learner personalization is NOT removed** — audit the boundary first |
+| 5 | Domain Context stays **OPTIONAL** where Automatic resolves trustworthily. Forcing a choice produces plausible-but-wrong values, which are worse than an honest blank because they are invisible |
+| 6 | **Block ambiguity at GENERATION, not at note save.** *Note validity ≠ generation readiness* |
+| 7 | Preserve learner behaviour; report rather than invent a brittle role check if no clean canonical-generation concept exists |
+| 8 | **New doctrine criterion:** *a missing authoring tradition does not justify a new enum when existing resolution already produces the same effective context.* Architecture is the worked example |
+| 9 | The September checkpoint must measure **effective** domains and their **source**, not just persisted enum usage |
+| 10 | Four named patterns (A authoring-order / B wrong-shape / C enum-redundancy / D avoidance) to distinguish the zero-usage explanations |
+| 11 | **Override behaviour is the strongest signal:** when Automatic produces a domain, does the curator accept or change it? |
+| 12 | The UI shows the **outcome**, never the resolver's five precedence levels |
+| 13 | Keep the shipped description fixes; audit the other values' descriptions for the same narrowing failure |
+
+## ⚠️ Three conflicts/couplings found against real code — flag these before implementing
+
+**1. Decisions 1 and 4 are COUPLED. Shipping 1 without 4 makes the label wrong again, in a new way.**
+`Automatic — use note context` is only truthful once the **profile fallback is removed for curated
+generation** — until then, "note context" can still be the curator's own account setting, which is
+not note context at all. **Do not ship the copy change alone.** (The label is curator-only —
+`showAuthoringMetadataFields` / `canEditAuthoringMetadata` / `isTeacherOrAdmin` — so it need not
+describe the learner path, where profile fallback legitimately survives.)
+
+**2. Decision 6 COLLIDES with an existing save-time block, and the decisions do not address it.**
+`NoteService:181` already calls `assertMultiProgramHasDomainContext` on create, and
+`NoteApplicableProgramsService:74-76` throws `MultiProgramDomainContextRequiredException` — so a note
+with **2+ Applicable Programs and no Domain Context is ALREADY hard-blocked at save**, in four
+independent write paths. Decision 6 says not to hard-block save. **Either that rule is an explicit
+exception to Decision 6** (defensible: multi-program is a data-integrity rule, because the resolver
+genuinely cannot choose between programs, whereas unresolved-single is a generation-readiness
+question) **or it moves to generation time too** — which is a larger change touching four call sites
+and an existing error contract. **This needs an owner ruling; do not decide it in implementation.**
+
+**3. Decision 4's boundary ALREADY EXISTS — no brittle role check needs inventing.** Decision 7 asked
+this be reported rather than guessed. `isTeacherSelectableOwner` (`NoteService:1524`) and `isCurator`
+(`NoteGenerationService:116`, `NoteBulkGenerationService:411`) are the same predicate —
+`TEACHER || ADMIN`, **preceded by an onboarding guard** — and it is **already used for exactly this
+field**: `NoteService:182` writes `entity.setCourseProgram(curator ? null : resolveRequested…)`. So
+the codebase already decides "curator notes carry no personal program" at creation; Decision 4
+extends that same rule to resolution. **The `ADMIN`-alone concern is moot** — the predicate is not
+`ADMIN` alone, and it is documented with its `v0.71.0` rationale.
+
+## ⚠️ Decision 11 is NOT observable from current data — this bounds Decisions 9–11
+
+Domain Context authoring emits **zero analytics events** (verified at Stage 1). Nothing records what
+Automatic *would have* produced at the moment a curator chose, so **"did the curator accept or
+override Automatic?" cannot be reconstructed retroactively at all.**
+
+- **Patterns A, C and D are partly reconstructable now** by SQL — Q5 in this document already
+  classifies every curator note by its effective-domain SOURCE, which is Decision 9's item 3.
+- **Pattern B and Decision 11 require instrumentation**, and it must exist *before* the behaviour it
+  measures occurs.
+
+**⚠️ The September read is 28 days out.** If override behaviour is wanted for it, the smallest
+honest addition is a single event at authoring capturing *(what Automatic resolved, what was
+persisted)* — proportionate, and consistent with Decision 9's "do not build a large analytics
+system". **If that is not added, Decisions 10-B and 11 are simply not answerable this cycle, and the
+read should say so rather than infer.**
+
+## Placement
+
+**This is a release, not a fold.** It changes resolver behaviour on the generation path (Decision 4),
+adds a derived API value (Decision 2), adds a generation-time gate (Decision 6), and touches curator
+copy (1, 3, 12, 13). `v0.99.0` is feature-complete with a different theme.
+
+**Verification tier, provisionally:** Decision 4 changes what reaches the LLM on the canonical
+authoring path, and Decision 6 adds a gate — **one scoped cold agent** at minimum; re-evaluate if the
+Decision 6 ruling widens to moving the existing save-block.
+
+**⚠️ The A–F implementation audit the decisions request has NOT been run.** Sections A (resolver
+boundary — partly answered by conflict 3 above), B (effective-domain exposure), C (generation
+readiness), D (exact copy), E (observability — partly answered above) and F (tests) are owed before
+coding.
