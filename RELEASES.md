@@ -97,6 +97,43 @@ never starting them.
   fails `invitingRequiresFinishedOnboardingAndSaysSoBeforeAnyAddressLookup`; removing the redirect fails
   `routes a mid-onboarding inviter to onboarding instead of a dead error`.
 
+#### Added 2026-08-31, after items 1-2 shipped — item 4, folded on the owner's instruction
+
+**⚠️ FOLDED BECAUSE IT BLOCKS CURRICULUM WORK, and the theme mismatch is acknowledged rather than
+argued away.** `v0.99.0`'s theme is connection lifecycle; this is authoring metadata. The owner ruled
+2026-08-31: *"it blocks my building of ALE review set so it must be shipped as soon as possible."*
+Folding here is genuinely the soonest — three string edits, **no code logic, no schema, no prompt
+change** — so the verification tier does not move.
+
+- **4. The curator-facing Domain Context copy stops blocking classification (frontend copy + docs).**
+  Output of a Stage 1 calibration audit run 2026-08-31 by two cold-context agents; full findings,
+  counter-argument and unrun production SQL in
+  `docs/claude-plans/domain-context-taxonomy-calibration-audit.md`.
+  **⚠️ THIS IS NOT A TAXONOMY CHANGE. The audit's verdict is that NO enum value is added** — see the
+  anti-drift block below, which states why in the form least likely to be misread.
+  Three edits:
+  - **`ENGINEERING_SCIENCES`'s description is widened.** It reads *"Strength of Materials,
+    Engineering Mechanics, Hydraulics or Fluid Mechanics, Thermodynamics, and Engineering
+    Materials"* — a **Civil-Engineering-flavoured enumeration of a broader ratified value**, omitting
+    plumbing, HVAC, electrical distribution, lighting, acoustics, fire protection and vertical
+    transport. **⚠️ THIS IS THE ACTUAL BLOCKER:** ~41 Building Utilities notes generate with
+    **computation guidance silently OFF** — `QUANTITATIVE_KEYWORDS` has no `architecture`, so
+    *"Air-Conditioning Systems"*, *"Room Acoustics"*, *"Automatic Sprinkler Systems"* trip nothing —
+    and the remedy is classifying them `ENGINEERING_SCIENCES`, which is `quantitative=true`. **A
+    curator reading the current description would never pick it.** Precedent is ratified:
+    `ADR-001`'s *Water Supply Engineering* worked example is the same family.
+  - **`CIVIL_ENGINEERING`'s description is corrected.** It claims *Surveying* and *Construction
+    Management*, which production practice places elsewhere — 7 Construction Materials and 6
+    Construction/Project Management notes carry `ENGINEERING_SCIENCES` and cross CE → Architecture
+    **unchanged**.
+  - **`REVIEW_SET_SHAPING_CONTEXT.md` stops pre-committing the answer.** It tells the strategist
+    *"Some programs (Architecture, notably) deliberately have no Domain Context and rely on this
+    fallback"* — which **produced 215 `(unset)` rows in the ALE plan** and pre-empts the exact
+    question `[CHECKPOINT — due 2026-09-28]` exists to ask. State the rule; drop the worked answer.
+- **⚠️ `ADR-001`'s program baseline is corrected from "27+" to 21** in the same edit. That figure is
+  the **pre-catalog free-text spread**, not catalog rows, and the ADR's own failure-condition ratio
+  depends on the denominator. The real ratio is **8:21**.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ AN ANTI-DRIFT RULE NEEDS ITS THIRD AMENDMENT, AND IT IS RAISED HERE RATHER THAN REASONED PAST.**
@@ -143,6 +180,22 @@ never starting them.
   **no endpoint accepts a learner user id**; **no public people search**.
 - **⚠️ Any predicate deciding whether a row is retained, or whether a caller may form a connection, needs a
   REAL-ROW test** in `NativeQueryPostgresIntegrationTest`, mutation-verified with the killing test named.
+- **⚠️ ITEM 4 ADDS NO DOMAIN CONTEXT VALUE, AND THE REASON MUST NOT BE COMPRESSED.** The Stage 1 audit
+  found that **`ARCHITECTURE` PASSES the governance floor and the exclusion trap and is STILL a
+  provable no-op** — a value's entire generation payload is its **label string plus one `quantitative`
+  boolean**, and the resolver already falls back to the single joined catalog program name, so a
+  single-program Architecture note **already sends `Domain: Architecture`**. A new value would emit a
+  byte-identical line. **⚠️ "Architecture didn't qualify" is the WRONG takeaway** and would cost a
+  release to re-derive; the counter-argument and what un-parks it are in the audit.
+- **⚠️ Item 4 is EXPLICITLY NOT GATED on `[CHECKPOINT — due 2026-09-28]`** (owner, 2026-08-31) **and
+  does not pre-empt it.** Classifying under existing values is not a taxonomy action, and `ADR-001`
+  records the multi-program rule as **itself the forcing function** generating the calibration
+  evidence. Good output confirms the vocabulary; consistently mis-framed building-services output
+  promotes the `Building Services` hypothesis the audit records.
+- **⚠️ Item 4 must NOT: add any enum value; add `GENERAL_ENGINEERING`; extend
+  `QUANTITATIVE_KEYWORDS`; remove `NURSING`, `ACCOUNTANCY` or `PROFESSIONAL_EDUCATION` on zero usage;
+  resolve the zero-usage question by reasoning; change the resolver; touch any prompt file; or
+  bulk-rewrite notes.** Domain Context changes affect **future generation only**.
 - **⚠️ Explicitly OUT OF SCOPE:** manual dismissal of terminal cards; anything changing what a supporter can
   see; Phase 5 items.
 
