@@ -273,7 +273,49 @@ change** — so the verification tier does not move.
 
 ### Shipped
 
-_(nothing yet)_
+- **`BP 334` was a typo for `BP 344`, and `PROFESSIONAL_PRACTICE_AND_REGULATION`'s description was
+  program-shaped (item 4, folded after the first three landed).** BP 344 is the accessibility law;
+  the ratified spec
+  (`docs/claude-prompt/canonical-knowledge-architecture-out/08-taxonomy-validation-and-final-recommendation.md`,
+  quoted at `RELEASES.md:3710`) and **every other reference in the repo** say 344 — only the shipped
+  curator string said 334. The same description also read as an **Engineering-union-Architecture
+  list** and omitted the two families the audit's own reuse table places there — **National Building
+  Code** and **Construction Safety**, which account for 19 of the 47 cross-program reused ALE rows.
+  It is now *"Codes, laws, ethics and licensure shared across programs."*
+- **⚠️ THE `quantitative` FLAG STAYS `false`, RECORDED AS A DECISION RATHER THAN LEFT UNSAID.**
+  Widening a description changes **which notes land there** — that is precisely what item 4 did to
+  `ENGINEERING_SCIENCES`, where the newly-landing notes *needed* computation guidance. Here the
+  answer is the opposite: codes, laws, ethics and accessibility compliance are **prose treatment**.
+  Per `v0.85.0`, `false` is a **no-op** that falls through to the untouched keyword scan while
+  `true` is a new signal that is **permanent per note**, since Study Packs never auto-regenerate.
+  Flipping it would also disturb the September zero-usage read.
+- **⚠️ `ENGINEERING_MATHEMATICS` was examined and deliberately NOT changed.** Its description
+  enumerates subjects and never states the rule the audit's existing-value review turns on — a note
+  belongs there when it **teaches** the computational method, not when it **uses** one. That is the
+  **opposite** failure mode from the one Decision 13 scopes (*"does the description make a broad
+  tradition look narrower?"*), and adding a selection rule to a dropdown is **taxonomy guidance, not
+  copy**, which Decision 13 explicitly excluded. Recorded in the audit doc for the A–F pass.
+- **The vacuous quantitative test was RENAMED, not deleted — and the distinction is the point.**
+  `isQuantitativeContext_preservesEveryPreviouslyQuantitativeEngineeringDomain` claimed to pin the
+  declared flag for the three engineering domains. **Verified empirically: flipping all three enum
+  values to `quantitative = false` leaves it GREEN.** `isQuantitativeContext` short-circuits on the
+  flag at `OpenAiLlmStudyPackService:1642`, but its fallback haystack **leads with the domain
+  LABEL** (`effectiveAuthoringDomain`, `:1648`) — and *"Engineering Mathematics"*, *"Engineering
+  Sciences"* and *"Civil Engineering"* each contain a `QUANTITATIVE_KEYWORD`. The flag half is
+  **unobservable at this level for exactly these three**; `ACCOUNTANCY` and `NURSING` are the values
+  that isolate it, and `declaredQuantitativeDomainsProduceComputationGuidance` already covers them.
+- **⚠️ DELETING IT WOULD HAVE LOST COVERAGE — the kill set is OVERDETERMINED, not empty.** It is the
+  only **service-level** assertion for those three (`DomainContextTest
+  .declaresWhetherEachDomainContextIsQuantitative` pins the *declaration* only, for all eight), so it
+  still fails if the keyword scan loses `engineering` **and** a flag is flipped. **The false coverage
+  was in the NAME, not the assertion** — now
+  `isQuantitativeContext_isTrueForEveryEngineeringDomainByFlagOrLabel`, with the mechanism and both
+  line references recorded beside it. **This is the seventh guard-that-looks-present found in five
+  releases, and the first whose correct fix was NOT to strengthen it.**
+- **⚠️ Verified by COUNTING, not reading:** the renamed test executes **3 times** (one per enum value)
+  in `TEST-…OpenAiLlmStudyPackServiceTest.xml`, the old name appears nowhere in the reports, and the
+  two classes report **96** and **10** tests run, 0 failures. **No test pins any description string**
+  — re-grepped, as item 4 claimed — so the copy edit is covered by `tsc` and the frontend suite.
 
 ## v0.98.0 - Connection Consistency
 

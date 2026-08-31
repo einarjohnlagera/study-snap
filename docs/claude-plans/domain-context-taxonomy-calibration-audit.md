@@ -216,6 +216,23 @@ that exists.
   Flipping `quantitative` to `false` on all three engineering values leaves it green, because three
   of the eight **labels self-trigger the keyword scan** the flag was built to replace. The declared
   flag is only independently observable for `NURSING` and `ACCOUNTANCY`.
+  **⚠️ CLOSED IN `v0.99.0`, BY RENAMING RATHER THAN DELETING.** The claim was verified empirically
+  — all three flags flipped to `false`, suite green — but the kill set is **overdetermined, not
+  empty**: this is the only *service-level* assertion for those three, and it still fails if the
+  keyword scan loses `engineering` **and** a flag is flipped. The declaration itself was already
+  pinned by `DomainContextTest.declaresWhetherEachDomainContextIsQuantitative`, so deleting would
+  have lost coverage while fixing nothing. **The false signal was in the NAME**, which claimed to
+  pin the flag; it is now `isQuantitativeContext_isTrueForEveryEngineeringDomainByFlagOrLabel`,
+  with the mechanism and the `:1642`/`:1648` line references recorded beside it.
+- **`ENGINEERING_MATHEMATICS`'s curator description invites OVER-selection — recorded for the A–F
+  implementation pass, deliberately NOT fixed in `v0.99.0`.** It enumerates subjects (Algebra …
+  Engineering Economics) and never states the rule the existing-value review above turns on:
+  a note belongs here when it **teaches** the computational method, not when it **uses** one.
+  **⚠️ It is the opposite failure mode from Decision 13's**, whose rubric asks whether a
+  description makes a broad tradition look *narrower*; this one makes a narrow value look broader.
+  Adding a selection rule to a dropdown description is **taxonomy guidance, not copy**, which
+  Decision 13 explicitly scoped out (*"a small copy consistency check, not another taxonomy
+  redesign"*), so it needs the A–F pass rather than a copy edit.
 - **The quantitative signal is not stable across prompts for one note** — the seven call sites pass
   different haystacks, so the same note can be quantitative for a Challenge Quiz and not for its
   Study Pack.
