@@ -44,6 +44,30 @@ never starting them.
   agent verified the defaults by hand against `origin/main`, and **nothing in the build would catch a future
   edit that silently changed a production schedule.**
 
+- **Every cron job's production schedule is pinned (item 3).** `v0.98.0` made three hardcoded crons
+  configurable, and its cold agent verified the defaults **by hand** against `origin/main` — because
+  nothing in the build could. A later edit that silently moved a production schedule would have
+  shipped green. **Hand verification does not survive the session that performed it.**
+- **⚠️ IT ALSO CATCHES THE GAP THAT ACTUALLY SHIPPED, which is the better half.** That same audit found
+  the claim *"every scheduled job is disabled in tests"* was made **one commit before it was true**:
+  three jobs had been fixed and **five others were already configurable but simply never listed** —
+  including `account.purge-cron`, which **deletes data** and was armed during every test run. A human
+  found it by enumerating annotations. `everyCronJobIsDisabledInTheTestProfile` now enumerates them
+  mechanically, so **a new job added without a test-profile entry fails immediately** rather than
+  waiting for someone to notice.
+- **The test covers all TEN cron jobs, not the three item 3 named.** Scoping it to the three would
+  have pinned exactly the jobs least likely to drift — the ones just audited — and left the other
+  seven in the state that produced the defect.
+- **A third property is pinned: the `${key:default}` form itself.** A bare literal cannot be
+  overridden or disabled; a bare `${key}` fails startup on a missing key — the small regression
+  `v0.98.0` introduced and then corrected. **Mutation-verified, three mutants, each killed with a
+  message naming the rule:** moving a schedule fails
+  `everyCronJobDeclaresItsProductionScheduleAsAnOverridableDefault`; reverting to a hardcoded literal
+  fails it with the form message; dropping a job from the disable list fails
+  `everyCronJobIsDisabledInTheTestProfile`.
+- **⚠️ Two tests were confirmed to RUN by counting, not by reading the file** — `v0.98.0`'s worst
+  finding was a test that reported *"Tests run: 0"* while the build stayed green.
+
 - **The curator-facing Domain Context copy stops blocking classification (item 4).**
   `ENGINEERING_SCIENCES`'s description now names **building services** — plumbing, HVAC, electrical
   distribution, lighting, acoustics, fire protection, vertical transportation — plus construction
