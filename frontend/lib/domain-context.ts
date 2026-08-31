@@ -34,7 +34,18 @@ export const DOMAIN_CONTEXT_OPTIONS: Array<{ value: DomainContext; label: string
   {
     value: "PROFESSIONAL_PRACTICE_AND_REGULATION",
     label: "Professional Practice & Regulation",
-    description: "Engineering Laws, Ethics, and Contracts; Architecture Professional Practice; Building Laws; and BP 334.",
+    // ⚠️ Corrected in v0.99.0. "BP 334" was a typo for BP 344, the accessibility law: the ratified
+    // spec (08-taxonomy-validation-and-final-recommendation.md, quoted at RELEASES.md:3710) and
+    // every other reference in the repo say 344. The description also read as an
+    // Engineering-union-Architecture list and omitted National Building Code and Construction
+    // Safety, which the ALE reuse data places here -- 19 of the 47 cross-program reused rows.
+    // ⚠️ `quantitative` STAYS FALSE, and that is a decision rather than an oversight. Widening a
+    // description changes WHICH notes land here -- that is exactly what item 4 did to
+    // ENGINEERING_SCIENCES -- but codes, laws, ethics and accessibility compliance are prose
+    // treatment, so it must not change HOW they are written. Per v0.85.0, `false` is a no-op that
+    // falls through to the untouched keyword scan, while `true` is a new signal that is PERMANENT
+    // per note, since Study Packs never auto-regenerate.
+    description: "Codes, laws, ethics and licensure shared across programs: Engineering Laws, Ethics and Contracts; Professional Practice; Building Laws including the National Building Code and BP 344 accessibility; and Construction Safety.",
   },
   {
     value: "GENERAL_EDUCATION",
