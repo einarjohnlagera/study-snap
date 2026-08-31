@@ -1,5 +1,380 @@
 # RELEASES.md - NoteLib
 
+## v0.98.0 - Connection Consistency
+
+**Status: Released** (kicked off 2026-08-30, signed off 2026-08-31, base branch `releases/v0.98.0`, cut
+from `main` after `v0.97.0` merged and tagged)
+
+Theme: one property, one bar, everywhere — and a connection row that tells the truth about its own
+terminal state.
+
+### Why this release exists
+
+**Every item is a `v0.97.0` Known limitation or Backlog row. Nothing new is un-gated**, and that is the
+point: `v0.97.0` shipped nine items and paid for it with the full three-agent pressure test **plus** a
+re-audit that found two of its own fixes weaker than claimed. **⚠️ FIVE ITEMS IS A DELIBERATE CEILING**,
+chosen so the tier resolves to one scoped cold agent rather than the full test.
+
+**The through-line is consistency:** `v0.97.0` made invitation links require finished onboarding and left
+the email path requiring only a verified email — the same resulting relationship behind two different bars.
+It cut grants on terminal transitions going forward and left every pre-`v0.97.0` revoked relationship still
+reporting that it shares. It added a terminal `EXPIRED` state and no way to clear the card. Each is the
+tail of a decision already taken.
+
+### Planned Scope
+
+- **1. The email invitation path requires finished onboarding too (backend).** `LinkedLearnerService
+  .acceptInvitation` forms the **identical** relationship as a link redemption, with identical
+  guardian-consent handling and identical cross-user capacity, but gates on `requireEmailVerified` +
+  `assertProfileComplete` only — and that method's own comment records it *"passes for a brand-new
+  account."* **⚠️ OWNER RULED 2026-08-30: tighten it to match**, over documenting the asymmetry, because an
+  undecided inconsistency in authorization code gets resolved silently by whoever touches it next.
+  **⚠️ THIS TIGHTENS A GATE AND WILL NEWLY REJECT LIVE ACCOUNTS — and unlike `v0.97.0`, that is known
+  BEFORE writing the code rather than found by a pressure test afterwards.** The frontend gates on
+  `needsOnboarding()`, which is **NOT** `onboardingCompletedAt != null`: a **failed `completeOnboarding`
+  POST** (whose marker never retries) and the **copy-on-signup cohort** (whose dashboard prompt is
+  **dismissible**) are both treated as onboarded client-side while the server value stays null.
+  **⚠️ SO THE SELF-HEAL IS PART OF THE ITEM, NOT A FOLLOW-UP:** the accept path must route a
+  `COMPLETE_ONBOARDING` remedy to `/onboarding` the way `v0.97.0` taught the invite page to, or this ships
+  a dead end. **⚠️ Do NOT touch `assertProfileComplete`** — its mid-onboarding exemption is deliberate,
+  protects the activation funnel, and has ~20 call sites across notes, Study Packs, quiz share links and
+  bulk import. **⚠️ The gate must run BEFORE any invitation lookup**, or it becomes a cheaper oracle beside
+  the `v0.90.0` single not-found contract. **⚠️ Acceptance authorizes on owning the invited ADDRESS**
+  (`v0.90.0` email-keying); that property is unchanged.
+- **2. Terminal connection cards stop accumulating — BOUNDED RETENTION, not dismissal (backend).**
+  **⚠️ DESIGN DECISION SETTLED 2026-08-30, before any code, as the kickoff required.** `listRelationships`
+  (`LinkedLearnerService:658-660`) calls `findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc` with
+  **no status filter at all**, so every `REVOKED` and `EXPIRED` row is returned forever. Terminal rows
+  become visible only while their terminal timestamp is within `request-ttl-days` of now — `revoked_at`
+  for `REVOKED`, `expires_at` for `EXPIRED`. Live `PENDING` and `ACCEPTED` rows are always returned.
+  **⚠️ THIS IS THE INVITATION LIST'S EXISTING PATTERN, NOT A NEW ONE.** `listInvitations` already computes
+  `outgoingVisibilityCutoff = now.minusDays(invitationTtlDays)` (`:163-168`) for the identical problem,
+  and `linked-learners.md:161-162` records the rationale: *"This bounded disclosure lets the inviter
+  distinguish expiry from silence without accumulating every address ever invited forever."* Reusing
+  `request-ttl-days` also honours that doc's *"the same configured duration for which it was live, not a
+  second hardcoded retention period."*
+- **⚠️ WHY NOT A PERSISTED `dismissed` FIELD — the option that looked obvious and is the expensive one.**
+  A relationship has **TWO parties**, so a single boolean is ambiguous by construction: it would have to
+  be per-side (`dismissed_by_supporter` / `dismissed_by_learner`) or a side table. Worse, it needs an
+  explicit amendment to the `v0.95.0` prohibition on adding columns to `linked_learner_relationships` —
+  a rule `[CHECKPOINT — due 2026-09-19]`, `[2026-09-26]` and `[2026-10-13]` depend on, and which
+  `v0.97.0` amended **once, narrowly**, for `expires_at`. Amending it a second time inside two releases
+  to hide a card is not a trade worth making.
+- **⚠️ WHY NOT CLIENT STATE.** `localStorage` is per-device: dismiss on a laptop and the card is still
+  there on a phone. It also fails silently in a private window. For a list that is the same on every
+  device, per-device state is the wrong shape.
+- **⚠️ THE TRADE-OFF, STATED: this is AUTOMATIC, not MANUAL.** Someone who wants one specific card gone
+  *right now* still cannot do that. Judged acceptable — it requires no user action at all, which is
+  strictly better for the reported problem (*"cards accumulate"*), and manual dismissal remains available
+  as a later, additive decision that bounded retention does not block. **⚠️ Nothing here deletes a
+  relationship row**; revoke and expiry remain the only terminal transitions, and re-inviting a hidden
+  pair mints a new relationship exactly as before.
+- **⚠️ CONSEQUENCE FOR THE TIER, and it closes a pre-declared escalation condition:** this item now needs
+  **no migration, no new column and no client state** — it is one query predicate.
+- **3. Heal grant rows on relationships terminated before `v0.97.0` (backend + migration).** `revoke()`
+  did not cut grants before `v0.97.0`, and its terminal early-return only heals a row someone revokes
+  *again* — which the UI stops offering on terminal rows. So a pre-`v0.97.0` `REVOKED` relationship still
+  reports `*SharedByMe: true` indefinitely. **⚠️ DISPLAY-ONLY, and it must stay described that way** —
+  every reader demands `ACCEPTED`, so no access is or was open. **⚠️ TERMINAL STATUSES ONLY
+  (`REVOKED`, `EXPIRED`) — NEVER the `ACCEPTED → PENDING` consent pause**, where `v0.93.0` made the grant
+  row survive by design. This is the same rule `v0.97.0` item 4 applied at runtime, now applied once to
+  history.
+- **4. The sweep's operational gaps (backend).** `findDuePendingIds` has **no `LIMIT`**, so the whole
+  backlog materialises in memory — harmless now, unbounded by construction.
+  `studysnap.linked-learners.request-expiry-cron` has **no `StudySnapProperties` field and no production
+  `application.yaml` entry**, so there is no env hook, unlike its sibling `studysnap.generation
+  .recovery-cron`. And a learner deleted mid-sweep produces a bare `NoSuchElementException` logged at
+  `error` for a benign race. **⚠️ No behaviour change to what expires or when** — the TTL bound and the
+  `created_at` clock are dated-read constraints and stay exactly as they are.
+- **5. `DATA_MODEL.md`'s linked-learner section (docs only).** Frozen at `v0.89.1`: it describes three
+  statuses where there are now four plus `expires_at`, says *"Only `ACCEPTED` authorizes the
+  relationship-scoped progress read"* — **false since `v0.93.0`, because acceptance authorizes nothing
+  without a live grant** — and mentions **none** of `linked_learner_grants`, `_invitations`,
+  `_invitation_links` or `_provisional_birth_years`. **⚠️ Five releases of drift, not this release's**, and
+  it is in scope because it is a doc-only correction with no code dependency: the cost is reading four
+  migrations, not making a decision.
+
+### Shipped
+
+- **The email invitation path requires finished onboarding too (item 1).** `acceptInvitation` now rejects a
+  caller whose `onboardingCompletedAt` is null, so the two paths that form the **identical** relationship
+  answer to one bar. The `LinkedLearnerOnboardingRequiredException` message was generalised to name neither
+  path, because it now covers both.
+- **⚠️ SCOPED TO THE ACTING ENDPOINT ONLY — `listInvitations` and `list` are deliberately NOT tightened, and
+  this is a decision, not an omission.** The link-path symmetry argument does not transfer: `resolve` was
+  tightened because it is the recipient's read of a token they were handed, one step from redeeming it. The
+  invitation list is the recipient's own inbox. **Tightening it would convert an error into an ABSENCE — and
+  an absence gives them nothing to act on**, inverting `v0.90.0`'s deliberate choice to make an invitation
+  visible. Recorded because *"the link path tightened five endpoints, so the email path should tighten
+  three"* is exactly the reasoning a later session will apply.
+- **⚠️ THE TWO REJECTED COHORTS WERE VERIFIED, NOT ASSUMED.** Both markers that make the frontend treat an
+  account as onboarded are set on paths where the email is **already verified** — the deferred-completion
+  marker fires at the end of onboarding, and the copy-on-signup marker is set inside the verify-email
+  success path and on Google signup, which stamps `emailVerifiedAt`. So `requireEmailVerified` does **not**
+  already reject them, and the blast radius really is two cohorts rather than one.
+- **The self-heal ships with the item, and is simpler than the link path's — deliberately.** There is **no
+  token to preserve**: the invitation is server-side and `listInvitations` was left alone, so it is still
+  listed when the caller returns. The connections page routes a `COMPLETE_ONBOARDING` remedy to
+  `/onboarding` and Accept then simply works. **Mutation-verified:** removing the redirect fails
+  `routes a mid-onboarding caller to onboarding instead of a dead error`.
+- **⚠️ The gate runs BEFORE the invitation lookup, and the test proves it with an id that does not exist.**
+  A rejection discloses the caller's own account state and never whether an invitation exists, so it cannot
+  become a cheaper oracle beside `v0.90.0`'s single not-found contract. **Mutation-verified:** removing the
+  gate fails `acceptingAnEmailInvitationRequiresFinishedOnboardingAndSaysSoBeforeAnyLookup`, and **moving it
+  after the lookup fails the same test.**
+- **⚠️ The shared test fixture had every caller un-onboarded**, so four existing acceptance tests failed the
+  moment the gate became real — the same shape `v0.97.0` hit on the link path. They now build an onboarded
+  user by default, with the gate covered by its own test rather than incidentally by all of them.
+
+- **Terminal connection cards stop accumulating (item 2).** `listRelationships` now calls
+  `findVisibleForUser`, which returns every live row plus terminal ones only while
+  `coalesce(revoked_at, expires_at)` is within `request-ttl-days`. The old derived query had **no status
+  filter at all**, so every `REVOKED` and `EXPIRED` row came back forever.
+- **⚠️ THE STATUS ALLOWLIST IS LOAD-BEARING, AND THE FIRST VERSION OF THE TESTS DID NOT PROVE IT.** A
+  mutation dropping `status in ('PENDING','ACCEPTED')` **survived**, because an `ACCEPTED` row has both
+  terminal timestamps null and stays visible through the null branch alone. The case that makes it matter
+  is a **PENDING request past its deadline but not yet swept** — the sweep runs daily, so that state
+  exists for up to a day, and without the allowlist such a request **disappears from its owner's list
+  before it has actually expired**. `aDueButUnsweptPendingRequestIsStillVisible` pins it, and the mutation
+  now fails.
+- **⚠️ A terminal row missing its timestamp is RETAINED, not hidden** — a data oddity must never silently
+  remove a connection from view.
+- **The sweep's operational gaps are closed (item 4).** `findDuePendingIds` takes a bound, so the backlog
+  no longer materialises in one read; **oldest-deadline-first ordering makes the bound safe rather than
+  lossy**, since anything deferred is swept next run and expiry is idempotent.
+  `request-expiry-cron` and `expiry-sweep-batch-size` are now bound `StudySnapProperties` fields with
+  `application.yaml` entries, so the sweep finally has the **env hook** its sibling
+  `generation.recovery-cron` always had — previously the placeholder resolved but nothing could override
+  it in an environment. And a learner deleted mid-sweep is now a **debug-level skip** rather than a bare
+  `NoSuchElementException` logged at `error`: account deletion cascades the relationship away, so there is
+  nothing left to expire and the noise was hiding real failures.
+- **⚠️ No change to what expires or when.** The TTL bound and the `created_at` clock are untouched; item 4
+  bounds **work per run**, not what is eligible.
+- **The exact-count tripwire fired again (38 → 39)**, acknowledging `findVisibleForUser` — which also
+  confirms the new SQL `PREPARE`s cleanly against PostgreSQL 16.
+
+- **Grant rows on relationships terminated before `v0.97.0` are healed (item 3).** `V129` revokes every
+  live grant whose relationship is `REVOKED` or `EXPIRED`. **⚠️ DISPLAY-ONLY — no access was open at any
+  point**, since `requireGrant` and every other reader demand `ACCEPTED`; what was broken is the connection
+  list asserting a sharing act on a relationship that no longer exists.
+- **⚠️ `PENDING` IS ABSENT FROM THE HEAL, DELIBERATELY, AND IT IS THE ONLY LINE THAT COULD HAVE BEEN
+  ACTIVELY WRONG.** A `v0.89.1` correction returns an `ACCEPTED` relationship to `PENDING`, and `v0.93.0`
+  made the grant row survive that pause **by design** — so sweeping it would turn a learner's own toggle
+  OFF without them touching it, and sharing would not resume on re-acceptance. **Mutation-verified against
+  real rows:** adding `'PENDING'` to the status list fails
+  `theTerminalGrantHealNeverTouchesAConsentPause` on exactly that assertion.
+- **⚠️ THE FIRST VERSION OF THAT TEST PASSED FOR THE WRONG REASON, and the idempotency test is what
+  exposed it.** The fixtures seeded relationships already `REVOKED`/`EXPIRED` and then called
+  `insertGrant` — but `insertLiveIfAbsent` is conditional on `ACCEPTED` (`v0.93.0`), so **no grant was
+  ever created** and the zero-grant assertions passed with the heal doing no work at all. The second heal
+  run returning 0 rows is what surfaced it. Every fixture now seeds `ACCEPTED`, **asserts the grant was
+  actually created**, and only then moves the row to its terminal status.
+- **One-time repair of history, not a mechanism.** The runtime rule in `revoke()` and the expiry worker
+  already does this at the moment of transition; `V129` exists only because those rows predate it.
+  Idempotent via `revoked_at IS NULL`.
+- **`DATA_MODEL.md`'s linked-learner section corrected (item 5) — five releases of drift, not this
+  release's.** It described three statuses where there are four, asserted that **acceptance authorizes the
+  progress read** (false since `v0.93.0`), and omitted `linked_learner_invitations`, `_invitation_links`,
+  `_grants` and `_provisional_birth_years` entirely. All four are now documented with the properties that
+  are easy to get wrong: the invitation table's status vocabulary deliberately **excludes `EXPIRED`** while
+  sharing a Java enum with relationships; a link row is **terminal the moment it is redeemed** and carries
+  no relationship id; grant creation is `ACCEPTED`-conditional while **withdrawal deliberately is not**;
+  the provisional table is **keyed by relationship with no user column**, so the `learner_user_id` join is
+  the privacy boundary; and `expires_at` **means the deadline for every status**, with NULL carrying the
+  meaning that a row is not on the clock at all.
+- **⚠️ The drift itself is recorded in the doc**, because a schema section that is not updated alongside a
+  migration becomes confidently wrong rather than merely incomplete — which is what makes it dangerous.
+
+#### Amended 2026-08-30, after items 1-5 shipped — four items folded, tier unchanged
+
+**⚠️ FOLDED BEFORE THE PRESSURE TEST RAN, DELIBERATELY.** Adding after it would mean the shipped code is
+no longer the audited code — the reason `v0.95.0` deferred its own item 2 — so this was fold-now-or-not-at-all.
+**All four are `v0.97.0` Known limitations or carried decisions, and none introduces a new verification
+trigger**, so the tier stays at **one scoped cold agent**. With these, every remaining `v0.97.0` Known
+limitation is closed and the release ends with a clean carried-forward list.
+
+- **6. A learner's OTHER provisional rows are cleared when one is promoted (backend).** `accept()` promotes
+  the declared year to `users.birth_year` and then deletes **only that relationship's** row. A learner with
+  two unconfirmed redemptions who confirms one therefore keeps the second declaration **after the
+  account-global value already exists** — which sits directly against `v0.89.1`'s rule that a declared-value
+  history is a minor's personal data and is not retained. Found by the `v0.97.0` pressure test and recorded
+  rather than fixed there. **⚠️ THE OTHER ROW IS ALREADY REDUNDANT, which is why deleting it is correct and
+  not a behaviour change:** `findEffectiveBirthYear` coalesces `users.birth_year` FIRST, so once the account
+  column is written no provisional row can affect any decision. **⚠️ THIS IS THE HIGHEST-RISK SMALL CHANGE
+  IN THE RELEASE and must be treated as such:** it edits `accept()`'s promote-then-delete sequence, which
+  the two-thread real-row harness pins and which guards the **unremediable state** — an `ACCEPTED`
+  relationship whose learner has a provisional row but a null account year, which `requireGrant` denies with
+  no remediation path. **⚠️ The deletion must be scoped by LEARNER through the relationship join**, never by
+  a bare user id, for the same structural reason the export query is: the table has no user column.
+- **7. Three hardcoded crons become configurable (backend).** `BillingUsageResetJob`,
+  `SubscriptionExpiryJob` and `BulkGenerationResultCleanupJob` carry literal cron expressions, so the test
+  profile cannot disable them — leaving the wall-clock flake class `v0.97.0` closed for the other jobs still
+  reachable for these three. `BulkGenerationResultCleanupJob` runs at `0 45 * * * *`, hourly, so it is the
+  live one. **⚠️ Schedules are UNCHANGED — the defaults are the current literals**; this adds an override
+  point, nothing else.
+- **8. `v0.75.0`'s never-answered checkpoint question is answered (docs).** Its pre-signoff pressure test
+  closed with *"Still open — an owner decision, not a defect: whether this release owes a `[CHECKPOINT]`
+  row… **Must not be left silent.**"* It was left silent; there is no `v0.75.0` checkpoint anywhere in the
+  Backlog Index. **⚠️ The reasoning is already reduced to a binary and must not be re-derived:** the value
+  claim has **no metric without new instrumentation**, and this repo's gate **forbids a dated checkpoint
+  whose metric does not fire** — so it is either ship an event now, or record that none is owed because
+  `v0.75.0` implements a **ratified `ADR-001` direction rather than a bet**. **Recording it is the answer**;
+  inventing instrumentation three releases later to measure a shipped ADR direction is the expensive branch,
+  and the gate explicitly prefers no row to a decorative one.
+- **9. The revoke/redeem race test stops being a nondeterministic detector (test).** `v0.94.0` recorded that
+  dropping `redeemedAt is null` from `markRevokedIfUsable` **survived four targeted runs** and was caught
+  only once under full-suite load — and then only as a `DataIntegrityViolationException` from the CHECK
+  constraint. **⚠️ In production that CHECK is the real guard**, so the JPQL clause is defence in depth and
+  the finding is about the TEST, not the code. Make the interleaving deterministic the way
+  `runWithFirstCommit` does, so the predicate is pinned rather than sampled.
+
+- **A learner's other provisional declarations are cleared on promotion (item 6).**
+  `deleteAllForLearnerOncePromoted` runs after `promoteIfAccountBirthYearMissing`, so a learner who held
+  two unconfirmed redemptions no longer keeps the second declared year once the account-global column
+  exists — which is what `v0.89.1` forbids.
+- **⚠️ The statement is guarded on `users.birth_year IS NOT NULL`, which makes the ORDER impossible to get
+  wrong rather than merely documented.** Calling it before promotion would discard a declaration that is
+  still deciding consent; the guard makes that a no-op instead of a bug, and the test asserts the pre-promotion
+  call returns **zero** before asserting the post-promotion sweep.
+- **⚠️ Scoped through the relationship join, never a bare user id** — the same structural guard every other
+  statement in that class uses, because the table has no user column of its own.
+- **⚠️ It is a RETENTION fix, not a behaviour change, and that is checkable:** `findEffectiveBirthYear`
+  coalesces `users.birth_year` first, so once the account column is written no provisional row can affect
+  consent, acceptance or the export. The sibling row was inert — it was simply still there.
+- **All scheduled jobs are now disableable in tests (item 7).** `BillingUsageResetJob`,
+  `SubscriptionExpiryJob` and `BulkGenerationResultCleanupJob` carried literal crons, so `v0.97.0`'s fix for
+  the wall-clock flake class did not reach them. **⚠️ `BulkGenerationResultCleanupJob` runs hourly at `:45`,
+  so it was the genuinely live one.** **⚠️ Schedules are unchanged — every default is the previous
+  literal**; this adds an override point and nothing else.
+- **`v0.75.0`'s never-answered checkpoint question is answered (item 8): NO CHECKPOINT IS OWED.**
+  `v0.75.0` implements a **ratified `ADR-001` direction** rather than a bet, and its value claim has **no
+  metric without new instrumentation** — which this repo's gate forbids a dated checkpoint from depending
+  on. **⚠️ The finding was never that the answer was wrong; it was that the question was LEFT SILENT**, for
+  three releases, invisible to kickoff step 9 because an absent row and a dateless row scan identically.
+- **The revoke/redeem terminal predicate is pinned deterministically (item 9).** `v0.94.0` recorded that
+  dropping `redeemedAt is null` **survived four targeted runs** of the race and was caught once under
+  full-suite load — a sampler, not a guard. A new test redeems, then revokes, and asserts the revoke is a
+  no-op with the redemption intact. No threads, no timing. **The race test is kept**: it tests the
+  concurrent property, which is a different claim.
+- **⚠️ Recorded precisely because it would be easy to overstate: the mutation is now killed EVERY run, but
+  it surfaces as a `DataIntegrityViolationException` from the terminal-state CHECK constraint rather than
+  as the assertion failing.** That is expected and correct — in production the CHECK is the real guard and
+  the JPQL clause is defence in depth, exactly as `v0.94.0` said. What changed is determinism, not the
+  detection mechanism.
+
+#### Pre-signoff pressure test — one scoped cold agent, and the worst finding was ours
+
+**⚠️ THE FIVE HEADLINE CLAIMS WERE CONFIRMED; THE DEFECTS WERE ALL IN VERIFICATION, NOT BEHAVIOUR.** The
+agent executed tests rather than reading source, which is what found the first one.
+
+- **⚠️ A TEST HAD SILENTLY STOPPED RUNNING, AND THE BUILD STAYED GREEN.** In
+  `LinkedLearnerRequestExpiryJobTest`, a helper was inserted **between the `@Test` annotation and its
+  method**, so the annotation landed on a `private static` helper. JUnit warned, skipped it, and the class
+  reported **"Tests run: 0"** while the suite passed. The only guard on *a poisoned relationship does not
+  stop the sweep* was gone with no signal. **⚠️ This is a NEW variant of the failure mode this release
+  already knew about** — not a test passing for the wrong reason, but a test **not existing** — and the
+  only reason it surfaced is that the agent counted executed tests instead of trusting the file.
+- **⚠️ "EVERY SCHEDULED JOB IS DISABLED IN TESTS" WAS FALSE WHEN WRITTEN.** Item 7 fixed the three jobs
+  with **hardcoded** crons and the comment claimed completeness — but **five others were already
+  placeholder-driven and simply were not listed**, including `AccountPurgeScheduler`, which **deletes
+  data**. All ten are now disabled, and the list was verified by **enumerating every `@Scheduled`
+  annotation** rather than by re-reading the comment. **The claim was made one commit before it was true.**
+- **⚠️ Item 4's stated rationale was wrong, and acting on it introduced a small regression.** A bound
+  `requestExpiryCron` property was added on the reasoning that *"without a bound field the placeholder
+  resolves but nothing can override it in an environment."* **That is not how `@Scheduled` works** — it
+  resolves from the `Environment`, so `REQUEST_EXPIRY_CRON` already worked. The field was **never read by
+  anything**, and removing the annotation's inline default made that job **the only one of ten that fails
+  startup on a missing key**. The dead field is removed and the default restored. **The `application.yaml`
+  entry stays** — it is the discoverable override point, which was the real gap.
+- **A test replaying `V129` hand-copied its SQL**, so the migration and the test could drift apart
+  silently — the one thing that test exists to prevent. It now **reads the migration file**.
+  **Mutation-verified:** adding `'PENDING'` to `V129` itself now fails
+  `theTerminalGrantHealNeverTouchesAConsentPause`.
+- Two Javadoc blocks orphaned by earlier insertions were re-attached to the tests they describe.
+
+### Known limitations
+
+- **⚠️ A LONG SWEEP BACKLOG CAN MAKE AN EXPIRY INVISIBLE — an interaction between two of this release's
+  own items, found by the cold agent.** Retention (item 2) is keyed on the **deadline**, not on when the
+  sweep ran, and under a daily sweep those coincide. But item 4 added a **500-row batch bound** and a
+  **pause hook**, and both create backlogs. A request swept more than `request-ttl-days` after its deadline
+  becomes `EXPIRED` with an `expires_at` **already outside the retention window**, so it vanishes from both
+  parties' lists immediately and is never shown as expired at all. **Concretely:** sweep paused 40 days,
+  then resumed — a user sees *"pending, overdue"* one day and **nothing** the next. That defeats the
+  purpose retention exists for, which is distinguishing expiry from silence. **Recorded rather than fixed:**
+  the correct fix is to key retention on when a row became terminal rather than on its deadline, which
+  changes what `expires_at` means for `EXPIRED` rows — and `v0.97.0` established, after two wrong attempts,
+  that changing that column's meaning is exactly where this area goes wrong. It deserves its own release.
+- **⚠️ Item 1 secures the RECIPIENT only, so "forming a connection requires finished onboarding" is NOT
+  yet true.** `invite()` and `accept()` remain gated on `assertProfileComplete` alone, which passes for a
+  brand-new account. A verified-but-not-onboarded account can therefore still **invite** as a supporter,
+  have an onboarded learner accept, and reach an `ACCEPTED` relationship with cross-user read capacity.
+  **The release's scoping decision was deliberate and stands** — gating the recipient's *reading* surfaces
+  would convert an error into an absence — but the property as a whole is half-built, and this records
+  which half. Closing it is a gate tightening on two more endpoints and belongs in a release that plans for
+  it.
+- **The three jobs made configurable in item 7 have no test asserting their defaults match production.**
+  The cold agent verified them against `origin/main` by hand; nothing in the build would catch a future
+  edit that silently changed a schedule.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Do NOT add, remove or reorder a step in the onboarding FLOW, and no code lands under
+  `frontend/app/onboarding`.** `[CHECKPOINT — due 2026-09-11]` is **12 days out** and measures completion
+  against a 62.4% baseline. Item 1 is adjacent to onboarding and must stay adjacent.
+- **⚠️ Do NOT change `assertProfileComplete`.** Item 1 lives in the accept path's own guard.
+- **⚠️ Do NOT change what expires, when, or from which clock.** The ≥30-day TTL dated from relationship
+  `created_at` protects `[CHECKPOINT — due 2026-09-26]`, and `invitation-ttl-days` is the separate carrier
+  clock `[CHECKPOINT — due 2026-10-13]` reads.
+- **⚠️ Do NOT backfill `expires_at` onto inherited rows.** `v0.97.0` established, after two wrong
+  attempts, that a NULL deadline **is** the protection for a consent-paused relationship; setting it at all
+  erases the distinction.
+- **⚠️ Terminal-only grant cutting, never on the consent pause** — for item 3's migration exactly as for
+  `v0.97.0`'s runtime rule.
+- **⚠️ Standing connection rules unchanged:** acceptance stays LOAD-BEARING; guardian consent stays
+  re-asserted inside the grant check, fail-closed on unknown age; **no account-existence oracle** and the
+  single not-found contract is preserved; absence of a live grant means NO ACCESS; every read re-verifies
+  `ACCEPTED`; the progress read stays UNIDIRECTIONAL; invitations stay ONE-AT-A-TIME; **no
+  relationship-type column, no new profile type, nothing gated on `ProfileType`**; `NoteVisibility` stays
+  `PRIVATE | PUBLIC`; **no endpoint accepts a learner user id**; **no public people search**.
+- **⚠️ Any predicate deciding whether a grant is cut, or whether a caller may accept, needs a REAL-ROW
+  test** in `NativeQueryPostgresIntegrationTest`, mutation-verified with the killing test named.
+- **⚠️ ITEM 2'S RETENTION WINDOW FOLLOWS `request-ttl-days` DELIBERATELY — do not hardcode 30 to "fix"
+  the coupling.** That key is load-bearing for `[CHECKPOINT — due 2026-09-26]`'s arithmetic, so a future
+  change to it will also change how long terminal cards stay visible. **That is intended**, and it mirrors
+  `linked-learners.md`'s existing rule for the invitation list — *the same configured duration for which it
+  was live, not a second hardcoded retention period.* Anyone decoupling them must say why.
+- **⚠️ Explicitly OUT OF SCOPE:** anything that changes what a supporter can see; Phase 5 items; and
+  re-opening the `v0.97.0` expiry semantics.
+
+### Pre-declared at kickoff
+
+- **Pre-signoff pressure test: ONE SCOPED COLD AGENT, framed as FALSIFICATION.** Two triggers fire and
+  both are one-cold-agent class: item 1 **moves an authorization boundary**, and item 3 changes
+  **production-data semantics** via a migration. Neither is a permission substrate, a first-of-kind
+  cross-user read, nor a money/quota change. **⚠️ ESCALATE TO THE FULL TEST IF** item 1's tightening is
+  found to reach beyond the two cohorts already identified. **⚠️ The other condition — item 2 needing a
+  server field — is CLOSED as of 2026-08-30**, not merely unfired: that design resolved to a query
+  predicate with no schema change.
+- **⚠️ ITEM 1 GETS ITS `advisor()` CALL BEFORE IMPLEMENTATION, not only on the diff** — it is the same
+  gate-tightening class as `v0.97.0` item 5 and `v0.71.0`'s ADMIN lockout, and both were caught late.
+- **⚠️ ~~ITEM 2'S DESIGN DECISION IS OWED BEFORE ANY CODE~~ — TAKEN 2026-08-30, before any code.**
+  Resolved to bounded retention reusing the invitation list's existing pattern: no schema change, no
+  client state. Retained struck through rather than deleted, because the reason it was pre-declared —
+  deciding a data model during implementation is how an unplanned migration appears — is the rule, and
+  the rule outlives this instance.
+- **The `### Planned Scope` heading is permanent**; delivery appends to `### Shipped`.
+- **⚠️ A `[CHECKPOINT]` is owed only if something ships ahead of its evidence.** On current scope nothing
+  does — every item closes a recorded defect, corrects a stale document, or answers a question already
+  owed. **Stated now so the signoff gate is answered deliberately rather than skipped.**
+  **⚠️ RE-EVALUATED after the 2026-08-30 fold to nine items: still none owed**, and item 8 is the reason to
+  be careful here rather than the reason to relax — it exists precisely because a release once left this
+  question unanswered.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.97.0 - Connection Lifecycle
 
 **Status: Released** (kicked off 2026-08-29, signed off 2026-08-30, base branch `releases/v0.97.0`, cut

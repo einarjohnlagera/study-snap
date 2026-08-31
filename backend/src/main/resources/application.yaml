@@ -145,6 +145,11 @@ studysnap:
     invitation-ttl-days: ${INVITATION_TTL_DAYS:30}
     # Separate from the invitation/link carrier clock: this dates a relationship request from creation.
     request-ttl-days: ${REQUEST_TTL_DAYS:30}
+    # Env hook for the expiry sweep, matching studysnap.generation.recovery-cron. Without a bound
+    # field the placeholder resolved but nothing could override it in an environment.
+    request-expiry-cron: ${REQUEST_EXPIRY_CRON:0 45 2 * * *}
+    # Work per sweep run, not a cap on what may expire: the remainder is picked up by the next run.
+    expiry-sweep-batch-size: ${EXPIRY_SWEEP_BATCH_SIZE:500}
     # Two keys on purpose: volume, and per-address so one victim cannot be hammered.
     invites-per-window: ${INVITES_PER_WINDOW:20}
     invites-per-address-per-window: ${INVITES_PER_ADDRESS_PER_WINDOW:3}
@@ -163,6 +168,10 @@ studysnap:
     free-ocr-rate-limit-per-minute: ${OCR_FREE_RATE_LIMIT_PER_MINUTE:6}
     premium-ocr-rate-limit-per-minute: ${OCR_PREMIUM_RATE_LIMIT_PER_MINUTE:20}
   billing:
+    # Configurable as of v0.98.0 so the test profile can disable them; defaults are the previous
+    # hardcoded literals, so no schedule changes.
+    usage-reset-cron: ${BILLING_USAGE_RESET_CRON:0 15 1 * * *}
+    subscription-expiry-cron: ${SUBSCRIPTION_EXPIRY_CRON:0 30 2 * * *}
     frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
     backend-base-url: ${BACKEND_BASE_URL:http://localhost:8080}
     price-id-placeholder: ${PLAN_PREMIUM_PRICE_ID:not_used_for_now}
@@ -431,6 +440,8 @@ studysnap:
     weak-concept-threshold-percent: ${RETENTION_WEAK_CONCEPT_THRESHOLD_PERCENT:60}
   generation:
     recovery-cron: ${GENERATION_RECOVERY_CRON:0 */10 * * * *}
+    # Hourly result cleanup. Configurable as of v0.98.0 so the test profile can disable it.
+    bulk-result-cleanup-cron: ${BULK_RESULT_CLEANUP_CRON:0 45 * * * *}
     enabled: ${GENERATION_RECOVERY_ENABLED:true}
     recovery-batch-size: ${GENERATION_RECOVERY_BATCH_SIZE:200}
     pool-pending-bound-minutes: ${GENERATION_POOL_PENDING_BOUND_MINUTES:60}

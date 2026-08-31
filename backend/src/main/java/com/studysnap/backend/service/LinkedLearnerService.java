@@ -20,6 +20,7 @@ import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
 import com.studysnap.backend.exception.LinkedLearnerNotAllowedException;
 import com.studysnap.backend.exception.LinkedLearnerNotFoundException;
+import com.studysnap.backend.exception.LinkedLearnerOnboardingRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerInvitationExpiredException;
 import com.studysnap.backend.exception.LinkedLearnerSelfLinkException;
 import com.studysnap.backend.security.InvitationRateLimitService;
@@ -274,6 +275,27 @@ public class LinkedLearnerService {
         authService.requireEmailVerified(callerUserId);
         onboardingGuardService.assertProfileComplete(callerUserId);
         UserEntity caller = requireUser(callerUserId);
+        // ⚠️ ONBOARDING IS REQUIRED HERE TOO, as of v0.98.0. This path forms the IDENTICAL relationship
+        // as an invitation-link redemption — same guardian-consent handling, same cross-user capacity —
+        // and until now answered to a lower bar, which the comment above already half-records:
+        // assertProfileComplete "passes for a brand-new account".
+        //
+        // ⚠️ IT REJECTS TWO LIVE COHORTS, KNOWN IN ADVANCE. The frontend gates on needsOnboarding(),
+        // which is NOT this predicate: a failed completeOnboarding POST (whose marker never retries) and
+        // the copy-on-signup cohort (whose dashboard prompt is dismissible) both read as onboarded
+        // client-side while this column stays null. Both have VERIFIED emails, so requireEmailVerified
+        // above does not already stop them — checked, not assumed. The connections page routes a
+        // COMPLETE_ONBOARDING remedy to /onboarding so this is a waypoint, not a wall.
+        //
+        // ⚠️ SCOPED TO THIS ACTING ENDPOINT ONLY. listInvitations and list are deliberately NOT
+        // tightened: making an invitation invisible to its recipient converts an error into an absence,
+        // and an absence gives them nothing to act on. v0.90.0 made invitations visible on purpose.
+        //
+        // ⚠️ BEFORE the invitation lookup below, so a rejection discloses only the caller's own account
+        // state and never whether an invitation exists.
+        if (caller.getOnboardingCompletedAt() == null) {
+            throw new LinkedLearnerOnboardingRequiredException();
+        }
         LinkedLearnerInvitationEntity invitation = invitationRepository.findById(invitationId)
                 .orElseThrow(LinkedLearnerNotFoundException::new);
         if (!normalizeEmail(caller.getEmail()).equalsIgnoreCase(invitation.getInvitedEmail())) {
@@ -395,6 +417,15 @@ public class LinkedLearnerService {
         provisionalBirthYearRepository.promoteIfAccountBirthYearMissing(
                 relationshipId, learnerUserId, now);
         provisionalBirthYearRepository.deleteForRelationship(relationshipId);
+        // ⚠️ AND every OTHER declaration this learner holds, now that the account-global year exists.
+        // A learner can hold more than one — two link redemptions before either creator confirms —
+        // and deleting only this relationship's row leaves a declared value retained after the
+        // account column is written, which v0.89.1 forbids. The statement is guarded on
+        // users.birth_year being present, so it cannot run before promotion has succeeded.
+        // ⚠️ ORDER MATTERS: this runs AFTER promotion, never before. The sibling row is inert by then
+        // because findEffectiveBirthYear coalesces the account column first, so this is a retention
+        // fix rather than a behaviour change.
+        provisionalBirthYearRepository.deleteAllForLearnerOncePromoted(learnerUserId);
         // The conditional update cleared the persistence context, so re-read rather than trust the
         // detached copy — status is exactly the field that changed.
         return toResponse(requireRelationship(relationshipId), callerUserId);
@@ -656,8 +687,14 @@ public class LinkedLearnerService {
     }
 
     private List<LinkedLearnerResponse> listRelationships(UUID callerUserId) {
+        // ⚠️ Terminal rows are retained only while recent. The window follows request-ttl-days
+        // deliberately, mirroring the invitation list's rule that retention uses the same configured
+        // duration the thing was live for rather than a second hardcoded number — so do not replace
+        // this with a literal 30 to "decouple" it.
+        OffsetDateTime terminalCutoff = OffsetDateTime.now()
+                .minusDays(properties.getLinkedLearners().getRequestTtlDays());
         List<LinkedLearnerRelationshipEntity> relationships = relationshipRepository
-                .findBySupporterUserIdOrLearnerUserIdOrderByCreatedAtDesc(callerUserId, callerUserId);
+                .findVisibleForUser(callerUserId, terminalCutoff);
         Set<UUID> relationshipIds = relationships.stream()
                 .map(LinkedLearnerRelationshipEntity::getId)
                 .collect(Collectors.toSet());

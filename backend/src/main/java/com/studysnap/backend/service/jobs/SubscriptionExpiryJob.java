@@ -21,7 +21,7 @@ public class SubscriptionExpiryJob {
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionService subscriptionService;
 
-    @Scheduled(cron = "0 30 2 * * *")
+    @Scheduled(cron = "${studysnap.billing.subscription-expiry-cron:0 30 2 * * *}")
     public void run() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         List<SubscriptionEntity> expiredPaidSubscriptions = subscriptionRepository.findByPlanTypeInAndStatusAndEndAtBefore(

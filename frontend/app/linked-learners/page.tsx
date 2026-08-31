@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { BirthYearInput } from "@/components/linked-learners/birth-year-input";
 import { ResponsiveActionLink } from "@/components/ui/action-button";
@@ -262,6 +263,7 @@ export default function LinkedLearnersPage() {
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [inviterRole, setInviterRole] = useState<LinkedLearnerSide>("SUPPORTER");
+  const router = useRouter();
   const [birthYears, setBirthYears] = useState<Record<string, string>>({});
   const [correctedBirthYear, setCorrectedBirthYear] = useState("");
   const [correctionWarningCount, setCorrectionWarningCount] = useState<number | null>(null);
@@ -440,6 +442,18 @@ export default function LinkedLearnersPage() {
       }
       await Promise.all([loadLinks(), loadInvitations()]);
     } catch (acceptError) {
+      // ⚠️ SELF-HEAL, and it is part of item 1 rather than a follow-up. Accepting now requires a
+      // finished onboarding, and the route guard for this page keys on needsOnboarding(), which
+      // treats two cohorts as onboarded while the server column is still null — a failed
+      // completeOnboarding POST, and the copy-on-signup cohort whose prompt is dismissible. Without
+      // this they would read "Could not accept the invitation" with no idea what to do.
+      // ⚠️ Simpler than the invitation-link path's equivalent, and deliberately so: there is no token
+      // to preserve. The invitation is server-side and listInvitations was NOT tightened, so it is
+      // still listed when they come back and Accept simply works.
+      if ((acceptError as { action?: string | null } | null)?.action === "COMPLETE_ONBOARDING") {
+        router.replace("/onboarding");
+        return;
+      }
       setError(errorMessage(acceptError, "Could not accept the invitation."));
     } finally {
       setBusyId(null);

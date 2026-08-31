@@ -300,6 +300,15 @@ public class StudySnapProperties {
             this.requestTtlDays = requestTtlDays;
         }
 
+        /**
+         * Maximum relationships one expiry sweep run will process.
+         *
+         * <p>⚠️ A bound on WORK PER RUN, not on what may expire. Anything above the bound is picked up
+         * by the next run, since the due-id read is ordered oldest-deadline-first and expiry is
+         * idempotent.
+         */
+        private int expirySweepBatchSize = 500;
+
         /** Total invitations one account may send per window, capping mail volume. */
         private int invitesPerWindow = 20;
 

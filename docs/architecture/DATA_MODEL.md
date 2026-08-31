@@ -219,9 +219,18 @@ Recommended fields:
 - `updated_at`
 - `last_login_at` (nullable)
 
-Linked-learner consent data:
+Linked-learner data:
 
-- `linked_learner_relationships` stores the directional supporter → learner relationship and its `PENDING`, `ACCEPTED` or `REVOKED` state. Only `ACCEPTED` authorizes the relationship-scoped progress read.
+**⚠️ This section was frozen at `v0.89.1` for five releases and was corrected at `v0.98.0`.** It described three statuses where there are four, and asserted that acceptance authorizes the progress read — false since `v0.93.0` — while omitting four tables shipped across `v0.90.0`–`v0.95.0`. Recorded because the drift is the point: a schema section that is not updated alongside a migration becomes confidently wrong rather than merely incomplete.
+
+- `linked_learner_relationships` stores the directional supporter → learner relationship and its `PENDING`, `ACCEPTED`, `REVOKED` or `EXPIRED` state, plus `expires_at`.
+  - **⚠️ `ACCEPTED` AUTHORIZES NOTHING BY ITSELF.** Since `v0.93.0` every cross-user read requires `ACCEPTED` **and** a live per-scope grant row; acceptance creates the *capacity* to grant. Absence of a grant means no access.
+  - **⚠️ `EXPIRED` is terminal** (`v0.97.0`) and names an unconfirmed request that timed out, distinct from a deliberate `REVOKED`. Re-inviting mints a new relationship rather than reviving either.
+  - **⚠️ `expires_at` means THE DEADLINE, for every status** — it is not overwritten with the moment a sweep ran. **A NULL is meaningful, not missing:** acceptance clears it and a consent pause leaves it clear, so a NULL means the row is not on the expiry clock at all. That NULL is the entire mechanism protecting a paused relationship from being expired.
+- `linked_learner_invitations` (`v0.90.0`) stores an email-keyed invitation against the typed ADDRESS rather than a resolved user id, which is what closed the account-existence oracle. It carries its own `expires_at` and its own `PENDING | ACCEPTED | REVOKED` check constraint. **⚠️ Its status vocabulary deliberately excludes `EXPIRED`** even though the Java enum is shared with relationships: invitation expiry is expressed by `expires_at`, and that check constraint is the only guard against writing a value the table does not mean.
+- `linked_learner_invitation_links` (`v0.94.0`) stores a single-use shareable link. `redeem()` sets `redeemed_at` / `redeemed_by_user_id`, making the row **terminal the moment it is used**; the row carries no relationship id, and the relationship carries no link id, so there is deliberately no path back from a relationship to the link that created it.
+- `linked_learner_grants` (`v0.92.0`) stores one directional permission per `(relationship_id, from_user_id, scope)`, `scope IN ('ACTIVITY','PROGRESS')`, live while `revoked_at IS NULL`. Creation is conditional on the relationship being `ACCEPTED` at write time; **withdrawal deliberately has no status predicate**, so sharing can always be turned off. **⚠️ A terminal transition cuts every live grant, but a consent PAUSE does not** — `v0.93.0` made the row survive the pause by design so sharing resumes on re-acceptance.
+- `linked_learner_provisional_birth_years` (`v0.95.0`) holds a link redeemer's declared year against ONE relationship until the creator confirms. Promotion writes the account-global column and deletes the row; revocation and expiry delete it too. **⚠️ It is keyed by RELATIONSHIP and has no user column**, so any read must join `linked_learner_relationships` on `learner_user_id` — that join is the privacy boundary, not a filter applied afterwards.
 - `linked_learner_guardian_consents` stores one relationship-specific attestation fact. A correction that makes consent necessary moves an un-consented accepted relationship back to `PENDING` in the same transaction as the year update; it never deletes or fabricates consent.
 
 ## Feedback Images
