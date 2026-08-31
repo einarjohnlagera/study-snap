@@ -44,6 +44,30 @@ never starting them.
   agent verified the defaults by hand against `origin/main`, and **nothing in the build would catch a future
   edit that silently changed a production schedule.**
 
+- **Inviting requires a finished onboarding (item 2) — the LAST ungated way to form a connection.**
+  `invite()` gated on `assertProfileComplete` alone, which *"passes for a brand-new account"* as the
+  neighbouring `acceptInvitation` comment already recorded. A verified-but-not-onboarded account could
+  invite as a SUPPORTER, have an onboarded learner accept, and reach an `ACCEPTED` relationship with
+  cross-user read capacity.
+- **⚠️ THE SCOPE NARROWED FROM THE KICKOFF, AND THE PROPERTY IS RESTATED RATHER THAN QUIETLY SHRUNK.**
+  The kickoff said the bar should cover *"`invite()` and `accept()`"*. **`accept()` is deliberately NOT
+  gated**, because the call graph makes it unreachable by a non-onboarded caller: every path that creates a
+  `PENDING` relationship now gates onboarding at creation — link creation and redemption (`v0.97.0`), email
+  acceptance (`v0.98.0`), and inviting (here) — `acceptInvitation` calls `accept()` internally and is
+  itself gated, and **`onboardingCompletedAt` is never cleared on a live account** (the only writers that
+  null it are `signup()` and `createGoogleUser()`, which initialise a new row — checked, not assumed).
+  **The honest statement of the property: inviting requires onboarding; accepting INHERITS the requirement
+  from whichever path created the relationship.**
+- **⚠️ Gating `accept()` anyway would have put a THIRD gate on the guardian-consent path**, whose
+  end-to-end working `v0.95.0` called *"the acceptance test for this item, not a side condition"* — cost
+  with no coverage gained.
+- **⚠️ The gate runs BEFORE any address lookup**, and the test proves it with an address that has no
+  account, so a rejection cannot become a cheaper oracle beside `v0.90.0`'s account-existence property.
+- **The `/onboarding` self-heal ships WITH the gate**, as `v0.98.0` established — this page's guard keys on
+  `needsOnboarding()`, so the same two cohorts reach a 403 here. **Mutation-verified:** removing the gate
+  fails `invitingRequiresFinishedOnboardingAndSaysSoBeforeAnyAddressLookup`; removing the redirect fails
+  `routes a mid-onboarding inviter to onboarding instead of a dead error`.
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ AN ANTI-DRIFT RULE NEEDS ITS THIRD AMENDMENT, AND IT IS RAISED HERE RATHER THAN REASONED PAST.**

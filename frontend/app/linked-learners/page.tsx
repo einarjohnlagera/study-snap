@@ -573,6 +573,15 @@ export default function LinkedLearnersPage() {
       setFieldErrors({ email: null, birthYear: null });
       await Promise.all([loadLinks(), loadInvitations()]);
     } catch (inviteError) {
+      // ⚠️ Same self-heal as the accept path, and it ships WITH the gate rather than after it.
+      // Inviting now requires a finished onboarding, and this page's guard keys on
+      // needsOnboarding(), which treats two cohorts as onboarded while the server column is null —
+      // a failed completeOnboarding POST and the copy-on-signup cohort. Without this they would
+      // read "Could not send the invitation" with no idea what to do.
+      if ((inviteError as { action?: string | null } | null)?.action === "COMPLETE_ONBOARDING") {
+        router.replace("/onboarding");
+        return;
+      }
       setError(errorMessage(inviteError, "Could not send the invitation."));
     } finally {
       setInviting(false);
