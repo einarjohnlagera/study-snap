@@ -2,8 +2,8 @@
 
 ## v0.99.0 - Connection Completeness
 
-**Status: In Progress** (kicked off 2026-08-31, base branch `releases/v0.99.0`, cut from `main` after
-`v0.98.0` merged and tagged)
+**Status: Released** (kicked off 2026-08-31, signed off 2026-08-31, base branch `releases/v0.99.0`,
+cut from `main` after `v0.98.0` merged and tagged)
 
 Theme: finish the two connection properties `v0.98.0` shipped half-built, and stop a paused sweep from
 hiding the expiries it later performs.
