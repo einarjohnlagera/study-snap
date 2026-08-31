@@ -173,6 +173,31 @@ class LinkedLearnerServiceTest {
     }
 
     /**
+     * ⚠️ v0.99.0 item 2 — the LAST ungated way to form a connection. Asserted with an address that has
+     * no account, which proves the gate runs BEFORE any address lookup: a rejection must disclose the
+     * caller's own state and never whether an address has an account (the v0.90.0 oracle property).
+     *
+     * <p>⚠️ {@code accept()} is deliberately NOT gated and has no test here, because the call graph
+     * makes it unreachable by a non-onboarded caller: every path creating a PENDING relationship now
+     * gates onboarding at creation, and {@code onboardingCompletedAt} is never cleared on a live
+     * account. See the comment on {@code invite()}.
+     */
+    @Test
+    void invitingRequiresFinishedOnboardingAndSaysSoBeforeAnyAddressLookup() {
+        UUID callerId = UUID.randomUUID();
+        UserEntity midOnboarding = user("newcomer@example.test");
+        midOnboarding.setId(callerId);
+        midOnboarding.setOnboardingCompletedAt(null);
+        when(userRepository.findById(callerId)).thenReturn(Optional.of(midOnboarding));
+
+        assertThatThrownBy(() -> service.invite(callerId,
+                new InviteLinkedLearnerRequest("stranger@example.test", LinkedLearnerSide.SUPPORTER, null)))
+                .isInstanceOf(LinkedLearnerOnboardingRequiredException.class);
+
+        verifyNoInteractions(invitationRepository);
+    }
+
+    /**
      * ⚠️ v0.98.0 item 1. This path forms the IDENTICAL relationship as an invitation-link redemption,
      * so it answers to the same bar. Asserted with an invitation id that does not exist, which proves
      * the gate runs BEFORE the lookup — a rejection must disclose the caller's own account state and
