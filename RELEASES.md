@@ -2,8 +2,8 @@
 
 ## v0.100.0 - Domain Context Resolution
 
-**Status: In Progress** (kicked off 2026-09-01, base branch `releases/v0.100.0`, cut from `main` after
-`v0.99.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-01, base branch `releases/v0.100.0`, cut from
+`main` after `v0.99.0` merged and tagged)
 
 Theme: a curator should be able to see which authoring domain a note will actually generate under, and the
 product should stop deciding that from the curator's own profile.
@@ -172,6 +172,40 @@ so the invariant is never unprotected between commits.
   **⚠️ Trimming `contentPreview`/`summaryPreview` from the list payload is EXPLICITLY EXCLUDED.** It only
   moves the threshold — which is precisely what produced this incident — and changes a DTO four other
   surfaces read. **⚠️ Raising the 2 MB limit is not an option; it is a hard Next.js constant.**
+
+### Known limitations
+
+- **⚠️ ITEM 7'S FIX HAS NOT BEEN VERIFIED AGAINST LIVE DATA, and this is the most important line here.**
+  `npm run build` passes locally with zero cache warnings, but **with no backend running every fetch falls
+  into its existing catch**, so the paginated path returns empty and is never exercised. **The first
+  production deploy is the confirmation** — and it is the deploy this release exists to unblock. **⚠️ Check
+  the build log for `items over 2MB` and the sitemap's note count; the cold agent proved that "the build
+  passes" and "the catalog is intact" are independent facts.**
+- **`PUT /notes/{id}/applicable-programs` emits no `NOTE_AUTHORING_DOMAIN_RECORDED` event, so a recorded
+  `automaticDomain` can go stale.** Changing a note's joined programs changes what `Automatic` resolves to,
+  and that path fires nothing. **⚠️ This bounds what `[CHECKPOINT — due 2026-09-28]` can conclude:** a
+  stored `"Nursing"` may no longer be what Automatic would produce, and the read cannot tell. The misleading
+  admin copy was corrected; **the event was not added, because a third firing site is a scope decision this
+  release did not take.** Recorded rather than fixed.
+- **Decision 13's sweep covered ONE of five unreviewed descriptions, deliberately.**
+  `GENERAL_EDUCATION`, `PROFESSIONAL_EDUCATION`, `NURSING` and `ACCOUNTANCY` are byte-identical — **three
+  are the zero-usage values `2026-09-28` reads**, and rewriting them mid-window changes that read's own
+  input with no honest way to say afterwards *"these curators saw a different description."* Deferred until
+  after the read, not overlooked.
+- **The real-row test pins the predicate, not the gate's placement.** `NativeQueryPostgresIntegrationTest`
+  passes with `assertGenerationReady` deleted from `startAsyncGenerationFromNote`, because it calls the
+  resolver method directly. Placement is pinned only by `StudyPackServiceTest`. Both properties are
+  covered; **no single test covers both, and the names do not say so.**
+- **⚠️ Four `v0.99.0` limitations remain open and are NOT closed by this release:** the permanently-false
+  *"every `ACCEPTED` relationship has two onboarded parties"* for pre-gate rows; `V130`'s backfill predicate
+  having no real-row test; `V130`'s index comment describing a read the index cannot serve; and the
+  rolling-deploy window that retains a small set of rows forever. **Two of the six were closed here** — the
+  unpinned dispatch timezone and the overstated test name.
+- **Item 1 shipped in two halves across two PRs, and the release notes say so.** Decision 4 landed in
+  `#1206`; **Decision 1's copy did not land until `#1208`**, because the first Codex prompt was scoped
+  backend-only and never carried it. It failed safe — the coupling rule forbids the copy without the
+  fallback fix, not the reverse — but *"items 1 and 3 shipped"* was written before it was true and had to be
+  corrected in `bf2c587d`.
 
 ### Anti-drift — locked rules for this release
 
