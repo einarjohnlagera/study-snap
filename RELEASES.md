@@ -374,6 +374,30 @@ so the invariant is never unprotected between commits.
 - **⚠️ Local build verification has a known limit, stated rather than glossed:** with no backend running the
   fetches fall into their existing catches, so this proves the change does not break the build — **it does
   not exercise the live data path.** The real confirmation is the first production deploy.
+- **Two carried `v0.99.0` Known limitations closed — test-only, folded because they fire no new trigger and
+  leave the verification tier exactly where it was.**
+- **Every scheduled job's dispatch TIMEZONE is now pinned, not just its expression.** The cron contract
+  test pinned `cron` and ignored `zone`, so changing it would have moved all three retention dispatches with
+  a green build — the same shadowing class as the yaml gap `v0.99.0` fixed, at lower stakes.
+  `everyCronJobPinsTheTimezoneItsScheduleIsInterpretedIn` enumerates all ten annotations reflectively, the
+  same way the schedule test does, so a job cannot be pinned in one map and missing from the other.
+  **Mutation-verified: dropping `zone = DISPATCH_ZONE` from the weekly retention job fails it.**
+- **⚠️ THE EMPTY ENTRIES IN THAT MAP ARE THE LOAD-BEARING HALF, NOT FILLER — and they touch an open
+  question.** Only **2 of 10** jobs declare a zone; the other **8 run in the JVM default**, which is **UTC**
+  in production, since nothing sets `TZ` in the Dockerfile, `application.yaml` or `docker-compose.yml` and
+  `eclipse-temurin` defaults to UTC. **An unzoned schedule reads as local time and is not:**
+  `billing.usage-reset-cron` at `0 15 1 * * *` fires at **09:15 Manila, not 01:15** — which is precisely the
+  arithmetic that removed it as a suspect for the reported 1am incident. Pinning the blanks makes adding a
+  zone, or dropping one, a decision rather than a side effect.
+- **A test that overstated itself now states what it proves.**
+  `consentPausedRelationshipIsNeverExpiredBecauseAPauseIsNotATermination` became
+  `expiryWorkerLeavesAConsentPausedRelationshipPendingWhenHandedItsId`. **`seedRelationship` never writes
+  `expires_at`**, so the row reached the sweep with a NULL deadline **by omission**, and the test could not
+  tell *"the worker respects a consent pause"* apart from *"there was no deadline to act on."* What it does
+  prove is kept and is the reachable production shape. **⚠️ The stronger property is covered by
+  `aPreMigrationConsentPausedRowIsNeverExpirableAtAnyFutureInstant`, and the two must NOT be merged — a
+  name that overstates its test is how a guard looks present and does nothing**, which this release has
+  now found four times in its own deliveries.
 - **⚠️ ITEM 6's GUARD IS PARTLY UNBUILDABLE, AND THE REASON IS A STRONGER PROPERTY THAN THE TEST WOULD HAVE
   BEEN.** The spec asked for three tests pinning that
   `OfficialChallengeQuizTemplateService:221`, `ExamQuestionPoolService:151` and
