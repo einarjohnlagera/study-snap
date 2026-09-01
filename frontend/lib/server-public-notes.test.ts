@@ -130,6 +130,27 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
     expect(requestedUrls.some((url) => url.includes("/subjects"))).toBe(false);
   });
 
+  // ⚠️ "general" is the slug getPublicSubjectSlug invents for a blank subject, and the server filter
+  // cannot express it: SQL coalesces a null subject to '', the request param normalizes with no fallback,
+  // and '' never equals 'general'. Server-filtering this slug drops those notes from a route the app
+  // manufactures for them. Found by the signoff cold agent.
+  it("filters the blank-subject general slug in JS because the server filter cannot express it", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [{ id: "blank", subject: null }, { id: "biology", subject: "Biology" }],
+        total: 2,
+        hasMore: false,
+      }),
+    });
+
+    const notes = await getServerPublicNotesBySubjectSlug("general");
+
+    expect(notes.map((note) => note.id)).toEqual(["blank"]);
+    const requestedUrls = (global.fetch as jest.Mock).mock.calls.map(([url]) => String(url));
+    expect(requestedUrls.every((url) => !url.includes("subject="))).toBe(true);
+  });
+
   it("returns an empty list for a blank slug without calling the backend", async () => {
     global.fetch = jest.fn();
 
@@ -139,18 +160,65 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
   });
 
   it("pages the full catalog so no single response can cross the limit", async () => {
-    const first = Array.from({ length: 250 }, (_, index) => ({ id: `note-${index}` }));
+    const first = Array.from({ length: 50 }, (_, index) => ({ id: `note-${index}` }));
     global.fetch = jest.fn()
       .mockResolvedValueOnce(page(first, true))
-      .mockResolvedValueOnce(page([{ id: "note-250" }], false));
+      .mockResolvedValueOnce(page([{ id: "note-50" }], false));
 
     const notes = await getServerPublicNotes();
 
-    expect(notes).toHaveLength(251);
+    expect(notes).toHaveLength(51);
     const requestedUrls = (global.fetch as jest.Mock).mock.calls.map(([url]) => String(url));
     expect(requestedUrls).toHaveLength(2);
-    expect(requestedUrls[0]).toContain("page=0&pageSize=250");
-    expect(requestedUrls[1]).toContain("page=1&pageSize=250");
+    expect(requestedUrls[0]).toContain("page=0&pageSize=50");
+    expect(requestedUrls[1]).toContain("page=1&pageSize=50");
+  });
+
+  // ⚠️ THE TEST THAT WOULD HAVE CAUGHT THE TRUNCATION, and the reason the first version did not:
+  // it mocked a 250-item page, which NoteController can never return -- PUBLIC_NOTES_MAX_SIZE clamps
+  // pageSize to 50. A response the backend cannot produce proves nothing about the loop.
+  // This mock behaves like the real server: it CLAMPS whatever pageSize is asked for, so a short page
+  // arrives with hasMore=true. A length-based stop condition truncates the catalog here and the
+  // assertion below fails.
+  // ⚠️ SERVER_MAX is deliberately BELOW the page size we request. That is the whole point: the defect
+  // only appears when the server hands back fewer items than were asked for, which is what its clamp
+  // does. A mock that returns exactly PUBLIC_NOTES_PAGE_SIZE items cannot reproduce it -- the first
+  // version of this test did that and a reintroduced length-based stop survived the mutation.
+  it("keeps paging when the server clamps to a smaller page than requested", async () => {
+    const SERVER_MAX = 20;
+    const catalog = Array.from({ length: 120 }, (_, index) => ({ id: `note-${index}` }));
+    global.fetch = jest.fn().mockImplementation((url: string) => {
+      const pageIndex = Number(new URL(String(url)).searchParams.get("page"));
+      const start = pageIndex * SERVER_MAX;
+      const items = catalog.slice(start, start + SERVER_MAX);
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ items, total: items.length, hasMore: start + items.length < catalog.length }),
+      });
+    });
+
+    const notes = await getServerPublicNotes();
+
+    // 120, not 20. A length-based stop returns the first clamped page and stops.
+    expect(notes).toHaveLength(120);
+    expect((global.fetch as jest.Mock).mock.calls).toHaveLength(6);
+  });
+
+  it("keeps paging a server-clamped SUBJECT query too, not just the full catalog", async () => {
+    const SERVER_MAX = 20;
+    const subjectNotes = Array.from({ length: 60 }, (_, index) => ({ id: `subject-note-${index}` }));
+    global.fetch = jest.fn().mockImplementation((url: string) => {
+      const parsed = new URL(String(url));
+      expect(parsed.searchParams.get("subject")).toBe("foundation-engineering");
+      const start = Number(parsed.searchParams.get("page")) * SERVER_MAX;
+      const items = subjectNotes.slice(start, start + SERVER_MAX);
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ items, total: items.length, hasMore: start + items.length < subjectNotes.length }),
+      });
+    });
+
+    await expect(getServerPublicNotesBySubjectSlug("foundation-engineering")).resolves.toHaveLength(60);
   });
 
   it("issues exactly one request when the catalog fits in a page", async () => {

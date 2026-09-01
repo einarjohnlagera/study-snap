@@ -398,6 +398,42 @@ so the invariant is never unprotected between commits.
   `aPreMigrationConsentPausedRowIsNeverExpirableAtAnyFutureInstant`, and the two must NOT be merged — a
   name that overstates its test is how a guard looks present and does nothing**, which this release has
   now found four times in its own deliveries.
+- **⚠️ THE SIGNOFF COLD AGENT FALSIFIED CLAIM 5 — ITEM 7's FIX SHIPPED WITH THE EXACT DEFECT ITS OWN
+  FALSIFICATION CLAIM WAS WRITTEN TO CATCH, and it was fixed before signoff.** The claim was *"every public
+  surface renders the same note set after the change as before"*, chosen because **a build that merely
+  passes is not evidence.** It did not.
+  `NoteController.PUBLIC_NOTES_MAX_SIZE` clamps `pageSize` to **50**, so a request for 250 returned **50
+  items with `hasMore=true`** — and the loop's *"a page shorter than we asked for means the end"* guard,
+  added to prevent an infinite loop, **exited after page zero.** `getServerPublicNotes()` returned **50
+  notes instead of ~950**: a ~95% loss on the SEO sitemap, most subject pages falling below the
+  `noteCount >= 6` index threshold and vanishing, subject pages truncated at 50, and note pages silently
+  losing their exam-hub link and *"More {program} notes"* rail.
+  **⚠️ THE FIX IS NOT THE PAGE SIZE — it is that a length-based stop is WRONG IN PRINCIPLE.** The page size
+  we receive is the server's to decide, not ours to assume. Requesting 50 matches the server's ceiling; the
+  loop now stops only on an authoritative signal (`hasMore=false`, an empty page, or a failed page).
+- **⚠️ AND THE REGRESSION TEST WAS ITSELF VACUOUS ON ITS FIRST WRITING — caught by mutating, not by
+  reading.** The original mocked a **250-item first page, a response the backend cannot produce.** The
+  replacement's first draft used a 50-item page, which equals the requested size, so **reintroducing the
+  bad break still passed.** Only a mock that clamps **below** what was asked reproduces it. Two tests now
+  kill that mutant. **This is the sixth test-that-claims-more-than-it-proves in this release and the
+  second that was ours.**
+- **Three further confirmed findings from the same agent, all fixed rather than carried.**
+  **(a)** `GeneratedQuizService:110` reached an LLM prompt from a note with **no readiness gate** — the
+  Study-Pack claim held while the quiz path did not, because the removed save-time block used to make the
+  ambiguous state *unrepresentable* and item 3 newly exposed **every** note-reading LLM path. Gated,
+  mutation-verified. **(b)** `admin-applicable-programs-section.tsx` told curators they were editing
+  discovery *"without changing their generation context"* — **false for a note relying on Automatic**,
+  where the single joined program **is** the writing domain. **(c)** The `general` slug is the one filter
+  the server cannot express: `getPublicSubjectSlug` substitutes `"general"` for a blank subject while SQL
+  coalesces to `''`, so a blank-subject note would have vanished from a route the app manufactures for it.
+  It now filters in JS — bounded, because the fetch is paginated.
+- **One residual made explicit rather than left to construction:** `buildFromStudyPackFallback` passed the
+  profile program with no curator guard, unlike its two siblings. Unreachable today (`study_packs.note_id`
+  is `NOT NULL` with an FK), but **"unreachable" is not the rule the other sites follow and a reader cannot
+  tell an omission from a decision.** Guarded.
+- **Claims 1-4 HELD under mutation**, each killer named by the agent: the curator-profile suppression, all
+  four `assertGenerationReady` sites individually, the analytics sentinels, and the owner-not-requester
+  resolution. Backend **1880**, frontend **2087**, `tsc` clean, lint at its 15 pre-existing warnings.
 - **⚠️ ITEM 6's GUARD IS PARTLY UNBUILDABLE, AND THE REASON IS A STRONGER PROPERTY THAN THE TEST WOULD HAVE
   BEEN.** The spec asked for three tests pinning that
   `OfficialChallengeQuizTemplateService:221`, `ExamQuestionPoolService:151` and

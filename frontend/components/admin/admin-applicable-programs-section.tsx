@@ -104,7 +104,9 @@ export function AdminApplicableProgramsSection() {
       <div>
         <h2 className="text-lg font-semibold text-foreground">Note Applicable Programs</h2>
         <p className="text-sm text-foreground/65">
-          Curate where your canonical notes can be discovered without changing their generation context.
+          Curate where your canonical notes can be discovered. For a note with a Domain Context set, that
+          leaves its generation context untouched — but for a note relying on Automatic, the single joined
+          program IS the writing domain, so changing programs here changes it.
         </p>
       </div>
       <Card className="overflow-hidden">
