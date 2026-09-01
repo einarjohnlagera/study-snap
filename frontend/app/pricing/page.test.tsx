@@ -82,9 +82,9 @@ describe("PricingPage", () => {
     expect(screen.getAllByText("10 Study Packs / month")).not.toHaveLength(0);
     expect(screen.getByText("Keep building with 50 Study Packs each month")).toBeInTheDocument();
     expect(screen.getByText("Build a deep library with 100 Study Packs each month")).toBeInTheDocument();
-    expect(screen.getAllByText("20 AI quizzes / month")).not.toHaveLength(0);
-    expect(screen.getByText("Make up to 100 AI quizzes each month")).toBeInTheDocument();
-    expect(screen.getByText("Make up to 200 AI quizzes each month")).toBeInTheDocument();
+    expect(screen.getAllByText("20 generated quizzes / month")).not.toHaveLength(0);
+    expect(screen.getByText("Make up to 100 generated quizzes each month")).toBeInTheDocument();
+    expect(screen.getByText("Make up to 200 generated quizzes each month")).toBeInTheDocument();
     expect(screen.getByText("2 exports / month")).toBeInTheDocument();
     expect(screen.getByText("Take 15 study resources offline each month")).toBeInTheDocument();
     expect(screen.getAllByText("Export every study resource you need")).not.toHaveLength(0);

@@ -1592,7 +1592,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Generate Quiz" }));
 
     expect(screen.getByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
-    expect(screen.queryByText("AI quizzes left this month")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quiz generations left this month")).not.toBeInTheDocument();
     expect(screen.getByText(/Questions and answers are AI-generated from your note/i)).toBeInTheDocument();
   });
 
@@ -1634,7 +1634,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText("Higher counts cover more material. Plus unlocks 20 and 30 questions.")).toBeInTheDocument();
     expect(screen.getByText("Target Level")).toBeInTheDocument();
     expect(screen.getByText("From your profile: College")).toBeInTheDocument();
-    expect(screen.getByText("AI quizzes left this month")).toBeInTheDocument();
+    expect(screen.getByText("Quiz generations left this month")).toBeInTheDocument();
     expect(screen.getByText("Share links left this month")).toBeInTheDocument();
     // ⚠️ The disclosure must NOT hang off the quota block: this quiz is generated for someone
     // else, so the person reviewing it is not the person who will sit it. See the sibling test
@@ -2351,7 +2351,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    expect(await screen.findByText("Suggestions")).toBeInTheDocument();
     expect(startQuickReviewSession).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
@@ -2492,7 +2492,7 @@ describe("PrivateNoteDetailPageClient", () => {
     await act(async () => {
       jest.advanceTimersByTime(3000);
     });
-    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    expect(await screen.findByText("Suggestions")).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Quiz question count" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
 
@@ -2596,11 +2596,11 @@ describe("PrivateNoteDetailPageClient", () => {
       jest.advanceTimersByTime(3000);
     });
 
-    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    expect(await screen.findByText("Suggestions")).toBeInTheDocument();
     expect(screen.getAllByText("Memory").length).toBeGreaterThan(0);
     expect(screen.getByText("Already on your note")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Use AI Subject"));
-    fireEvent.click(screen.getByLabelText("Merge My Tags + AI Tags"));
+    fireEvent.click(screen.getByLabelText("Use Suggested Subject"));
+    fireEvent.click(screen.getByLabelText("Merge My Tags + Suggested Tags"));
     fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
 
     await waitFor(() => {

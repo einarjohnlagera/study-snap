@@ -97,7 +97,7 @@ describe("LandingPage", () => {
 
     expect(screen.getAllByText("Why NoteLib")).not.toHaveLength(0);
     expect(screen.getByRole("heading", { name: "Built for study, not just answers" })).toBeInTheDocument();
-    expect(screen.getByText("Generic AI tools")).toBeInTheDocument();
+    expect(screen.getByText("Generic chat tools")).toBeInTheDocument();
     expect(screen.getAllByText("NoteLib")).not.toHaveLength(0);
     expect(screen.getByText("Your notes stay")).toBeInTheDocument();
     expect(screen.getByText("Weak areas remembered")).toBeInTheDocument();

@@ -147,7 +147,7 @@ const landingFaqs = [
 const valueSummaryCards = [
   {
     title: "Built for studying",
-    description: "Not just AI output — structured for real learning and exam preparation.",
+    description: "Structured for real learning and exam preparation, not just an answer.",
     icon: BookOpen,
   },
   {
@@ -346,7 +346,7 @@ function DifferentiationSection() {
         <div className="grid border-b border-border bg-muted/20 text-sm font-medium sm:grid-cols-[0.9fr_1fr_1fr]">
           <div className="px-4 py-3 sm:px-6">What matters</div>
           <div className="border-t border-border px-4 py-3 text-foreground/70 sm:border-l sm:border-t-0 sm:px-6">
-            Generic AI tools
+            Generic chat tools
           </div>
           <div className="border-t border-border bg-sky-500/8 px-4 py-3 sm:border-l sm:border-t-0 sm:px-6 dark:bg-sky-500/12">
             NoteLib

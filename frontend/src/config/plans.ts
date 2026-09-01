@@ -1,6 +1,9 @@
 import type { PaidPlanType, PlanType, ProfileType } from "@/lib/api";
 import { pricingConfig } from "@/lib/pricing-config";
-import { AI_QUIZZES_USAGE_LABEL } from "@/lib/usage-labels";
+import {
+  GENERATED_QUIZZES_PRICING_NOUN,
+  GENERATED_QUIZZES_PRICING_NOUN_CAPITALIZED,
+} from "@/lib/usage-labels";
 
 export type AppPlanType = Extract<PlanType, "FREE" | "PLUS" | "PRO">;
 
@@ -46,7 +49,7 @@ export const PLANS: Record<AppPlanType, {
     adaptivePracticeMessage: `Taste Adaptive Practice — ${pricingConfig.free.adaptivePracticePerMonth} sessions / month`,
     features: [
       { label: `${pricingConfig.free.studyPacksPerMonth} Study Packs / month` },
-      { label: `${pricingConfig.free.challengeQuizzesPerMonth} ${AI_QUIZZES_USAGE_LABEL} / month` },
+      { label: `${pricingConfig.free.challengeQuizzesPerMonth} ${GENERATED_QUIZZES_PRICING_NOUN} / month` },
       { label: `Adaptive Practice (${pricingConfig.free.adaptivePracticePerMonth} sessions / month)` },
       { label: `${pricingConfig.free.docxExportsPerMonth} exports / month`, helper: EXPORT_HELPER },
       { label: `${pricingConfig.free.quizShareLinksPerMonth} shareable quiz links / month` },
@@ -66,7 +69,7 @@ export const PLANS: Record<AppPlanType, {
     adaptivePracticeMessage: "Train on weak areas (limited sessions)",
     features: [
       { label: `Keep building with ${pricingConfig.plus.studyPacksPerMonth} Study Packs each month` },
-      { label: `Make up to ${pricingConfig.plus.challengeQuizzesPerMonth} ${AI_QUIZZES_USAGE_LABEL} each month` },
+      { label: `Make up to ${pricingConfig.plus.challengeQuizzesPerMonth} ${GENERATED_QUIZZES_PRICING_NOUN} each month` },
       { label: `Take ${pricingConfig.plus.docxExportsPerMonth} study resources offline each month`, helper: EXPORT_HELPER },
       { label: `Share ${pricingConfig.plus.quizShareLinksPerMonth} quizzes with classmates each month` },
       { label: `Target weak areas with ${pricingConfig.plus.adaptivePracticePerMonth} Adaptive Practice sessions each month` },
@@ -83,7 +86,7 @@ export const PLANS: Record<AppPlanType, {
     adaptivePracticeMessage: "Train on weak areas until you master them",
     features: [
       { label: `Build a deep library with ${pricingConfig.pro.studyPacksPerMonth} Study Packs each month` },
-      { label: `Make up to ${pricingConfig.pro.challengeQuizzesPerMonth} ${AI_QUIZZES_USAGE_LABEL} each month` },
+      { label: `Make up to ${pricingConfig.pro.challengeQuizzesPerMonth} ${GENERATED_QUIZZES_PRICING_NOUN} each month` },
       { label: "Export every study resource you need", helper: EXPORT_HELPER },
       { label: "Share unlimited quizzes with classmates" },
       { label: `Keep improving weak areas with ${pricingConfig.pro.adaptivePracticePerMonth} Adaptive Practice sessions each month` },
@@ -113,7 +116,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     },
   },
   {
-    label: `${AI_QUIZZES_USAGE_LABEL} / month`,
+    label: `${GENERATED_QUIZZES_PRICING_NOUN_CAPITALIZED} / month`,
     values: {
       FREE: String(pricingConfig.free.challengeQuizzesPerMonth),
       PLUS: String(pricingConfig.plus.challengeQuizzesPerMonth),

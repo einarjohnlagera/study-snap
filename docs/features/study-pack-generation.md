@@ -314,15 +314,15 @@ Recovery is status-only and idempotent. It never auto-regenerates, re-dispatches
 - In the normal note flow, generated metadata must remain transient until the user explicitly clicks `Apply Changes`.
 - Note Editor generation is asynchronous, so Create Note hands off to Note Detail and the suggestion modal opens there once generation reaches `STUDY_PACK_READY`.
 - The shared AI suggestion modal should support:
-  - `Title` -> `Keep My Title` or `Use AI Title`
-  - `Subject` -> `Keep My Subject` or `Use AI Subject`
-  - `Tags` -> `Keep My Tags`, `Merge Tags`, or `Use AI Tags`
+  - `Title` -> `Keep My Title` or `Use Suggested Title`
+  - `Subject` -> `Keep My Subject` or `Use Suggested Subject`
+  - `Tags` -> `Keep My Tags`, `Merge My Tags + Suggested Tags`, or `Use Suggested Tags Only`
 - Default selection should stay conservative:
   - existing `title` -> default `Keep My Title`
   - existing `subject` -> default `Keep My Subject`
-  - existing `tags` with new AI tags -> default `Merge Tags`
+  - existing `tags` with new AI tags -> default `Merge My Tags + Suggested Tags`
   - existing `tags` with no new AI tags -> default `Keep My Tags`
-  - no existing `tags` -> default `Use AI Tags`
+  - no existing `tags` -> default `Use Suggested Tags Only`
 - Tag comparison must be case-insensitive and whitespace-trimmed when deciding whether an AI tag is actually new.
 - AI tag suggestions should show only new tags as suggestions and should mark overlapping tags as already present on the note instead of presenting them as fresh additions.
 - AI subject output must be a reusable academic subject label, not a specific topic. Topic specificity belongs in tags.
