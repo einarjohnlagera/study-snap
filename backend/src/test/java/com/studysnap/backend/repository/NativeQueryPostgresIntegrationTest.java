@@ -873,7 +873,23 @@ class NativeQueryPostgresIntegrationTest {
     }
 
     @Test
-    void consentPausedRelationshipIsNeverExpiredBecauseAPauseIsNotATermination() {
+    /**
+     * ⚠️ Renamed in v0.100.0, closing a v0.99.0 Known limitation. It was
+     * {@code consentPausedRelationshipIsNeverExpiredBecauseAPauseIsNotATermination}, which claimed more
+     * than it shows: {@code seedRelationship} never writes {@code expires_at}, so the row reaches the
+     * sweep with a NULL deadline by OMISSION, and this test cannot tell "the worker respects a consent
+     * pause" apart from "there was no deadline to act on."
+     *
+     * <p>What it does prove is still worth having, and is the reachable production shape: the worker is
+     * handed this id — selection and execution are separate transactions by design — and leaves the row
+     * PENDING rather than expiring it.
+     *
+     * <p>⚠️ The stronger property, that {@code pauseAcceptedForConsent} LEAVES the deadline NULL, is
+     * covered by {@link #aPreMigrationConsentPausedRowIsNeverExpirableAtAnyFutureInstant()}, which nulls
+     * the column explicitly and asserts the intermediate state. Do not merge the two: a name that
+     * overstates its test is how a guard looks present and does nothing.
+     */
+    void expiryWorkerLeavesAConsentPausedRelationshipPendingWhenHandedItsId() {
         UUID supporter = seedUser("paused-not-expired-supporter");
         UUID learner = seedUser("paused-not-expired-learner");
         UUID relationshipId = seedRelationship(supporter, learner, "ACCEPTED");
