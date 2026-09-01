@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,11 +30,16 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.NoteCollectionEntity;
+import com.studysnap.backend.entity.NoteCollectionItemEntity;
+import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.exception.InvalidLongExamSourceException;
 import com.studysnap.backend.exception.LongExamNotAvailableException;
 import com.studysnap.backend.exception.LongExamSessionNotInProgressException;
 import com.studysnap.backend.exception.LongExamSessionNotPausableException;
 import com.studysnap.backend.exception.MonthlyLongExamLimitReachedException;
+import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -46,7 +52,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.mockito.ArgumentCaptor;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,6 +75,8 @@ class LongExamServiceTest {
 
     @Mock
     private NoteRepository noteRepository;
+    @Mock
+    private PlanSourcedExamVerifier planSourcedExamVerifier;
     @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
@@ -118,6 +128,7 @@ class LongExamServiceTest {
         };
         longExamService = new LongExamService(
             noteRepository,
+            planSourcedExamVerifier,
             studyPackRepository,
             quickReviewSessionRepository,
             userRepository,
@@ -547,6 +558,261 @@ class LongExamServiceTest {
     }
 
     @Test
+    void startSession_withPlanSourcedMixedSubjectNotesSucceeds() {
+        // ⚠️ THE DEFECT THIS RELEASE EXISTS TO FIX. The plan CTA pre-selects a plan's own notes and the
+        // backend then rejected them for not sharing a subject — the product refusing a selection it made
+        // itself. A verified plan makes membership the predicate, so mixed subjects are legitimate.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId,
+            "Structural Analysis", "Engineering Mathematics");
+
+        stubPlanSourcedStart(userId, collectionId, primaryStudyPack, List.of(additionalStudyPack));
+
+        LongExamStartResponse response = longExamService.startSession(
+            primaryStudyPackId.toString(),
+            userId,
+            new LongExamStartRequest(
+                null,
+                List.of(additionalStudyPackId.toString()),
+                collectionId.toString()
+            )
+        );
+
+        assertThat(response.sourceNoteRefs())
+            .extracting(LongExamSourceNoteRef::noteTitle)
+            .containsExactly(PRIMARY_BIOLOGY_TITLE, "Structural Analysis");
+    }
+
+    @Test
+    void startSession_propagatesAVerifierRejectionRatherThanSwallowingIt() {
+        // ⚠️ RENAMED AFTER A COLD AGENT PROVED THE OLD NAME WAS A LIE. It was
+        // `startSession_withCollectionTheCallerDoesNotOwnThrows`, which claimed to cover ownership
+        // enforcement — but the verifier is a MOCK here, so this stubs a throw and asserts the throw
+        // propagates. The ownership check itself is covered by PlanSourcedExamVerifierTest, against the
+        // real repositories; deleting that check passed all 1894 tests while this one was green.
+        // What this DOES cover, and is worth keeping: startSession does not catch or swallow a source
+        // rejection on its way out.
+        UUID userId = UUID.randomUUID();
+        UUID foreignCollectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primaryStudyPack));
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(foreignCollectionId.toString()), eq(userId), any()))
+            .thenThrow(new InvalidLongExamSourceException());
+        stubNoActiveLongExamSession(userId, primaryStudyPackId);
+
+        LongExamStartRequest request = new LongExamStartRequest(
+            null,
+            List.of(additionalStudyPackId.toString()),
+            foreignCollectionId.toString()
+        );
+
+        assertThatThrownBy(() -> longExamService.startSession(primaryStudyPackId.toString(), userId, request))
+            .isInstanceOf(InvalidLongExamSourceException.class);
+    }
+
+    @Test
+    void startSession_withPlanSourcedNoteThatIsNotAMemberStillEnforcesSubject() {
+        // ⚠️ The gate is PER SOURCE, not per request. Naming a plan must not let one legitimate member
+        // smuggle in arbitrary non-members: a source the plan does not contain still answers to the
+        // same-subject rule.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID outsiderStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+        StudyPackEntity outsiderStudyPack = buildStudyPack(outsiderStudyPackId, userId, "Outsider",
+            "Engineering Mathematics");
+
+        // The plan contains ONLY the primary; the outsider is owned but not a member.
+        stubPlanSourcedStart(userId, collectionId, primaryStudyPack, List.of());
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(outsiderStudyPackId, userId))
+            .thenReturn(Optional.of(outsiderStudyPack));
+
+        LongExamStartRequest request = new LongExamStartRequest(
+            null,
+            List.of(outsiderStudyPackId.toString()),
+            collectionId.toString()
+        );
+
+        assertThatThrownBy(() -> longExamService.startSession(primaryStudyPackId.toString(), userId, request))
+            .isInstanceOf(InvalidLongExamSourceException.class);
+    }
+
+    @Test
+    void startSession_withPrimaryOutsideTheNamedPlanStillEnforcesSubject() {
+        // ⚠️ The exam must be anchored IN the plan it claims. Otherwise a learner could name any plan
+        // they own to relax the rule for an exam built somewhere else entirely.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId, "Structural Analysis",
+            "Engineering Mathematics");
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+            .thenReturn(Optional.of(additionalStudyPack));
+        // The plan holds the ADDITIONAL note but not the primary.
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(Set.of(additionalStudyPack.getNoteId()));
+        stubNoActiveLongExamSession(userId, primaryStudyPackId);
+
+        LongExamStartRequest request = new LongExamStartRequest(
+            null,
+            List.of(additionalStudyPackId.toString()),
+            collectionId.toString()
+        );
+
+        assertThatThrownBy(() -> longExamService.startSession(primaryStudyPackId.toString(), userId, request))
+            .isInstanceOf(InvalidLongExamSourceException.class);
+    }
+
+    @Test
+    void startSession_planSourcedCapComesFromLearnerLevelNotAConstant() {
+        // ⚠️ A College learner gets 25 questions and MIN_QUESTIONS_PER_SOURCE is 3, so the ceiling is 8
+        // sources — 7 additional. An 8th additional is one past it and must be refused, which is exactly
+        // the boundary a flat "~10 notes" cap would have shipped over.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        List<String> additionalIds = new ArrayList<>();
+        for (int index = 0; index < 8; index++) {
+            additionalIds.add(UUID.randomUUID().toString());
+        }
+
+        // Rejected before the primary pack is loaded, so nothing else needs stubbing — that ordering is
+        // itself the point: request shape is validated before a locking read, not after one.
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+
+        LongExamStartRequest request = new LongExamStartRequest(
+            null,
+            additionalIds,
+            collectionId.toString()
+        );
+
+        assertThatThrownBy(() -> longExamService.startSession(primaryStudyPackId.toString(), userId, request))
+            .isInstanceOf(InvalidLongExamSourceException.class);
+    }
+
+    @Test
+    void startSession_planClaimThatFailsVerificationFallsBackToTheManualCap() {
+        // ⚠️ The claimed scope sizes the EARLY check only. Four additional sources pass it (a College
+        // learner may claim 7), so the request reaches the verified check — where the primary turns out
+        // not to be a plan member, the scope collapses to manual, and the cap of 3 rejects it. Without
+        // that fallback, naming any owned collection would permanently buy the larger cap.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+        // ⚠️ All four are OWNED and share the primary's subject, so ownership and the subject rule both
+        // pass. The cap is then the ONLY thing that can reject this request — without that isolation the
+        // test throws for an unrelated reason and proves nothing, which is how it first passed while the
+        // cap fallback was mutated away.
+        List<StudyPackEntity> additional = new ArrayList<>();
+        for (int index = 0; index < 4; index++) {
+            additional.add(buildStudyPack(UUID.randomUUID(), userId, "Same Subject " + index, BIOLOGY_SUBJECT));
+        }
+        List<String> additionalIds = additional.stream().map(pack -> pack.getId().toString()).toList();
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primaryStudyPack));
+        for (StudyPackEntity additionalStudyPack : additional) {
+            lenient().when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPack.getId(), userId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        }
+        // Owned, but it does not contain the primary — so this is not a plan-sourced exam.
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(Set.of(UUID.randomUUID()));
+        stubNoActiveLongExamSession(userId, primaryStudyPackId);
+
+        LongExamStartRequest request = new LongExamStartRequest(null, additionalIds, collectionId.toString());
+
+        assertThatThrownBy(() -> longExamService.startSession(primaryStudyPackId.toString(), userId, request))
+            .isInstanceOf(InvalidLongExamSourceException.class);
+    }
+
+    @Test
+    void startSession_recordsTheVERIFIEDSourceScopeNotTheClaim() {
+        // ⚠️ A caller who owns a collection that does not contain the primary is treated as a MANUAL exam
+        // in every respect — strict cap, subject rule enforced. Reporting them as `plan` would let the
+        // client set the single metric that separates the new path from the old one, and that metric is
+        // what the release's checkpoint reads.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primaryStudyPack));
+        // Owned, but the primary is not a member.
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(Set.of(UUID.randomUUID()));
+        stubNoActiveLongExamSession(userId, primaryStudyPackId);
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        // Take the POOLED branch, which fires LONG_EXAM_STARTED synchronously. The other site fires from
+        // the dispatched async task, which this fixture captures without running.
+        when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
+            .thenReturn(Optional.of(List.of(new QuizItem(
+                "Pooled question",
+                List.of("A", "B", "C", "D"),
+                0,
+                "Cells",
+                "Explanation"
+            ))));
+
+        longExamService.startSession(
+            primaryStudyPackId.toString(),
+            userId,
+            new LongExamStartRequest(null, List.of(), collectionId.toString())
+        );
+
+        ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(analyticsService, atLeastOnce()).trackEvent(
+            eq(userId),
+            eq(AnalyticsEventType.LONG_EXAM_STARTED),
+            any(),
+            metadata.capture()
+        );
+        assertThat(metadata.getAllValues())
+            .allSatisfy(recorded -> assertThat(recorded).containsEntry("sourceScope", "manual"));
+    }
+
+    @Test
+    void resolveMaxSourceNotes_tracksTheLevelDerivedQuestionCount() {
+        // The three tiers are 20 / 25 / 30, so the honest caps are 6 / 8 / 10. Pinned as arithmetic
+        // because the UI states this number to the learner before they start.
+        assertThat(longExamService.resolveMaxSourceNotes(20)).isEqualTo(6);
+        assertThat(longExamService.resolveMaxSourceNotes(25)).isEqualTo(8);
+        assertThat(longExamService.resolveMaxSourceNotes(30)).isEqualTo(10);
+    }
+
+    @Test
     void startSession_withDifferentSubjectAdditionalNoteThrows() {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
@@ -923,6 +1189,50 @@ class LongExamServiceTest {
             any());
         verify(conceptHealthService, never()).recordCorrectAnswersForKnownConcepts(any(), any(), any(), any(), any());
         verify(conceptHealthService, never()).recordIncorrectAnswersForKnownConcepts(any(), any(), any(), any(), any());
+    }
+
+    private NoteCollectionItemEntity buildCollectionItem(UUID collectionId, UUID noteId) {
+        NoteCollectionItemEntity item = new NoteCollectionItemEntity();
+        item.setId(UUID.randomUUID());
+        item.setCollectionId(collectionId);
+        item.setNoteId(noteId);
+        item.setPosition(0);
+        return item;
+    }
+
+    private void stubNoActiveLongExamSession(UUID userId, UUID primaryStudyPackId) {
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            eq(userId),
+            eq(primaryStudyPackId),
+            eq(QuickReviewSessionMode.LONG_EXAM),
+            any()
+        )).thenReturn(Optional.empty());
+    }
+
+    /** A PRO learner starting from a plan that genuinely contains the primary and every listed source. */
+    private void stubPlanSourcedStart(
+        UUID userId,
+        UUID collectionId,
+        StudyPackEntity primaryStudyPack,
+        List<StudyPackEntity> additionalStudyPacks
+    ) {
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPack.getId(), userId))
+            .thenReturn(Optional.of(primaryStudyPack));
+        List<NoteCollectionItemEntity> items = new ArrayList<>();
+        items.add(buildCollectionItem(collectionId, primaryStudyPack.getNoteId()));
+        for (StudyPackEntity additionalStudyPack : additionalStudyPacks) {
+            lenient().when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPack.getId(), userId))
+                .thenReturn(Optional.of(additionalStudyPack));
+            items.add(buildCollectionItem(collectionId, additionalStudyPack.getNoteId()));
+        }
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(items.stream().map(NoteCollectionItemEntity::getNoteId)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new)));
+        stubNoActiveLongExamSession(userId, primaryStudyPack.getId());
+        lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId) {

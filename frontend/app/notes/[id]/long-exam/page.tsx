@@ -180,6 +180,17 @@ export default function LongExamPage() {
     const [forfeiting, setForfeiting] = useState(false);
     const [showFocusTip, setShowFocusTip] = useState(false);
     const [note, setNote] = useState<NoteResponse | null>(null);
+    /**
+     * Max sources INCLUDING the primary, as the server reports it.
+     *
+     * ⚠️ Never re-derived here. It is floor(questionCount / 3) where questionCount comes from the
+     * learner's LEVEL via backend config, so a client-side copy of that mapping is guaranteed drift —
+     * the failure v0.100.0 item 2 was written to prevent. Null until a response arrives; the plan path
+     * falls back to the manual constant rather than guessing high.
+     */
+    const [maxSourceNotes, setMaxSourceNotes] = useState<number | null>(null);
+    const [planEligibleNoteCount, setPlanEligibleNoteCount] = useState<number | null>(null);
+    const [planTotalNoteCount, setPlanTotalNoteCount] = useState<number | null>(null);
     const [profileLearnerLevel, setProfileLearnerLevel] = useState<string | null>(null);
     const [availableSourceNotes, setAvailableSourceNotes] = useState<NoteListItemResponse[]>([]);
     const [selectedAdditionalStudyPackIds, setSelectedAdditionalStudyPackIds] = useState<string[]>([]);
@@ -314,6 +325,20 @@ export default function LongExamPage() {
                 setError("Generate a Study Pack before starting a Long Exam.");
                 return;
             }
+            // ⚠️ The session read moves AHEAD of source resolution because it carries maxSourceNotes,
+            // and the plan path must pre-select against the learner's real cap rather than a constant.
+            // It is an idempotent GET and the result is reused below, so this is a reorder, not a
+            // second call. Non-PRO callers cannot start, so their pre-selection stays on the constant.
+            const isProPlan = getAuthUser()?.planType === "PRO";
+            const activeSession = isProPlan
+                ? await getActiveLongExamSession(noteDetail.studyPackId)
+                : null;
+            const serverMaxSourceNotes = activeSession?.maxSourceNotes ?? null;
+            setMaxSourceNotes(serverMaxSourceNotes);
+            const planAdditionalCap = serverMaxSourceNotes === null
+                ? LONG_EXAM_MAX_ADDITIONAL_NOTES
+                : Math.max(0, serverMaxSourceNotes - 1);
+
             try {
                 const notes = await listNotes();
                 if (collectionId) {
@@ -326,15 +351,21 @@ export default function LongExamPage() {
                             {requireStudyPackId: true},
                         );
                         setAvailableSourceNotes(collectionSourceNotes);
+                        // Counts describe the PLAN, not the selection: eligible sources include the
+                        // primary note, which resolveCollectionScopedSourceNotes deliberately excludes.
+                        setPlanEligibleNoteCount(collectionSourceNotes.length + 1);
+                        setPlanTotalNoteCount(collection.items.length);
                         setSelectedAdditionalStudyPackIds(
                             collectionSourceNotes
                                 .map((sourceNote) => sourceNote.studyPackId)
                                 .filter((studyPackId): studyPackId is string => Boolean(studyPackId))
-                                .slice(0, LONG_EXAM_MAX_ADDITIONAL_NOTES),
+                                .slice(0, planAdditionalCap),
                         );
                     } catch {
                         setAvailableSourceNotes(resolveSameSubjectSourceNotes(noteDetail, notes));
                         setSelectedAdditionalStudyPackIds([]);
+                        setPlanEligibleNoteCount(null);
+                        setPlanTotalNoteCount(null);
                     }
                 } else {
                     setAvailableSourceNotes(resolveSameSubjectSourceNotes(noteDetail, notes));
@@ -344,12 +375,11 @@ export default function LongExamPage() {
                 setAvailableSourceNotes([]);
                 setSelectedAdditionalStudyPackIds([]);
             }
-            if (getAuthUser()?.planType !== "PRO") {
+            if (!isProPlan) {
                 setActiveStartResponse(null);
                 return;
             }
 
-            const activeSession = await getActiveLongExamSession(noteDetail.studyPackId);
             setLongExamUsedThisMonth(activeSession?.usedThisMonth ?? 0);
             setLongExamMonthlyLimit(activeSession?.monthlyLimit ?? 0);
             if (!activeSession?.sessionId || !activeSession.status) {
@@ -422,17 +452,51 @@ export default function LongExamPage() {
         setShowFocusTip(false);
     }, []);
 
+    /**
+     * What this exam will actually cover, said before the learner starts.
+     *
+     * Three separate facts, and each is only stated when it is true: how many notes are being tested,
+     * how many the plan holds, and the level cap when it is what is doing the limiting. Notes without a
+     * generated Study Pack cannot be sources, so "of N" counts the plan while the first number counts
+     * what is eligible AND selected — conflating them would promise coverage the exam will not have.
+     */
+    const planScopeSummary = (() => {
+        const included = selectedAdditionalStudyPackIds.length + 1;
+        const total = planTotalNoteCount;
+        const eligible = planEligibleNoteCount;
+        const scope = total === null
+            ? `Testing material from ${included} Notes in this plan.`
+            : `Testing material from ${included} of ${total} Notes in this plan.`;
+        if (eligible !== null && total !== null && eligible < total) {
+            return `${scope} ${total - eligible} have no Study Pack yet.`;
+        }
+        // ⚠️ Only ever stated from the SERVER's number. maxSourceNotes is null for a non-PRO viewer
+        // (the session read is Pro-gated), and filling that gap from the frontend constant would print
+        // a cap the backend never sanctioned — the re-derivation this whole item exists to prevent.
+        if (maxSourceNotes !== null && eligible !== null && eligible > maxSourceNotes) {
+            return `${scope} Your level allows up to ${maxSourceNotes}.`;
+        }
+        return scope;
+    })();
+
+    // Additional sources exclude the primary, so the additional cap is one less than the total.
+    // Without a server value yet, fall back to the manual constant rather than guessing high — an
+    // over-generous client cap only moves the rejection to the Start button.
+    const maxAdditionalSources = collectionId && maxSourceNotes !== null
+        ? Math.max(0, maxSourceNotes - 1)
+        : LONG_EXAM_MAX_ADDITIONAL_NOTES;
+
     const toggleAdditionalSource = useCallback((studyPackIdToToggle: string) => {
         setSelectedAdditionalStudyPackIds((current) => {
             if (current.includes(studyPackIdToToggle)) {
                 return current.filter((studyPackIdValue) => studyPackIdValue !== studyPackIdToToggle);
             }
-            if (current.length >= LONG_EXAM_MAX_ADDITIONAL_NOTES) {
+            if (current.length >= maxAdditionalSources) {
                 return current;
             }
             return [...current, studyPackIdToToggle];
         });
-    }, []);
+    }, [maxAdditionalSources]);
 
     useEffect(() => {
         if (phase !== "generating" || !studyPackId) {
@@ -502,12 +566,19 @@ export default function LongExamPage() {
         setError(null);
         startedTrackedRef.current = false;
         try {
+            // ⚠️ The collection id is a CLAIM the server re-verifies (ownership + live membership of
+            // every source). Sending it is what lets a mixed-subject plan selection be accepted; it is
+            // not, and must never become, a way to switch the same-subject rule off.
             const requestBody = selectedAdditionalStudyPackIds.length > 0
-                ? {additionalStudyPackIds: selectedAdditionalStudyPackIds}
+                ? {
+                    additionalStudyPackIds: selectedAdditionalStudyPackIds,
+                    ...(collectionId ? {sourceCollectionId: collectionId} : {}),
+                }
                 : {};
             const response = await startLongExam(studyPackId, requestBody);
             setLongExamUsedThisMonth(response.usedThisMonth);
             setLongExamMonthlyLimit(response.monthlyLimit);
+            setMaxSourceNotes(response.maxSourceNotes);
             setActiveStartResponse(response);
             setSessionId(response.sessionId);
             trackStarted(response);
@@ -534,7 +605,7 @@ export default function LongExamPage() {
         } finally {
             setStarting(false);
         }
-    }, [enterRunningFromStart, selectedAdditionalStudyPackIds, starting, studyPackId, trackStarted]);
+    }, [collectionId, enterRunningFromStart, selectedAdditionalStudyPackIds, starting, studyPackId, trackStarted]);
 
     const handleResumeActiveSession = useCallback(async () => {
         if (!activeStartResponse?.sessionId) {
@@ -931,7 +1002,7 @@ export default function LongExamPage() {
                                         </h2>
                                         <p className="text-sm text-foreground/70">
                                             {collectionId
-                                                ? `Add up to ${LONG_EXAM_MAX_ADDITIONAL_NOTES} more notes from this plan.`
+                                                ? planScopeSummary
                                                 : `Add up to ${LONG_EXAM_MAX_ADDITIONAL_NOTES} ready Study Packs from this subject.`}
                                         </p>
                                     </div>

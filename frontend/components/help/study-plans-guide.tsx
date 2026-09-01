@@ -20,8 +20,9 @@ export function StudyPlansGuide({ profileType }: Readonly<{ profileType: Profile
           have. Use it to gather a unit, an exam topic, or a weekly review into one place you can return to.
         </p>
         <p className="text-xs leading-relaxed text-foreground/55">
-          A {labels.singular} isn&apos;t a new kind of content and nothing is generated for the set itself. Study
-          Packs and quizzes stay per note, on your existing limits — a {labels.singular} just organizes the notes.
+          A {labels.singular} isn&apos;t a new kind of content — Study Packs and quizzes stay per note, on your
+          existing limits. A {labels.singular} organizes those notes, and a Long Exam can draw its questions from
+          the notes in one, so you can be tested across the whole {labels.singular} rather than one note at a time.
         </p>
       </section>
 

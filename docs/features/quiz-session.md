@@ -66,7 +66,7 @@ As of v0.38.0, collection practiced counts, collection detail `lastSessionComple
 
 ## Long Exam Multi-source State
 
-Long Exam sessions stay anchored to the primary `studyPackId`. When the user adds same-subject notes, additional source attribution is stored in `sessionState.sourceNoteRefs`.
+Long Exam sessions stay anchored to the primary `studyPackId`. When the user adds notes — same-subject on the manual path, or plan members on a plan-sourced launch — additional source attribution is stored in `sessionState.sourceNoteRefs`.
 
 Each entry contains:
 

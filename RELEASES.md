@@ -1,5 +1,192 @@
 # RELEASES.md - NoteLib
 
+## v0.102.0 - Plan-Sourced Assessment
+
+**Status: Released** (kicked off 2026-09-01, signed off 2026-09-02, base branch `releases/v0.102.0`, cut
+from `main` after `v0.101.0` merged and tagged)
+
+Theme: the plan a learner builds should be the thing they can be tested on.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** The reservation is
+**conjunctive** — *live core AND product success* — and both halves are unmet. The three-digit minor is
+deliberate and was verified safe at the `v0.100.0` kickoff. **Do not "fix" it.**
+
+### Why this release exists
+
+**Slice 2 of the Review Sets audit** (§S2-2), and the audit names it **the single highest-leverage change in
+the whole brief**: it is simultaneously the assessment gap (§9), the retention loop (§25), the supporter gap
+(§15) and the Free-tier question (§16).
+
+**⚠️ CORRECTED 2026-09-01, BEFORE ANY IMPLEMENTATION — THE KICKOFF'S OWN FRAMING WAS WRONG AND IS RETRACTED
+HERE AT FULL STRENGTH.** This section originally said *"plan-sourcing is genuinely new rather than half-built,"*
+reasoning from `LongExamStartRequest` carrying no collection id. **The DTO fact is true and the conclusion drawn
+from it is false.** Reading the frontend disproves it:
+
+- `collection-exam.ts:44-53` — `resolveCollectionScopedSourceNotes` already selects sources by **collection
+  MEMBERSHIP**, filtered to quiz-ready notes, **with no subject filter anywhere**. That is already the exact
+  predicate §S2-2 specifies.
+- `long-exam/page.tsx:319-336` — when `collectionId` is present the page **already calls it and pre-selects the
+  result**, capped at a hardcoded `LONG_EXAM_MAX_ADDITIONAL_NOTES = 3` (`:72`).
+- `collection-detail-page-client.tsx:3149` — the plan's terminal CTA **already routes with `?collectionId=`**.
+
+**So the frontend has sourced by plan membership for some time, and the BACKEND REJECTS IT** at
+`LongExamService:842`, which requires every additional source to share the primary's subject.
+
+**⚠️ THIS IS THEREFORE A LIVE DEFECT ON A PAID PATH, NOT A MISSING CAPABILITY, AND THE USER-VISIBLE BEHAVIOUR IS
+SELF-CONTRADICTING:** a PRO learner opens a mixed-subject Study Plan, presses the plan's own *Take the Long
+Exam* CTA, the product **pre-selects that plan's notes for them**, and pressing Start returns
+`InvalidLongExamSourceException` — surfaced verbatim by `long-exam/page.tsx:531-533` as
+**"Long Exam source notes must be owned by you and share the same subject."** The product refuses a selection it
+made itself, and blames the learner for it.
+
+**The gap this release closes, restated: the Study Plan is first-class everywhere EXCEPT the one place that
+would prove its value — and the half that exists is broken rather than absent.**
+
+**⚠️ IT SHIPS SECOND, NOT FIRST, AND THE ORDER WAS THE POINT.** Slice 1 shipped
+`NOTE_ADDED_TO_COLLECTION` precisely so that the "note joins a plan" signal has lead time before the
+behaviour around plans changes. **Do not fold Slice 3 into this release** — §S2-D records Slice 3 as a HARD
+dependency on this one, and folding them would put a quota change in the same diff as a new source path.
+
+### Planned Scope
+
+- **1. The backend stops rejecting the plan-sourced selection the frontend already makes (backend).**
+  **⚠️ RESHAPED FROM "BUILD PLAN SOURCING" TO "STOP REFUSING IT" — see the retraction above.** The source set is
+  **plan MEMBERSHIP**, and the frontend already resolves exactly that; what is missing is a backend that accepts
+  it. **⚠️ THE SERVER MUST NOT TRUST A CLIENT-SUPPLIED `sourceCollectionId`.** Skipping the subject check merely
+  because the field is present would let any caller bypass a validation rule by naming a collection. The gate is
+  **caller owns the collection AND every additional study pack's note is a live member of it** — anything less
+  converts a validation rule into an opt-out flag. **⚠️ `LongExamService` injects NEITHER collection repository
+  today** (`:126-143`); `NoteCollectionItemRepository.findByCollectionIdOrderByPositionAsc` and
+  `findByCollectionIdAndNoteId` both exist and are the reads to use.
+  **⚠️ `notes.subject` IS NOT THE PREDICATE, AND THIS IS THE ONE ITEM THE OWNER MARKED
+  "NOT TUNABLE AT ALL" (2026-08-31).** §G3a is why: matching is `trim().toLowerCase()` on free text with no
+  catalog, so two notes a learner deliberately put in the same plan are refused from one exam when their
+  subjects were typed differently (*Engineering Mathematics* vs *Engineering Math*). **The fix is replacing a
+  wrong predicate, not relaxing a rule.**
+- **2. The cap is stated honestly per learner level, and the engine is UNCHANGED (owner decision,
+  2026-09-01).** **⚠️ THE CAP IS NOT A FREE CONSTANT AND THE ARITHMETIC WAS RE-VERIFIED AT THIS KICKOFF:**
+  `MIN_QUESTIONS_PER_SOURCE = 3` (`LongExamService:111`) is checked against
+  `baseQuestionCount = questionCount / sourceCount` (`:849-850`), and `questionCount` derives from the
+  learner's **LEVEL, not their selection** (`resolveQuestionCount:543-550` → 20 / 25 / 30). So the real
+  ceiling is **6 for Grade School and Junior High, 8 for Senior High / College / Personal Learning, 10 for
+  Board Exam Review and Professional** — and **a College learner, the default and most common level, fails at
+  9.** The cap ships as `floor(questionCount / 3)`, surfaced before the learner starts.
+  **⚠️ REJECTED AT KICKOFF, each with its reason:** scaling `questionCount` with source count (a 10-note exam
+  silently becomes longer than the learner's level norm) and lowering `MIN_QUESTIONS_PER_SOURCE` to 2 (it
+  weakens per-note coverage, and per-note evidence is exactly what Slice 4's remediation reads).
+  **⚠️ `MAX_ADDITIONAL_SOURCE_COUNT = 3` today (`:110`), so 4 sources total** — the raise applies to the
+  **plan-sourced path only**; the manual path is untouched.
+- **3. The learner is told what is in scope BEFORE starting (frontend). ⚠️ SMALLER THAN SCOPED — the surface
+  already exists.** `long-exam/page.tsx:934` already renders *"Add up to N more notes from this plan."* It needs
+  **the honest number and the eligible-vs-total count**, not a new surface: *"Testing material from 8 of 12 Notes
+  in this Subject Plan."* **⚠️ ELIGIBLE notes only** — a source must have a generated Study Pack
+  (`LongExamService:799-802`). **⚠️ Do NOT compute this set a second time** — `collection-exam.ts` already derives
+  it. **⚠️ AND DO NOT RE-DERIVE THE CAP CLIENT-SIDE:** `LONG_EXAM_MAX_ADDITIONAL_NOTES = 3` is a frontend
+  constant while the level → `questionCount` mapping is **backend config** (`longExamLowTierCount` / `Mid` /
+  `High`). **The cap must arrive from the server**, or it is the same frontend-re-implements-backend-precedence
+  drift `v0.100.0` item 2 was written to prevent.
+- **4. `BOARD_EXAM_COMPLETED` plus source-count and source-scope metadata on exam starts (backend).**
+  **⚠️ Verified at kickoff: `BOARD_EXAM_STARTED` EXISTS and `BOARD_EXAM_COMPLETED` DOES NOT** — so the Board
+  Exam funnel currently has a start with no end. Enum first, per the standing convention.
+- **5. `study-plans-guide.tsx:23` becomes FALSE in this release and must be corrected in it (frontend copy).**
+  It says *"nothing is generated for the set itself."* **⚠️ THIS LINE HAS NEVER ONCE BEEN IN A DIFF WHEN THE
+  BEHAVIOUR IT DESCRIBES CHANGED, and `v0.101.0` made it HARDER to find, not easier** — that release's sweep
+  removed the word "AI" from it, so the sweep-by-surface grep that would previously have caught it no longer
+  matches. **It is listed here by file and line for exactly that reason.**
+
+### Explicitly out of scope
+
+- **⚠️ WHOLE-REVIEW-SET SOURCING IS DEFERRED BY DECISION, NOT UNSUPPORTED BY ACCIDENT (owner, 2026-08-31).**
+  The hierarchy stays **Note → topic; Subject Plan → mixed retrieval; Review Set → readiness**, and the
+  Review Set level overlaps Board Exam Mode, so the two are decided together or not at all.
+- **Slice 3 (Free/Plus mixed retrieval), Slice 4 (plan-scoped remediation), Slice 5 (supporter combined
+  quiz).** **⚠️ NO QUOTA, LIMIT OR METER CHANGE HERE** — plan-sourced assessment stays on the existing
+  Pro-gated Long Exam capability, and opening the ladder is Slice 3's decision.
+- **⚠️ NO NEW QUIZ MODE.** `EXAM_MODES.md` is a **locked five-mode contract**; multi-note is a CAPABILITY on
+  Long Exam, which that doc anticipates by name.
+- **⚠️ INTERVIEW PRACTICE IS NOT A PARALLEL DEFECT — CHECKED, NOT ASSUMED.** It has the identical frontend
+  pattern (`interview-practice/page.tsx:144`, `MAX_ADDITIONAL_NOTES = 2`), but `InterviewPracticeService`
+  **enforces no subject rule at all**, so its plan-sourced path already works. **Do not "fix" it, and do not
+  record it as a known-identical defect.**
+- **The manual note-selected path keeps its same-subject rule.** **⚠️ It is a KNOWN defect consciously
+  deferred (§S2-X3), and this release makes it WORSE, not better** — afterwards a learner can run a
+  plan-sourced exam across mixed subjects while manual selection of *the same notes* still rejects them. **One
+  product, two answers to the same question. It ships as a named Known limitation rather than being
+  discovered as a bug report.**
+- **"AI critique", every Category B disclosure, and every Category C code identifier** — unchanged from
+  `v0.101.0`.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Plan MEMBERSHIP, never `notes.subject`.** Not tunable.
+- **⚠️ No new persisted field for the cap** — it is derived from the learner's level at request time.
+- **⚠️ Do NOT widen the Note Detail Adaptive Practice entry point** — that is Slice 4, and widening it has no
+  target for a standalone note.
+- **⚠️ Do NOT add, remove or reorder an onboarding FLOW step, and no code under `frontend/app/onboarding`.**
+  **⚠️ The freeze is NOT engaged and this was verified, not assumed:** every `BOARD_EXAM` match in
+  `app/onboarding/page.tsx` is `ProfileType.BOARD_EXAM`, not Board Exam **mode**, and the directory contains
+  **no Long Exam reference at all**. `[CHECKPOINT — due 2026-09-11]` is 10 days out.
+- **⚠️ Viewing must never write `ConceptHealth`**, and Long Exam's existing writes (`:473,481`) are unchanged.
+
+### Shipped
+
+- **Item 1 — the backend accepts the plan-sourced selection the frontend already made.** `LongExamStartRequest` gains `sourceCollectionId`; `LongExamService` resolves plan membership and skips the same-subject rule **per source**, only for notes the plan verifiably contains.
+- **⚠️ THE GATE IS PER SOURCE AND ANCHORED, NOT A FLAG — three independent properties, each with its own test.** The caller must own the collection; the **primary** must be a member, or naming any owned collection would relax the rule for an exam anchored elsewhere; and a source the plan does **not** contain still answers to the same-subject rule, so one legitimate member cannot smuggle in arbitrary others.
+- **⚠️ AND THE CAP FALLS BACK WHEN THE CLAIM FAILS.** The claimed scope sizes only the *early* rejection; the verified scope sizes the binding one. A plan claim that does not survive verification drops to the manual cap of 3 rather than keeping the larger one.
+- **Item 2 — the cap is `floor(questionCount / 3)`, server-derived and returned as `maxSourceNotes`** on both start and active-session responses, so the frontend renders the number instead of re-deriving the level mapping.
+- **⚠️ AN EXISTING TEST CAUGHT A REAL ORDERING REGRESSION, and it is recorded because the fix is not obvious.** Moving the cap check to where plan-scope is known put it *after* `findByIdAndOwnerUserIdForUpdate` — validating request shape **after taking a row lock**. Restored by sizing an early check from the **claim** (known before verification) while the verified check still binds. `startSession_withFourAdditionalNotesThrows` failed on the intermediate state and passes on the final one.
+- **Item 3 — the prestart states real scope**: *"Testing material from 5 of 12 Notes in this plan"*, with *"N have no Study Pack yet"* or *"Your level allows up to N"* added only when each is actually true.
+- **⚠️ ITEM 4'S EVENTS ARE ASSERTED BY THEIR METADATA MAP, NOT BY "trackEvent WAS CALLED", AND THE MODE TERNARY IS PINNED IN BOTH DIRECTIONS** — a one-character change attributing every Board Exam to the Challenge funnel is killed by `completeSession_emitsBoardExamCompletedWhenTheSessionIsABoardExam`.
+- **Item 4 — `BOARD_EXAM_COMPLETED` added and fired. ⚠️ IT ALSO CLOSED A DEAD ENUM VALUE THAT PROVES THE POINT:** `CHALLENGE_QUIZ_COMPLETED` already existed **and was fired from nowhere**, so adding a value without a fire site would have reproduced the exact defect item 4 exists to fix. One method completes either mode, so both now fire there. `LONG_EXAM_STARTED` gains `sourceCount` and `sourceScope`.
+- **⚠️ ITEM 1 GREW TO BOARD EXAM DURING IMPLEMENTATION, and shipping without it would have made this release's headline FALSE FOR MOST USERS.** A pre-commit review challenged a Known limitation claiming Board Exam "already works"; checking rather than trusting it found `ChallengeQuizService` enforces the **identical** subject rule (`InvalidBoardExamSourceException.subjectMismatch`) on additional sources, while `challenge-quiz/page.tsx:589-601` pre-selects plan members through **the same `resolveCollectionScopedSourceNotes` helper**. And the plan's terminal CTA is chosen by PROFILE — `board_exam` for `BOARD_EXAM`, which `app/onboarding/page.tsx:1134` records as **~71% of profile-typed accounts** — so the original scope would have fixed the defect only for `STUDENT`. **Completing item 1 rather than scaling it down was the call; the Board Exam CAP is deliberately untouched**, because its question count scales with source count and raising it is quota-adjacent arithmetic that belongs with Slice 3.
+- **⚠️ THE VERIFICATION PREDICATE WAS EXTRACTED, NOT COPIED.** `PlanSourcedExamVerifier` is the single place a `sourceCollectionId` claim is checked, with each exam path supplying its own error contract. A second inlined copy is exactly what `v0.100.0` spent a release consolidating, and these two services **had already drifted apart on the rule it guards**.
+- **Item 5 — `study-plans-guide.tsx` corrected**, since a Long Exam can now draw from a plan.
+- **Mutation-verified, five backend mutants and two frontend, each with its killing test:** dropping the ownership check → killed by 5 tests including `startSession_withCollectionTheCallerDoesNotOwnThrows`; a blanket subject skip → `startSession_withPlanSourcedNoteThatIsNotAMemberStillEnforcesSubject`; dropping the primary-membership anchor → `startSession_withPrimaryOutsideTheNamedPlanStillEnforcesSubject`; keeping the claimed cap → `startSession_planClaimThatFailsVerificationFallsBackToTheManualCap`; a flat cap constant → `resolveMaxSourceNotes_tracksTheLevelDerivedQuestionCount`; not sending `sourceCollectionId` and re-deriving the cap client-side → their two page tests.
+- **⚠️ ONE NEW TEST WAS FOUND PASSING FOR THE WRONG REASON, BY MUTATING RATHER THAN READING — the eighth instance in six releases and the first this release.** `startSession_planClaimThatFailsVerificationFallsBackToTheManualCap` left its additional packs unstubbed, so it threw on the ownership lookup and **survived the cap mutant**. Rewritten so all four sources are owned and same-subject, leaving the cap as the only thing that can reject them; the mutant then died.
+- **⚠️ `MAX_PLAN_SOURCED_ADDITIONAL_CEILING` was introduced and then deleted in the same release** — the claim-sized early check made it dead, and a dead constant beside a live one is how the next reader picks the wrong bound.
+- **Docs swept by surface:** `quiz.md`, `quiz-session.md`, `collections.md`, `EXAM_MODES.md`, `study-plans-guide.tsx`. **⚠️ `quiz.md:96` already DOCUMENTED the plan launch** — the doc described the frontend flow while the backend rejected it, which is why reading code rather than docs is what found this.
+- **Green:** 1890 backend tests, 2090 frontend tests, `tsc --noEmit` exit 0, lint unchanged (15 pre-existing warnings), `mvn clean install` producing `backend-0.102.0.jar`.
+
+### Pre-signoff cold agent — findings and fixes
+
+**Pre-declared at kickoff as ONE SCOPED COLD AGENT framed as falsification. It ran 2026-09-02 against five stated claims and FALSIFIED one, with two further defects and two accepted limitations.** Claims 1, 2, 3 and 5 held under its own mutation testing.
+
+- **⚠️ FINDING 1, AND IT IS THE MOST IMPORTANT LINE IN THIS RELEASE: THE SECURITY GATE HAD ZERO EXECUTED COVERAGE, AND THE REFACTOR THAT LOOKED CORRECT IS WHAT DELETED IT.** The agent removed the collection-ownership check from `PlanSourcedExamVerifier` and ran the **entire backend suite: 1894 tests, zero failures.** **⚠️ THE MECHANISM IS THE LESSON — that exact mutant was run and KILLED earlier in this release, while the logic was still inlined in `LongExamService`. Extracting it to a collaborator (the right call) moved it behind a `@Mock` in both service tests and silently deleted coverage that had already been verified. A pre-extraction mutation kill DOES NOT CARRY; re-run it after the extraction.**
+- **⚠️ And the test named for that property was asserting Mockito.** `startSession_withCollectionTheCallerDoesNotOwnThrows` stubbed the mocked verifier to throw and then asserted the throw arrived — its **name** claimed ownership enforcement, which is precisely what would have stopped the next reader adding real coverage. **Ninth test-that-claims-more-than-it-proves in six releases, and the second this release.** Fixed: `PlanSourcedExamVerifierTest` (5 tests) exercises the real repositories; the mutant that survived 1894 tests is now killed by three of them. The old test is **renamed to what it actually covers** — that `startSession` does not swallow a source rejection — rather than deleted.
+- **⚠️ FINDING 2 — `sourceCount` was WRONG on both new completion events, and a test pinned the wrong value.** `buildInitialSessionState:1347` persists `sourceNoteRefs` only when there is **more than one** source, so the naive read reported **0 for every single-source session**: `CHALLENGE_QUIZ_COMPLETED.sourceCount` was **always 0**, Board Exam never reported 1, and 0 was ambiguous across three distinct states. **⚠️ The first version of the new test asserted `containsEntry("sourceCount", 0)`, so the fix would have read as a regression.** Fixed to `Math.max(1, ...)`; test corrected and mutation-verified. `LONG_EXAM_STARTED` was unaffected — it stores unconditionally.
+- **⚠️ FINDING 3 — `sourceScope` recorded the CLIENT'S CLAIM, not the verified outcome, AND IT IS THE FIELD THIS RELEASE'S CHECKPOINT READS.** A caller owning a collection that does not contain the primary is treated as manual in every respect — strict cap, subject rule enforced — yet the event said `plan`. **The one metric separating the new path from the old was settable by the client, which would have corrupted `[CHECKPOINT — due 2026-09-28]` at source.** `resolveSourceNoteRefs` now returns the verified `planSourced` and analytics record that.
+- **Executed-test counts read from `target/surefire-reports/*.xml`, not from source**, per the standing instruction: `LongExamServiceTest` 31, `ChallengeQuizServiceTest` 54, `PlanSourcedExamVerifierTest` 5, full suite **1900**, zero failures.
+
+### Known limitations
+
+- **⚠️ The manual note-selected path still enforces the same-subject rule, and this release makes the inconsistency SHARPER.** A learner can now run a plan-sourced exam across mixed subjects while manually selecting *the same notes* is still refused. **One product, two answers to the same question** — deferred by decision (§S2-X3), not overlooked.
+- **⚠️ THE UI CAN STILL PRODUCE A SELECTION THE BACKEND REFUSES, through the primary-membership door (cold agent finding 4, ACCEPTED).** `resolveCollectionScopedSourceNotes` never checks that the PRIMARY is a plan member, so if it is not, the backend drops to the manual cap of 3 and hard-throws — the same bug class this release shipped to fix. **The only in-app producer derives the primary from the same collection**, so reaching it needs a hand-edited URL or a removal between page load and start. Real, low, and left rather than papered over.
+- **The blank-primary-subject guard is skippable for plan callers (cold agent finding 5, ACCEPTED).** A non-member source with a blank subject passes the per-source check via `"".equals("")`. No cross-user exposure — every note involved is caller-owned — and the non-member does still face the subject rule.
+- **The cap is enforced but not explained at the moment of refusal.** Selecting past it is blocked in the UI with the number stated up front; a learner who reaches the limit is not told *why* their level sets it.
+- **⚠️ THAT BULLET PREVIOUSLY READ "Board Exam already works (neither enforces a subject rule)" AND WAS FALSE.** It is corrected above and in scope. **Interview Practice genuinely does not enforce one** — re-checked, `InterviewPracticeService` contains no subject matching at all — so its plan launch has always worked.
+- **Board Exam keeps its 2-additional cap and does not gain the level-derived one.** Its question count scales with source count, so the two interact; deferred to Slice 3 with the reason recorded rather than left implicit.
+- **A non-PRO viewer never sees a level cap at all.** The session read that carries `maxSourceNotes` is Pro-gated, so the clause is suppressed rather than filled from a frontend constant — printing a cap the server never sanctioned is the drift this item exists to prevent.
+
+### Verification tier
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION** (§S2-2's own tier, re-evaluated rather than inherited).
+The trigger is that this release **changes what a scored assessment is built from** — a new source path into
+an engine whose per-source arithmetic silently rejects at a boundary most learners can reach. It is **not**
+the full three-agent test: no permission substrate, no cross-user read, and **no money or quota semantics
+change**.
+
+**⚠️ CARRIED FORWARD FROM `v0.100.0`, because it is measured rather than an impression:** every one of that
+release's five deliveries carried a defect past its own tests. So — `advisor()` **before** any prompt;
+verify *"X already does Y"* against code first; **MUTATE and confirm a test fails**; confirm new tests
+**EXECUTED** via `target/surefire-reports/*.xml`; and read `tsc --noEmit`'s own exit code.
+**⚠️ The cold agent must be asked to COUNT EXECUTED TESTS, not read them.**
+
+**⚠️ A `[CHECKPOINT]` IS LIKELY OWED HERE, unlike `v0.101.0`.** Item 2 ships a cap the product has never
+tested against real selection behaviour, and items 4's events exist to read it. **The owner's no-checkpoint
+ruling was scoped to `v0.101.0` and does NOT carry** — decide it at signoff on the gate's five properties.
+
 ## v0.101.0 - Language and Observability
 
 **Status: Released** (kicked off and signed off 2026-09-01, base branch `releases/v0.101.0`, cut from `main`
