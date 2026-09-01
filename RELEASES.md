@@ -134,6 +134,45 @@ all four copies**, so the resolver cannot call it and a **fifth copy is the wron
 **⚠️ ORDERING IS PART OF THE FIX: add the generation gate FIRST, then remove the three save-time blocks**,
 so the invariant is never unprotected between commits.
 
+- **7. THE PRODUCTION FRONTEND BUILD IS FAILING AND HAS BEEN SINCE 2026-08-31 23:54. ⚠️ FOLDED IN
+  2026-09-01 BY OWNER RULING — this is not release scope in the normal sense, it is the reason nothing can
+  deploy at all.** `/notes/public` returns **2,579,045 bytes**, past Next.js's **hard 2 MB data-cache
+  limit**, so the cache silently stops deduping. `getServerPublicNotes()`
+  (`frontend/lib/server-public-notes.ts:65`) fetches the **entire** public catalog with **no `size`
+  parameter**, and it is reached from `sitemap.ts`, `generateStaticParams`, `generateMetadata`, the subject
+  page body, the note page and the exam hub — so **~250 static pages each issue their own 2.5 MB request in
+  one build.** The backend saturates, a page exhausts its 3 attempts, the build exits 1.
+  **⚠️ `foundation-engineering` is not special** — it is whichever page was in flight; do not investigate
+  that subject.
+  **⚠️ THIS IS NOT A `v0.99.0` REGRESSION AND REVERTING WILL NOT FIX IT.** `NoteListItemResponse` last
+  changed 2026-08-17, `server-public-notes.ts` 2026-08-06; `v0.99.0` touched neither. **Data growth crossed
+  a threshold a latent unbounded fetch had always had.** `v0.100.0` hits the same wall.
+  **⚠️ Diagnosis: `docs/claude-findings/2026-09-01-prod-frontend-build-failure-public-notes-2mb.md`,
+  written by another session and VERIFIED AGAINST CODE HERE rather than trusted.** Its call-site table is
+  accurate and **understates** the amplification — `app/exam/[slug]/page.tsx:199` is a seventh site it does
+  not list.
+  **⚠️ THE FIX IS SIMPLER AND SAFER THAN THE FINDING PROPOSED, and the reason is a fact neither the finding
+  nor the obvious reading of the code surfaces.** The finding says a server-side subject filter *"needs a
+  slug → label resolution step"*, and inverting a lossy slug would be a real hazard: `notes.subject` is
+  **free text with no catalog**, so label variants that slug identically demonstrably exist, and today's JS
+  filter silently groups them. **But the backend never needed a label.**
+  `PublicLibraryRepositoryImpl:209` matches `normalizedSlugSql(n.subject) = :subjectSlug`, and the incoming
+  `subject` param is put through `NoteService.normalizePublicLibraryFilterSlug:1204`, which is
+  **operation-for-operation identical** to the frontend's `slugify` — trim, lowercase,
+  `[^a-z0-9]+ → -`, strip leading/trailing dashes. **So passing the SLUG returns exactly the set the JS
+  filter produces today, variants included. The fix is behaviour-preserving BY CONSTRUCTION, and no
+  slug-collision decision is owed.**
+  **Scope:** (a) `getServerPublicNotesBySubjectSlug` requests `?subject=<slug>` instead of fetching
+  everything — this removes the bulk of the ~250 requests; (b) `generateStaticParams` uses
+  `GET /subjects?scope=public`, a small anonymous `List<String>` (`v0.83.2`), since **it needs only slugs**
+  and never needed the catalog; (c) `getServerPublicNotes()` paginates internally so each response stays
+  well under 2 MB and the cache works again for `sitemap.ts`, which genuinely does need every note;
+  (d) `getServerPublicNotesByCourseProgram(s)` use the endpoint's existing `courseProgram` filter.
+  **⚠️ NO BACKEND CHANGE — every parameter already exists** (`NoteController:647-661`).
+  **⚠️ Trimming `contentPreview`/`summaryPreview` from the list payload is EXPLICITLY EXCLUDED.** It only
+  moves the threshold — which is precisely what produced this incident — and changes a DTO four other
+  surfaces read. **⚠️ Raising the 2 MB limit is not an option; it is a hard Next.js constant.**
+
 ### Anti-drift — locked rules for this release
 
 - **⚠️ NO TAXONOMY CHANGE. The Stage 1 verdict is ACCEPTED, not re-litigated.** Do **NOT** add
@@ -177,6 +216,13 @@ so the invariant is never unprotected between commits.
 
 ### Pre-declared at kickoff
 
+- **⚠️ TIER RE-EVALUATED A THIRD TIME WHEN ITEM 7 WAS FOLDED IN (2026-09-01), AND IT STILL HOLDS AT ONE
+  SCOPED COLD AGENT.** Item 7 is a fourth independent trigger: it touches every **SEO-indexed public
+  surface** — sitemap, subject pages, note pages, exam hub — where a wrong filter **silently changes what
+  gets indexed**. It is not a permission substrate and not a cross-user read, so it does not reach the full
+  three-agent test. **⚠️ IT ADDS ITS OWN FALSIFICATION CLAIM, because a build that merely PASSES is not
+  evidence: *every public surface renders the same note set after the change as before.* A diff that fixes
+  the build while quietly dropping notes from `/public/library/[subject]` would look exactly like success.**
 - **⚠️ TIER RE-EVALUATED TWICE AND HOLDS AT ONE SCOPED COLD AGENT — and the second re-evaluation is now MOOT
   rather than merely resolved.** It was made when item 6 was thought to introduce a **cross-owner row read**;
   **that read was withdrawn the same day when the defect turned out not to exist**, so the release contains no
