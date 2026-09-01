@@ -2467,6 +2467,25 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(await screen.findByText("Your Study Pack is being generated...")).toBeInTheDocument();
   });
 
+  it("surfaces the multi-program generation contract instead of a generic error", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "FAILED" });
+    (createStudyPackFromNote as jest.Mock).mockRejectedValueOnce(
+      new Error("A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in."),
+    );
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+    await screen.findByText("We couldn't generate the Study Pack this time.");
+    fireEvent.click(screen.getAllByRole("button", { name: "Retry Generation" })[0]);
+
+    expect(await screen.findByText(/needs a Domain Context, so the AI knows/)).toBeInTheDocument();
+  });
+
   it("applies selected AI metadata choices from note detail after async generation completes", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",

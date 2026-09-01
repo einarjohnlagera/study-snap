@@ -126,11 +126,11 @@ So:
 
 1. **Domain Context, when set** — always the authoring signal, unchanged.
 2. **A single program, when Domain Context is unset** — today's single-value fallback, unchanged.
-3. **Several programs with no Domain Context** — **rejected at save**, server-side. Not a UI-disabled button.
+3. **Several programs with no Domain Context** — valid to save, but **rejected at generation**, server-side. Not a UI-disabled button.
 
 Sending the full program list to the model is **explicitly rejected.** The hypothesis that a list encourages authoring toward shared knowledge rather than over-specialising is untested and runs opposite to this ADR's premise. **R4 does not cover it** — R4 validated a *broader single* Domain Context, which is a different question. Revisiting this requires an R4-style generate-and-diff read first.
 
-The rule is enforced by **program count at save time**, which means adding a second program to an existing note is the moment Domain Context becomes required. That is intended: it forces the authoring decision exactly when it starts to matter. The error must teach rather than name a mechanism — *"A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in."*
+The rule is enforced by **program count at generation time**. Adding a second program may leave a valid note that is not generation-ready; requesting a Study Pack is the moment Domain Context becomes required. The gate runs before status writes, quota spend, or LLM work. The error must teach rather than name a mechanism — *"A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in."*
 
 **Introduced at zero cost, and only at this moment.** `V107` produces exactly one join row per note and has not yet reached production, so **no multi-program note exists anywhere**. The requirement lands with no pre-existing violations and no backfill. That cheapness expires the moment curators begin authoring.
 
@@ -158,7 +158,7 @@ NoteLib has **two authoring modes**, and this is a product distinction rather th
 **Consequences to hold onto:**
 
 - **The column has no exit condition and needs none.** Retiring it would delete personal-note discovery. `19-slice-2-facet-equivalence-impact.sql` query A still usefully sizes how much *existing* content sits outside the catalog, but it is no longer gating a removal.
-- **The generation fallback for legacy multi-program notes.** The Domain Context requirement cannot apply retroactively, so a pre-existing multi-program note with no Domain Context resolves its domain through its string. That path must survive any future change to this column.
+- **The resolver fallback for a saved multi-program note.** Saving this shape is legal, and resolver-only reads may still resolve its single personal string. Study Pack generation rejects it before the prompt is built, so the fallback never turns a program list into an LLM domain.
 - **Catalog-excluded historical values** (bare levels, bare subjects, the `Engineering` family, the owner-ruled `Computer Science` / `Software Engineering`) keep working through the same personal-notes path, which is why nothing needs migrating.
 
 ### Representation authority: what may author an Applicable Program row
@@ -209,7 +209,7 @@ This is the exact condition under which `notes.course_program` cannot be read on
 - **Discovery** ignores the string whenever *any* join row exists — every library and public read is `EXISTS(join rows) OR (NOT EXISTS(join rows) AND legacy string matches)`. Verified across all five readers: both library filters, both legacy-value lookups, and the facet count. So discovery ignores it iff `joinRowCount >= 1`.
 - **Generation** reads the string only through `effectiveAuthoringDomain`, which returns the Domain Context label when one is set, and otherwise calls `resolveCourseProgram` — which returns the joined catalog name at **exactly one** row and falls through to the string at 0 or 2+. So generation ignores it iff `domainContext != null || joinRowCount == 1`.
 
-So a copy of a curated note is shadowed on both paths: at 2+ programs the inherited Domain Context wins (curated multi-program notes are *required* to carry one, and `copyNote` inherits it); at exactly one program the joined catalog name wins.
+So a copy of a curated note is shadowed on both paths when the formula says it is: at 2+ programs an inherited Domain Context wins when present; clearing it makes the personal string readable to generation resolution but leaves the note not generation-ready. At exactly one program the joined catalog name wins.
 
 **Corrected 2026-08-11 by the `v0.71.1` pressure test. The original form was `(joinRowCount == 1) || (domainContext != null)`** — it dropped the discovery term entirely, and so returned `true` at **zero** join rows with a Domain Context, which is precisely where the string is *maximally* readable: with no join rows it is the only value discovery can match on. The consequence was a learner whose own Course / Program field was hidden, un-required, and skipped by `update`, while still deciding which shelf their note appeared on — permanently uneditable through the product. It was reachable by copying a curated note whose program the catalog deliberately excludes. **The error came from deriving the predicate from the two resolvers while treating their conditions as alternatives rather than as a conjunction**, then propagating it into four documents and a test that asserted it as correct.
 
@@ -381,7 +381,7 @@ one explanation as settled would make that read unfalsifiable before it runs. **
 
 Thin programs (1–7 notes: Law, Medicine, Criminology, Psychology, Aviation, Business Administration, Physical Therapy, Civil Service, and initially Pharmacy and Information Technology) use their **program name** as the effective authoring context via the resolver's fallback chain. This is pragmatic, not desired.
 
-**⚠️ Carve-out, stated because it is ENFORCED and a curator otherwise meets an unexplained save error: `domain_context IS NULL` is the backlog marker for SINGLE-PROGRAM notes only.** A note with two or more Applicable Programs **must** carry a Domain Context — `NoteApplicableProgramsService` rejects the combination server-side, on the reasoning ratified above: *"treat the domain above as the authoritative academic domain"* is logically unsatisfiable when handed a list. **⚠️ Second-order effect, recorded because it is load-bearing rather than incidental: as shared engineering material gains Applicable Programs, Domain Context becomes mandatory more often — the multi-program rule is itself the forcing function that generates classification evidence.** No instrumentation is needed for it.
+**⚠️ Generation-readiness carve-out:** `domain_context IS NULL` remains the classification backlog marker for both single- and multi-program notes. A note with two or more Applicable Programs may be saved in that state, but Study Pack generation rejects it server-side because *"treat the domain above as the authoritative academic domain"* is logically unsatisfiable when handed a list. **⚠️ Second-order effect, recorded because it is load-bearing rather than incidental: as shared engineering material gains Applicable Programs, Domain Context becomes mandatory for generation more often — the multi-program rule is itself the forcing function that generates classification evidence.**
 
 **It is expressed mechanically rather than only documented, so it cannot be mistaken for the end state:** these values are **not** added to the curated `domain_contexts` set, so `domain_context IS NULL` *is* the marker of "not yet promoted," and the promotion backlog is a one-line query grouping null-context notes by `course_program`. A curator can see at any time which programs have crossed the ~10-note governance floor. Prose intent decays; a queryable state does not.
 

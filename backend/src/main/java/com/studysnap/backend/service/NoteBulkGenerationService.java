@@ -13,7 +13,6 @@ import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
-import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.BulkNoteGenerationQuotaExceededException;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
 import com.studysnap.backend.exception.CourseProgramTooLongException;
@@ -403,18 +402,6 @@ public class NoteBulkGenerationService {
         return llmStudyPackService.generateNoteFromTopic(topic, context);
     }
 
-    // Nobody curates during onboarding. Matches NoteService.isTeacherSelectableOwner and
-    // NoteGenerationService.isCurator, which were corrected in adfa797f; this third path kept the bare
-    // role check and was recorded as a v0.71.0 Known Limitation rather than a pattern to copy. Not
-    // UI-reachable -- requireAuthenticatedOnboardedUser redirects mid-onboarding users away from bulk
-    // generate -- but a rule with a live exception in the codebase is a rule that decays.
-    private boolean isCurator(UserEntity owner) {
-        if (owner.getOnboardingCompletedAt() == null) {
-            return false;
-        }
-        return owner.getRole() == UserRole.ADMIN || owner.getProfileType() == ProfileType.TEACHER;
-    }
-
     private NormalizedBatch normalizeAndValidate(BulkGenerateNotesRequest request, UserEntity owner) {
         if (request == null) {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
@@ -446,7 +433,7 @@ public class NoteBulkGenerationService {
             throw new InvalidBulkGenerationRequestException(EMPTY_BATCH_MESSAGE);
         }
 
-        boolean isTeacherOrAdmin = isCurator(owner);
+        boolean isTeacherOrAdmin = CuratorAuthoringPredicate.isCurator(owner);
         NoteTargetProfileType targetProfileType = mapProfileTypeToNoteTargetProfile(owner.getProfileType());
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());

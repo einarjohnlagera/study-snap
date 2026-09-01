@@ -1,13 +1,17 @@
 package com.studysnap.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.studysnap.backend.entity.DomainContext;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
@@ -15,7 +19,9 @@ import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -144,10 +150,8 @@ class StudyPackGenerationContextResolverTest {
 
     @Test
     void resolve_multiProgramNoteWithoutDomainContextFallsBackToASingleValueNotAList() {
-        // The invariant forbids this state going forward (Domain Context is required above one program),
-        // but pre-invariant rows exist. What matters is that the fallback is still a SINGLE value, never a
-        // list. It is the author's profile program, which is why NoteBulkGenerationService's result row
-        // shows that value for a multi-program bulk note -- cosmetic, and recorded rather than changed.
+        // This is a valid saved learner-note state now; generation readiness is checked only when a Study
+        // Pack is requested. The resolver must still produce a SINGLE fallback value, never a program list.
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -174,12 +178,15 @@ class StudyPackGenerationContextResolverTest {
     }
 
     @Test
-    void resolve_fallsBackToProfileCourseProgramWhenNoteCourseProgramIsMissing() {
+    void resolve_learnerOwnedNoteInheritsProfileProgram() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
         user.setLearnerLevel(LearnerLevel.PROFESSIONAL);
         user.setCourseProgram("Software Engineering");
+        user.setRole(UserRole.USER);
+        user.setProfileType(ProfileType.STUDENT);
+        user.setOnboardingCompletedAt(OffsetDateTime.now());
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         NoteEntity note = new NoteEntity();
@@ -194,6 +201,99 @@ class StudyPackGenerationContextResolverTest {
         assertThat(context.courseProgram()).isEqualTo("Software Engineering");
         assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context))
                 .isEqualTo("Software Engineering");
+    }
+
+    @Test
+    void resolve_curatorOwnedNoteDoesNotInheritTheCuratorProfileProgram() {
+        UUID userId = UUID.randomUUID();
+        UserEntity curator = curator(userId, "Software Engineering");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(curator));
+
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setCourseProgram(null);
+
+        StudyPackGenerationContext context = resolver().resolve(userId, note);
+
+        assertThat(context.courseProgram()).isNull();
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context)).isNull();
+    }
+
+    @Test
+    void resolve_twoCuratorsWithDifferentProfilesGetByteIdenticalAuthoringDomains() {
+        UUID firstId = UUID.randomUUID();
+        UUID secondId = UUID.randomUUID();
+        when(userRepository.findById(firstId)).thenReturn(Optional.of(curator(firstId, "Nursing")));
+        when(userRepository.findById(secondId)).thenReturn(Optional.of(curator(secondId, "Accountancy")));
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setCourseProgram(null);
+        // NO joined programs, deliberately. An earlier version of this test gave the note exactly one
+        // joined program, so resolveCourseProgram returned at the `joinedPrograms.size() == 1` branch and
+        // the profile fallback -- the thing this test exists to pin -- was never reached. It passed
+        // identically with and without the fix. The fallback is only reachable when the joined-program
+        // count is not exactly one, so that is the shape the invariant has to be asserted in.
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of());
+
+        StudyPackGenerationContext first = resolver().resolve(firstId, note);
+        StudyPackGenerationContext second = resolver().resolve(secondId, note);
+
+        // Both curators resolve to NO authoring domain rather than to their own profile programs.
+        // Restoring the profile fallback makes these "Nursing" and "Accountancy" -- different strings
+        // for the same canonical note, which is exactly Decision 4's invariant being broken.
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(first))
+                .isNull();
+        assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(second))
+                .isEqualTo(StudyPackGenerationContextResolver.effectiveAuthoringDomain(first));
+    }
+
+    @Test
+    void resolve_curatorSingleProgramUsesJoinedCatalogNameInsteadOfProfile() {
+        UUID userId = UUID.randomUUID();
+        UserEntity curator = curator(userId, "Software Engineering");
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(curator));
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(
+                new com.studysnap.backend.dto.ApplicableProgramResponse(UUID.randomUUID(), "Architecture")
+        ));
+
+        StudyPackGenerationContext context = resolver().resolve(userId, note);
+
+        assertThat(context.courseProgram()).isEqualTo("Architecture");
+        assertThat(context.courseProgram()).isNotEqualTo("Software Engineering");
+    }
+
+    @Test
+    void resolveForBulkGeneration_curatorDoesNotInheritProfileProgram() {
+        UUID userId = UUID.randomUUID();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(curator(userId, "Software Engineering")));
+
+        StudyPackGenerationContext context = resolver().resolveForBulkGeneration(
+                userId, List.of(), null, "Physics", null, LearnerLevel.COLLEGE
+        );
+
+        assertThat(context.courseProgram()).isNull();
+    }
+
+    @Test
+    void assertGenerationReady_rejectsMultipleProgramsWithoutDomainContext() {
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        when(noteCourseProgramRepository.findIdsByNoteId(note.getId()))
+                .thenReturn(Set.of(UUID.randomUUID(), UUID.randomUUID()));
+
+        assertThatThrownBy(() -> resolver().assertGenerationReady(note))
+                .isInstanceOf(MultiProgramDomainContextRequiredException.class);
+    }
+
+    @Test
+    void assertGenerationReady_allowsRetryAfterDomainContextIsSet() {
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setDomainContext(DomainContext.ENGINEERING_SCIENCES);
+
+        resolver().assertGenerationReady(note);
     }
 
     @Test
@@ -324,5 +424,21 @@ class StudyPackGenerationContextResolverTest {
         assertThat(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context)).isNull();
         assertThat(StudyPackGenerationContextResolver.effectiveCurriculumLevel(context))
                 .isEqualTo(LearnerLevel.COLLEGE);
+    }
+
+    private StudyPackGenerationContextResolver resolver() {
+        return new StudyPackGenerationContextResolver(
+                userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository
+        );
+    }
+
+    private UserEntity curator(UUID userId, String courseProgram) {
+        UserEntity curator = new UserEntity();
+        curator.setId(userId);
+        curator.setRole(UserRole.ADMIN);
+        curator.setProfileType(ProfileType.STUDENT);
+        curator.setOnboardingCompletedAt(OffsetDateTime.now());
+        curator.setCourseProgram(courseProgram);
+        return curator;
     }
 }

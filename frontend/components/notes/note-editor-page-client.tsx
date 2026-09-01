@@ -197,7 +197,6 @@ export function NoteEditorPageClient({
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [applicableProgramCatalog, setApplicableProgramCatalog] = useState<CourseProgramCatalogItem[]>([]);
   const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
-  const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
   const [savedApplicableProgramNames, setSavedApplicableProgramNames] = useState<string[]>([]);
   const [courseProgramShadowed, setCourseProgramShadowed] = useState<boolean | null>(null);
   const [copiedFromNoteId, setCopiedFromNoteId] = useState<string | null>(null);
@@ -263,7 +262,6 @@ export function NoteEditorPageClient({
         if (response) {
           const selectedIds = response.programs.map((program) => program.id);
           setApplicableProgramIds(selectedIds);
-          setSavedApplicableProgramIds(selectedIds);
           setSavedApplicableProgramNames(response.programs.map((program) => program.name));
           setCourseProgramShadowed(response.courseProgramShadowed);
           setApplicableProgramsDirty(false);
@@ -731,16 +729,6 @@ export function NoteEditorPageClient({
       showToast(`Please complete: ${missing.join(", ")}.`, "warning");
       return null;
     }
-    // C6. The three sibling surfaces (Create a Note, Note Detail, Bulk Generate) all pre-validate this
-    // rule; Save did not, so a curator who family-expanded to several programs with "Add details"
-    // collapsed -- the default -- got a raw 400 naming a field that was off screen inside the closed
-    // accordion, with no way to act on it. Reveal the panel as well as reporting it.
-    if (showCuratorMetadataFields && applicableProgramIds.length > 1 && !draft.domainContext) {
-      setRevealOptionalDetailsSignal((previous) => previous + 1);
-      setFormError(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE);
-      showToast(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE, "warning");
-      return null;
-    }
     return {
       title: normalizeOptional(draft.title),
       subject: normalizeOptional(draft.subject),
@@ -783,7 +771,6 @@ export function NoteEditorPageClient({
       : await createNote(payload);
 
     if (showCuratorMetadataFields) {
-      setSavedApplicableProgramIds(applicableProgramIds);
       setApplicableProgramsDirty(false);
     }
 
@@ -802,9 +789,6 @@ export function NoteEditorPageClient({
     }
     return saved;
   }, [
-    applicableProgramIds,
-    applicableProgramsDirty,
-    applicableProgramsError,
     buildRequest,
     contentEmpty,
     currentNoteId,

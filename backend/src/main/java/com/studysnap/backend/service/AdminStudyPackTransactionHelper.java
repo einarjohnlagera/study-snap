@@ -61,6 +61,7 @@ public class AdminStudyPackTransactionHelper {
                 return;
             }
 
+            generationContextResolver.assertGenerationReady(note);
             StudyPackGenerationContext context = buildContext(note);
             String newSummary = llmStudyPackService.regenerateSummary(note.getContent(), context);
             currentPack.setSummary(newSummary);
@@ -115,6 +116,7 @@ public class AdminStudyPackTransactionHelper {
                 return;
             }
 
+            generationContextResolver.assertGenerationReady(note);
             StudyPackGenerationContext context = buildContext(note);
             GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(note.getContent(), context);
             currentPack.setQuiz(generated.quiz());

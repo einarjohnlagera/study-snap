@@ -1073,10 +1073,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByText(/Tailored for: Software Engineering/)).not.toBeInTheDocument();
   });
 
-  // C6. Save was the only one of four surfaces not pre-validating the multi-program rule, so a curator
-  // who family-expanded with "Add details" collapsed -- the default -- got a raw 400 naming a field
-  // inside the closed accordion. Reveal it and never send the request.
-  it("blocks Save on several programs with no Domain Context instead of letting the API reject it", async () => {
+  it("saves several programs without Domain Context because readiness is checked at generation", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
     (getNoteApplicablePrograms as jest.Mock).mockResolvedValue([]);
 
@@ -1092,8 +1089,10 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
 
-    expect(await screen.findAllByText(/needs a Domain Context/)).not.toHaveLength(0);
-    expect(createNote).not.toHaveBeenCalled();
+    await waitFor(() => expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
+      courseProgramIds: expect.arrayContaining(["program-nursing", "program-pharmacy"]),
+      domainContext: null,
+    })));
   });
 
   it("does not preselect a profile program the catalog does not carry", async () => {

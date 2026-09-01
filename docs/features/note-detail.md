@@ -55,7 +55,7 @@ Study Pack Ready actions:
 
 Inline metadata edit:
 
-- fields: `title`, `subject`, `Course / Program(s)`, `tags` for every owner; Teacher/Admin use the catalog-backed multi-select while learners retain one free-text personal value. Domain Context is visible from the start and required above one curator-selected program.
+- fields: `title`, `subject`, `Course / Program(s)`, `tags` for every owner; Teacher/Admin use the catalog-backed multi-select while learners retain one free-text personal value. Domain Context is visible from the start, optional at save, and required before generating a note with more than one program.
 - When the catalog contains Program Families, the same control offers an unconditional all-members shortcut. Added programs appear immediately as the existing removable chips, so the author can trim the explicit set before the normal Note Detail save persists it; the family itself is never saved.
 - **A learner viewing a shadowed note sees read-only provenance instead of the viewer** (`v0.71.1`): the program names middot-separated, followed by *"Set by the note this was copied from. Your own course or program is on your profile."* when `copiedFromNoteId` is present. It is text, never a control — `ADR-001` permits showing a learner their programs but never lets them author them.
 - when the panel is closed, a single-program note names that program. A multi-program note says `Applies to N programs` (`v0.71.1` unified this with the card phrasing — it read `Applicable to` until then, which was L12's actual live instance); activating it opens a popover on desktop and a bottom sheet on mobile with the explicit program list. The same viewer is available on public note detail.

@@ -855,14 +855,13 @@ class NoteServiceTest {
     }
 
     @Test
-    void update_byLearnerOwner_rejectsClearingDomainContextOnAMultiProgramNote() {
-        // C1. A learner's request carries no programs, so validating the request always saw 0 and the
-        // invariant was unenforceable on the one author who can reach it: a learner could copy a
-        // curated multi-program note and clear domainContext, producing exactly the state slice 4
-        // forbids. The stored rows -- which a learner update leaves untouched -- are the truth here.
+    void update_byLearnerOwner_allowsClearingDomainContextButGenerationThenRejects() {
+        // Saving and generation now answer different questions. The copied note remains valid with its
+        // stored Applicable Programs, but it is not generation-ready until a Domain Context is chosen.
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteEntity copiedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "content");
+        copiedNote.setDomainContext(DomainContext.ENGINEERING_SCIENCES);
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(copiedNote));
         when(noteCourseProgramRepository.findIdsByNoteId(noteId))
                 .thenReturn(Set.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()));
@@ -871,7 +870,13 @@ class NoteServiceTest {
                 "Title", "Subject", "Course", null, null, List.of(), "content"
         );
 
-        assertThatThrownBy(() -> noteService.update(noteId.toString(), clearsDomainContext, ownerUserId))
+        noteService.update(noteId.toString(), clearsDomainContext, ownerUserId);
+
+        assertThat(copiedNote.getDomainContext()).isNull();
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                userRepository, noteRepository, noteCourseProgramRepository, courseProgramCatalogRepository
+        );
+        assertThatThrownBy(() -> resolver.assertGenerationReady(copiedNote))
                 .isInstanceOf(MultiProgramDomainContextRequiredException.class);
     }
 

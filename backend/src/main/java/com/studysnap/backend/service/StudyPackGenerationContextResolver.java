@@ -6,6 +6,7 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
@@ -29,6 +30,14 @@ public class StudyPackGenerationContextResolver {
     private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
 
+    public void assertGenerationReady(NoteEntity note) {
+        if (note != null
+                && note.getDomainContext() == null
+                && noteCourseProgramRepository.findIdsByNoteId(note.getId()).size() > 1) {
+            throw new MultiProgramDomainContextRequiredException();
+        }
+    }
+
     public StudyPackGenerationContext resolve(UUID ownerUserId, NoteEntity note) {
         List<String> tags = note == null || note.getTags() == null
                 ? List.of()
@@ -37,7 +46,7 @@ public class StudyPackGenerationContextResolver {
         return userRepository.findById(ownerUserId)
                 .map(user -> new StudyPackGenerationContext(
                         user.getLearnerLevel(),
-                        resolveCourseProgram(note, user.getCourseProgram()),
+                        resolveCourseProgram(note, user),
                         note == null ? null : note.getSubject(),
                         tags,
                         note == null ? null : note.getDomainContext(),
@@ -85,7 +94,7 @@ public class StudyPackGenerationContextResolver {
         return userRepository.findById(ownerUserId)
                 .map(user -> new StudyPackGenerationContext(
                         user.getLearnerLevel(),
-                        resolveBulkCourseProgram(courseProgramIds, courseProgramText, user.getCourseProgram()),
+                        resolveBulkCourseProgram(courseProgramIds, courseProgramText, user),
                         subject,
                         List.of(),
                         domainContext,
@@ -118,7 +127,10 @@ public class StudyPackGenerationContextResolver {
         return noteRepository.findByIdAndOwnerUserId(studyPack.getNoteId(), ownerUserId);
     }
 
-    private String resolveCourseProgram(NoteEntity note, String profileCourseProgram) {
+    private String resolveCourseProgram(NoteEntity note, UserEntity user) {
+        String profileCourseProgram = user != null && !CuratorAuthoringPredicate.isCurator(user)
+                ? user.getCourseProgram()
+                : null;
         if (note == null) {
             return CourseProgramNormalizationUtils.normalizeForStorage(profileCourseProgram);
         }
@@ -137,7 +149,7 @@ public class StudyPackGenerationContextResolver {
     private String resolveBulkCourseProgram(
             List<UUID> courseProgramIds,
             String courseProgramText,
-            String profileCourseProgram
+            UserEntity user
     ) {
         List<UUID> ids = courseProgramIds == null ? List.of() : courseProgramIds;
         if (ids.size() == 1) {
@@ -146,6 +158,9 @@ public class StudyPackGenerationContextResolver {
                 return names.getFirst();
             }
         }
+        String profileCourseProgram = user != null && !CuratorAuthoringPredicate.isCurator(user)
+                ? user.getCourseProgram()
+                : null;
         return CourseProgramNormalizationUtils.normalizeForStorage(firstNonBlank(courseProgramText, profileCourseProgram));
     }
 

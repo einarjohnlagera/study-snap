@@ -36,7 +36,6 @@ import com.studysnap.backend.exception.InvalidPublicLibraryQueryException;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
 import com.studysnap.backend.exception.CourseProgramTooLongException;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
-import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.exception.UnknownCourseProgramException;
@@ -171,14 +170,11 @@ public class NoteService {
         entity.setOwnerUserId(ownerUserId);
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
-        boolean curator = isTeacherSelectableOwner(owner);
+        boolean curator = CuratorAuthoringPredicate.isCurator(owner);
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
         NoteTargetProfileType targetProfileType = resolveTargetProfileType(owner);
         Set<UUID> courseProgramIds = curator ? validateCuratedProgramIds(request.courseProgramIds()) : Set.of();
-        // Create needs no stored-row lookup, unlike update: the note does not exist yet, so the request
-        // set is the whole post-create truth, and a learner create writes no join rows at all.
-        assertMultiProgramHasDomainContext(courseProgramIds.size(), domainContext);
         entity.setCourseProgram(curator ? null : resolveRequestedCourseProgram(request.courseProgramText(), owner));
         entity.setDomainContext(domainContext);
         entity.setLearnerLevel(learnerLevel);
@@ -212,23 +208,20 @@ public class NoteService {
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(NoteNotFoundException::new);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
-        boolean curator = isTeacherSelectableOwner(owner);
+        boolean curator = CuratorAuthoringPredicate.isCurator(owner);
         Set<UUID> courseProgramIds = curator ? validateCuratedProgramIds(request.courseProgramIds()) : Set.of();
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
-        // Validate the program set that will be in effect *after* this update, which is not the same
-        // source for both authors. A curator's request is the new set -- it is written below via
-        // replace() -- so validating stored rows would both block a legal 6-to-1 reduction and let an
-        // illegal 1-to-6 expansion through. A learner's request carries no programs at all
-        // (courseProgramIds is Set.of() above) while the stored rows survive the update untouched, so
-        // the request always reported 0 and the invariant was unenforceable on the one author who can
-        // reach it -- a learner could clear domainContext on a copied multi-program note and the
-        // client was the only thing preventing it.
+        // The learner branch still needs the stored program count even though multi-program notes may
+        // now be saved without a Domain Context. Learner requests carry no Applicable Programs and the
+        // stored rows survive untouched, so the request count is always 0. Reading the stored rows here
+        // preserves the shadowing decision below: a copied note's personal Course / Program string is
+        // editable only when generation and discovery can actually read it. Generation readiness is
+        // enforced when a Study Pack is requested, not while this otherwise-valid note is saved.
         int effectiveProgramCount = curator
                 ? courseProgramIds.size()
                 : noteCourseProgramRepository.findIdsByNoteId(noteId).size();
-        assertMultiProgramHasDomainContext(effectiveProgramCount, domainContext);
 
         entity.setContent(normalizedRequestedContent);
         entity.setTitle(normalizeOptionalText(request.title()));
@@ -1467,12 +1460,6 @@ public class NoteService {
         return uniqueIds;
     }
 
-    private void assertMultiProgramHasDomainContext(int courseProgramCount, DomainContext domainContext) {
-        if (courseProgramCount > 1 && domainContext == null) {
-            throw new MultiProgramDomainContextRequiredException();
-        }
-    }
-
     private String normalizeOptionalCourseProgram(String value) {
         return CourseProgramNormalizationUtils.normalizeForStorage(value);
     }
@@ -1511,21 +1498,6 @@ public class NoteService {
         return storedTargetProfileType != null
                 ? storedTargetProfileType
                 : mapOwnerProfileTypeToNoteTarget(owner.getProfileType());
-    }
-
-    /**
-     * Nobody curates during onboarding. The flow collects personal learning context and has no catalog
-     * picker, so a curator-role account reaching a note-authoring path mid-onboarding was asked for
-     * {@code courseProgramIds} that no onboarding screen can supply -- which made onboarding
-     * uncompletable for every ADMIN account. This removes no authority: once onboarding is complete the
-     * account is a full curator again. Mirrors the exemption {@code OnboardingGuardService} already makes
-     * for mid-onboarding users, and matches {@code NoteGenerationService.isCurator}.
-     */
-    private boolean isTeacherSelectableOwner(UserEntity owner) {
-        if (owner.getOnboardingCompletedAt() == null) {
-            return false;
-        }
-        return owner.getRole() == UserRole.ADMIN || owner.getProfileType() == ProfileType.TEACHER;
     }
 
     private NoteTargetProfileType mapOwnerProfileTypeToNoteTarget(ProfileType profileType) {
