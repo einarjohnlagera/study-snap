@@ -32,6 +32,7 @@ import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.model.StudyPackProgressProjection;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
@@ -63,10 +64,12 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -114,6 +117,8 @@ class NoteServiceTest {
     private com.studysnap.backend.repository.CourseProgramCatalogRepository courseProgramCatalogRepository;
     @Mock
     private StudyPackQuizMasteryService studyPackQuizMasteryService;
+    @Mock
+    private StudyPackGenerationContextResolver studyPackGenerationContextResolver;
     private NoteService noteService;
     private final Map<UUID, NoteEntity> noteFixtures = new HashMap<>();
 
@@ -137,7 +142,8 @@ class NoteServiceTest {
                 officialChallengeQuizTemplateService,
                 noteCourseProgramRepository,
                 courseProgramCatalogRepository,
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                studyPackGenerationContextResolver
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
@@ -171,6 +177,8 @@ class NoteServiceTest {
         lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.ADAPTIVE_QUIZ))).thenReturn(false);
         lenient().when(studyPackQuizMasteryService.resolve(any(UUID.class), any()))
                 .thenReturn(com.studysnap.backend.service.model.StudyPackQuizMastery.notMastered());
+        lenient().when(studyPackGenerationContextResolver.resolve(any(UUID.class), any(NoteEntity.class)))
+                .thenReturn(authoringContext(null));
     }
 
     @Test
@@ -306,6 +314,192 @@ class NoteServiceTest {
         assertThat(created.copiedFromPublic()).isFalse();
         verify(noteRepository).flush();
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.NOTE_CREATED), eq(saved.getId()), any());
+    }
+
+    @Test
+    void create_curatorRecordsAcceptedAutomaticDomainFromJoinedProgram() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        UserEntity curator = curator(ownerUserId);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(programId))).thenReturn(List.of(programId));
+        when(studyPackGenerationContextResolver.resolve(eq(ownerUserId), any(NoteEntity.class)))
+                .thenReturn(authoringContext("Civil Engineering"));
+
+        noteService.create(curatorRequest(List.of(programId), null), ownerUserId);
+
+        assertThat(authoringDomainMetadata(ownerUserId)).containsExactly(
+                Map.entry("automaticDomain", "Civil Engineering"),
+                Map.entry("persistedDomainContext", "AUTOMATIC")
+        );
+        InOrder eventOrder = inOrder(
+                noteCourseProgramRepository,
+                studyPackGenerationContextResolver,
+                analyticsService
+        );
+        eventOrder.verify(noteCourseProgramRepository).replace(any(UUID.class), eq(Set.of(programId)));
+        eventOrder.verify(studyPackGenerationContextResolver).resolve(eq(ownerUserId), any(NoteEntity.class));
+        eventOrder.verify(analyticsService).trackEvent(
+                eq(ownerUserId),
+                eq(AnalyticsEventType.NOTE_AUTHORING_DOMAIN_RECORDED),
+                any(UUID.class),
+                any()
+        );
+    }
+
+    @Test
+    void create_curatorRecordsOverriddenDomainAlongsideAutomaticDomain() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator(ownerUserId)));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(programId))).thenReturn(List.of(programId));
+        when(studyPackGenerationContextResolver.resolve(eq(ownerUserId), any(NoteEntity.class)))
+                .thenReturn(authoringContext("Civil Engineering"));
+
+        noteService.create(curatorRequest(List.of(programId), "ENGINEERING_SCIENCES"), ownerUserId);
+
+        assertThat(authoringDomainMetadata(ownerUserId)).containsExactly(
+                Map.entry("automaticDomain", "Civil Engineering"),
+                Map.entry("persistedDomainContext", "ENGINEERING_SCIENCES")
+        );
+    }
+
+    @Test
+    void create_curatorRecordsConfirmedDomainAlongsideAutomaticDomain() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator(ownerUserId)));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(programId))).thenReturn(List.of(programId));
+        when(studyPackGenerationContextResolver.resolve(eq(ownerUserId), any(NoteEntity.class)))
+                .thenReturn(authoringContext("Civil Engineering"));
+
+        noteService.create(curatorRequest(List.of(programId), "CIVIL_ENGINEERING"), ownerUserId);
+
+        assertThat(authoringDomainMetadata(ownerUserId)).containsExactly(
+                Map.entry("automaticDomain", "Civil Engineering"),
+                Map.entry("persistedDomainContext", "CIVIL_ENGINEERING")
+        );
+    }
+
+    @Test
+    void create_curatorRecordsAutomaticNoneInsteadOfDroppingTheEvent() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator(ownerUserId)));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(programId))).thenReturn(List.of(programId));
+        when(studyPackGenerationContextResolver.resolve(eq(ownerUserId), any(NoteEntity.class)))
+                .thenReturn(authoringContext(null));
+
+        noteService.create(curatorRequest(List.of(programId), null), ownerUserId);
+
+        assertThat(authoringDomainMetadata(ownerUserId)).containsExactly(
+                Map.entry("automaticDomain", "NONE"),
+                Map.entry("persistedDomainContext", "AUTOMATIC")
+        );
+    }
+
+    @Test
+    void update_curatorRecordsChangedDomainContextWithPreviousValue() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        note.setDomainContext(DomainContext.ENGINEERING_SCIENCES);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator(ownerUserId)));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(programId))).thenReturn(List.of(programId));
+        when(studyPackGenerationContextResolver.resolve(ownerUserId, note))
+                .thenReturn(authoringContext("Civil Engineering"));
+
+        noteService.update(noteId.toString(), curatorRequest(List.of(programId), "CIVIL_ENGINEERING"), ownerUserId);
+
+        assertThat(authoringDomainMetadata(ownerUserId)).containsExactly(
+                Map.entry("automaticDomain", "Civil Engineering"),
+                Map.entry("persistedDomainContext", "CIVIL_ENGINEERING"),
+                Map.entry("previousDomainContext", "ENGINEERING_SCIENCES")
+        );
+        // The create-path tests pin this ordering and the update path did not, which let a mutation
+        // that fires the event BEFORE the join rows are replaced survive the whole suite. It is not
+        // cosmetic: resolve() reads note_course_program, so firing first records the PREVIOUS program
+        // set as automaticDomain -- wrong for exactly the curator save that changes programs and
+        // Domain Context together, which is the multi-program case this release exists for.
+        InOrder eventOrder = inOrder(
+                noteCourseProgramRepository,
+                studyPackGenerationContextResolver,
+                analyticsService
+        );
+        eventOrder.verify(noteCourseProgramRepository).replace(any(UUID.class), eq(Set.of(programId)));
+        eventOrder.verify(studyPackGenerationContextResolver).resolve(eq(ownerUserId), any(NoteEntity.class));
+        eventOrder.verify(analyticsService).trackEvent(
+                eq(ownerUserId),
+                eq(AnalyticsEventType.NOTE_AUTHORING_DOMAIN_RECORDED),
+                any(UUID.class),
+                any()
+        );
+    }
+
+    @Test
+    void update_curatorRecordsUnchangedDomainContextWithSamePreviousValue() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        note.setDomainContext(DomainContext.CIVIL_ENGINEERING);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator(ownerUserId)));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(programId))).thenReturn(List.of(programId));
+        when(studyPackGenerationContextResolver.resolve(ownerUserId, note))
+                .thenReturn(authoringContext("Civil Engineering"));
+
+        noteService.update(noteId.toString(), curatorRequest(List.of(programId), "CIVIL_ENGINEERING"), ownerUserId);
+
+        assertThat(authoringDomainMetadata(ownerUserId)).containsExactly(
+                Map.entry("automaticDomain", "Civil Engineering"),
+                Map.entry("persistedDomainContext", "CIVIL_ENGINEERING"),
+                Map.entry("previousDomainContext", "CIVIL_ENGINEERING")
+        );
+    }
+
+    @Test
+    void learnerCreateAndUpdateDoNotRecordAuthoringDomain() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(note));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Title", "Subject", "Course", null, null, List.of(), "content"
+        );
+        noteService.create(request, ownerUserId);
+        noteService.update(noteId.toString(), request, ownerUserId);
+
+        verify(analyticsService, never()).trackEvent(
+                eq(ownerUserId),
+                eq(AnalyticsEventType.NOTE_AUTHORING_DOMAIN_RECORDED),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    void create_curatorStillSavesWhenAuthoringDomainAnalyticsThrows() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID programId = UUID.randomUUID();
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(curator(ownerUserId)));
+        when(courseProgramCatalogRepository.findExistingIds(Set.of(programId))).thenReturn(List.of(programId));
+        when(studyPackGenerationContextResolver.resolve(eq(ownerUserId), any(NoteEntity.class)))
+                .thenReturn(authoringContext("Civil Engineering"));
+        lenient().doThrow(new RuntimeException("analytics unavailable")).when(analyticsService).trackEvent(
+                eq(ownerUserId),
+                eq(AnalyticsEventType.NOTE_AUTHORING_DOMAIN_RECORDED),
+                any(),
+                any()
+        );
+
+        assertThatCode(() -> noteService.create(curatorRequest(List.of(programId), null), ownerUserId))
+                .doesNotThrowAnyException();
+
+        verify(noteRepository).save(any(NoteEntity.class));
     }
 
     @Test
@@ -2232,6 +2426,48 @@ class NoteServiceTest {
         // silently make every ADMIN/TEACHER fixture behave as a learner.
         user.setOnboardingCompletedAt(OffsetDateTime.now());
         return user;
+    }
+
+    private UserEntity curator(UUID userId) {
+        UserEntity user = buildUser(userId, "curator@example.com");
+        user.setProfileType(ProfileType.TEACHER);
+        return user;
+    }
+
+    private UpsertNoteRequest curatorRequest(List<UUID> courseProgramIds, String domainContext) {
+        return new UpsertNoteRequest(
+                "Title",
+                "Subject",
+                courseProgramIds,
+                null,
+                domainContext,
+                null,
+                List.of(),
+                "content"
+        );
+    }
+
+    private StudyPackGenerationContext authoringContext(String automaticDomain) {
+        return new StudyPackGenerationContext(
+                null,
+                automaticDomain,
+                "Subject",
+                List.of(),
+                null,
+                null
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> authoringDomainMetadata(UUID ownerUserId) {
+        ArgumentCaptor<Map<String, Object>> metadataCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(analyticsService).trackEvent(
+                eq(ownerUserId),
+                eq(AnalyticsEventType.NOTE_AUTHORING_DOMAIN_RECORDED),
+                any(UUID.class),
+                metadataCaptor.capture()
+        );
+        return metadataCaptor.getValue();
     }
 
     private NoteEntity buildNote(

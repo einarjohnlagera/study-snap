@@ -62,11 +62,11 @@ list to the LLM. **The work is resolver + UX + mental model.**
   carving multi-program out as a data-integrity exception. **⚠️ THIS RULING WIDENED THE RELEASE AND THE
   AUDIT NAMED IT AS THE TRIGGER TO RE-EVALUATE THE VERIFICATION TIER; see Pre-declared below.**
 - **4. Decision 11 — the override signal becomes observable (backend + frontend).** **The smallest honest
-  addition:** an authoring event capturing *(what `Automatic` resolved, what was persisted)* — equal means
-  accepted, different means overridden, null means declined. **⚠️ NOT a large analytics system** — Decision
-  9 forbids that explicitly. `NOTE_CREATED` already writes a `jsonb` `metadata_json`, so **adding keys costs
-  no migration and no enum value**, and it already fires *after* the join rows are written, which is the
-  only ordering at which the resolved value is correct.
+  addition:** one targeted authoring event capturing *(what `Automatic` resolved, what was persisted)* —
+  `AUTOMATIC` means accepted, an equal resolved label means confirmed, and a different value means overridden.
+  **⚠️ NOT a large analytics system** — Decision 9 forbids that explicitly. The dedicated event enum writes
+  to existing `jsonb` `metadata_json`, so it needs no migration; create fires only after the join rows are
+  written, which is the only ordering at which the resolved value is correct.
   **⚠️ WIDENED BY THE A–F AUDIT: `create`-ONLY INSTRUMENTATION CANNOT ANSWER DECISION 11.** There is **no
   `NOTE_UPDATED` event** (confirmed absent from the 146-line enum), and **both surfaces that let a curator
   CHANGE Domain Context — the note editor and note detail — are `update` paths.** Instrumenting `create`
@@ -226,6 +226,7 @@ so the invariant is never unprotected between commits.
 - **⚠️ ITEM 1 IS HALF SHIPPED, AND THE HEADING THIS BULLET ORIGINALLY CARRIED (*"Items 1 and 3"*) OVERSTATED IT.** Item 1 is **Decisions 1 AND 4, which `RELEASES.md` records as COUPLED**. **Decision 4 shipped** — canonical curated generation no longer inherits the curator's profile program. **Decision 1 did NOT** — all three sites still read `Automatic — based on the program` rather than the ratified `Automatic — use note context` (`bulk-generation-page-client.tsx:627`, `private-note-detail-page-client.tsx:2451`, `note-editor-form.tsx:490`). **⚠️ The omission was in the Codex prompt, which was scoped backend-only and never carried Decision 1.** **⚠️ It failed SAFE, and that is the only reason this is unshipped scope rather than a defect:** the coupling rule is *do not ship the copy alone*, because the label would be wrong in a new way. Shipping Decision 4 alone leaves a label that is **more** accurate than before — for a curator the domain now genuinely does come from the joined catalog program. **Decision 1's copy moves to the copy prompt with Decisions 3, 12 and 13, where it belongs.** **Recorded rather than quietly re-scoped, because a release bullet claiming an item shipped when half of it did is exactly the `v0.99.0` release-notes defect, one release later.**
 - **Item 1 (Decision 4) and item 3 — canonical curator domain resolution and generation readiness (backend + frontend).** The four existing curator checks now share one onboarding-aware `CuratorAuthoringPredicate`; canonical note and bulk resolution suppress only a curator's profile-program fallback, while learner personalization, a note's own legacy string, and `buildFromStudyPackFallback` remain unchanged. Two curators with different profiles therefore resolve the same canonical note to the same authoring-domain instruction, and a curator single-program note uses its joined catalog name.
 - **Multi-program notes may be saved without Domain Context; generation rejects them before side effects.** The three save-time blocks and their frontend pre-validation were removed only after the readiness gate existed. `StudyPackService` now gates both note-ID generation entry points before quota/rate checks, status writes, dispatch, or LLM work; the synchronous `POST /study-packs` path was added after the pre-implementation advisor proved it was a second live bypass. Existing-pack admin summary/quiz regeneration is gated before its LLM call as well. The existing topic and bulk generation checks remain intact, and the existing `MultiProgramDomainContextRequiredException` contract is reused unchanged.
+- **Item 4 — the Domain Context override signal is now observable.** Curator note creates and updates emit `NOTE_AUTHORING_DOMAIN_RECORDED` after Applicable Program rows are saved, using the generation resolver's `courseProgram()` result rather than a second resolution pass. Metadata is explicit even when values are absent: `automaticDomain=NONE` and `persistedDomainContext=AUTOMATIC`; updates additionally carry `previousDomainContext`. Learner saves emit nothing, and an analytics failure is isolated from the note save.
 - **⚠️ THE `/audit-diff` PASS FOUND A VACUOUS TEST NAMED AFTER THIS RELEASE'S HEADLINE PROPERTY, and it is
   the eighth instance of that class in five releases.**
   `resolve_twoCuratorsWithDifferentProfilesGetByteIdenticalAuthoringDomains` gave its note **exactly one**
@@ -245,6 +246,25 @@ so the invariant is never unprotected between commits.
   because it calls `resolver.assertGenerationReady(note)` directly rather than going through
   `startAsyncGenerationFromNote`. It genuinely pins the predicate against real rows, which is what it was
   asked for; **gate PLACEMENT is pinned only by `StudyPackServiceTest`.**
+- **⚠️ THE `/audit-diff` MUTATION PASS FOUND THE UPDATE PATH'S ORDERING UNPINNED, and it was a real gap
+  rather than a cosmetic one.** The create-path tests assert `replace` → `resolve` → `trackEvent` with
+  `InOrder`; the update path asserted only the resulting metadata. **Moving the event to fire BEFORE
+  `noteCourseProgramRepository.replace(...)` on the update path left all 93 `NoteServiceTest` tests green.**
+  That mutation is not harmless: `resolve()` reads `note_course_program`, so firing first records the
+  **previous** program set as `automaticDomain` — wrong for exactly the curator save that changes programs
+  and Domain Context **together**, which is the multi-program case this release exists for. The same
+  `InOrder` assertion now covers the update path, and the mutant is killed by
+  `update_curatorRecordsChangedDomainContextWithPreviousValue`.
+- **Mutation-verified, three mutants, each with its killing test:** returning `null` instead of the
+  `"AUTOMATIC"` sentinel fails `create_curatorRecordsAcceptedAutomaticDomainFromJoinedProgram` **and**
+  `create_curatorRecordsAutomaticNoneInsteadOfDroppingTheEvent`; dropping the `"NONE"` sentinel fails the
+  latter; inverting the update-path ordering fails `update_curatorRecordsChangedDomainContextWithPreviousValue`.
+  **⚠️ The first two matter because `putMetadataValue` silently drops nulls** — without the sentinels,
+  *"the curator accepted Automatic"* would have been recorded as a **missing key**, indistinguishable from
+  *"we never recorded it"*, in precisely the case the September read most needs to see.
+- **⚠️ The tests assert the persisted metadata MAP via `containsExactly`, not merely that `trackEvent` was
+  called** — a verification-only test would have passed with every key silently absent. **The eight new tests
+  were confirmed to EXECUTE by reading the surefire XML**, and the suite moved 1867 → 1875, which matches.
 - **⚠️ ITEM 6's GUARD IS PARTLY UNBUILDABLE, AND THE REASON IS A STRONGER PROPERTY THAN THE TEST WOULD HAVE
   BEEN.** The spec asked for three tests pinning that
   `OfficialChallengeQuizTemplateService:221`, `ExamQuestionPoolService:151` and

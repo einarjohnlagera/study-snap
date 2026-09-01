@@ -47,6 +47,7 @@ import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySource;
 import com.studysnap.backend.model.StudyPackProgressProjection;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
@@ -79,6 +80,8 @@ import com.studysnap.backend.util.NoteCourseProgramShadowing;
 import com.studysnap.backend.util.NoteMetadataBounds;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -107,6 +110,7 @@ import java.util.stream.Collectors;
 @Transactional
 @RequiredArgsConstructor
 public class NoteService {
+    private static final Logger log = LoggerFactory.getLogger(NoteService.class);
     private static final int CONTENT_PREVIEW_MAX_LENGTH = 180;
     private static final int SUMMARY_PREVIEW_MAX_LENGTH = 180;
     private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
@@ -124,6 +128,11 @@ public class NoteService {
     private static final String SORT_PARAMETER_NAME = "sort";
     private static final String ANALYTICS_METADATA_PREVIOUS_VISIBILITY = "previousVisibility";
     private static final String ANALYTICS_METADATA_NEW_VISIBILITY = "newVisibility";
+    private static final String ANALYTICS_METADATA_AUTOMATIC_DOMAIN = "automaticDomain";
+    private static final String ANALYTICS_METADATA_PERSISTED_DOMAIN_CONTEXT = "persistedDomainContext";
+    private static final String ANALYTICS_METADATA_PREVIOUS_DOMAIN_CONTEXT = "previousDomainContext";
+    private static final String ANALYTICS_AUTOMATIC_DOMAIN_NONE = "NONE";
+    private static final String ANALYTICS_DOMAIN_CONTEXT_AUTOMATIC = "AUTOMATIC";
     private static final String PUBLIC_RANKING_PLACEHOLDER = "available";
     private static final int PUBLIC_DISCOVERY_SECTION_LIMIT = 6;
     private static final String LIBRARY_SUBJECT_FALLBACK = "General";
@@ -160,6 +169,7 @@ public class NoteService {
     private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
+    private final StudyPackGenerationContextResolver studyPackGenerationContextResolver;
 
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
@@ -200,6 +210,9 @@ public class NoteService {
                 "subject", saved.getSubject(),
                 "visibility", resolveVisibility(saved).name()
         ));
+        if (curator) {
+            trackAuthoringDomainRecorded(ownerUserId, saved, null, false);
+        }
         return mapToResponse(saved, null);
     }
 
@@ -243,6 +256,7 @@ public class NoteService {
                 entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgramText(), owner));
             }
         }
+        DomainContext previousDomainContext = entity.getDomainContext();
         entity.setDomainContext(domainContext);
         entity.setLearnerLevel(learnerLevel);
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
@@ -253,6 +267,7 @@ public class NoteService {
         noteRepository.flush();
         if (curator) {
             noteCourseProgramRepository.replace(saved.getId(), courseProgramIds);
+            trackAuthoringDomainRecorded(ownerUserId, saved, previousDomainContext, true);
         }
         // A learner update deliberately leaves join rows alone rather than clearing them. A learner
         // never authors them, but a note copied from curated content inherits them -- and clearing
@@ -2011,6 +2026,63 @@ public class NoteService {
         putMetadataValue(metadata, key1, value1);
         putMetadataValue(metadata, key2, value2);
         return metadata;
+    }
+
+    private Map<String, Object> buildMetadata(
+            String key1,
+            Object value1,
+            String key2,
+            Object value2,
+            String key3,
+            Object value3
+    ) {
+        LinkedHashMap<String, Object> metadata = new LinkedHashMap<>();
+        putMetadataValue(metadata, key1, value1);
+        putMetadataValue(metadata, key2, value2);
+        putMetadataValue(metadata, key3, value3);
+        return metadata;
+    }
+
+    private void trackAuthoringDomainRecorded(
+            UUID ownerUserId,
+            NoteEntity note,
+            DomainContext previousDomainContext,
+            boolean includePreviousDomainContext
+    ) {
+        try {
+            StudyPackGenerationContext context = studyPackGenerationContextResolver.resolve(ownerUserId, note);
+            String automaticDomain = context.courseProgram() == null
+                    ? ANALYTICS_AUTOMATIC_DOMAIN_NONE
+                    : context.courseProgram();
+            String persistedDomainContext = domainContextMetadataValue(note.getDomainContext());
+            Map<String, Object> metadata = !includePreviousDomainContext
+                    ? buildMetadata(
+                            ANALYTICS_METADATA_AUTOMATIC_DOMAIN,
+                            automaticDomain,
+                            ANALYTICS_METADATA_PERSISTED_DOMAIN_CONTEXT,
+                            persistedDomainContext
+                    )
+                    : buildMetadata(
+                            ANALYTICS_METADATA_AUTOMATIC_DOMAIN,
+                            automaticDomain,
+                            ANALYTICS_METADATA_PERSISTED_DOMAIN_CONTEXT,
+                            persistedDomainContext,
+                            ANALYTICS_METADATA_PREVIOUS_DOMAIN_CONTEXT,
+                            domainContextMetadataValue(previousDomainContext)
+                    );
+            analyticsService.trackEvent(
+                    ownerUserId,
+                    AnalyticsEventType.NOTE_AUTHORING_DOMAIN_RECORDED,
+                    note.getId(),
+                    metadata
+            );
+        } catch (RuntimeException ex) {
+            log.warn("note_authoring_domain_analytics_failed noteId={} ownerUserId={}", note.getId(), ownerUserId, ex);
+        }
+    }
+
+    private String domainContextMetadataValue(DomainContext domainContext) {
+        return domainContext == null ? ANALYTICS_DOMAIN_CONTEXT_AUTOMATIC : domainContext.name();
     }
 
     private void putMetadataValue(Map<String, Object> metadata, String key, Object value) {
