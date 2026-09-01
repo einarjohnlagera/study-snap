@@ -88,6 +88,8 @@ describe("BulkGenerationPageClient", () => {
     expect(screen.queryByLabelText(/^Target Audience/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/^Domain Context/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Authored Depth/)).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Automatic — use note context" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Automatic — based on the reader" })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /public/i })).toBeInTheDocument();
     expect(screen.getByTestId("bulk-metadata-grid")).toHaveClass("sm:grid-cols-2");
     // ADMIN bypasses the quota gate, so no remaining-cap hint should render. Asserts the

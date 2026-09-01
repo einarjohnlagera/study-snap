@@ -196,3 +196,32 @@ FROM course_programs cp
 LEFT JOIN note_course_program ncp ON ncp.course_program_id = cp.id
 GROUP BY cp.name
 ORDER BY notes_tagged DESC, cp.name;
+
+-- ---------------------------------------------------------------------------
+-- Q7. RECONCILIATION — fill in a proposed shape's `status` column.
+--
+-- WHEN: a strategist has proposed a target shape for a set whose notes ALREADY EXIST (a
+-- reshape rather than a build). Their rows land as `status = Unmapped`, which is honest but
+-- not actionable. This produces the list to match them against.
+--
+-- ⚠️ Match on KNOWLEDGE, not on string equality. A strategist proposes knowledge-first titles
+-- ("Normal Stress"); existing notes often carry the older suffixed form ("Normal Stress in
+-- Strength of Materials"). Those are the SAME note and the existing one should be reused —
+-- with its title normalised on touch, per the canonical title policy. A string join would
+-- score them as different and manufacture hundreds of phantom "New" rows.
+--
+-- Set the collection id, then match subject block by subject block.
+-- ---------------------------------------------------------------------------
+SELECT n.subject,
+       count(*)                                     AS existing_notes,
+       string_agg(n.title, ' | ' ORDER BY n.title)  AS existing_titles
+FROM note_collection_items i
+JOIN notes n ON n.id = i.note_id
+WHERE i.collection_id IN (
+        WITH RECURSIVE t AS (
+            SELECT id, parent_collection_id FROM note_collections WHERE id = '<ROOT_ID>'
+            UNION ALL
+            SELECT c.id, c.parent_collection_id FROM note_collections c JOIN t ON c.parent_collection_id = t.id
+        ) SELECT id FROM t)
+GROUP BY n.subject
+ORDER BY existing_notes DESC, n.subject;

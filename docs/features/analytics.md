@@ -50,6 +50,11 @@ values are acceptable for analytics reporting.
 Core usage and business events:
 
 - `NOTE_CREATED`
+- `NOTE_AUTHORING_DOMAIN_RECORDED` — curator-owned note create/update only; metadata always records the
+  resolver's single automatic program-domain candidate (`automaticDomain`, or `NONE`), the persisted enum
+  name (`persistedDomainContext`, or `AUTOMATIC`), and on update the prior enum name
+  (`previousDomainContext`, or `AUTOMATIC`). This is the Decision 11 override signal, not a general note
+  update event; analytics failure never affects the save.
 - `STUDY_PACK_GENERATED`
 - `QUICK_REVIEW_STARTED`
 - `CHALLENGE_QUIZ_STARTED`

@@ -16,6 +16,23 @@ describe("Domain Context descriptions", () => {
   it("stays silent while the automatic fallback is selected", () => {
     expect(getDomainContextDescription("")).toBeNull();
   });
+
+  it("limits Engineering Mathematics to notes that teach the computational method", () => {
+    const engineeringMathematics = DOMAIN_CONTEXT_OPTIONS.find(
+      (option) => option.value === "ENGINEERING_MATHEMATICS",
+    );
+
+    expect(engineeringMathematics?.description).toContain("teaches a computational method");
+    expect(engineeringMathematics?.description).toContain("not merely when it uses one");
+    expect(DOMAIN_CONTEXT_OPTIONS.find((option) => option.value === "GENERAL_EDUCATION")?.description)
+      .toBe("General education material, with curriculum depth carried separately by Authored Depth.");
+    expect(DOMAIN_CONTEXT_OPTIONS.find((option) => option.value === "PROFESSIONAL_EDUCATION")?.description)
+      .toBe("Educational Psychology, Assessment of Learning, Curriculum Development, and Teaching Profession.");
+    expect(DOMAIN_CONTEXT_OPTIONS.find((option) => option.value === "NURSING")?.description)
+      .toBe("Medical-Surgical, Psychiatric, Pediatric, Maternal & Child, Fundamentals, and nursing-framed Pharmacology.");
+    expect(DOMAIN_CONTEXT_OPTIONS.find((option) => option.value === "ACCOUNTANCY")?.description)
+      .toBe("FAR, Taxation, Auditing, MAS, RFBT, and Financial Management.");
+  });
 });
 
 describe("isSubjectSameAsDomainContext", () => {

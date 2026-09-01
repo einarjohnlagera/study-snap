@@ -4,6 +4,7 @@ import java.util.List;
 
 public record NoteApplicableProgramsResponse(
         List<ApplicableProgramResponse> programs,
-        boolean courseProgramShadowed
+        boolean courseProgramShadowed,
+        String effectiveWritingDomain
 ) {
 }

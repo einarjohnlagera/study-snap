@@ -25,6 +25,7 @@ import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
 import com.studysnap.backend.exception.InvalidNoteLearnerLevelException;
 import com.studysnap.backend.exception.MonthlyNoteGenerationLimitReachedException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.repository.BulkGenerationResultRepository;
@@ -939,6 +940,28 @@ class NoteBulkGenerationServiceTest {
         assertThatThrownBy(() -> service.queueBatch(missingCourse, teacherId, false))
                 .isInstanceOf(com.studysnap.backend.exception.CourseProgramSelectionRequiredException.class)
                 .hasMessage("Choose at least one course or program.");
+    }
+
+    @Test
+    void queueBatch_curatorMultiProgramWithoutDomainContextStillRejects() {
+        UUID adminId = UUID.randomUUID();
+        UUID secondProgramId = UUID.randomUUID();
+        mockUser(adminId, UserRole.ADMIN, ProfileType.STUDENT, LearnerLevel.COLLEGE, COURSE_PROGRAM);
+        BulkGenerateNotesRequest request = new BulkGenerateNotesRequest(
+                SUBJECT,
+                List.of("Topic"),
+                false,
+                List.of(CATALOG_PROGRAM_ID, secondProgramId),
+                null,
+                null,
+                null
+        );
+
+        assertThatThrownBy(() -> service.queueBatch(request, adminId, false))
+                .isInstanceOf(MultiProgramDomainContextRequiredException.class);
+
+        verify(taskDispatcher, never()).execute(any(Runnable.class));
+        verify(noteService, never()).create(any(UpsertNoteRequest.class), any(UUID.class));
     }
 
     @Test

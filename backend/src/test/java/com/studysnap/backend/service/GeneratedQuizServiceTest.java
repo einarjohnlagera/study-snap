@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -47,6 +48,8 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -132,6 +135,35 @@ class GeneratedQuizServiceTest {
         assertThat(captor.getValue().getOwnerUserId()).isEqualTo(userId);
         assertThat(captor.getValue().getNoteId()).isEqualTo(noteId);
         assertThat(captor.getValue().getQuestions()).hasSize(10);
+    }
+
+    /**
+     * ⚠️ v0.100.0. Moving the multi-program Domain Context block from save to generation made
+     * "2+ programs, null Domain Context" a legal STORED state, which newly exposes every note-reading LLM
+     * path -- not just Study Pack generation. The failure is silent: a null authoring domain drops the
+     * Domain line and its constraint from the prompt with no error and no log. Found by the signoff cold
+     * agent, which noted the Study-Pack claim held while this quiz path was ungated.
+     */
+    @Test
+    void generate_rejectsAnAmbiguousNoteBeforeSpendingQuizCreditOrCallingTheLlm() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        doThrow(new MultiProgramDomainContextRequiredException())
+                .when(generationContextResolver).assertGenerationReady(note);
+
+        assertThatThrownBy(() -> generatedQuizService.generate(noteId.toString(), userId))
+                .isInstanceOf(MultiProgramDomainContextRequiredException.class);
+
+        verify(quizGenerationService, never()).generateTeacherQuiz(
+                any(), any(), any(), anyInt(), any(StudyPackGenerationContext.class));
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any(OffsetDateTime.class));
+        verify(generatedQuizRepository, never()).save(any(GeneratedQuizEntity.class));
     }
 
     @ParameterizedTest

@@ -4,7 +4,7 @@ export const DOMAIN_CONTEXT_OPTIONS: Array<{ value: DomainContext; label: string
   {
     value: "ENGINEERING_MATHEMATICS",
     label: "Engineering Mathematics",
-    description: "Algebra, Trigonometry, Analytic Geometry, Calculus, Differential Equations, Probability & Statistics, and Engineering Economics.",
+    description: "Choose this when the note teaches a computational method, not merely when it uses one. Algebra, Trigonometry, Analytic Geometry, Calculus, Differential Equations, Probability & Statistics, and Engineering Economics.",
   },
   {
     value: "ENGINEERING_SCIENCES",

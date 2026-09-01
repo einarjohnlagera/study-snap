@@ -75,17 +75,6 @@ export function AdminApplicableProgramsSection() {
       setSaveFailure("Select at least one course or program. A curated note must stay discoverable.");
       return;
     }
-    // C7. This screen has no Domain Context control, and the endpoint validates the new program set
-    // against the note's already-persisted domainContext -- so expanding a blank-domain note past one
-    // program 400s with no way to act on it from here. Catch it before the request and say where the
-    // field lives, instead of surfacing a raw API error on a field this screen does not show.
-    if (selectedIds.length > 1 && !editingNote.domainContext) {
-      setSaveFailure(
-        "A note shared across several programs needs a Domain Context. This screen cannot set it — "
-        + "open the note and set Domain Context under \"Generation & discovery\", then reapply these programs.",
-      );
-      return;
-    }
     setSaving(true);
     setSaveFailure(null);
     try {
@@ -115,7 +104,9 @@ export function AdminApplicableProgramsSection() {
       <div>
         <h2 className="text-lg font-semibold text-foreground">Note Applicable Programs</h2>
         <p className="text-sm text-foreground/65">
-          Curate where your canonical notes can be discovered without changing their generation context.
+          Curate where your canonical notes can be discovered. For a note with a Domain Context set, that
+          leaves its generation context untouched — but for a note relying on Automatic, the single joined
+          program IS the writing domain, so changing programs here changes it.
         </p>
       </div>
       <Card className="overflow-hidden">
@@ -209,6 +200,9 @@ export function AdminApplicableProgramsSection() {
           </div>
         )}
       >
+        <p className="text-sm text-foreground/65">
+          Applicable Programs determine where this note applies and is discoverable; they do not determine its Domain Context.
+        </p>
         <ApplicableProgramsCombobox
           id="admin-note-applicable-programs"
           catalog={catalog}

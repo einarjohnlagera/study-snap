@@ -1,5 +1,484 @@
 # RELEASES.md - NoteLib
 
+## v0.100.0 - Domain Context Resolution
+
+**Status: Released** (kicked off and signed off 2026-09-01, base branch `releases/v0.100.0`, cut from
+`main` after `v0.99.0` merged and tagged)
+
+Theme: a curator should be able to see which authoring domain a note will actually generate under, and the
+product should stop deciding that from the curator's own profile.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** The reservation is
+**conjunctive** — tag it only once the redefinition's user-visible core is **live** *and* the product
+**succeeds** — and **both halves are unmet**: the Stage 2 slices are recorded as *targeting* `v1.0.0`+, so
+the core is not built, and no success read exists. **So the minor rolls to three digits.** Checked before
+the bump rather than discovered after: `/version-check` matches literal strings and carries no
+two-digit-minor assumption, there are no CI workflows, and nothing in the repo sorts tags lexically — which
+is the one place `v0.100.0` would sort *before* `v0.99.0`.
+
+### Why this release exists
+
+**⚠️ THIS IS THE FIRST RELEASE OFF THE CONNECTION SURFACE IN SIX, and the backlog is still gated.** Nothing
+unlocks until `2026-09-10`; `[CHECKPOINT — due 2026-09-11]` has **10 days** left. So this release again
+chooses from what is un-gated — but unlike the last five, the choice was forced by a **deadline that closes
+on its own**, not by theme preference.
+
+**The forcing function is Decision 11.** Domain Context authoring emits **zero analytics events**, and
+nothing records what `Automatic` *would have* resolved at the moment a curator chose. So *"did the curator
+accept or override Automatic?"* — the strongest signal the September read has — **cannot be reconstructed
+retroactively at all.** `[CHECKPOINT — due 2026-09-28]` is **27 days out**. Instrumentation that must exist
+*before* the behaviour it measures is the one kind of work that cannot slip a release without being lost.
+
+**The taxonomy questions are settled and are NOT re-opened here.** Stage 1's audit and the 13 ratified
+decisions agree: no `ARCHITECTURE`, no catch-all, no removals, no multi-valued Domain Context, no program
+list to the LLM. **The work is resolver + UX + mental model.**
+
+### Planned Scope
+
+- **1. Decisions 1 and 4, which are COUPLED and must ship together (frontend + backend).** Replace
+  `Automatic — based on the program` with **`Automatic — use note context`** *and* remove the profile
+  fallback for **canonical curated generation**. **⚠️ SHIPPING THE COPY ALONE MAKES THE LABEL WRONG AGAIN,
+  IN A NEW WAY** — until the fallback goes, "note context" can still resolve to the curator's own account
+  setting, which is not note context at all. The invariant being bought: **two curators generating the same
+  canonical note must not get different authoring-domain instructions because their personal profiles
+  differ.** **⚠️ LEARNER PERSONALIZATION IS NOT REMOVED** — profile fallback legitimately survives on the
+  learner path, and the label is curator-only (`showAuthoringMetadataFields` / `canEditAuthoringMetadata`).
+  **⚠️ The boundary predicate ALREADY EXISTS and must not be re-invented** — `isTeacherSelectableOwner` /
+  `isCurator` is `TEACHER || ADMIN` behind an onboarding guard, and `NoteService:182` **already uses it for
+  exactly this field**. The `ADMIN`-alone concern is moot.
+- **2. Decision 2 — show the EFFECTIVE writing domain as derived state (backend + frontend).**
+  `Writing domain: Architecture`, or `Writing domain needs attention`. **⚠️ NO NEW PERSISTED FIELD**, and
+  **⚠️ it must reuse the BACKEND resolver — never a frontend re-implementation of precedence**, which is a
+  guaranteed drift source. **⚠️ Decision 12: the UI shows the OUTCOME, never the resolver's five precedence
+  levels.**
+- **3. Decision 6 — block ambiguity at GENERATION, not at note save. ⚠️ OWNER RULED 2026-09-01: MOVE THE
+  EXISTING SAVE-TIME BLOCK, do not except it (backend).** `NoteService:181` calls
+  `assertMultiProgramHasDomainContext` and `NoteApplicableProgramsService:74-76` throws
+  `MultiProgramDomainContextRequiredException`, so a note with **2+ Applicable Programs and no Domain
+  Context is hard-blocked at save today, across four independent write paths.** The ruling takes the larger
+  of the two options offered: **one uniform rule — *note validity ≠ generation readiness*** — rather than
+  carving multi-program out as a data-integrity exception. **⚠️ THIS RULING WIDENED THE RELEASE AND THE
+  AUDIT NAMED IT AS THE TRIGGER TO RE-EVALUATE THE VERIFICATION TIER; see Pre-declared below.**
+- **4. Decision 11 — the override signal becomes observable (backend + frontend).** **The smallest honest
+  addition:** one targeted authoring event capturing *(what `Automatic` resolved, what was persisted)* —
+  `AUTOMATIC` means accepted, an equal resolved label means confirmed, and a different value means overridden.
+  **⚠️ NOT a large analytics system** — Decision 9 forbids that explicitly. The dedicated event enum writes
+  to existing `jsonb` `metadata_json`, so it needs no migration; create fires only after the join rows are
+  written, which is the only ordering at which the resolved value is correct.
+  **⚠️ WIDENED BY THE A–F AUDIT: `create`-ONLY INSTRUMENTATION CANNOT ANSWER DECISION 11.** There is **no
+  `NOTE_UPDATED` event** (confirmed absent from the 146-line enum), and **both surfaces that let a curator
+  CHANGE Domain Context — the note editor and note detail — are `update` paths.** Instrumenting `create`
+  alone measures *first-authoring choice*; Decision 11 asks about *override behaviour*. **Ship create-only
+  and the September read returns empty for the exact question it exists to answer.** The update path is in
+  scope. **⚠️ THIS IS THE ITEM WITH THE DEADLINE** — if it does not ship, Decisions 10-B and 11 are **not
+  answerable this cycle, and the read must say so rather than infer.**
+- **5. Decisions 3, 12 and 13 — the copy that carries the mental model (frontend).** Applicable Programs
+  helper copy states the boundary: *they determine where this note applies and is discoverable; they do not
+  determine its Domain Context.* **Decision 13 is deliberately limited to the carried
+  `ENGINEERING_MATHEMATICS` teaches-versus-uses defect.** `GENERAL_EDUCATION`,
+  `PROFESSIONAL_EDUCATION`, `NURSING`, and `ACCOUNTANCY` remain byte-identical: three are zero-usage values
+  the live 2026-09-28 checkpoint reads, so rewriting their descriptions would alter its input mid-window
+  without an honest deploy split. **⚠️ Verified at kickoff: `frontend/app/onboarding/` contains ZERO
+  `AI`/domain strings**, so no copy in this release can land on the frozen path.
+
+- **6. A REGRESSION GUARD pins that the authoring domain cannot start depending on WHO IS READING (test
+  only). ⚠️ REDUCED 2026-09-01 FROM A BEHAVIOUR CHANGE TO A GUARD, BECAUSE THE DEFECT IT WAS SCOPED TO FIX
+  DOES NOT EXIST. The retraction is recorded at full strength rather than edited away, because a deleted
+  wrong claim teaches nothing and this one was expensive.**
+
+  **What was claimed when item 6 was scoped in, and is FALSE:** that on the twelve `resolveForStudyPack(callerId, studyPack)`
+  sites, *"a learner practising a curator's public Study Pack"* falls through to their own profile course
+  program — reported as **"Decision 4's invariant broken on the reader axis, the larger of the two leaks by
+  volume."** **The A–F audit verified WHICH IDENTITY each call site passes and did NOT verify WHETHER A
+  CALLER CAN REACH A PACK THEY DO NOT OWN.** They cannot:
+  - Every quiz/exam path fetches the pack via `findByIdAndOwnerUserId` (`ChallengeQuizService:1749`,
+    `LongExamService:230/470/790/795/800`, `InterviewPracticeService:578`), so **caller == pack owner by
+    construction**, and `findSourceNote` applies the same owner scope.
+  - The three sites that could have diverged **already pass the OWNER, not the caller**:
+    `AdminStudyPackTransactionHelper:147`, `OfficialChallengeQuizTemplateService:221`,
+    `ExamQuestionPoolService:151`.
+  - **A learner cannot reach a curator's pack at all** — `NoteService:405-411` mints a **copy** and sets the
+    copied pack's owner to the copied note's owner, so the learner owns both and the lookup succeeds.
+  - `study_packs.owner_user_id` is **`NOT NULL`** (`V1__init.sql:35`), so there is no null-owner path.
+
+  **What is actually left is legitimate:** `buildFromStudyPackFallback:159` fires only for a pack the caller
+  **owns** whose note is unreachable, so the profile substituted is **their own, for their own material** —
+  exactly the personalization Decision 4 preserves. **⚠️ It must NOT be "fixed."**
+
+  **⚠️ WHAT SHIPS IS THE GUARD, AND THE REASON IS THAT NOTHING IN THE BUILD PINS THIS.** A future edit
+  "simplifying" `resolveForStudyPack(note.getOwnerUserId(), …)` to `resolveForStudyPack(callerId, …)` would
+  **create** the leak this item wrongly claimed already existed, and would **ship green**. The guard asserts
+  those three sites keep passing the owner, plus a comment recording why the fallback is safe.
+  **⚠️ TEST AND COMMENT ONLY — no behaviour change, no column, no endpoint, no cross-owner read.**
+  **⚠️ THE CROSS-OWNER ROW READ SCOPED IN WITH IT IS WITHDRAWN ENTIRELY.**
+
+  **⚠️ THE LESSON, recorded because it is the seventh instance of this class:** the claim was inferred from an
+  owner-scoped lookup returning empty, without checking reachability. It was caught by the `advisor()` call
+  **before the Codex prompt was written** — the checkpoint `CLAUDE.md` records as where the yield actually is
+  — and cost one document edit instead of a release.
+
+**⚠️ THE A–F IMPLEMENTATION AUDIT HAS BEEN RUN (2026-09-01): `docs/claude-plans/v0.100.0-domain-context-implementation-audit.md`.** **It re-shaped the release and its
+findings are binding:** **(a)** only **three** save-time sites move, because `NoteGenerationService:75` and
+`NoteBulkGenerationService:466` are **already at generation time**; **(b)** **`StudyPackService.startAsyncGenerationFromNote`
+— the primary note → Study Pack path — VALIDATES NOTHING**, so removing the save-time block without adding a
+gate there **deletes the invariant rather than moving it**, and the failure is **silent** (a null authoring
+domain makes `OpenAiLlmStudyPackService:1577-1581` drop the `Domain:` line and its constraint with no error
+and no log); **(c)** **Decisions 4 and 6 are COUPLED too** — a naive item 3 re-opens item 1's defect through
+a new door and makes it legal going forward; **(d)** item 2 **shrinks**, because
+`effectiveAuthoringDomain` already exists as a public static and is the same function the prompt builder
+uses, so *"never a frontend re-implementation"* holds **by construction**; **(e)** item 4 as scoped was
+**insufficient** — see its own bullet; **(f)** the curator predicate exists but is **private or inlined in
+all four copies**, so the resolver cannot call it and a **fifth copy is the wrong move**.
+**⚠️ ORDERING IS PART OF THE FIX: add the generation gate FIRST, then remove the three save-time blocks**,
+so the invariant is never unprotected between commits.
+
+- **7. THE PRODUCTION FRONTEND BUILD IS FAILING AND HAS BEEN SINCE 2026-08-31 23:54. ⚠️ FOLDED IN
+  2026-09-01 BY OWNER RULING — this is not release scope in the normal sense, it is the reason nothing can
+  deploy at all.** `/notes/public` returns **2,579,045 bytes**, past Next.js's **hard 2 MB data-cache
+  limit**, so the cache silently stops deduping. `getServerPublicNotes()`
+  (`frontend/lib/server-public-notes.ts:65`) fetches the **entire** public catalog with **no `size`
+  parameter**, and it is reached from `sitemap.ts`, `generateStaticParams`, `generateMetadata`, the subject
+  page body, the note page and the exam hub — so **~250 static pages each issue their own 2.5 MB request in
+  one build.** The backend saturates, a page exhausts its 3 attempts, the build exits 1.
+  **⚠️ `foundation-engineering` is not special** — it is whichever page was in flight; do not investigate
+  that subject.
+  **⚠️ THIS IS NOT A `v0.99.0` REGRESSION AND REVERTING WILL NOT FIX IT.** `NoteListItemResponse` last
+  changed 2026-08-17, `server-public-notes.ts` 2026-08-06; `v0.99.0` touched neither. **Data growth crossed
+  a threshold a latent unbounded fetch had always had.** `v0.100.0` hits the same wall.
+  **⚠️ Diagnosis: `docs/claude-findings/2026-09-01-prod-frontend-build-failure-public-notes-2mb.md`,
+  written by another session and VERIFIED AGAINST CODE HERE rather than trusted.** Its call-site table is
+  accurate and **understates** the amplification — `app/exam/[slug]/page.tsx:199` is a seventh site it does
+  not list.
+  **⚠️ THE FIX IS SIMPLER AND SAFER THAN THE FINDING PROPOSED, and the reason is a fact neither the finding
+  nor the obvious reading of the code surfaces.** The finding says a server-side subject filter *"needs a
+  slug → label resolution step"*, and inverting a lossy slug would be a real hazard: `notes.subject` is
+  **free text with no catalog**, so label variants that slug identically demonstrably exist, and today's JS
+  filter silently groups them. **But the backend never needed a label.**
+  `PublicLibraryRepositoryImpl:209` matches `normalizedSlugSql(n.subject) = :subjectSlug`, and the incoming
+  `subject` param is put through `NoteService.normalizePublicLibraryFilterSlug:1204`, which is
+  **operation-for-operation identical** to the frontend's `slugify` — trim, lowercase,
+  `[^a-z0-9]+ → -`, strip leading/trailing dashes. **So passing the SLUG returns exactly the set the JS
+  filter produces today, variants included. The fix is behaviour-preserving BY CONSTRUCTION, and no
+  slug-collision decision is owed.**
+  **Scope:** (a) `getServerPublicNotesBySubjectSlug` requests `?subject=<slug>` instead of fetching
+  everything — this removes the bulk of the ~250 requests; (b) `generateStaticParams` uses
+  `GET /subjects?scope=public`, a small anonymous `List<String>` (`v0.83.2`), since **it needs only slugs**
+  and never needed the catalog; (c) `getServerPublicNotes()` paginates internally so each response stays
+  well under 2 MB and the cache works again for `sitemap.ts`, which genuinely does need every note;
+  (d) `getServerPublicNotesByCourseProgram(s)` use the endpoint's existing `courseProgram` filter.
+  **⚠️ NO BACKEND CHANGE — every parameter already exists** (`NoteController:647-661`).
+  **⚠️ Trimming `contentPreview`/`summaryPreview` from the list payload is EXPLICITLY EXCLUDED.** It only
+  moves the threshold — which is precisely what produced this incident — and changes a DTO four other
+  surfaces read. **⚠️ Raising the 2 MB limit is not an option; it is a hard Next.js constant.**
+
+### Known limitations
+
+- **⚠️ ITEM 7'S FIX HAS NOT BEEN VERIFIED AGAINST LIVE DATA, and this is the most important line here.**
+  `npm run build` passes locally with zero cache warnings, but **with no backend running every fetch falls
+  into its existing catch**, so the paginated path returns empty and is never exercised. **The first
+  production deploy is the confirmation** — and it is the deploy this release exists to unblock. **⚠️ Check
+  the build log for `items over 2MB` and the sitemap's note count; the cold agent proved that "the build
+  passes" and "the catalog is intact" are independent facts.**
+- **`PUT /notes/{id}/applicable-programs` emits no `NOTE_AUTHORING_DOMAIN_RECORDED` event, so a recorded
+  `automaticDomain` can go stale.** Changing a note's joined programs changes what `Automatic` resolves to,
+  and that path fires nothing. **⚠️ This bounds what `[CHECKPOINT — due 2026-09-28]` can conclude:** a
+  stored `"Nursing"` may no longer be what Automatic would produce, and the read cannot tell. The misleading
+  admin copy was corrected; **the event was not added, because a third firing site is a scope decision this
+  release did not take.** Recorded rather than fixed.
+- **Decision 13's sweep covered ONE of five unreviewed descriptions, deliberately.**
+  `GENERAL_EDUCATION`, `PROFESSIONAL_EDUCATION`, `NURSING` and `ACCOUNTANCY` are byte-identical — **three
+  are the zero-usage values `2026-09-28` reads**, and rewriting them mid-window changes that read's own
+  input with no honest way to say afterwards *"these curators saw a different description."* Deferred until
+  after the read, not overlooked.
+- **The real-row test pins the predicate, not the gate's placement.** `NativeQueryPostgresIntegrationTest`
+  passes with `assertGenerationReady` deleted from `startAsyncGenerationFromNote`, because it calls the
+  resolver method directly. Placement is pinned only by `StudyPackServiceTest`. Both properties are
+  covered; **no single test covers both, and the names do not say so.**
+- **⚠️ Four `v0.99.0` limitations remain open and are NOT closed by this release:** the permanently-false
+  *"every `ACCEPTED` relationship has two onboarded parties"* for pre-gate rows; `V130`'s backfill predicate
+  having no real-row test; `V130`'s index comment describing a read the index cannot serve; and the
+  rolling-deploy window that retains a small set of rows forever. **Two of the six were closed here** — the
+  unpinned dispatch timezone and the overstated test name.
+- **Item 1 shipped in two halves across two PRs, and the release notes say so.** Decision 4 landed in
+  `#1206`; **Decision 1's copy did not land until `#1208`**, because the first Codex prompt was scoped
+  backend-only and never carried it. It failed safe — the coupling rule forbids the copy without the
+  fallback fix, not the reverse — but *"items 1 and 3 shipped"* was written before it was true and had to be
+  corrected in `bf2c587d`.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ NO TAXONOMY CHANGE. The Stage 1 verdict is ACCEPTED, not re-litigated.** Do **NOT** add
+  `ARCHITECTURE` — **it PASSED the governance floor and the exclusion trap and is STILL a provable no-op**,
+  because a value's entire generation payload is its **label string plus one `quantitative` boolean** and
+  the resolver already falls back to the single joined catalog program name, so a single-program
+  Architecture note **already sends `Domain: Architecture`**. **⚠️ "Architecture didn't qualify" is the
+  WRONG takeaway and costs a release to re-derive.**
+- **⚠️ Do NOT add `GENERAL_ENGINEERING` or any catch-all** — an honest NULL beats a false classification.
+- **⚠️ Do NOT extend `QUANTITATIVE_KEYWORDS`** — that restores the guess the declared flag replaced.
+- **⚠️ Do NOT create one Domain Context per Course/Program.** The ratio is watched at every kickoff: **8:21**.
+- **⚠️ Do NOT remove `NURSING`, `ACCOUNTANCY` or `PROFESSIONAL_EDUCATION` on zero usage, and do NOT resolve
+  the zero-usage question by reasoning** — it is precisely what `[CHECKPOINT — due 2026-09-28]` reads.
+- **⚠️ Do NOT bulk-rewrite notes or retroactively regenerate Study Packs.** Domain Context changes affect
+  **future generation only**.
+- **⚠️ Do NOT invent a second evaluation rubric** — R4's runbook exists.
+- **⚠️ Do NOT add, remove or reorder an onboarding FLOW step, and no code under `frontend/app/onboarding`.**
+  `[CHECKPOINT — due 2026-09-11]` is **10 days out** and measures completion against a 62.4% baseline.
+- **⚠️ Item 3 RELAXES A SAVE-TIME INVARIANT, which creates a production data state that has never existed:
+  a note with 2+ Applicable Programs and a NULL Domain Context.** Q6 of the audit's read is an **invariant
+  check whose non-zero result currently means a live bug**; after this release it means legacy-or-legal, so
+  **that query's interpretation must be updated in the same release or it will be misread in September.**
+- **⚠️ `MultiProgramDomainContextRequiredException` is an EXISTING ERROR CONTRACT across four write paths.**
+  Moving it is not deleting it; the generation path must fail just as loudly, and the four call sites must
+  be enumerated mechanically rather than found by grep-and-hope.
+- **⚠️ Item 1 must not touch the LEARNER resolution path.** The change is scoped to canonical curated
+  generation; a thin edit to the shared resolver would silently remove learner personalization.
+- **⚠️ ITEM 6 IS TEST AND COMMENT ONLY.** No production behaviour changes, no cross-owner read, no column,
+  no endpoint. **⚠️ `buildFromStudyPackFallback:159` MUST NOT BE "FIXED"** — it is reachable only for a pack
+  the caller owns whose note is unreachable, where their own profile is the correct value.
+- **⚠️ THE PROFILE FALLBACK IS NOT DELETED, IT IS BOUNDED.** A caller's own profile program remains the
+  correct fallback for their **own** material — Decision 4 preserves learner personalization explicitly, and
+  a fix that removes it everywhere fails the decision it is implementing.
+- **⚠️ DECISION 13's DESCRIPTION SWEEP TOUCHES THE CHECKPOINT'S OWN INPUT.** Three descriptions were revised
+  in `v0.99.0`; **five have never been reviewed**, and **three of those five — `NURSING`, `ACCOUNTANCY`,
+  `PROFESSIONAL_EDUCATION` — are exactly the zero-usage values `[CHECKPOINT — due 2026-09-28]` reads.**
+  Revising them is legitimate, but the deploy-split caveat must be recorded **with the checkpoint, before
+  the read**, or September cannot separate *"curators finally understood the value"* from *"the description
+  changed."*
+- **⚠️ Every standing connection rule is unchanged** — this release does not touch that surface.
+
+### Pre-declared at kickoff
+
+- **⚠️ TIER RE-EVALUATED A THIRD TIME WHEN ITEM 7 WAS FOLDED IN (2026-09-01), AND IT STILL HOLDS AT ONE
+  SCOPED COLD AGENT.** Item 7 is a fourth independent trigger: it touches every **SEO-indexed public
+  surface** — sitemap, subject pages, note pages, exam hub — where a wrong filter **silently changes what
+  gets indexed**. It is not a permission substrate and not a cross-user read, so it does not reach the full
+  three-agent test. **⚠️ IT ADDS ITS OWN FALSIFICATION CLAIM, because a build that merely PASSES is not
+  evidence: *every public surface renders the same note set after the change as before.* A diff that fixes
+  the build while quietly dropping notes from `/public/library/[subject]` would look exactly like success.**
+- **⚠️ TIER RE-EVALUATED TWICE AND HOLDS AT ONE SCOPED COLD AGENT — and the second re-evaluation is now MOOT
+  rather than merely resolved.** It was made when item 6 was thought to introduce a **cross-owner row read**;
+  **that read was withdrawn the same day when the defect turned out not to exist**, so the release contains no
+  cross-user read at all and the question no longer arises. Recorded rather than deleted, because "we
+  considered it and it went away" is a different fact from "we never considered it." **⚠️ THE LITERAL ESCALATION TRIGGER DID FIRE ON
+  ITEM 3 — *"escalate if the four write paths turn out not to be four"* — and it is recorded as fired rather
+  than quietly re-interpreted.** It resolves to *no escalation* because the count moved for the **opposite**
+  reason to the one the trigger anticipated: two sites were **already correct**, and the newly-found risk is
+  a **gap inside one method with a nameable falsification claim** — precisely what a scoped agent is best
+  at. **⚠️ NEW ESCALATION TRIGGERS, replacing the spent one:** escalate if item 6's read cannot be confined
+  to the five authoring axes; if the predicate extraction changes behaviour at any of its four existing call
+  sites; or if the generation gate turns out to need a second write path.
+- **⚠️ VERIFICATION TIER: ONE SCOPED COLD AGENT, framed as FALSIFICATION — first set at kickoff, RE-EVALUATED
+  TWICE.** The audit set the tier *"one scoped cold agent at minimum; re-evaluate if the Decision 6
+  ruling widens to moving the existing save-block."* **The ruling DID widen it.** Re-evaluated against the
+  gate in `CLAUDE.md`: the full three-agent test is reserved for a **permission substrate** or a
+  **first-of-kind cross-user read**, and this release has neither. It fires the one-agent trigger three
+  times over — **production-data semantics change** (item 3), a **changed error contract across four write
+  paths**, and a **change to what reaches the LLM** on the canonical authoring path (item 1). That is the
+  same shape `v0.95.0` and `v0.99.0` both carried at one agent. **⚠️ ESCALATE TO THE FULL TEST IF** the A–F
+  audit finds item 1's boundary is not cleanly separable from the learner path, or if item 3's four write
+  paths turn out not to be four.
+- **⚠️ THE COLD AGENT'S FALSIFICATION CLAIM IS STATED NOW, not composed at signoff:** *after this release,
+  no path can generate a Study Pack for a multi-program note with no Domain Context; no curator's profile
+  program can reach a prompt on the canonical authoring path;.* Hand it the A–F audit with the release.
+- **⚠️ TWO TESTS MUST BE CONSCIOUSLY REWRITTEN, NEVER DELETED, and one is a trap.**
+  `NoteServiceTest:858` (`update_byLearnerOwner_rejectsClearingDomainContextOnAMultiProgramNote`) pins the
+  save-time rejection Decision 6 removes; it becomes *cleared at save, rejected at generation*.
+  `StudyPackGenerationContextResolverTest:146` asserts the profile fallback Decision 4 removes — **and it
+  will KEEP PASSING under a correct curator-scoped fix, because its fixture has no role and reads as a
+  learner. A green result there is not evidence the fix works**; it needs a curator-owner twin.
+- **⚠️ ITEM 1 GETS ITS `advisor()` CALL BEFORE IMPLEMENTATION** — it changes what reaches the LLM on the
+  canonical authoring path, and `v0.99.0` measured that the earliest checks are where the yield is.
+- **⚠️ THE COLD AGENT MUST BE ASKED TO COUNT EXECUTED TESTS, NOT READ THEM.** Seventh instance in five
+  releases of a guard that looks present and does nothing — and `v0.99.0`'s was **inside the guard built to
+  prevent exactly that.** Also required: **name which test killed each mutant**, and **assert the fixture
+  worked before asserting behaviour.**
+- **⚠️ A `[CHECKPOINT]` IS OWED, and it is a DEPLOY-SPLIT CAVEAT rather than a new date.** This release
+  changes the resolver **inside `[CHECKPOINT — due 2026-09-28]`'s own window**, and item 4 adds the
+  instrumentation that read depends on. So the read spans two behaviours. **Per the consolidation rule this
+  JOINS `2026-09-28` rather than minting a date** — same trigger, same surface, evaluated once — and the
+  caveat is recorded **before** the read, not discovered during it.
+- **⚠️ Item 4 itself owes NO checkpoint.** Adding an event is instrumentation, not shipping ahead of
+  evidence. Stated so the signoff gate is answered deliberately rather than skipped.
+- **The `### Planned Scope` heading is permanent**; delivery appends to `### Shipped`.
+
+### Shipped
+
+- **⚠️ ITEM 1 IS HALF SHIPPED, AND THE HEADING THIS BULLET ORIGINALLY CARRIED (*"Items 1 and 3"*) OVERSTATED IT.** Item 1 is **Decisions 1 AND 4, which `RELEASES.md` records as COUPLED**. **Decision 4 shipped** — canonical curated generation no longer inherits the curator's profile program. **Decision 1 did NOT** — all three sites still read `Automatic — based on the program` rather than the ratified `Automatic — use note context` (`bulk-generation-page-client.tsx:627`, `private-note-detail-page-client.tsx:2451`, `note-editor-form.tsx:490`). **⚠️ The omission was in the Codex prompt, which was scoped backend-only and never carried Decision 1.** **⚠️ It failed SAFE, and that is the only reason this is unshipped scope rather than a defect:** the coupling rule is *do not ship the copy alone*, because the label would be wrong in a new way. Shipping Decision 4 alone leaves a label that is **more** accurate than before — for a curator the domain now genuinely does come from the joined catalog program. **Decision 1's copy moves to the copy prompt with Decisions 3, 12 and 13, where it belongs.** **Recorded rather than quietly re-scoped, because a release bullet claiming an item shipped when half of it did is exactly the `v0.99.0` release-notes defect, one release later.**
+- **Item 1 (Decision 4) and item 3 — canonical curator domain resolution and generation readiness (backend + frontend).** The four existing curator checks now share one onboarding-aware `CuratorAuthoringPredicate`; canonical note and bulk resolution suppress only a curator's profile-program fallback, while learner personalization, a note's own legacy string, and `buildFromStudyPackFallback` remain unchanged. Two curators with different profiles therefore resolve the same canonical note to the same authoring-domain instruction, and a curator single-program note uses its joined catalog name.
+- **Multi-program notes may be saved without Domain Context; generation rejects them before side effects.** The three save-time blocks and their frontend pre-validation were removed only after the readiness gate existed. `StudyPackService` now gates both note-ID generation entry points before quota/rate checks, status writes, dispatch, or LLM work; the synchronous `POST /study-packs` path was added after the pre-implementation advisor proved it was a second live bypass. Existing-pack admin summary/quiz regeneration is gated before its LLM call as well. The existing topic and bulk generation checks remain intact, and the existing `MultiProgramDomainContextRequiredException` contract is reused unchanged.
+- **Item 4 — the Domain Context override signal is now observable.** Curator note creates and updates emit `NOTE_AUTHORING_DOMAIN_RECORDED` after Applicable Program rows are saved, using the generation resolver's `courseProgram()` result rather than a second resolution pass. Metadata is explicit even when values are absent: `automaticDomain=NONE` and `persistedDomainContext=AUTOMATIC`; updates additionally carry `previousDomainContext`. Learner saves emit nothing, and an analytics failure is isolated from the note save.
+- **Item 2 and Decision 12 — curators now see the effective writing-domain outcome.** The existing Applicable Programs detail response carries the value returned by `StudyPackGenerationContextResolver.effectiveAuthoringDomain`, resolved with the note owner rather than an ADMIN viewer. Note Editor and Note Detail render exactly `Writing domain: <name>` or `Writing domain needs attention` after their initial response succeeds; a failed response renders neither state and no UI exposes resolver precedence.
+- **Decision 1 and Decision 3 — the authoring controls now state the correct mental model.** All three Domain Context empty options say `Automatic — use note context`; the adjacent Authored Depth `Automatic — based on the reader` labels remain unchanged. Applicable Programs helper text on the Note Editor, Note Detail and admin picker states that programs determine where a note applies and is discoverable, not its Domain Context.
+- **Decision 13 remains deliberately deferred except for Engineering Mathematics.** `ENGINEERING_MATHEMATICS` now says to select it when a note teaches a computational method, not merely when it uses one. `GENERAL_EDUCATION`, `PROFESSIONAL_EDUCATION`, `NURSING`, and `ACCOUNTANCY` are byte-identical: three are zero-usage values measured by the 2026-09-28 checkpoint, so revising them during its live window would change the input without an honest deploy split.
+- **⚠️ THE `/audit-diff` PASS FOUND A VACUOUS TEST NAMED AFTER THIS RELEASE'S HEADLINE PROPERTY, and it is
+  the eighth instance of that class in five releases.**
+  `resolve_twoCuratorsWithDifferentProfilesGetByteIdenticalAuthoringDomains` gave its note **exactly one**
+  joined program, so `resolveCourseProgram` returned at the `joinedPrograms.size() == 1` branch and **the
+  profile fallback the test exists to pin was never reached.** It passed identically with and without the
+  fix. Corrected to use a note with **no** joined programs — the only shape in which the fallback is
+  reachable — and re-verified: **the mutant restoring the curator fallback is now killed by TWO tests
+  (`resolve_curatorOwnedNoteDoesNotInheritTheCuratorProfileProgram` and the corrected one), where before it
+  was killed by one.** The comment recording why the shape matters is in the test.
+- **Mutation-verified, each mutant named with its killing test:** restoring the curator profile fallback
+  fails the two tests above; removing `assertGenerationReady` from `startAsyncGenerationFromNote` fails
+  `startAsyncGenerationFromNote_multiProgramWithoutDomainContextKeepsStatusAndSpendsNoQuota`.
+  **⚠️ The eleven new backend tests were confirmed to EXECUTE by reading the surefire XML, not the source** —
+  the `v0.98.0` lesson, applied rather than cited.
+- **⚠️ The real-row test is weaker than its name suggests, and it is recorded rather than left to be
+  discovered.** `NativeQueryPostgresIntegrationTest` passes 37/37 **with the generation gate deleted**,
+  because it calls `resolver.assertGenerationReady(note)` directly rather than going through
+  `startAsyncGenerationFromNote`. It genuinely pins the predicate against real rows, which is what it was
+  asked for; **gate PLACEMENT is pinned only by `StudyPackServiceTest`.**
+- **⚠️ THE `/audit-diff` MUTATION PASS FOUND THE UPDATE PATH'S ORDERING UNPINNED, and it was a real gap
+  rather than a cosmetic one.** The create-path tests assert `replace` → `resolve` → `trackEvent` with
+  `InOrder`; the update path asserted only the resulting metadata. **Moving the event to fire BEFORE
+  `noteCourseProgramRepository.replace(...)` on the update path left all 93 `NoteServiceTest` tests green.**
+  That mutation is not harmless: `resolve()` reads `note_course_program`, so firing first records the
+  **previous** program set as `automaticDomain` — wrong for exactly the curator save that changes programs
+  and Domain Context **together**, which is the multi-program case this release exists for. The same
+  `InOrder` assertion now covers the update path, and the mutant is killed by
+  `update_curatorRecordsChangedDomainContextWithPreviousValue`.
+- **Mutation-verified, three mutants, each with its killing test:** returning `null` instead of the
+  `"AUTOMATIC"` sentinel fails `create_curatorRecordsAcceptedAutomaticDomainFromJoinedProgram` **and**
+  `create_curatorRecordsAutomaticNoneInsteadOfDroppingTheEvent`; dropping the `"NONE"` sentinel fails the
+  latter; inverting the update-path ordering fails `update_curatorRecordsChangedDomainContextWithPreviousValue`.
+  **⚠️ The first two matter because `putMetadataValue` silently drops nulls** — without the sentinels,
+  *"the curator accepted Automatic"* would have been recorded as a **missing key**, indistinguishable from
+  *"we never recorded it"*, in precisely the case the September read most needs to see.
+- **⚠️ The tests assert the persisted metadata MAP via `containsExactly`, not merely that `trackEvent` was
+  called** — a verification-only test would have passed with every key silently absent. **The eight new tests
+  were confirmed to EXECUTE by reading the surefire XML**, and the suite moved 1867 → 1875, which matches.
+- **⚠️ THE `/audit-diff` PASS CAUGHT A BUILD-BREAKING DEFECT THAT THE ENTIRE TEST SUITE PASSED OVER, and the
+  reason it was invisible is the finding.** `effectiveWritingDomain` reached the response **TYPE** in
+  `lib/api.ts` but **never reached the runtime parser** — `getNoteApplicablePrograms` built its return object
+  without the field. **`npx tsc --noEmit` failed with `TS2741`**, so `npm run build` would have failed, while
+  **all 193 Jest suites passed** because Jest does not typecheck and **every surface test mocks
+  `getNoteApplicablePrograms` directly.**
+- **⚠️ EVEN HAD IT COMPILED, ITEM 2 WOULD HAVE SHIPPED INERT.** The field would have been `undefined` in the
+  browser, so the writing-domain line would **never have rendered in production** — and `undefined` is
+  precisely the value the surfaces cannot distinguish from *"not loaded yet"*, which is the distinction the
+  error-state design turns on. A feature that renders correctly in every test and never once in production is
+  the worst shape this could have taken.
+- **The parser now normalizes a missing or non-string value to `null`, never `undefined`**, and
+  `lib/api-note-applicable-programs.test.ts` gained the coverage that was missing. **Mutation-verified:
+  removing the field from the parser again fails three of its four tests.** **⚠️ The lesson is narrow and
+  reusable — a typed field is not a delivered field, and a mocked-boundary test suite structurally cannot
+  see the boundary.**
+- **The other required properties were verified rather than assumed.** The effective domain is resolved from
+  `note.getOwnerUserId()`, not the requester — mutating it to the requester fails
+  `adminReadResolvesTheWritingDomainFromTheNoteOwnerNotTheRequester`. The value comes from
+  `effectiveAuthoringDomain` itself, so **no second copy of the precedence chain exists** on either side.
+  `effectiveWritingDomainLoaded` is reset to `false` per fetch and set `true` **only** in the success branch,
+  so a failed load renders **neither** line rather than falsely claiming *"needs attention"*.
+- **Decision 13 was held to ONE description on purpose.** `ENGINEERING_MATHEMATICS` now states the
+  teaches-versus-uses rule. **`GENERAL_EDUCATION`, `PROFESSIONAL_EDUCATION`, `NURSING` and `ACCOUNTANCY` are
+  byte-identical and deliberately untouched: three of them are exactly the zero-usage values
+  `[CHECKPOINT — due 2026-09-28]` reads**, and rewriting them would change that read's own input mid-window
+  with no honest way to say afterwards *"these curators saw a different description."* **⚠️ Recorded so the
+  omission is not re-derived as an oversight; it is deferred until after the read.**
+- **Item 7 — the production build failure is fixed, and no page fetches the whole catalog to filter it any
+  more.** `getServerPublicNotesBySubjectSlug` requests `?subject=<slug>`;
+  `getServerPublicNotesByCourseProgram(s)` use `?courseProgram=`, one request per program merged and
+  de-duplicated by note id; `generateStaticParams` reads `GET /subjects?scope=public`; and
+  `getServerPublicNotes()` — now the **only** full-catalog reader, for `sitemap.ts` alone — paginates at
+  **250 items**, derived from the failing build's own numbers (2,579,045 bytes over ~950 notes ≈ 2.7 KB
+  each, so ~675 KB per page, about **3× headroom**). The constant carries that arithmetic in a comment and
+  the instruction to revisit it if `NoteListItemResponse` grows.
+- **⚠️ THE SLUG IS PASSED THROUGH UNCHANGED, AND VERIFYING WHY IS WHAT MADE THIS SAFE.** The finding
+  proposed resolving slug → label first. That would have been a real defect: `notes.subject` is free text
+  with **no catalog**, so label variants that slug identically exist, and inverting a lossy slug drops them
+  from **SEO-indexed** pages. **The backend never needed a label** —
+  `PublicLibraryRepositoryImpl:209` matches `normalizedSlugSql(n.subject) = :subjectSlug`, and
+  `NoteService.normalizePublicLibraryFilterSlug:1204` puts the incoming param through the **identical**
+  transformation. Behaviour-preserving by construction.
+- **⚠️ THE SAME QUESTION WAS ASKED OF THE COURSE-PROGRAM FILTER RATHER THAN ASSUMED, and a failing test is
+  what forced it.** The old JS matcher had real semantics — joined programs win, the personal scalar counts
+  **only** when no join rows exist. `PublicLibraryRepositoryImpl:212-221` expresses **exactly** that
+  (`exists(...) OR (not exists(...) AND ...)`), both sides slug-normalized. It is in fact marginally **more**
+  inclusive, since it groups punctuation variants the JS `trim().toLowerCase()` treated as distinct.
+- **Dead code removed rather than left as a trap:** `getNormalizedNotePrograms` (the JS matcher the server
+  replaced) and `getServerPublicSubjects` (the orphaned full-catalog subject reader). **Leaving an exported
+  helper that does the exact thing this fix exists to prevent is how the defect comes back.**
+- **Verified: `npm run build` exits 0 with ZERO `items over 2MB` warnings**, 193 suites / 2084 tests green,
+  `tsc --noEmit` clean, lint back to its 15 pre-existing warnings. **Mutation-verified — reverting the
+  subject filter to in-JS filtering fails two tests**, and the suite carries an explicit invariant test:
+  **no request to `/notes/public` may go out without a filter or a `pageSize`.**
+- **⚠️ Local build verification has a known limit, stated rather than glossed:** with no backend running the
+  fetches fall into their existing catches, so this proves the change does not break the build — **it does
+  not exercise the live data path.** The real confirmation is the first production deploy.
+- **Two carried `v0.99.0` Known limitations closed — test-only, folded because they fire no new trigger and
+  leave the verification tier exactly where it was.**
+- **Every scheduled job's dispatch TIMEZONE is now pinned, not just its expression.** The cron contract
+  test pinned `cron` and ignored `zone`, so changing it would have moved all three retention dispatches with
+  a green build — the same shadowing class as the yaml gap `v0.99.0` fixed, at lower stakes.
+  `everyCronJobPinsTheTimezoneItsScheduleIsInterpretedIn` enumerates all ten annotations reflectively, the
+  same way the schedule test does, so a job cannot be pinned in one map and missing from the other.
+  **Mutation-verified: dropping `zone = DISPATCH_ZONE` from the weekly retention job fails it.**
+- **⚠️ THE EMPTY ENTRIES IN THAT MAP ARE THE LOAD-BEARING HALF, NOT FILLER — and they touch an open
+  question.** Only **2 of 10** jobs declare a zone; the other **8 run in the JVM default**, which is **UTC**
+  in production, since nothing sets `TZ` in the Dockerfile, `application.yaml` or `docker-compose.yml` and
+  `eclipse-temurin` defaults to UTC. **An unzoned schedule reads as local time and is not:**
+  `billing.usage-reset-cron` at `0 15 1 * * *` fires at **09:15 Manila, not 01:15** — which is precisely the
+  arithmetic that removed it as a suspect for the reported 1am incident. Pinning the blanks makes adding a
+  zone, or dropping one, a decision rather than a side effect.
+- **A test that overstated itself now states what it proves.**
+  `consentPausedRelationshipIsNeverExpiredBecauseAPauseIsNotATermination` became
+  `expiryWorkerLeavesAConsentPausedRelationshipPendingWhenHandedItsId`. **`seedRelationship` never writes
+  `expires_at`**, so the row reached the sweep with a NULL deadline **by omission**, and the test could not
+  tell *"the worker respects a consent pause"* apart from *"there was no deadline to act on."* What it does
+  prove is kept and is the reachable production shape. **⚠️ The stronger property is covered by
+  `aPreMigrationConsentPausedRowIsNeverExpirableAtAnyFutureInstant`, and the two must NOT be merged — a
+  name that overstates its test is how a guard looks present and does nothing**, which this release has
+  now found four times in its own deliveries.
+- **⚠️ THE SIGNOFF COLD AGENT FALSIFIED CLAIM 5 — ITEM 7's FIX SHIPPED WITH THE EXACT DEFECT ITS OWN
+  FALSIFICATION CLAIM WAS WRITTEN TO CATCH, and it was fixed before signoff.** The claim was *"every public
+  surface renders the same note set after the change as before"*, chosen because **a build that merely
+  passes is not evidence.** It did not.
+  `NoteController.PUBLIC_NOTES_MAX_SIZE` clamps `pageSize` to **50**, so a request for 250 returned **50
+  items with `hasMore=true`** — and the loop's *"a page shorter than we asked for means the end"* guard,
+  added to prevent an infinite loop, **exited after page zero.** `getServerPublicNotes()` returned **50
+  notes instead of ~950**: a ~95% loss on the SEO sitemap, most subject pages falling below the
+  `noteCount >= 6` index threshold and vanishing, subject pages truncated at 50, and note pages silently
+  losing their exam-hub link and *"More {program} notes"* rail.
+  **⚠️ THE FIX IS NOT THE PAGE SIZE — it is that a length-based stop is WRONG IN PRINCIPLE.** The page size
+  we receive is the server's to decide, not ours to assume. Requesting 50 matches the server's ceiling; the
+  loop now stops only on an authoritative signal (`hasMore=false`, an empty page, or a failed page).
+- **⚠️ AND THE REGRESSION TEST WAS ITSELF VACUOUS ON ITS FIRST WRITING — caught by mutating, not by
+  reading.** The original mocked a **250-item first page, a response the backend cannot produce.** The
+  replacement's first draft used a 50-item page, which equals the requested size, so **reintroducing the
+  bad break still passed.** Only a mock that clamps **below** what was asked reproduces it. Two tests now
+  kill that mutant. **This is the sixth test-that-claims-more-than-it-proves in this release and the
+  second that was ours.**
+- **Three further confirmed findings from the same agent, all fixed rather than carried.**
+  **(a)** `GeneratedQuizService:110` reached an LLM prompt from a note with **no readiness gate** — the
+  Study-Pack claim held while the quiz path did not, because the removed save-time block used to make the
+  ambiguous state *unrepresentable* and item 3 newly exposed **every** note-reading LLM path. Gated,
+  mutation-verified. **(b)** `admin-applicable-programs-section.tsx` told curators they were editing
+  discovery *"without changing their generation context"* — **false for a note relying on Automatic**,
+  where the single joined program **is** the writing domain. **(c)** The `general` slug is the one filter
+  the server cannot express: `getPublicSubjectSlug` substitutes `"general"` for a blank subject while SQL
+  coalesces to `''`, so a blank-subject note would have vanished from a route the app manufactures for it.
+  It now filters in JS — bounded, because the fetch is paginated.
+- **One residual made explicit rather than left to construction:** `buildFromStudyPackFallback` passed the
+  profile program with no curator guard, unlike its two siblings. Unreachable today (`study_packs.note_id`
+  is `NOT NULL` with an FK), but **"unreachable" is not the rule the other sites follow and a reader cannot
+  tell an omission from a decision.** Guarded.
+- **Claims 1-4 HELD under mutation**, each killer named by the agent: the curator-profile suppression, all
+  four `assertGenerationReady` sites individually, the analytics sentinels, and the owner-not-requester
+  resolution. Backend **1880**, frontend **2087**, `tsc` clean, lint at its 15 pre-existing warnings.
+- **⚠️ ITEM 6's GUARD IS PARTLY UNBUILDABLE, AND THE REASON IS A STRONGER PROPERTY THAN THE TEST WOULD HAVE
+  BEEN.** The spec asked for three tests pinning that
+  `OfficialChallengeQuizTemplateService:221`, `ExamQuestionPoolService:151` and
+  `AdminStudyPackTransactionHelper:147` pass the **owner** and not the caller. **None of those three methods
+  takes a caller identity at all** — `seedTemplateAsync(noteId, studyPackId)`, `refreshPool(studyPackId,
+  mode)` — and `isEligibleOfficialTemplate` additionally **requires** note owner == pack owner. So a test
+  there could only assert `ownerId == ownerId`. **A vacuous guard is exactly what the finding above is
+  about**, so the invariant is recorded as a comment at each site, naming the condition under which the test
+  becomes both possible and required (a caller id being threaded in). **The spec was mine and it assumed a
+  caller id was in scope; it is not.**
+
 ## v0.99.0 - Connection Completeness
 
 **Status: Released** (kicked off 2026-08-31, signed off 2026-08-31, base branch `releases/v0.99.0`,

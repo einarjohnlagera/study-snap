@@ -119,6 +119,7 @@ public class StudyPackService {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         NoteEntity requestedSourceNote = resolveSourceNoteForGeneration(request.noteId(), ownerUserId, false);
+        generationContextResolver.assertGenerationReady(requestedSourceNote);
         String normalizedText = requestedSourceNote == null
                 ? normalizeAndValidateText(request.notesText())
                 : normalizeAndValidateText(requestedSourceNote.getContent());
@@ -197,6 +198,7 @@ public class StudyPackService {
         if (sourceNote == null) {
             throw new NoteNotFoundException();
         }
+        generationContextResolver.assertGenerationReady(sourceNote);
         String normalizedText = normalizeAndValidateText(sourceNote.getContent());
         PlanType planType = enforceLimits
                 ? assertMonthlyStudyPackQuotaAvailable(ownerUserId)

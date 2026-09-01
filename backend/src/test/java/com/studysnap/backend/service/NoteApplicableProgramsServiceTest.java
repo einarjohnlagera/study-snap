@@ -9,13 +9,13 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
-import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UnknownCourseProgramException;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,6 +51,8 @@ class NoteApplicableProgramsServiceTest {
     private CourseProgramCatalogRepository courseProgramCatalogRepository;
     @Mock
     private NoteCourseProgramRepository noteCourseProgramRepository;
+    @Mock
+    private StudyPackGenerationContextResolver studyPackGenerationContextResolver;
 
     private NoteApplicableProgramsService service;
 
@@ -59,8 +62,11 @@ class NoteApplicableProgramsServiceTest {
                 noteRepository,
                 userRepository,
                 courseProgramCatalogRepository,
-                noteCourseProgramRepository
+                noteCourseProgramRepository,
+                studyPackGenerationContextResolver
         );
+        lenient().when(studyPackGenerationContextResolver.resolve(any(UUID.class), any(NoteEntity.class)))
+                .thenReturn(new StudyPackGenerationContext(null, null, null, List.of(), null, null));
     }
 
     @Test
@@ -245,6 +251,78 @@ class NoteApplicableProgramsServiceTest {
     }
 
     @Test
+    void getExposesTheResolverEffectiveDomainForDomainContextAndAutomaticProgramCases() {
+        UUID ownerId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), ownerId);
+        note.setDomainContext(DomainContext.NURSING);
+        ApplicableProgramResponse program = new ApplicableProgramResponse(UUID.randomUUID(), "Nursing");
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                null,
+                "Bachelor of Science in Nursing",
+                null,
+                List.of(),
+                DomainContext.NURSING,
+                null
+        );
+        authorize(note, user(ownerId, UserRole.USER, ProfileType.TEACHER));
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(program));
+        when(studyPackGenerationContextResolver.resolve(ownerId, note)).thenReturn(context);
+
+        NoteApplicableProgramsResponse result = service.get(note.getId().toString(), ownerId);
+
+        assertThat(result.effectiveWritingDomain())
+                .isEqualTo(StudyPackGenerationContextResolver.effectiveAuthoringDomain(context));
+    }
+
+    @Test
+    void getExposesTheResolverAutomaticProgramAndNothingResolvedStates() {
+        UUID ownerId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), ownerId);
+        ApplicableProgramResponse program = new ApplicableProgramResponse(UUID.randomUUID(), "Architecture");
+        authorize(note, user(ownerId, UserRole.USER, ProfileType.TEACHER));
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of(program));
+        StudyPackGenerationContext automaticProgram = new StudyPackGenerationContext(
+                null, "Architecture", null, List.of(), null, null
+        );
+        when(studyPackGenerationContextResolver.resolve(ownerId, note)).thenReturn(automaticProgram);
+
+        NoteApplicableProgramsResponse resolved = service.get(note.getId().toString(), ownerId);
+
+        assertThat(resolved.effectiveWritingDomain())
+                .isEqualTo(StudyPackGenerationContextResolver.effectiveAuthoringDomain(automaticProgram));
+
+        StudyPackGenerationContext nothingResolved = new StudyPackGenerationContext(
+                null, null, null, List.of(), null, null
+        );
+        when(studyPackGenerationContextResolver.resolve(ownerId, note)).thenReturn(nothingResolved);
+
+        NoteApplicableProgramsResponse unresolved = service.get(note.getId().toString(), ownerId);
+
+        assertThat(unresolved.effectiveWritingDomain())
+                .isEqualTo(StudyPackGenerationContextResolver.effectiveAuthoringDomain(nothingResolved));
+        assertThat(unresolved.effectiveWritingDomain()).isNull();
+    }
+
+    @Test
+    void adminReadResolvesTheWritingDomainFromTheNoteOwnerNotTheRequester() {
+        UUID adminId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        NoteEntity note = note(UUID.randomUUID(), ownerId);
+        StudyPackGenerationContext ownerContext = new StudyPackGenerationContext(
+                null, "Architecture", null, List.of(), null, null
+        );
+        authorize(note, user(adminId, UserRole.ADMIN, ProfileType.STUDENT));
+        when(noteCourseProgramRepository.findByNoteId(note.getId())).thenReturn(List.of());
+        when(studyPackGenerationContextResolver.resolve(ownerId, note)).thenReturn(ownerContext);
+
+        NoteApplicableProgramsResponse result = service.get(note.getId().toString(), adminId);
+
+        assertThat(result.effectiveWritingDomain()).isEqualTo("Architecture");
+        verify(studyPackGenerationContextResolver).resolve(ownerId, note);
+        verify(studyPackGenerationContextResolver, never()).resolve(adminId, note);
+    }
+
+    @Test
     void learnerOwnerCanReadOwnApplicablePrograms() {
         UUID learnerId = UUID.randomUUID();
         NoteEntity note = note(UUID.randomUUID(), learnerId);
@@ -299,7 +377,7 @@ class NoteApplicableProgramsServiceTest {
     }
 
     @Test
-    void multipleProgramsWithoutDomainContextRejectBeforeReconcile() {
+    void multipleProgramsWithoutDomainContextSaveForLaterGenerationReadinessCheck() {
         UUID teacherId = UUID.randomUUID();
         NoteEntity note = note(UUID.randomUUID(), teacherId);
         UUID firstProgramId = UUID.randomUUID();
@@ -308,11 +386,11 @@ class NoteApplicableProgramsServiceTest {
         when(courseProgramCatalogRepository.findExistingIds(Set.of(firstProgramId, secondProgramId)))
                 .thenReturn(List.of(firstProgramId, secondProgramId));
 
-        assertThatThrownBy(() -> service.replace(
-                note.getId().toString(), List.of(firstProgramId, secondProgramId), teacherId
-        )).isInstanceOf(MultiProgramDomainContextRequiredException.class);
+        service.replace(note.getId().toString(), List.of(firstProgramId, secondProgramId), teacherId);
 
-        verify(noteCourseProgramRepository, never()).replace(any(), any());
+        verify(noteCourseProgramRepository).replace(
+                note.getId(), Set.of(firstProgramId, secondProgramId)
+        );
     }
 
     @Test

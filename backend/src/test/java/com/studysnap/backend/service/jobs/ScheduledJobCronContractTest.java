@@ -65,6 +65,32 @@ class ScheduledJobCronContractTest {
             Map.entry("studysnap.retention.weekly-cron", "0 0 18 * * SUN")
     ));
 
+    /**
+     * Every cron key and the timezone its dispatch is anchored to — {@code ""} meaning none declared, so
+     * the job runs in the JVM default (UTC in production: nothing sets TZ in the Dockerfile,
+     * application.yaml or docker-compose.yml, and eclipse-temurin defaults to UTC).
+     *
+     * ⚠️ Recorded as a v0.99.0 Known limitation and closed here. The cron contract pinned the EXPRESSION
+     * but not the ZONE, so changing {@code zone} would have moved all three retention dispatches with a
+     * green build — the same shadowing class as the yaml gap, at lower stakes.
+     *
+     * ⚠️ The empty entries are the load-bearing half, not filler. An UNZONED schedule reads as local time
+     * and is not: {@code billing.usage-reset-cron} at {@code 0 15 1 * * *} runs 01:15 UTC, which is
+     * 09:15 in Manila, not 01:15. Pinning the blanks makes adding a zone — or dropping one — a decision.
+     */
+    private static final Map<String, String> EXPECTED_ZONES = new TreeMap<>(Map.ofEntries(
+            Map.entry("studysnap.account.purge-cron", ""),
+            Map.entry("studysnap.billing.expiry-email-cron", ""),
+            Map.entry("studysnap.billing.subscription-expiry-cron", ""),
+            Map.entry("studysnap.billing.usage-reset-cron", ""),
+            Map.entry("studysnap.generation.bulk-result-cleanup-cron", ""),
+            Map.entry("studysnap.generation.recovery-cron", ""),
+            Map.entry("studysnap.linked-learners.request-expiry-cron", ""),
+            Map.entry("studysnap.retention.daily-cron", "Asia/Manila"),
+            Map.entry("studysnap.retention.knowledge-impact-digest-monthly-cron", ""),
+            Map.entry("studysnap.retention.weekly-cron", "Asia/Manila")
+    ));
+
     private static final String DISABLED = "-";
     /** A {@code name: value} YAML entry, capturing its indent so the parent path can be tracked. */
     private static final Pattern YAML_ENTRY = Pattern.compile("^( *)([A-Za-z0-9_-]+):(.*)$");
@@ -79,6 +105,19 @@ class ScheduledJobCronContractTest {
                 .as("a new cron job must be added to EXPECTED_DEFAULTS, so its schedule is a decision")
                 .containsOnlyKeys(EXPECTED_DEFAULTS.keySet().toArray(new String[0]));
         assertThat(found).isEqualTo(EXPECTED_DEFAULTS);
+    }
+
+    @Test
+    void everyCronJobPinsTheTimezoneItsScheduleIsInterpretedIn() throws Exception {
+        Map<String, String> found = discoverCronZones();
+
+        assertThat(found)
+                .as("a new cron job must be added to EXPECTED_ZONES, so its dispatch timezone is a decision")
+                .containsOnlyKeys(EXPECTED_ZONES.keySet().toArray(new String[0]));
+        assertThat(found)
+                .as("a changed zone moves when a job fires without changing its cron expression, so it "
+                        + "must be an explicit edit here rather than a silent one")
+                .isEqualTo(EXPECTED_ZONES);
     }
 
     /**
@@ -191,6 +230,33 @@ class ScheduledJobCronContractTest {
                                 className, method.getName())
                         .isTrue();
                 found.put(matcher.group(1), matcher.group(2));
+            }
+        }
+        return new LinkedHashMap<>(found);
+    }
+
+    /**
+     * Mirrors {@link #discoverCronExpressions()} but collects {@code zone} instead of the expression, so a
+     * job cannot be pinned in one map and missing from the other.
+     */
+    private Map<String, String> discoverCronZones() throws IOException, ClassNotFoundException {
+        Map<String, String> found = new TreeMap<>();
+        PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+        for (Resource resource : resolver.getResources(JOB_CLASSES)) {
+            String className = className(resource);
+            if (className.contains("$")) {
+                continue;
+            }
+            for (Method method : Class.forName(className).getDeclaredMethods()) {
+                Scheduled scheduled = method.getAnnotation(Scheduled.class);
+                if (scheduled == null || scheduled.cron().isEmpty()) {
+                    continue;
+                }
+                Matcher matcher = PLACEHOLDER.matcher(scheduled.cron());
+                if (!matcher.matches()) {
+                    continue;
+                }
+                found.put(matcher.group(1), scheduled.zone());
             }
         }
         return new LinkedHashMap<>(found);

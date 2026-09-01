@@ -36,7 +36,6 @@ import com.studysnap.backend.exception.InvalidPublicLibraryQueryException;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
 import com.studysnap.backend.exception.CourseProgramTooLongException;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
-import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.exception.UnknownCourseProgramException;
@@ -48,6 +47,7 @@ import com.studysnap.backend.model.NoteListItemProjection;
 import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.model.PublicLibrarySource;
 import com.studysnap.backend.model.StudyPackProgressProjection;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
@@ -80,6 +80,8 @@ import com.studysnap.backend.util.NoteCourseProgramShadowing;
 import com.studysnap.backend.util.NoteMetadataBounds;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -108,6 +110,7 @@ import java.util.stream.Collectors;
 @Transactional
 @RequiredArgsConstructor
 public class NoteService {
+    private static final Logger log = LoggerFactory.getLogger(NoteService.class);
     private static final int CONTENT_PREVIEW_MAX_LENGTH = 180;
     private static final int SUMMARY_PREVIEW_MAX_LENGTH = 180;
     private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
@@ -125,6 +128,11 @@ public class NoteService {
     private static final String SORT_PARAMETER_NAME = "sort";
     private static final String ANALYTICS_METADATA_PREVIOUS_VISIBILITY = "previousVisibility";
     private static final String ANALYTICS_METADATA_NEW_VISIBILITY = "newVisibility";
+    private static final String ANALYTICS_METADATA_AUTOMATIC_DOMAIN = "automaticDomain";
+    private static final String ANALYTICS_METADATA_PERSISTED_DOMAIN_CONTEXT = "persistedDomainContext";
+    private static final String ANALYTICS_METADATA_PREVIOUS_DOMAIN_CONTEXT = "previousDomainContext";
+    private static final String ANALYTICS_AUTOMATIC_DOMAIN_NONE = "NONE";
+    private static final String ANALYTICS_DOMAIN_CONTEXT_AUTOMATIC = "AUTOMATIC";
     private static final String PUBLIC_RANKING_PLACEHOLDER = "available";
     private static final int PUBLIC_DISCOVERY_SECTION_LIMIT = 6;
     private static final String LIBRARY_SUBJECT_FALLBACK = "General";
@@ -161,6 +169,7 @@ public class NoteService {
     private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
+    private final StudyPackGenerationContextResolver studyPackGenerationContextResolver;
 
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
@@ -171,14 +180,11 @@ public class NoteService {
         entity.setOwnerUserId(ownerUserId);
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
-        boolean curator = isTeacherSelectableOwner(owner);
+        boolean curator = CuratorAuthoringPredicate.isCurator(owner);
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
         NoteTargetProfileType targetProfileType = resolveTargetProfileType(owner);
         Set<UUID> courseProgramIds = curator ? validateCuratedProgramIds(request.courseProgramIds()) : Set.of();
-        // Create needs no stored-row lookup, unlike update: the note does not exist yet, so the request
-        // set is the whole post-create truth, and a learner create writes no join rows at all.
-        assertMultiProgramHasDomainContext(courseProgramIds.size(), domainContext);
         entity.setCourseProgram(curator ? null : resolveRequestedCourseProgram(request.courseProgramText(), owner));
         entity.setDomainContext(domainContext);
         entity.setLearnerLevel(learnerLevel);
@@ -204,6 +210,9 @@ public class NoteService {
                 "subject", saved.getSubject(),
                 "visibility", resolveVisibility(saved).name()
         ));
+        if (curator) {
+            trackAuthoringDomainRecorded(ownerUserId, saved, null, false);
+        }
         return mapToResponse(saved, null);
     }
 
@@ -212,23 +221,20 @@ public class NoteService {
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(NoteNotFoundException::new);
         UserEntity owner = getOwnerOrThrow(ownerUserId);
-        boolean curator = isTeacherSelectableOwner(owner);
+        boolean curator = CuratorAuthoringPredicate.isCurator(owner);
         Set<UUID> courseProgramIds = curator ? validateCuratedProgramIds(request.courseProgramIds()) : Set.of();
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
         LearnerLevel learnerLevel = NoteAuthoringMetadataParser.parseLearnerLevelOrThrow(request.learnerLevel());
-        // Validate the program set that will be in effect *after* this update, which is not the same
-        // source for both authors. A curator's request is the new set -- it is written below via
-        // replace() -- so validating stored rows would both block a legal 6-to-1 reduction and let an
-        // illegal 1-to-6 expansion through. A learner's request carries no programs at all
-        // (courseProgramIds is Set.of() above) while the stored rows survive the update untouched, so
-        // the request always reported 0 and the invariant was unenforceable on the one author who can
-        // reach it -- a learner could clear domainContext on a copied multi-program note and the
-        // client was the only thing preventing it.
+        // The learner branch still needs the stored program count even though multi-program notes may
+        // now be saved without a Domain Context. Learner requests carry no Applicable Programs and the
+        // stored rows survive untouched, so the request count is always 0. Reading the stored rows here
+        // preserves the shadowing decision below: a copied note's personal Course / Program string is
+        // editable only when generation and discovery can actually read it. Generation readiness is
+        // enforced when a Study Pack is requested, not while this otherwise-valid note is saved.
         int effectiveProgramCount = curator
                 ? courseProgramIds.size()
                 : noteCourseProgramRepository.findIdsByNoteId(noteId).size();
-        assertMultiProgramHasDomainContext(effectiveProgramCount, domainContext);
 
         entity.setContent(normalizedRequestedContent);
         entity.setTitle(normalizeOptionalText(request.title()));
@@ -250,6 +256,7 @@ public class NoteService {
                 entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgramText(), owner));
             }
         }
+        DomainContext previousDomainContext = entity.getDomainContext();
         entity.setDomainContext(domainContext);
         entity.setLearnerLevel(learnerLevel);
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
@@ -260,6 +267,7 @@ public class NoteService {
         noteRepository.flush();
         if (curator) {
             noteCourseProgramRepository.replace(saved.getId(), courseProgramIds);
+            trackAuthoringDomainRecorded(ownerUserId, saved, previousDomainContext, true);
         }
         // A learner update deliberately leaves join rows alone rather than clearing them. A learner
         // never authors them, but a note copied from curated content inherits them -- and clearing
@@ -1467,12 +1475,6 @@ public class NoteService {
         return uniqueIds;
     }
 
-    private void assertMultiProgramHasDomainContext(int courseProgramCount, DomainContext domainContext) {
-        if (courseProgramCount > 1 && domainContext == null) {
-            throw new MultiProgramDomainContextRequiredException();
-        }
-    }
-
     private String normalizeOptionalCourseProgram(String value) {
         return CourseProgramNormalizationUtils.normalizeForStorage(value);
     }
@@ -1511,21 +1513,6 @@ public class NoteService {
         return storedTargetProfileType != null
                 ? storedTargetProfileType
                 : mapOwnerProfileTypeToNoteTarget(owner.getProfileType());
-    }
-
-    /**
-     * Nobody curates during onboarding. The flow collects personal learning context and has no catalog
-     * picker, so a curator-role account reaching a note-authoring path mid-onboarding was asked for
-     * {@code courseProgramIds} that no onboarding screen can supply -- which made onboarding
-     * uncompletable for every ADMIN account. This removes no authority: once onboarding is complete the
-     * account is a full curator again. Mirrors the exemption {@code OnboardingGuardService} already makes
-     * for mid-onboarding users, and matches {@code NoteGenerationService.isCurator}.
-     */
-    private boolean isTeacherSelectableOwner(UserEntity owner) {
-        if (owner.getOnboardingCompletedAt() == null) {
-            return false;
-        }
-        return owner.getRole() == UserRole.ADMIN || owner.getProfileType() == ProfileType.TEACHER;
     }
 
     private NoteTargetProfileType mapOwnerProfileTypeToNoteTarget(ProfileType profileType) {
@@ -2039,6 +2026,63 @@ public class NoteService {
         putMetadataValue(metadata, key1, value1);
         putMetadataValue(metadata, key2, value2);
         return metadata;
+    }
+
+    private Map<String, Object> buildMetadata(
+            String key1,
+            Object value1,
+            String key2,
+            Object value2,
+            String key3,
+            Object value3
+    ) {
+        LinkedHashMap<String, Object> metadata = new LinkedHashMap<>();
+        putMetadataValue(metadata, key1, value1);
+        putMetadataValue(metadata, key2, value2);
+        putMetadataValue(metadata, key3, value3);
+        return metadata;
+    }
+
+    private void trackAuthoringDomainRecorded(
+            UUID ownerUserId,
+            NoteEntity note,
+            DomainContext previousDomainContext,
+            boolean includePreviousDomainContext
+    ) {
+        try {
+            StudyPackGenerationContext context = studyPackGenerationContextResolver.resolve(ownerUserId, note);
+            String automaticDomain = context.courseProgram() == null
+                    ? ANALYTICS_AUTOMATIC_DOMAIN_NONE
+                    : context.courseProgram();
+            String persistedDomainContext = domainContextMetadataValue(note.getDomainContext());
+            Map<String, Object> metadata = !includePreviousDomainContext
+                    ? buildMetadata(
+                            ANALYTICS_METADATA_AUTOMATIC_DOMAIN,
+                            automaticDomain,
+                            ANALYTICS_METADATA_PERSISTED_DOMAIN_CONTEXT,
+                            persistedDomainContext
+                    )
+                    : buildMetadata(
+                            ANALYTICS_METADATA_AUTOMATIC_DOMAIN,
+                            automaticDomain,
+                            ANALYTICS_METADATA_PERSISTED_DOMAIN_CONTEXT,
+                            persistedDomainContext,
+                            ANALYTICS_METADATA_PREVIOUS_DOMAIN_CONTEXT,
+                            domainContextMetadataValue(previousDomainContext)
+                    );
+            analyticsService.trackEvent(
+                    ownerUserId,
+                    AnalyticsEventType.NOTE_AUTHORING_DOMAIN_RECORDED,
+                    note.getId(),
+                    metadata
+            );
+        } catch (RuntimeException ex) {
+            log.warn("note_authoring_domain_analytics_failed noteId={} ownerUserId={}", note.getId(), ownerUserId, ex);
+        }
+    }
+
+    private String domainContextMetadataValue(DomainContext domainContext) {
+        return domainContext == null ? ANALYTICS_DOMAIN_CONTEXT_AUTOMATIC : domainContext.name();
     }
 
     private void putMetadataValue(Map<String, Object> metadata, String key, Object value) {

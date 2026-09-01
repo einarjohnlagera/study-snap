@@ -509,9 +509,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
   const [savedApplicableProgramNames, setSavedApplicableProgramNames] = useState<string[]>([]);
   const [courseProgramShadowed, setCourseProgramShadowed] = useState<boolean | null>(null);
+  const [effectiveWritingDomain, setEffectiveWritingDomain] = useState<string | null>(null);
+  const [effectiveWritingDomainLoaded, setEffectiveWritingDomainLoaded] = useState(false);
   const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
   const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
-  const [applicableProgramsDirty, setApplicableProgramsDirty] = useState(false);
   const [applicableProgramsRetryToken, setApplicableProgramsRetryToken] = useState(0);
   const [conceptHash, setConceptHash] = useState("");
   const [highlightedConceptAnchor, setHighlightedConceptAnchor] = useState<string | null>(null);
@@ -904,6 +905,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     let active = true;
     setApplicableProgramsLoading(true);
     setApplicableProgramsError(null);
+    setEffectiveWritingDomainLoaded(false);
     // The catalog is only ever used by the curator combobox, so a learner must not be blocked by its
     // failure: rejecting the whole Promise.all left courseProgramShadowed null forever, which hides the
     // learner's own Course / Program field AND skips its required validation. Guarded the way the Note
@@ -922,7 +924,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         setSavedApplicableProgramIds(selectedIds);
         setSavedApplicableProgramNames(response.programs.map((program) => program.name));
         setCourseProgramShadowed(response.courseProgramShadowed);
-        setApplicableProgramsDirty(false);
+        setEffectiveWritingDomain(response.effectiveWritingDomain);
+        setEffectiveWritingDomainLoaded(true);
       })
       .catch((error) => {
         if (active) {
@@ -1598,7 +1601,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!isDraft) {
       setMetadataDraft(toMetadataDraft(note));
       setApplicableProgramIds(savedApplicableProgramIds);
-      setApplicableProgramsDirty(false);
       setMetadataTagDraft("");
       setIsInlineMetadataEditMode(true);
       return;
@@ -1612,7 +1614,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
     setMetadataDraft(toMetadataDraft(note));
     setApplicableProgramIds(savedApplicableProgramIds);
-    setApplicableProgramsDirty(false);
     setMetadataTagDraft("");
     setMetadataSubjectError(null);
     setMetadataCourseProgramError(null);
@@ -1683,7 +1684,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         setSavedApplicableProgramNames(applicableProgramCatalog
           .filter((program) => applicableProgramIds.includes(program.id))
           .map((program) => program.name));
-        setApplicableProgramsDirty(false);
       }
       setNote(updated);
       setMetadataDraft(toMetadataDraft(updated));
@@ -2103,6 +2103,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     ? <CourseProgramsViewer programs={selectedProgramNames} />
                     : <p className="text-sm text-foreground/65">{noteProgramLine}</p>
                 ) : null}
+                {!isInlineMetadataEditMode && canEditAuthoringMetadata && effectiveWritingDomainLoaded ? (
+                  <p className="text-sm text-foreground/70">
+                    {effectiveWritingDomain
+                      ? `Writing domain: ${effectiveWritingDomain}`
+                      : "Writing domain needs attention"}
+                  </p>
+                ) : null}
                 {!isInlineMetadataEditMode && !canEditAuthoringMetadata && courseProgramShadowed ? (
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Course / Program(s)</p>
@@ -2420,7 +2427,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       Course / Program(s) <span className="text-red-500" aria-hidden="true">*</span>
                     </label>
                     <p className="text-xs text-foreground/60">
-                      Choose one or more programs this note applies to. Adding multiple programs lets one note serve several curricula instead of creating duplicates.
+                      They determine where this note applies and is discoverable; they do not determine its Domain Context. Adding multiple programs lets one note serve several curricula instead of creating duplicates.
                     </p>
                     <ApplicableProgramsCombobox
                       id="note-applicable-programs-inline"
@@ -2428,7 +2435,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       selectedIds={applicableProgramIds}
                       onChange={(selectedIds) => {
                         setApplicableProgramIds(selectedIds);
-                        setApplicableProgramsDirty(true);
                       }}
                       canCreateCatalogProgram={userRole === "ADMIN"}
                       onCatalogProgramCreated={(program) => setApplicableProgramCatalog((current) => [...current, program])}
@@ -2454,7 +2460,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         }))}
                         className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                       >
-                        <option value="">Automatic — based on the program</option>
+                        <option value="">Automatic — use note context</option>
                         {DOMAIN_CONTEXT_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}

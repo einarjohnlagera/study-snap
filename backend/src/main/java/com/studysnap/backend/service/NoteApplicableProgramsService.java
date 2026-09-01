@@ -5,12 +5,10 @@ import com.studysnap.backend.dto.AdminNoteApplicableProgramsPageResponse;
 import com.studysnap.backend.dto.ApplicableProgramResponse;
 import com.studysnap.backend.dto.NoteApplicableProgramsResponse;
 import com.studysnap.backend.entity.NoteEntity;
-import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
-import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.UnknownCourseProgramException;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
@@ -41,6 +39,7 @@ public class NoteApplicableProgramsService {
     private final UserRepository userRepository;
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final NoteCourseProgramRepository noteCourseProgramRepository;
+    private final StudyPackGenerationContextResolver studyPackGenerationContextResolver;
 
     @Transactional(readOnly = true)
     public NoteApplicableProgramsResponse get(String noteIdRaw, UUID requesterUserId) {
@@ -50,7 +49,10 @@ public class NoteApplicableProgramsService {
                 programs.size(),
                 note.getDomainContext()
         );
-        return new NoteApplicableProgramsResponse(programs, courseProgramShadowed);
+        String effectiveWritingDomain = StudyPackGenerationContextResolver.effectiveAuthoringDomain(
+                studyPackGenerationContextResolver.resolve(note.getOwnerUserId(), note)
+        );
+        return new NoteApplicableProgramsResponse(programs, courseProgramShadowed, effectiveWritingDomain);
     }
 
     @Transactional
@@ -70,9 +72,6 @@ public class NoteApplicableProgramsService {
         List<UUID> existingIds = courseProgramCatalogRepository.findExistingIds(desiredIds);
         if (existingIds.size() != desiredIds.size()) {
             throw new UnknownCourseProgramException();
-        }
-        if (desiredIds.size() > 1 && note.getDomainContext() == null) {
-            throw new MultiProgramDomainContextRequiredException();
         }
         noteCourseProgramRepository.replace(note.getId(), desiredIds);
         return noteCourseProgramRepository.findByNoteId(note.getId());
@@ -114,13 +113,7 @@ public class NoteApplicableProgramsService {
         NoteEntity note = noteRepository.findById(noteId).orElseThrow(NoteNotFoundException::new);
         UserEntity requester = userRepository.findById(requesterUserId).orElseThrow(NoteNotFoundException::new);
         boolean isOwner = note.getOwnerUserId().equals(requesterUserId);
-        // Nobody curates during onboarding. This is the FOURTH curator predicate; the pressure test
-        // found it created without the guard in the same release that added the guard to the third and
-        // recorded in CLAUDE.md that all of them carry it. Not UI-reachable mid-onboarding
-        // (requireAuthenticatedOnboardedUser gates both note surfaces), so this is consistency work --
-        // but a rule with a live in-repo exception decays, and the doc claiming otherwise was false.
-        boolean isCurator = requester.getOnboardingCompletedAt() != null
-                && (requester.getRole() == UserRole.ADMIN || requester.getProfileType() == ProfileType.TEACHER);
+        boolean isCurator = CuratorAuthoringPredicate.isCurator(requester);
         if (!isOwner || !isCurator) {
             throw new NoteNotFoundException();
         }

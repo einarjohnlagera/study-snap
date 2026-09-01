@@ -3,9 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.entity.DomainContext;
-import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
-import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.CourseProgramSelectionRequiredException;
 import com.studysnap.backend.exception.DuplicateCourseProgramException;
 import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
@@ -69,7 +67,7 @@ public class NoteGenerationService {
             UserEntity user
     ) {
         DomainContext domainContext = NoteAuthoringMetadataParser.parseDomainContextOrThrow(request.domainContext());
-        if (isCurator(user)) {
+        if (CuratorAuthoringPredicate.isCurator(user)) {
             Set<UUID> courseProgramIds = validateCuratedProgramIds(request.courseProgramIds());
             if (courseProgramIds.size() > 1 && domainContext == null) {
                 throw new MultiProgramDomainContextRequiredException();
@@ -113,16 +111,4 @@ public class NoteGenerationService {
         return uniqueIds;
     }
 
-    private boolean isCurator(UserEntity user) {
-        // Nobody curates during onboarding. The flow collects personal learning context and has no
-        // catalog picker at all, so a curator-role account reaching here mid-onboarding was asked for
-        // courseProgramIds that no onboarding screen can supply -- which made onboarding uncompletable
-        // for every ADMIN and for a TEACHER whose profile type was already persisted. This removes no
-        // authority: once onboarding is complete the account is a full curator again. Mirrors the
-        // exemption OnboardingGuardService already makes for mid-onboarding users.
-        if (user.getOnboardingCompletedAt() == null) {
-            return false;
-        }
-        return user.getRole() == UserRole.ADMIN || user.getProfileType() == ProfileType.TEACHER;
-    }
 }

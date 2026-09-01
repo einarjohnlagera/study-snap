@@ -197,9 +197,10 @@ export function NoteEditorPageClient({
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [applicableProgramCatalog, setApplicableProgramCatalog] = useState<CourseProgramCatalogItem[]>([]);
   const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
-  const [savedApplicableProgramIds, setSavedApplicableProgramIds] = useState<string[]>([]);
   const [savedApplicableProgramNames, setSavedApplicableProgramNames] = useState<string[]>([]);
   const [courseProgramShadowed, setCourseProgramShadowed] = useState<boolean | null>(null);
+  const [effectiveWritingDomain, setEffectiveWritingDomain] = useState<string | null>(null);
+  const [effectiveWritingDomainLoaded, setEffectiveWritingDomainLoaded] = useState(false);
   const [copiedFromNoteId, setCopiedFromNoteId] = useState<string | null>(null);
   const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
   const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
@@ -252,6 +253,7 @@ export function NoteEditorPageClient({
     let active = true;
     setApplicableProgramsLoading(true);
     setApplicableProgramsError(null);
+    setEffectiveWritingDomainLoaded(false);
     const catalogRequest = showCuratorMetadataFields ? getCourseProgramCatalog() : Promise.resolve([]);
     const programsRequest = noteId ? getNoteApplicablePrograms(noteId) : Promise.resolve(null);
     void Promise.all([catalogRequest, programsRequest])
@@ -263,9 +265,10 @@ export function NoteEditorPageClient({
         if (response) {
           const selectedIds = response.programs.map((program) => program.id);
           setApplicableProgramIds(selectedIds);
-          setSavedApplicableProgramIds(selectedIds);
           setSavedApplicableProgramNames(response.programs.map((program) => program.name));
           setCourseProgramShadowed(response.courseProgramShadowed);
+          setEffectiveWritingDomain(response.effectiveWritingDomain);
+          setEffectiveWritingDomainLoaded(true);
           setApplicableProgramsDirty(false);
         }
         setCatalogLoaded(true);
@@ -731,16 +734,6 @@ export function NoteEditorPageClient({
       showToast(`Please complete: ${missing.join(", ")}.`, "warning");
       return null;
     }
-    // C6. The three sibling surfaces (Create a Note, Note Detail, Bulk Generate) all pre-validate this
-    // rule; Save did not, so a curator who family-expanded to several programs with "Add details"
-    // collapsed -- the default -- got a raw 400 naming a field that was off screen inside the closed
-    // accordion, with no way to act on it. Reveal the panel as well as reporting it.
-    if (showCuratorMetadataFields && applicableProgramIds.length > 1 && !draft.domainContext) {
-      setRevealOptionalDetailsSignal((previous) => previous + 1);
-      setFormError(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE);
-      showToast(MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE, "warning");
-      return null;
-    }
     return {
       title: normalizeOptional(draft.title),
       subject: normalizeOptional(draft.subject),
@@ -783,7 +776,6 @@ export function NoteEditorPageClient({
       : await createNote(payload);
 
     if (showCuratorMetadataFields) {
-      setSavedApplicableProgramIds(applicableProgramIds);
       setApplicableProgramsDirty(false);
     }
 
@@ -802,9 +794,6 @@ export function NoteEditorPageClient({
     }
     return saved;
   }, [
-    applicableProgramIds,
-    applicableProgramsDirty,
-    applicableProgramsError,
     buildRequest,
     contentEmpty,
     currentNoteId,
@@ -855,9 +844,11 @@ export function NoteEditorPageClient({
         };
       }
     } catch (error) {
-      // M10: this catch discarded the exception, so a curator hitting the paywall with several programs
-      // and a blank Domain Context saw "we couldn't save your draft" instead of the instruction that
-      // would actually let them save. Surface the server's message when it has one -- it is a
+      // M10: this catch discarded the exception, so a curator whose save was rejected saw "we couldn't
+      // save your draft" instead of the instruction that would actually let them save.
+      // (The original example was several programs with a blank Domain Context. v0.100.0 moved that
+      // check to generation time, so it no longer fails HERE -- CourseProgramSelectionRequiredException
+      // still does, and the mechanism below is unchanged.) Surface the server's message when it has one -- it is a
       // validation contract (MultiProgramDomainContextRequiredException,
       // CourseProgramSelectionRequiredException), not an infrastructure failure -- and keep the generic
       // draft-preservation notice for everything else.
@@ -1423,6 +1414,8 @@ export function NoteEditorPageClient({
         applicableProgramsLoading={applicableProgramsLoading}
         applicableProgramsError={applicableProgramsError}
         onRetryApplicablePrograms={() => setApplicableProgramsRetryToken((value) => value + 1)}
+        effectiveWritingDomain={effectiveWritingDomain}
+        effectiveWritingDomainLoaded={effectiveWritingDomainLoaded}
         courseProgramShadowed={courseProgramShadowed ?? (
           isEditMode && (applicableProgramsLoading || Boolean(applicableProgramsError)) ? true : null
         )}
