@@ -1,5 +1,117 @@
 # RELEASES.md - NoteLib
 
+## v0.102.0 - Plan-Sourced Assessment
+
+**Status: In Progress** (kicked off 2026-09-01, base branch `releases/v0.102.0`, cut from `main` after
+`v0.101.0` merged and tagged)
+
+Theme: the plan a learner builds should be the thing they can be tested on.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** The reservation is
+**conjunctive** — *live core AND product success* — and both halves are unmet. The three-digit minor is
+deliberate and was verified safe at the `v0.100.0` kickoff. **Do not "fix" it.**
+
+### Why this release exists
+
+**Slice 2 of the Review Sets audit** (§S2-2), and the audit names it **the single highest-leverage change in
+the whole brief**: it is simultaneously the assessment gap (§9), the retention loop (§25), the supporter gap
+(§15) and the Free-tier question (§16).
+
+**The gap it closes, stated plainly: the Study Plan is first-class everywhere EXCEPT the one place that would
+prove its value — you cannot assess against it.** Verified at this kickoff rather than inherited:
+`LongExamStartRequest` carries `difficulty` and `additionalStudyPackIds` and **nothing else**, so there is no
+collection id anywhere in the contract and plan-sourcing is genuinely new rather than half-built.
+
+**⚠️ IT SHIPS SECOND, NOT FIRST, AND THE ORDER WAS THE POINT.** Slice 1 shipped
+`NOTE_ADDED_TO_COLLECTION` precisely so that the "note joins a plan" signal has lead time before the
+behaviour around plans changes. **Do not fold Slice 3 into this release** — §S2-D records Slice 3 as a HARD
+dependency on this one, and folding them would put a quota change in the same diff as a new source path.
+
+### Planned Scope
+
+- **1. A Subject Plan can source the existing multi-note assessment (backend + frontend).** The source set is
+  **plan MEMBERSHIP**. **⚠️ `notes.subject` IS NOT THE PREDICATE, AND THIS IS THE ONE ITEM THE OWNER MARKED
+  "NOT TUNABLE AT ALL" (2026-08-31).** §G3a is why: matching is `trim().toLowerCase()` on free text with no
+  catalog, so two notes a learner deliberately put in the same plan are refused from one exam when their
+  subjects were typed differently (*Engineering Mathematics* vs *Engineering Math*). **The fix is replacing a
+  wrong predicate, not relaxing a rule.**
+- **2. The cap is stated honestly per learner level, and the engine is UNCHANGED (owner decision,
+  2026-09-01).** **⚠️ THE CAP IS NOT A FREE CONSTANT AND THE ARITHMETIC WAS RE-VERIFIED AT THIS KICKOFF:**
+  `MIN_QUESTIONS_PER_SOURCE = 3` (`LongExamService:111`) is checked against
+  `baseQuestionCount = questionCount / sourceCount` (`:849-850`), and `questionCount` derives from the
+  learner's **LEVEL, not their selection** (`resolveQuestionCount:543-550` → 20 / 25 / 30). So the real
+  ceiling is **6 for Grade School and Junior High, 8 for Senior High / College / Personal Learning, 10 for
+  Board Exam Review and Professional** — and **a College learner, the default and most common level, fails at
+  9.** The cap ships as `floor(questionCount / 3)`, surfaced before the learner starts.
+  **⚠️ REJECTED AT KICKOFF, each with its reason:** scaling `questionCount` with source count (a 10-note exam
+  silently becomes longer than the learner's level norm) and lowering `MIN_QUESTIONS_PER_SOURCE` to 2 (it
+  weakens per-note coverage, and per-note evidence is exactly what Slice 4's remediation reads).
+  **⚠️ `MAX_ADDITIONAL_SOURCE_COUNT = 3` today (`:110`), so 4 sources total** — the raise applies to the
+  **plan-sourced path only**; the manual path is untouched.
+- **3. The learner is told what is in scope BEFORE starting (frontend).** *"Architectural Design · Testing
+  material from 8 of 12 Notes in this Subject Plan."* **⚠️ ELIGIBLE notes only** — a source must have a
+  generated Study Pack (`LongExamService:799-802`). **⚠️ Do NOT compute this set a second time:** the
+  collection detail page already derives exactly it as `quizReadyNoteIds`
+  (`collection-detail-page-client.tsx:3046`), with `hasNonQuizReadyItems` beside it at `:3061`.
+- **4. `BOARD_EXAM_COMPLETED` plus source-count and source-scope metadata on exam starts (backend).**
+  **⚠️ Verified at kickoff: `BOARD_EXAM_STARTED` EXISTS and `BOARD_EXAM_COMPLETED` DOES NOT** — so the Board
+  Exam funnel currently has a start with no end. Enum first, per the standing convention.
+- **5. `study-plans-guide.tsx:23` becomes FALSE in this release and must be corrected in it (frontend copy).**
+  It says *"nothing is generated for the set itself."* **⚠️ THIS LINE HAS NEVER ONCE BEEN IN A DIFF WHEN THE
+  BEHAVIOUR IT DESCRIBES CHANGED, and `v0.101.0` made it HARDER to find, not easier** — that release's sweep
+  removed the word "AI" from it, so the sweep-by-surface grep that would previously have caught it no longer
+  matches. **It is listed here by file and line for exactly that reason.**
+
+### Explicitly out of scope
+
+- **⚠️ WHOLE-REVIEW-SET SOURCING IS DEFERRED BY DECISION, NOT UNSUPPORTED BY ACCIDENT (owner, 2026-08-31).**
+  The hierarchy stays **Note → topic; Subject Plan → mixed retrieval; Review Set → readiness**, and the
+  Review Set level overlaps Board Exam Mode, so the two are decided together or not at all.
+- **Slice 3 (Free/Plus mixed retrieval), Slice 4 (plan-scoped remediation), Slice 5 (supporter combined
+  quiz).** **⚠️ NO QUOTA, LIMIT OR METER CHANGE HERE** — plan-sourced assessment stays on the existing
+  Pro-gated Long Exam capability, and opening the ladder is Slice 3's decision.
+- **⚠️ NO NEW QUIZ MODE.** `EXAM_MODES.md` is a **locked five-mode contract**; multi-note is a CAPABILITY on
+  Long Exam, which that doc anticipates by name.
+- **The manual note-selected path keeps its same-subject rule.** **⚠️ It is a KNOWN defect consciously
+  deferred (§S2-X3), and this release makes it WORSE, not better** — afterwards a learner can run a
+  plan-sourced exam across mixed subjects while manual selection of *the same notes* still rejects them. **One
+  product, two answers to the same question. It ships as a named Known limitation rather than being
+  discovered as a bug report.**
+- **"AI critique", every Category B disclosure, and every Category C code identifier** — unchanged from
+  `v0.101.0`.
+
+### Anti-drift — locked rules for this release
+
+- **⚠️ Plan MEMBERSHIP, never `notes.subject`.** Not tunable.
+- **⚠️ No new persisted field for the cap** — it is derived from the learner's level at request time.
+- **⚠️ Do NOT widen the Note Detail Adaptive Practice entry point** — that is Slice 4, and widening it has no
+  target for a standalone note.
+- **⚠️ Do NOT add, remove or reorder an onboarding FLOW step, and no code under `frontend/app/onboarding`.**
+  **⚠️ The freeze is NOT engaged and this was verified, not assumed:** every `BOARD_EXAM` match in
+  `app/onboarding/page.tsx` is `ProfileType.BOARD_EXAM`, not Board Exam **mode**, and the directory contains
+  **no Long Exam reference at all**. `[CHECKPOINT — due 2026-09-11]` is 10 days out.
+- **⚠️ Viewing must never write `ConceptHealth`**, and Long Exam's existing writes (`:473,481`) are unchanged.
+
+### Verification tier
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION** (§S2-2's own tier, re-evaluated rather than inherited).
+The trigger is that this release **changes what a scored assessment is built from** — a new source path into
+an engine whose per-source arithmetic silently rejects at a boundary most learners can reach. It is **not**
+the full three-agent test: no permission substrate, no cross-user read, and **no money or quota semantics
+change**.
+
+**⚠️ CARRIED FORWARD FROM `v0.100.0`, because it is measured rather than an impression:** every one of that
+release's five deliveries carried a defect past its own tests. So — `advisor()` **before** any prompt;
+verify *"X already does Y"* against code first; **MUTATE and confirm a test fails**; confirm new tests
+**EXECUTED** via `target/surefire-reports/*.xml`; and read `tsc --noEmit`'s own exit code.
+**⚠️ The cold agent must be asked to COUNT EXECUTED TESTS, not read them.**
+
+**⚠️ A `[CHECKPOINT]` IS LIKELY OWED HERE, unlike `v0.101.0`.** Item 2 ships a cap the product has never
+tested against real selection behaviour, and items 4's events exist to read it. **The owner's no-checkpoint
+ruling was scoped to `v0.101.0` and does NOT carry** — decide it at signoff on the gate's five properties.
+
 ## v0.101.0 - Language and Observability
 
 **Status: Released** (kicked off and signed off 2026-09-01, base branch `releases/v0.101.0`, cut from `main`
