@@ -79,12 +79,31 @@ fetch was written unbounded; the catalog simply grew into it. **Reverting `v0.99
 - Per `CLAUDE.md`, merging to `main` **auto-deploys to production**.
 - This frontend build failed at **23:54**, ~15 minutes later.
 
-**So the `v0.99.0` production deploy failed at the frontend build step.** Anyone investigating the
-reported 1am outage should treat this as a stronger lead than any scheduled job — separately checked, **no
-cron job is scheduled at 01:00 PHT**, and the one that reads like it (`billing.usage-reset-cron`,
-`0 15 1 * * *`) carries **no `zone`**, so it runs in the JVM default. Nothing in the repo sets `TZ`
-(Dockerfile, `application.yaml`, `docker-compose.yml` are all silent; `eclipse-temurin:21-jre` defaults to
-UTC), which would put it at 09:15 PHT, not 01:15.
+**So the `v0.99.0` production deploy failed at the frontend build step.**
+
+**⚠️ RESOLVED 2026-09-01 — AND THE LEAD THIS SECTION OFFERED WAS WRONG. The build failure and the 1am
+outage are SEPARATE EVENTS.** This section proposed the build failure as *"a stronger lead than any
+scheduled job"* for the 1am outage. It is not a lead at all: the owner confirmed the outage ran
+**01:00–01:01, a single minute**, more than an hour AFTER this 23:54 build failure, and its stack trace is
+a `java.net.UnknownHostException` on the Render internal Postgres host (`dpg-…-a`) — a **transient DNS/DB
+resolution hiccup**, with `HikariPool total=0, active=0, idle=0` proving the pool never opened a single
+connection rather than being exhausted by load.
+
+**⚠️ THIS CUTS BOTH WAYS AND THE SECOND HALF IS THE IMPORTANT ONE.** Before the timestamp was known, the
+DB failure was a live alternative explanation for the build failure itself — if the database had been
+unreachable at 23:54, the backend would have been failing every request regardless of fetch amplification,
+and `v0.100.0` item 7's fix would have been treating a symptom. **The one-minute window at 01:00 rules that
+out**, so the amplification diagnosis in this document stands and item 7's *"unblocks deploys"* claim is
+sound. Recorded because the question was raised against the release's own headline claim, and *"we checked
+and it held"* is a different fact from *"nobody asked."*
+
+**The cron elimination below remains correct and is now pinned by a test** (`v0.100.0`,
+`everyCronJobPinsTheTimezoneItsScheduleIsInterpretedIn`): **no cron job is scheduled at 01:00 PHT**, and the
+one that reads like it (`billing.usage-reset-cron`, `0 15 1 * * *`) carries **no `zone`**, so it runs in the
+JVM default. Nothing in the repo sets `TZ` (Dockerfile, `application.yaml`, `docker-compose.yml` are all
+silent; `eclipse-temurin:21-jre` defaults to UTC), which puts it at 09:15 PHT, not 01:15. **⚠️ That
+arithmetic is now load-bearing: if someone ever adds a `zone` to that job, the reasoning that cleared it
+stops being true — which is why the timezone map is pinned rather than documented.**
 
 ---
 
