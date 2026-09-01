@@ -19,7 +19,7 @@ import {
 } from "@/lib/public-note-path";
 import {
   getServerPublicNotesBySubjectSlug,
-  getServerPublicSubjects,
+  getServerPublicSubjectSlugs,
   SUBJECT_PAGE_INDEX_THRESHOLD,
 } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
@@ -131,8 +131,10 @@ function SubjectSection({ title, description, notes, subjectPath }: Readonly<Sub
 
 export async function generateStaticParams() {
   try {
-    const subjects = await getServerPublicSubjects();
-    return subjects.map((entry) => ({ subject: entry.slug }));
+    // Slugs come from GET /subjects?scope=public rather than from the whole note catalog. Deriving them
+    // from every public note is what made this run one of ~250 unbounded 2.5MB fetches in a single build.
+    const subjectSlugs = await getServerPublicSubjectSlugs();
+    return subjectSlugs.map((slug) => ({ subject: slug }));
   } catch {
     // Backend unreachable at build time (e.g. Vercel build); ISR will generate pages on first request.
     return [];
