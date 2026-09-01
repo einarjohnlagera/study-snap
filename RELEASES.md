@@ -19,10 +19,30 @@ deliberate and was verified safe at the `v0.100.0` kickoff. **Do not "fix" it.**
 the whole brief**: it is simultaneously the assessment gap (§9), the retention loop (§25), the supporter gap
 (§15) and the Free-tier question (§16).
 
-**The gap it closes, stated plainly: the Study Plan is first-class everywhere EXCEPT the one place that would
-prove its value — you cannot assess against it.** Verified at this kickoff rather than inherited:
-`LongExamStartRequest` carries `difficulty` and `additionalStudyPackIds` and **nothing else**, so there is no
-collection id anywhere in the contract and plan-sourcing is genuinely new rather than half-built.
+**⚠️ CORRECTED 2026-09-01, BEFORE ANY IMPLEMENTATION — THE KICKOFF'S OWN FRAMING WAS WRONG AND IS RETRACTED
+HERE AT FULL STRENGTH.** This section originally said *"plan-sourcing is genuinely new rather than half-built,"*
+reasoning from `LongExamStartRequest` carrying no collection id. **The DTO fact is true and the conclusion drawn
+from it is false.** Reading the frontend disproves it:
+
+- `collection-exam.ts:44-53` — `resolveCollectionScopedSourceNotes` already selects sources by **collection
+  MEMBERSHIP**, filtered to quiz-ready notes, **with no subject filter anywhere**. That is already the exact
+  predicate §S2-2 specifies.
+- `long-exam/page.tsx:319-336` — when `collectionId` is present the page **already calls it and pre-selects the
+  result**, capped at a hardcoded `LONG_EXAM_MAX_ADDITIONAL_NOTES = 3` (`:72`).
+- `collection-detail-page-client.tsx:3149` — the plan's terminal CTA **already routes with `?collectionId=`**.
+
+**So the frontend has sourced by plan membership for some time, and the BACKEND REJECTS IT** at
+`LongExamService:842`, which requires every additional source to share the primary's subject.
+
+**⚠️ THIS IS THEREFORE A LIVE DEFECT ON A PAID PATH, NOT A MISSING CAPABILITY, AND THE USER-VISIBLE BEHAVIOUR IS
+SELF-CONTRADICTING:** a PRO learner opens a mixed-subject Study Plan, presses the plan's own *Take the Long
+Exam* CTA, the product **pre-selects that plan's notes for them**, and pressing Start returns
+`InvalidLongExamSourceException` — surfaced verbatim by `long-exam/page.tsx:531-533` as
+**"Long Exam source notes must be owned by you and share the same subject."** The product refuses a selection it
+made itself, and blames the learner for it.
+
+**The gap this release closes, restated: the Study Plan is first-class everywhere EXCEPT the one place that
+would prove its value — and the half that exists is broken rather than absent.**
 
 **⚠️ IT SHIPS SECOND, NOT FIRST, AND THE ORDER WAS THE POINT.** Slice 1 shipped
 `NOTE_ADDED_TO_COLLECTION` precisely so that the "note joins a plan" signal has lead time before the
@@ -31,8 +51,16 @@ dependency on this one, and folding them would put a quota change in the same di
 
 ### Planned Scope
 
-- **1. A Subject Plan can source the existing multi-note assessment (backend + frontend).** The source set is
-  **plan MEMBERSHIP**. **⚠️ `notes.subject` IS NOT THE PREDICATE, AND THIS IS THE ONE ITEM THE OWNER MARKED
+- **1. The backend stops rejecting the plan-sourced selection the frontend already makes (backend).**
+  **⚠️ RESHAPED FROM "BUILD PLAN SOURCING" TO "STOP REFUSING IT" — see the retraction above.** The source set is
+  **plan MEMBERSHIP**, and the frontend already resolves exactly that; what is missing is a backend that accepts
+  it. **⚠️ THE SERVER MUST NOT TRUST A CLIENT-SUPPLIED `sourceCollectionId`.** Skipping the subject check merely
+  because the field is present would let any caller bypass a validation rule by naming a collection. The gate is
+  **caller owns the collection AND every additional study pack's note is a live member of it** — anything less
+  converts a validation rule into an opt-out flag. **⚠️ `LongExamService` injects NEITHER collection repository
+  today** (`:126-143`); `NoteCollectionItemRepository.findByCollectionIdOrderByPositionAsc` and
+  `findByCollectionIdAndNoteId` both exist and are the reads to use.
+  **⚠️ `notes.subject` IS NOT THE PREDICATE, AND THIS IS THE ONE ITEM THE OWNER MARKED
   "NOT TUNABLE AT ALL" (2026-08-31).** §G3a is why: matching is `trim().toLowerCase()` on free text with no
   catalog, so two notes a learner deliberately put in the same plan are refused from one exam when their
   subjects were typed differently (*Engineering Mathematics* vs *Engineering Math*). **The fix is replacing a
@@ -50,11 +78,15 @@ dependency on this one, and folding them would put a quota change in the same di
   weakens per-note coverage, and per-note evidence is exactly what Slice 4's remediation reads).
   **⚠️ `MAX_ADDITIONAL_SOURCE_COUNT = 3` today (`:110`), so 4 sources total** — the raise applies to the
   **plan-sourced path only**; the manual path is untouched.
-- **3. The learner is told what is in scope BEFORE starting (frontend).** *"Architectural Design · Testing
-  material from 8 of 12 Notes in this Subject Plan."* **⚠️ ELIGIBLE notes only** — a source must have a
-  generated Study Pack (`LongExamService:799-802`). **⚠️ Do NOT compute this set a second time:** the
-  collection detail page already derives exactly it as `quizReadyNoteIds`
-  (`collection-detail-page-client.tsx:3046`), with `hasNonQuizReadyItems` beside it at `:3061`.
+- **3. The learner is told what is in scope BEFORE starting (frontend). ⚠️ SMALLER THAN SCOPED — the surface
+  already exists.** `long-exam/page.tsx:934` already renders *"Add up to N more notes from this plan."* It needs
+  **the honest number and the eligible-vs-total count**, not a new surface: *"Testing material from 8 of 12 Notes
+  in this Subject Plan."* **⚠️ ELIGIBLE notes only** — a source must have a generated Study Pack
+  (`LongExamService:799-802`). **⚠️ Do NOT compute this set a second time** — `collection-exam.ts` already derives
+  it. **⚠️ AND DO NOT RE-DERIVE THE CAP CLIENT-SIDE:** `LONG_EXAM_MAX_ADDITIONAL_NOTES = 3` is a frontend
+  constant while the level → `questionCount` mapping is **backend config** (`longExamLowTierCount` / `Mid` /
+  `High`). **The cap must arrive from the server**, or it is the same frontend-re-implements-backend-precedence
+  drift `v0.100.0` item 2 was written to prevent.
 - **4. `BOARD_EXAM_COMPLETED` plus source-count and source-scope metadata on exam starts (backend).**
   **⚠️ Verified at kickoff: `BOARD_EXAM_STARTED` EXISTS and `BOARD_EXAM_COMPLETED` DOES NOT** — so the Board
   Exam funnel currently has a start with no end. Enum first, per the standing convention.
@@ -74,6 +106,10 @@ dependency on this one, and folding them would put a quota change in the same di
   Pro-gated Long Exam capability, and opening the ladder is Slice 3's decision.
 - **⚠️ NO NEW QUIZ MODE.** `EXAM_MODES.md` is a **locked five-mode contract**; multi-note is a CAPABILITY on
   Long Exam, which that doc anticipates by name.
+- **⚠️ INTERVIEW PRACTICE IS NOT A PARALLEL DEFECT — CHECKED, NOT ASSUMED.** It has the identical frontend
+  pattern (`interview-practice/page.tsx:144`, `MAX_ADDITIONAL_NOTES = 2`), but `InterviewPracticeService`
+  **enforces no subject rule at all**, so its plan-sourced path already works. **Do not "fix" it, and do not
+  record it as a known-identical defect.**
 - **The manual note-selected path keeps its same-subject rule.** **⚠️ It is a KNOWN defect consciously
   deferred (§S2-X3), and this release makes it WORSE, not better** — afterwards a learner can run a
   plan-sourced exam across mixed subjects while manual selection of *the same notes* still rejects them. **One
