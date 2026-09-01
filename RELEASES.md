@@ -344,6 +344,36 @@ so the invariant is never unprotected between commits.
   `[CHECKPOINT — due 2026-09-28]` reads**, and rewriting them would change that read's own input mid-window
   with no honest way to say afterwards *"these curators saw a different description."* **⚠️ Recorded so the
   omission is not re-derived as an oversight; it is deferred until after the read.**
+- **Item 7 — the production build failure is fixed, and no page fetches the whole catalog to filter it any
+  more.** `getServerPublicNotesBySubjectSlug` requests `?subject=<slug>`;
+  `getServerPublicNotesByCourseProgram(s)` use `?courseProgram=`, one request per program merged and
+  de-duplicated by note id; `generateStaticParams` reads `GET /subjects?scope=public`; and
+  `getServerPublicNotes()` — now the **only** full-catalog reader, for `sitemap.ts` alone — paginates at
+  **250 items**, derived from the failing build's own numbers (2,579,045 bytes over ~950 notes ≈ 2.7 KB
+  each, so ~675 KB per page, about **3× headroom**). The constant carries that arithmetic in a comment and
+  the instruction to revisit it if `NoteListItemResponse` grows.
+- **⚠️ THE SLUG IS PASSED THROUGH UNCHANGED, AND VERIFYING WHY IS WHAT MADE THIS SAFE.** The finding
+  proposed resolving slug → label first. That would have been a real defect: `notes.subject` is free text
+  with **no catalog**, so label variants that slug identically exist, and inverting a lossy slug drops them
+  from **SEO-indexed** pages. **The backend never needed a label** —
+  `PublicLibraryRepositoryImpl:209` matches `normalizedSlugSql(n.subject) = :subjectSlug`, and
+  `NoteService.normalizePublicLibraryFilterSlug:1204` puts the incoming param through the **identical**
+  transformation. Behaviour-preserving by construction.
+- **⚠️ THE SAME QUESTION WAS ASKED OF THE COURSE-PROGRAM FILTER RATHER THAN ASSUMED, and a failing test is
+  what forced it.** The old JS matcher had real semantics — joined programs win, the personal scalar counts
+  **only** when no join rows exist. `PublicLibraryRepositoryImpl:212-221` expresses **exactly** that
+  (`exists(...) OR (not exists(...) AND ...)`), both sides slug-normalized. It is in fact marginally **more**
+  inclusive, since it groups punctuation variants the JS `trim().toLowerCase()` treated as distinct.
+- **Dead code removed rather than left as a trap:** `getNormalizedNotePrograms` (the JS matcher the server
+  replaced) and `getServerPublicSubjects` (the orphaned full-catalog subject reader). **Leaving an exported
+  helper that does the exact thing this fix exists to prevent is how the defect comes back.**
+- **Verified: `npm run build` exits 0 with ZERO `items over 2MB` warnings**, 193 suites / 2084 tests green,
+  `tsc --noEmit` clean, lint back to its 15 pre-existing warnings. **Mutation-verified — reverting the
+  subject filter to in-JS filtering fails two tests**, and the suite carries an explicit invariant test:
+  **no request to `/notes/public` may go out without a filter or a `pageSize`.**
+- **⚠️ Local build verification has a known limit, stated rather than glossed:** with no backend running the
+  fetches fall into their existing catches, so this proves the change does not break the build — **it does
+  not exercise the live data path.** The real confirmation is the first production deploy.
 - **⚠️ ITEM 6's GUARD IS PARTLY UNBUILDABLE, AND THE REASON IS A STRONGER PROPERTY THAN THE TEST WOULD HAVE
   BEEN.** The spec asked for three tests pinning that
   `OfficialChallengeQuizTemplateService:221`, `ExamQuestionPoolService:151` and

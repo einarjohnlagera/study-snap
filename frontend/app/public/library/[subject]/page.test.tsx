@@ -1,13 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import SubjectLandingPage, { generateMetadata, generateStaticParams } from "./page";
-import { getServerPublicNotesBySubjectSlug, getServerPublicSubjects } from "@/lib/server-public-notes";
+import { getServerPublicNotesBySubjectSlug, getServerPublicSubjectSlugs } from "@/lib/server-public-notes";
 import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 import type { NoteListItemResponse } from "@/lib/api";
 
 jest.mock("@/lib/server-public-notes", () => ({
   ...jest.requireActual("@/lib/server-public-notes"),
   getServerPublicNotesBySubjectSlug: jest.fn(),
-  getServerPublicSubjects: jest.fn(),
+  getServerPublicSubjectSlugs: jest.fn(),
 }));
 
 type TestNote = NoteListItemResponse & { slug: string };
@@ -75,21 +75,26 @@ const subjectNotes = [
 describe("SubjectLandingPage", () => {
   beforeEach(() => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockReset();
-    (getServerPublicSubjects as jest.Mock).mockReset();
+    (getServerPublicSubjectSlugs as jest.Mock).mockReset();
     window.sessionStorage.clear();
   });
 
-  it("generates static params from public subject slugs", async () => {
-    (getServerPublicSubjects as jest.Mock).mockResolvedValue([
-      { slug: "biology", label: "Biology", lastModified: "2026-03-21T00:00:00Z" },
-      { slug: "chemistry", label: "Chemistry", lastModified: null },
-    ]);
+  // ⚠️ Slugs now come from GET /subjects?scope=public, not from every public note. Deriving them from the
+  // catalog is what made this one of ~250 unbounded 2.5MB fetches in a single build.
+  it("generates static params from the public subjects endpoint, not the note catalog", async () => {
+    (getServerPublicSubjectSlugs as jest.Mock).mockResolvedValue(["biology", "chemistry"]);
 
     await expect(generateStaticParams()).resolves.toEqual([
       { subject: "biology" },
       { subject: "chemistry" },
     ]);
-    expect(getServerPublicSubjects).toHaveBeenCalledTimes(1);
+    expect(getServerPublicSubjectSlugs).toHaveBeenCalledTimes(1);
+  });
+
+  it("still falls back to ISR rather than failing the build when the subjects call rejects", async () => {
+    (getServerPublicSubjectSlugs as jest.Mock).mockRejectedValue(new Error("backend unreachable"));
+
+    await expect(generateStaticParams()).resolves.toEqual([]);
   });
 
   it("generates per-subject metadata from the subject label", async () => {
