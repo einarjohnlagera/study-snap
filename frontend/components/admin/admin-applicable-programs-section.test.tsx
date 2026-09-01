@@ -78,6 +78,7 @@ describe("AdminApplicableProgramsSection", () => {
 
     await screen.findByText("Engineering Algebra");
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByText(/Applicable Programs determine where this note applies and is discoverable/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add all 2 Engineering programs" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove Mechanical Engineering" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Applicable Programs" }));

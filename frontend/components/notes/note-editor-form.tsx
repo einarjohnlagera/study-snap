@@ -120,6 +120,8 @@ type NoteEditorFormProps = {
     applicableProgramsLoading?: boolean;
     applicableProgramsError?: string | null;
     onRetryApplicablePrograms?: () => void;
+    effectiveWritingDomain?: string | null;
+    effectiveWritingDomainLoaded?: boolean;
     courseProgramShadowed?: boolean | null;
     savedApplicableProgramNames?: string[];
     copiedFromNoteId?: string | null;
@@ -207,6 +209,8 @@ export function NoteEditorForm({
                                    applicableProgramsLoading = false,
                                    applicableProgramsError = null,
                                    onRetryApplicablePrograms,
+                                   effectiveWritingDomain = null,
+                                   effectiveWritingDomainLoaded = false,
                                    courseProgramShadowed = null,
                                    savedApplicableProgramNames = [],
                                    copiedFromNoteId = null,
@@ -433,8 +437,9 @@ export function NoteEditorForm({
                     {showAuthoringMetadataFields ? (
                         <>
                             <p className="text-xs text-foreground/60">
-                                Choose one or more programs this note applies to. Adding multiple programs lets one
-                                note serve several curricula instead of creating duplicates.
+                                They determine where this note applies and is discoverable; they do not determine its
+                                Domain Context. Adding multiple programs lets one note serve several curricula instead
+                                of creating duplicates.
                             </p>
                             <ApplicableProgramsCombobox
                                 id="note-applicable-programs"
@@ -475,6 +480,13 @@ export function NoteEditorForm({
             {showAuthoringMetadataFields ? (
                 <fieldset className="space-y-4 rounded-xl border border-border/80 bg-muted/15 p-4">
                     <legend className="px-1 text-sm font-semibold text-foreground">Generation context</legend>
+                    {effectiveWritingDomainLoaded ? (
+                        <p className="text-sm text-foreground/70">
+                            {effectiveWritingDomain
+                                ? `Writing domain: ${effectiveWritingDomain}`
+                                : "Writing domain needs attention"}
+                        </p>
+                    ) : null}
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                             <label htmlFor="note-domain-context" className="text-sm font-medium text-foreground">
@@ -487,7 +499,7 @@ export function NoteEditorForm({
                                 disabled={isCopying}
                                 className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                             >
-                                <option value="">Automatic — based on the program</option>
+                                <option value="">Automatic — use note context</option>
                                 {DOMAIN_CONTEXT_OPTIONS.map((option) => (
                                     <option key={option.value} value={option.value}>{option.label}</option>
                                 ))}

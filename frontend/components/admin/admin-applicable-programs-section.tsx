@@ -198,6 +198,9 @@ export function AdminApplicableProgramsSection() {
           </div>
         )}
       >
+        <p className="text-sm text-foreground/65">
+          Applicable Programs determine where this note applies and is discoverable; they do not determine its Domain Context.
+        </p>
         <ApplicableProgramsCombobox
           id="admin-note-applicable-programs"
           catalog={catalog}

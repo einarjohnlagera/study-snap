@@ -1712,6 +1712,7 @@ export type ApplicableProgram = {
 export type NoteApplicableProgramsResponse = {
   programs: ApplicableProgram[];
   courseProgramShadowed: boolean;
+  effectiveWritingDomain: string | null;
 };
 
 export type AdminNoteApplicableProgramsItem = {
@@ -5310,9 +5311,17 @@ export async function getNoteApplicablePrograms(noteId: string): Promise<NoteApp
     && "name" in program
     && typeof program.name === "string"
   ));
+  // The backend serves this as a derived value that may legitimately be null ("nothing resolved"), so a
+  // missing or non-string field is normalized to null rather than left undefined. Without this the field
+  // is absent at runtime and the writing-domain line never renders, which no mocked test would catch.
+  const effectiveWritingDomain = "effectiveWritingDomain" in payload
+    && typeof payload.effectiveWritingDomain === "string"
+    ? payload.effectiveWritingDomain
+    : null;
   return {
     programs,
     courseProgramShadowed: payload.courseProgramShadowed,
+    effectiveWritingDomain,
   };
 }
 

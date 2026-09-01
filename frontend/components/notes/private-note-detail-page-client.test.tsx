@@ -204,6 +204,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
       programs: [{ id: "program-nursing", name: "Nursing" }],
       courseProgramShadowed: true,
+      effectiveWritingDomain: "Nursing",
     });
     (replaceNoteApplicablePrograms as jest.Mock).mockImplementation(async (_noteId: string, ids: string[]) => (
       ids.map((id) => ({ id, name: id === "program-pharmacy" ? "Pharmacy" : "Nursing" }))
@@ -489,6 +490,9 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
     expect(await screen.findByLabelText("Add a course or program")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add all 3 Engineering programs" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Automatic — use note context" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Automatic — based on the reader" })).toBeInTheDocument();
+    expect(screen.getByText(/They determine where this note applies and is discoverable/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
   });
@@ -535,6 +539,65 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(viewerButton);
     expect(await screen.findByText("Pharmacy")).toBeInTheDocument();
     expect(screen.getByText("Medicine")).toBeInTheDocument();
+  });
+
+  it("shows the Domain Context outcome as the writing domain for a curator", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, domainContext: "NURSING" });
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [{ id: "program-nursing", name: "Nursing" }],
+      courseProgramShadowed: true,
+      effectiveWritingDomain: "Nursing",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Writing domain: Nursing")).toBeInTheDocument();
+    expect(getNoteApplicablePrograms).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows needs attention only after a successful unresolved applicable-programs response", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue(baseNote);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [],
+      courseProgramShadowed: false,
+      effectiveWritingDomain: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Writing domain needs attention")).toBeInTheDocument();
+  });
+
+  it("does not claim a writing-domain problem when the applicable-programs fetch fails", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue(baseNote);
+    let rejectApplicablePrograms: (reason?: unknown) => void = () => undefined;
+    (getNoteApplicablePrograms as jest.Mock).mockImplementation(() => new Promise((_, reject) => {
+      rejectApplicablePrograms = reject;
+    }));
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await waitFor(() => expect(getNoteApplicablePrograms).toHaveBeenCalledWith("note-1"));
+    await act(async () => {
+      rejectApplicablePrograms(new Error("Applicable Programs unavailable"));
+    });
+    expect(screen.queryByText("Writing domain needs attention")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Writing domain:/)).not.toBeInTheDocument();
   });
 
   it("keeps a non-teacher route to quiz creation, in the note actions menu not the practice row", async () => {

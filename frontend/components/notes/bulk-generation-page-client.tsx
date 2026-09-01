@@ -624,7 +624,7 @@ export function BulkGenerationPageClient() {
                   onChange={(event) => setDomainContext(event.target.value as DomainContext | "")}
                   className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
                 >
-                  <option value="">Automatic — based on the program</option>
+                  <option value="">Automatic — use note context</option>
                   {DOMAIN_CONTEXT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}

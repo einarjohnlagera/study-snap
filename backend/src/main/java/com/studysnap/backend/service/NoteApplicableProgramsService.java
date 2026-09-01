@@ -39,6 +39,7 @@ public class NoteApplicableProgramsService {
     private final UserRepository userRepository;
     private final CourseProgramCatalogRepository courseProgramCatalogRepository;
     private final NoteCourseProgramRepository noteCourseProgramRepository;
+    private final StudyPackGenerationContextResolver studyPackGenerationContextResolver;
 
     @Transactional(readOnly = true)
     public NoteApplicableProgramsResponse get(String noteIdRaw, UUID requesterUserId) {
@@ -48,7 +49,10 @@ public class NoteApplicableProgramsService {
                 programs.size(),
                 note.getDomainContext()
         );
-        return new NoteApplicableProgramsResponse(programs, courseProgramShadowed);
+        String effectiveWritingDomain = StudyPackGenerationContextResolver.effectiveAuthoringDomain(
+                studyPackGenerationContextResolver.resolve(note.getOwnerUserId(), note)
+        );
+        return new NoteApplicableProgramsResponse(programs, courseProgramShadowed, effectiveWritingDomain);
     }
 
     @Transactional
