@@ -1,5 +1,103 @@
 # RELEASES.md - NoteLib
 
+## v0.103.0 - Mixed Retrieval for Free and Plus
+
+**Status: In Progress** (kicked off 2026-09-02, base branch `releases/v0.103.0`, cut from `main` after
+`v0.102.0` merged and tagged)
+
+Theme: practising across several notes at once should not be a thing only Pro learners have ever seen.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition, both
+halves unmet. The three-digit minor is deliberate and was verified safe at the `v0.100.0` kickoff.
+
+### Why this release exists
+
+**Slice 3 of the Review Sets audit** (§S2-3), and it is the slice with a **HARD dependency on `v0.102.0`**
+(§S2-D) — its Plus tier *is* plan-sourced assessment, which only started working last release.
+
+**⚠️ THE DEFECT IT CLOSES IS A PRICING ONE, AND IT IS SHARPER THAN "Free lacks a feature": PLUS HAS
+IDENTICAL MIXED-RETRIEVAL CAPABILITY TO FREE — NAMELY NONE.** `isLongExamAvailable` is
+`longExamAvailableForPro && plan == PRO` (`StudySnapProperties:253-255`), verified at this kickoff, so a
+learner paying for Plus buys nothing at all on this axis. That is a ladder with a missing rung, not a
+locked feature.
+
+**⚠️ AND THE PLAN'S OWN CTA IS ALREADY DISHONEST ABOUT IT.** `resolvePlanPremiumExamMode`
+(`exam-mode-visibility.ts:71-84`) resolves on **`profileType` alone and never takes plan** — verified by
+reading the signature at kickoff — while the paywall fires on **plan**. So a Free or Plus learner is shown
+a concluding action on their Study Plan that they cannot use, and a `PARENT` profile is shown none at all.
+
+**⚠️ ONE THING §S2-X4 PREDICTED IS ALREADY DISCHARGED AND MUST NOT BE RE-DONE.** It says Slice 3 must
+re-correct Slice 1's meter description, because a Free/Plus multi-note session rides the Challenge engine
+and spends the same meter. **The owner pre-empted this on 2026-09-01 by ruling ONE DURABLE WORDING**, and
+`v0.101.0` shipped *"Quiz sessions we generate for you, plus quizzes you make for someone. Board Exam
+sessions also count against their own allowance."* — mode-agnostic by construction. **It stays TRUE when
+multi-note arrives, so there is no copy edit owed here. Do not "fix" it; a `quiz-session-history.test.ts`
+guard pins that it names no mode.**
+
+### Planned Scope
+
+- **1. Free and Plus can run a multi-note session (backend + frontend).** **⚠️ THE ENGINE IS DECIDED AND
+  IS NOT A NEW MODE (§S2-X2):** it follows the **Board Exam pattern — a `mode` string on the `CHALLENGE`
+  discriminator** — which is proven, already shares the Challenge engine with different constants, and
+  honours `EXAM_MODES.md` as a **locked five-mode contract**. **⚠️ Do NOT add a quiz mode; do NOT unlock
+  Long Exam for non-Pro** (that is Pro's readiness simulation and the owner ruled Pro is not weakened).
+- **2. The allowance is a SUB-LIMIT INSIDE THE EXISTING METER (owner decision, 2026-09-02).** A multi-note
+  session spends `challenge_quiz_generations` like any Challenge session **and additionally** carries a
+  monthly ceiling of **~2 for Free and ~10 for Plus**, config-backed per tier. **⚠️ THIS IS NOT A NEW METER
+  AND NEEDS NO MIGRATION OR COLUMN — it is a bound on a session TYPE, and "no new meter" stays locked.**
+  **⚠️ REJECTED WITH REASONS:** no separate limit at all (a Free learner could then run 20 multi-note
+  sessions a month, sitting on top of what Pro pays for), and Plus-only (it drops the ladder's *experience
+  the principle* rung, so Free never learns why mixed retrieval matters).
+- **3. The source cap is Free 3 flat, Plus level-derived (owner decision, 2026-09-02).** Plus gets the same
+  honest **6 / 8 / 10 by learner level** that `v0.102.0` shipped for Pro, so **Plus versus Pro is modes and
+  allowance, never an artificial note count.** **⚠️ REJECTED: a flat 5 for Plus** — it reintroduces exactly
+  the arbitrary constant `v0.102.0` replaced, and sits *below* what the engine would allow most levels.
+- **4. The terminal CTA stops offering what the caller cannot use (frontend).** `resolvePlanPremiumExamMode`
+  takes **plan as well as profile**. **⚠️ Its four call sites and the `PARENT`-gets-nothing branch must be
+  checked together** — the fix is resolving the right action per (profile, plan), not hiding the button.
+- **5. Analytics distinguish the new tier path.** The `sourceScope` and `sourceCount` metadata `v0.102.0`
+  added must carry through the non-Pro path unchanged. **⚠️ `sourceScope` RECORDS THE VERIFIED OUTCOME,
+  NEVER THE CLIENT'S CLAIM** — that distinction was a `v0.102.0` cold-agent finding and
+  `[CHECKPOINT — due 2026-09-28]` reads exactly this field.
+
+### Explicitly out of scope
+
+- **⚠️ NO NEW QUIZ MODE and NO NEW METER** — both locked (§S2-L).
+- **⚠️ Pro is NOT weakened.** Long Exam, Board Exam Mode, difficulty control and the 30 Adaptive Practice
+  sessions are untouched.
+- **⚠️ Challenge Quiz length is NOT shortened** — recommended against on three grounds, chiefly that its
+  20-question ceiling is the only sustained retrieval practice Free has.
+- **The manual path's same-subject rule** stays, and this release makes the inconsistency reach more
+  learners. It is a carried Known limitation (§S2-X3), deferred by decision.
+- **Slice 4 (plan-scoped remediation) and Slice 5 (supporter combined quiz).**
+- **⚠️ Do NOT add, remove or reorder an onboarding FLOW step, and no code under `frontend/app/onboarding`**
+  — `[CHECKPOINT — due 2026-09-11]` is **9 days out**, the closest this constraint has been to its date.
+
+### Verification tier
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION.** The trigger is explicit and single: **this release
+changes money/quota semantics**, which the gate names outright. It is not the full three-agent test — no
+permission substrate, no cross-user read.
+
+**⚠️ CARRIED FORWARD, AND `v0.102.0` PROVED IT AGAIN THE HARD WAY:** its cold agent deleted a security check
+and passed **1894 tests**, because a correct refactor had moved the check behind a `@Mock` after its mutant
+had already been killed. **A PRE-EXTRACTION MUTATION KILL DOES NOT CARRY — re-run mutants after any
+extraction.** Also: `advisor()` **before** the prompt; verify *"X already does Y"* against code first;
+confirm tests **EXECUTED** via `target/surefire-reports/*.xml`; read `tsc --noEmit`'s own exit code; and
+**ask the cold agent to COUNT executed tests, not read them.**
+
+**⚠️ ROUTING: THIS RELEASE GOES TO CODEX, and that is a correction rather than a preference.** `v0.102.0`
+was implemented inline at **19 files and ~838 insertions**, which hit three separate "→ Codex" rows in
+`CLAUDE.md`'s table at once. The routing call was made at plan time and never re-evaluated as scope grew.
+**Re-run the routing test whenever implementation discovers a second service, a new class, or a surface
+that was not in the agreed plan.**
+
+**⚠️ A `[CHECKPOINT]` IS LIKELY OWED** — the tier numbers (2/month, 10/month, 3 notes) are proposals with no
+usage behind them, and `[CHECKPOINT — due 2026-09-28]` already reads the metric that would test them.
+Decide at signoff; **do NOT assume `v0.102.0`'s ruling carries.**
+
 ## v0.102.0 - Plan-Sourced Assessment
 
 **Status: Released** (kicked off 2026-09-01, signed off 2026-09-02, base branch `releases/v0.102.0`, cut
