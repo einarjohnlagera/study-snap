@@ -1,7 +1,9 @@
 # Review Sets First-Class + Independent Notes + Learner-Facing "AI" Language — Stage 1 Audit
 
-**Status:** Audit only. No code changed, no copy changed, no scope opened.
-**Date:** 2026-08-31
+**Status:** Audit + owner-ratified Stage 2 sequencing. **Nothing in Stage 2 has been implemented.**
+**Date:** 2026-08-31; **state note added 2026-09-01 after `v0.100.0` shipped — read it first, below.**
+**⚠️ The original "no copy changed" claim no longer holds:** the state note's commit corrected two copy sites
+that `v0.100.0` made false. That is a `v0.100.0` correction, not Stage 2 work, and no slice has opened.
 **Scope of this document:** Stage 1 (sections A–I of the brief) plus a Stage 2 sequencing proposal.
 **Method:** every claim below is anchored to `file:line` in the repo at `releases/v0.99.0`. Where the brief's
 premise is contradicted by code, the contradiction is stated rather than smoothed over.
@@ -13,6 +15,56 @@ premise is contradicted by code, the contradiction is stated rather than smoothe
 > **⚠️ `frontend/app/onboarding` is frozen** until `[CHECKPOINT — due 2026-09-11]` (signup-funnel read, 375
 > signups against a 62.4% completion baseline). Onboarding is audited below but **no recommendation touches
 > it before that date**.
+
+---
+
+# ⚠️ STATE AT `v0.100.0` — read this before acting on anything below
+
+**Added 2026-09-01, after `v0.100.0` (Domain Context Resolution) shipped and was tagged.** Everything below
+this section was anchored to `releases/v0.99.0`. **`v0.100.0` moved some of it.** This section exists so the
+next session starts current rather than re-deriving — or worse, trusting a line number that has shifted.
+
+**⚠️ EVERY `file:line` REFERENCE BELOW IS AT `v0.99.0` AND MANY HAVE MOVED.** `v0.100.0` edited
+`note-editor-form.tsx`, `private-note-detail-page-client.tsx`, `note-editor-page-client.tsx`,
+`bulk-generation-page-client.tsx`, `applicable-programs-combobox.tsx`, `domain-context.ts`, `api.ts`,
+`NoteService.java`, `StudyPackGenerationContextResolver.java` and `NoteApplicableProgramsService.java`.
+**Re-locate by string, never by line.**
+
+## What changed for Slice 1 specifically
+
+| Audit says | Actually, at `v0.100.0` |
+|---|---|
+| *"the six-site Domain Context string"* (§S2-1 item 2, §G2) | **THREE sites** — `note-editor-form.tsx:514`, `private-note-detail-page-client.tsx:2475`, `bulk-generation-page-client.tsx:639`. `v0.100.0`'s Decision 3 copy absorbed the rest. **Slice 1 is smaller than its own plan says** |
+| `applicable-programs-combobox.tsx:323` — *"A program list is never sent to the AI…"* | **Re-worded by `v0.100.0`** and still contains *"sent to the AI"*. Still Category A, different surrounding text |
+| `ai-suggestion-modal.tsx` — 8 strings | **Unchanged, still 8.** The densest cluster and still the bulk of the sweep |
+| `usage-labels.ts` — `AI quizzes` | **Unchanged.** `quiz-session-history.test.ts:86` still asserts it; `:87` still pins label ≠ mode name |
+| `AnalyticsEventType` has *"106 values"* (§I1, §B2 G5) | **108.** `v0.100.0` added `NOTE_AUTHORING_DOMAIN_RECORDED`; `NOTE_ADDED_TO_COLLECTION` (**M1**) is still missing and still the highest-value gap |
+| `study-plans-guide.tsx:23` — *"nothing is AI-generated for the set itself"* | **Unchanged and still true.** Still becomes false when Slice 2 ships |
+
+## Three facts that cost real work to re-derive
+
+**1. `frontend/app/onboarding/` contains ZERO `AI` strings.** Verified twice on `main` at `v0.100.0`.
+**This is what makes Slice 1's Category A sweep safe against `[CHECKPOINT — due 2026-09-11]`** — no copy item
+can reach the frozen path. Without this fact a cautious reader would defer the slice for no reason.
+
+**2. §S2-X4's decision is owed BEFORE the Codex prompt, not after.** Slice 3 falsifies Slice 1's new meter
+description *by construction*. Either accept two copy edits across two releases, or write it once in a form
+that survives — *"Sessions and quizzes we generate for you"* — at some cost in specificity. **It is an owner
+call and it is cheap to make early and expensive to discover late.**
+
+**3. `v0.100.0` moved the multi-program Domain Context rule from SAVE to GENERATION**, so anything below
+describing it as a save-time requirement is stale. Three copy sites said *"Required when this note applies to
+more than one program"*; **two were corrected in this commit and one was deliberately left**, because bulk
+generation creates and generates in one operation and `NoteBulkGenerationService` still throws
+pre-generation — so *"Required"* is still true there and only there. **⚠️ That asymmetry is real product
+behaviour, not an oversight: do not "fix" the bulk string for consistency.**
+
+## What `v0.100.0` did NOT change
+
+The five Stage 2 slices, their sequencing, the owner's rulings, and every gap in §B2 are **untouched**.
+`G1`–`G6` all still hold: no Review Set or Subject Plan can source an exam, the 3–4 note cap stands,
+the same-subject rule is still the wrong predicate (§G3a), Adaptive Practice is still single-pack, and
+multi-note assessment is still PRO-only. **Nothing in Stage 2 has been implemented.**
 
 ---
 
