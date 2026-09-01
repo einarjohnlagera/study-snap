@@ -7,6 +7,8 @@ import com.studysnap.backend.entity.LinkedLearnerRelationshipEntity;
 import com.studysnap.backend.entity.LinkedLearnerSide;
 import com.studysnap.backend.entity.LinkedLearnerStatus;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.dto.AcceptLinkedLearnerRequest;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.EmailService;
@@ -14,9 +16,11 @@ import com.studysnap.backend.service.EmailTemplateService;
 import com.studysnap.backend.service.GuardianConsentPolicy;
 import com.studysnap.backend.service.LinkedLearnerService;
 import com.studysnap.backend.service.OnboardingGuardService;
+import com.studysnap.backend.service.StudyPackGenerationContextResolver;
 import com.studysnap.backend.service.jobs.LinkedLearnerRequestExpiryWorker;
 import com.studysnap.backend.exception.LinkedLearnerBirthYearRequiredException;
 import com.studysnap.backend.exception.LinkedLearnerInvalidStateException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.security.InvitationRateLimitService;
 import com.studysnap.backend.model.NoteLibraryReadiness;
@@ -68,6 +72,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.mock;
 
@@ -1477,6 +1482,59 @@ class NativeQueryPostgresIntegrationTest {
                 publicTagCriteria(List.of("nephrology")), PublicLibrarySort.RECENT, 0, 10))
                 .as("a tag no public note carries must match nothing")
                 .isEmpty();
+    }
+
+    /**
+     * Real-row boundary test for adding a database-level save constraint, removing the generation
+     * predicate, or changing its exact two-program boundary to three. Service-level tests separately pin
+     * that both save APIs accept this state. PostgreSQL must persist it, while generation readiness rejects
+     * it without changing the persisted note status.
+     */
+    @Test
+    void curatorMultiProgramNoteWithoutDomainContextSavesButGenerationRejectsWithoutStatusChange() {
+        UUID curatorId = seedUser("domain-ready-curator");
+        jdbcTemplate.update(
+                "update users set role = 'ADMIN', profile_type = 'STUDENT', onboarding_completed_at = now() where id = ?",
+                curatorId
+        );
+        UUID noteId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into notes (id, owner_user_id, title, content, visibility, tags,"
+                        + " target_profile_type, domain_context, status, created_at, updated_at)"
+                        + " values (?, ?, 'Shared engineering note', 'body', 'PRIVATE', '{}',"
+                        + " 'STUDENT', null, 'DRAFT', now(), now())",
+                noteId,
+                curatorId
+        );
+        jdbcTemplate.update(
+                "insert into note_course_program (id, note_id, course_program_id) values (?, ?, ?), (?, ?, ?)",
+                UUID.randomUUID(), noteId, UUID.fromString("20000000-0000-0000-0000-000000000002"),
+                UUID.randomUUID(), noteId, UUID.fromString("20000000-0000-0000-0000-000000000005")
+        );
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from note_course_program where note_id = ?", Integer.class, noteId
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "select domain_context from notes where id = ?", String.class, noteId
+        )).isNull();
+
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setStatus(NoteStatus.DRAFT);
+        StudyPackGenerationContextResolver resolver = new StudyPackGenerationContextResolver(
+                null,
+                null,
+                new NoteCourseProgramRepository(jdbcTemplate),
+                null
+        );
+
+        assertThatThrownBy(() -> resolver.assertGenerationReady(note))
+                .isInstanceOf(MultiProgramDomainContextRequiredException.class);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select status from notes where id = ?", String.class, noteId
+        )).isEqualTo("DRAFT");
     }
 
     private PublicLibraryFilterCriteria publicTagCriteria(List<String> tagSlugs) {

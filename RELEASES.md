@@ -223,7 +223,37 @@ so the invariant is never unprotected between commits.
 
 ### Shipped
 
-_(nothing yet)_
+- **Items 1 and 3 — canonical curator domain resolution and generation readiness (backend + frontend).** The four existing curator checks now share one onboarding-aware `CuratorAuthoringPredicate`; canonical note and bulk resolution suppress only a curator's profile-program fallback, while learner personalization, a note's own legacy string, and `buildFromStudyPackFallback` remain unchanged. Two curators with different profiles therefore resolve the same canonical note to the same authoring-domain instruction, and a curator single-program note uses its joined catalog name.
+- **Multi-program notes may be saved without Domain Context; generation rejects them before side effects.** The three save-time blocks and their frontend pre-validation were removed only after the readiness gate existed. `StudyPackService` now gates both note-ID generation entry points before quota/rate checks, status writes, dispatch, or LLM work; the synchronous `POST /study-packs` path was added after the pre-implementation advisor proved it was a second live bypass. Existing-pack admin summary/quiz regeneration is gated before its LLM call as well. The existing topic and bulk generation checks remain intact, and the existing `MultiProgramDomainContextRequiredException` contract is reused unchanged.
+- **⚠️ THE `/audit-diff` PASS FOUND A VACUOUS TEST NAMED AFTER THIS RELEASE'S HEADLINE PROPERTY, and it is
+  the eighth instance of that class in five releases.**
+  `resolve_twoCuratorsWithDifferentProfilesGetByteIdenticalAuthoringDomains` gave its note **exactly one**
+  joined program, so `resolveCourseProgram` returned at the `joinedPrograms.size() == 1` branch and **the
+  profile fallback the test exists to pin was never reached.** It passed identically with and without the
+  fix. Corrected to use a note with **no** joined programs — the only shape in which the fallback is
+  reachable — and re-verified: **the mutant restoring the curator fallback is now killed by TWO tests
+  (`resolve_curatorOwnedNoteDoesNotInheritTheCuratorProfileProgram` and the corrected one), where before it
+  was killed by one.** The comment recording why the shape matters is in the test.
+- **Mutation-verified, each mutant named with its killing test:** restoring the curator profile fallback
+  fails the two tests above; removing `assertGenerationReady` from `startAsyncGenerationFromNote` fails
+  `startAsyncGenerationFromNote_multiProgramWithoutDomainContextKeepsStatusAndSpendsNoQuota`.
+  **⚠️ The eleven new backend tests were confirmed to EXECUTE by reading the surefire XML, not the source** —
+  the `v0.98.0` lesson, applied rather than cited.
+- **⚠️ The real-row test is weaker than its name suggests, and it is recorded rather than left to be
+  discovered.** `NativeQueryPostgresIntegrationTest` passes 37/37 **with the generation gate deleted**,
+  because it calls `resolver.assertGenerationReady(note)` directly rather than going through
+  `startAsyncGenerationFromNote`. It genuinely pins the predicate against real rows, which is what it was
+  asked for; **gate PLACEMENT is pinned only by `StudyPackServiceTest`.**
+- **⚠️ ITEM 6's GUARD IS PARTLY UNBUILDABLE, AND THE REASON IS A STRONGER PROPERTY THAN THE TEST WOULD HAVE
+  BEEN.** The spec asked for three tests pinning that
+  `OfficialChallengeQuizTemplateService:221`, `ExamQuestionPoolService:151` and
+  `AdminStudyPackTransactionHelper:147` pass the **owner** and not the caller. **None of those three methods
+  takes a caller identity at all** — `seedTemplateAsync(noteId, studyPackId)`, `refreshPool(studyPackId,
+  mode)` — and `isEligibleOfficialTemplate` additionally **requires** note owner == pack owner. So a test
+  there could only assert `ownerId == ownerId`. **A vacuous guard is exactly what the finding above is
+  about**, so the invariant is recorded as a comment at each site, naming the condition under which the test
+  becomes both possible and required (a caller id being threaded in). **The spec was mine and it assumed a
+  caller id was in scope; it is not.**
 
 ## v0.99.0 - Connection Completeness
 

@@ -75,17 +75,6 @@ export function AdminApplicableProgramsSection() {
       setSaveFailure("Select at least one course or program. A curated note must stay discoverable.");
       return;
     }
-    // C7. This screen has no Domain Context control, and the endpoint validates the new program set
-    // against the note's already-persisted domainContext -- so expanding a blank-domain note past one
-    // program 400s with no way to act on it from here. Catch it before the request and say where the
-    // field lives, instead of surfacing a raw API error on a field this screen does not show.
-    if (selectedIds.length > 1 && !editingNote.domainContext) {
-      setSaveFailure(
-        "A note shared across several programs needs a Domain Context. This screen cannot set it — "
-        + "open the note and set Domain Context under \"Generation & discovery\", then reapply these programs.",
-      );
-      return;
-    }
     setSaving(true);
     setSaveFailure(null);
     try {

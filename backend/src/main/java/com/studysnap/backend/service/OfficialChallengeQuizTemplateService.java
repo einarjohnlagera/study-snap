@@ -218,6 +218,13 @@ public class OfficialChallengeQuizTemplateService {
                         || questionBankRepository.existsByUserIdAndStudyPackId(note.getOwnerUserId(), studyPack.getId())) {
                     return null;
                 }
+                // v0.100.0 item 6. The authoring domain is a property of the MATERIAL, not of whoever
+                // is reading it, so this must stay the note owner. It cannot currently drift: this
+                // method takes no caller identity at all, and isEligibleOfficialTemplate additionally
+                // requires note owner == studyPack owner. Recorded rather than pinned by a test,
+                // because a test here could only assert ownerId == ownerId -- vacuous, and this repo
+                // has paid for tests that pass for the wrong reason. If a caller id is ever threaded
+                // into this method, that test becomes both possible and required.
                 StudyPackGenerationContext context = generationContextResolver.resolveForStudyPack(
                         note.getOwnerUserId(), studyPack
                 );

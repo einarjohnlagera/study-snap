@@ -511,7 +511,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [courseProgramShadowed, setCourseProgramShadowed] = useState<boolean | null>(null);
   const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
   const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
-  const [applicableProgramsDirty, setApplicableProgramsDirty] = useState(false);
   const [applicableProgramsRetryToken, setApplicableProgramsRetryToken] = useState(0);
   const [conceptHash, setConceptHash] = useState("");
   const [highlightedConceptAnchor, setHighlightedConceptAnchor] = useState<string | null>(null);
@@ -922,7 +921,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         setSavedApplicableProgramIds(selectedIds);
         setSavedApplicableProgramNames(response.programs.map((program) => program.name));
         setCourseProgramShadowed(response.courseProgramShadowed);
-        setApplicableProgramsDirty(false);
       })
       .catch((error) => {
         if (active) {
@@ -1598,7 +1596,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!isDraft) {
       setMetadataDraft(toMetadataDraft(note));
       setApplicableProgramIds(savedApplicableProgramIds);
-      setApplicableProgramsDirty(false);
       setMetadataTagDraft("");
       setIsInlineMetadataEditMode(true);
       return;
@@ -1612,7 +1609,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
     setMetadataDraft(toMetadataDraft(note));
     setApplicableProgramIds(savedApplicableProgramIds);
-    setApplicableProgramsDirty(false);
     setMetadataTagDraft("");
     setMetadataSubjectError(null);
     setMetadataCourseProgramError(null);
@@ -1683,7 +1679,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         setSavedApplicableProgramNames(applicableProgramCatalog
           .filter((program) => applicableProgramIds.includes(program.id))
           .map((program) => program.name));
-        setApplicableProgramsDirty(false);
       }
       setNote(updated);
       setMetadataDraft(toMetadataDraft(updated));
@@ -2428,7 +2423,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       selectedIds={applicableProgramIds}
                       onChange={(selectedIds) => {
                         setApplicableProgramIds(selectedIds);
-                        setApplicableProgramsDirty(true);
                       }}
                       canCreateCatalogProgram={userRole === "ADMIN"}
                       onCatalogProgramCreated={(program) => setApplicableProgramCatalog((current) => [...current, program])}

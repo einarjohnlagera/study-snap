@@ -29,8 +29,6 @@ describe("AdminApplicableProgramsSection", () => {
         noteId: "note-1",
         title: "Engineering Algebra",
         courseProgram: "Civil Engineering",
-        // Multi-program saves require a Domain Context, so the default fixture carries one -- without it
-        // every multi-select case below would be an illegal save that the backend rejects.
         domainContext: "ENGINEERING_SCIENCES",
         applicablePrograms: [{ id: "program-a", name: "Civil Engineering" }],
       }],
@@ -110,10 +108,7 @@ describe("AdminApplicableProgramsSection", () => {
     expect(screen.getByRole("button", { name: "Remove Electrical Engineering" })).toBeInTheDocument();
   });
 
-  // C7. The endpoint validates the new program set against the note's already-persisted domainContext,
-  // and this screen has no Domain Context control -- so without a client-side check the curator meets a
-  // raw 400 naming a field the screen does not show, with no route to fixing it.
-  it("blocks a multi-program save on a note with no Domain Context and says where to set it", async () => {
+  it("saves multiple Applicable Programs without Domain Context for later generation readiness", async () => {
     (getAdminNoteApplicablePrograms as jest.Mock).mockResolvedValue({
       items: [{
         noteId: "note-1",
@@ -126,6 +121,11 @@ describe("AdminApplicableProgramsSection", () => {
       size: 25,
       totalElements: 1,
     });
+    (replaceNoteApplicablePrograms as jest.Mock).mockResolvedValue([
+      { id: "program-a", name: "Civil Engineering" },
+      { id: "program-b", name: "Mechanical Engineering" },
+      { id: "program-c", name: "Electrical Engineering" },
+    ]);
     render(<AdminApplicableProgramsSection />);
 
     await screen.findByText("Engineering Algebra");
@@ -133,11 +133,11 @@ describe("AdminApplicableProgramsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add all 2 Engineering programs" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Applicable Programs" }));
 
-    // Rendered twice by design: a toast and the inline failure line under the picker.
-    expect(await screen.findAllByText(/needs a Domain Context/)).not.toHaveLength(0);
-    expect(screen.getAllByText(/open the note and set Domain Context/)).not.toHaveLength(0);
-    expect(replaceNoteApplicablePrograms).not.toHaveBeenCalled();
-    // The selection survives, so the curator can set the domain and come back to it.
-    expect(screen.getByRole("button", { name: "Remove Electrical Engineering" })).toBeInTheDocument();
+    await waitFor(() => expect(replaceNoteApplicablePrograms).toHaveBeenCalledWith(
+      "note-1",
+      ["program-a", "program-b", "program-c"],
+    ));
+    expect(await screen.findByText("Civil Engineering, Mechanical Engineering, Electrical Engineering"))
+      .toBeInTheDocument();
   });
 });

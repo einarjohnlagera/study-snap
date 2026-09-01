@@ -148,6 +148,11 @@ public class ExamQuestionPoolService {
 
                 StudyPackEntity studyPack = studyPackRepository.findById(pool.getStudyPackId())
                         .orElseThrow(StudyPackNotFoundException::new);
+                // v0.100.0 item 6. Pool generation is a background refresh with no caller in scope --
+                // refreshPool(studyPackId, mode) carries no user id -- so the pack owner is the only
+                // identity available and the reader's profile can never reach the prompt from here.
+                // Keep it that way: passing a session user id would make the generated pool depend on
+                // whoever happened to trigger the refresh.
                 StudyPackGenerationContext context = generationContextResolver.resolveForStudyPack(
                         studyPack.getOwnerUserId(),
                         studyPack

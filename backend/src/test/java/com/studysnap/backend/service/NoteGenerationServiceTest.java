@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.UserRole;
 import java.time.OffsetDateTime;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.exception.InvalidDomainContextException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
@@ -25,12 +26,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -176,6 +179,37 @@ class NoteGenerationServiceTest {
         assertThatThrownBy(() -> noteGenerationService.generateFromTopic(request, userId))
                 .isInstanceOf(InvalidDomainContextException.class)
                 .hasMessageContaining("domainContext");
+    }
+
+    @Test
+    void generateFromTopic_curatorMultiProgramWithoutDomainContextStillRejects() {
+        UUID userId = UUID.randomUUID();
+        UUID firstProgramId = UUID.randomUUID();
+        UUID secondProgramId = UUID.randomUUID();
+        UserEntity curator = new UserEntity();
+        curator.setId(userId);
+        curator.setRole(UserRole.ADMIN);
+        curator.setOnboardingCompletedAt(OffsetDateTime.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(curator));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(courseProgramCatalogRepository.findExistingIds(java.util.Set.of(firstProgramId, secondProgramId)))
+                .thenReturn(List.of(firstProgramId, secondProgramId));
+        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest(
+                ENGINEERING_ALGEBRA_TOPIC,
+                List.of(firstProgramId, secondProgramId),
+                null,
+                null
+        );
+
+        assertThatThrownBy(() -> noteGenerationService.generateFromTopic(request, userId))
+                .isInstanceOf(MultiProgramDomainContextRequiredException.class);
+
+        verify(llmStudyPackService, never()).generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()
+        );
+        verify(noteGenerationUsageProtectionService, never()).recordUsage(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test

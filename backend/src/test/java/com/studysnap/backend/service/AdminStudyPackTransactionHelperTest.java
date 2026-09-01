@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -26,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -78,6 +80,23 @@ class AdminStudyPackTransactionHelperTest {
                 org.mockito.ArgumentMatchers.any()
         );
         verify(studyPackRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void regenerateOnePack_rejectsAmbiguousSourceBeforeSummaryGeneration() {
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity pack = buildPack(noteId, List.of());
+        NoteEntity note = buildNote(noteId, pack.getOwnerUserId());
+        when(studyPackRepository.findById(pack.getId())).thenReturn(Optional.of(pack));
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
+        doThrow(new MultiProgramDomainContextRequiredException())
+                .when(generationContextResolver).assertGenerationReady(note);
+
+        transactionHelper.regenerateOnePack(pack);
+
+        verify(llmStudyPackService, never()).regenerateSummary(any(), any());
+        verify(studyPackRepository, never()).save(any());
+        verify(progressTracker).recordFailure();
     }
 
     @Test
@@ -171,6 +190,28 @@ class AdminStudyPackTransactionHelperTest {
         assertThatCode(() -> transactionHelper.repairMalformedQuiz(pack))
                 .doesNotThrowAnyException();
 
+        verify(studyPackRepository, never()).save(any());
+        verify(progressTracker).recordFailure();
+    }
+
+    @Test
+    void repairMalformedQuiz_rejectsAmbiguousSourceBeforeLlmGeneration() {
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity pack = buildPack(noteId, malformedQuiz());
+        NoteEntity note = buildNote(noteId, pack.getOwnerUserId());
+        when(studyPackRepository.findById(pack.getId())).thenReturn(Optional.of(pack));
+        when(quickReviewSessionRepository.existsByStudyPackIdAndSessionModeAndStatus(
+                pack.getId(),
+                QuickReviewSessionMode.QUICK_REVIEW,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(false);
+        when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
+        doThrow(new MultiProgramDomainContextRequiredException())
+                .when(generationContextResolver).assertGenerationReady(note);
+
+        transactionHelper.repairMalformedQuiz(pack);
+
+        verify(llmStudyPackService, never()).generateStudyPack(any(), any());
         verify(studyPackRepository, never()).save(any());
         verify(progressTracker).recordFailure();
     }

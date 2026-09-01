@@ -30,6 +30,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.OcrDisabledException;
+import com.studysnap.backend.exception.MultiProgramDomainContextRequiredException;
 import com.studysnap.backend.exception.ProfileSetupRequiredException;
 import com.studysnap.backend.exception.SubjectTooLongException;
 import com.studysnap.backend.repository.NoteRepository;
@@ -356,6 +357,28 @@ class StudyPackServiceTest {
         assertThat(response.summary()).isEqualTo("Generated summary");
         assertThat(response.keyConcepts()).containsExactly("Cell membrane", "Mitochondria");
         assertThat(response.quiz()).hasSize(1);
+    }
+
+    @Test
+    void createFromText_multiProgramNoteWithoutDomainContextRejectsBeforeQuotaOrLlm() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        MultiProgramDomainContextRequiredException exception =
+                new MultiProgramDomainContextRequiredException();
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        doThrow(exception).when(generationContextResolver).assertGenerationReady(draftNote);
+        CreateStudyPackRequest request = new CreateStudyPackRequest(null, noteId.toString());
+
+        assertThatThrownBy(() -> studyPackService.createFromText(request, userId))
+                .isSameAs(exception);
+
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.DRAFT);
+        verify(studyPackUsageService, never()).resolveUsage(any(UUID.class), any(OffsetDateTime.class));
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), anyString());
+        verify(llmStudyPackService, never()).generateStudyPack(any(), any());
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(), any());
     }
 
     @Test
@@ -798,6 +821,29 @@ class StudyPackServiceTest {
         assertThat(generationTasks).hasSize(1);
         verify(llmStudyPackService, never()).generateStudyPack(any(), any());
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_multiProgramWithoutDomainContextKeepsStatusAndSpendsNoQuota() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        MultiProgramDomainContextRequiredException exception =
+                new MultiProgramDomainContextRequiredException();
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        doThrow(exception).when(generationContextResolver).assertGenerationReady(draftNote);
+        String noteIdRaw = noteId.toString();
+
+        assertThatThrownBy(() -> studyPackService.startAsyncGenerationFromNote(noteIdRaw, userId))
+                .isSameAs(exception);
+
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.DRAFT);
+        assertThat(draftNote.getGenerationEnqueuedAt()).isNull();
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+        verify(studyPackUsageService, never()).resolveUsage(any(UUID.class), any(OffsetDateTime.class));
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), anyString());
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(), any());
     }
 
     @Test
