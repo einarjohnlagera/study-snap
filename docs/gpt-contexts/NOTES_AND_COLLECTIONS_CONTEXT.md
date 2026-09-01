@@ -55,7 +55,7 @@ Every note carries four durable metadata axes (a fifth, Target Audience, was ret
 
 **One finding from that audit that changes how you should read this list:** `Junior High`, `High School`, `Senior High – STEM/HUMSS/ABM` and `Grade School` are currently being used as **Course / Program** values on ~47 public notes. Those are academic *levels* — Note Learner Level's job. Do not propose notes that file an academic level as a program; give a real catalog program plus the level in field 4.
 
-**Hard rule: if a note has more than one Applicable Program, Domain Context is required.** The API rejects the save otherwise (`MultiProgramDomainContextRequiredException`) — a note serving several programs has no single program to infer its authoring domain from, so it must be stated.
+**Hard rule: if a note has more than one Applicable Program, Domain Context is required TO GENERATE — not to save.** A note serving several programs has no single program to infer its authoring domain from, so it must be stated before a Study Pack can be produced. **⚠️ Changed in `v0.100.0` (owner ruling, 2026-09-01): *note validity is not generation readiness*.** The save now succeeds; every note-to-Study-Pack path rejects the state with `MultiProgramDomainContextRequiredException` **before** a `GENERATING` status, quota spend, rate-limit spend or LLM call. **⚠️ This file said *"the API rejects the save"* for the whole of `v0.100.0` and was never in one of its diffs** — it is a snapshot describing behaviour, which is exactly the kind of file that goes stale silently when the behaviour changes.
 
 ### The 8 ratified Domain Context values
 
