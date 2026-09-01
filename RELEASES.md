@@ -38,15 +38,31 @@ guard pins that it names no mode.**
 
 ### Planned Scope
 
-- **1. Free and Plus can run a multi-note session (backend + frontend).** **⚠️ THE ENGINE IS DECIDED AND
-  IS NOT A NEW MODE (§S2-X2):** it follows the **Board Exam pattern — a `mode` string on the `CHALLENGE`
-  discriminator** — which is proven, already shares the Challenge engine with different constants, and
-  honours `EXAM_MODES.md` as a **locked five-mode contract**. **⚠️ Do NOT add a quiz mode; do NOT unlock
-  Long Exam for non-Pro** (that is Pro's readiness simulation and the owner ruled Pro is not weakened).
-- **2. The allowance is a SUB-LIMIT INSIDE THE EXISTING METER (owner decision, 2026-09-02).** A multi-note
-  session spends `challenge_quiz_generations` like any Challenge session **and additionally** carries a
-  monthly ceiling of **~2 for Free and ~10 for Plus**, config-backed per tier. **⚠️ THIS IS NOT A NEW METER
-  AND NEEDS NO MIGRATION OR COLUMN — it is a bound on a session TYPE, and "no new meter" stays locked.**
+- **1. Free and Plus can run a multi-note session — as a CAPABILITY of Challenge Quiz, NOT a sub-mode
+  (owner decision, 2026-09-02).** **⚠️ THIS SUPERSEDES THE KICKOFF'S FIRST WORDING, which said "the Board
+  Exam pattern — a `mode` string on the `CHALLENGE` discriminator" after §S2-X2.** Applying
+  `EXAM_MODES.md`'s own sub-mode test settles it: a sub-mode needs **its own label, entry point and stated
+  differentiator** (Interview Practice's is scenario questions plus per-answer critique plus its own result
+  framing). This has none — same questions, same scoring, same result screen, drawn from more notes.
+  **So: NO `subMode` value, NO new row in the locked table, and nothing to name.** `EXAM_MODES.md` gains one
+  capability line under Challenge Quiz. **⚠️ Do NOT add a quiz mode or a sub-mode; do NOT unlock Long Exam
+  for non-Pro** (that is Pro's readiness simulation, and the owner ruled Pro is not weakened).
+  **⚠️ TODAY `additionalStudyPackIds` ON A NON-`board_exam` REQUEST ARE SILENTLY DROPPED, NOT REJECTED**
+  (`ChallengeQuizService:196-198`). This release makes them accepted for a permitted caller — **state
+  explicitly what happens for a caller over their cap or on an ineligible plan, because silent-ignore
+  turning into silent-accept is exactly how a cap gets bypassed.**
+- **2. The allowance is a sub-limit enforced by a COUNTER COLUMN (owner decision, 2026-09-02, CORRECTED THE
+  SAME DAY).** A multi-note session spends `challenge_quiz_generations` like any Challenge session **and
+  additionally** carries a monthly ceiling of **~2 for Free and ~10 for Plus**, config-backed per tier.
+  **⚠️ THE KICKOFF FIRST SAID "NO MIGRATION OR COLUMN" AND THAT WAS AN UNVERIFIED CLAIM PUT IN FRONT OF THE
+  OWNER — it is retracted here.** Checking the precedent it named: **every per-type monthly cap in this
+  codebase is a counter column** — `board_exam_used_this_month`, `adaptive_quiz_generations`,
+  `long_exam_used_this_month`, `interview_practice_used_this_month`. **A migration adds one counter and
+  enforcement mirrors Board Exam exactly** (`countBoardExamUsedThisMonth` → `resolveMonthlyBoardExamLimit`
+  → throw). **⚠️ "NO NEW METER" STILL HOLDS IN THE SENSE THAT BINDS: Settings renders NO row for it, so the
+  learner sees no new allowance.** **⚠️ REJECTED: counting session rows by a JSONB `sourceNoteRefs`
+  predicate** — it would be this repository's **first** JSONB predicate, PostgreSQL-only, and **invisible to
+  the mocked-repository tests that make up most of the suite.**
   **⚠️ REJECTED WITH REASONS:** no separate limit at all (a Free learner could then run 20 multi-note
   sessions a month, sitting on top of what Pro pays for), and Plus-only (it drops the ladder's *experience
   the principle* rung, so Free never learns why mixed retrieval matters).
@@ -55,8 +71,10 @@ guard pins that it names no mode.**
   allowance, never an artificial note count.** **⚠️ REJECTED: a flat 5 for Plus** — it reintroduces exactly
   the arbitrary constant `v0.102.0` replaced, and sits *below* what the engine would allow most levels.
 - **4. The terminal CTA stops offering what the caller cannot use (frontend).** `resolvePlanPremiumExamMode`
-  takes **plan as well as profile**. **⚠️ Its four call sites and the `PARENT`-gets-nothing branch must be
-  checked together** — the fix is resolving the right action per (profile, plan), not hiding the button.
+  takes **plan as well as profile**. **⚠️ It has ONE call site, not the four this kickoff first claimed** —
+  `collection-labels.ts:109`, reached from `getCollectionTerminalAction`, whose own single caller is
+  `collection-detail-page-client.tsx:2611`. Verified rather than repeated. **The `PARENT`-gets-nothing
+  branch must be handled in the same change** — the fix is resolving the right action per (profile, plan), not hiding the button.
 - **5. Analytics distinguish the new tier path.** The `sourceScope` and `sourceCount` metadata `v0.102.0`
   added must carry through the non-Pro path unchanged. **⚠️ `sourceScope` RECORDS THE VERIFIED OUTCOME,
   NEVER THE CLIENT'S CLAIM** — that distinction was a `v0.102.0` cold-agent finding and
