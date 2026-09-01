@@ -169,9 +169,13 @@ public class StudyPackGenerationContextResolver {
             StudyPackEntity studyPack,
             List<String> tags
     ) {
+        // ⚠️ Guarded for the same reason as resolveCourseProgram, not left to construction. This branch is
+        // currently unreachable with a curator whose profile could leak -- study_packs.note_id is NOT NULL
+        // with an FK, so a miss needs pack-owner != note-owner -- but "unreachable today" is not the rule
+        // the other two sites follow, and a reader cannot tell an omission from a decision.
         return new StudyPackGenerationContext(
                 user.getLearnerLevel(),
-                user.getCourseProgram(),
+                CuratorAuthoringPredicate.isCurator(user) ? null : user.getCourseProgram(),
                 studyPack == null ? null : studyPack.getSubject(),
                 tags,
                 null,

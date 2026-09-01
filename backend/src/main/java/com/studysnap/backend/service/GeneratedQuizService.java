@@ -106,6 +106,13 @@ public class GeneratedQuizService {
         List<String> disallowedQuestions = existing == null
                 ? List.of()
                 : extractQuestionTexts(existing.getQuestions());
+        // v0.100.0. The save-time block used to make "2+ programs, null Domain Context" unrepresentable,
+        // so no note-reading LLM path needed its own check. Moving that block to generation time made the
+        // state legal to store, which newly exposes every such path -- and the failure is silent: a null
+        // authoring domain simply drops the Domain line and its constraint from the prompt, with no error
+        // and no log. Found by the signoff cold agent, which correctly noted the Study-Pack claim survived
+        // while this quiz path did not.
+        generationContextResolver.assertGenerationReady(note);
         StudyPackGenerationContext generationContext = withLearnerLevelOverride(
                 generationContextResolver.resolve(userId, note),
                 requestedLearnerLevel

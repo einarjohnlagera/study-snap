@@ -14,10 +14,16 @@ type ServerPublicNoteListResponse = {
 // own copy of the request -- which is what took the production build down on 2026-08-31: ~250 pages each
 // re-fetching a 2.5MB catalog until the backend saturated.
 //
-// Sizing: the failing build logged 2,579,045 bytes for a catalog of roughly 950 public notes, so a list
-// item averages ~2.7KB. 250 items is therefore ~675KB, about 3x headroom.
-// ⚠️ Revisit this number if NoteListItemResponse grows -- it is derived from that payload, not arbitrary.
-const PUBLIC_NOTES_PAGE_SIZE = 250;
+// ⚠️ 50 is the SERVER's ceiling, not our choice: NoteController.PUBLIC_NOTES_MAX_SIZE clamps pageSize to
+// it, so asking for more silently yields 50. A previous version of this file asked for 250 and treated the
+// clamped 50-item page as "end of data", which truncated the whole catalog to 50 notes -- see the loop
+// below for why that break condition is gone.
+// Headroom: the failing build logged 2,579,045 bytes over ~950 public notes, so a list item averages
+// ~2.7KB and 50 items is ~135KB, comfortably inside the 2MB cache limit.
+const PUBLIC_NOTES_PAGE_SIZE = 50;
+
+/** What getPublicSubjectSlug substitutes for a subject that slugifies to empty. */
+const PUBLIC_SUBJECT_FALLBACK_SLUG = "general";
 
 function buildApiUrl(path: string) {
   return `${API_BASE_URL}${path}`;
@@ -84,13 +90,15 @@ async function fetchAllPublicNotePages(query: string): Promise<NoteListItemRespo
     );
     const items = payload?.items ?? [];
     collected.push(...items);
-    // Three independent stop conditions, because only the first is authoritative and the backend may
-    // omit hasMore: an explicit hasMore=false, a short page, or an empty page. Without the latter two a
-    // malformed response would loop forever during a build.
+    // ⚠️ Stop ONLY on an authoritative signal: a failed page, hasMore=false, or an empty page. Together
+    // these terminate; an empty page cannot repeat forever because it always breaks.
+    //
+    // ⚠️ There used to be a fourth condition here -- "a page shorter than we asked for means the end" --
+    // and it was a REAL DEFECT, not a redundant guard. The server clamps pageSize to its own maximum, so
+    // a request for more than that always comes back short WITH hasMore=true. The loop exited after page
+    // zero and the whole catalog silently became one page. Do not reintroduce a length-based stop: the
+    // page size we receive is the server's to decide, not ours to assume.
     if (payload === null || payload.hasMore !== true || items.length === 0) {
-      break;
-    }
-    if (items.length < PUBLIC_NOTES_PAGE_SIZE) {
       break;
     }
   }
@@ -220,6 +228,15 @@ export async function getServerPublicNotesBySubjectSlug(subjectSlug: string) {
   const normalizedSubjectSlug = subjectSlug.trim();
   if (!normalizedSubjectSlug) {
     return [];
+  }
+  // ⚠️ The one slug the server filter cannot express. getPublicSubjectSlug substitutes "general" when a
+  // subject slugifies to empty, but the SQL side coalesces a null subject to '' and the request param is
+  // normalized with no fallback at all -- so '' never equals 'general' and a blank-subject public note
+  // would silently vanish from a route getPublicSubjectEntries manufactures for it. Filtering these in
+  // JS is what the old code did for every subject; it is bounded now because the fetch is paginated.
+  if (normalizedSubjectSlug === PUBLIC_SUBJECT_FALLBACK_SLUG) {
+    const notes = await getServerPublicNotes();
+    return notes.filter((note) => getPublicSubjectSlug(note.subject) === PUBLIC_SUBJECT_FALLBACK_SLUG);
   }
   return fetchAllPublicNotePages(`subject=${encodeURIComponent(normalizedSubjectSlug)}`);
 }
