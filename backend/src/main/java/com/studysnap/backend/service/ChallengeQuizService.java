@@ -665,7 +665,13 @@ public class ChallengeQuizService {
                             ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
                             ANALYTICS_METADATA_QUESTION_COUNT, statistics.totalQuestions(),
                             ANALYTICS_METADATA_SCORE_PERCENTAGE, scorePercentage,
-                            ANALYTICS_METADATA_SOURCE_COUNT, extractSourceNoteRefs(saved.getSessionState()).size()
+                            // ⚠️ NOT extractSourceNoteRefs(...).size() on its own. buildInitialSessionState
+                            // only persists sourceNoteRefs when there is MORE THAN ONE source, so that
+                            // expression reports 0 for every single-source session — meaning
+                            // CHALLENGE_QUIZ_COMPLETED was always 0 and Board Exam skipped 1 entirely.
+                            // A count of 0 is also ambiguous across three distinct states.
+                            ANALYTICS_METADATA_SOURCE_COUNT,
+                            Math.max(1, extractSourceNoteRefs(saved.getSessionState()).size())
                     )
             );
         } catch (RuntimeException ignored) {

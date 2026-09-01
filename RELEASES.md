@@ -2,8 +2,8 @@
 
 ## v0.102.0 - Plan-Sourced Assessment
 
-**Status: In Progress** (kicked off 2026-09-01, base branch `releases/v0.102.0`, cut from `main` after
-`v0.101.0` merged and tagged)
+**Status: Released** (kicked off 2026-09-01, signed off 2026-09-02, base branch `releases/v0.102.0`, cut
+from `main` after `v0.101.0` merged and tagged)
 
 Theme: the plan a learner builds should be the thing they can be tested on.
 
@@ -149,10 +149,21 @@ dependency on this one, and folding them would put a quota change in the same di
 - **Docs swept by surface:** `quiz.md`, `quiz-session.md`, `collections.md`, `EXAM_MODES.md`, `study-plans-guide.tsx`. **⚠️ `quiz.md:96` already DOCUMENTED the plan launch** — the doc described the frontend flow while the backend rejected it, which is why reading code rather than docs is what found this.
 - **Green:** 1890 backend tests, 2090 frontend tests, `tsc --noEmit` exit 0, lint unchanged (15 pre-existing warnings), `mvn clean install` producing `backend-0.102.0.jar`.
 
+### Pre-signoff cold agent — findings and fixes
+
+**Pre-declared at kickoff as ONE SCOPED COLD AGENT framed as falsification. It ran 2026-09-02 against five stated claims and FALSIFIED one, with two further defects and two accepted limitations.** Claims 1, 2, 3 and 5 held under its own mutation testing.
+
+- **⚠️ FINDING 1, AND IT IS THE MOST IMPORTANT LINE IN THIS RELEASE: THE SECURITY GATE HAD ZERO EXECUTED COVERAGE, AND THE REFACTOR THAT LOOKED CORRECT IS WHAT DELETED IT.** The agent removed the collection-ownership check from `PlanSourcedExamVerifier` and ran the **entire backend suite: 1894 tests, zero failures.** **⚠️ THE MECHANISM IS THE LESSON — that exact mutant was run and KILLED earlier in this release, while the logic was still inlined in `LongExamService`. Extracting it to a collaborator (the right call) moved it behind a `@Mock` in both service tests and silently deleted coverage that had already been verified. A pre-extraction mutation kill DOES NOT CARRY; re-run it after the extraction.**
+- **⚠️ And the test named for that property was asserting Mockito.** `startSession_withCollectionTheCallerDoesNotOwnThrows` stubbed the mocked verifier to throw and then asserted the throw arrived — its **name** claimed ownership enforcement, which is precisely what would have stopped the next reader adding real coverage. **Ninth test-that-claims-more-than-it-proves in six releases, and the second this release.** Fixed: `PlanSourcedExamVerifierTest` (5 tests) exercises the real repositories; the mutant that survived 1894 tests is now killed by three of them. The old test is **renamed to what it actually covers** — that `startSession` does not swallow a source rejection — rather than deleted.
+- **⚠️ FINDING 2 — `sourceCount` was WRONG on both new completion events, and a test pinned the wrong value.** `buildInitialSessionState:1347` persists `sourceNoteRefs` only when there is **more than one** source, so the naive read reported **0 for every single-source session**: `CHALLENGE_QUIZ_COMPLETED.sourceCount` was **always 0**, Board Exam never reported 1, and 0 was ambiguous across three distinct states. **⚠️ The first version of the new test asserted `containsEntry("sourceCount", 0)`, so the fix would have read as a regression.** Fixed to `Math.max(1, ...)`; test corrected and mutation-verified. `LONG_EXAM_STARTED` was unaffected — it stores unconditionally.
+- **⚠️ FINDING 3 — `sourceScope` recorded the CLIENT'S CLAIM, not the verified outcome, AND IT IS THE FIELD THIS RELEASE'S CHECKPOINT READS.** A caller owning a collection that does not contain the primary is treated as manual in every respect — strict cap, subject rule enforced — yet the event said `plan`. **The one metric separating the new path from the old was settable by the client, which would have corrupted `[CHECKPOINT — due 2026-09-28]` at source.** `resolveSourceNoteRefs` now returns the verified `planSourced` and analytics record that.
+- **Executed-test counts read from `target/surefire-reports/*.xml`, not from source**, per the standing instruction: `LongExamServiceTest` 31, `ChallengeQuizServiceTest` 54, `PlanSourcedExamVerifierTest` 5, full suite **1900**, zero failures.
+
 ### Known limitations
 
 - **⚠️ The manual note-selected path still enforces the same-subject rule, and this release makes the inconsistency SHARPER.** A learner can now run a plan-sourced exam across mixed subjects while manually selecting *the same notes* is still refused. **One product, two answers to the same question** — deferred by decision (§S2-X3), not overlooked.
-- **`sourceScope` records the CLAIM, not the verified outcome.** A request naming a collection that fails verification still reports `plan` while being treated as manual. Reads wanting verified scope must join on the session's sources.
+- **⚠️ THE UI CAN STILL PRODUCE A SELECTION THE BACKEND REFUSES, through the primary-membership door (cold agent finding 4, ACCEPTED).** `resolveCollectionScopedSourceNotes` never checks that the PRIMARY is a plan member, so if it is not, the backend drops to the manual cap of 3 and hard-throws — the same bug class this release shipped to fix. **The only in-app producer derives the primary from the same collection**, so reaching it needs a hand-edited URL or a removal between page load and start. Real, low, and left rather than papered over.
+- **The blank-primary-subject guard is skippable for plan callers (cold agent finding 5, ACCEPTED).** A non-member source with a blank subject passes the per-source check via `"".equals("")`. No cross-user exposure — every note involved is caller-owned — and the non-member does still face the subject rule.
 - **The cap is enforced but not explained at the moment of refusal.** Selecting past it is blocked in the UI with the number stated up front; a learner who reaches the limit is not told *why* their level sets it.
 - **⚠️ THAT BULLET PREVIOUSLY READ "Board Exam already works (neither enforces a subject rule)" AND WAS FALSE.** It is corrected above and in scope. **Interview Practice genuinely does not enforce one** — re-checked, `InterviewPracticeService` contains no subject matching at all — so its plan launch has always worked.
 - **Board Exam keeps its 2-additional cap and does not gain the level-derived one.** Its question count scales with source count, so the two interact; deferred to Slice 3 with the reason recorded rather than left implicit.

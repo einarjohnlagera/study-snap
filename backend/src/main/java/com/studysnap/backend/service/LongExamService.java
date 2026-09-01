@@ -62,6 +62,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Service
@@ -166,7 +167,12 @@ public class LongExamService {
                 claimsPlanScope ? resolveMaxSourceNotes(questionCount) - 1 : MAX_ADDITIONAL_SOURCE_COUNT
         );
         int sourceCount = additionalStudyPackIds.size() + 1;
-        String sourceScope = claimsPlanScope ? SOURCE_SCOPE_PLAN : SOURCE_SCOPE_MANUAL;
+        // ⚠️ Seeded from the claim only so a path that never reaches verification still reports something;
+        // resolveSourceNoteRefs overwrites it with the VERIFIED outcome. Reporting the claim would let a
+        // client set the one metric that separates plan-sourced exams from manual ones.
+        AtomicReference<String> verifiedSourceScope = new AtomicReference<>(
+                claimsPlanScope ? SOURCE_SCOPE_PLAN : SOURCE_SCOPE_MANUAL
+        );
         assertLongExamQuotaAvailable(userId, planType, QUOTA_UNITS_PER_SESSION);
         AtomicBoolean createdSession = new AtomicBoolean(false);
         AtomicBoolean poolSourcedSession = new AtomicBoolean(false);
@@ -186,13 +192,16 @@ public class LongExamService {
                 return existing;
             }
 
-            List<LongExamSourceNoteRef> sourceNoteRefs = resolveSourceNoteRefs(
+            ResolvedExamSources resolvedSources = resolveSourceNoteRefs(
                     studyPack,
                     userId,
                     additionalStudyPackIds,
                     questionCount,
                     request == null ? null : request.sourceCollectionId()
             );
+            List<LongExamSourceNoteRef> sourceNoteRefs = resolvedSources.sourceNoteRefs();
+            // The VERIFIED scope, replacing the claim computed before the request was checked.
+            verifiedSourceScope.set(resolvedSources.planSourced() ? SOURCE_SCOPE_PLAN : SOURCE_SCOPE_MANUAL);
             if (additionalStudyPackIds.isEmpty()) {
                 StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(userId, studyPack);
                 Optional<List<QuizItem>> pooledQuestions = examQuestionPoolService.sampleQuestions(
@@ -220,7 +229,7 @@ public class LongExamService {
                             ANALYTICS_METADATA_QUESTION_COUNT, pooledQuestions.get().size(),
                             ANALYTICS_METADATA_DIFFICULTY, difficulty,
                             ANALYTICS_METADATA_SOURCE_COUNT, sourceCount,
-                            ANALYTICS_METADATA_SOURCE_SCOPE, sourceScope
+                            ANALYTICS_METADATA_SOURCE_SCOPE, verifiedSourceScope.get()
                     ));
                     createdSession.set(true);
                     poolSourcedSession.set(true);
@@ -234,7 +243,7 @@ public class LongExamService {
                     questionCount,
                     sourceNoteRefs
             ));
-            dispatchLongExamGenerationAfterCommit(saved.getId(), difficulty, sourceScope);
+            dispatchLongExamGenerationAfterCommit(saved.getId(), difficulty, verifiedSourceScope.get());
             createdSession.set(true);
             return saved;
         });
@@ -308,6 +317,7 @@ public class LongExamService {
                         ANALYTICS_METADATA_QUESTION_COUNT, longExamQuiz.size(),
                         ANALYTICS_METADATA_DIFFICULTY, difficulty,
                         ANALYTICS_METADATA_SOURCE_COUNT, sourceNoteRefs.size(),
+                        // The verified scope, threaded in by dispatchLongExamGenerationAfterCommit.
                         ANALYTICS_METADATA_SOURCE_SCOPE, sourceScope
                 ));
                 return null;
@@ -874,7 +884,18 @@ public class LongExamService {
         return questionCount / MIN_QUESTIONS_PER_SOURCE;
     }
 
-    private List<LongExamSourceNoteRef> resolveSourceNoteRefs(
+    /**
+     * Resolved sources plus whether the plan claim actually held.
+     *
+     * <p>⚠️ {@code planSourced} is the VERIFIED outcome, not the request's claim. Analytics must record
+     * this rather than the claim: a caller who owns a collection that does not contain the primary is
+     * treated as a manual exam in every respect, and reporting them as plan-sourced would let the client
+     * set the one metric that distinguishes the new path from the old one.
+     */
+    record ResolvedExamSources(List<LongExamSourceNoteRef> sourceNoteRefs, boolean planSourced) {
+    }
+
+    private ResolvedExamSources resolveSourceNoteRefs(
             StudyPackEntity primaryStudyPack,
             UUID userId,
             List<UUID> additionalStudyPackIds,
@@ -929,7 +950,7 @@ public class LongExamService {
             int sourceQuestionCount = baseQuestionCount + (index == 0 ? remainder : 0);
             sourceNoteRefs.add(buildSourceNoteRef(source, sourceQuestionCount));
         }
-        return sourceNoteRefs;
+        return new ResolvedExamSources(sourceNoteRefs, planSourced);
     }
 
     private LongExamSourceNoteRef buildSourceNoteRef(StudyPackEntity studyPack, int questionCount) {

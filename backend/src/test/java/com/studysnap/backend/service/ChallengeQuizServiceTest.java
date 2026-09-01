@@ -2037,7 +2037,11 @@ class ChallengeQuizServiceTest {
                 .containsEntry("sessionId", sessionId.toString())
                 .containsEntry("questionCount", 2)
                 .containsKey("scorePercentage")
-                .containsEntry("sourceCount", 0);
+                // ⚠️ ONE, not zero. buildInitialSessionState only persists sourceNoteRefs above one
+                // source, so the naive read reported 0 for every single-source session — and the first
+                // version of this test PINNED that 0, which would have made the fix look like a
+                // regression. A single-source session drew from exactly one note.
+                .containsEntry("sourceCount", 1);
         verify(analyticsService, never())
                 .trackEvent(any(), eq(AnalyticsEventType.BOARD_EXAM_COMPLETED), any(), any());
     }

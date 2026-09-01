@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -51,6 +52,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.mockito.ArgumentCaptor;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -587,10 +589,14 @@ class LongExamServiceTest {
     }
 
     @Test
-    void startSession_withCollectionTheCallerDoesNotOwnThrows() {
-        // ⚠️ THE SECURITY HALF. sourceCollectionId arrives in the request body, so it is a CLAIM. A fix
-        // that skips the subject rule whenever the field is present turns a validation rule into a
-        // client-supplied opt-out flag — and passes the success test above without this one.
+    void startSession_propagatesAVerifierRejectionRatherThanSwallowingIt() {
+        // ⚠️ RENAMED AFTER A COLD AGENT PROVED THE OLD NAME WAS A LIE. It was
+        // `startSession_withCollectionTheCallerDoesNotOwnThrows`, which claimed to cover ownership
+        // enforcement — but the verifier is a MOCK here, so this stubs a throw and asserts the throw
+        // propagates. The ownership check itself is covered by PlanSourcedExamVerifierTest, against the
+        // real repositories; deleting that check passed all 1894 tests while this one was green.
+        // What this DOES cover, and is worth keeping: startSession does not catch or swallow a source
+        // rejection on its way out.
         UUID userId = UUID.randomUUID();
         UUID foreignCollectionId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
@@ -745,6 +751,56 @@ class LongExamServiceTest {
 
         assertThatThrownBy(() -> longExamService.startSession(primaryStudyPackId.toString(), userId, request))
             .isInstanceOf(InvalidLongExamSourceException.class);
+    }
+
+    @Test
+    void startSession_recordsTheVERIFIEDSourceScopeNotTheClaim() {
+        // ⚠️ A caller who owns a collection that does not contain the primary is treated as a MANUAL exam
+        // in every respect — strict cap, subject rule enforced. Reporting them as `plan` would let the
+        // client set the single metric that separates the new path from the old one, and that metric is
+        // what the release's checkpoint reads.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+            BIOLOGY_SUBJECT);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primaryStudyPack));
+        // Owned, but the primary is not a member.
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(Set.of(UUID.randomUUID()));
+        stubNoActiveLongExamSession(userId, primaryStudyPackId);
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        // Take the POOLED branch, which fires LONG_EXAM_STARTED synchronously. The other site fires from
+        // the dispatched async task, which this fixture captures without running.
+        when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
+            .thenReturn(Optional.of(List.of(new QuizItem(
+                "Pooled question",
+                List.of("A", "B", "C", "D"),
+                0,
+                "Cells",
+                "Explanation"
+            ))));
+
+        longExamService.startSession(
+            primaryStudyPackId.toString(),
+            userId,
+            new LongExamStartRequest(null, List.of(), collectionId.toString())
+        );
+
+        ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(analyticsService, atLeastOnce()).trackEvent(
+            eq(userId),
+            eq(AnalyticsEventType.LONG_EXAM_STARTED),
+            any(),
+            metadata.capture()
+        );
+        assertThat(metadata.getAllValues())
+            .allSatisfy(recorded -> assertThat(recorded).containsEntry("sourceScope", "manual"));
     }
 
     @Test
