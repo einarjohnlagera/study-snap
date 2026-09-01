@@ -3643,6 +3643,101 @@ class NoteCollectionServiceTest {
     }
 
     @Test
+    void addItems_emitsNoteAddedToCollectionCountingOnlyTheNotesActuallyAdded() {
+        // The transition the retention hypothesis rests on: a learner deciding a note belongs in a
+        // set. Nothing recorded it before v0.101.0, so the claim was untestable.
+        // ⚠️ The count is of NEWLY added notes, not of the request — addItems filters out notes the
+        // set already holds. Here two ids are submitted and one is already a member, so the event
+        // must say 1. Asserting the metadata MAP rather than "trackEvent was called" is deliberate:
+        // a count that silently became the request size would still pass the weaker assertion.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID existingNoteId = UUID.randomUUID();
+        UUID newNoteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteCollectionItemEntity existingItem = buildItem(collectionId, existingNoteId, 0, null);
+        NoteEntity existingNote = buildNote(existingNoteId, userId, NOTE_TITLE_ONE);
+        NoteEntity newNote = buildNote(newNoteId, userId, NOTE_TITLE_TWO);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(existingNoteId, newNoteId)))
+                .thenReturn(List.of(existingNote, newNote));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(existingItem));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(existingNoteId, newNoteId), List.of(existingNote, newNote));
+
+        service.addItems(collectionId, userId, new AddNoteCollectionItemsRequest(
+                List.of(existingNoteId, newNoteId)
+        ));
+
+        ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(analyticsService).trackEvent(
+                eq(userId),
+                eq(AnalyticsEventType.NOTE_ADDED_TO_COLLECTION),
+                eq(collectionId),
+                metadata.capture()
+        );
+        assertThat(metadata.getValue()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "addedCount", 1,
+                "source", "interactive"
+        ));
+    }
+
+    @Test
+    void addItems_doesNotEmitNoteAddedToCollectionWhenEveryNoteIsAlreadyAMember() {
+        // ⚠️ A re-add is a no-op, so it must not emit a zero-count event. Without the emptiness
+        // guard this fires with addedCount=0 and inflates the very signal the event exists to
+        // measure — every duplicate drop would read as a membership decision.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteCollectionItemEntity existingItem = buildItem(collectionId, noteId, 0, null);
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of(existingItem));
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(noteId), List.of(note));
+
+        service.addItems(collectionId, userId, new AddNoteCollectionItemsRequest(List.of(noteId)));
+
+        verify(analyticsService, never())
+                .trackEvent(any(), eq(AnalyticsEventType.NOTE_ADDED_TO_COLLECTION), any(), any());
+    }
+
+    @Test
+    void addGeneratedItems_marksNoteAddedToCollectionAsBulkRatherThanALearnerDecision() {
+        // ⚠️ addGeneratedItems routes through addItems, so bulk curator authoring reaches this event.
+        // Without the source metadata a curator generating a batch into a Review Set is
+        // indistinguishable from a learner adding a note, and the two cannot be separated after the
+        // fact — which would make the retention read wrong rather than merely noisy.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteCollectionEntity collection = buildCollection(collectionId, userId, COLLECTION_TITLE, Instant.now());
+        NoteEntity note = buildNote(noteId, userId, NOTE_TITLE_ONE);
+        when(collectionRepository.findByIdAndOwnerUserId(collectionId, userId)).thenReturn(Optional.of(collection));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note));
+        when(itemRepository.findByCollectionIdOrderByPositionAsc(collectionId)).thenReturn(List.of());
+        when(itemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(collectionRepository.save(collection)).thenAnswer(invocation -> invocation.getArgument(0));
+        stubDetailItemLoad(userId, List.of(noteId), List.of(note));
+
+        service.addGeneratedItems(collectionId, userId, List.of(noteId), null);
+
+        ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(analyticsService).trackEvent(
+                eq(userId),
+                eq(AnalyticsEventType.NOTE_ADDED_TO_COLLECTION),
+                eq(collectionId),
+                metadata.capture()
+        );
+        assertThat(metadata.getValue()).containsEntry("source", "bulk_generation");
+    }
+
+    @Test
     void addGeneratedItems_skipsNotesDeletedMidBatchInsteadOfDroppingAllOfThem() {
         // A bulk batch runs for minutes while its notes are already visible in the Library.
         // Deleting one made addItems throw on the first unresolvable id, so NONE of the

@@ -184,7 +184,7 @@ Landing should compare NoteLib against generic AI tools with concrete, felt cont
 - weak areas remembered: starts fresh every session vs tracked across quizzes over time
 - exam-ready flow: one answer then it stops vs note → study pack → quiz → exam, all from the same saved note
 
-The goal is not to attack generic AI tools, but to show why NoteLib fits repeated study better. Keep the 3-column `What matters / Generic AI tools / NoteLib` table layout; only the row copy is felt/concrete, not the structure.
+The goal is not to attack generic chat tools, but to show why NoteLib fits repeated study better. Keep the 3-column `What matters / Generic chat tools / NoteLib` table layout; only the row copy is felt/concrete, not the structure.
 
 ## Target Users
 

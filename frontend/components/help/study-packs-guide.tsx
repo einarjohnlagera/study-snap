@@ -14,7 +14,7 @@ const SECTIONS: Section[] = [
     icon: Sparkles,
     title: "Generating a Study Pack",
     description:
-      "Open any note and click Generate Study Pack. The AI reads your note and builds the pack in the background — you'll be notified when it's ready.",
+      "Open any note and click Generate Study Pack. NoteLib reads your note and builds the pack in the background — you'll be notified when it's ready.",
     bullets: [
       "Generation usually takes under a minute",
       "Note content is locked after generation to keep the study material consistent",
@@ -25,7 +25,7 @@ const SECTIONS: Section[] = [
   {
     icon: AlignLeft,
     title: "Summary",
-    description: "An AI-generated overview of your note condensed into the key points.",
+    description: "A condensed overview of your note, distilled into the key points.",
     bullets: [
       "Covers the main topic, core arguments, and key terms from your note",
       "Written at your learner level for clarity",
@@ -37,7 +37,7 @@ const SECTIONS: Section[] = [
     title: "Key Concepts",
     description: "The most important ideas extracted from your note, organized for reference.",
     bullets: [
-      "Auto-extracted from your note content by the AI",
+      "Auto-extracted from your note content",
       "Used as the basis for quiz and exam questions across all modes",
       "Shown on your note detail page and Dashboard for quick reference",
     ],

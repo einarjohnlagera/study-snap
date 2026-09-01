@@ -150,7 +150,7 @@ const profileLearningLoops: ProfileLearningLoop[] = [
       { title: "Create", description: "domain notes", icon: FileText },
       { title: "Understand", description: "summaries", icon: BookOpen },
       { title: "Practice", description: "scenario MCQ via Interview Practice", icon: ClipboardList },
-      { title: "Critique", description: "per-answer AI feedback", icon: MessageSquare },
+      { title: "Critique", description: "per-answer feedback on your reasoning", icon: MessageSquare },
       { title: "Report", description: "Interview Readiness Report", icon: BarChart3 },
     ],
     modeChips: [

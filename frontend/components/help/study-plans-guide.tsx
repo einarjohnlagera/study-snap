@@ -20,7 +20,7 @@ export function StudyPlansGuide({ profileType }: Readonly<{ profileType: Profile
           have. Use it to gather a unit, an exam topic, or a weekly review into one place you can return to.
         </p>
         <p className="text-xs leading-relaxed text-foreground/55">
-          A {labels.singular} isn&apos;t a new kind of content and nothing is AI-generated for the set itself. Study
+          A {labels.singular} isn&apos;t a new kind of content and nothing is generated for the set itself. Study
           Packs and quizzes stay per note, on your existing limits — a {labels.singular} just organizes the notes.
         </p>
       </section>

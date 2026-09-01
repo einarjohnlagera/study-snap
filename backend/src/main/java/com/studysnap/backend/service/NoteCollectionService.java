@@ -131,6 +131,10 @@ public class NoteCollectionService {
     private static final String SKIPPED_SUBJECT_COUNT_METADATA_KEY = "skippedSubjectCount";
     private static final String TOTAL_NOTES_COPIED_METADATA_KEY = "totalNotesCopied";
     private static final String TOTAL_NOTES_SKIPPED_METADATA_KEY = "totalNotesSkipped";
+    private static final String ADDED_COUNT_METADATA_KEY = "addedCount";
+    private static final String SOURCE_METADATA_KEY = "source";
+    private static final String ADD_SOURCE_INTERACTIVE = "interactive";
+    private static final String ADD_SOURCE_BULK_GENERATION = "bulk_generation";
 
     private final NoteCollectionRepository collectionRepository;
     private final NoteCollectionItemRepository itemRepository;
@@ -934,6 +938,23 @@ public class NoteCollectionService {
 
     @Transactional
     public NoteCollectionDetailResponse addItems(UUID collectionId, UUID userId, AddNoteCollectionItemsRequest request) {
+        return addItems(collectionId, userId, request, ADD_SOURCE_INTERACTIVE);
+    }
+
+    /**
+     * Membership write shared by the interactive API and bulk authoring.
+     *
+     * <p>{@code source} exists only so {@code NOTE_ADDED_TO_COLLECTION} can be read as a learner
+     * signal. {@link #addGeneratedItems} routes through here, so a curator generating a batch into a
+     * Review Set would otherwise land in the same event stream as a learner deciding a note belongs
+     * in their plan, and the two cannot be told apart afterwards.
+     */
+    private NoteCollectionDetailResponse addItems(
+            UUID collectionId,
+            UUID userId,
+            AddNoteCollectionItemsRequest request,
+            String source
+    ) {
         NoteCollectionEntity collection = getOwnedCollectionOrThrow(collectionId, userId);
         if (collectionRepository.countByParentCollectionId(collectionId) > 0) {
             throw new InvalidCollectionRequestException(GOAL_CANNOT_ACCEPT_NOTES_MESSAGE);
@@ -959,6 +980,22 @@ public class NoteCollectionService {
         itemRepository.saveAll(newItems);
         touch(collection, now);
         NoteCollectionEntity saved = collectionRepository.save(collection);
+
+        // Guarded on newItems rather than on the request: addItems filters out notes the set already
+        // holds, so re-adding an existing note is a no-op that must not emit a zero-count event.
+        // trackEvent swallows its own failures (AnalyticsService:49-59), so no wrapper is needed here
+        // and none is used by COLLECTION_CREATED above.
+        if (!newItems.isEmpty()) {
+            analyticsService.trackEvent(
+                    userId,
+                    AnalyticsEventType.NOTE_ADDED_TO_COLLECTION,
+                    collectionId,
+                    Map.of(
+                            ADDED_COUNT_METADATA_KEY, newItems.size(),
+                            SOURCE_METADATA_KEY, source
+                    )
+            );
+        }
 
         List<NoteCollectionItemEntity> allItems = new ArrayList<>(currentItems);
         allItems.addAll(newItems);
@@ -990,7 +1027,7 @@ public class NoteCollectionService {
         if (resolvable.isEmpty()) {
             return 0;
         }
-        addItems(collectionId, userId, new AddNoteCollectionItemsRequest(resolvable, label));
+        addItems(collectionId, userId, new AddNoteCollectionItemsRequest(resolvable, label), ADD_SOURCE_BULK_GENERATION);
         return resolvable.size();
     }
 

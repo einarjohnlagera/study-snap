@@ -13,7 +13,7 @@ Shared app modals should stay readable, compact, and safe on mobile.
   - secondary/dismissive action first
   - primary action second
 
-## AI Suggestions Modal
+## Suggestions Modal
 
 - use a compact review layout
 - show comparisons for `Your` value vs `AI` value

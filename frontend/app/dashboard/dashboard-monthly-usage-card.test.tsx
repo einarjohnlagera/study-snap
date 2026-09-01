@@ -34,12 +34,19 @@ const usageSummary: MePlanResponse = {
 };
 
 describe("DashboardMonthlyUsageCard", () => {
-  it("names and explains the shared AI quiz meter", () => {
+  it("names and explains the shared quiz-generation meter", () => {
     render(<DashboardMonthlyUsageCard usageSummary={usageSummary} />);
 
     const card = screen.getByRole("heading", { name: "This Month" }).parentElement as HTMLElement;
-    expect(within(card).getByText("AI quizzes")).toBeInTheDocument();
-    expect(within(card).getByText("Challenge Quiz sessions and quizzes you make for someone.")).toBeInTheDocument();
+    expect(within(card).getByText("Quiz generations")).toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        "Quiz sessions we generate for you, plus quizzes you make for someone. Board Exam sessions also count against their own allowance.",
+      ),
+    ).toBeInTheDocument();
+    // ⚠️ The meter must not be labelled with a MODE name (a v0.92.0 guard), and the description must
+    // not enumerate today's modes — a later multi-note session for Free and Plus rides the Challenge
+    // engine and spends this same meter, so naming them goes stale the day that ships.
     expect(within(card).queryByText("Challenge Quiz")).not.toBeInTheDocument();
     expect(within(card).queryByText("Quiz")).not.toBeInTheDocument();
   });

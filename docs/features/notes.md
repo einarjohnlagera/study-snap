@@ -260,15 +260,15 @@ Edit mode for Study Pack Ready notes:
 
 After a user explicitly generates or regenerates a Study Pack, the shared AI suggestion modal should let them decide field by field. Copied public Study Packs that launch Quick Review are not regenerated and must not open this modal. If any future generated flow also requests an immediate next action, that action must wait until the metadata suggestion is resolved so a real generation's reconciliation choice is never skipped.
 
-- `Title` -> `Keep My Title` or `Use AI Title`
-- `Subject` -> `Keep My Subject` or `Use AI Subject`
-- `Tags` -> `Keep My Tags`, `Merge Tags`, or `Use AI Tags`
+- `Title` -> `Keep My Title` or `Use Suggested Title`
+- `Subject` -> `Keep My Subject` or `Use Suggested Subject`
+- `Tags` -> `Keep My Tags`, `Merge My Tags + Suggested Tags`, or `Use Suggested Tags Only`
 
 Rules:
 
 - never silently overwrite user-entered `title` or `subject`
-- default to `Merge Tags` when the note already has tags
-- default to `Use AI Tags` when the note has no tags yet
+- default to `Merge My Tags + Suggested Tags` when the note already has tags
+- default to `Use Suggested Tags Only` when the note has no tags yet
 - use the same suggestion flow from both `Create Note` and `Note Detail`
 - present the choices in a compact review modal, not a wall of buttons
 - compare `Your` value versus `AI` value for each field

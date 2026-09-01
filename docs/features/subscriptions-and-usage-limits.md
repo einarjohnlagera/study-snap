@@ -21,12 +21,16 @@ Do not derive plan access from:
 
 Challenge Quiz has no manual difficulty selector (removed v0.60.1) on any plan; difficulty is fully automatic from the last Quick Review score.
 
-The generation allowance is user-facing as **“AI quizzes”** on every usage meter, the pricing page and the quiz-generation dialog. **⚠️ The explanatory line “Challenge Quiz sessions and quizzes you make for someone” appears on the Dashboard usage card ONLY** — `UsageMetric` in Settings takes no description prop, so the Settings meter shows the bare label. Do not restate the description as appearing everywhere the label does. The Challenge Quiz mode keeps its product name; only usage-meter and pricing labels use the broader quota name. Both jobs continue to spend the single `challenge_quiz_generations` counter.
+The generation allowance is user-facing as **“Quiz generations”** on the usage meters and the quiz-generation dialog, and as **“generated quizzes”** on the pricing page (renamed from “AI quizzes” in `v0.101.0`). **⚠️ THOSE TWO STRINGS ARE SEPARATE CONSTANTS ON PURPOSE** — `QUIZ_GENERATIONS_USAGE_LABEL` and `GENERATED_QUIZZES_PRICING_NOUN` in `frontend/lib/usage-labels.ts`. They were one shared constant until `v0.101.0`, interpolated into four `src/config/plans.ts` strings, so a meter fix silently rewrote public pricing copy. The meter names the metered **act**; pricing names a **count** of things you get. Do not re-merge them.
+
+The explanatory line is **“Quiz sessions we generate for you, plus quizzes you make for someone. Board Exam sessions also count against their own allowance.”** **⚠️ It is deliberately mode-agnostic and deliberately does NOT list who has their own allowance.** It names no mode because a later multi-note session for Free and Plus would ride the Challenge engine and spend this same meter, so any enumeration goes stale the day that ships; and it names no allowance list because Board Exam spends **both** this meter and `board_exam_used_this_month`, and Settings renders a Board Exam row directly beneath it — so a list like *“Long Exam, Adaptive Practice and Interview Practice have their own allowances”* is falsified by a row the reader is already looking at. Naming the double-spend is the only thing about Board Exam worth the words. `frontend/lib/quiz-session-history.test.ts` pins all of this.
+
+**⚠️ The description appears on the Dashboard usage card AND the Settings meter** — `UsageMetric` in Settings takes a `description` prop and Settings passes it. The Challenge Quiz mode keeps its product name; only usage-meter and pricing labels use the broader quota name, and a test pins that the two differ. The three spend sites — and the only three — are `ChallengeQuizService:235` (Board Exam, pooled), `ChallengeQuizService:343` (Challenge Quiz and Board Exam, live) and `GeneratedQuizService:158` (“Quiz for someone”); `+5 Questions` spends nothing, so the metered unit is a **session or quiz created**, never a question and never a generation call. All three spend the single `challenge_quiz_generations` counter.
 
 ### Free
 
 - `10` Study Packs / month
-- `20` AI quizzes / month
+- `20` generated quizzes / month
 - `3` shareable quiz links / month
 - topic note generation: backend-configured Free limit (`5` by default)
 - OCR: backend-configured Free limit (`20` by default)
@@ -40,7 +44,7 @@ The generation allowance is user-facing as **“AI quizzes”** on every usage m
 ### Plus
 
 - `50` Study Packs / month
-- `100` AI quizzes / month
+- `100` generated quizzes / month
 - `10` shareable quiz links / month
 - topic note generation: backend-configured Plus limit (`25` by default)
 - OCR: backend-configured Plus limit (`50` by default)
@@ -52,7 +56,7 @@ The generation allowance is user-facing as **“AI quizzes”** on every usage m
 ### Pro
 
 - `100` Study Packs / month
-- `200` AI quizzes / month
+- `200` generated quizzes / month
 - unlimited shareable quiz links
 - Board Exam Mode uses the shared AI-quiz budget and has a dedicated `10` source-note units / month hard cap; quota is deducted per source note (a 3-note session costs 3 units)
 - topic note generation: backend-configured Pro limit (`100` by default)
@@ -67,7 +71,7 @@ For actual behavior and gating decisions:
 - use backend plan limits and feature flags
 - treat `GET /api/me/plan` as the frontend contract
 
-`GET /api/me/plan` includes the share-link monthly limit, used count and remaining count; unlimited uses the same `null` representation as other unlimited limits. The “Quiz for someone” dialog displays both AI quizzes remaining and share links remaining before generation. An exhausted share-link allowance is informational there: generation and export remain valid, while the existing link-creation path remains the only enforcement point.
+`GET /api/me/plan` includes the share-link monthly limit, used count and remaining count; unlimited uses the same `null` representation as other unlimited limits. The “Quiz for someone” dialog displays both quiz generations remaining and share links remaining before generation. An exhausted share-link allowance is informational there: generation and export remain valid, while the existing link-creation path remains the only enforcement point.
 
 ## Concept due and mastery signals
 

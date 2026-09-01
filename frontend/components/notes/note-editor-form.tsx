@@ -373,7 +373,7 @@ export function NoteEditorForm({
             <div className="space-y-2">
                 <label htmlFor="note-title" className="text-sm font-medium text-foreground">Title (optional)</label>
                 <p className="text-xs text-foreground/60">
-                    Left blank, the AI writes one for you when you generate a Study Pack.
+                    Left blank, we write one for you when you generate a Study Pack.
                 </p>
                 <input
                     id="note-title"
@@ -390,8 +390,8 @@ export function NoteEditorForm({
                 <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject
                     (optional)</label>
                 <p className="text-xs text-foreground/60">
-                    Helps organize your library, and improves your Study Pack — the subject is sent to the
-                    AI when you generate.
+                    Helps organize your library, and improves your Study Pack — the subject is used when you
+                    generate.
                 </p>
                 <SubjectCombobox
                     id="note-subject"
@@ -511,7 +511,7 @@ export function NoteEditorForm({
                             ) : null}
                             <p className="text-xs text-foreground/60">
                                 {applicableProgramIds.length > 1
-                                    ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
+                                    ? "You've added more than one program. Choose the academic domain this note should be written in — it shapes how the note is written, while the programs decide who finds it."
                                     : "Needed before you can generate a Study Pack for a note in more than one program."}
                             </p>
                         </div>

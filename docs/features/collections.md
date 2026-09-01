@@ -947,6 +947,11 @@ The shipped Prompt B integrations make collections useful from both entry points
 - This handoff is frontend-only. DOCX export and the collection-to-Exam Builder route remain Teacher/Admin-only; sharing an individual generated quiz is available to any onboarded owner from Quiz Preview. No collection-level generation, analytics, quota, backend, or AI behavior is added.
 - Student, board-exam, and professional multi-note practice terminal CTAs are deferred. The existing Long Exam flow is same-subject scoped and meters quota per source note, while collections can be cross-subject and mixed-readiness; a collection-level practice action needs a separate product-shape pass.
 - `COLLECTION_CREATED` fires server-side from `NoteCollectionService.create(...)` only, with `itemCount` metadata for the number of initial notes. Add-items, update, remove, and reorder do not fire a creation event.
+- `NOTE_ADDED_TO_COLLECTION` fires server-side from `NoteCollectionService.addItems(...)` (added `v0.101.0`), with `addedCount` and `source` metadata. It records the transition the retention hypothesis rests on — a learner deciding a note belongs in a set — which nothing measured before.
+  - **⚠️ `addedCount` counts NEWLY added notes, not the request.** `addItems` filters out notes the set already holds, and the event is guarded on that filtered list being non-empty, so **re-adding an existing note emits nothing.** A zero-count event would make every duplicate drop read as a membership decision.
+  - **⚠️ `source` distinguishes `interactive` from `bulk_generation`, and it is load-bearing.** `addGeneratedItems` routes through `addItems`, so a curator generating a batch into a Review Set reaches this same event; without the tag a curator authoring run is indistinguishable from learner intent, and the two cannot be separated afterwards.
+  - **⚠️ ONE FIRE SITE IS A STATED BOUNDARY, not an oversight.** Creating a collection with initial notes is already `COLLECTION_CREATED`, and adopting a plan is already `STUDY_PLAN_ADOPTED`. Firing here as well would double-count a single learner intent. Update, remove and reorder fire nothing.
+  - It is **backend-only**, so it has no entry in the frontend `AnalyticsEventType` union in `lib/api.ts`; do not add unused vocabulary there.
 
 Deferred Prompt B slots:
 
