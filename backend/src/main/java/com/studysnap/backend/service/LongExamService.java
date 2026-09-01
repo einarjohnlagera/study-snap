@@ -62,6 +62,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -101,6 +102,10 @@ public class LongExamService {
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
     private static final String ANALYTICS_METADATA_QUESTION_COUNT = "questionCount";
     private static final String ANALYTICS_METADATA_DIFFICULTY = "difficulty";
+    private static final String ANALYTICS_METADATA_SOURCE_COUNT = "sourceCount";
+    private static final String ANALYTICS_METADATA_SOURCE_SCOPE = "sourceScope";
+    private static final String SOURCE_SCOPE_PLAN = "plan";
+    private static final String SOURCE_SCOPE_MANUAL = "manual";
     private static final String ANALYTICS_METADATA_SCORE_PERCENTAGE = "scorePercentage";
     private static final int WEAK_DOMAIN_ACCURACY_THRESHOLD = 60;
     private static final int FAIR_SCORE_THRESHOLD = 50;
@@ -109,6 +114,7 @@ public class LongExamService {
     private static final int SECONDS_PER_QUESTION = 90;
     private static final int MAX_ADDITIONAL_SOURCE_COUNT = 3;
     private static final int MIN_QUESTIONS_PER_SOURCE = 3;
+
     private static final int QUOTA_UNITS_PER_SESSION = 1;
     private static final BigDecimal ZERO_SCORE = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     private static final List<QuickReviewSessionStatus> ACTIVE_STATUSES = List.of(
@@ -124,6 +130,7 @@ public class LongExamService {
     );
 
     private final NoteRepository noteRepository;
+    private final PlanSourcedExamVerifier planSourcedExamVerifier;
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final UserRepository userRepository;
@@ -150,8 +157,16 @@ public class LongExamService {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         String difficulty = resolveDifficulty(request);
         int questionCount = resolveQuestionCount(userId);
-        List<UUID> additionalStudyPackIds = resolveAdditionalStudyPackIds(request, studyPackId);
+        boolean claimsPlanScope = request != null
+                && request.sourceCollectionId() != null
+                && !request.sourceCollectionId().isBlank();
+        List<UUID> additionalStudyPackIds = resolveAdditionalStudyPackIds(
+                request,
+                studyPackId,
+                claimsPlanScope ? resolveMaxSourceNotes(questionCount) - 1 : MAX_ADDITIONAL_SOURCE_COUNT
+        );
         int sourceCount = additionalStudyPackIds.size() + 1;
+        String sourceScope = claimsPlanScope ? SOURCE_SCOPE_PLAN : SOURCE_SCOPE_MANUAL;
         assertLongExamQuotaAvailable(userId, planType, QUOTA_UNITS_PER_SESSION);
         AtomicBoolean createdSession = new AtomicBoolean(false);
         AtomicBoolean poolSourcedSession = new AtomicBoolean(false);
@@ -175,7 +190,8 @@ public class LongExamService {
                     studyPack,
                     userId,
                     additionalStudyPackIds,
-                    questionCount
+                    questionCount,
+                    request == null ? null : request.sourceCollectionId()
             );
             if (additionalStudyPackIds.isEmpty()) {
                 StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(userId, studyPack);
@@ -202,7 +218,9 @@ public class LongExamService {
                     trackAnalytics(userId, AnalyticsEventType.LONG_EXAM_STARTED, saved.getStudyPackId(), Map.of(
                             ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
                             ANALYTICS_METADATA_QUESTION_COUNT, pooledQuestions.get().size(),
-                            ANALYTICS_METADATA_DIFFICULTY, difficulty
+                            ANALYTICS_METADATA_DIFFICULTY, difficulty,
+                            ANALYTICS_METADATA_SOURCE_COUNT, sourceCount,
+                            ANALYTICS_METADATA_SOURCE_SCOPE, sourceScope
                     ));
                     createdSession.set(true);
                     poolSourcedSession.set(true);
@@ -216,7 +234,7 @@ public class LongExamService {
                     questionCount,
                     sourceNoteRefs
             ));
-            dispatchLongExamGenerationAfterCommit(saved.getId(), difficulty);
+            dispatchLongExamGenerationAfterCommit(saved.getId(), difficulty, sourceScope);
             createdSession.set(true);
             return saved;
         });
@@ -239,9 +257,10 @@ public class LongExamService {
 
     private void dispatchLongExamGenerationAfterCommit(
             UUID sessionId,
-            String difficulty
+            String difficulty,
+            String sourceScope
     ) {
-        Runnable generationTask = () -> generateLongExamAsync(sessionId, difficulty);
+        Runnable generationTask = () -> generateLongExamAsync(sessionId, difficulty, sourceScope);
         if (TransactionSynchronizationManager.isSynchronizationActive()
                 && TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -255,7 +274,10 @@ public class LongExamService {
         studyPackGenerationTaskDispatcher.execute(generationTask);
     }
 
-    private void generateLongExamAsync(UUID sessionId, String difficulty) {
+    // sourceScope is threaded through rather than re-derived: this method reloads the session from the
+    // database and the session state does not record how its sources were chosen. Both LONG_EXAM_STARTED
+    // sites must carry the same metadata shape, or a funnel read has to special-case which branch fired.
+    private void generateLongExamAsync(UUID sessionId, String difficulty, String sourceScope) {
         try {
             studyPackGenerationTransactionOperations.execute(status -> {
                 QuickReviewSessionEntity session = quickReviewSessionRepository.findById(sessionId)
@@ -284,7 +306,9 @@ public class LongExamService {
                 trackAnalytics(session.getUserId(), AnalyticsEventType.LONG_EXAM_STARTED, saved.getStudyPackId(), Map.of(
                         ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
                         ANALYTICS_METADATA_QUESTION_COUNT, longExamQuiz.size(),
-                        ANALYTICS_METADATA_DIFFICULTY, difficulty
+                        ANALYTICS_METADATA_DIFFICULTY, difficulty,
+                        ANALYTICS_METADATA_SOURCE_COUNT, sourceNoteRefs.size(),
+                        ANALYTICS_METADATA_SOURCE_SCOPE, sourceScope
                 ));
                 return null;
             });
@@ -586,7 +610,8 @@ public class LongExamService {
                 extractTimerStartedAtEpochSeconds(session.getSessionState()),
                 extractSourceNoteRefs(session.getSessionState()),
                 (int) countLongExamUsedThisMonth(session.getUserId()),
-                properties.getPricing().resolveMonthlyLongExamLimit(planType)
+                properties.getPricing().resolveMonthlyLongExamLimit(planType),
+                resolveMaxSourceNotes(resolveQuestionCount(session.getUserId()))
         );
     }
 
@@ -603,7 +628,8 @@ public class LongExamService {
                 0,
                 List.of(),
                 (int) countLongExamUsedThisMonth(userId),
-                properties.getPricing().resolveMonthlyLongExamLimit(planType)
+                properties.getPricing().resolveMonthlyLongExamLimit(planType),
+                resolveMaxSourceNotes(resolveQuestionCount(userId))
         );
     }
 
@@ -801,7 +827,11 @@ public class LongExamService {
                 .orElseThrow(InvalidLongExamSourceException::new);
     }
 
-    private List<UUID> resolveAdditionalStudyPackIds(LongExamStartRequest request, UUID primaryStudyPackId) {
+    private List<UUID> resolveAdditionalStudyPackIds(
+            LongExamStartRequest request,
+            UUID primaryStudyPackId,
+            int claimedMaxAdditional
+    ) {
         if (request == null || request.additionalStudyPackIds() == null || request.additionalStudyPackIds().isEmpty()) {
             return List.of();
         }
@@ -819,27 +849,69 @@ public class LongExamService {
             }
             uniqueIds.add(studyPackId);
         }
-        if (uniqueIds.size() > MAX_ADDITIONAL_SOURCE_COUNT) {
+        // Reject an over-cap request BEFORE the primary pack is loaded, because that load takes a row
+        // lock — validating request shape after acquiring a lock is the wrong order. The bound used here
+        // is the one the CLAIM allows: a caller naming no plan gets the manual cap immediately. The claim
+        // is not trusted, only used to size this early check; resolveSourceNoteRefs re-applies the cap
+        // that the VERIFIED scope allows, so an unverifiable plan claim still falls back to the manual
+        // cap rather than keeping the larger one.
+        if (uniqueIds.size() > claimedMaxAdditional) {
             throw new InvalidLongExamSourceException();
         }
         return List.copyOf(uniqueIds);
+    }
+
+    /**
+     * Most sources this learner may combine, counting the primary.
+     *
+     * <p>⚠️ Derived, never a constant. {@code questionCount} comes from the learner's LEVEL rather than
+     * their selection, and {@link #MIN_QUESTIONS_PER_SOURCE} is checked against
+     * {@code questionCount / sourceCount} below — so the true ceiling is 6 / 8 / 10 by level, and a
+     * College learner (the default) fails at 9. Exposing this on the response is what stops the
+     * frontend re-implementing the level mapping.
+     */
+    int resolveMaxSourceNotes(int questionCount) {
+        return questionCount / MIN_QUESTIONS_PER_SOURCE;
     }
 
     private List<LongExamSourceNoteRef> resolveSourceNoteRefs(
             StudyPackEntity primaryStudyPack,
             UUID userId,
             List<UUID> additionalStudyPackIds,
-            int questionCount
+            int questionCount,
+            String sourceCollectionIdRaw
     ) {
         List<StudyPackEntity> sources = new ArrayList<>(1 + additionalStudyPackIds.size());
         sources.add(primaryStudyPack);
         String primarySubject = resolveNoteSubjectForStudyPack(primaryStudyPack);
-        if (!additionalStudyPackIds.isEmpty() && primarySubject.isBlank()) {
+
+        Set<UUID> planMemberNoteIds = planSourcedExamVerifier.resolvePlanMemberNoteIds(
+                sourceCollectionIdRaw,
+                userId,
+                InvalidLongExamSourceException::new
+        );
+        // ⚠️ The PRIMARY must be a member too, or naming an unrelated collection the caller happens to
+        // own would relax the rule for its members while the exam is anchored somewhere else entirely.
+        boolean planSourced = !planMemberNoteIds.isEmpty()
+                && planMemberNoteIds.contains(primaryStudyPack.getNoteId());
+
+        int maxAdditional = planSourced
+                ? resolveMaxSourceNotes(questionCount) - 1
+                : MAX_ADDITIONAL_SOURCE_COUNT;
+        if (additionalStudyPackIds.size() > maxAdditional) {
+            throw new InvalidLongExamSourceException();
+        }
+
+        // The same-subject rule still applies to a note the plan does not contain. Skipping it wholesale
+        // once any plan is named would let one plan-member source smuggle in arbitrary others.
+        boolean subjectRuleApplies = !planSourced;
+        if (!additionalStudyPackIds.isEmpty() && subjectRuleApplies && primarySubject.isBlank()) {
             throw new InvalidLongExamSourceException();
         }
         for (UUID additionalStudyPackId : additionalStudyPackIds) {
             StudyPackEntity additionalStudyPack = findOwnedLongExamSourceOrThrow(additionalStudyPackId, userId);
-            if (!primarySubject.equals(resolveNoteSubjectForStudyPack(additionalStudyPack))) {
+            boolean memberOfPlan = planSourced && planMemberNoteIds.contains(additionalStudyPack.getNoteId());
+            if (!memberOfPlan && !primarySubject.equals(resolveNoteSubjectForStudyPack(additionalStudyPack))) {
                 throw new InvalidLongExamSourceException();
             }
             sources.add(additionalStudyPack);

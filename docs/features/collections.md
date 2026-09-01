@@ -306,7 +306,7 @@ Premium-exam eligibility differs from the Teacher Exam Builder: Long/Board/Inter
 
 The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its Study Pack-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap:
 
-- Long Exam: primary note route plus up to 3 additional Study Pack ids
+- Long Exam: primary note route plus additional Study Pack ids, capped by the learner-level-derived `maxSourceNotes` the server returns (6 / 8 / 10 sources including the primary). The start request carries `sourceCollectionId`, which the server re-verifies — see `quiz.md`
 - Board Exam: primary Study Pack route plus up to 2 additional Study Pack ids
 - Interview Practice: primary note route plus up to 2 additional note ids
 
@@ -945,17 +945,19 @@ The shipped Prompt B integrations make collections useful from both entry points
 - Collections with only unlabeled quiz-ready notes seed one default section. Teachers can still rename, reorder, add, rebalance, and replace the initial structure with an existing Exam Builder template.
 - The terminal CTA keeps the existing partial-readiness hint when some notes are skipped and disables with `Generate a quiz for at least one note to build an exam.` when none are quiz-ready.
 - This handoff is frontend-only. DOCX export and the collection-to-Exam Builder route remain Teacher/Admin-only; sharing an individual generated quiz is available to any onboarded owner from Quiz Preview. No collection-level generation, analytics, quota, backend, or AI behavior is added.
-- Student, board-exam, and professional multi-note practice terminal CTAs are deferred. The existing Long Exam flow is same-subject scoped and meters quota per source note, while collections can be cross-subject and mixed-readiness; a collection-level practice action needs a separate product-shape pass.
+- Student, board-exam, and professional multi-note practice terminal CTAs are deferred. The existing MANUAL Long Exam flow is same-subject scoped (the plan-sourced flow is not, as of `v0.102.0`) and meters quota per source note, while collections can be cross-subject and mixed-readiness; a collection-level practice action needs a separate product-shape pass.
 - `COLLECTION_CREATED` fires server-side from `NoteCollectionService.create(...)` only, with `itemCount` metadata for the number of initial notes. Add-items, update, remove, and reorder do not fire a creation event.
 - `NOTE_ADDED_TO_COLLECTION` fires server-side from `NoteCollectionService.addItems(...)` (added `v0.101.0`), with `addedCount` and `source` metadata. It records the transition the retention hypothesis rests on — a learner deciding a note belongs in a set — which nothing measured before.
   - **⚠️ `addedCount` counts NEWLY added notes, not the request.** `addItems` filters out notes the set already holds, and the event is guarded on that filtered list being non-empty, so **re-adding an existing note emits nothing.** A zero-count event would make every duplicate drop read as a membership decision.
   - **⚠️ `source` distinguishes `interactive` from `bulk_generation`, and it is load-bearing.** `addGeneratedItems` routes through `addItems`, so a curator generating a batch into a Review Set reaches this same event; without the tag a curator authoring run is indistinguishable from learner intent, and the two cannot be separated afterwards.
   - **⚠️ ONE FIRE SITE IS A STATED BOUNDARY, not an oversight.** Creating a collection with initial notes is already `COLLECTION_CREATED`, and adopting a plan is already `STUDY_PLAN_ADOPTED`. Firing here as well would double-count a single learner intent. Update, remove and reorder fire nothing.
   - It is **backend-only**, so it has no entry in the frontend `AnalyticsEventType` union in `lib/api.ts`; do not add unused vocabulary there.
+- `BOARD_EXAM_COMPLETED` and `CHALLENGE_QUIZ_COMPLETED` fire server-side from `ChallengeQuizService.completeSession(...)` (added `v0.102.0`), carrying `sessionId`, `questionCount`, `scorePercentage` and `sourceCount`. **⚠️ Both funnels previously had a START and no END: `BOARD_EXAM_COMPLETED` did not exist, and `CHALLENGE_QUIZ_COMPLETED` existed in the enum while being fired from NOWHERE — enum membership is not instrumentation.** One method completes either mode, so both fire from the same site, chosen by the session's mode.
+- `LONG_EXAM_STARTED` additionally carries `sourceCount` and `sourceScope` (`plan` or `manual`), so a plan-sourced exam is separable from a manual multi-note one. **⚠️ `sourceScope` reflects the CLAIM, not the verified outcome** — it is threaded to the async generation path rather than re-derived, because the session row does not record how its sources were chosen and both `LONG_EXAM_STARTED` sites must carry the same shape.
 
 Deferred Prompt B slots:
 
-- Student, board-exam, and professional multi-note practice actions remain a follow-up for the Long Exam same-subject/per-note-quota reason above.
+- Student, board-exam, and professional multi-note practice actions remain a follow-up for the per-note-quota reason above. The same-subject half of that reason no longer applies to a plan-sourced Long Exam.
 
 ## Out Of Scope
 

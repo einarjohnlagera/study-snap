@@ -1245,6 +1245,11 @@ export default function ChallengeQuizPage() {
       const request: ChallengeQuizStartRequest = { mode: nextMode };
       if (nextMode === BOARD_EXAM_MODE && selectedBoardExamAdditionalStudyPackIds.length > 0) {
         request.additionalStudyPackIds = selectedBoardExamAdditionalStudyPackIds;
+        // Without this the backend applies the same-subject rule to notes this screen pre-selected from
+        // the plan, and refuses a selection the product itself made.
+        if (collectionId) {
+          request.sourceCollectionId = collectionId;
+        }
       }
       const started = redoMissed
         ? await startRedoMissedChallengeQuizSession(note.id)
@@ -1290,7 +1295,7 @@ export default function ChallengeQuizPage() {
       startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, resetToPrestart, selectedBoardExamAdditionalStudyPackIds, selectedMode, viewerPlanType]);
+  }, [applyStartedSession, collectionId, isEmailVerified, note, openLockedFeaturePaywall, resetToPrestart, selectedBoardExamAdditionalStudyPackIds, selectedMode, viewerPlanType]);
 
   useEffect(() => {
     if (
