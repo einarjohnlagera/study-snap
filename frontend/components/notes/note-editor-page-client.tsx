@@ -844,9 +844,11 @@ export function NoteEditorPageClient({
         };
       }
     } catch (error) {
-      // M10: this catch discarded the exception, so a curator hitting the paywall with several programs
-      // and a blank Domain Context saw "we couldn't save your draft" instead of the instruction that
-      // would actually let them save. Surface the server's message when it has one -- it is a
+      // M10: this catch discarded the exception, so a curator whose save was rejected saw "we couldn't
+      // save your draft" instead of the instruction that would actually let them save.
+      // (The original example was several programs with a blank Domain Context. v0.100.0 moved that
+      // check to generation time, so it no longer fails HERE -- CourseProgramSelectionRequiredException
+      // still does, and the mechanism below is unchanged.) Surface the server's message when it has one -- it is a
       // validation contract (MultiProgramDomainContextRequiredException,
       // CourseProgramSelectionRequiredException), not an infrastructure failure -- and keep the generic
       // draft-preservation notice for everything else.
