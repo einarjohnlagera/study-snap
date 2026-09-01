@@ -144,6 +144,7 @@ describe("NoteEditorPageClient", () => {
     (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
       programs: [{ id: "program-nursing", name: "Nursing" }],
       courseProgramShadowed: false,
+      effectiveWritingDomain: "Nursing",
     });
     (replaceNoteApplicablePrograms as jest.Mock).mockImplementation(async (_noteId: string, ids: string[]) => (
       ids.map((id) => ({ id, name: id === "program-pharmacy" ? "Pharmacy" : "Nursing" }))
@@ -1213,6 +1214,9 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByLabelText("Domain Context (optional)")).toHaveValue("NURSING");
     expect(screen.getByLabelText("Authored Depth (optional)")).toHaveValue("COLLEGE");
+    expect(screen.getByRole("option", { name: "Automatic — use note context" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Automatic — based on the reader" })).toBeInTheDocument();
+    expect(screen.getByText(/They determine where this note applies and is discoverable/)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Remove Nursing" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Domain Context (optional)"), {
       target: { value: "ENGINEERING_SCIENCES" },
@@ -1229,6 +1233,39 @@ describe("NoteEditorPageClient", () => {
         learnerLevel: "BOARD_EXAM_REVIEW",
       }),
     ));
+  });
+
+  it("shows the resolver-derived writing domain from the initial applicable-programs fetch", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue(baseNote);
+    (getNoteApplicablePrograms as jest.Mock).mockResolvedValue({
+      programs: [{ id: "program-architecture", name: "Architecture" }],
+      courseProgramShadowed: true,
+      effectiveWritingDomain: "Architecture",
+    });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    expect(await screen.findByText("Writing domain: Architecture")).toBeInTheDocument();
+    expect(getNoteApplicablePrograms).toHaveBeenCalledTimes(1);
+    expect(getNoteApplicablePrograms).toHaveBeenCalledWith("note-1");
+  });
+
+  it("keeps curator authoring copy hidden for learner-owned notes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue(baseNote);
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    await screen.findByLabelText("Content");
+    expect(screen.queryByText(/Writing domain/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/They determine where this note applies/)).not.toBeInTheDocument();
   });
 
   it("sends Domain Context to topic generation and preserves input after an API error", async () => {

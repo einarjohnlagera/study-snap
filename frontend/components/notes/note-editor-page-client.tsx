@@ -199,6 +199,8 @@ export function NoteEditorPageClient({
   const [applicableProgramIds, setApplicableProgramIds] = useState<string[]>([]);
   const [savedApplicableProgramNames, setSavedApplicableProgramNames] = useState<string[]>([]);
   const [courseProgramShadowed, setCourseProgramShadowed] = useState<boolean | null>(null);
+  const [effectiveWritingDomain, setEffectiveWritingDomain] = useState<string | null>(null);
+  const [effectiveWritingDomainLoaded, setEffectiveWritingDomainLoaded] = useState(false);
   const [copiedFromNoteId, setCopiedFromNoteId] = useState<string | null>(null);
   const [applicableProgramsLoading, setApplicableProgramsLoading] = useState(false);
   const [applicableProgramsError, setApplicableProgramsError] = useState<string | null>(null);
@@ -251,6 +253,7 @@ export function NoteEditorPageClient({
     let active = true;
     setApplicableProgramsLoading(true);
     setApplicableProgramsError(null);
+    setEffectiveWritingDomainLoaded(false);
     const catalogRequest = showCuratorMetadataFields ? getCourseProgramCatalog() : Promise.resolve([]);
     const programsRequest = noteId ? getNoteApplicablePrograms(noteId) : Promise.resolve(null);
     void Promise.all([catalogRequest, programsRequest])
@@ -264,6 +267,8 @@ export function NoteEditorPageClient({
           setApplicableProgramIds(selectedIds);
           setSavedApplicableProgramNames(response.programs.map((program) => program.name));
           setCourseProgramShadowed(response.courseProgramShadowed);
+          setEffectiveWritingDomain(response.effectiveWritingDomain);
+          setEffectiveWritingDomainLoaded(true);
           setApplicableProgramsDirty(false);
         }
         setCatalogLoaded(true);
@@ -1407,6 +1412,8 @@ export function NoteEditorPageClient({
         applicableProgramsLoading={applicableProgramsLoading}
         applicableProgramsError={applicableProgramsError}
         onRetryApplicablePrograms={() => setApplicableProgramsRetryToken((value) => value + 1)}
+        effectiveWritingDomain={effectiveWritingDomain}
+        effectiveWritingDomainLoaded={effectiveWritingDomainLoaded}
         courseProgramShadowed={courseProgramShadowed ?? (
           isEditMode && (applicableProgramsLoading || Boolean(applicableProgramsError)) ? true : null
         )}

@@ -76,10 +76,12 @@ list to the LLM. **The work is resolver + UX + mental model.**
   answerable this cycle, and the read must say so rather than infer.**
 - **5. Decisions 3, 12 and 13 — the copy that carries the mental model (frontend).** Applicable Programs
   helper copy states the boundary: *they determine where this note applies and is discoverable; they do not
-  determine its Domain Context.* Plus **audit every remaining Domain Context description for the same
-  narrowing failure `v0.99.0` fixed in two values** — an enumeration of a narrower value than the one it
-  names. **⚠️ Verified at kickoff: `frontend/app/onboarding/` contains ZERO `AI`/domain strings**, so no
-  copy in this release can land on the frozen path.
+  determine its Domain Context.* **Decision 13 is deliberately limited to the carried
+  `ENGINEERING_MATHEMATICS` teaches-versus-uses defect.** `GENERAL_EDUCATION`,
+  `PROFESSIONAL_EDUCATION`, `NURSING`, and `ACCOUNTANCY` remain byte-identical: three are zero-usage values
+  the live 2026-09-28 checkpoint reads, so rewriting their descriptions would alter its input mid-window
+  without an honest deploy split. **⚠️ Verified at kickoff: `frontend/app/onboarding/` contains ZERO
+  `AI`/domain strings**, so no copy in this release can land on the frozen path.
 
 - **6. A REGRESSION GUARD pins that the authoring domain cannot start depending on WHO IS READING (test
   only). ⚠️ REDUCED 2026-09-01 FROM A BEHAVIOUR CHANGE TO A GUARD, BECAUSE THE DEFECT IT WAS SCOPED TO FIX
@@ -227,6 +229,9 @@ so the invariant is never unprotected between commits.
 - **Item 1 (Decision 4) and item 3 — canonical curator domain resolution and generation readiness (backend + frontend).** The four existing curator checks now share one onboarding-aware `CuratorAuthoringPredicate`; canonical note and bulk resolution suppress only a curator's profile-program fallback, while learner personalization, a note's own legacy string, and `buildFromStudyPackFallback` remain unchanged. Two curators with different profiles therefore resolve the same canonical note to the same authoring-domain instruction, and a curator single-program note uses its joined catalog name.
 - **Multi-program notes may be saved without Domain Context; generation rejects them before side effects.** The three save-time blocks and their frontend pre-validation were removed only after the readiness gate existed. `StudyPackService` now gates both note-ID generation entry points before quota/rate checks, status writes, dispatch, or LLM work; the synchronous `POST /study-packs` path was added after the pre-implementation advisor proved it was a second live bypass. Existing-pack admin summary/quiz regeneration is gated before its LLM call as well. The existing topic and bulk generation checks remain intact, and the existing `MultiProgramDomainContextRequiredException` contract is reused unchanged.
 - **Item 4 — the Domain Context override signal is now observable.** Curator note creates and updates emit `NOTE_AUTHORING_DOMAIN_RECORDED` after Applicable Program rows are saved, using the generation resolver's `courseProgram()` result rather than a second resolution pass. Metadata is explicit even when values are absent: `automaticDomain=NONE` and `persistedDomainContext=AUTOMATIC`; updates additionally carry `previousDomainContext`. Learner saves emit nothing, and an analytics failure is isolated from the note save.
+- **Item 2 and Decision 12 — curators now see the effective writing-domain outcome.** The existing Applicable Programs detail response carries the value returned by `StudyPackGenerationContextResolver.effectiveAuthoringDomain`, resolved with the note owner rather than an ADMIN viewer. Note Editor and Note Detail render exactly `Writing domain: <name>` or `Writing domain needs attention` after their initial response succeeds; a failed response renders neither state and no UI exposes resolver precedence.
+- **Decision 1 and Decision 3 — the authoring controls now state the correct mental model.** All three Domain Context empty options say `Automatic — use note context`; the adjacent Authored Depth `Automatic — based on the reader` labels remain unchanged. Applicable Programs helper text on the Note Editor, Note Detail and admin picker states that programs determine where a note applies and is discoverable, not its Domain Context.
+- **Decision 13 remains deliberately deferred except for Engineering Mathematics.** `ENGINEERING_MATHEMATICS` now says to select it when a note teaches a computational method, not merely when it uses one. `GENERAL_EDUCATION`, `PROFESSIONAL_EDUCATION`, `NURSING`, and `ACCOUNTANCY` are byte-identical: three are zero-usage values measured by the 2026-09-28 checkpoint, so revising them during its live window would change the input without an honest deploy split.
 - **⚠️ THE `/audit-diff` PASS FOUND A VACUOUS TEST NAMED AFTER THIS RELEASE'S HEADLINE PROPERTY, and it is
   the eighth instance of that class in five releases.**
   `resolve_twoCuratorsWithDifferentProfilesGetByteIdenticalAuthoringDomains` gave its note **exactly one**
@@ -265,6 +270,34 @@ so the invariant is never unprotected between commits.
 - **⚠️ The tests assert the persisted metadata MAP via `containsExactly`, not merely that `trackEvent` was
   called** — a verification-only test would have passed with every key silently absent. **The eight new tests
   were confirmed to EXECUTE by reading the surefire XML**, and the suite moved 1867 → 1875, which matches.
+- **⚠️ THE `/audit-diff` PASS CAUGHT A BUILD-BREAKING DEFECT THAT THE ENTIRE TEST SUITE PASSED OVER, and the
+  reason it was invisible is the finding.** `effectiveWritingDomain` reached the response **TYPE** in
+  `lib/api.ts` but **never reached the runtime parser** — `getNoteApplicablePrograms` built its return object
+  without the field. **`npx tsc --noEmit` failed with `TS2741`**, so `npm run build` would have failed, while
+  **all 193 Jest suites passed** because Jest does not typecheck and **every surface test mocks
+  `getNoteApplicablePrograms` directly.**
+- **⚠️ EVEN HAD IT COMPILED, ITEM 2 WOULD HAVE SHIPPED INERT.** The field would have been `undefined` in the
+  browser, so the writing-domain line would **never have rendered in production** — and `undefined` is
+  precisely the value the surfaces cannot distinguish from *"not loaded yet"*, which is the distinction the
+  error-state design turns on. A feature that renders correctly in every test and never once in production is
+  the worst shape this could have taken.
+- **The parser now normalizes a missing or non-string value to `null`, never `undefined`**, and
+  `lib/api-note-applicable-programs.test.ts` gained the coverage that was missing. **Mutation-verified:
+  removing the field from the parser again fails three of its four tests.** **⚠️ The lesson is narrow and
+  reusable — a typed field is not a delivered field, and a mocked-boundary test suite structurally cannot
+  see the boundary.**
+- **The other required properties were verified rather than assumed.** The effective domain is resolved from
+  `note.getOwnerUserId()`, not the requester — mutating it to the requester fails
+  `adminReadResolvesTheWritingDomainFromTheNoteOwnerNotTheRequester`. The value comes from
+  `effectiveAuthoringDomain` itself, so **no second copy of the precedence chain exists** on either side.
+  `effectiveWritingDomainLoaded` is reset to `false` per fetch and set `true` **only** in the success branch,
+  so a failed load renders **neither** line rather than falsely claiming *"needs attention"*.
+- **Decision 13 was held to ONE description on purpose.** `ENGINEERING_MATHEMATICS` now states the
+  teaches-versus-uses rule. **`GENERAL_EDUCATION`, `PROFESSIONAL_EDUCATION`, `NURSING` and `ACCOUNTANCY` are
+  byte-identical and deliberately untouched: three of them are exactly the zero-usage values
+  `[CHECKPOINT — due 2026-09-28]` reads**, and rewriting them would change that read's own input mid-window
+  with no honest way to say afterwards *"these curators saw a different description."* **⚠️ Recorded so the
+  omission is not re-derived as an oversight; it is deferred until after the read.**
 - **⚠️ ITEM 6's GUARD IS PARTLY UNBUILDABLE, AND THE REASON IS A STRONGER PROPERTY THAN THE TEST WOULD HAVE
   BEEN.** The spec asked for three tests pinning that
   `OfficialChallengeQuizTemplateService:221`, `ExamQuestionPoolService:151` and
