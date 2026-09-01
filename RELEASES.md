@@ -1,5 +1,115 @@
 # RELEASES.md - NoteLib
 
+## v0.101.0 - Language and Observability
+
+**Status: In Progress** (kicked off 2026-09-01, base branch `releases/v0.101.0`, cut from `main` after
+`v0.100.0` merged and tagged)
+
+Theme: the product should describe what it does for the learner rather than what technology produces it — and
+it should be able to see the one transition the whole retention hypothesis rests on.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** The reservation is
+**conjunctive** — tag it only once the redefinition's user-visible core is **live** *and* the product
+**succeeds** — and **both halves are unmet**. The three-digit minor is deliberate and was verified safe at the
+`v0.100.0` kickoff: `/version-check` matches literal strings, there are no CI workflows, and nothing sorts
+tags lexically. **Do not "fix" it.**
+
+### Why this release exists
+
+**This is Slice 1 of the Review Sets audit** (`docs/claude-plans/review-sets-first-class-and-ai-language-audit.md`
+§S2-1). It ships first because **instrumentation should predate behaviour change** — Slices 2 and 3 change what
+a Review Set can do, and measuring that afterwards measures nothing.
+
+**Item 3 is the reason it ships now.** `NOTE_ADDED_TO_COLLECTION` records the single transition the retention
+hypothesis rests on — a learner deciding a note belongs in a Review Set — and **today that claim is
+untestable**, because nothing fires when it happens.
+
+**⚠️ NO GATES AND NO CHECKPOINTS (owner, 2026-09-01).** Nothing here ships ahead of its own evidence: the copy
+sweep corrects strings that are inaccurate today, and the event is the thing that makes a later read possible.
+**The signoff gate is answered "none owed, owner ruled" — it is not skipped.**
+
+**⚠️ `[CHECKPOINT — due 2026-09-11]` is NOT engaged and this is verified, not assumed.**
+`frontend/app/onboarding/` contains **zero `AI` strings** — confirmed on `main` at `v0.100.0` and re-confirmed
+at this kickoff. **No copy item can reach the frozen path, so the sweep is not deferred over it.**
+
+### Planned Scope
+
+- **1. The quiz meter says what it counts (frontend).** `AI quizzes` → **`Quiz generations`**, with a
+  description that is factually complete for the first time. **⚠️ THE CURRENT DESCRIPTION IS NOT MERELY
+  OFF-POSITIONING, IT IS INCOMPLETE:** *"Challenge Quiz sessions and quizzes you make for someone"* omits
+  **Board Exam**, which spends a unit on every start. **Verified at kickoff — the only three spend sites are
+  `ChallengeQuizService:235` (Board Exam, pooled branch), `ChallengeQuizService:343` (Challenge Quiz and Board
+  Exam, live branch) and `GeneratedQuizService:158` ("Quiz for someone").** `+5 Questions` spends nothing, so
+  **the metered unit is a session or quiz created, not a question and not a generation call** — the wording
+  stays session-shaped.
+  - **⚠️ OWNER DECISION 2026-09-01 — ONE DURABLE WORDING, NOT TWO EDITS ACROSS TWO RELEASES.** §S2-X4 proves
+    Slice 3 falsifies any description that enumerates today's modes, because a Free/Plus multi-note session
+    rides the Challenge engine (§S2-X2) and spends this same meter at `:343`. The shipped description is
+    therefore **mode-agnostic by construction**: *"Quiz sessions we generate for you, plus quizzes you make
+    for someone. Board Exam sessions also count against their own allowance."*
+  - **⚠️ THE SECOND SENTENCE DISCLOSES A DOUBLE-SPEND AND THAT IS WHY IT NAMES BOARD EXAM AT ALL.** Board Exam
+    increments **both** this meter and `board_exam_used_this_month`, and Settings renders a separate **Board
+    Exam** row directly beneath this one. **The candidate wording carried into this release —** *"Long Exam,
+    Adaptive Practice and Interview Practice have their own allowances"* **— was REJECTED at kickoff because
+    the Board Exam row falsifies it while the learner is reading it**, replacing an omission with a fresh
+    inaccuracy. **Do not restore an enumeration of who has their own allowance.**
+  - **⚠️ THE CONSTANT IS SPLIT, AND THIS WAS A BLOCKING FIND AT KICKOFF (owner decision, 2026-09-01).**
+    `AI_QUIZZES_USAGE_LABEL` is **interpolated into four `src/config/plans.ts` pricing strings**
+    (`:49`, `:69`, `:86`, `:116`), so renaming the constant alone would have **silently rewritten public
+    pricing copy** to *"20 Quiz generations / month"* — editing a money surface as a side effect of a Settings
+    fix, against `v0.76.0`'s positioning doctrine. **The meter label and the pricing noun become separate
+    constants:** the meter reads `Quiz generations` (the metered act); pricing reads **`generated quizzes`**
+    (a count of things you get). **Both lose "AI"; neither reads as the other's surface.**
+  - **⚠️ Test blast radius is four files, not the one the audit names** — `quiz-session-history.test.ts:86`,
+    `dashboard-monthly-usage-card.test.tsx:41`, `pricing/page.test.tsx:85-87`,
+    `private-note-detail-page-client.test.tsx:1595,1637`. **⚠️ `quiz-session-history.test.ts:87` must KEEP
+    PASSING** — it pins that the usage *label* differs from the Challenge Quiz *mode* name, a `v0.92.0`
+    regression guard. `Quiz generations` satisfies it.
+- **2. The Category A copy sweep (frontend, copy only).** Learner-facing strings that market the
+  implementation become strings that describe the outcome. **⚠️ SMALLER THAN THE AUDIT SAYS:** the Domain
+  Context explainer is **THREE sites, not six** — `note-editor-form.tsx:514`,
+  `private-note-detail-page-client.tsx:2475`, `bulk-generation-page-client.tsx:639` — because `v0.100.0`'s
+  Decision 3 copy absorbed the rest. Verified by string at this kickoff. The rest: `ai-suggestion-modal.tsx`'s
+  **eight** strings (the densest cluster), `study-packs-guide.tsx:17,28,40`, `study-plans-guide.tsx:23`, the two
+  landing strings (`app/page.tsx:150,349`), `applicable-programs-combobox.tsx:323`,
+  `note-editor-form.tsx:376,394` and `profile-learning-section.tsx:153`.
+  **⚠️ "Suggested" is the replacement for "AI" in the suggestion modal because it is MORE accurate** — they are
+  proposals the user accepts, not output the user receives.
+- **3. `NOTE_ADDED_TO_COLLECTION` — one enum value, one fire site (backend).**
+  **⚠️ `AnalyticsEventType` is at 129 values, not the 108 the audit records** — corrected at this kickoff
+  rather than carried forward. **⚠️ THE SINGLE FIRE SITE IS A STATED BOUNDARY, NOT AN OVERSIGHT:**
+  `NoteCollectionService.addItems:936` is the deliberate "add this note to this set" act. Collection creation
+  with initial notes (`:253`) is already covered by `COLLECTION_CREATED` and plan adoption (`:1432`) by
+  `STUDY_PLAN_ADOPTED`; **firing here as well would double-count the same learner intent.**
+  **⚠️ Three implementation constraints, each verified against the method:** `addItems` filters to `newNoteIds`,
+  so **a re-add of an existing note must not fire a zero-count event**; the call is wrapped so **analytics can
+  never fail the membership write**, per the `ChallengeQuizService` idiom; and **`addGeneratedItems` routes
+  through `addItems`**, so bulk curator authoring reaches this event — the path is recorded in metadata so a
+  retention read can exclude it.
+
+### Explicitly out of scope
+
+- **"AI critique"** — a product-feature name in `EXAM_MODES.md`'s **locked** sub-mode table, in two SEO-indexed
+  learn guides (one is a guide *title*, so changing it changes a public URL's content) and as a pricing tier
+  label. **It deserves its own owner decision and must not be folded into a copy sweep.**
+- **Every Category B disclosure** — privacy, terms, *"verify calculations"* on computed working, and the
+  review-before-you-share warning. **These are safety and disclosure copy; do not touch them.**
+- **Every Category C code identifier** — `OpenAiLlmStudyPackService`, `LLM_API_KEY`, prompt files, every `ai-*`
+  symbol. **Do not rename symbols for branding.**
+- **Slices 2–5** — no Review Set becomes an assessment source, no cap moves, no meter is added.
+
+### Verification tier
+
+**A single `advisor()` call**, per §S2-1 and correct on size. **⚠️ BUT `v0.100.0`'s MEASURED BLIND SPOT IS
+CARRIED FORWARD, because it is measurement rather than impression: EVERY ONE of that release's five deliveries
+carried a defect past its own tests, and six tests were found claiming more than they proved — two written by
+the session that shipped them.** So: `advisor()` **before** any prompt, not only on the diff; **verify "X
+already does Y" against code before it reaches a prompt**; **mutate the production code and confirm a test
+actually fails**; **confirm new tests EXECUTED by reading `target/surefire-reports/*.xml`**, not the source;
+and **run `tsc --noEmit` and read its own exit code** — Jest does not typecheck.
+
 ## v0.100.0 - Domain Context Resolution
 
 **Status: Released** (kicked off and signed off 2026-09-01, base branch `releases/v0.100.0`, cut from
