@@ -2,8 +2,8 @@
 
 ## v0.101.0 - Language and Observability
 
-**Status: In Progress** (kicked off 2026-09-01, base branch `releases/v0.101.0`, cut from `main` after
-`v0.100.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-01, base branch `releases/v0.101.0`, cut from `main`
+after `v0.100.0` merged and tagged)
 
 Theme: the product should describe what it does for the learner rather than what technology produces it — and
 it should be able to see the one transition the whole retention hypothesis rests on.

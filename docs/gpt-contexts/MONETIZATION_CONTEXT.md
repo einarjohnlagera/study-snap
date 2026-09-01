@@ -2,7 +2,7 @@
 
 > **Module — not a standalone brief.** Paste `GPT_CONTEXT.md` first; this file assumes it.
 > Paste this module when the conversation is about **pricing, plan tiers, paywalls, or checkout**.
-> Last updated: v0.92.0 - 2026-08-27 (Released). **⚠️ This module had gone SIXTEEN releases stale (v0.76.0) while being pasted into sessions as fact** — restamped at the `v0.92.0` signoff with the monetization-relevant changes from that span. The three paywall-copy rules and the `getUpgradeCtas` rule below are unchanged and still current.
+> Last updated: v0.101.0 - 2026-09-01 (Released). **`v0.101.0` renamed the generation meter and SPLIT its constant.** The meter reads **`Quiz generations`** and the pricing page reads **`generated quizzes`** — two values, not one, because the shared constant fed four `src/config/plans.ts` strings and a meter fix rewrote public pricing copy. **⚠️ It also corrected a claim this module itself carried: the counter does THREE jobs, not two — Board Exam spends it too, and no copy said so until now.** Previously v0.92.0 - 2026-08-27 (Released). **⚠️ This module had gone SIXTEEN releases stale (v0.76.0) while being pasted into sessions as fact** — restamped at the `v0.92.0` signoff with the monetization-relevant changes from that span. The three paywall-copy rules and the `getUpgradeCtas` rule below are unchanged and still current.
 
 ---
 
@@ -23,11 +23,24 @@ Runtime entitlement source of truth is the backend subscription model and `GET /
 - **The paywall modal renders upgrade *targets* only** (`PlanCard` is typed `"PLUS" | "PRO"`). Free is represented by a single line, not a card — a Free card would look selectable and lead nowhere.
 - **Four separate components render plan `title`/`description`** — `/pricing`'s `PricingPlansSection`, the landing page's `SimplePricingSection`, `app/settings/page.tsx`, and `components/billing/paywall-modal.tsx`. `v0.68.0` shipped a real misalignment bug because plan `description` lengths had drifted to 62/96/133 characters, which cannot render at equal line counts in a multi-column card grid. They are now balanced at **88/88/92**. If you propose changing a plan description, keep the three within a few characters of each other, or you will silently break card alignment on four surfaces at once.
 
-### The generation meter is called "AI quizzes" (`v0.92.0`) — and it is ONE counter doing TWO jobs
+### The generation meter is called "Quiz generations" (`v0.101.0`) — and it is ONE counter doing THREE jobs
 
-- **`user_usage.challenge_quiz_generations` is spent by BOTH Challenge Quiz and "Quiz for someone."** Free 20 /
-  Plus 100 / Pro 200 per month. Every usage meter, the pricing page and the quiz-generation dialog label it
-  **"AI quizzes"**, from a single definition (`frontend/lib/usage-labels.ts`).
+- **`user_usage.challenge_quiz_generations` is spent by Challenge Quiz, Board Exam AND "Quiz for someone."**
+  Free 20 / Plus 100 / Pro 200 per month. **⚠️ `v0.92.0`'s framing of this as TWO jobs was incomplete — Board
+  Exam spends a unit on every start and no copy said so until `v0.101.0`.** The only three spend sites are
+  `ChallengeQuizService:235` (Board Exam, pooled), `ChallengeQuizService:343` (Challenge Quiz and Board Exam,
+  live) and `GeneratedQuizService:158`. **`+5 Questions` spends nothing, so the metered unit is a session or
+  quiz CREATED** — never a question and never a generation call.
+- **The meters and the quiz-generation dialog label it "Quiz generations"; the pricing page says "generated
+  quizzes".** **⚠️ THOSE ARE TWO CONSTANTS ON PURPOSE and re-merging them is a regression a test pins.** They
+  were one shared value until `v0.101.0`, interpolated into four `src/config/plans.ts` strings, so renaming the
+  meter silently rewrote public pricing copy. The meter names the metered **act**; pricing names a **count**.
+- **The description is "Quiz sessions we generate for you, plus quizzes you make for someone. Board Exam
+  sessions also count against their own allowance."** **⚠️ Deliberately mode-agnostic** — a later Free/Plus
+  multi-note session would ride the Challenge engine and spend this same meter, so naming today's modes goes
+  stale by construction. **⚠️ And deliberately NOT a list of who has their own allowance** — Board Exam spends
+  BOTH this meter and `board_exam_used_this_month`, and Settings renders a Board Exam row directly beneath it,
+  so any such list is falsified by a row the reader is already looking at.
 - **⚠️ The quota LABEL and the Challenge Quiz MODE name are deliberately DIFFERENT strings**, pinned by a
   regression test. The mode keeps its product name everywhere it names the mode. **A global find-and-replace
   unifying them is a known failure and must not be proposed.**
@@ -38,7 +51,7 @@ Runtime entitlement source of truth is the backend subscription model and `GET /
   taken**. Do not propose one as a "clarity" fix — it changes what people pay for.
 - **⚠️ Known limitation, live today:** the meters are unified but the **exhaustion copy is not**. The paywall
   headline still says *"quiz generation limit"* and the server message *"monthly quiz credit limit"*, so a user
-  who watches an *AI quizzes* meter run out is then told about two differently-named limits.
+  who watches a *Quiz generations* meter run out is then told about two differently-named limits.
 
 ### Quiz share links are a second, cheaper meter — disclosed early, still enforced late
 
