@@ -81,31 +81,41 @@ list to the LLM. **The work is resolver + UX + mental model.**
   names. **⚠️ Verified at kickoff: `frontend/app/onboarding/` contains ZERO `AI`/domain strings**, so no
   copy in this release can land on the frozen path.
 
-- **6. The authoring domain stops depending on WHO IS READING (backend). ⚠️ ADDED 2026-09-01 BY OWNER
-  RULING, after the A–F audit found it; it was NOT in the kickoff scope.** All 18 resolver call sites were
-  enumerated: `AdminStudyPackTransactionHelper:147` passes the **note owner**, every other passes the
-  **caller**. On the twelve `resolveForStudyPack(callerId, studyPack)` sites that drive quiz, exam,
-  interview and adaptive-practice generation, `findSourceNote` is `findByIdAndOwnerUserId` — so **when a
-  learner practises a curator's public Study Pack the lookup returns empty**, falls to
-  `buildFromStudyPackFallback:159`, and the authoring domain becomes **that learner's own profile course
-  program.** **⚠️ THIS IS DECISION 4's INVARIANT BROKEN ON THE READER AXIS, and by volume it is the LARGER
-  of the two leaks** — two learners generating from the *same canonical pack* get **different**
-  authoring-domain instructions because their personal profiles differ.
-  **⚠️ THE RULE, decided here and not by delivery: the profile fallback is legitimate ONLY when the caller
-  OWNS the pack.** A learner's own material personalizing to their own profile is Decision 4's explicitly
-  preserved behaviour; substituting a *stranger's* profile is the defect.
-  **⚠️ THE FIX SHAPE IS DECIDED AT KICKOFF TOO, because the obvious one is wrong.** Do **NOT** simply drop
-  the fallback — that returns null and **silently removes the `Domain:` line for every public-pack quiz**,
-  degrading output for the most-trafficked path in the product. **Resolve the source note through
-  `studyPack.getOwnerUserId()` instead**, which `StudyPackEntity:32` already carries: the domain is a
-  property of the **material**, not of the reader. **⚠️ `StudyPackEntity` carries only `subject` and `tags`
-  — no `domain_context`, no `course_program`, no level — so the note is the only source and NO column is
-  added to fix this.**
-  **⚠️ THIS INTRODUCES A CROSS-OWNER ROW READ AND THAT IS NAMED, NOT SLIPPED IN.** The resolver would read
-  the pack owner's note to obtain **authoring axes only** — `domainContext`, `courseProgram`, `subject`,
-  `tags`, `learnerLevel`. **⚠️ It must NEVER widen to note CONTENT**, and it is strictly less than the pack
-  content the caller can already see. **⚠️ It is not a first-of-kind cross-user read** — the product has had
-  those since `v0.89.0` — so it does not by itself move the verification tier; see below.
+- **6. A REGRESSION GUARD pins that the authoring domain cannot start depending on WHO IS READING (test
+  only). ⚠️ REDUCED 2026-09-01 FROM A BEHAVIOUR CHANGE TO A GUARD, BECAUSE THE DEFECT IT WAS SCOPED TO FIX
+  DOES NOT EXIST. The retraction is recorded at full strength rather than edited away, because a deleted
+  wrong claim teaches nothing and this one was expensive.**
+
+  **What was claimed when item 6 was scoped in, and is FALSE:** that on the twelve `resolveForStudyPack(callerId, studyPack)`
+  sites, *"a learner practising a curator's public Study Pack"* falls through to their own profile course
+  program — reported as **"Decision 4's invariant broken on the reader axis, the larger of the two leaks by
+  volume."** **The A–F audit verified WHICH IDENTITY each call site passes and did NOT verify WHETHER A
+  CALLER CAN REACH A PACK THEY DO NOT OWN.** They cannot:
+  - Every quiz/exam path fetches the pack via `findByIdAndOwnerUserId` (`ChallengeQuizService:1749`,
+    `LongExamService:230/470/790/795/800`, `InterviewPracticeService:578`), so **caller == pack owner by
+    construction**, and `findSourceNote` applies the same owner scope.
+  - The three sites that could have diverged **already pass the OWNER, not the caller**:
+    `AdminStudyPackTransactionHelper:147`, `OfficialChallengeQuizTemplateService:221`,
+    `ExamQuestionPoolService:151`.
+  - **A learner cannot reach a curator's pack at all** — `NoteService:405-411` mints a **copy** and sets the
+    copied pack's owner to the copied note's owner, so the learner owns both and the lookup succeeds.
+  - `study_packs.owner_user_id` is **`NOT NULL`** (`V1__init.sql:35`), so there is no null-owner path.
+
+  **What is actually left is legitimate:** `buildFromStudyPackFallback:159` fires only for a pack the caller
+  **owns** whose note is unreachable, so the profile substituted is **their own, for their own material** —
+  exactly the personalization Decision 4 preserves. **⚠️ It must NOT be "fixed."**
+
+  **⚠️ WHAT SHIPS IS THE GUARD, AND THE REASON IS THAT NOTHING IN THE BUILD PINS THIS.** A future edit
+  "simplifying" `resolveForStudyPack(note.getOwnerUserId(), …)` to `resolveForStudyPack(callerId, …)` would
+  **create** the leak this item wrongly claimed already existed, and would **ship green**. The guard asserts
+  those three sites keep passing the owner, plus a comment recording why the fallback is safe.
+  **⚠️ TEST AND COMMENT ONLY — no behaviour change, no column, no endpoint, no cross-owner read.**
+  **⚠️ THE CROSS-OWNER ROW READ SCOPED IN WITH IT IS WITHDRAWN ENTIRELY.**
+
+  **⚠️ THE LESSON, recorded because it is the seventh instance of this class:** the claim was inferred from an
+  owner-scoped lookup returning empty, without checking reachability. It was caught by the `advisor()` call
+  **before the Codex prompt was written** — the checkpoint `CLAUDE.md` records as where the yield actually is
+  — and cost one document edit instead of a release.
 
 **⚠️ THE A–F IMPLEMENTATION AUDIT HAS BEEN RUN (2026-09-01): `docs/claude-plans/v0.100.0-domain-context-implementation-audit.md`.** **It re-shaped the release and its
 findings are binding:** **(a)** only **three** save-time sites move, because `NoteGenerationService:75` and
@@ -149,8 +159,9 @@ so the invariant is never unprotected between commits.
   be enumerated mechanically rather than found by grep-and-hope.
 - **⚠️ Item 1 must not touch the LEARNER resolution path.** The change is scoped to canonical curated
   generation; a thin edit to the shared resolver would silently remove learner personalization.
-- **⚠️ ITEM 6's READ IS BOUNDED TO FIVE AUTHORING AXES** — `domainContext`, `courseProgram`, `subject`,
-  `tags`, `learnerLevel`. **It must never widen to note CONTENT**, and it adds no endpoint and no column.
+- **⚠️ ITEM 6 IS TEST AND COMMENT ONLY.** No production behaviour changes, no cross-owner read, no column,
+  no endpoint. **⚠️ `buildFromStudyPackFallback:159` MUST NOT BE "FIXED"** — it is reachable only for a pack
+  the caller owns whose note is unreachable, where their own profile is the correct value.
 - **⚠️ THE PROFILE FALLBACK IS NOT DELETED, IT IS BOUNDED.** A caller's own profile program remains the
   correct fallback for their **own** material — Decision 4 preserves learner personalization explicitly, and
   a fix that removes it everywhere fails the decision it is implementing.
@@ -164,11 +175,11 @@ so the invariant is never unprotected between commits.
 
 ### Pre-declared at kickoff
 
-- **⚠️ TIER RE-EVALUATED A SECOND TIME AFTER ITEM 6 WAS ADDED (2026-09-01), AND IT HOLDS AT ONE SCOPED COLD
-  AGENT.** Item 6 introduces a **cross-owner row read**, which is the loudest-sounding thing in this release
-  — but the full-test trigger is a ***first-of-kind*** cross-user read, and the product has had cross-user
-  reads since `v0.89.0`. It reads **authoring axes only**, from a note whose generated content the caller
-  can already see, on a path with no permission substrate. **⚠️ THE LITERAL ESCALATION TRIGGER DID FIRE ON
+- **⚠️ TIER RE-EVALUATED TWICE AND HOLDS AT ONE SCOPED COLD AGENT — and the second re-evaluation is now MOOT
+  rather than merely resolved.** It was made when item 6 was thought to introduce a **cross-owner row read**;
+  **that read was withdrawn the same day when the defect turned out not to exist**, so the release contains no
+  cross-user read at all and the question no longer arises. Recorded rather than deleted, because "we
+  considered it and it went away" is a different fact from "we never considered it." **⚠️ THE LITERAL ESCALATION TRIGGER DID FIRE ON
   ITEM 3 — *"escalate if the four write paths turn out not to be four"* — and it is recorded as fired rather
   than quietly re-interpreted.** It resolves to *no escalation* because the count moved for the **opposite**
   reason to the one the trigger anticipated: two sites were **already correct**, and the newly-found risk is
@@ -188,8 +199,7 @@ so the invariant is never unprotected between commits.
   paths turn out not to be four.
 - **⚠️ THE COLD AGENT'S FALSIFICATION CLAIM IS STATED NOW, not composed at signoff:** *after this release,
   no path can generate a Study Pack for a multi-program note with no Domain Context; no curator's profile
-  program can reach a prompt on the canonical authoring path; and no reader's profile program can reach a
-  prompt for a pack they do not own.* Hand it the A–F audit with the release.
+  program can reach a prompt on the canonical authoring path;.* Hand it the A–F audit with the release.
 - **⚠️ TWO TESTS MUST BE CONSCIOUSLY REWRITTEN, NEVER DELETED, and one is a trap.**
   `NoteServiceTest:858` (`update_byLearnerOwner_rejectsClearingDomainContextOnAMultiProgramNote`) pins the
   save-time rejection Decision 6 removes; it becomes *cleared at save, rejected at generation*.
