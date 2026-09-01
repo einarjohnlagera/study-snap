@@ -52,6 +52,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -72,6 +73,8 @@ class ChallengeQuizServiceTest {
     private StudyPackRepository studyPackRepository;
     @Mock
     private NoteRepository noteRepository;
+    @Mock
+    private PlanSourcedExamVerifier planSourcedExamVerifier;
     @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
@@ -121,6 +124,7 @@ class ChallengeQuizServiceTest {
         challengeQuizService = new ChallengeQuizService(
                 studyPackRepository,
                 noteRepository,
+                planSourcedExamVerifier,
                 quickReviewSessionRepository,
                 quizGenerationService,
                 subscriptionService,
@@ -1413,6 +1417,76 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void startSession_boardExamFromAPlanAcceptsMixedSubjectMembers() {
+        // ⚠️ THE SAME LIVE DEFECT AS THE LONG EXAM PATH, ON THE CTA THAT BOARD_EXAM PROFILES GET.
+        // The plan CTA routes to this screen with ?collectionId=, the prescreen pre-selects the plan's
+        // notes regardless of subject, and this service rejected them with "must share the same subject".
+        // Fixing only Long Exam would have left the release's headline false for the majority profile.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
+        primary.setSubject("Biology");
+        StudyPackEntity additional = buildStudyPack(additionalStudyPackId, additionalNoteId, userId);
+        additional.setSubject("Engineering Mathematics");
+
+        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+                .thenReturn(Optional.of(additional));
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+                .thenReturn(new java.util.LinkedHashSet<>(List.of(primaryNoteId, additionalNoteId)));
+
+        String id = primaryStudyPackId.toString();
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
+                "board_exam",
+                List.of(additionalStudyPackId.toString()),
+                collectionId.toString()
+        );
+
+        // Asserts the SOURCE gate specifically, not overall success: this fixture stops short of full
+        // generation, and a broader assertion would either fail for an unrelated reason or start passing
+        // for one. The property under test is that plan members are no longer refused for their subject.
+        Throwable thrown = catchThrowable(() -> challengeQuizService.startSession(id, userId, request));
+        assertThat(thrown).isNotInstanceOf(InvalidBoardExamSourceException.class);
+    }
+
+    @Test
+    void startSession_boardExamFromAPlanStillRejectsANonMemberOfADifferentSubject() {
+        // ⚠️ Per-source, exactly as on the Long Exam path: naming a plan must not let one legitimate
+        // member smuggle in a note the plan does not contain.
+        UUID userId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID outsiderStudyPackId = UUID.randomUUID();
+        UUID outsiderNoteId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
+        primary.setSubject("Biology");
+        StudyPackEntity outsider = buildStudyPack(outsiderStudyPackId, outsiderNoteId, userId);
+        outsider.setSubject("Engineering Mathematics");
+
+        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(outsiderStudyPackId, userId))
+                .thenReturn(Optional.of(outsider));
+        // The plan contains only the primary.
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+                .thenReturn(new java.util.LinkedHashSet<>(List.of(primaryNoteId)));
+
+        String id = primaryStudyPackId.toString();
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
+                "board_exam",
+                List.of(outsiderStudyPackId.toString()),
+                collectionId.toString()
+        );
+
+        assertThatThrownBy(() -> challengeQuizService.startSession(id, userId, request))
+                .isInstanceOf(InvalidBoardExamSourceException.class);
+    }
+
+    @Test
     void startSession_rejectsBoardExamWithMoreThanTwoAdditionalSources() {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
@@ -1677,6 +1751,7 @@ class ChallengeQuizServiceTest {
         ChallengeQuizService mockModeChallengeQuizService = new ChallengeQuizService(
                 studyPackRepository,
                 noteRepository,
+                planSourcedExamVerifier,
                 quickReviewSessionRepository,
                 new QuizGenerationService(llmStudyPackService, properties),
                 subscriptionService,
@@ -1855,6 +1930,38 @@ class ChallengeQuizServiceTest {
         assertThat(response.weakConcepts()).containsExactly("Respiration");
     }
 
+    private static final String MODE_CHALLENGE_VALUE = "challenge";
+    private static final String MODE_BOARD_EXAM_VALUE = "board_exam";
+
+    private void stubCompletableSession(UUID userId, UUID studyPackId, UUID sessionId, String mode) {
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(UUID.randomUUID());
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(2);
+        session.setCurrentQuestionIndex(1);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+        Map<String, Object> state = new java.util.HashMap<>(QuizSessionStateUtils.withQuiz(
+                List.of(
+                        new QuizItem("Question 1", List.of("A", "B", "C", "D"), "A", "Concept 1", "Explanation"),
+                        new QuizItem("Question 2", List.of("A", "B", "C", "D"), "B", "Concept 2", "Explanation")
+                ),
+                Map.of("selectedChoices", Map.of("0", "A", "1", "C"), "completed", false)
+        ));
+        state.put("mode", mode);
+        session.setSessionState(state);
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
     @Test
     void completeSession_recordsChallengeQuizActivity() {
         UUID userId = UUID.randomUUID();
@@ -1901,6 +2008,64 @@ class ChallengeQuizServiceTest {
         verify(challengeQuizQuestionBankService).updateOutcomesAndReleaseClaims(
                 eq(userId), eq(studyPackId), eq(sessionId), any(), any(), any(), any(), any()
         );
+    }
+
+    @Test
+    void completeSession_emitsChallengeQuizCompletedWithItsFullMetadataMap() {
+        // ⚠️ CHALLENGE_QUIZ_COMPLETED existed in the enum and was fired from NOWHERE before v0.102.0 —
+        // enum membership is not instrumentation. The metadata MAP is asserted rather than "trackEvent was
+        // called", because a payload nothing reads is the same dead end one level down.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        stubCompletableSession(userId, studyPackId, sessionId, MODE_CHALLENGE_VALUE);
+
+        challengeQuizService.completeSession(
+                sessionId.toString(),
+                userId,
+                new ChallengeQuizCompleteRequest(1, 2, 120)
+        );
+
+        ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(analyticsService).trackEvent(
+                eq(userId),
+                eq(AnalyticsEventType.CHALLENGE_QUIZ_COMPLETED),
+                eq(studyPackId),
+                metadata.capture()
+        );
+        assertThat(metadata.getValue())
+                .containsEntry("sessionId", sessionId.toString())
+                .containsEntry("questionCount", 2)
+                .containsKey("scorePercentage")
+                .containsEntry("sourceCount", 0);
+        verify(analyticsService, never())
+                .trackEvent(any(), eq(AnalyticsEventType.BOARD_EXAM_COMPLETED), any(), any());
+    }
+
+    @Test
+    void completeSession_emitsBoardExamCompletedWhenTheSessionIsABoardExam() {
+        // ⚠️ The event is chosen by the completed session's MODE. One method completes both, so a
+        // one-character change to that ternary would silently attribute every Board Exam to the Challenge
+        // funnel — which is why both directions are pinned rather than just the new value existing.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        stubCompletableSession(userId, studyPackId, sessionId, MODE_BOARD_EXAM_VALUE);
+
+        challengeQuizService.completeSession(
+                sessionId.toString(),
+                userId,
+                new ChallengeQuizCompleteRequest(1, 2, 120)
+        );
+
+        verify(analyticsService).trackEvent(
+                eq(userId),
+                eq(AnalyticsEventType.BOARD_EXAM_COMPLETED),
+                eq(studyPackId),
+                any()
+        );
+        verify(analyticsService, never())
+                .trackEvent(any(), eq(AnalyticsEventType.CHALLENGE_QUIZ_COMPLETED), any(), any());
     }
 
     @Test

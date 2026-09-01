@@ -92,8 +92,11 @@ Two defences, and both are needed:
 - quota-limited separately from Challenge Quiz (`12` sessions / month by default)
 - quota is deducted per session at exam start: 1 unit per Long Exam regardless of note count; the source count still drives source refs, question distribution, and multi-note generation
 - fixed question set generated at start (not progressive)
-- prestart supports one primary note plus up to 3 additional same-subject Study Pack-ready notes
-- Long Exam can also launch from a Study Plan through `collectionId`; plan launch replaces the same-subject default picker with quiz-ready notes from that plan only and pre-selects up to the existing 3-additional-note cap
+- prestart supports one primary note plus up to 3 additional same-subject Study Pack-ready notes on the MANUAL path
+- Long Exam can also launch from a Study Plan through `collectionId`; plan launch replaces the same-subject default picker with quiz-ready notes from that plan only
+- **⚠️ On a plan launch the same-subject rule does NOT apply and the cap is larger — both changed in `v0.102.0`, and until then this document described a flow the backend rejected.** The frontend had always pre-selected plan members regardless of subject while `LongExamService` required every additional source to match the primary's subject, so a mixed-subject plan produced *"source notes must be owned by you and share the same subject"* on a selection the product made itself
+- **The plan-sourced predicate is plan MEMBERSHIP, verified server-side.** `sourceCollectionId` in the start request is a CLAIM: the server re-checks that the caller owns the collection and that the primary AND each additional source are live members. A source the plan does not contain still answers to the same-subject rule, and a claim that fails verification falls back to the manual cap of 3 — a collection id must never become a way to switch the rule off
+- **The plan-sourced cap is derived from the learner's LEVEL, not a constant:** `floor(questionCount / 3)` where `questionCount` is 20 / 25 / 30, so the ceiling is **6 / 8 / 10 sources including the primary**, and a College learner fails at 9. It is returned as `maxSourceNotes` on the start and active-session responses; the frontend renders that value and must never re-derive the level mapping
 - multi-note generation stores source refs in session JSONB and distributes the resolved question count proportionally across sources
 - mastery-report result screen includes coverage, weak domains, suggested next step, and source attribution when multiple notes are covered
 

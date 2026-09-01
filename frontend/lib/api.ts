@@ -1332,6 +1332,13 @@ export type ChallengeQuizStartRequest = {
   mode?: ChallengeQuizMode;
   sessionMode?: QuizStartSessionMode;
   additionalStudyPackIds?: string[];
+  /**
+   * The Study Plan these sources came from, when the Board Exam was launched from one.
+   *
+   * ⚠️ A CLAIM the server re-verifies (ownership plus per-source membership). Sending it is what lets a
+   * mixed-subject plan selection be accepted; it is never a way to switch the same-subject rule off.
+   */
+  sourceCollectionId?: string;
 };
 
 export type ChallengeQuizStartResponse = {
@@ -1463,6 +1470,13 @@ export type LongExamStartResponse = {
   sourceNoteRefs: LongExamSourceNoteRef[];
   usedThisMonth: number;
   monthlyLimit: number;
+  /**
+   * Most sources this learner may combine, INCLUDING the primary note.
+   *
+   * ⚠️ Server-derived. Do NOT re-derive it here: it is floor(questionCount / 3) and questionCount comes
+   * from the learner's LEVEL via backend config, so a client-side copy of that mapping is guaranteed drift.
+   */
+  maxSourceNotes: number;
 };
 
 export type LongExamSessionResponse = {
@@ -3996,7 +4010,7 @@ export async function getChallengeQuizSessionReview(
 
 export async function startLongExam(
   studyPackId: string,
-  body: { difficulty?: string; additionalStudyPackIds?: string[] } = {},
+  body: { difficulty?: string; additionalStudyPackIds?: string[]; sourceCollectionId?: string } = {},
 ): Promise<LongExamStartResponse> {
   const response = await fetchWithAuth(
     `/long-exam/study-packs/${studyPackId}/start`,

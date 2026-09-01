@@ -105,6 +105,8 @@ public class ChallengeQuizService {
     private static final String PERFORMANCE_LEVEL_FAIR = "Fair";
     private static final String PERFORMANCE_LEVEL_NEEDS_IMPROVEMENT = "Needs Improvement";
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
+    private static final String ANALYTICS_METADATA_SOURCE_COUNT = "sourceCount";
+    private static final String ANALYTICS_METADATA_SCORE_PERCENTAGE = "scorePercentage";
     private static final String ANALYTICS_METADATA_QUESTION_COUNT = "questionCount";
     private static final String ANALYTICS_METADATA_DIFFICULTY = "difficulty";
     private static final String ANALYTICS_METADATA_MODE = "mode";
@@ -154,6 +156,7 @@ public class ChallengeQuizService {
 
     private final StudyPackRepository studyPackRepository;
     private final NoteRepository noteRepository;
+    private final PlanSourcedExamVerifier planSourcedExamVerifier;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final QuizGenerationService quizGenerationService;
     private final SubscriptionService subscriptionService;
@@ -206,7 +209,13 @@ public class ChallengeQuizService {
                 ? resolveBoardExamQuestionCount(boardExamSourceCount)
                 : profile.questionCount();
         List<LongExamSourceNoteRef> boardExamSourceNoteRefs = MODE_BOARD_EXAM.equals(selectedMode)
-                ? resolveBoardExamSourceNoteRefs(studyPack, userId, additionalBoardExamStudyPackIds, quizCount)
+                ? resolveBoardExamSourceNoteRefs(
+                        studyPack,
+                        userId,
+                        additionalBoardExamStudyPackIds,
+                        quizCount,
+                        request == null ? null : request.sourceCollectionId()
+                )
                 : List.of();
         StudyPackGenerationContext generationContext = null;
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
@@ -640,6 +649,28 @@ public class ChallengeQuizService {
             );
         }
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, saved.getStudyPackId());
+        // ⚠️ Both funnels ended here with a START and no END. BOARD_EXAM_COMPLETED did not exist, and
+        // CHALLENGE_QUIZ_COMPLETED existed in the enum while being fired from NOWHERE — enum membership
+        // is not instrumentation. This is the one site that completes either mode, so both fire here.
+        // Analytics must never turn a successfully completed session into a failed one.
+        try {
+            String completedMode = extractMode(saved.getSessionState());
+            analyticsService.trackEvent(
+                    userId,
+                    MODE_BOARD_EXAM.equals(completedMode)
+                            ? AnalyticsEventType.BOARD_EXAM_COMPLETED
+                            : AnalyticsEventType.CHALLENGE_QUIZ_COMPLETED,
+                    saved.getStudyPackId(),
+                    Map.of(
+                            ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
+                            ANALYTICS_METADATA_QUESTION_COUNT, statistics.totalQuestions(),
+                            ANALYTICS_METADATA_SCORE_PERCENTAGE, scorePercentage,
+                            ANALYTICS_METADATA_SOURCE_COUNT, extractSourceNoteRefs(saved.getSessionState()).size()
+                    )
+            );
+        } catch (RuntimeException ignored) {
+            // Deliberately swallowed, matching the BOARD_EXAM_STARTED site above.
+        }
         return new ChallengeQuizSessionResponse(
                 saved.getId().toString(),
                 saved.getStudyPackId().toString(),
@@ -1097,12 +1128,27 @@ public class ChallengeQuizService {
             StudyPackEntity primaryStudyPack,
             UUID userId,
             List<UUID> additionalStudyPackIds,
-            int questionCount
+            int questionCount,
+            String sourceCollectionIdRaw
     ) {
         String primarySubject = noteRepository.findById(primaryStudyPack.getNoteId())
                 .map(note -> normalizeSubjectForMatch(note.getSubject()))
                 .orElseGet(() -> normalizeSubjectForMatch(primaryStudyPack.getSubject()));
-        if (!additionalStudyPackIds.isEmpty() && primarySubject.isBlank()) {
+
+        // Same defect, same fix as the Long Exam path: the plan CTA pre-selects a plan's own notes and
+        // this method then rejected them for not sharing a subject. The gate is per source and anchored —
+        // the primary must be a member too, and a source the plan does not contain still answers to the
+        // subject rule. ⚠️ The Board Exam CAP is deliberately unchanged: its question count scales with
+        // source count, so raising it is quota-adjacent arithmetic and a separate decision.
+        Set<UUID> planMemberNoteIds = planSourcedExamVerifier.resolvePlanMemberNoteIds(
+                sourceCollectionIdRaw,
+                userId,
+                InvalidBoardExamSourceException::subjectMismatch
+        );
+        boolean planSourced = !planMemberNoteIds.isEmpty()
+                && planMemberNoteIds.contains(primaryStudyPack.getNoteId());
+
+        if (!additionalStudyPackIds.isEmpty() && !planSourced && primarySubject.isBlank()) {
             throw InvalidBoardExamSourceException.primarySubjectRequired();
         }
 
@@ -1120,7 +1166,8 @@ public class ChallengeQuizService {
                         additionalStudyPack.getNoteId(),
                         normalizeSubjectForMatch(additionalStudyPack.getSubject())
                 );
-                if (!primarySubject.equals(additionalSubject)) {
+                boolean memberOfPlan = planSourced && planMemberNoteIds.contains(additionalStudyPack.getNoteId());
+                if (!memberOfPlan && !primarySubject.equals(additionalSubject)) {
                     throw InvalidBoardExamSourceException.subjectMismatch();
                 }
             }

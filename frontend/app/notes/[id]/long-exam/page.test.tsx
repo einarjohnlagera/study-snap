@@ -87,6 +87,9 @@ describe("LongExamPage", () => {
       status: null,
       usedThisMonth: 0,
       monthlyLimit: 10,
+      // ⚠️ Server-derived, floor(questionCount / 3). 25 questions at COLLEGE -> 8 sources including
+      // the primary. Mirrors buildEmptyStartResponse; the page must never re-derive this.
+      maxSourceNotes: 8,
     });
     (listNotes as jest.Mock).mockResolvedValue([]);
     (getCollection as jest.Mock).mockResolvedValue({
@@ -176,7 +179,7 @@ describe("LongExamPage", () => {
     expect(screen.queryByRole("button", { name: /Organic Chemistry/ })).not.toBeInTheDocument();
   });
 
-  it("scopes collection launches to plan notes and preselects up to the Long Exam cap", async () => {
+  it("scopes collection launches to plan notes and preselects up to the SERVER-reported cap", async () => {
     searchParamsMock = new URLSearchParams("collectionId=collection-1");
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", profileType: "STUDENT" });
     (getCollection as jest.Mock).mockResolvedValue({
@@ -202,12 +205,48 @@ describe("LongExamPage", () => {
     expect(await screen.findByRole("button", { name: /Plan Two/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /Plan Three/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /Plan Four/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /Plan Five/ })).toHaveAttribute("aria-pressed", "false");
+    // ⚠️ Five, not three. The cap is now the server's maxSourceNotes (8 including the primary), so a
+    // College learner reaches further than the old hardcoded 3 — and Plan Five is inside it.
+    expect(screen.getByRole("button", { name: /Plan Five/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByRole("button", { name: /Outside Plan/ })).not.toBeInTheDocument();
-    expect(screen.getByText("4 notes · 25 questions")).toBeInTheDocument();
-    expect(screen.getByText("Add up to 3 more notes from this plan.")).toBeInTheDocument();
+    expect(screen.getByText("5 notes · 25 questions")).toBeInTheDocument();
+    expect(screen.getByText("Testing material from 5 of 5 Notes in this plan.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Study Plan/ })).toHaveAttribute("href", "/collections/collection-1");
     expect(screen.queryByRole("button", { name: "Choose another mode" })).not.toBeInTheDocument();
+  });
+
+  it("sends the collection id so the server can verify the plan claim", async () => {
+    // ⚠️ This is what makes a mixed-subject plan selection legal. Without it the backend applies the
+    // same-subject rule and rejects a selection the product itself pre-selected — the defect this
+    // release fixes. The id is a CLAIM the server re-verifies; the page must send it, not assert it.
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", profileType: "STUDENT" });
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
+      ],
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Two", subject: "Chemistry", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+    (startLongExam as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "GENERATING",
+      quiz: [],
+      usedThisMonth: 1,
+      monthlyLimit: 10,
+      maxSourceNotes: 8,
+    });
+
+    render(<LongExamPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Begin Long Exam" }));
+
+    await waitFor(() => expect(startLongExam).toHaveBeenCalledWith("sp-1", {
+      additionalStudyPackIds: ["sp-2"],
+      sourceCollectionId: "collection-1",
+    }));
   });
 
   it("falls back to the normal source picker when collection lookup fails", async () => {
