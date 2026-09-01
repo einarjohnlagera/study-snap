@@ -2473,7 +2473,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       <p className="text-xs text-foreground/60">
                         {applicableProgramIds.length > 1
                           ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
-                          : "Required when this note applies to more than one program."}
+                          : "Needed before you can generate a Study Pack for a note in more than one program."}
                       </p>
                     </div>
 
