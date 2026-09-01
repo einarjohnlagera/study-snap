@@ -20,13 +20,13 @@ describe("AiSuggestionModal", () => {
 
     expect(screen.getByLabelText("Keep My Title")).toBeChecked();
     expect(screen.getByLabelText("Keep My Subject")).toBeChecked();
-    expect(screen.getByLabelText("Merge My Tags + AI Tags")).toBeChecked();
+    expect(screen.getByLabelText("Merge My Tags + Suggested Tags")).toBeChecked();
 
-    fireEvent.click(screen.getByLabelText("Use AI Subject"));
+    fireEvent.click(screen.getByLabelText("Use Suggested Subject"));
     expect(screen.getByText("This is what will be saved if you apply the current selections.")).toBeInTheDocument();
     expect(screen.getAllByText("Biology").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByLabelText("Use AI Tags Only"));
+    fireEvent.click(screen.getByLabelText("Use Suggested Tags Only"));
     expect(screen.getAllByText("cells").length).toBeGreaterThan(0);
     expect(screen.getAllByText("anatomy").length).toBeGreaterThan(0);
   });
@@ -47,9 +47,9 @@ describe("AiSuggestionModal", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Use AI Title")).toBeChecked();
-    expect(screen.getByLabelText("Use AI Subject")).toBeChecked();
-    expect(screen.getByLabelText("Use AI Tags Only")).toBeChecked();
+    expect(screen.getByLabelText("Use Suggested Title")).toBeChecked();
+    expect(screen.getByLabelText("Use Suggested Subject")).toBeChecked();
+    expect(screen.getByLabelText("Use Suggested Tags Only")).toBeChecked();
   });
 
   it("shows only new AI tag suggestions and marks overlaps as already included", () => {
@@ -92,6 +92,6 @@ describe("AiSuggestionModal", () => {
 
     expect(screen.getByText("No new tag suggestions.")).toBeInTheDocument();
     expect(screen.getByLabelText("Keep My Tags")).toBeChecked();
-    expect(screen.getByLabelText("Merge My Tags + AI Tags")).toBeDisabled();
+    expect(screen.getByLabelText("Merge My Tags + Suggested Tags")).toBeDisabled();
   });
 });

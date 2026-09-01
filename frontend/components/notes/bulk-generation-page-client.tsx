@@ -320,7 +320,7 @@ export function BulkGenerationPageClient() {
       return "Enter a course or program for this batch.";
     }
     if (isTeacherOrAdmin && courseProgramIds.length > 1 && !domainContext) {
-      return "A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in.";
+      return "A note shared across several programs needs a Domain Context, so it is clear which academic domain to write in.";
     }
     return null;
   };
@@ -636,7 +636,7 @@ export function BulkGenerationPageClient() {
                 ) : null}
                 <p className="text-xs text-foreground/60">
                   {courseProgramIds.length > 1
-                    ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
+                    ? "You've added more than one program. Choose the academic domain this note should be written in — it shapes how the note is written, while the programs decide who finds it."
                     : "Required when this note applies to more than one program."}
                 </p>
               </div>

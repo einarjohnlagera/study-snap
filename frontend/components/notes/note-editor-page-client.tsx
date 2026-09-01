@@ -127,7 +127,7 @@ function resolveGenerateHelperText(_profileType: string | null | undefined): str
 
 const GENERATE_NOTE_TIP_ID = "create-note-generate-topic";
 const MULTI_PROGRAM_DOMAIN_CONTEXT_MESSAGE =
-  "A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in.";
+  "A note shared across several programs needs a Domain Context, so it is clear which academic domain to write in.";
 const NOTE_CONTENT_SCROLL_DELAY_MS = 140;
 const IMPORT_LOADING_MESSAGE = "Extracting text from your file...";
 const IMPORT_SUCCESS_MESSAGE = "Text imported. Review and edit it before continuing.";

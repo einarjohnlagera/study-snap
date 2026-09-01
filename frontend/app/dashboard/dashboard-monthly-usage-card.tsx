@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import type { MePlanResponse } from "@/lib/me-plan";
 import { getUsageProgressPercent } from "@/lib/plans";
-import { AI_QUIZZES_USAGE_DESCRIPTION, AI_QUIZZES_USAGE_LABEL } from "@/lib/usage-labels";
+import { QUIZ_GENERATIONS_USAGE_DESCRIPTION, QUIZ_GENERATIONS_USAGE_LABEL } from "@/lib/usage-labels";
 
 type DashboardMonthlyUsageCardProps = {
   usageSummary: MePlanResponse | null;
@@ -34,8 +34,8 @@ export function DashboardMonthlyUsageCard({
       limit: usageSummary.limits.studyPacksPerMonth,
     },
     {
-      label: AI_QUIZZES_USAGE_LABEL,
-      description: AI_QUIZZES_USAGE_DESCRIPTION,
+      label: QUIZ_GENERATIONS_USAGE_LABEL,
+      description: QUIZ_GENERATIONS_USAGE_DESCRIPTION,
       used: usageSummary.usage.challengeQuizzesUsed,
       limit: usageSummary.limits.challengeQuizzesPerMonth,
     },

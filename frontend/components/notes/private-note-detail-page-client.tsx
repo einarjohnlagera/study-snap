@@ -143,7 +143,7 @@ import {
   buildAdaptivePracticeHref,
 } from "@/lib/adaptive-practice-entry";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
-import { AI_QUIZZES_USAGE_LABEL } from "@/lib/usage-labels";
+import { QUIZ_GENERATIONS_USAGE_LABEL } from "@/lib/usage-labels";
 import Link from "next/link";
 
 const COPIED_STUDY_PACK_REGENERATE_HINT_ID = "copied-study-pack-regenerate-hint";
@@ -1649,7 +1649,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
     if (canEditAuthoringMetadata && applicableProgramIds.length > 1 && !metadataDraft.domainContext) {
       setToastTone("warning");
-      setToast("A note shared across several programs needs a Domain Context, so the AI knows which academic domain to write in.");
+      setToast("A note shared across several programs needs a Domain Context, so it is clear which academic domain to write in.");
       return;
     }
     if (missing.length > 0) {
@@ -2472,7 +2472,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       ) : null}
                       <p className="text-xs text-foreground/60">
                         {applicableProgramIds.length > 1
-                          ? "You've added more than one program. Choose the academic domain this note should be written in — it tells the AI how to write it, while the programs decide who finds it."
+                          ? "You've added more than one program. Choose the academic domain this note should be written in — it shapes how the note is written, while the programs decide who finds it."
                           : "Needed before you can generate a Study Pack for a note in more than one program."}
                       </p>
                     </div>
@@ -3227,7 +3227,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           {usageSummary ? (
             <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3" aria-label="Quiz allowances">
               <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-foreground/70">{AI_QUIZZES_USAGE_LABEL} left this month</span>
+                <span className="text-foreground/70">{QUIZ_GENERATIONS_USAGE_LABEL} left this month</span>
                 <span className="font-medium text-foreground">{challengeQuizzesRemaining}</span>
               </div>
               {quizShareLinksRemaining !== undefined ? (

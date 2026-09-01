@@ -201,7 +201,7 @@ export function AiSuggestionModal({
   return (
     <AppModal
       isOpen={open}
-      title="AI Suggestions"
+      title="Suggestions"
       description="Review each suggestion, compare it with your note, and apply only the changes you want."
       onClose={onSkip}
       panelClassName="flex h-[100dvh] max-h-[100dvh] w-full max-w-none flex-col overflow-hidden rounded-none border-0 p-0 sm:h-auto sm:max-h-[80vh] sm:max-w-[640px] sm:rounded-2xl sm:border"
@@ -229,7 +229,7 @@ export function AiSuggestionModal({
           title="Title"
           currentLabel="Your Title"
           currentValue={formatValue(currentTitle, "No title")}
-          suggestedLabel="AI Title"
+          suggestedLabel="Suggested Title"
           suggestedValue={formatValue(suggestedTitle, "No title")}
         >
           <fieldset className="space-y-2">
@@ -242,7 +242,7 @@ export function AiSuggestionModal({
             />
             <RadioOption
               name={`${groupBaseId}-title`}
-              label="Use AI Title"
+              label="Use Suggested Title"
               checked={selection.titleChoice === "use-ai"}
               onChange={() => setSelection((current) => ({ ...current, titleChoice: "use-ai" }))}
             />
@@ -253,7 +253,7 @@ export function AiSuggestionModal({
           title="Subject"
           currentLabel="Your Subject"
           currentValue={formatValue(currentSubject, "No subject")}
-          suggestedLabel="AI Subject"
+          suggestedLabel="Suggested Subject"
           suggestedValue={formatValue(suggestedSubject, "No subject")}
         >
           <fieldset className="space-y-2">
@@ -266,7 +266,7 @@ export function AiSuggestionModal({
             />
             <RadioOption
               name={`${groupBaseId}-subject`}
-              label="Use AI Subject"
+              label="Use Suggested Subject"
               checked={selection.subjectChoice === "use-ai"}
               onChange={() => setSelection((current) => ({ ...current, subjectChoice: "use-ai" }))}
               disabled={!hasSuggestedSubject}
@@ -278,7 +278,7 @@ export function AiSuggestionModal({
           title="Tags"
           currentLabel="Your Tags"
           currentValue={<TagChips tags={currentTags} emptyLabel="No tags" />}
-          suggestedLabel="AI Tags"
+          suggestedLabel="Suggested Tags"
           suggestedValue={(
             <SuggestedTagSummary
               newTags={suggestedTagPartition.newTags}
@@ -296,14 +296,14 @@ export function AiSuggestionModal({
             />
             <RadioOption
               name={`${groupBaseId}-tags`}
-              label="Merge My Tags + AI Tags"
+              label="Merge My Tags + Suggested Tags"
               checked={selection.tagsChoice === "merge"}
               onChange={() => setSelection((current) => ({ ...current, tagsChoice: "merge" }))}
               disabled={!hasNewSuggestedTags}
             />
             <RadioOption
               name={`${groupBaseId}-tags`}
-              label="Use AI Tags Only"
+              label="Use Suggested Tags Only"
               checked={selection.tagsChoice === "use-ai"}
               onChange={() => setSelection((current) => ({ ...current, tagsChoice: "use-ai" }))}
               disabled={!hasSuggestedTags}

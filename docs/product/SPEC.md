@@ -1185,10 +1185,10 @@ Rules:
 - Generated metadata must never silently overwrite user-entered `title` or `subject`.
 - Create Note hands off to Note Detail during asynchronous generation; the suggestion modal appears there after the Study Pack becomes ready.
 - After generation, users should see the shared suggestion review modal with per-field choices:
-  - `Title` -> `Keep My Title` or `Use AI Title`
-  - `Subject` -> `Keep My Subject` or `Use AI Subject`
-  - `Tags` -> `Keep My Tags`, `Merge Tags`, or `Use AI Tags`
-- The AI Suggestions modal should behave like a review-and-decision screen:
+  - `Title` -> `Keep My Title` or `Use Suggested Title`
+  - `Subject` -> `Keep My Subject` or `Use Suggested Subject`
+  - `Tags` -> `Keep My Tags`, `Merge My Tags + Suggested Tags`, or `Use Suggested Tags Only`
+- The Suggestions modal should behave like a review-and-decision screen:
   - compact sections for `Title`, `Subject`, and `Tags`
   - comparison of `Yours` vs `AI`
   - radio-button decisions rather than long stacked action buttons
@@ -1202,8 +1202,8 @@ Rules:
 - Default AI suggestion choices should stay user-safe:
   - existing `title` -> default `Keep My Title`
   - existing `subject` -> default `Keep My Subject`
-  - existing `tags` -> default `Merge Tags`
-  - no existing `tags` -> default `Use AI Tags`
+  - existing `tags` -> default `Merge My Tags + Suggested Tags`
+  - no existing `tags` -> default `Use Suggested Tags Only`
 - AI subject suggestions should prefer specific academic library-friendly subjects instead of broad catch-all categories when the notes support that specificity.
 - Backend generation context carries `learnerLevel`, `courseProgram`, note `subject`, and note `tags` into Study Pack generation so AI subject suggestions can use learner/course context without changing the existing note-storage model.
 
