@@ -820,7 +820,8 @@ class NoteServicePublicLibraryPaginationIntegrationTest {
                 mock(OfficialChallengeQuizTemplateService.class),
                 mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class),
                 mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class),
-                mock(StudyPackQuizMasteryService.class)
+                mock(StudyPackQuizMasteryService.class),
+                mock(StudyPackGenerationContextResolver.class)
         );
     }
 

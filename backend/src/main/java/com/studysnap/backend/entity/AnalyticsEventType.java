@@ -2,6 +2,7 @@ package com.studysnap.backend.entity;
 
 public enum AnalyticsEventType {
     NOTE_CREATED,
+    NOTE_AUTHORING_DOMAIN_RECORDED,
     COURSE_PROGRAM_VALUE_SELECTED,
     NOTES_BULK_IMPORTED,
     COLLECTION_CREATED,

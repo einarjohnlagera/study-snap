@@ -419,7 +419,8 @@ class NoteServiceListProjectionIntegrationTest {
                 mock(OfficialChallengeQuizTemplateService.class),
                 mock(com.studysnap.backend.repository.NoteCourseProgramRepository.class),
                 mock(com.studysnap.backend.repository.CourseProgramCatalogRepository.class),
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                mock(StudyPackGenerationContextResolver.class)
         );
     }
 }
