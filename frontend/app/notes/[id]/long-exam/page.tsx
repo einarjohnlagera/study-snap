@@ -736,7 +736,11 @@ export default function LongExamPage() {
     }, [currentQuestion, currentQuestionIndex, savingProgress, sessionId, showToast]);
 
     const handleIdentificationAnswer = useCallback(async (answerText: string) => {
-        if (!sessionId || !currentQuestion || savingProgress || currentQuestion.questionFormat !== "IDENTIFICATION") {
+        // ⚠️ LOCAL STATE FIRST, AND NEVER GATED ON AN IN-FLIGHT SAVE. The input is controlled by this
+        // state, so returning early while a save was in flight meant the character was never rendered —
+        // it simply disappeared as the learner typed. This matches the Challenge Quiz handler, which is
+        // the established precedent for the same component.
+        if (!sessionId || !currentQuestion || currentQuestion.questionFormat !== "IDENTIFICATION") {
             return;
         }
         const choiceKey = String(currentQuestionIndex);
@@ -755,13 +759,15 @@ export default function LongExamPage() {
             });
             setSelectedChoices(normalizeSelectedChoices(response.selectedChoices));
             setSelectedMultiChoices(normalizeSelectedMultiChoices(response.selectedMultiChoices));
-            setSelectedIdentificationAnswers(normalizeSelectedIdentificationAnswers(response.selectedIdentificationAnswers));
+            // ⚠️ Deliberately NOT overwriting the identification answers from the echo. Doing so clobbered
+            // every character typed during the round trip — the learner's own newer input replaced by a
+            // stale server copy of what they had typed a moment earlier.
         } catch {
             showToast("Could not save that answer. Your answer is still visible.", "error");
         } finally {
             setSavingProgress(false);
         }
-    }, [currentQuestion, currentQuestionIndex, savingProgress, sessionId, showToast]);
+    }, [currentQuestion, currentQuestionIndex, sessionId, showToast]);
 
     const handleSelectMatchingChoice = useCallback(async (questionIndex: number, choiceIndex: number) => {
         if (!sessionId || savingProgress || !currentMatchingGroup) {

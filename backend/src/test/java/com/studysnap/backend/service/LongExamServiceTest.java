@@ -1596,6 +1596,59 @@ class LongExamServiceTest {
             eq(userId), any(), eq(com.studysnap.backend.entity.StudyPackStatus.DONE));
     }
 
+
+    @Test
+    void asyncGeneration_failsWhenOnlyOneOfTwoSourcesActuallyContributes() {
+        // ⚠️ contributingSourceCount must count sources that PRODUCED questions, not sources ATTEMPTED.
+        // Moving the increment above the "did this source yield anything" guard left the suite green, and
+        // that counter is what the release's own resilience decision rests on: with 2 sources the floor is
+        // min(2, 2) = 2, so one silent source must fail the exam rather than pass it as complete.
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+        StudyPackEntity additional = buildStudyPack(additionalStudyPackId, userId, CELL_BIOLOGY_TITLE, BIOLOGY_SUBJECT);
+        List<QuickReviewSessionStatus> savedStatuses = new ArrayList<>();
+        List<QuickReviewSessionEntity> savedSessions = new ArrayList<>();
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primary));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+            .thenReturn(Optional.of(additional));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            eq(userId), eq(primaryStudyPackId), eq(QuickReviewSessionMode.LONG_EXAM), any()
+        )).thenReturn(Optional.empty());
+        when(generationContextResolver.resolveForStudyPack(eq(userId), any()))
+            .thenReturn(buildGenerationContext(LearnerLevel.COLLEGE));
+        // The primary yields plenty; the second source yields nothing at all.
+        when(quizGenerationService.generateLongExamParallel(
+            eq(PRIMARY_BIOLOGY_TITLE), any(), any(), any(), anyInt(), any(), any(), any()
+        )).thenReturn(buildQuiz(13));
+        when(quizGenerationService.generateLongExamParallel(
+            eq(CELL_BIOLOGY_TITLE), any(), any(), any(), anyInt(), any(), any(), any()
+        )).thenReturn(List.of());
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+            .thenAnswer(invocation -> {
+                QuickReviewSessionEntity session = invocation.getArgument(0);
+                savedStatuses.add(session.getStatus());
+                savedSessions.add(session);
+                return session;
+            });
+
+        LongExamStartResponse response = longExamService.startSession(
+            primaryStudyPackId.toString(), userId,
+            new LongExamStartRequest(null, List.of(additionalStudyPackId.toString())));
+        when(quickReviewSessionRepository.findById(response.sessionId()))
+            .thenReturn(Optional.of(savedSessions.getFirst()));
+
+        dispatchedTask.run();
+
+        assertThat(savedStatuses).endsWith(QuickReviewSessionStatus.FAILED);
+        verify(generationRecoveryRowWriter).failLongExamSession(response.sessionId());
+    }
+
     private void stubStartSession(
         UUID userId,
         UUID studyPackId,

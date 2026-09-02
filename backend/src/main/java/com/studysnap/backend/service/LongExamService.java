@@ -406,11 +406,23 @@ public class LongExamService {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         int currentQuestionIndex = Math.clamp(request.questionIndex(), 0, Math.max(0, quiz.size() - 1));
         session.setCurrentQuestionIndex(currentQuestionIndex);
-        Map<String, Object> nextSessionState = QuizSessionStateUtils.withSelectedChoice(
-                session.getSessionState(),
-                request.questionIndex(),
-                request.selectedChoiceIndex()
-        );
+        // ⚠️ A CHOICELESS ITEM MUST NOT RECORD A CHOICE. The client sends selectedChoiceIndex on every
+        // keystroke of an IDENTIFICATION answer (the field is @Min(0), so it cannot signal "none"), and
+        // writing it unconditionally left a phantom selectedChoices[i] = 0 behind. Clearing the typed
+        // answer removes the identification entry but not that phantom, and countAnsweredQuestions unions
+        // both maps — so an abandoned blank permanently counted as ANSWERED and scored incorrect,
+        // diluting the score and disagreeing with the client's own answered count.
+        QuizItem targetItem = request.questionIndex() >= 0 && request.questionIndex() < quiz.size()
+                ? quiz.get(request.questionIndex())
+                : null;
+        boolean choiceless = targetItem != null && (targetItem.choices() == null || targetItem.choices().isEmpty());
+        Map<String, Object> nextSessionState = choiceless
+                ? session.getSessionState()
+                : QuizSessionStateUtils.withSelectedChoice(
+                        session.getSessionState(),
+                        request.questionIndex(),
+                        request.selectedChoiceIndex()
+                );
         if (request.selectedMultiChoiceIndices() != null) {
             nextSessionState = QuizSessionStateUtils.withSelectedMultiChoice(
                     nextSessionState,
@@ -794,14 +806,6 @@ public class LongExamService {
         session.setSessionState(state);
     }
 
-    private void markSessionFailed(QuickReviewSessionEntity session) {
-        session.setStatus(QuickReviewSessionStatus.FAILED);
-        session.setCurrentQuestionIndex(0);
-        session.setTotalQuestions(0);
-        session.setCorrectAnswers(0);
-        session.setScorePercentage(ZERO_SCORE);
-        session.setCompletedAt(null);
-    }
 
     private LongExamStatistics computeStatistics(
             List<QuizItem> quiz,
@@ -1020,6 +1024,14 @@ public class LongExamService {
         // own would relax the rule for its members while the exam is anchored somewhere else entirely.
         boolean planSourced = planMemberNoteIds.contains(primaryStudyPack.getNoteId());
         if (planSourced && !planMembers.isEmpty()) {
+            // ⚠️ REJECT RATHER THAN SILENTLY DISCARD, and only on the path that actually samples. Here the
+            // server chooses the sources, so a caller-supplied list has no meaning — and silently ignoring
+            // it is how a cap gets bypassed once "silently ignored" drifts into "silently accepted". When
+            // the plan cannot be resolved we fall through to the manual branch below, where the list IS
+            // honoured and validated, so this must not reject there.
+            if (!additionalStudyPackIds.isEmpty()) {
+                throw new InvalidLongExamSourceException();
+            }
             List<LongExamPlanSourceSampler.EligiblePlanSource> eligiblePool = resolveEligiblePlanSourcePool(
                     planMembers,
                     userId

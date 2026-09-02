@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.exception.LongExamPrimarySourceNotEligibleException;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -27,10 +28,14 @@ public class LongExamPlanSourceSampler {
             int sampleLimit,
             UUID sessionId
     ) {
+        // ⚠️ A NAMED EXCEPTION, NOT A BARE orElseThrow. The primary is absent from the eligible pool when
+        // its own Study Pack is not READY — findOwnedStudyPackForGenerationOrThrow does not filter on
+        // status, so such a primary passes the start check and then vanishes here. A bare orElseThrow
+        // surfaced as NoSuchElementException: a generic 500 with no error code, on a paid path.
         EligiblePlanSource primary = eligiblePool.stream()
                 .filter(source -> source.studyPack().getId().equals(primaryStudyPackId))
                 .findFirst()
-                .orElseThrow();
+                .orElseThrow(LongExamPrimarySourceNotEligibleException::new);
         int limit = Math.min(eligiblePool.size(), sampleLimit);
         if (limit <= 1) {
             return List.of(primary);

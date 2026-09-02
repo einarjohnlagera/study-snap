@@ -237,11 +237,43 @@ repository cannot test a predicate.**
 | Disable the assembly threshold | `asyncGeneration_belowMinimumAssembledQuestionsFailsTheSessionAndReversesQuota` |
 | `minimumSources = 0` | `startSession_planWithTooFewEligibleSourcesFailsWithoutCreatingASessionOrChargingQuota` |
 | Drop identification answers from scoring | `completeSession_gradesIdentificationAnswersAndTreatsBlankAsIncorrect` |
-| Sampler drops the primary force-include | `sample_isDeterministicForSessionId` |
+| Sampler drops the primary force-include | `sample_forceIncludesCallerPrimaryAtIndexZero` |
 | Sampler non-deterministic | `sample_isDeterministicForSessionId` |
 
 **1938 tests, 0 failures**, run with the PostgreSQL container enabled; counts read from
 `target/surefire-reports/*.xml`.
+
+### Pre-signoff pressure test — three cold agents, and what they found
+
+**⚠️ THE FULL THREE-AGENT TEST FOUND FOUR LIVE DEFECTS AND ~10 SURVIVING MUTANTS. All are fixed; recorded
+because each is a recurring shape.**
+
+- **⚠️ A LEARNER COULD OBTAIN A FREE, USABLE EXAM.** Generation runs inside the transaction and can outlast
+  the 30-minute stale-session sweeper (a 10-source exam is bounded at 10 × 240s = **40 minutes**, and the
+  transaction has no timeout), so the sweeper could FAIL and REFUND a session mid-generation while the async
+  completion then resurrected it as `IN_PROGRESS` with a full quiz. **This release created the reachability**
+  by raising the sample to 6/8/10. Fixed by acquiring the row lock and re-reading status through a scalar
+  projection — `findByIdForUpdate` returns the instance already in the persistence context, so its
+  `getStatus()` can be a stale `GENERATING`. `@Version` was rejected: it would touch every mode's write path.
+- **⚠️ IDENTIFICATION COULD NEVER FIRE.** `allowIdentification` and `allowEnumeration` were both derived from
+  the Challenge schema name, so the Long Exam schema forbade `questionFormat=IDENTIFICATION` and forbade
+  `acceptableAnswers` outright. The prompt rules, DTO, grading and frontend all shipped against a path the
+  model could not emit. **A prompt-only assertion cannot catch this — the schema is the binding contract.**
+- **⚠️ REPEAT PLAN LAUNCHES BECAME SINGLE-NOTE EXAMS LABELLED AS PLAN EXAMS**, corrupting `sourceScope` —
+  the field a dated checkpoint reads and which must record the VERIFIED outcome.
+- **⚠️ THE BRANCH SHIPPED A RED FRONTEND TEST**, and the notes picker was decorative: it rendered,
+  pre-selected, and its selection was discarded. **`npm test` had not been run.**
+- **⚠️ THE PLAN-OWNERSHIP PREDICATE WAS DUPLICATED**, so deleting the check from one copy survived where the
+  same deletion was killed before the duplication — **lost mutation coverage on an authorization boundary.**
+- **⚠️ THE ROOT CAUSE WAS SINGULAR:** there was no end-to-end reserve→fail→refund test, and the plan-sourced
+  **success** path had no coverage at all — `resolvePlanMembers` was stubbed in exactly one test, so every
+  other plan test fell through to the legacy manual branch, including the one whose comment named the defect
+  this release exists to fix. **Deleting the reservation-flag write disabled every refund in the product and
+  left 1938 tests green.**
+
+**⚠️ METHODOLOGY ERROR, RECORDED SO IT IS NOT REPEATED: the three agents were run in ONE working tree and
+corrupted each other's builds.** Two detected it and re-ran in isolated worktrees; one did not. **Mutating
+agents need isolated `git worktree`s.**
 
 ### Known limitations
 
