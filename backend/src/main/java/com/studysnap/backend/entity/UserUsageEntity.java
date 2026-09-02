@@ -56,6 +56,9 @@ public class UserUsageEntity {
     @Column(name = "board_exam_used_this_month", nullable = false)
     private Integer boardExamUsedThisMonth;
 
+    @Column(name = "multi_note_generations", nullable = false)
+    private Integer multiNoteGenerations;
+
     @Column(name = "ocr_extractions", nullable = false)
     private Integer ocrExtractions;
 

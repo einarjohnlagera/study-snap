@@ -295,10 +295,10 @@ Profile-aware presentation is a frontend responsibility. The backend responses s
 | Profile | Frontend label | Primary terminal action |
 |---|---|---|
 | `TEACHER` | `Lesson Plan` | `Build Exam` → combined sectioned DOCX through Exam Builder; quiz share links are available to every onboarded profile from Quiz Preview |
-| `STUDENT` | `Study Plan` | `Take the Long Exam` → Long Exam setup |
-| `BOARD_EXAM` | `Review Set` | `Take the Board Exam` → Board Exam setup |
-| `PROFESSIONAL` | `Collection` | `Start Interview Practice` → Interview Practice setup |
-| `PARENT` | `Collection` | No terminal action |
+| `STUDENT` | `Study Plan` | Free/Plus: `Start Challenge Quiz`; Pro: `Take the Long Exam` |
+| `BOARD_EXAM` | `Review Set` | Free/Plus: `Start Challenge Quiz`; Pro: `Take the Board Exam` |
+| `PROFESSIONAL` | `Collection` | Free/Plus: `Start Challenge Quiz`; Pro: `Start Interview Practice` |
+| `PARENT` | `Collection` | `Start Challenge Quiz` (explicitly handled) |
 
 The non-teacher premium-exam mapping is owned by `resolvePlanPremiumExamMode` in `frontend/lib/exam-mode-visibility.ts`, and the profile-aware CTA labels live in `getCollectionTerminalAction`. Do not hardcode profile checks in collection UI components.
 
@@ -308,6 +308,7 @@ The Study Plan premium-exam launch carries `collectionId` in the URL, not a call
 
 - Long Exam: primary note route plus additional Study Pack ids, capped by the learner-level-derived `maxSourceNotes` the server returns (6 / 8 / 10 sources including the primary). The start request carries `sourceCollectionId`, which the server re-verifies — see `quiz.md`
 - Board Exam: primary Study Pack route plus up to 2 additional Study Pack ids
+- Challenge Quiz: Free/Plus plan launch plus optional additional Study Pack ids. The server supplies the cap (Free 3 including primary; Plus a stable 6, from the fixed 18-question multi-note count rather than Long Exam's) and verifies the collection claim before accepting mixed subjects.
 - Interview Practice: primary note route plus up to 2 additional note ids
 
 If the collection cannot be loaded from a prescreen, the exam falls back to its normal single-note/same-subject setup. The Teacher Exam Builder path is unchanged and still receives the collection id plus quiz-ready note ids.

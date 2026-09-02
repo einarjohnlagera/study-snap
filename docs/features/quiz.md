@@ -61,6 +61,8 @@ Two defences, and both are needed:
 
 - timed quiz mode
 - available on Free, Plus, and Pro with plan-based monthly limits
+- A verified Study Plan can source one Challenge Quiz from several notes without creating a new mode: Free is capped at 3 sources and 2 such starts/month; Plus uses the server-provided cap (a stable 6, from the fixed 18-question multi-note count) and 10 starts/month. Pro retains its premium modes and receives the same level-derived source cap.
+- The Challenge start response supplies `maxSourceNotes`; the browser renders that value rather than replicating plan or learner-level cap logic.
 - generated separately from Quick Review
 - uses the shared mode-selection entry
 
@@ -94,6 +96,7 @@ Two defences, and both are needed:
 - fixed question set generated at start (not progressive)
 - prestart supports one primary note plus up to 3 additional same-subject Study Pack-ready notes on the MANUAL path
 - Long Exam can also launch from a Study Plan through `collectionId`; plan launch replaces the same-subject default picker with quiz-ready notes from that plan only
+- Challenge Quiz has the matching plan-sourced path while retaining its flexible progressive session and shared Quiz meter.
 - **⚠️ On a plan launch the same-subject rule does NOT apply and the cap is larger — both changed in `v0.102.0`, and until then this document described a flow the backend rejected.** The frontend had always pre-selected plan members regardless of subject while `LongExamService` required every additional source to match the primary's subject, so a mixed-subject plan produced *"source notes must be owned by you and share the same subject"* on a selection the product made itself
 - **The plan-sourced predicate is plan MEMBERSHIP, verified server-side.** `sourceCollectionId` in the start request is a CLAIM: the server re-checks that the caller owns the collection and that the primary AND each additional source are live members. A source the plan does not contain still answers to the same-subject rule, and a claim that fails verification falls back to the manual cap of 3 — a collection id must never become a way to switch the rule off
 - **The plan-sourced cap is derived from the learner's LEVEL, not a constant:** `floor(questionCount / 3)` where `questionCount` is 20 / 25 / 30, so the ceiling is **6 / 8 / 10 sources including the primary**, and a College learner fails at 9. It is returned as `maxSourceNotes` on the start and active-session responses; the frontend renders that value and must never re-derive the level mapping

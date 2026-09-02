@@ -35,10 +35,13 @@ import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.exception.InvalidChallengeQuizResultException;
 import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
+import com.studysnap.backend.exception.MonthlyMultiNoteLimitReachedException;
+import com.studysnap.backend.exception.MultiNoteChallengeQuizSourceNotAllowedException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -106,6 +109,7 @@ public class ChallengeQuizService {
     private static final String PERFORMANCE_LEVEL_NEEDS_IMPROVEMENT = "Needs Improvement";
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
     private static final String ANALYTICS_METADATA_SOURCE_COUNT = "sourceCount";
+    private static final String ANALYTICS_METADATA_SOURCE_SCOPE = "sourceScope";
     private static final String ANALYTICS_METADATA_SCORE_PERCENTAGE = "scorePercentage";
     private static final String ANALYTICS_METADATA_QUESTION_COUNT = "questionCount";
     private static final String ANALYTICS_METADATA_DIFFICULTY = "difficulty";
@@ -116,6 +120,8 @@ public class ChallengeQuizService {
     private static final String CHALLENGE_QUIZ_SESSION_REVIEW_NOT_AVAILABLE_MESSAGE = "Challenge Quiz session review is only available after completion.";
     private static final String MODE_CHALLENGE = "challenge";
     private static final String MODE_BOARD_EXAM = "board_exam";
+    private static final String SOURCE_SCOPE_MANUAL = "manual";
+    private static final String SOURCE_SCOPE_PLAN = "plan";
     private static final String HISTORY_MODE_BOARD_EXAM = "BOARD_EXAM";
     private static final String MATCHING_FORMAT = "MATCHING";
     private static final List<QuickReviewSessionStatus> ACTIVE_GENERATION_STATUSES = List.of(
@@ -141,6 +147,22 @@ public class ChallengeQuizService {
     private static final int LOW_SCORE_QUESTION_COUNT = 10;
     private static final int MID_SCORE_QUESTION_COUNT = 12;
     private static final int HIGH_SCORE_QUESTION_COUNT = 15;
+    /**
+     * Question count for a MULTI-NOTE Challenge Quiz, fixed rather than score-adaptive.
+     *
+     * <p>⚠️ A single-note Challenge Quiz sizes itself from the learner's last Quick Review score
+     * (10 / 12 / 15). Letting a multi-note session do the same made the SOURCE CAP move between
+     * sessions on the same plan while the prestart renders it as a stable promise. Owner ruled
+     * 2026-09-02 to fix it, so what the prestart shows is what the start will enforce.
+     *
+     * <p>⚠️ THE VALUE IS 18 BECAUSE OF A CEILING, NOT A PREFERENCE. At three questions per source this
+     * gives {@code 18 / 3 = 6} sources for Plus and Pro — rejecting the earlier 4, which was pure
+     * arithmetic leakage from a 12-question count. The original intent was ~10 sources, and that is
+     * UNREACHABLE: it needs 30 questions, ten past {@link #MAX_CHALLENGE_QUIZ_QUESTIONS} (20), which
+     * {@code +5 More Questions} also depends on. **Do NOT raise this past 20, and do NOT lift that
+     * ceiling to chase ~10** — the owner declined that as a Challenge Quiz identity change.
+     */
+    private static final int MULTI_NOTE_CHALLENGE_QUESTION_COUNT = 18;
     private static final int INITIAL_CHALLENGE_QUIZ_COUNT = 5;
     public static final int MAX_CHALLENGE_QUIZ_QUESTIONS = 20;
     private static final int GENERATE_MORE_BATCH_SIZE = 5;
@@ -155,6 +177,7 @@ public class ChallengeQuizService {
     private static final String DEFAULT_SELECTED_DIFFICULTY = DIFFICULTY_MEDIUM;
 
     private final StudyPackRepository studyPackRepository;
+    private final UserRepository userRepository;
     private final NoteRepository noteRepository;
     private final PlanSourcedExamVerifier planSourcedExamVerifier;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
@@ -193,13 +216,25 @@ public class ChallengeQuizService {
             return existingSession.get();
         }
 
-        List<UUID> additionalBoardExamStudyPackIds = MODE_BOARD_EXAM.equals(selectedMode)
+        int maxChallengeSourceNotes = resolveMaxChallengeSourceNotes(planType);
+        List<UUID> additionalStudyPackIds = MODE_BOARD_EXAM.equals(selectedMode)
                 ? resolveAdditionalBoardExamStudyPackIds(request, studyPackId)
-                : List.of();
+                : resolveAdditionalChallengeStudyPackIds(request, studyPackId, maxChallengeSourceNotes - 1);
+        boolean multiNoteChallenge = MODE_CHALLENGE.equals(selectedMode) && !additionalStudyPackIds.isEmpty();
         int boardExamSourceCount = MODE_BOARD_EXAM.equals(selectedMode)
-                ? additionalBoardExamStudyPackIds.size() + 1
+                ? additionalStudyPackIds.size() + 1
                 : 0;
         int usedThisMonth = assertChallengeQuizQuotaAvailable(userId, planType);
+        if (multiNoteChallenge) {
+            // ⚠️ CONDITIONAL, and that matters. The counter is per user while the Study Pack lock is per
+            // note, so concurrent starts from different notes could otherwise both see the same remaining
+            // allowance. But taking it unconditionally put a PESSIMISTIC_WRITE on the user row for EVERY
+            // Challenge and Board Exam start, held across LLM generation by @Transactional — serializing
+            // that account's other quiz starts and blocking anything else that writes the same row.
+            // Only the multi-note path has a counter at stake, so only it takes the lock.
+            userRepository.findByIdForUpdate(userId);
+            assertMultiNoteQuotaAvailable(userId, planType);
+        }
         int boardExamUsedThisMonth = 0;
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
             boardExamUsedThisMonth = assertBoardExamQuotaAvailable(userId, planType, BOARD_EXAM_QUOTA_UNITS_PER_SESSION);
@@ -207,20 +242,23 @@ public class ChallengeQuizService {
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty, selectedMode);
         int quizCount = MODE_BOARD_EXAM.equals(selectedMode)
                 ? resolveBoardExamQuestionCount(boardExamSourceCount)
-                : profile.questionCount();
-        List<LongExamSourceNoteRef> boardExamSourceNoteRefs = MODE_BOARD_EXAM.equals(selectedMode)
+                : multiNoteChallenge ? MULTI_NOTE_CHALLENGE_QUESTION_COUNT : profile.questionCount();
+        ResolvedPlanSources resolvedPlanSources = MODE_BOARD_EXAM.equals(selectedMode) || multiNoteChallenge
                 ? resolveBoardExamSourceNoteRefs(
                         studyPack,
                         userId,
-                        additionalBoardExamStudyPackIds,
+                        additionalStudyPackIds,
                         quizCount,
                         request == null ? null : request.sourceCollectionId()
                 )
-                : List.of();
+                : ResolvedPlanSources.empty();
+        List<LongExamSourceNoteRef> sourceNoteRefs = multiNoteChallenge
+                ? allocateQuestionsAcrossSources(resolvedPlanSources.sourceNoteRefs(), quizCount)
+                : resolvedPlanSources.sourceNoteRefs();
         StudyPackGenerationContext generationContext = null;
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
             generationContext = buildQuizGenerationContext(userId, studyPack);
-            if (additionalBoardExamStudyPackIds.isEmpty()) {
+            if (additionalStudyPackIds.isEmpty()) {
                 Optional<List<QuizItem>> pooledQuestions = examQuestionPoolService.sampleQuestions(
                         studyPackId,
                         ExamQuestionPoolService.MODE_BOARD_EXAM,
@@ -263,7 +301,7 @@ public class ChallengeQuizService {
                 studyPack,
                 profile.difficulty(),
                 selectedMode,
-                boardExamSourceNoteRefs
+                sourceNoteRefs
         ));
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         Set<String> disallowedQuestionKeys = QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions);
@@ -277,7 +315,7 @@ public class ChallengeQuizService {
             List<QuizItem> challengeQuiz;
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
                 aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-                List<QuizItem> generatedQuiz = additionalBoardExamStudyPackIds.isEmpty()
+                List<QuizItem> generatedQuiz = additionalStudyPackIds.isEmpty()
                         ? quizGenerationService.generateBoardExamQuiz(
                                 studyPack.getTitle(),
                                 studyPack.getSummary(),
@@ -287,8 +325,14 @@ public class ChallengeQuizService {
                                 profile.difficulty(),
                                 generationContext
                         )
-                        : generateBoardExamQuizForSources(userId, boardExamSourceNoteRefs, profile.difficulty());
+                        : generateBoardExamQuizForSources(userId, sourceNoteRefs, profile.difficulty());
                 challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(generatedQuiz, disallowedQuestionKeys);
+            } else if (multiNoteChallenge) {
+                aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
+                challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(
+                        generateChallengeQuizForSources(userId, sourceNoteRefs, profile.difficulty()),
+                        disallowedQuestionKeys
+                );
             } else {
                 List<QuizItem> bankedQuestions = challengeQuizQuestionBankService.claimEligibleQuestions(
                         userId,
@@ -350,6 +394,9 @@ public class ChallengeQuizService {
             markSessionReady(session, challengeQuiz, profile.difficulty());
             QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
             userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
+            if (multiNoteChallenge) {
+                userUsageService.incrementMultiNoteGeneration(userId, saved.getCreatedAt());
+            }
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
                 userUsageService.incrementBoardExamGenerationBy(userId, BOARD_EXAM_QUOTA_UNITS_PER_SESSION, saved.getCreatedAt());
             }
@@ -357,16 +404,27 @@ public class ChallengeQuizService {
                 AnalyticsEventType startedEventType = MODE_BOARD_EXAM.equals(selectedMode)
                         ? AnalyticsEventType.BOARD_EXAM_STARTED
                         : AnalyticsEventType.CHALLENGE_QUIZ_STARTED;
-                analyticsService.trackEvent(userId, startedEventType, studyPackId, Map.of(
-                        ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
-                        ANALYTICS_METADATA_QUESTION_COUNT, challengeQuiz.size(),
-                        ANALYTICS_METADATA_DIFFICULTY, profile.difficulty(),
-                        ANALYTICS_METADATA_MODE, selectedMode
-                ));
+                Map<String, Object> analyticsMetadata = MODE_BOARD_EXAM.equals(selectedMode)
+                        ? Map.of(
+                                ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
+                                ANALYTICS_METADATA_QUESTION_COUNT, challengeQuiz.size(),
+                                ANALYTICS_METADATA_DIFFICULTY, profile.difficulty(),
+                                ANALYTICS_METADATA_MODE, selectedMode
+                        )
+                        : Map.of(
+                                ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
+                                ANALYTICS_METADATA_QUESTION_COUNT, challengeQuiz.size(),
+                                ANALYTICS_METADATA_DIFFICULTY, profile.difficulty(),
+                                ANALYTICS_METADATA_MODE, selectedMode,
+                                ANALYTICS_METADATA_SOURCE_COUNT, sourceNoteRefs.isEmpty() ? 1 : sourceNoteRefs.size(),
+                                ANALYTICS_METADATA_SOURCE_SCOPE, resolvedPlanSources.planSourced()
+                                        ? SOURCE_SCOPE_PLAN : SOURCE_SCOPE_MANUAL
+                        );
+                analyticsService.trackEvent(userId, startedEventType, studyPackId, analyticsMetadata);
             } catch (RuntimeException ignored) {
                 // Analytics must never turn a successfully generated quiz into a failed session.
             }
-            if (!MODE_BOARD_EXAM.equals(selectedMode)) {
+            if (!MODE_BOARD_EXAM.equals(selectedMode) && !multiNoteChallenge) {
                 trackChallengeLaunchMasterySplit(userId, studyPack, saved);
             }
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
@@ -725,7 +783,12 @@ public class ChallengeQuizService {
         }
 
         List<QuizItem> existingQuiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        if (existingQuiz.size() >= MAX_CHALLENGE_QUIZ_QUESTIONS) {
+        // ⚠️ Refuse BEFORE generating when the remaining headroom cannot produce a viable batch, not
+        // after paying for the LLM call. A batch is rejected downstream unless it yields at least
+        // MIN_NEW_QUESTIONS_AFTER_DEDUP new questions, so an 18-question multi-note session — headroom
+        // 2 — could never succeed: it generated, threw, and the frontend swallowed the failure into
+        // "no more questions". The button was live, cost a call, and was deterministically dead.
+        if (MAX_CHALLENGE_QUIZ_QUESTIONS - existingQuiz.size() < MIN_NEW_QUESTIONS_AFTER_DEDUP) {
             throw new AppException("MAX_QUESTIONS_REACHED",
                     "This session has reached the maximum of " + MAX_CHALLENGE_QUIZ_QUESTIONS + " questions.",
                     org.springframework.http.HttpStatus.CONFLICT);
@@ -935,6 +998,16 @@ public class ChallengeQuizService {
         return userUsageService.getMonthlyUsage(userId, now).boardExamUsedThisMonth();
     }
 
+    private void assertMultiNoteQuotaAvailable(UUID userId, PlanType planType) {
+        int usedThisMonth = userUsageService.getMonthlyUsage(userId, OffsetDateTime.now(ZoneOffset.UTC))
+                .multiNoteGenerations();
+        int monthlyLimit = properties.getPricing().resolveMonthlyMultiNoteLimit(planType);
+        if (usedThisMonth < monthlyLimit) {
+            return;
+        }
+        throw new MonthlyMultiNoteLimitReachedException(monthlyLimit);
+    }
+
     private int resolveUsedThisMonthForResponse(UUID userId, QuickReviewSessionEntity session) {
         String mode = extractMode(session.getSessionState());
         if (MODE_BOARD_EXAM.equals(mode)) {
@@ -1122,6 +1195,33 @@ public class ChallengeQuizService {
         return List.copyOf(uniqueIds);
     }
 
+    private List<UUID> resolveAdditionalChallengeStudyPackIds(
+            ChallengeQuizStartRequest request,
+            UUID primaryStudyPackId,
+            int maxAdditionalSources
+    ) {
+        if (request == null || request.additionalStudyPackIds() == null || request.additionalStudyPackIds().isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> uniqueIds = new LinkedHashSet<>();
+        for (String rawStudyPackId : request.additionalStudyPackIds()) {
+            if (rawStudyPackId == null || rawStudyPackId.isBlank()) {
+                throw new MultiNoteChallengeQuizSourceNotAllowedException();
+            }
+            UUID studyPackId = parseBoardExamSourceStudyPackId(rawStudyPackId);
+            if (studyPackId.equals(primaryStudyPackId)) {
+                throw new MultiNoteChallengeQuizSourceNotAllowedException();
+            }
+            uniqueIds.add(studyPackId);
+        }
+        // This is deliberately a rejection, not the old silent drop. An unentitled or over-cap caller
+        // must never receive a single-note session that looks like their mixed request succeeded.
+        if (uniqueIds.size() > maxAdditionalSources) {
+            throw new MultiNoteChallengeQuizSourceNotAllowedException();
+        }
+        return List.copyOf(uniqueIds);
+    }
+
     private UUID parseBoardExamSourceStudyPackId(String rawStudyPackId) {
         try {
             return UUID.fromString(rawStudyPackId.trim());
@@ -1130,7 +1230,7 @@ public class ChallengeQuizService {
         }
     }
 
-    private List<LongExamSourceNoteRef> resolveBoardExamSourceNoteRefs(
+    private ResolvedPlanSources resolveBoardExamSourceNoteRefs(
             StudyPackEntity primaryStudyPack,
             UUID userId,
             List<UUID> additionalStudyPackIds,
@@ -1195,7 +1295,72 @@ public class ChallengeQuizService {
             int sourceQuestionCount = baseQuestionCount + (index == 0 ? remainder : 0);
             sourceNoteRefs.add(buildSourceNoteRef(source, sourceQuestionCount));
         }
-        return sourceNoteRefs;
+        return new ResolvedPlanSources(List.copyOf(sourceNoteRefs), planSourced);
+    }
+
+    private record ResolvedPlanSources(List<LongExamSourceNoteRef> sourceNoteRefs, boolean planSourced) {
+        private static ResolvedPlanSources empty() {
+            return new ResolvedPlanSources(List.of(), false);
+        }
+    }
+
+    /**
+     * Most notes a multi-note Challenge Quiz may draw from, counting the primary.
+     *
+     * <p>⚠️ DERIVED FROM {@link #MULTI_NOTE_CHALLENGE_QUESTION_COUNT}, never the Long Exam one. The
+     * first implementation used {@code resolveLongExamQuestionCount} (20/25/30 → 6/8/10), but a
+     * Challenge Quiz is far shorter — so a Plus learner could select 8 sources for a 12-question quiz
+     * and seven of those notes would contribute a SINGLE question each. That is not mixed retrieval,
+     * and it contradicts {@link ExamSourceLimitResolver}'s guarantee that every source gets enough
+     * questions to be worth including.
+     *
+     * <p>⚠️ It is also STABLE, which the score-adaptive count would not have been: the cap is always
+     * {@code 18 / 3 = 6} for Plus and Pro, and {@code min(3, 6) = 3} for Free.
+     *
+     * <p>⚠️ Raising the question count is NOT the fix: {@link #MAX_CHALLENGE_QUIZ_QUESTIONS} is 20, so a
+     * 25-question base would breach that ceiling outright. At 18 the headroom is 2, which is below the
+     * minimum viable batch — so {@code +5 More Questions} is correctly refused up front on a multi-note
+     * session rather than generating a batch that cannot pass.
+     *
+     * <p>The owner's ruling — Plus uses the same level-derived formula as Pro rather than an artificial
+     * constant — is preserved exactly. Only the input is corrected.
+     */
+    private int resolveMaxChallengeSourceNotes(PlanType planType) {
+        int derived = ExamSourceLimitResolver.resolveMaxSourceNotes(MULTI_NOTE_CHALLENGE_QUESTION_COUNT);
+        if (planType == PlanType.FREE) {
+            return Math.min(properties.getPricing().getFreeMultiNoteSourceCap(), derived);
+        }
+        return derived;
+    }
+
+
+    // Package-private so the floor guard below can be pinned directly. The cap now makes it
+    // unreachable through startSession, which is exactly why it would otherwise go untested — and an
+    // untested guard is how the hole it closes gets silently re-opened by a later cap change.
+    List<LongExamSourceNoteRef> allocateQuestionsAcrossSources(
+            List<LongExamSourceNoteRef> sourceNoteRefs,
+            int totalQuestionCount
+    ) {
+        int sourceCount = sourceNoteRefs.size();
+        int baseQuestionCount = totalQuestionCount / sourceCount;
+        // ⚠️ The cap should already prevent this. The guard exists because the first implementation
+        // sized the cap from a DIFFERENT question count than the one allocated here, and nothing
+        // failed — seven of eight notes silently received one question each.
+        if (baseQuestionCount < ExamSourceLimitResolver.minimumQuestionsPerSource()) {
+            throw new MultiNoteChallengeQuizSourceNotAllowedException();
+        }
+        int remainder = totalQuestionCount % sourceCount;
+        List<LongExamSourceNoteRef> allocated = new ArrayList<>(sourceCount);
+        for (int index = 0; index < sourceCount; index++) {
+            LongExamSourceNoteRef source = sourceNoteRefs.get(index);
+            allocated.add(new LongExamSourceNoteRef(
+                    source.studyPackId(),
+                    source.noteId(),
+                    source.noteTitle(),
+                    baseQuestionCount + (index == 0 ? remainder : 0)
+            ));
+        }
+        return List.copyOf(allocated);
     }
 
     private LongExamSourceNoteRef buildSourceNoteRef(StudyPackEntity studyPack, int questionCount) {
@@ -1231,6 +1396,36 @@ public class ChallengeQuizService {
             );
             List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(
                     generatedQuiz,
+                    disallowedQuestions
+            );
+            mergedQuiz.addAll(uniqueGeneratedQuiz);
+            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(uniqueGeneratedQuiz));
+        }
+        return mergedQuiz;
+    }
+
+    private List<QuizItem> generateChallengeQuizForSources(
+            UUID userId,
+            List<LongExamSourceNoteRef> sourceNoteRefs,
+            String difficulty
+    ) {
+        List<QuizItem> mergedQuiz = new ArrayList<>();
+        Set<String> disallowedQuestions = new LinkedHashSet<>();
+        for (LongExamSourceNoteRef sourceNoteRef : sourceNoteRefs) {
+            UUID sourceStudyPackId = parseBoardExamSourceStudyPackId(sourceNoteRef.studyPackId());
+            StudyPackEntity sourceStudyPack = findOwnedStudyPackForGenerationOrThrow(sourceStudyPackId, userId);
+            StudyPackGenerationContext sourceContext = buildQuizGenerationContext(userId, sourceStudyPack);
+            GeneratedChallengeQuizContent generatedContent = quizGenerationService.generateChallengeQuiz(
+                    sourceStudyPack.getTitle(),
+                    sourceStudyPack.getSummary(),
+                    getKeyConcepts(sourceStudyPack),
+                    List.copyOf(disallowedQuestions),
+                    sourceNoteRef.questionCount(),
+                    difficulty,
+                    sourceContext
+            );
+            List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(
+                    generatedContent.quizItems(),
                     disallowedQuestions
             );
             mergedQuiz.addAll(uniqueGeneratedQuiz);
@@ -1303,7 +1498,8 @@ public class ChallengeQuizService {
                 quiz,
                 session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex(),
                 sanitizeSessionStateForClient(session.getSessionState()),
-                extractResponseSourceNoteRefs(session.getSessionState())
+                extractResponseSourceNoteRefs(session.getSessionState()),
+                resolveMaxChallengeSourceNotes(planType)
         );
     }
 
@@ -1890,7 +2086,8 @@ public class ChallengeQuizService {
                 List.of(),
                 0,
                 null,
-                null
+                null,
+                resolveMaxChallengeSourceNotes(planType)
         );
     }
 

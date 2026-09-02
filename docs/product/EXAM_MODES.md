@@ -75,6 +75,7 @@ No other identity changes from `quick-review.md`; included here for completeness
 - **Audience**: All profile types, all plans (with monthly quota per `PLANS.md`).
 - **Boundary**:
   - Progressive generation (`5 → 20`).
+  - **Multi-note retrieval is a Challenge Quiz capability, not a mode or sub-mode.** From a verified Study Plan, Free may select up to 3 sources and Plus receives the server-derived cap of **6** (a fixed 18-question multi-note count divided by the three-per-source floor — deliberately NOT Long Exam's 6 / 8 / 10, which comes from 20 / 25 / 30, and deliberately not score-adaptive). **PRO's plan launch opens Board Exam rather than multi-note Challenge.** **⚠️ ~10 sources is UNREACHABLE — it needs 30 questions, ten past the 20-question Challenge ceiling that `+5` depends on; do not lift that ceiling to chase it (owner, 2026-09-02)**; questions, scoring, result framing, and the `CHALLENGE` discriminator remain unchanged.
   - Mid-flight `+5 Questions` and early submit are **core to the identity**.
   - Score is computed against answered questions.
   - Result screen guides the next study step (`Practice Weak Concepts`, retry, etc.).

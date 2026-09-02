@@ -45,7 +45,7 @@ Student and Board Taker enter through a shared mode-selection screen. Profile ty
 - `Full Practice Exam` — Long Exam engine with professional-facing label
 - `Interview Practice` — Adaptive Practice sub-mode tile for Professional users; Free/Plus users can open setup and see the Interview Practice paywall from the Start CTA
 
-Study Plan / Review Set detail can launch the learner's profile-appropriate premium exam via `collectionId`: Student → Long Exam, Board Exam → Board Exam setup, Professional → Interview Practice. Each prescreen restricts additional-note selection to quiz-ready notes from that plan and preselects only up to the mode's existing cap; Teacher remains on the DOCX Exam Builder path.
+Study Plan / Review Set detail resolves on both profile and plan: Free and Plus learners (including `PARENT`) launch Challenge Quiz with `collectionId`, while Pro retains its profile-appropriate premium route. The Challenge Quiz prescreen restricts additional-note selection to quiz-ready notes from that plan; Teacher remains on the DOCX Exam Builder path.
 
 ### Long Exam backend (v0.13.0)
 
@@ -55,6 +55,8 @@ Study Plan / Review Set detail can launch the learner's profile-appropriate prem
 ## Current plan gating
 
 - Challenge Quiz is available on Free, Plus, and Pro with rolling monthly limits of `20`, `100`, and `200` sessions respectively
+- A multi-note Challenge Quiz remains a `CHALLENGE` session, also consuming the shared Quiz allowance, but has a separate internal monthly ceiling: Free `2`, Plus `10`, Pro `200` by default. The counter is enforcement plumbing only: it is not surfaced as a Settings allowance.
+- Multi-note source selection is accepted only after the server verifies the claimed plan's ownership and membership (including the primary). Free may use 3 sources including the primary; Plus and Pro use the same `floor(questionCount / 3)` formula as Long Exam, fed a **fixed 18-question multi-note count**, so the cap is a stable **6 sources**. **⚠️ 12 questions / 4 sources was itself rejected as arithmetic leakage (owner, 2026-09-02); ~10 sources is UNREACHABLE because it needs 30 questions, ten past `MAX_CHALLENGE_QUIZ_QUESTIONS` (20), which `+5 More Questions` depends on — do NOT lift that ceiling to chase it.** **⚠️ NOT Long Exam's 6 / 8 / 10** — that comes from 20 / 25 / 30, and applying it here gave sources a single question each. **⚠️ And NOT the score-adaptive 10 / 12 / 15 a single-note quiz uses** — that would make the cap move between sessions on the same plan while the prestart renders it as a stable promise (owner, 2026-09-02). A per-source floor rejects any split below three questions. An invalid, ineligible, or over-cap `additionalStudyPackIds` request is rejected; it is never silently downgraded to a single-note session. A non-plan source still follows the carried same-subject rule.
 - Board Exam Mode is Pro-only
 - Board Exam Mode consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`10` source-note units / month; default configurable)
 - Board Exam quota is deducted **per source note** at session start — a 3-note session costs 3 quota units

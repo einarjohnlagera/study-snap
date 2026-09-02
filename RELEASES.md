@@ -1,5 +1,228 @@
 # RELEASES.md - NoteLib
 
+## v0.103.0 - Mixed Retrieval for Free and Plus
+
+**Status: Released** (kicked off and signed off 2026-09-02, base branch `releases/v0.103.0`, cut from
+`main` after `v0.102.0` merged and tagged)
+
+Theme: practising across several notes at once should not be a thing only Pro learners have ever seen.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition, both
+halves unmet. The three-digit minor is deliberate and was verified safe at the `v0.100.0` kickoff.
+
+### Why this release exists
+
+**Slice 3 of the Review Sets audit** (§S2-3), and it is the slice with a **HARD dependency on `v0.102.0`**
+(§S2-D) — its Plus tier *is* plan-sourced assessment, which only started working last release.
+
+**⚠️ THE DEFECT IT CLOSES IS A PRICING ONE, AND IT IS SHARPER THAN "Free lacks a feature": PLUS HAS
+IDENTICAL MIXED-RETRIEVAL CAPABILITY TO FREE — NAMELY NONE.** `isLongExamAvailable` is
+`longExamAvailableForPro && plan == PRO` (`StudySnapProperties:253-255`), verified at this kickoff, so a
+learner paying for Plus buys nothing at all on this axis. That is a ladder with a missing rung, not a
+locked feature.
+
+**⚠️ AND THE PLAN'S OWN CTA IS ALREADY DISHONEST ABOUT IT.** `resolvePlanPremiumExamMode`
+(`exam-mode-visibility.ts:71-84`) resolves on **`profileType` alone and never takes plan** — verified by
+reading the signature at kickoff — while the paywall fires on **plan**. So a Free or Plus learner is shown
+a concluding action on their Study Plan that they cannot use, and a `PARENT` profile is shown none at all.
+
+**⚠️ ONE THING §S2-X4 PREDICTED IS ALREADY DISCHARGED AND MUST NOT BE RE-DONE.** It says Slice 3 must
+re-correct Slice 1's meter description, because a Free/Plus multi-note session rides the Challenge engine
+and spends the same meter. **The owner pre-empted this on 2026-09-01 by ruling ONE DURABLE WORDING**, and
+`v0.101.0` shipped *"Quiz sessions we generate for you, plus quizzes you make for someone. Board Exam
+sessions also count against their own allowance."* — mode-agnostic by construction. **It stays TRUE when
+multi-note arrives, so there is no copy edit owed here. Do not "fix" it; a `quiz-session-history.test.ts`
+guard pins that it names no mode.**
+
+### ⚠️ SCOPE RESHAPED 2026-09-02, AFTER AN ASSESSMENT ARCHITECTURE AUDIT
+
+**The release keeps its theme and loses its framing.** An owner + Product UX architecture brief, a Stage 1
+repo audit and an owner tightening pass all landed on 2026-09-02, between this kickoff and delivery. Full
+record: `docs/claude-plans/assessment-architecture-audit.md`. **The Stage 1 findings are ACCEPTED and are not
+re-audited here.**
+
+**⚠️ WHY THE FRAMING CHANGED.** This release was scoped as *"Slice 3 of the Review Sets audit — mixed
+retrieval reaches Free and Plus."* That slice numbering is **superseded**: the assessment audit replaced it
+with a seven-slice sequence in which **this release is slice 0**. Its work is unchanged in substance; what
+changed is that it is now understood as *making an already-built capability reachable*, not as opening a new
+tier of the ladder.
+
+**⚠️ THE DELIVERED CAPABILITY IS UNREACHABLE ON EVERY PLAN, AND THAT IS THIS RELEASE'S REAL JOB.** A
+falsification pass proved it: `challenge-quiz/page.tsx` computes the multi-note cap from `challengeSession`,
+which is **null at prestart by construction**, so the source picker is permanently disabled and
+`additionalStudyPackIds` can never be populated; and PRO is routed to Board Exam setup before it can reach
+the picker at all. **The server side is correct and reachable via API — this is UI wiring, not
+architecture**, which is why the release is reshaped rather than withdrawn.
+
+**⚠️ THE PLUS CAP OF 4 IS REJECTED AS ARITHMETIC LEAKAGE (owner, 2026-09-02), NOT PRODUCT DESIGN.** It was
+`MULTI_NOTE_CHALLENGE_QUESTION_COUNT (12) / 3` — a division leaking into the pricing ladder.
+**⚠️ AND ~10, THE ORIGINAL INTENT, IS UNREACHABLE — VERIFIED, NOT ASSUMED.** `MAX_CHALLENGE_QUIZ_QUESTIONS`
+is **20**, and at three questions per source that bounds sources at **6**; ~10 would need 30 questions, ten
+past a ceiling that `+5 More Questions` also depends on. **OWNER RULED: 18 questions → 6 sources for Plus** —
+50% larger than the rejected 4, changing no existing contract and leaving the ceiling and `+5` untouched.
+**⚠️ Do NOT lift `MAX_CHALLENGE_QUIZ_QUESTIONS` to chase ~10; that is a Challenge Quiz identity change and
+was declined.**
+
+**⚠️ GATING, STATED BECAUSE IT IS ROUTINELY CONFLATED:** this initiative carries **no product or checkpoint
+gate**; **engineering pre-signoff verification is preserved in full**; and **plan-tier entitlements are a
+separate monetization contract, unchanged.** Nothing here adds, widens or removes a subscription gate.
+
+### Revised scope
+
+- **1. Make the multi-note capability reachable (frontend).** Read the cap at prestart from a source that is
+  actually populated then, rather than from the null `challengeSession`, and fix the PRO+`collectionId`
+  routing. **⚠️ `PARENT` on PRO is contradictory on any answer** — its CTA reads *"Start Challenge Quiz"* and
+  lands on Board Exam setup — and must be resolved in the same change.
+- **2. Plus multi-note uses 18 questions → 6 sources; Free stays at 3.** Config-backed, so the figure stays
+  tunable. **⚠️ The cap must remain derived from the question count through `ExamSourceLimitResolver`, never
+  reintroduced as a standalone constant** — a second constant beside the formula is how the leakage returns.
+- **3. Correct the docs that overclaim.** `PLANS.md` advertises *"200 multi-note Challenge Quiz starts /
+  month"* for PRO. **⚠️ Nobody chose that** — it was a delivery default mirroring the challenge-quiz limit,
+  then written up as an entitlement. PRO's plan launch opens **Board Exam**, per the ladder.
+- **4–7. UNCHANGED AND ALREADY BUILT:** the `V131` counter and its sub-limit, the plan-membership gate reusing
+  `PlanSourcedExamVerifier`, the terminal CTA resolving on (profile, plan), and `sourceCount`/`sourceScope`
+  recording the **verified** outcome.
+
+### Shipped (slice 0)
+
+- **The multi-note capability is reachable.** The prestart reads the cap from the in-progress response — which already carried it and was **discarding the field** — instead of from `challengeSession`, which is **null at prestart by construction**. That single derivation made `maxChallengeAdditionalNotes` permanently `0`, disabling every source button on every plan while the server side was correct.
+- **⚠️ NO CLIENT-SIDE FALLBACK WAS ADDED.** With no server value the cap is `0`, never a local default — a constant here is the drift this release exists to remove.
+- **Plus multi-note is 18 questions → 6 sources; Free stays at 3**, still derived through `ExamSourceLimitResolver` rather than reintroduced as a standalone constant.
+- **⚠️ THE `PARENT` CONTRADICTION IS FIXED — AND THE FIRST FIX FOR IT WAS INERT, CAUGHT BY MUTATION RATHER THAN REVIEW.** `resolvePlanPremiumExamMode(PARENT, PRO)` is `"challenge"`, but the page re-derived from plan alone and forced Board Exam setup under a CTA reading *"Start Challenge Quiz"*. Routing it through the resolver **looked correct and changed nothing**: `isChallengeViewerProfileType` deliberately excludes `PARENT`, so the narrowed profile was `null` and the resolver returned `null`. **The resolver now receives the UNNARROWED profile.**
+- **⚠️ AND THE FIRST TEST FOR IT DID NOT DISCRIMINATE.** It asserted the plan's source button present and a "Board Exam" heading absent — **Board Exam setup renders the same source buttons**, so two mutants survived. Rewritten against a challenge-setup-only element; both mutants now die, including the narrowed-profile one.
+- **⚠️ A stale-closure warning was introduced and fixed rather than accepted** — the new state was missing from an effect's dependency array, which is the audit checklist's own item 4.
+- **`PLANS.md`'s PRO multi-note row is corrected.** *"200 multi-note Challenge Quiz starts / month"* was a delivery default mirroring the challenge-quiz limit, then written up as an entitlement nobody chose.
+- **Green:** 1910 backend tests, 2092 frontend tests, `tsc --noEmit` exit 0, lint back to its 15 pre-existing warnings.
+
+### Pre-signoff cold agent — findings and fixes
+
+**Pre-declared tier: ONE SCOPED COLD AGENT, framed as falsification.** It ran 2026-09-02 against seven claims, **falsified two**, and found a defect more severe than either. Claims 1, 3, 4 and 6 held under its own mutation testing.
+
+- **⚠️ WORST FINDING, AND MY CAP DECISION CAUSED IT: `+5 More Questions` WAS DETERMINISTICALLY DEAD ON EVERY MULTI-NOTE SESSION, AFTER PAYING FOR AN LLM CALL.** At 18 questions the headroom is `20 − 18 = 2`, and a batch is rejected unless it yields `MIN_NEW_QUESTIONS_AFTER_DEDUP = 3` new questions — **so it generated, threw, and the frontend swallowed the failure into "no more questions".** The button was live, cost a call, and could never succeed. **⚠️ It also falsified a javadoc I had written in this same release claiming `+5` is allowed on multi-note.** Fixed by refusing **before** generating whenever the headroom cannot produce a viable batch — a general guard, not a multi-note special case.
+- **⚠️ CLAIM 7 FALSIFIED — THE USER-ROW LOCK WAS UNCONDITIONAL AND HELD ACROSS LLM GENERATION.** `findByIdForUpdate` fired on **every** `startSession`, single-note Challenge and Board Exam included, and `@Transactional` held that `PESSIMISTIC_WRITE` until commit — **serializing an account's other quiz starts and blocking `AskCompanionService` and `LinkedLearnerService`, which write the same row.** Now taken **only on the multi-note path**, where a counter is actually at stake, and still before the ceiling assert.
+- **⚠️ AND THE LOCK HAD ZERO COVERAGE: the agent deleted it entirely and all 1910 backend tests passed.** The concurrency guarantee rested on nothing. Now pinned by two tests — one asserting the lock is **not** taken single-note, one asserting `InOrder` that it precedes the usage read the ceiling depends on. **Both mutants die; so does reverting the `+5` guard.**
+- **⚠️ CLAIM 5 FALSIFIED, and recorded rather than fixed:** `resolveExistingChallengeSession` returns **before** sources are resolved, so a caller with a stuck `GENERATING` session on the primary pack gets a 200 with their old single-note session and their `additionalStudyPackIds` silently discarded. **The frontend masks the `IN_PROGRESS` case but not `GENERATING`.** Narrow — it needs a stuck session — and fixing it means reordering a short-circuit that predates this release. See Known limitations.
+- **Executed counts read from `target/surefire-reports/*.xml` after an explicit `test-compile` (exit 0):** 1913 backend, 2092 frontend, `tsc --noEmit` exit 0, lint at its 15 pre-existing warnings.
+- **⚠️ Stale comments from the 12→18 change were found and corrected** — the javadoc still said `12 / 3 = 4` beside an assertion of 6.
+
+### Known limitations
+
+- **⚠️ A stuck `GENERATING` session silently discards multi-note sources (cold agent, CLAIM 5).** `resolveExistingChallengeSession` short-circuits before sources are resolved, so such a caller gets a 200 with their old single-note session and no error. **The frontend masks the `IN_PROGRESS` case but not `GENERATING`.** Narrow, needs a stuck session, and the fix reorders a short-circuit that predates this release — **left rather than reordered under signoff time pressure.**
+- **The multi-note ceiling is invisible until it is hit.** `multi_note_generations` reaches no DTO, no `/me/plan` field and no prestart copy, so a Free learner discovers their 2/month only via a 403. **The counter was deliberately not rendered as a meter; disclosing the limit is a separate copy decision.**
+- **Board-Exam-flavoured errors on the Challenge path.** `resolveBoardExamSourceNoteRefs` is reused verbatim, so an unowned `sourceCollectionId` or a subject mismatch raises `InvalidBoardExamSourceException` on a request that never mentioned Board Exam. Wrong error contract, correct behaviour.
+- **Prestart timer copy is wrong for multi-note** — the card says "Timer: 10 minutes" while an 18-question session gets `18 × 90s = 27 minutes`. **Pre-existing copy, newly wrong.**
+- **The CTA and the page read the plan from different sources** — the collection page prefers the usage summary, the challenge page uses the auth cookie alone. A lapsed PRO cookie can still show "Start Challenge Quiz" and land on Board Exam setup.
+- **`page.tsx:516-523` is untested** — the `sharedModeSelectionEntryRequested` branch of the routing fix survives mutation. Reachable via `entry=mode-selection` links.
+- **Per-source allocation is computed twice** and both floors are unreachable through `startSession` under the current cap.
+- **Multi-note Challenge bypasses the question bank**, weakening the distinction between repeatable custom practice and freshly generated assessment. Tracked in the assessment audit as an integrity item.
+
+### Carried out of this release, by the approved sequence
+
+- **Source provenance moves to the NEXT release and is slice 1.** **⚠️ It is deliberately AHEAD of
+  curriculum-scale sampling:** `ConceptHealth` currently writes the same concept list to every source pack,
+  and `QuizItem` carries no source-pack field, so representative sampling would push **more** evidence
+  through a mis-attributing writer.
+- **The eligible-pool separation, the coverage blueprint and generation resilience** are slice 2, and
+  resilience is **coupled into** that slice rather than following it.
+- **⚠️ INTEGRITY ITEM, recorded not deferred silently: multi-note Challenge bypasses the Challenge question
+  bank**, weakening the very distinction between repeatable custom practice and freshly generated
+  assessment. Not blocking; tracked in the audit.
+
+### Planned Scope
+
+- **1. Free and Plus can run a multi-note session — as a CAPABILITY of Challenge Quiz, NOT a sub-mode
+  (owner decision, 2026-09-02).** **⚠️ THIS SUPERSEDES THE KICKOFF'S FIRST WORDING, which said "the Board
+  Exam pattern — a `mode` string on the `CHALLENGE` discriminator" after §S2-X2.** Applying
+  `EXAM_MODES.md`'s own sub-mode test settles it: a sub-mode needs **its own label, entry point and stated
+  differentiator** (Interview Practice's is scenario questions plus per-answer critique plus its own result
+  framing). This has none — same questions, same scoring, same result screen, drawn from more notes.
+  **So: NO `subMode` value, NO new row in the locked table, and nothing to name.** `EXAM_MODES.md` gains one
+  capability line under Challenge Quiz. **⚠️ Do NOT add a quiz mode or a sub-mode; do NOT unlock Long Exam
+  for non-Pro** (that is Pro's readiness simulation, and the owner ruled Pro is not weakened).
+  **⚠️ TODAY `additionalStudyPackIds` ON A NON-`board_exam` REQUEST ARE SILENTLY DROPPED, NOT REJECTED**
+  (`ChallengeQuizService:196-198`). This release makes them accepted for a permitted caller — **state
+  explicitly what happens for a caller over their cap or on an ineligible plan, because silent-ignore
+  turning into silent-accept is exactly how a cap gets bypassed.**
+- **2. The allowance is a sub-limit enforced by a COUNTER COLUMN (owner decision, 2026-09-02, CORRECTED THE
+  SAME DAY).** A multi-note session spends `challenge_quiz_generations` like any Challenge session **and
+  additionally** carries a monthly ceiling of **~2 for Free and ~10 for Plus**, config-backed per tier.
+  **⚠️ THE KICKOFF FIRST SAID "NO MIGRATION OR COLUMN" AND THAT WAS AN UNVERIFIED CLAIM PUT IN FRONT OF THE
+  OWNER — it is retracted here.** Checking the precedent it named: **every per-type monthly cap in this
+  codebase is a counter column** — `board_exam_used_this_month`, `adaptive_quiz_generations`,
+  `long_exam_used_this_month`, `interview_practice_used_this_month`. **A migration adds one counter and
+  enforcement mirrors Board Exam exactly** (`countBoardExamUsedThisMonth` → `resolveMonthlyBoardExamLimit`
+  → throw). **⚠️ "NO NEW METER" STILL HOLDS IN THE SENSE THAT BINDS: Settings renders NO row for it, so the
+  learner sees no new allowance.** **⚠️ REJECTED: counting session rows by a JSONB `sourceNoteRefs`
+  predicate** — it would be this repository's **first** JSONB predicate, PostgreSQL-only, and **invisible to
+  the mocked-repository tests that make up most of the suite.**
+  **⚠️ REJECTED WITH REASONS:** no separate limit at all (a Free learner could then run 20 multi-note
+  sessions a month, sitting on top of what Pro pays for), and Plus-only (it drops the ladder's *experience
+  the principle* rung, so Free never learns why mixed retrieval matters).
+- **3. The source cap is Free 3 flat, Plus level-derived (owner decision, 2026-09-02).** Plus gets the same
+  honest **6 / 8 / 10 by learner level** that `v0.102.0` shipped for Pro, so **Plus versus Pro is modes and
+  allowance, never an artificial note count.** **⚠️ REJECTED: a flat 5 for Plus** — it reintroduces exactly
+  the arbitrary constant `v0.102.0` replaced, and sits *below* what the engine would allow most levels.
+- **4. The terminal CTA stops offering what the caller cannot use (frontend).** `resolvePlanPremiumExamMode`
+  takes **plan as well as profile**. **⚠️ It has ONE call site, not the four this kickoff first claimed** —
+  `collection-labels.ts:109`, reached from `getCollectionTerminalAction`, whose own single caller is
+  `collection-detail-page-client.tsx:2611`. Verified rather than repeated. **The `PARENT`-gets-nothing
+  branch must be handled in the same change** — the fix is resolving the right action per (profile, plan), not hiding the button.
+- **5. Analytics distinguish the new tier path.** The `sourceScope` and `sourceCount` metadata `v0.102.0`
+  added must carry through the non-Pro path unchanged. **⚠️ `sourceScope` RECORDS THE VERIFIED OUTCOME,
+  NEVER THE CLIENT'S CLAIM** — that distinction was a `v0.102.0` cold-agent finding and
+  `[CHECKPOINT — due 2026-09-28]` reads exactly this field.
+
+### Shipped
+
+- Challenge Quiz now accepts verified multi-note sources without adding a mode or sub-mode.
+- `V131` adds the internal multi-note usage counter; Free, Plus, and Pro allowances are configuration-backed.
+- **⚠️ CORRECTED DURING `/audit-diff` — THE DELIVERED CAP WAS SIZED FROM THE WRONG QUESTION COUNT, AND TWO DELIVERED TESTS PINNED THE DEFECT.** Free is capped at three sources; Plus and Pro use the shared level-derived formula — **but fed THIS quiz's own question count, not the Long Exam one.** As delivered, `resolveMaxChallengeSourceNotes` derived the cap from `resolveLongExamQuestionCount` (20/25/30 → 6/8/10) while a Challenge Quiz has **10/12/15** questions and, unlike Long Exam, had **no per-source floor**. A Plus learner selecting 6 sources for a 12-question quiz got **2 questions per source**; at the full cap of 8 it would have been **1 question for seven of the eight notes** — not mixed retrieval, and a direct contradiction of `ExamSourceLimitResolver`'s own guarantee.
+- **⚠️ RAISING THE QUESTION COUNT WAS NOT AVAILABLE AS A FIX, and the reason is worth keeping:** `+5 More Questions` is permitted on a multi-note Challenge session (only Board Exam blocks it) and `MAX_CHALLENGE_QUIZ_QUESTIONS` is **20**, so a Long-Exam-sized 25-question base would breach that ceiling before the learner added anything. **The owner's ruling — Plus uses the same level-derived formula as Pro rather than an artificial constant — is preserved exactly; only the input is corrected.**
+- **⚠️ AND THE MULTI-NOTE QUESTION COUNT IS FIXED AT 12, so the cap is a STABLE 4 (owner ruling, 2026-09-02).** The first correction left the cap derived from the score-adaptive single-note count (10 / 12 / 15 → 3 / 4 / 5), which meant **the cap moved between sessions on the same plan** while the prestart renders it as a stable promise — a learner shown "up to 5" could be refused at 5 after their score changed. Fixing the count removes the variance at its source and, as a side effect, removed a per-response repository lookup the first correction had introduced. **Pinned structurally, not by value:** the test asserts the score lookup is **never consulted**, because asserting the number alone would still pass if the cap went back to being score-derived and the fixture happened to land on 12.
+- **⚠️ THE TWO DELIVERED TESTS DID NOT MERELY MISS THIS — THEY ENCODED IT.** `startSession_plusUsesItsLevelDerivedSixNoteCap` asserted `maxSourceNotes == 6` and stubbed `generateChallengeQuiz(..., eq(2), ...)`, writing the below-floor split into the expectation. Both were **rewritten, not deleted**, and now assert the honest cap plus a per-source minimum. **Tenth test-that-claims-more-than-it-proves in seven releases, and the first delivered by Codex rather than written in-session.**
+- **A per-source floor guard was added and is pinned directly.** The corrected cap makes it unreachable through `startSession`, so a mutation removing it initially **survived** — `allocateQuestionsAcrossSources` is now package-private with two tests against it, because an unreachable, untested guard is exactly how the hole it closes gets silently re-opened by a later cap change.
+- **`resolveLongExamQuestionCount` was removed from `ChallengeQuizService` as dead code** once the cap stopped using it; a dead sizing helper beside a live one is how the next reader picks the wrong input.
+- Challenge starts reject over-cap source lists instead of silently dropping them, and persist verified `sourceCount` / `sourceScope` analytics.
+- Study Plan terminal actions resolve on both profile and plan, routing Free and Plus learners (including `PARENT`) to Challenge Quiz.
+
+### Explicitly out of scope
+
+- **⚠️ NO NEW QUIZ MODE and NO NEW METER** — both locked (§S2-L).
+- **⚠️ Pro is NOT weakened.** Long Exam, Board Exam Mode, difficulty control and the 30 Adaptive Practice
+  sessions are untouched.
+- **⚠️ Challenge Quiz length is NOT shortened** — recommended against on three grounds, chiefly that its
+  20-question ceiling is the only sustained retrieval practice Free has.
+- **The manual path's same-subject rule** stays, and this release makes the inconsistency reach more
+  learners. It is a carried Known limitation (§S2-X3), deferred by decision.
+- **Slice 4 (plan-scoped remediation) and Slice 5 (supporter combined quiz).**
+- **⚠️ Do NOT add, remove or reorder an onboarding FLOW step, and no code under `frontend/app/onboarding`**
+  — `[CHECKPOINT — due 2026-09-11]` is **9 days out**, the closest this constraint has been to its date.
+
+### Verification tier
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION.** The trigger is explicit and single: **this release
+changes money/quota semantics**, which the gate names outright. It is not the full three-agent test — no
+permission substrate, no cross-user read.
+
+**⚠️ CARRIED FORWARD, AND `v0.102.0` PROVED IT AGAIN THE HARD WAY:** its cold agent deleted a security check
+and passed **1894 tests**, because a correct refactor had moved the check behind a `@Mock` after its mutant
+had already been killed. **A PRE-EXTRACTION MUTATION KILL DOES NOT CARRY — re-run mutants after any
+extraction.** Also: `advisor()` **before** the prompt; verify *"X already does Y"* against code first;
+confirm tests **EXECUTED** via `target/surefire-reports/*.xml`; read `tsc --noEmit`'s own exit code; and
+**ask the cold agent to COUNT executed tests, not read them.**
+
+**⚠️ ROUTING: THIS RELEASE GOES TO CODEX, and that is a correction rather than a preference.** `v0.102.0`
+was implemented inline at **19 files and ~838 insertions**, which hit three separate "→ Codex" rows in
+`CLAUDE.md`'s table at once. The routing call was made at plan time and never re-evaluated as scope grew.
+**Re-run the routing test whenever implementation discovers a second service, a new class, or a surface
+that was not in the agreed plan.**
+
+**⚠️ A `[CHECKPOINT]` IS LIKELY OWED** — the tier numbers (2/month, 10/month, 3 notes) are proposals with no
+usage behind them, and `[CHECKPOINT — due 2026-09-28]` already reads the metric that would test them.
+Decide at signoff; **do NOT assume `v0.102.0`'s ruling carries.**
+
 ## v0.102.0 - Plan-Sourced Assessment
 
 **Status: Released** (kicked off 2026-09-01, signed off 2026-09-02, base branch `releases/v0.102.0`, cut

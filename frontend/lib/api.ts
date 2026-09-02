@@ -1358,6 +1358,8 @@ export type ChallengeQuizStartResponse = {
   currentQuestionIndex: number;
   sessionState: Record<string, unknown> | null;
   sourceNoteRefs?: LongExamSourceNoteRef[] | null;
+  /** Server-derived so the browser never re-implements plan/level source-cap policy. */
+  maxSourceNotes: number;
 };
 
 export type ChallengeQuizProgressRequest = {

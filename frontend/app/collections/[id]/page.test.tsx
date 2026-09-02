@@ -1531,7 +1531,7 @@ describe("CollectionDetailPageClient", () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
     expect(await screen.findByText("Try the exam mode")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Take the Long Exam" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Start Challenge Quiz" }).length).toBeGreaterThan(0);
   });
 
   it("renders only populated companion prose sections", async () => {
@@ -2438,27 +2438,27 @@ describe("CollectionDetailPageClient", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it("routes student collections to the Long Exam prescreen with the collection anchor", async () => {
+  it("routes Free student collections to the Challenge Quiz prescreen with the collection anchor", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const examButton = await screen.findByRole("button", { name: "Take the Long Exam" });
+    const examButton = await screen.findByRole("button", { name: "Start Challenge Quiz" });
     expect(examButton).toBeEnabled();
     expect(screen.getByText("Only Study Pack-ready notes will be included.")).toBeInTheDocument();
 
     fireEvent.click(examButton);
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/long-exam?collectionId=collection-1");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/challenge-quiz?collectionId=collection-1");
   });
 
   it("renders the terminal exam as the secondary primary-action CTA", async () => {
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const examButton = await screen.findByRole("button", { name: "Take the Long Exam" });
+    const examButton = await screen.findByRole("button", { name: "Start Challenge Quiz" });
     expect(examButton).toBeEnabled();
 
     fireEvent.click(examButton);
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/long-exam?collectionId=collection-1");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/challenge-quiz?collectionId=collection-1");
   });
 
   it("enables the premium exam CTA for Study Pack-ready notes that have no generated quiz", async () => {
@@ -2473,12 +2473,12 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const examButton = await screen.findByRole("button", { name: "Take the Long Exam" });
+    const examButton = await screen.findByRole("button", { name: "Start Challenge Quiz" });
     expect(examButton).toBeEnabled();
 
     fireEvent.click(examButton);
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/long-exam?collectionId=collection-1");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz?collectionId=collection-1");
   });
 
   it("advises review first when a plan note has not been practiced, then proceeds on confirm", async () => {
@@ -2492,7 +2492,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Take the Long Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Challenge Quiz" }));
 
     // Modal intercepts the launch; CTA does not route yet.
     expect(await screen.findByText("Review before the exam?")).toBeInTheDocument();
@@ -2500,7 +2500,7 @@ describe("CollectionDetailPageClient", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start the exam anyway" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/long-exam?collectionId=collection-1");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz?collectionId=collection-1");
   });
 
   it("does not advise review when every plan note has been practiced", async () => {
@@ -2514,23 +2514,23 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Take the Long Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Challenge Quiz" }));
 
     expect(screen.queryByText("Review before the exam?")).not.toBeInTheDocument();
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/long-exam?collectionId=collection-1");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz?collectionId=collection-1");
   });
 
-  it("routes professional collections to Interview Practice with the collection anchor", async () => {
+  it("routes Plus professional collections to Challenge Quiz with the collection anchor", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "PROFESSIONAL", planType: "PLUS" });
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Start Interview Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Challenge Quiz" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/interview-practice?collectionId=collection-1");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/challenge-quiz?collectionId=collection-1");
   });
 
-  it("routes board exam collections through the primary note studyPackId resolved from listNotes", async () => {
+  it("routes Free board-profile collections through the reachable Challenge Quiz note route", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM", planType: "FREE" });
     (listNotes as jest.Mock).mockResolvedValue([
       { ...note("note-2", "Dosage Calculations"), studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
@@ -2538,24 +2538,24 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Take the Board Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Challenge Quiz" }));
 
     expect(pushMock).toHaveBeenCalledWith(
-      "/study-packs/sp-2/challenge-quiz?collectionId=collection-1&entry=mode-selection",
+      "/notes/note-2/challenge-quiz?collectionId=collection-1",
     );
   });
 
-  it("disables the board exam collection CTA when the primary studyPackId cannot be resolved", async () => {
+  it("keeps the Free board-profile Challenge Quiz CTA reachable without a studyPackId lookup", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "BOARD_EXAM", planType: "FREE" });
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const examButton = await screen.findByRole("button", { name: "Take the Board Exam" });
-    expect(examButton).toBeDisabled();
+    const examButton = await screen.findByRole("button", { name: "Start Challenge Quiz" });
+    expect(examButton).toBeEnabled();
 
     fireEvent.click(examButton);
 
-    expect(pushMock).not.toHaveBeenCalled();
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-2/challenge-quiz?collectionId=collection-1");
   });
 
   it("resolves the hero eyebrow and back link through getCollectionLabels for the BOARD_EXAM profile", async () => {
@@ -2579,7 +2579,7 @@ describe("CollectionDetailPageClient", () => {
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
 
-    const examButton = await screen.findByRole("button", { name: "Take the Long Exam" });
+    const examButton = await screen.findByRole("button", { name: "Start Challenge Quiz" });
     expect(examButton).toBeDisabled();
     expect(screen.getByText("Generate a Study Pack for at least one note to start an exam.")).toBeInTheDocument();
 
@@ -2588,7 +2588,7 @@ describe("CollectionDetailPageClient", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it("does not render a terminal CTA for parent profiles", async () => {
+  it("renders the reachable Challenge Quiz terminal CTA for parent profiles", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ profileType: "PARENT", planType: "FREE" });
 
     render(<CollectionDetailPageClient collectionId="collection-1" />);
@@ -2596,12 +2596,7 @@ describe("CollectionDetailPageClient", () => {
     await screen.findByRole("heading", { name: "Midterm Study Plan" });
 
     expect(screen.queryByRole("button", { name: /Build Exam/i })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Take the Long Exam|Take the Board Exam|Start Interview Practice/ }),
-    ).not.toBeInTheDocument();
-    // No terminal action and no due concepts for this profile/data combination — the "Quick
-    // Actions" label itself must not render with nothing underneath it.
-    expect(screen.queryByText("Quick Actions")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Challenge Quiz" })).toBeEnabled();
   });
 
   it("hides admin publish action for non-admins", async () => {
