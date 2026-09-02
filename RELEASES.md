@@ -92,6 +92,36 @@ dead:** `QuizDeduplicationUtils` is pure normalized-question-string matching and
   null stamp **falls back to today's behaviour per service** — primary for Challenge,
   `resolveSourceStudyPackIds(session)` for Long Exam — and must neither attribute to nothing nor throw.
 
+
+### ⚠️ Amended at kickoff, after `advisor()` — three additions that change the implementation
+
+**A. `resolveSourceStudyPackIds` must be DEMOTED, not left standing beside the new path.** Verified: it has
+**exactly one caller**, `LongExamService:502` — the over-attributing loop itself. Once aggregation buckets by
+the per-item stamp, this method is either **dead** or **demoted to the null-stamp fallback path only**. The
+prompt must say which. **⚠️ LEFT AMBIGUOUS, THE LIKELY OUTCOME IS THAT BOTH RUN — per-source aggregation
+PLUS the old broadcast over the same session, which is WORSE THAN TODAY.** And the pre-declared fixture
+**does not catch that**, because a test asserting *"pack A got Shear"* still passes when the broadcast also
+wrote it.
+
+**⚠️ THE FIXTURE THEREFORE GAINS A FIFTH, NEGATIVE ASSERTION, and it is the one that discriminates a double
+write:** a third pack **C** whose `getKeyConcepts()` **contains** *Shear* but which contributed **no item to
+this session** must receive **NOTHING**. Under today's Long Exam behaviour it receives *Shear*; under a
+correct fix it receives nothing; under a both-paths-running implementation it receives *Shear* while every
+positive assertion still passes.
+
+**B. Board Exam attribution changes with the same fix, and that is IN SCOPE and intended.**
+`generateBoardExamQuizForSources:1375` is one of the stamp sites and `completeSession` is shared, so Board
+Exam gains per-source `ConceptHealth` attribution as a direct consequence. **Stated explicitly because it is
+a behaviour change on a PRO-quota path** — recording it here rather than letting the cold agent find an
+unstated change on a paid surface. **No quota, entitlement or question-count change accompanies it.**
+
+**C. A matching group must never span two source packs — assert it, do not assume it.**
+`shuffleQuestionOrderPreservingMatchingGroups:2180` builds blocks from **contiguous runs sharing a
+`questionGroup` string**. Groups are generated per source, so in practice every item in a block shares a
+stamp — **but two sources independently emitting the same group label (`"Group 1"`) adjacent at a merge
+boundary would fuse into ONE block spanning two stamps**, making that block's provenance ambiguous. **Fail
+loudly rather than silently picking one.**
+
 ### Anti-drift
 
 **⚠️ Out of scope, each named in §15 or §16 of the audit:** cross-pack **canonical concept identity**
