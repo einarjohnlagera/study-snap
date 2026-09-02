@@ -61,7 +61,7 @@ Two defences, and both are needed:
 
 - timed quiz mode
 - available on Free, Plus, and Pro with plan-based monthly limits
-- A verified Study Plan can source one Challenge Quiz from several notes without creating a new mode: Free is capped at 3 sources and 2 such starts/month; Plus uses the server-provided cap (a stable 4, from the fixed 12-question multi-note count) and 10 starts/month. Pro retains its premium modes and receives the same level-derived source cap.
+- A verified Study Plan can source one Challenge Quiz from several notes without creating a new mode: Free is capped at 3 sources and 2 such starts/month; Plus uses the server-provided cap (a stable 6, from the fixed 18-question multi-note count) and 10 starts/month. Pro retains its premium modes and receives the same level-derived source cap.
 - The Challenge start response supplies `maxSourceNotes`; the browser renders that value rather than replicating plan or learner-level cap logic.
 - generated separately from Quick Review
 - uses the shared mode-selection entry

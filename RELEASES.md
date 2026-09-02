@@ -2,8 +2,8 @@
 
 ## v0.103.0 - Mixed Retrieval for Free and Plus
 
-**Status: In Progress** (kicked off 2026-09-02, base branch `releases/v0.103.0`, cut from `main` after
-`v0.102.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-02, base branch `releases/v0.103.0`, cut from
+`main` after `v0.102.0` merged and tagged)
 
 Theme: practising across several notes at once should not be a thing only Pro learners have ever seen.
 
@@ -95,6 +95,28 @@ separate monetization contract, unchanged.** Nothing here adds, widens or remove
 - **⚠️ A stale-closure warning was introduced and fixed rather than accepted** — the new state was missing from an effect's dependency array, which is the audit checklist's own item 4.
 - **`PLANS.md`'s PRO multi-note row is corrected.** *"200 multi-note Challenge Quiz starts / month"* was a delivery default mirroring the challenge-quiz limit, then written up as an entitlement nobody chose.
 - **Green:** 1910 backend tests, 2092 frontend tests, `tsc --noEmit` exit 0, lint back to its 15 pre-existing warnings.
+
+### Pre-signoff cold agent — findings and fixes
+
+**Pre-declared tier: ONE SCOPED COLD AGENT, framed as falsification.** It ran 2026-09-02 against seven claims, **falsified two**, and found a defect more severe than either. Claims 1, 3, 4 and 6 held under its own mutation testing.
+
+- **⚠️ WORST FINDING, AND MY CAP DECISION CAUSED IT: `+5 More Questions` WAS DETERMINISTICALLY DEAD ON EVERY MULTI-NOTE SESSION, AFTER PAYING FOR AN LLM CALL.** At 18 questions the headroom is `20 − 18 = 2`, and a batch is rejected unless it yields `MIN_NEW_QUESTIONS_AFTER_DEDUP = 3` new questions — **so it generated, threw, and the frontend swallowed the failure into "no more questions".** The button was live, cost a call, and could never succeed. **⚠️ It also falsified a javadoc I had written in this same release claiming `+5` is allowed on multi-note.** Fixed by refusing **before** generating whenever the headroom cannot produce a viable batch — a general guard, not a multi-note special case.
+- **⚠️ CLAIM 7 FALSIFIED — THE USER-ROW LOCK WAS UNCONDITIONAL AND HELD ACROSS LLM GENERATION.** `findByIdForUpdate` fired on **every** `startSession`, single-note Challenge and Board Exam included, and `@Transactional` held that `PESSIMISTIC_WRITE` until commit — **serializing an account's other quiz starts and blocking `AskCompanionService` and `LinkedLearnerService`, which write the same row.** Now taken **only on the multi-note path**, where a counter is actually at stake, and still before the ceiling assert.
+- **⚠️ AND THE LOCK HAD ZERO COVERAGE: the agent deleted it entirely and all 1910 backend tests passed.** The concurrency guarantee rested on nothing. Now pinned by two tests — one asserting the lock is **not** taken single-note, one asserting `InOrder` that it precedes the usage read the ceiling depends on. **Both mutants die; so does reverting the `+5` guard.**
+- **⚠️ CLAIM 5 FALSIFIED, and recorded rather than fixed:** `resolveExistingChallengeSession` returns **before** sources are resolved, so a caller with a stuck `GENERATING` session on the primary pack gets a 200 with their old single-note session and their `additionalStudyPackIds` silently discarded. **The frontend masks the `IN_PROGRESS` case but not `GENERATING`.** Narrow — it needs a stuck session — and fixing it means reordering a short-circuit that predates this release. See Known limitations.
+- **Executed counts read from `target/surefire-reports/*.xml` after an explicit `test-compile` (exit 0):** 1913 backend, 2092 frontend, `tsc --noEmit` exit 0, lint at its 15 pre-existing warnings.
+- **⚠️ Stale comments from the 12→18 change were found and corrected** — the javadoc still said `12 / 3 = 4` beside an assertion of 6.
+
+### Known limitations
+
+- **⚠️ A stuck `GENERATING` session silently discards multi-note sources (cold agent, CLAIM 5).** `resolveExistingChallengeSession` short-circuits before sources are resolved, so such a caller gets a 200 with their old single-note session and no error. **The frontend masks the `IN_PROGRESS` case but not `GENERATING`.** Narrow, needs a stuck session, and the fix reorders a short-circuit that predates this release — **left rather than reordered under signoff time pressure.**
+- **The multi-note ceiling is invisible until it is hit.** `multi_note_generations` reaches no DTO, no `/me/plan` field and no prestart copy, so a Free learner discovers their 2/month only via a 403. **The counter was deliberately not rendered as a meter; disclosing the limit is a separate copy decision.**
+- **Board-Exam-flavoured errors on the Challenge path.** `resolveBoardExamSourceNoteRefs` is reused verbatim, so an unowned `sourceCollectionId` or a subject mismatch raises `InvalidBoardExamSourceException` on a request that never mentioned Board Exam. Wrong error contract, correct behaviour.
+- **Prestart timer copy is wrong for multi-note** — the card says "Timer: 10 minutes" while an 18-question session gets `18 × 90s = 27 minutes`. **Pre-existing copy, newly wrong.**
+- **The CTA and the page read the plan from different sources** — the collection page prefers the usage summary, the challenge page uses the auth cookie alone. A lapsed PRO cookie can still show "Start Challenge Quiz" and land on Board Exam setup.
+- **`page.tsx:516-523` is untested** — the `sharedModeSelectionEntryRequested` branch of the routing fix survives mutation. Reachable via `entry=mode-selection` links.
+- **Per-source allocation is computed twice** and both floors are unreachable through `startSession` under the current cap.
+- **Multi-note Challenge bypasses the question bank**, weakening the distinction between repeatable custom practice and freshly generated assessment. Tracked in the assessment audit as an integrity item.
 
 ### Carried out of this release, by the approved sequence
 

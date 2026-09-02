@@ -308,7 +308,7 @@ The Study Plan premium-exam launch carries `collectionId` in the URL, not a call
 
 - Long Exam: primary note route plus additional Study Pack ids, capped by the learner-level-derived `maxSourceNotes` the server returns (6 / 8 / 10 sources including the primary). The start request carries `sourceCollectionId`, which the server re-verifies — see `quiz.md`
 - Board Exam: primary Study Pack route plus up to 2 additional Study Pack ids
-- Challenge Quiz: Free/Plus plan launch plus optional additional Study Pack ids. The server supplies the cap (Free 3 including primary; Plus a stable 4, from the fixed 12-question multi-note count rather than Long Exam's) and verifies the collection claim before accepting mixed subjects.
+- Challenge Quiz: Free/Plus plan launch plus optional additional Study Pack ids. The server supplies the cap (Free 3 including primary; Plus a stable 6, from the fixed 18-question multi-note count rather than Long Exam's) and verifies the collection claim before accepting mixed subjects.
 - Interview Practice: primary note route plus up to 2 additional note ids
 
 If the collection cannot be loaded from a prescreen, the exam falls back to its normal single-note/same-subject setup. The Teacher Exam Builder path is unchanged and still receives the collection id plus quiz-ready note ids.

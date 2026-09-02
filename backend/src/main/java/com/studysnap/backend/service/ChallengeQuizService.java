@@ -216,10 +216,6 @@ public class ChallengeQuizService {
             return existingSession.get();
         }
 
-        // The counter is per user, while the primary Study Pack lock is per note. Lock the user row
-        // before checking the multi-note ceiling so concurrent starts from different notes cannot
-        // both observe the same remaining allowance.
-        userRepository.findByIdForUpdate(userId);
         int maxChallengeSourceNotes = resolveMaxChallengeSourceNotes(planType);
         List<UUID> additionalStudyPackIds = MODE_BOARD_EXAM.equals(selectedMode)
                 ? resolveAdditionalBoardExamStudyPackIds(request, studyPackId)
@@ -230,6 +226,13 @@ public class ChallengeQuizService {
                 : 0;
         int usedThisMonth = assertChallengeQuizQuotaAvailable(userId, planType);
         if (multiNoteChallenge) {
+            // ⚠️ CONDITIONAL, and that matters. The counter is per user while the Study Pack lock is per
+            // note, so concurrent starts from different notes could otherwise both see the same remaining
+            // allowance. But taking it unconditionally put a PESSIMISTIC_WRITE on the user row for EVERY
+            // Challenge and Board Exam start, held across LLM generation by @Transactional — serializing
+            // that account's other quiz starts and blocking anything else that writes the same row.
+            // Only the multi-note path has a counter at stake, so only it takes the lock.
+            userRepository.findByIdForUpdate(userId);
             assertMultiNoteQuotaAvailable(userId, planType);
         }
         int boardExamUsedThisMonth = 0;
@@ -780,7 +783,12 @@ public class ChallengeQuizService {
         }
 
         List<QuizItem> existingQuiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        if (existingQuiz.size() >= MAX_CHALLENGE_QUIZ_QUESTIONS) {
+        // ⚠️ Refuse BEFORE generating when the remaining headroom cannot produce a viable batch, not
+        // after paying for the LLM call. A batch is rejected downstream unless it yields at least
+        // MIN_NEW_QUESTIONS_AFTER_DEDUP new questions, so an 18-question multi-note session — headroom
+        // 2 — could never succeed: it generated, threw, and the frontend swallowed the failure into
+        // "no more questions". The button was live, cost a call, and was deterministically dead.
+        if (MAX_CHALLENGE_QUIZ_QUESTIONS - existingQuiz.size() < MIN_NEW_QUESTIONS_AFTER_DEDUP) {
             throw new AppException("MAX_QUESTIONS_REACHED",
                     "This session has reached the maximum of " + MAX_CHALLENGE_QUIZ_QUESTIONS + " questions.",
                     org.springframework.http.HttpStatus.CONFLICT);
@@ -1307,11 +1315,12 @@ public class ChallengeQuizService {
      * questions to be worth including.
      *
      * <p>⚠️ It is also STABLE, which the score-adaptive count would not have been: the cap is always
-     * {@code 12 / 3 = 4} for Plus and Pro, and {@code min(3, 4) = 3} for Free.
+     * {@code 18 / 3 = 6} for Plus and Pro, and {@code min(3, 6) = 3} for Free.
      *
-     * <p>⚠️ Raising the question count instead is NOT the fix: {@code +5 More Questions} is allowed on a
-     * multi-note Challenge session (only Board Exam blocks it) and {@link #MAX_CHALLENGE_QUIZ_QUESTIONS}
-     * is 20, so a 25-question base would breach that ceiling before the learner added anything.
+     * <p>⚠️ Raising the question count is NOT the fix: {@link #MAX_CHALLENGE_QUIZ_QUESTIONS} is 20, so a
+     * 25-question base would breach that ceiling outright. At 18 the headroom is 2, which is below the
+     * minimum viable batch — so {@code +5 More Questions} is correctly refused up front on a multi-note
+     * session rather than generating a batch that cannot pass.
      *
      * <p>The owner's ruling — Plus uses the same level-derived formula as Pro rather than an artificial
      * constant — is preserved exactly. Only the input is corrected.
