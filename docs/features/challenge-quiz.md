@@ -78,11 +78,13 @@ Study Plan / Review Set detail resolves on both profile and plan: Free and Plus 
   `shortExam` with the count it expected. Below either floor the session FAILS and **both meters are
   reversed**. This applies to the legacy single-note path too, which previously failed strictly on any
   shortfall.
-- **The warm question pool is never served to a Review Set Board Exam**, mirroring the `v0.102.0` Long Exam
+- **The warm question pool is never served to a Review Set Board Exam**, mirroring the `v0.105.0` Long Exam
   rule: a sampled multi-source exam must not be served primary-only pooled questions while its session
-  records the sampled sources. On the legacy single-note path the pool is used, but **only after the same
-  answer-key filter the generated paths apply** — a sample overlapping the note's own Quiz tab is abandoned
-  in favour of normal generation rather than served short.
+  records the sampled sources. On the legacy single-note path the pool is used, and **the pool
+  itself now excludes the note's own saved quiz** — at generation time, so new pools cannot contain the
+  answer key, and again at sampling time, so pools built before that fix cannot serve it either. The
+  sampling filter runs BEFORE the have-we-got-enough check, so a leaked question is never a candidate and no
+  clean pool row is spent rejecting it.
 - Board Exam quota exhaustion remains separate from Pro-only feature gating
 - monthly quiz-limit exhaustion is separate from Pro-only feature gating
 

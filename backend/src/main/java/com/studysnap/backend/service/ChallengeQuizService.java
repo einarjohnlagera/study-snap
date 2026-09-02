@@ -315,26 +315,12 @@ public class ChallengeQuizService {
                         quizCount,
                         StudyPackGenerationContextResolver.effectiveCurriculumLevel(generationContext)
                 );
-                // ⚠️ THE POOL IS NOT EXEMPT FROM THE ANSWER-KEY FILTER. Pre-existing hole, closed here:
-                // the generated paths strip questions that already sit on the note's Quiz tab — where the
-                // learner can read them WITH their answers — but the pooled path served its sample raw. A
-                // leaked item both hands over the answer key and corrupts ConceptHealth, which has been
-                // locked since v0.37.0 to move only from genuine assessment.
-                // ⚠️ ON OVERLAP WE ABANDON THE POOL RATHER THAN SHIP SHORT. The pool is a cost
-                // optimisation, not a product promise; a Board Exam quietly losing questions to a filter
-                // would be a silent quality regression on a PRO path, so a sample that cannot fill the
-                // exam cleanly falls through to normal generation.
-                if (pooledQuestions.isPresent()) {
-                    List<QuizItem> answerKeySafePool = QuizDeduplicationUtils.uniqueQuestions(
-                            pooledQuestions.get(),
-                            QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(
-                                    extractQuestionTexts(studyPack.getQuiz())
-                            )
-                    );
-                    pooledQuestions = answerKeySafePool.size() < quizCount
-                            ? Optional.empty()
-                            : Optional.of(answerKeySafePool);
-                }
+                // ⚠️ THE ANSWER-KEY FILTER FOR POOLED QUESTIONS LIVES IN ExamQuestionPoolService, NOT HERE.
+                // It was first written at this call site and that was the wrong layer twice over: it would
+                // have filtered AFTER sampleQuestions had already marked those questions served, burning a
+                // whole exam's worth of clean pool rows on every hit, and it would have left the identical
+                // hole open on the Long Exam pooled path. The pool now excludes the note's saved quiz at
+                // both generation and sampling time, so anything returned here is already answer-key safe.
                 if (pooledQuestions.isPresent()) {
                     QuickReviewSessionEntity session = buildGeneratingSession(
                             userId,
@@ -494,6 +480,9 @@ public class ChallengeQuizService {
             if (multiNoteChallenge) {
                 userUsageService.incrementMultiNoteGeneration(userId, saved.getCreatedAt());
             }
+            // ⚠️ UNREACHABLE MONEY CODE, KEPT ONLY BECAUSE REMOVING IT WIDENS A SIGNOFF DIFF. board_exam
+            // cannot reach here — the tripwire above throws first — so this charge never fires. Do not read
+            // it as the Board Exam charge; that lives in the early return, inside the request transaction.
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
                 userUsageService.incrementBoardExamGenerationBy(userId, BOARD_EXAM_QUOTA_UNITS_PER_SESSION, saved.getCreatedAt());
             }

@@ -1476,41 +1476,6 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void startSession_boardExamAbandonsAPooledSampleThatLeaksAQuestionFromTheNotesQuizTab() {
-        // ⚠️ PRE-EXISTING HOLE, CLOSED IN THIS RELEASE. Both generated Board Exam paths strip questions
-        // that already sit on the note's Quiz tab — where the learner can read them WITH their answers —
-        // but the warm-pool path served its sample raw. A leaked item hands over the answer key AND
-        // corrupts ConceptHealth, locked since v0.37.0 to move only from genuine assessment.
-        // The pool is a cost optimisation, not a product promise, so an overlapping sample is ABANDONED
-        // rather than served short: the exam falls through to normal generation.
-        UUID userId = UUID.randomUUID();
-        StudyPackEntity studyPack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
-        // One of the pool's twelve questions is already on the Quiz tab, answer visible.
-        studyPack.setQuiz(List.of(
-                new QuizItem("Question 3", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
-        ));
-
-        stubBoardExamStartDependencies(userId, studyPack.getId(), studyPack);
-        stubReviewSetBoardExamGeneration(userId);
-        when(examQuestionPoolService.sampleQuestions(eq(studyPack.getId()), any(), anyInt(), any()))
-                .thenReturn(Optional.of(buildQuiz(12)));
-
-        ChallengeQuizStartResponse response = challengeQuizService.startSession(
-                studyPack.getId().toString(), userId, new ChallengeQuizStartRequest("board_exam", null));
-
-        // Not served immediately from the pool — it went to generation instead.
-        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
-        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
-        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
-        assertThat(persistedQuiz(persisted)).isNotEmpty();
-        assertThat(persistedQuiz(persisted))
-                .extracting(QuizItem::question)
-                .doesNotContain("Question 3");
-        verify(quizGenerationService, atLeastOnce())
-                .generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
-    }
-
-    @Test
     void startSession_createsMultiNoteBoardExamWithSourceRefs() {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();

@@ -192,11 +192,21 @@ production, and 1979 tests were green while it was there.**
   loudly instead of falling through. The **legacy single-note rule is pinned in both directions** by
   `startSession_legacySingleNoteBoardExamShipsShortAboveTheFloorInsteadOfFailingStrictly` (11 of 12 ships,
   marked short) and `...StillFailsBelowTheQuestionFloorAndReversesBothMeters` (8 fails and refunds).
-- **The pooled Board Exam path now applies the answer-key filter — a pre-existing hole, closed here.** A
-  warm-pool sample could emit a question sitting on the note's Quiz tab with its answer visible, which both
-  hands over the answer key and corrupts `ConceptHealth`. **An overlapping sample is ABANDONED, never served
-  short:** the pool is a cost optimisation, not a product promise, so the exam falls through to normal
-  generation. Pinned by `startSession_boardExamAbandonsAPooledSampleThatLeaksAQuestionFromTheNotesQuizTab`.
+- **The exam question POOL now excludes the note's own saved quiz — a pre-existing hole, and the first fix
+  for it was written at the wrong layer.** A pooled Board Exam or Long Exam could emit a question sitting on
+  the note's Quiz tab with its answer visible, which both hands over the answer key and corrupts
+  `ConceptHealth`. **The fix was initially written in `ChallengeQuizService`, filtering the RETURNED sample,
+  and that was wrong twice over:** `sampleQuestions` marks its sample **served before returning it**, so
+  dropping one leaked item would have burned a whole exam's worth of clean rows on every hit — out of a Board
+  Exam pool of **24** — and it left the identical hole open on the Long Exam pooled path. It now lives in
+  `ExamQuestionPoolService`, which serves both modes: the builder passes the saved quiz as both prompt hint
+  and hard filter so **new pools cannot contain the answer key**, and sampling filters again **before** the
+  have-we-got-enough check so **pools built earlier cannot serve it and nothing is spent rejecting it**.
+  Verified: `generateBoardExamPool` and the Long Exam builder both passed `List.of()`, so overlap was never
+  rare. Pinned by three tests in `ExamQuestionPoolServiceTest`, each mutation-verified —
+  `...neverServesAQuestionThatIsAlreadyOnTheStudyPacksQuizTab`,
+  `...burnsNoPoolRowsWhenTheAnswerKeyFilterLeavesTooFew` (which is what pins the ORDER of the filter against
+  the count check) and `generatePoolAsync_buildsTheBoardExamPoolWithTheStudyPacksOwnQuizDisallowed`.
 - **`boardExamQuotaReserved` no longer reaches the wire, and the test pins BOTH halves.** It is the sweeper's
   only record that a crashed Board Exam still owes a refund, so it must survive on the row; it is internal
   bookkeeping, so it has no business in the response. It was never writable — `mergeSessionState` is an
