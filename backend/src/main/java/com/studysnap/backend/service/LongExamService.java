@@ -331,6 +331,24 @@ public class LongExamService {
                     throw new LongExamGenerationFailedException();
                 }
 
+                // ⚠️ FREE-QUOTA RACE GUARD. Generation runs INSIDE this transaction and can take longer
+                // than the stale-session sweeper's cutoff (a 10-source exam is bounded at 10 x 240s = 40
+                // minutes against a 30-minute cutoff, and the transaction has no timeout). The sweeper can
+                // therefore mark this session FAILED and REFUND its quota unit while we are still
+                // generating. Without this guard the write below resurrects the refunded session as
+                // IN_PROGRESS with a full quiz — a free, usable exam — because the entity carries no
+                // @Version and the status was last read before generation began.
+                // ⚠️ LOCK FIRST, THEN RE-READ. findByIdForUpdate serialises against the sweeper, but it
+                // returns the instance already in the persistence context, so its getStatus() can still be
+                // a stale GENERATING. The scalar projection is what actually reaches the database.
+                quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                        .orElseThrow(LongExamSessionNotFoundException::new);
+                if (quickReviewSessionRepository.findStatusById(sessionId)
+                        .filter(QuickReviewSessionStatus.GENERATING::equals)
+                        .isEmpty()) {
+                    return null;
+                }
+
                 markSessionReady(session, longExamQuiz, difficulty);
                 markShortExam(session, expectedQuestionCount, longExamQuiz.size());
                 QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
@@ -725,6 +743,12 @@ public class LongExamService {
     private void markSessionReady(QuickReviewSessionEntity session, List<QuizItem> quiz, String difficulty) {
         List<LongExamSourceNoteRef> sourceNoteRefs = extractSourceNoteRefs(session.getSessionState());
         Map<String, Object> state = QuizSessionStateUtils.withQuiz(quiz, buildInitialSessionState(difficulty, sourceNoteRefs));
+        // ⚠️ CARRY THE QUOTA FLAGS FORWARD RATHER THAN REGENERATING THEM. buildInitialSessionState writes
+        // longExamQuotaReserved=true and knows nothing of longExamQuotaReversed, so rebuilding state here
+        // would re-arm a refund that has already been paid out and erase the idempotency stamp that stops
+        // it happening twice. This is a defect independent of the race guard above: ANY future path that
+        // marks a session ready would otherwise silently reopen the refund.
+        carryForwardQuotaFlags(session.getSessionState(), state);
         state.put(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS, OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond());
         state.put(SESSION_STATE_TIME_LIMIT_SECONDS, quiz.size() * SECONDS_PER_QUESTION);
 
@@ -738,6 +762,18 @@ public class LongExamService {
         session.setSessionMetadata(null);
         session.setSessionState(state);
         session.setCompletedAt(null);
+    }
+
+    private void carryForwardQuotaFlags(Map<String, Object> previousState, Map<String, Object> nextState) {
+        if (previousState == null) {
+            return;
+        }
+        for (String key : List.of(SESSION_STATE_LONG_EXAM_QUOTA_RESERVED, SESSION_STATE_LONG_EXAM_QUOTA_REVERSED)) {
+            Object value = previousState.get(key);
+            if (value != null) {
+                nextState.put(key, value);
+            }
+        }
     }
 
     private void markShortExam(QuickReviewSessionEntity session, int expectedQuestionCount, int actualQuestionCount) {

@@ -126,6 +126,13 @@ class LongExamServiceTest {
             });
             return null;
         }).when(generationRecoveryRowWriter).failLongExamSession(any(UUID.class));
+        // Default: the session is still GENERATING when generation finishes — the normal case. The race
+        // test overrides findStatusById to FAILED, so the guard is exercised in BOTH directions and this
+        // default cannot hide it.
+        lenient().when(quickReviewSessionRepository.findByIdForUpdate(any(UUID.class)))
+            .thenAnswer(invocation -> quickReviewSessionRepository.findById(invocation.getArgument(0)));
+        lenient().when(quickReviewSessionRepository.findStatusById(any(UUID.class)))
+            .thenReturn(Optional.of(QuickReviewSessionStatus.GENERATING));
         lenient().when(userUsageService.getMonthlyUsage(any(UUID.class), any(OffsetDateTime.class)))
             .thenReturn(UserUsageService.MonthlyUsage.zero());
         lenient().when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
@@ -1428,6 +1435,89 @@ class LongExamServiceTest {
         verify(generationRecoveryRowWriter, never()).failLongExamSession(any(UUID.class));
     }
 
+
+    @Test
+    void asyncGeneration_doesNotResurrectASessionTheSweeperAlreadyFailedAndRefunded() {
+        // ⚠️ THE TEST THE WHOLE RELEASE LACKED. Generation runs inside the transaction and can outlast the
+        // stale-session sweeper's cutoff, so the sweeper can FAIL and REFUND a session while generation is
+        // still running. Without the lock-then-scalar-read guard, the async completion resurrects that
+        // refunded session as IN_PROGRESS with a full quiz — a free, usable exam — and rebuilding the
+        // session state re-arms the reservation flag while erasing the reversal stamp.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
+        StudyPackGenerationContext context = buildGenerationContext(LearnerLevel.COLLEGE);
+        List<QuickReviewSessionStatus> savedStatuses = new ArrayList<>();
+        List<QuickReviewSessionEntity> savedSessions = new ArrayList<>();
+
+        stubStartSession(userId, studyPackId, studyPack, context, buildQuiz(25), savedStatuses, savedSessions);
+
+        LongExamStartResponse response = longExamService.startSession(
+            studyPackId.toString(), userId, new LongExamStartRequest(null));
+        QuickReviewSessionEntity generating = savedSessions.getFirst();
+        when(quickReviewSessionRepository.findById(response.sessionId())).thenReturn(Optional.of(generating));
+
+        // The sweeper wins the race: the row is FAILED and refunded before generation finishes.
+        when(quickReviewSessionRepository.findByIdForUpdate(response.sessionId()))
+            .thenReturn(Optional.of(generating));
+        when(quickReviewSessionRepository.findStatusById(response.sessionId()))
+            .thenReturn(Optional.of(QuickReviewSessionStatus.FAILED));
+        savedStatuses.clear();
+        savedSessions.clear();
+
+        dispatchedTask.run();
+
+        // No resurrection: the quiz is never installed and the session is not written back to IN_PROGRESS.
+        assertThat(savedStatuses).doesNotContain(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(savedSessions).isEmpty();
+        // And the reversal stamp is never erased, so a second refund can never be armed.
+        assertThat(generating.getSessionState()).doesNotContainKey("longExamQuotaReversed");
+    }
+
+    @Test
+    void markSessionReady_carriesQuotaFlagsForwardInsteadOfReArmingARefund() {
+        // ⚠️ Independent of the race: any path that marks a session ready must not regenerate the quota
+        // flags. buildInitialSessionState writes longExamQuotaReserved=true and drops longExamQuotaReversed.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildSession(
+            userId, studyPackId, QuickReviewSessionStatus.GENERATING, List.of());
+        Map<String, Object> state = new LinkedHashMap<>(session.getSessionState());
+        state.put("longExamQuotaReserved", true);
+        state.put("longExamQuotaReversed", true);
+        session.setSessionState(state);
+
+        ReflectionTestUtils.invokeMethod(
+            longExamService, "markSessionReady", session, buildQuiz(25), DEFAULT_DIFFICULTY);
+
+        assertThat(session.getSessionState()).containsEntry("longExamQuotaReversed", true);
+        assertThat(session.getSessionState()).containsEntry("longExamQuotaReserved", true);
+    }
+
+
+    @Test
+    void startSession_persistsTheQuotaReservationFlagThatTheRefundPathReads() {
+        // ⚠️ CONNECTIVE TEST. The refund is written by buildInitialSessionState here and read by
+        // GenerationRecoveryRowWriter.markLongExamSessionFailed. Both sides were tested in isolation —
+        // the writer's tests never asserted the flag, and the reader's tests hand-built the state map —
+        // so deleting the write disabled every refund in the product and 1938 tests stayed green.
+        // Assert the real persisted state carries the exact key the refund path keys on.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
+        List<QuickReviewSessionStatus> savedStatuses = new ArrayList<>();
+        List<QuickReviewSessionEntity> savedSessions = new ArrayList<>();
+
+        stubStartSession(userId, studyPackId, studyPack, buildGenerationContext(LearnerLevel.COLLEGE),
+            buildQuiz(25), savedStatuses, savedSessions);
+
+        longExamService.startSession(studyPackId.toString(), userId, new LongExamStartRequest(null));
+
+        assertThat(savedSessions.getFirst().getSessionState())
+            .containsEntry(LongExamService.SESSION_STATE_LONG_EXAM_QUOTA_RESERVED, true);
+        verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+    }
+
     private void stubStartSession(
         UUID userId,
         UUID studyPackId,
@@ -1445,7 +1535,8 @@ class LongExamServiceTest {
         )).thenReturn(Optional.empty());
         when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
         when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
-        when(quizGenerationService.generateLongExamParallel(
+        // lenient: callers that only exercise the START path never run the dispatched task.
+        lenient().when(quizGenerationService.generateLongExamParallel(
             any(), any(), any(), any(), anyInt(), any(), any(), any()
         )).thenReturn(generatedQuiz);
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
