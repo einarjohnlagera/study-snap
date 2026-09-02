@@ -598,10 +598,7 @@ export default function LongExamPage() {
             const requestBody = collectionId
                 ? {sourceCollectionId: collectionId}
                 : selectedAdditionalStudyPackIds.length > 0
-                ? {
-                    additionalStudyPackIds: selectedAdditionalStudyPackIds,
-                    ...(collectionId ? {sourceCollectionId: collectionId} : {}),
-                }
+                ? {additionalStudyPackIds: selectedAdditionalStudyPackIds}
                 : {};
             const response = await startLongExam(studyPackId, requestBody);
             setLongExamUsedThisMonth(response.usedThisMonth);

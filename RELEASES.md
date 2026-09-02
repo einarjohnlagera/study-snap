@@ -2,8 +2,8 @@
 
 ## v0.105.0 - Curriculum-Scale Exams
 
-**Status: In Progress** (kicked off 2026-09-02, base branch `releases/v0.105.0`, cut from `main` after
-`v0.104.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-02, base branch `releases/v0.105.0`, cut from
+`main` after `v0.104.0` merged and tagged)
 
 Theme: an exam over a 77-note Subject Plan should be built from the whole plan, not from the eight notes an
 arithmetic accident left reachable.

@@ -77,7 +77,14 @@ public class GenerationRecoveryRowWriter {
                 });
     }
 
-    /** Shared by the async catch and the stale-session sweeper so every FAILED transition refunds once. */
+    /**
+     * Fails a GENERATING Long Exam session from the async generation catch, refunding its quota unit once.
+     *
+     * <p>⚠️ The shared piece is {@link #markLongExamSessionFailed}, NOT this method. This one has a single
+     * caller ({@code LongExamService}'s async catch); the stale-session sweeper reaches the same private
+     * writer through {@code recoverLongExamSession}. An earlier javadoc claimed both callers used this
+     * method, which would let a reader reason wrongly about sweeper behaviour.
+     */
     @Transactional
     public void failLongExamSession(UUID sessionId) {
         quickReviewSessionRepository.findByIdForUpdate(sessionId)
