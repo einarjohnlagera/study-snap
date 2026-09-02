@@ -6,9 +6,38 @@ import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
 import com.studysnap.backend.dto.QuizItem;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class QuizSessionReviewUtilsTest {
+
+    @Test
+    void computeConceptBreakdownBySourceStudyPack_keepsSharedConceptsSeparatedAtAbsoluteIndexes() {
+        String sourceA = UUID.randomUUID().toString();
+        String sourceB = UUID.randomUUID().toString();
+        List<QuizItem> quiz = List.of(
+                quizItem("A Shear", 0, "Shear", null).withSourceStudyPackId(sourceA),
+                quizItem("A Moment", 0, "Moment", null).withSourceStudyPackId(sourceA),
+                quizItem("B Shear", 0, "Shear", null).withSourceStudyPackId(sourceB),
+                quizItem("B Moment", 0, "Moment", null).withSourceStudyPackId(sourceB)
+        );
+
+        Map<String, List<ChallengeQuizConceptStatResponse>> breakdownBySource =
+                QuizSessionReviewUtils.computeConceptBreakdownBySourceStudyPack(
+                        quiz,
+                        Map.of(0, 0, 1, 1, 2, 1, 3, 0),
+                        Map.of(),
+                        Map.of(),
+                        Map.of()
+                );
+
+        assertThat(breakdownBySource.get(sourceA))
+                .extracting(stat -> stat.concept() + ":" + stat.correctAnswers() + "/" + stat.totalQuestions())
+                .containsExactly("Shear:1/1", "Moment:0/1");
+        assertThat(breakdownBySource.get(sourceB))
+                .extracting(stat -> stat.concept() + ":" + stat.correctAnswers() + "/" + stat.totalQuestions())
+                .containsExactly("Shear:0/1", "Moment:1/1");
+    }
 
     @Test
     void computeConceptsWithMissesIncludesPartiallyCorrectConceptsOnly() {
