@@ -1476,6 +1476,41 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void startSession_boardExamAbandonsAPooledSampleThatLeaksAQuestionFromTheNotesQuizTab() {
+        // ⚠️ PRE-EXISTING HOLE, CLOSED IN THIS RELEASE. Both generated Board Exam paths strip questions
+        // that already sit on the note's Quiz tab — where the learner can read them WITH their answers —
+        // but the warm-pool path served its sample raw. A leaked item hands over the answer key AND
+        // corrupts ConceptHealth, locked since v0.37.0 to move only from genuine assessment.
+        // The pool is a cost optimisation, not a product promise, so an overlapping sample is ABANDONED
+        // rather than served short: the exam falls through to normal generation.
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+        // One of the pool's twelve questions is already on the Quiz tab, answer visible.
+        studyPack.setQuiz(List.of(
+                new QuizItem("Question 3", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
+        ));
+
+        stubBoardExamStartDependencies(userId, studyPack.getId(), studyPack);
+        stubReviewSetBoardExamGeneration(userId);
+        when(examQuestionPoolService.sampleQuestions(eq(studyPack.getId()), any(), anyInt(), any()))
+                .thenReturn(Optional.of(buildQuiz(12)));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                studyPack.getId().toString(), userId, new ChallengeQuizStartRequest("board_exam", null));
+
+        // Not served immediately from the pool — it went to generation instead.
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(persistedQuiz(persisted)).isNotEmpty();
+        assertThat(persistedQuiz(persisted))
+                .extracting(QuizItem::question)
+                .doesNotContain("Question 3");
+        verify(quizGenerationService, atLeastOnce())
+                .generateBoardExamQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
     void startSession_createsMultiNoteBoardExamWithSourceRefs() {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
@@ -1944,6 +1979,60 @@ class ChallengeQuizServiceTest {
                 userId,
                 new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
         );
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        dispatchedTask.run();
+
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService).reverseBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_legacySingleNoteBoardExamShipsShortAboveTheFloorInsteadOfFailingStrictly() {
+        // ⚠️ THIS IS A DELIBERATE BEHAVIOUR CHANGE ON A PATH THIS RELEASE DID NOT SET OUT TO TOUCH, and it
+        // was previously unpinned in both directions. A legacy single-note Board Exam — no Review Set, no
+        // additional packs — used to run the synchronous branch, whose rule was `quiz.size() != quizCount`
+        // → fail the whole session. It now runs the same resilient path as a sampled exam, so a short
+        // generation SHIPS above the assembly floors and is marked short. The old branch was deleted rather
+        // than left unreachable precisely so the two rules cannot both live in this class.
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        // A legacy single-note Board Exam asks for BOARD_EXAM_QUESTIONS_PER_SOURCE (12), not the sampled
+        // path's 30. The model returns 11: short of the ask, clear of the 10-question floor, and its one
+        // source is also its source floor (min(1, 2) = 1).
+        when(quizGenerationService.generateBoardExamQuiz(
+                any(), any(), any(), any(), anyInt(), any(), any(StudyPackGenerationContext.class)
+        )).thenAnswer(invocation -> buildQuizWithPrefix("Legacy", 11));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId, new ChallengeQuizStartRequest("board_exam", null, null));
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(persistedQuiz(persisted)).hasSize(11);
+        assertThat(persisted.getSessionState()).containsEntry("shortExam", true);
+        assertThat(persisted.getSessionState()).containsEntry("expectedQuestionCount", 12);
+        verify(userUsageService, never()).reverseBoardExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_legacySingleNoteBoardExamStillFailsBelowTheQuestionFloorAndReversesBothMeters() {
+        // The tolerance above is bounded, not unlimited: the same legacy path still fails under the floor,
+        // and still refunds. Without this case the test above would read as "short exams always ship".
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        when(quizGenerationService.generateBoardExamQuiz(
+                any(), any(), any(), any(), anyInt(), any(), any(StudyPackGenerationContext.class)
+        )).thenAnswer(invocation -> buildQuizWithPrefix("Legacy", 8));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId, new ChallengeQuizStartRequest("board_exam", null, null));
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
         dispatchedTask.run();
 
@@ -4510,10 +4599,12 @@ class ChallengeQuizServiceTest {
         // and round-robin drew it from both buckets — so the exam reports more sources than it has and
         // contributingSourceCount double-counts one note, letting a SINGLE note satisfy the
         // two-contributing-sources assembly floor that exists to prevent exactly that.
-        // ⚠️ HONEST LIMITATION: this test documents the property but does NOT yet discriminate — removing
-        // the dedupe leaves it green, so the fixture is not producing the two-plans-one-note pool shape it
-        // intends. The production fix is correct by construction (first occurrence wins, keyed by study
-        // pack id); the guard is not earned. Recorded rather than claimed, and listed in RELEASES.md.
+        // ⚠️ THE PRIMARY MUST NOT BE THE SHARED NOTE, and that is the whole reason two earlier versions of
+        // this test failed to discriminate. `LongExamPlanSourceSampler.sample` filters the primary out of
+        // the bucket pass and re-adds it exactly once, so when the shared note IS the primary the sampler
+        // silently absorbs the duplication and the pool bug becomes unobservable. Here the primary is the
+        // note that belongs to ONE plan, and the shared note is drawn from the buckets — where a duplicated
+        // pool entry survives into the sample.
         UUID userId = UUID.randomUUID();
         UUID reviewSetId = UUID.randomUUID();
         UUID sharedNoteId = UUID.randomUUID();
@@ -4549,11 +4640,11 @@ class ChallengeQuizServiceTest {
         when(studyPackRepository.findByOwnerUserIdAndNoteIdInAndStatus(eq(userId), any(), any()))
                 .thenReturn(List.of(shared, other));
 
-        stubBoardExamStartDependencies(userId, shared.getId(), shared);
+        stubBoardExamStartDependencies(userId, other.getId(), other);
         stubReviewSetBoardExamGeneration(userId);
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
-                shared.getId().toString(), userId,
+                other.getId().toString(), userId,
                 new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
 
         // Two distinct notes exist, so the exam must draw exactly two distinct sources — never the shared

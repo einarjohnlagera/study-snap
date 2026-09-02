@@ -178,28 +178,30 @@ production, and 1979 tests were green while it was there.**
   condition now fails exactly one of them. **The source-floor case asserts the per-source ASK, not the quiz
   size** — a FAILED session holds no quiz, so the ask is the only available evidence that the question floor
   was clear.
+- **The shared-note dedupe guard now discriminates, and why it did not is worth recording.**
+  `LongExamPlanSourceSampler.sample` filters the primary out of its bucket pass and re-adds it exactly once,
+  so while the shared note **was** the primary the sampler silently absorbed the duplicated pool entry and
+  the bug was unobservable. The fixture now makes the shared note a **non-primary**; removing the
+  `putIfAbsent` dedupe fails
+  `startSession_boardExamCountsANoteSharedByTwoSubjectPlansOnlyOnce`.
+- **The dead synchronous Board Exam branch and `generateBoardExamQuizForSources` were DELETED, not left
+  unreachable.** They were not merely dead — they encoded a **different, superseded rule**
+  (`quiz.size() != quizCount` fails the session) beside the resilient path's rule (ship above the assembly
+  floors, mark `shortExam`), which is exactly how a later edit reinstates the old one by accident. A
+  tripwire `IllegalStateException` now stands where the branch was, so removing the early return fails
+  loudly instead of falling through. The **legacy single-note rule is pinned in both directions** by
+  `startSession_legacySingleNoteBoardExamShipsShortAboveTheFloorInsteadOfFailingStrictly` (11 of 12 ships,
+  marked short) and `...StillFailsBelowTheQuestionFloorAndReversesBothMeters` (8 fails and refunds).
+- **The pooled Board Exam path now applies the answer-key filter — a pre-existing hole, closed here.** A
+  warm-pool sample could emit a question sitting on the note's Quiz tab with its answer visible, which both
+  hands over the answer key and corrupts `ConceptHealth`. **An overlapping sample is ABANDONED, never served
+  short:** the pool is a cost optimisation, not a product promise, so the exam falls through to normal
+  generation. Pinned by `startSession_boardExamAbandonsAPooledSampleThatLeaksAQuestionFromTheNotesQuizTab`.
 
 ### Known limitations
 
 **⚠️ These are recorded rather than claimed. Each was verified by mutation; none is a guess.**
 
-- **⚠️ THE SHARED-NOTE DEDUPE FIX IS CORRECT BUT ITS GUARD IS NOT EARNED.** A note in two Subject Plans of
-  one Review Set produced two pool entries carrying the same Study Pack, letting **one note satisfy the
-  two-contributing-sources floor**. The fix (first occurrence wins, keyed by study pack id) is correct by
-  construction, but `startSession_boardExamCountsANoteSharedByTwoSubjectPlansOnlyOnce` **stays green when
-  the dedupe is removed** — the fixture does not produce the intended pool shape. Two attempts were made;
-  the second asserts the property directly and still does not discriminate. **Do not read that test as
-  proof.**
-- **⚠️ LEGACY SINGLE-NOTE BOARD EXAMS SILENTLY GAINED A SHORT-EXAM TOLERANCE.** They previously failed
-  strictly when generation returned fewer questions than requested; they now succeed short above the
-  assembly floors. This is a behaviour change on a path the release did not intend to touch, and nothing
-  pins either the old or the new rule.
-- **`generateBoardExamQuizForSources` is dead code** — the `MODE_BOARD_EXAM` early return makes it
-  unreachable. Its replacement also changed the legacy multi-note path from fail-fast to partial-loss: a
-  source whose generation fails is now dropped and the exam proceeds short.
-- **The pooled Board Exam path applies no answer-key filter** — a single-note Board Exam served from a warm
-  pool can emit a question that is on the note's Quiz tab with its answer visible. **Pre-existing, not
-  introduced here**, but the sampled path's guarantee does not extend to it.
 - **Doc drift, including a money surface:** `subscriptions-and-usage-limits.md` and `quiz-session.md` still
   say Board Exam quota is deducted **per source note** ("a 3-note session costs 3 units"); the charge has
   been one unit per session since `v0.32.2`. `challenge-quiz.md` still describes a picker that no longer

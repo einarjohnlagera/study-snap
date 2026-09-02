@@ -315,6 +315,26 @@ public class ChallengeQuizService {
                         quizCount,
                         StudyPackGenerationContextResolver.effectiveCurriculumLevel(generationContext)
                 );
+                // ⚠️ THE POOL IS NOT EXEMPT FROM THE ANSWER-KEY FILTER. Pre-existing hole, closed here:
+                // the generated paths strip questions that already sit on the note's Quiz tab — where the
+                // learner can read them WITH their answers — but the pooled path served its sample raw. A
+                // leaked item both hands over the answer key and corrupts ConceptHealth, which has been
+                // locked since v0.37.0 to move only from genuine assessment.
+                // ⚠️ ON OVERLAP WE ABANDON THE POOL RATHER THAN SHIP SHORT. The pool is a cost
+                // optimisation, not a product promise; a Board Exam quietly losing questions to a filter
+                // would be a silent quality regression on a PRO path, so a sample that cannot fill the
+                // exam cleanly falls through to normal generation.
+                if (pooledQuestions.isPresent()) {
+                    List<QuizItem> answerKeySafePool = QuizDeduplicationUtils.uniqueQuestions(
+                            pooledQuestions.get(),
+                            QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(
+                                    extractQuestionTexts(studyPack.getQuiz())
+                            )
+                    );
+                    pooledQuestions = answerKeySafePool.size() < quizCount
+                            ? Optional.empty()
+                            : Optional.of(answerKeySafePool);
+                }
                 if (pooledQuestions.isPresent()) {
                     QuickReviewSessionEntity session = buildGeneratingSession(
                             userId,
@@ -391,21 +411,19 @@ public class ChallengeQuizService {
         );
         try {
             List<QuizItem> challengeQuiz;
+            // ⚠️ TRIPWIRE, NOT DEAD-CODE PADDING. Every board_exam start returns above, into the async
+            // resilient path. The synchronous branch that used to live here — and the
+            // generateBoardExamQuizForSources helper it called — were deleted because they were not merely
+            // unreachable, they encoded a DIFFERENT and now-superseded rule: `quiz.size() != quizCount`
+            // fails the session outright, whereas the resilient path accepts a short exam above the two
+            // assembly floors and marks it `shortExam`. Leaving both rules in one class is how a future
+            // edit silently reinstates the old one. If the early return is ever removed, this fails loudly
+            // and forces that choice to be made deliberately.
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
-                aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-                List<QuizItem> generatedQuiz = additionalStudyPackIds.isEmpty()
-                        ? quizGenerationService.generateBoardExamQuiz(
-                                studyPack.getTitle(),
-                                studyPack.getSummary(),
-                                getKeyConcepts(studyPack),
-                                disallowedQuestions,
-                                quizCount,
-                                profile.difficulty(),
-                                generationContext
-                        )
-                        : generateBoardExamQuizForSources(userId, sourceNoteRefs, profile.difficulty());
-                challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(generatedQuiz, disallowedQuestionKeys);
-            } else if (multiNoteChallenge) {
+                throw new IllegalStateException(
+                        "board_exam must not reach the synchronous Challenge generation path");
+            }
+            if (multiNoteChallenge) {
                 aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
                 challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(
                         generateChallengeQuizForSources(userId, sourceNoteRefs, profile.difficulty()),
@@ -1768,42 +1786,6 @@ public class ChallengeQuizService {
                 studyPack.getTitle(),
                 questionCount
         );
-    }
-
-    private List<QuizItem> generateBoardExamQuizForSources(
-            UUID userId,
-            List<LongExamSourceNoteRef> sourceNoteRefs,
-            String difficulty
-    ) {
-        List<QuizItem> mergedQuiz = new ArrayList<>();
-        Set<String> disallowedQuestions = new LinkedHashSet<>();
-        for (LongExamSourceNoteRef sourceNoteRef : sourceNoteRefs) {
-            UUID sourceStudyPackId = parseBoardExamSourceStudyPackId(sourceNoteRef.studyPackId());
-            StudyPackEntity sourceStudyPack = findOwnedStudyPackForGenerationOrThrow(sourceStudyPackId, userId);
-            StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, sourceStudyPack);
-            List<String> sourceDisallowedQuestions = extractQuestionTexts(sourceStudyPack.getQuiz());
-            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(sourceDisallowedQuestions));
-            List<QuizItem> generatedQuiz = quizGenerationService.generateBoardExamQuiz(
-                    sourceStudyPack.getTitle(),
-                    sourceStudyPack.getSummary(),
-                    getKeyConcepts(sourceStudyPack),
-                    sourceDisallowedQuestions,
-                    sourceNoteRef.questionCount(),
-                    difficulty,
-                    generationContext
-            );
-            List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(
-                    generatedQuiz,
-                    disallowedQuestions
-            );
-            List<QuizItem> stampedGeneratedQuiz = stampQuestionsWithSourceStudyPack(
-                    uniqueGeneratedQuiz,
-                    sourceStudyPackId
-            );
-            mergedQuiz.addAll(stampedGeneratedQuiz);
-            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(stampedGeneratedQuiz));
-        }
-        return mergedQuiz;
     }
 
     private List<QuizItem> generateChallengeQuizForSources(
