@@ -193,7 +193,62 @@ agreed plan**, per the correction recorded at the `v0.103.0` kickoff.
 
 ### Shipped
 
-_(nothing yet)_
+- **Every generated assessment item now carries its `sourceStudyPackId` in session state.** Challenge Quiz,
+  Board Exam, and Long Exam stamp it after per-source deduplication and before merging; it therefore survives
+  later shuffle operations with the item rather than relying on a fragile parallel index array.
+- **ConceptHealth now records multi-note evidence per contributing Study Pack.** Completion makes one
+  absolute-index-preserving pass and buckets by `(sourceStudyPackId, concept)`, so a correct *Shear* answer
+  on one note no longer overwrites or contaminates a miss on another. Board Exam gains the same intended
+  per-source attribution through its shared completion path.
+- **Pre-v0.104.0 in-flight sessions remain completable.** An unstamped Challenge item retains the historical
+  primary-pack write; an unstamped Long Exam item retains the historical source-list fallback. Missing or
+  unowned packs are skipped without failing a completed assessment.
+- **`+5 Questions` records the primary as its source deliberately.** That path generates, templates, and
+  banks only from the primary Study Pack, even in a multi-note session.
+- **Cross-source MATCHING groups now fail loudly.** A contiguous matching group with more than one source
+  stamp is rejected rather than shuffling ambiguous provenance into a scored assessment.
+
+### Known limitations
+
+- **⚠️ A THIRD INSTANCE OF THE SAME DEFECT EXISTS IN `InterviewPracticeService` AND IS NOT FIXED HERE.**
+  Found during this release's diff audit, not by the architecture audit, which named only `LongExamService`.
+  `InterviewPracticeService.recordConceptsForSourcePacks:270-298` is **byte-for-byte the same shape** as the
+  Long Exam loop this release replaced: it iterates `resolveSourceStudyPackIds(session)` and writes **the same
+  concept list to every source pack**, filtered only by that pack's own `getKeyConcepts()`. Interview Practice
+  is genuinely multi-source (`interviewSourceNoteRefs` in session state), so it **over-attributes exactly as
+  Long Exam did**.
+  **⚠️ THIS IS A LIVE DEFECT TODAY, NOT A CONSEQUENCE OF THIS SLICE.** It over-attributes on every
+  multi-source Interview Practice session right now, and did so before this release existed — it is **a third
+  live instance of the same production defect, deferred for release-size reasons**, not something blocked on
+  stamping. Stating it that way deliberately: framed as *"blocked on stamping"*, a later reader would file it
+  as downstream cleanup and leave it indefinitely.
+  **⚠️ AND IT PARTIALLY UNDERCUTS THIS RELEASE'S OWN STATED PURPOSE.** The audit's §32 goal — *"Structural
+  Engineering needs work, Transportation is stronger"* — reads `ConceptHealth` written by **all** modes, so
+  subject-level reporting stays contaminated by Interview Practice until this is fixed. Long Exam and Board
+  Exam are now trustworthy; the store as a whole is not yet.
+  **Deferred rather than folded in** because fixing it needs the same two coupled changes in a third service
+  (its generation path is not stamped by any of this slice's three seams), and folding a third service into a
+  release that already changes what production evidence means was judged the worse trade. **Recorded rather
+  than silently dropped**, per the standing rule.
+- **Cross-pack concept identity is unchanged and still blocks true cross-subject mastery.** `ConceptHealthEntity`
+  remains keyed `(user_id, study_pack_id, concept)` with `concept` as free text scoped per pack, so two packs
+  using the same concept string still hold independent rows. This is ADR-sized and explicitly deferred (§15).
+- **`ConceptHealth` remains format-blind.** A missed True/False and a missed Identification still write
+  identical rows. Deferred with True/False itself (§9, §14.4).
+- **A redo of a PRE-`v0.104.0` multi-note Challenge session attributes everything to the primary pack,
+  permanently.** `redoMissedQuestions` stamps unstamped prior-session items with the primary at build time
+  rather than leaving them null for completion's fallback. **The outcome is identical either way** — the
+  historical Challenge fallback is also the primary — but it is persisted at build time instead of resolved
+  at read time, which is narrower than the *"a null stamp falls back at completion"* wording in Planned Scope.
+  Accepted deliberately: it keeps a redo session internally consistent with itself.
+- **The `startSession` stamp is belt-and-braces, not load-bearing, and no test claims otherwise.**
+  `stampUnstampedQuestionsWithPrimarySource` is unobservable at completion by construction — if it returned
+  its input unchanged, multi-source stamps would still survive and single-source, bank and template items
+  would take completion's primary fallback to the identical result. Recorded so a future reader does not
+  mistake the absence of an isolating mutant for missing coverage.
+- **The Challenge question bank and exam question pool stay primary-keyed.** `markServed` and
+  `updateOutcomesAndReleaseClaims` are unchanged, per the audit's §12.1 integrity item, which is tracked and
+  explicitly not in slices 1–4.
 
 ## v0.103.0 - Mixed Retrieval for Free and Plus
 

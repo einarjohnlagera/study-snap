@@ -28,6 +28,7 @@ public final class QuizItem {
     private final String keyConcept;
     private final List<String> acceptableAnswers;
     private final List<List<String>> acceptableAnswerGroups;
+    private final String sourceStudyPackId;
 
     public QuizItem(
             String question,
@@ -129,6 +130,7 @@ public final class QuizItem {
                 questionGroup,
                 null,
                 null,
+                null,
                 null
         );
     }
@@ -149,6 +151,42 @@ public final class QuizItem {
             List<String> acceptableAnswers,
             List<List<String>> acceptableAnswerGroups
     ) {
+        this(
+                question,
+                choices,
+                correctIndex,
+                concept,
+                explanation,
+                legacyAnswer,
+                questionFormat,
+                questionType,
+                workingSolution,
+                correctIndices,
+                questionGroup,
+                keyConcept,
+                acceptableAnswers,
+                acceptableAnswerGroups,
+                null
+        );
+    }
+
+    private QuizItem(
+            String question,
+            List<String> choices,
+            Integer correctIndex,
+            String concept,
+            String explanation,
+            String legacyAnswer,
+            String questionFormat,
+            String questionType,
+            String workingSolution,
+            List<Integer> correctIndices,
+            String questionGroup,
+            String keyConcept,
+            List<String> acceptableAnswers,
+            List<List<String>> acceptableAnswerGroups,
+            String sourceStudyPackId
+    ) {
         this.question = question;
         this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
         this.correctIndices = sanitizeCorrectIndices(correctIndices, this.choices.size());
@@ -162,6 +200,7 @@ public final class QuizItem {
         this.keyConcept = keyConcept;
         this.acceptableAnswers = sanitizeAcceptableAnswers(acceptableAnswers);
         this.acceptableAnswerGroups = sanitizeAcceptableAnswerGroups(acceptableAnswerGroups);
+        this.sourceStudyPackId = sourceStudyPackId;
     }
 
     @JsonCreator
@@ -181,7 +220,8 @@ public final class QuizItem {
             @JsonProperty("questionGroup") String questionGroup,
             @JsonProperty("keyConcept") String keyConcept,
             @JsonProperty("acceptableAnswers") List<String> acceptableAnswers,
-            @JsonProperty("acceptableAnswerGroups") List<List<String>> acceptableAnswerGroups
+            @JsonProperty("acceptableAnswerGroups") List<List<String>> acceptableAnswerGroups,
+            @JsonProperty("sourceStudyPackId") String sourceStudyPackId
     ) {
         this(
                 question,
@@ -197,7 +237,8 @@ public final class QuizItem {
                 questionGroup,
                 keyConcept,
                 acceptableAnswers,
-                acceptableAnswerGroups
+                acceptableAnswerGroups,
+                sourceStudyPackId
         );
     }
 
@@ -259,6 +300,30 @@ public final class QuizItem {
 
     public List<List<String>> acceptableAnswerGroups() {
         return acceptableAnswerGroups;
+    }
+
+    public String sourceStudyPackId() {
+        return sourceStudyPackId;
+    }
+
+    public QuizItem withSourceStudyPackId(String sourceStudyPackId) {
+        return new QuizItem(
+                question,
+                choices,
+                correctIndex,
+                concept,
+                explanation,
+                answer(),
+                questionFormat,
+                questionType,
+                workingSolution,
+                correctIndices,
+                questionGroup,
+                keyConcept,
+                acceptableAnswers,
+                acceptableAnswerGroups,
+                sourceStudyPackId
+        );
     }
 
     private static Integer resolveCorrectIndex(
@@ -387,12 +452,13 @@ public final class QuizItem {
                 && Objects.equals(questionGroup, quizItem.questionGroup)
                 && Objects.equals(keyConcept, quizItem.keyConcept)
                 && Objects.equals(acceptableAnswers, quizItem.acceptableAnswers)
-                && Objects.equals(acceptableAnswerGroups, quizItem.acceptableAnswerGroups);
+                && Objects.equals(acceptableAnswerGroups, quizItem.acceptableAnswerGroups)
+                && Objects.equals(sourceStudyPackId, quizItem.sourceStudyPackId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution, questionGroup, keyConcept, acceptableAnswers, acceptableAnswerGroups);
+        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution, questionGroup, keyConcept, acceptableAnswers, acceptableAnswerGroups, sourceStudyPackId);
     }
 
     @Override
@@ -411,6 +477,7 @@ public final class QuizItem {
                 + ", keyConcept='" + keyConcept + '\''
                 + ", acceptableAnswers=" + acceptableAnswers
                 + ", acceptableAnswerGroups=" + acceptableAnswerGroups
+                + ", sourceStudyPackId='" + sourceStudyPackId + '\''
                 + '}';
     }
 }

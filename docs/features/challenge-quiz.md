@@ -133,6 +133,8 @@ Challenge mode supports on-demand question batching within a live session:
 - Backend first reuses eligible per-user banked questions, then uses `QuizDeduplicationUtils.uniqueQuestions()` to deduplicate any generated shortfall by normalized question text against all existing session questions
 - If fewer than 3 unique new questions survive dedup, backend returns `NOT_ENOUGH_NEW_QUESTIONS` (HTTP 409); frontend treats this as `noMoreQuestions = true`, not an error state
 - New questions are appended to the session JSONB state via `QuizSessionStateUtils.appendQuizItems()`; no schema changes required
+- Every `+5` item is stamped with the primary Study Pack id. This is accurate even for a multi-note session because
+  the bank, Official template, and live generation paths for `+5` all use the primary pack only.
 - Board Exam Mode is exempt — no generate-more button; fixed question count for the session
 
 ## Action bar and button labels
@@ -206,6 +208,10 @@ If Adaptive Practice quota is exhausted, the shared component shows the targeted
 - on completion, Challenge Quiz records concepts answered fully correctly in the session to `ConceptHealth`
 - on completion, Challenge Quiz also records concepts missed in the session to `ConceptHealth.lastIncorrectAt`
 - Board Exam Mode uses the same Challenge completion path and records fully-correct and missed concepts the same way
+- In a multi-note Challenge Quiz or Board Exam, each generated item carries its source Study Pack id and completion
+  records that item's evidence only against that pack. This prevents shared concept names from being attributed to
+  the primary pack or to non-contributing sibling notes. Pre-v0.104.0 unstamped Challenge items retain the
+  historical primary-pack fallback so an in-flight session can still complete.
 - a concept is recorded only when its concept breakdown is `correctAnswers == totalQuestions` and `totalQuestions > 0`
 - weak or partially correct concepts are recorded as missed, not mastered
 - the post-session next-step endpoint reads ConceptHealth after completion, so fully correct concepts can immediately reset due-ness before the next recommendation is resolved

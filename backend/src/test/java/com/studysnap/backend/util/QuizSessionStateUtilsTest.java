@@ -7,10 +7,33 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class QuizSessionStateUtilsTest {
+
+    @Test
+    void withQuiz_andExtractQuiz_roundTripsSourceStudyPackIdAndTreatsMissingOrMalformedValuesAsNull() {
+        String sourceStudyPackId = UUID.randomUUID().toString();
+        QuizItem item = new QuizItem("Question", List.of("A", "B"), 0, "Concept", "Explanation")
+                .withSourceStudyPackId(sourceStudyPackId);
+        Map<String, Object> state = QuizSessionStateUtils.withQuiz(List.of(item), Map.of());
+
+        assertThat(QuizSessionStateUtils.extractQuiz(state).getFirst().sourceStudyPackId()).isEqualTo(sourceStudyPackId);
+
+        Map<String, Object> missingSourceState = QuizSessionStateUtils.withQuiz(
+                List.of(new QuizItem("Question", List.of("A", "B"), 0, "Concept", "Explanation")), Map.of()
+        );
+        assertThat(QuizSessionStateUtils.extractQuiz(missingSourceState).getFirst().sourceStudyPackId()).isNull();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> malformedItem = new java.util.LinkedHashMap<>((Map<String, Object>)
+                ((List<?>) state.get("quiz")).getFirst());
+        malformedItem.put("sourceStudyPackId", "not-a-uuid");
+        assertThat(QuizSessionStateUtils.extractQuiz(Map.of("quiz", List.of(malformedItem))).getFirst().sourceStudyPackId())
+                .isNull();
+    }
 
     @Test
     void withQuiz_andExtractQuiz_roundTripPreservesQuizAndBaseState() {

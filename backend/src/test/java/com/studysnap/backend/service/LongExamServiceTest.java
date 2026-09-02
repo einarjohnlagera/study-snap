@@ -62,6 +62,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -455,6 +456,51 @@ class LongExamServiceTest {
             .containsExactly(PRIMARY_BIOLOGY_TITLE + ":13", CELL_BIOLOGY_TITLE + ":12");
         verify(examQuestionPoolService, never()).sampleQuestions(any(UUID.class), any(), anyInt(), any());
         verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void generateQuizForSources_stampsEachSourceBeforeMerging() {
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId, PRIMARY_BIOLOGY_TITLE,
+                BIOLOGY_SUBJECT);
+        StudyPackEntity additionalStudyPack = buildStudyPack(additionalStudyPackId, userId, CELL_BIOLOGY_TITLE,
+                BIOLOGY_SUBJECT);
+        UserEntity user = buildUser(userId, LearnerLevel.COLLEGE);
+        List<LongExamSourceNoteRef> sources = List.of(
+                new LongExamSourceNoteRef(primaryStudyPackId.toString(), primaryStudyPack.getNoteId().toString(),
+                        primaryStudyPack.getTitle(), 2),
+                new LongExamSourceNoteRef(additionalStudyPackId.toString(), additionalStudyPack.getNoteId().toString(),
+                        additionalStudyPack.getTitle(), 2)
+        );
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+                .thenReturn(Optional.of(primaryStudyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
+                .thenReturn(Optional.of(additionalStudyPack));
+        when(quizGenerationService.generateLongExamParallel(any(), any(), any(), any(), eq(2), any(), any(), any()))
+                .thenReturn(
+                        List.of(
+                                new QuizItem("Primary one", List.of("A", "B"), 0, "Primary one", "Explanation"),
+                                new QuizItem("Primary two", List.of("A", "B"), 1, "Primary two", "Explanation")
+                        ),
+                        List.of(
+                                new QuizItem("Additional one", List.of("A", "B"), 0, "Additional one", "Explanation"),
+                                new QuizItem("Additional two", List.of("A", "B"), 1, "Additional two", "Explanation")
+                        )
+                );
+
+        @SuppressWarnings("unchecked")
+        List<QuizItem> quiz = ReflectionTestUtils.invokeMethod(
+                longExamService,
+                "generateQuizForSources",
+                user,
+                sources,
+                DEFAULT_DIFFICULTY
+        );
+
+        assertThat(quiz).filteredOn(item -> primaryStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(2);
+        assertThat(quiz).filteredOn(item -> additionalStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(2);
     }
 
     @Test
@@ -1047,7 +1093,7 @@ class LongExamServiceTest {
     }
 
     @Test
-    void completeSession_recordsFullyCorrectConceptsAgainstMatchingSourcePacks() {
+    void completeSession_unstampedItemsFallBackToSourceStudyPackBroadcast() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
@@ -1096,6 +1142,59 @@ class LongExamServiceTest {
             eq(List.of("Concurrency")),
             any(OffsetDateTime.class)
         );
+    }
+
+    @Test
+    void completeSession_attributesStampedSharedConceptsOnlyToTheirContributingSourcePacks() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID sourceAId = UUID.randomUUID();
+        UUID sourceBId = UUID.randomUUID();
+        UUID sourceCId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildSession(userId, sourceAId, QuickReviewSessionStatus.IN_PROGRESS,
+                List.of(
+                        new QuizItem("A Shear", List.of("A", "B"), 0, "Shear", "Explanation").withSourceStudyPackId(sourceAId.toString()),
+                        new QuizItem("A Moment", List.of("A", "B"), 0, "Moment", "Explanation").withSourceStudyPackId(sourceAId.toString()),
+                        new QuizItem("B Shear", List.of("A", "B"), 0, "Shear", "Explanation").withSourceStudyPackId(sourceBId.toString()),
+                        new QuizItem("B Moment", List.of("A", "B"), 0, "Moment", "Explanation").withSourceStudyPackId(sourceBId.toString())
+                ));
+        session.setId(sessionId);
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 0, 0));
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 1, 1));
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 2, 1));
+        session.setSessionState(QuizSessionStateUtils.withSelectedChoice(session.getSessionState(), 3, 0));
+        Map<String, Object> state = new LinkedHashMap<>(session.getSessionState());
+        state.put("sourceNoteRefs", List.of(
+                Map.of("studyPackId", sourceBId.toString(), "noteId", UUID.randomUUID().toString(), "noteTitle", "B", "questionCount", 2),
+                Map.of("studyPackId", sourceCId.toString(), "noteId", UUID.randomUUID().toString(), "noteTitle", "C", "questionCount", 0)
+        ));
+        session.setSessionState(state);
+        StudyPackEntity sourceA = buildStudyPack(sourceAId, userId);
+        sourceA.setKeyConcepts(List.of("Shear", "Moment"));
+        StudyPackEntity sourceB = buildStudyPack(sourceBId, userId);
+        sourceB.setKeyConcepts(List.of("Shear", "Moment"));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.LONG_EXAM))
+                .thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(sourceAId, userId)).thenReturn(Optional.of(sourceA));
+        when(studyPackRepository.findByIdAndOwnerUserId(sourceBId, userId)).thenReturn(Optional.of(sourceB));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        longExamService.completeSession(sessionId, userId, new LongExamCompleteRequest(900));
+
+        verify(conceptHealthService).recordCorrectAnswersForKnownConcepts(
+                eq(userId), eq(sourceAId), eq(List.of("Shear")), eq(List.of("Shear", "Moment")), any(OffsetDateTime.class));
+        verify(conceptHealthService).recordIncorrectAnswersForKnownConcepts(
+                eq(userId), eq(sourceAId), eq(List.of("Moment")), eq(List.of("Shear", "Moment")), any(OffsetDateTime.class));
+        verify(conceptHealthService).recordCorrectAnswersForKnownConcepts(
+                eq(userId), eq(sourceBId), eq(List.of("Moment")), eq(List.of("Shear", "Moment")), any(OffsetDateTime.class));
+        verify(conceptHealthService).recordIncorrectAnswersForKnownConcepts(
+                eq(userId), eq(sourceBId), eq(List.of("Shear")), eq(List.of("Shear", "Moment")), any(OffsetDateTime.class));
+        verify(conceptHealthService, never()).recordCorrectAnswersForKnownConcepts(
+                eq(userId), eq(sourceCId), any(), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswersForKnownConcepts(
+                eq(userId), eq(sourceCId), any(), any(), any());
     }
 
     @Test

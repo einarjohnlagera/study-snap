@@ -1749,6 +1749,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 ### Quiz Generation Anti-Drift
 
 - `buildLearnerContextBlock()` is the single formatting point for learner level + course/program in quiz/exam prompts. Static note and Study Pack prompts use the content-context builder, which deliberately excludes learner level.
+- Per-item multi-source provenance travels on `QuizItem`, never a parallel index-keyed array: merged quizzes are shuffled after merge, so an index-keyed sidecar silently corrupts source attribution.
 - Quiz result statistics (score, performance level, weak concepts) are derived from stored session data only. No LLM calls for stats.
 - Weak concept threshold is `< 60%` accuracy (`WEAK_CONCEPT_THRESHOLD`). Do not change this without a test covering the boundary.
 - `lib/challenge-quiz-results.ts` owns quiz result computation utilities. Reuse them; do not duplicate the logic.

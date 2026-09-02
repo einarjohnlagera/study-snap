@@ -77,6 +77,16 @@ Each entry contains:
 
 This keeps multi-source Long Exam generation inside the shared quiz-session lifecycle without adding a new persistence aggregate.
 
+## Item Source Provenance
+
+Each serialized `QuizItem` may carry `sourceStudyPackId`. Multi-source Challenge Quiz, Board Exam, and Long Exam
+stamp it at the per-source generation seam, after deduplication and before merge. It travels on the item because
+the assembled quiz may be shuffled after merging; no parallel index-keyed provenance array is valid.
+
+The key is optional for sessions persisted before v0.104.0. A missing or malformed value deserializes as `null`:
+Challenge Quiz completes it using the primary Study Pack fallback, while Long Exam uses its historical source-list
+fallback. This keeps an in-flight pre-release assessment completable without inventing provenance it did not store.
+
 ### Long Exam generation recovery
 
 Age-based recovery may move a `LONG_EXAM` session from `GENERATING` to `FAILED` when its immutable `created_at` is older than the configured Long Exam bound (default `30` minutes). `FAILED` remains observable but is not active, so the existing start flow creates a fresh session on the learner's next attempt instead of handing back the stale row. The frontend already treats this state as recoverable, stops generation polling, explains that the learner can try again, and returns to setup rather than showing an indefinite spinner.
