@@ -117,6 +117,7 @@ public class ChallengeQuizService {
     private static final String PERFORMANCE_LEVEL_FAIR = "Fair";
     private static final String PERFORMANCE_LEVEL_NEEDS_IMPROVEMENT = "Needs Improvement";
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
+    private static final String ANALYTICS_METADATA_EXPECTED_QUESTION_COUNT = "expectedQuestionCount";
     private static final String ANALYTICS_METADATA_SOURCE_COUNT = "sourceCount";
     private static final String ANALYTICS_METADATA_SOURCE_SCOPE = "sourceScope";
     private static final String ANALYTICS_METADATA_SCORE_PERCENTAGE = "scorePercentage";
@@ -248,8 +249,11 @@ public class ChallengeQuizService {
             // ⚠️ CONDITIONAL, and that matters. The counter is per user while the Study Pack lock is per
             // note, so concurrent starts from different notes could otherwise both see the same remaining
             // allowance. But taking it unconditionally put a PESSIMISTIC_WRITE on the user row for EVERY
-            // Challenge and Board Exam start, held across LLM generation by @Transactional — serializing
-            // that account's other quiz starts and blocking anything else that writes the same row.
+            // Challenge start, held across LLM generation by @Transactional — serializing that account's
+            // other quiz starts and blocking anything else that writes the same row. (Board Exam no longer
+            // holds the transaction across generation — it dispatches after commit — so the "every start"
+            // half of that cost is now Challenge-only. The conclusion is unchanged: only the multi-note
+            // path has a counter at stake, so only it takes the lock.)
             // Only the multi-note path has a counter at stake, so only it takes the lock.
             userRepository.findByIdForUpdate(userId);
             assertMultiNoteQuotaAvailable(userId, planType);
@@ -384,7 +388,8 @@ public class ChallengeQuizService {
             // so the mode silently lost its AI rate limit — a cost and abuse control on a PRO path. Third
             // instance in this release of the same class: a gate that stopped firing when a branch moved.
             aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-            dispatchBoardExamGenerationAfterCommit(session.getId(), profile.difficulty(), userId, planType);
+            dispatchBoardExamGenerationAfterCommit(
+                    session.getId(), profile.difficulty(), userId, planType, resolvedPlanSources.planSourced());
             return toStartResponse(session, studyPack, boardExamUsedThisMonth + BOARD_EXAM_QUOTA_UNITS_PER_SESSION, planType);
         }
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
@@ -562,8 +567,14 @@ public class ChallengeQuizService {
      * the same remaining quota. A process death after the row commit but before this charge is the accepted
      * reserved-before-charged window documented in the release notes.
      */
-    private void dispatchBoardExamGenerationAfterCommit(UUID sessionId, String difficulty, UUID userId, PlanType planType) {
-        Runnable generationTask = () -> generateBoardExamAsync(sessionId, difficulty, userId, planType);
+    private void dispatchBoardExamGenerationAfterCommit(
+            UUID sessionId,
+            String difficulty,
+            UUID userId,
+            PlanType planType,
+            boolean planSourced
+    ) {
+        Runnable generationTask = () -> generateBoardExamAsync(sessionId, difficulty, userId, planType, planSourced);
         // ⚠️ DISPATCH ONLY. Never perform a @Transactional write in an afterCommit callback: it joins the
         // committed transaction and throws. Every other registerSynchronization site in this codebase
         // dispatches only, for the same reason — this one copied the pattern from a site that dispatched
@@ -582,7 +593,13 @@ public class ChallengeQuizService {
         chargeThenDispatch.run();
     }
 
-    private void generateBoardExamAsync(UUID sessionId, String difficulty, UUID userId, PlanType planType) {
+    private void generateBoardExamAsync(
+            UUID sessionId,
+            String difficulty,
+            UUID userId,
+            PlanType planType,
+            boolean planSourced
+    ) {
         try {
             studyPackGenerationTransactionOperations.execute(status -> {
                 QuickReviewSessionEntity session = quickReviewSessionRepository.findById(sessionId)
@@ -615,9 +632,18 @@ public class ChallengeQuizService {
                 markBoardExamShort(session, expectedQuestionCount, generated.quiz().size());
                 QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
                 try {
+                    // ⚠️ sourceCount AND sourceScope BELONG ON THIS EVENT, and without them the release's
+                    // own numbers are unreadable. questionCount alone cannot tell a Review Set exam that
+                    // assembled short (target 30) from a legacy single-note one that asked for 12 — so the
+                    // dated checkpoint on the configured target and the assembly floors would have had no
+                    // metric. ⚠️ sourceScope records the VERIFIED outcome, never the caller's claim, exactly
+                    // as v0.102.0 established and v0.105.0's cold agent re-confirmed.
                     analyticsService.trackEvent(userId, AnalyticsEventType.BOARD_EXAM_STARTED, saved.getStudyPackId(), Map.of(
                             ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
                             ANALYTICS_METADATA_QUESTION_COUNT, generated.quiz().size(),
+                            ANALYTICS_METADATA_EXPECTED_QUESTION_COUNT, expectedQuestionCount,
+                            ANALYTICS_METADATA_SOURCE_COUNT, sourceNoteRefs.size(),
+                            ANALYTICS_METADATA_SOURCE_SCOPE, planSourced ? SOURCE_SCOPE_PLAN : SOURCE_SCOPE_MANUAL,
                             ANALYTICS_METADATA_DIFFICULTY, difficulty,
                             ANALYTICS_METADATA_MODE, MODE_BOARD_EXAM
                     ));
