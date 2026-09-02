@@ -247,6 +247,34 @@ class GenerationRecoveryServiceTest {
                 eq(session.getUserId()), eq(ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION), any());
     }
 
+
+    @Test
+    void recoverStaleBoardExamSessions_selectsGeneratingChallengeRowsOlderThanTheCutoff() {
+        // ⚠️ THE CANDIDATE QUERY'S OWN ARGUMENTS WERE NEVER ASSERTED. Every other Board Exam sweep test
+        // stubs findStaleSessionIds(any(), any(), any(), any()), so switching the mode to LONG_EXAM left
+        // the whole suite green — the row-level filter then rejects every candidate and the refund-on-crash
+        // path silently recovers NOTHING. The guarantee that a crashed Board Exam is ever refunded rests
+        // entirely on these four arguments, so they are pinned here.
+        QuickReviewSessionEntity session = boardExamSession(OffsetDateTime.now().minusHours(1));
+        when(quickReviewSessionRepository.findStaleSessionIds(any(), any(), any(), any()))
+                .thenReturn(List.of(session.getId()));
+        when(quickReviewSessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        service.recoverStaleBoardExamSessions();
+
+        ArgumentCaptor<QuickReviewSessionStatus> status = ArgumentCaptor.forClass(QuickReviewSessionStatus.class);
+        ArgumentCaptor<QuickReviewSessionMode> mode = ArgumentCaptor.forClass(QuickReviewSessionMode.class);
+        ArgumentCaptor<OffsetDateTime> cutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(quickReviewSessionRepository).findStaleSessionIds(
+                status.capture(), mode.capture(), cutoff.capture(), any());
+
+        // Board Exam IS a CHALLENGE row — selecting LONG_EXAM here would sweep nothing at all.
+        assertThat(mode.getValue()).isEqualTo(QuickReviewSessionMode.CHALLENGE);
+        assertThat(status.getValue()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        // The cutoff must be in the past, or a freshly started exam would be swept mid-generation.
+        assertThat(cutoff.getValue()).isBefore(OffsetDateTime.now());
+    }
+
     @Test
     void recoverStaleBoardExamSessions_leavesAnOrdinaryChallengeSessionAlone() {
         // ⚠️ THE CANDIDATE QUERY CANNOT TELL THESE APART — Board Exam IS a CHALLENGE session — so the

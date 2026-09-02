@@ -1425,6 +1425,12 @@ class NativeQueryPostgresIntegrationTest {
         OffsetDateTime periodStart = OffsetDateTime.now(ZoneOffset.UTC)
                 .withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
         seedBoardExamUsage(userId, periodStart, 1, 1);
+        // ⚠️ A BYSTANDER PERIOD HOLDING NON-ZERO VALUES. The scoping assertion at the end of this test used
+        // to read the REFUNDED period's own column — which the test had already driven to 0 — so deleting
+        // the `periodStart` predicate from the reversal clamped 0 → 0 and the assertion still passed. A
+        // cross-period write can only be detected against a row that must SURVIVE with a non-zero value.
+        OffsetDateTime bystanderPeriod = periodStart.plusMonths(2);
+        seedBoardExamUsage(userId, bystanderPeriod, 5, 4);
 
         // Refunding 2 against a stored 1 must land on 0 on BOTH columns, never -1 and never an exception.
         userUsageRepository.decrementBoardExamUsageNotBelowZero(userId, periodStart, 2);
@@ -1440,8 +1446,10 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(readUsageColumn(userId, nextPeriod, "challenge_quiz_generations")).isEqualTo(3);
         assertThat(readUsageColumn(userId, nextPeriod, "board_exam_used_this_month")).isEqualTo(2);
 
-        // Another period's row is never touched by a refund scoped to this one.
-        assertThat(readUsageColumn(userId, periodStart, "challenge_quiz_generations")).isZero();
+        // ⚠️ THE REAL SCOPING ASSERTION: the bystander period is untouched by EITHER refund, on BOTH
+        // columns. Without the periodStart predicate these would read 3 and 2.
+        assertThat(readUsageColumn(userId, bystanderPeriod, "challenge_quiz_generations")).isEqualTo(5);
+        assertThat(readUsageColumn(userId, bystanderPeriod, "board_exam_used_this_month")).isEqualTo(4);
     }
 
     private void seedBoardExamUsage(UUID userId, OffsetDateTime periodStart, int challengeUsed, int boardUsed) {

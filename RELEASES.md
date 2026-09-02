@@ -165,22 +165,24 @@ production, and 1979 tests were green while it was there.**
   gate stopped firing — the same class four times in this release. Both restored and pinned.
 - **The parent walk had ZERO coverage** — the release's headline mechanism. Now pinned, along with its
   ownership re-verification.
+- **Three coverage gaps the pressure test opened were closed before signoff, each mutation-verified.**
+  (a) The sweep's candidate query is pinned by
+  `recoverStaleBoardExamSessions_selectsGeneratingChallengeRowsOlderThanTheCutoff`, which captures the mode,
+  status and cutoff instead of stubbing them past — flipping `CHALLENGE` to `LONG_EXAM` now fails.
+  (b) `boardExamRefundReversesBothMetersAndClampsEachAtZero` was restructured around a **bystander period row
+  holding non-zero counters that must survive both refunds**, so the `period_start` predicate is no longer
+  satisfied vacuously by a column the test had already driven to 0.
+  (c) The two assembly floors are pinned **independently** by
+  `startSession_boardExamFailsOnTheSOURCEFloorEvenWhenItHasEnoughQuestions` and
+  `startSession_boardExamFailsOnTheQUESTIONFloorEvenWhenEnoughSourcesContribute`; deleting either half of the
+  condition now fails exactly one of them. **The source-floor case asserts the per-source ASK, not the quiz
+  size** — a FAILED session holds no quiz, so the ask is the only available evidence that the question floor
+  was clear.
 
 ### Known limitations
 
 **⚠️ These are recorded rather than claimed. Each was verified by mutation; none is a guess.**
 
-- **⚠️ THE SWEEP'S MODE ARGUMENT IS UNPINNED.** Changing `recoverStaleBoardExamSessions`' candidate query
-  from `CHALLENGE` to `LONG_EXAM` leaves the whole suite green — the refund-on-crash path would silently
-  recover nothing. `GenerationRecoveryServiceTest` stubs `findStaleSessionIds(any(), any(), any(), any())`,
-  so the selection itself is never asserted.
-- **⚠️ THE REVERSAL'S `periodStart` PREDICATE IS UNPINNED, AND THE TEST THAT LOOKS LIKE IT COVERS THIS
-  PASSES VACUOUSLY.** `boardExamRefundReversesBothMetersAndClampsEachAtZero`'s closing "another period is
-  never touched" assertion reads a column the test already drove to **0**, so a cross-period write clamps
-  0 → 0 and it still passes. Fix needs a period row holding a **non-zero** value that must survive.
-- **⚠️ THE TWO ASSEMBLY FLOORS ARE NOT INDEPENDENTLY PINNED.** The only below-floor test fails **both** at
-  once, so deleting either alone stays green. Needs two cases: short-but-enough-sources, and
-  enough-questions-but-one-source.
 - **⚠️ THE SHARED-NOTE DEDUPE FIX IS CORRECT BUT ITS GUARD IS NOT EARNED.** A note in two Subject Plans of
   one Review Set produced two pool entries carrying the same Study Pack, letting **one note satisfy the
   two-contributing-sources floor**. The fix (first occurrence wins, keyed by study pack id) is correct by

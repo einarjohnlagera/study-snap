@@ -4249,6 +4249,66 @@ class ChallengeQuizServiceTest {
      * Makes only the named source titles generate; every other source throws, so the resilient fan-out
      * records a partial assembly exactly the way a real per-source LLM failure does.
      */
+
+    @Test
+    void startSession_boardExamFailsOnTheSOURCEFloorEvenWhenItHasEnoughQuestions() {
+        // ⚠️ THE TWO FLOORS MUST BE PINNED SEPARATELY. The only below-floor test fails BOTH at once ("5
+        // questions and 1 source"), so deleting either floor alone left the suite green — the other one
+        // still fired. This case clears the QUESTION floor and fails only the SOURCE floor.
+        // Arithmetic: a 2-note pool samples 2, so each source is asked for 30/2 = 15. The primary alone
+        // yields 15 questions — comfortably over the floor of 10 — while contributing 1 source against a
+        // minimum of min(2, 2) = 2.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 1, 1);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        stubBoardExamSourceOutcomes(Set.of(primary.getTitle()));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+        dispatchedTask.run();
+
+        // The per-source ask proves the QUESTION floor was never the trigger: the primary alone was asked
+        // for 15, well over the floor of 10. A FAILED session holds no quiz, so the ask is the evidence.
+        ArgumentCaptor<Integer> perSourceCount = ArgumentCaptor.forClass(Integer.class);
+        verify(quizGenerationService, atLeastOnce()).generateBoardExamQuiz(
+                any(), any(), any(), any(), perSourceCount.capture(), any(), any(StudyPackGenerationContext.class));
+        assertThat(perSourceCount.getAllValues().get(0)).isGreaterThanOrEqualTo(10);
+
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService).reverseBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_boardExamFailsOnTheQUESTIONFloorEvenWhenEnoughSourcesContribute() {
+        // The mirror case: clears the SOURCE floor and fails only the QUESTION floor.
+        // Arithmetic: a 10-note pool samples 10, so each source is asked for 30/10 = 3. Two succeeding
+        // sources clear the minimum of min(10, 2) = 2 while yielding only 6 questions, under the floor of 10.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 5, 5);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        StudyPackEntity second = packsByPlan.get(1).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        stubBoardExamSourceOutcomes(Set.of(primary.getTitle(), second.getTitle()));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+        dispatchedTask.run();
+
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService).reverseBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+    }
+
     private void stubBoardExamSourceOutcomes(Set<String> succeedingTitles) {
         lenient().when(quizGenerationService.generateBoardExamQuiz(
                 any(), any(), any(), any(), anyInt(), any(), any(StudyPackGenerationContext.class)
