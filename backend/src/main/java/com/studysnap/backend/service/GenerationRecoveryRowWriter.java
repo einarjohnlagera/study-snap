@@ -82,6 +82,11 @@ public class GenerationRecoveryRowWriter {
     public void failLongExamSession(UUID sessionId) {
         quickReviewSessionRepository.findByIdForUpdate(sessionId)
                 .filter(session -> session.getSessionMode() == QuickReviewSessionMode.LONG_EXAM)
+                // ⚠️ STATUS GUARD, matching recoverLongExamSession. Without it this public method would
+                // fail and refund an IN_PROGRESS or COMPLETED exam — destroying a live or finished session
+                // — if any future caller passed one. The mode filter alone protects other quiz modes; this
+                // protects Long Exam sessions that are past generation.
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.GENERATING)
                 .ifPresent(this::markLongExamSessionFailed);
     }
 

@@ -211,7 +211,13 @@ public class LongExamService {
             List<LongExamSourceNoteRef> sourceNoteRefs = resolvedSources.sourceNoteRefs();
             // The VERIFIED scope, replacing the claim computed before the request was checked.
             verifiedSourceScope.set(resolvedSources.planSourced() ? SOURCE_SCOPE_PLAN : SOURCE_SCOPE_MANUAL);
-            if (additionalStudyPackIds.isEmpty()) {
+            // ⚠️ `additionalStudyPackIds.isEmpty()` ALONE IS NOT THE SINGLE-NOTE TEST ANY MORE. A plan-sourced
+            // start sends only `sourceCollectionId`, so that list is empty while the exam is sampled across
+            // the whole plan. Without the planSourced clause the second and every later plan launch is served
+            // this PRIMARY-ONLY question pool while the session still records the sampled multi-source
+            // sourceNoteRefs and sourceScope=plan — a single-note exam presented, and reported, as a
+            // curriculum exam. `sourceScope` must record the VERIFIED outcome, and a dated checkpoint reads it.
+            if (additionalStudyPackIds.isEmpty() && !resolvedSources.planSourced()) {
                 StudyPackGenerationContext generationContext = generationContextResolver.resolveForStudyPack(userId, studyPack);
                 Optional<List<QuizItem>> pooledQuestions = examQuestionPoolService.sampleQuestions(
                         studyPackId,
@@ -268,7 +274,12 @@ public class LongExamService {
         if (createdSession.get() && !poolSourcedSession.get()) {
             dispatchLongExamGenerationAfterCommit(session.getId(), difficulty, verifiedSourceScope.get());
         }
-        if (createdSession.get() && !poolSourcedSession.get() && additionalStudyPackIds.isEmpty()) {
+        if (createdSession.get()
+                && !poolSourcedSession.get()
+                && additionalStudyPackIds.isEmpty()
+                // Warming a PRIMARY-ONLY pool for a plan-sourced session is what created the pool that the
+                // next plan launch was then served from. Plan exams are sampled fresh, never pooled.
+                && !SOURCE_SCOPE_PLAN.equals(verifiedSourceScope.get())) {
             studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                     .ifPresent(studyPack -> examQuestionPoolService.initiatePoolForUsage(
                             studyPack,

@@ -18,6 +18,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -80,5 +83,39 @@ class GenerationRecoveryRowWriterTest {
         session.setStatus(QuickReviewSessionStatus.GENERATING);
         session.setSessionState(reserved ? Map.of(LongExamService.SESSION_STATE_LONG_EXAM_QUOTA_RESERVED, true) : Map.of());
         return session;
+    }
+
+    @Test
+    void failLongExamSession_ignoresANonLongExamSession() {
+        // ⚠️ failLongExamSession is a PUBLIC method on the SHARED recovery writer. Its mode filter is the
+        // only thing stopping it failing a Quick Review / Challenge / Board Exam / Adaptive / Interview
+        // session AND refunding a Long Exam quota unit for it. Deleting that filter left the suite green.
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity challenge = generatingSession(true);
+        challenge.setId(sessionId);
+        challenge.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        when(sessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(challenge));
+
+        writer.failLongExamSession(sessionId);
+
+        assertThat(challenge.getStatus()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        verify(userUsageService, never()).reverseLongExamGenerationBy(any(), anyInt(), any());
+        verify(sessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+    }
+
+    @Test
+    void failLongExamSession_ignoresASessionPastGeneration() {
+        // ⚠️ Unlike its sibling recoverLongExamSession, this method had NO status guard. Called with an
+        // IN_PROGRESS exam it would destroy a live session and refund it.
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity live = generatingSession(true);
+        live.setId(sessionId);
+        live.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        when(sessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(live));
+
+        writer.failLongExamSession(sessionId);
+
+        assertThat(live.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        verify(userUsageService, never()).reverseLongExamGenerationBy(any(), anyInt(), any());
     }
 }

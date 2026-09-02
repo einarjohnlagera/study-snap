@@ -40,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -2568,5 +2569,36 @@ class OpenAiLlmStudyPackServiceTest {
                 return CompletableFuture.failedFuture(ex);
             }
         }
+    }
+
+    @Test
+    void longExamSchemaAllowsIdentificationButNotEnumeration() {
+        // ⚠️ REGRESSION GUARD FOR A FEATURE THAT SHIPPED DEAD. allowIdentification and allowEnumeration were
+        // both derived from CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName), so the Long Exam schema forbade
+        // questionFormat=IDENTIFICATION and forbade acceptableAnswers outright (additionalProperties:false).
+        // Under strict structured outputs the model therefore could not emit a single Identification item,
+        // while the prompt rules, the DTO field, the grading path and the frontend input all shipped.
+        // A prompt-only assertion cannot catch that — the schema is what the model is actually bound by.
+        JsonNode longExamSchema = ReflectionTestUtils.invokeMethod(
+                service, "buildGeneratedQuizSchema", 10, true, List.<String>of(), true, false);
+        JsonNode item = longExamSchema.path("properties").path("questions").path("items");
+        List<String> formats = new ArrayList<>();
+        item.path("properties").path("questionFormat").path("enum").forEach(node -> formats.add(node.asText()));
+
+        assertThat(formats).contains("IDENTIFICATION");
+        assertThat(formats).doesNotContain("ENUMERATION");
+        assertThat(item.path("properties").has("acceptableAnswers")).isTrue();
+    }
+
+    @Test
+    void challengeQuizSchemaStillAllowsBothIdentificationAndEnumeration() {
+        JsonNode challengeSchema = ReflectionTestUtils.invokeMethod(
+                service, "buildGeneratedQuizSchema", 10, true, List.<String>of(), true, true);
+        List<String> formats = new ArrayList<>();
+        challengeSchema.path("properties").path("questions").path("items")
+                .path("properties").path("questionFormat").path("enum")
+                .forEach(node -> formats.add(node.asText()));
+
+        assertThat(formats).contains("IDENTIFICATION", "ENUMERATION");
     }
 }

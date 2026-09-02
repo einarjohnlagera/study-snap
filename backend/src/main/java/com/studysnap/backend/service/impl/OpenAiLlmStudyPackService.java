@@ -103,6 +103,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final String IDENTIFICATION_FORMAT = "IDENTIFICATION";
     private static final String ENUMERATION_FORMAT = "ENUMERATION";
     private static final String CHALLENGE_QUIZ_SCHEMA_NAME = "note_lib_challenge_quiz";
+    private static final String LONG_EXAM_SCHEMA_NAME = "note_lib_long_exam";
     private static final String COMPANION_SCHEMA_NAME = "note_lib_companion_draft";
     private static final String COMPANION_INVALID_OUTPUT_MESSAGE =
             "The Companion generation service returned an invalid format. Please try again.";
@@ -1932,7 +1933,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         context
                 ),
                 questionCount,
-                "note_lib_long_exam",
+                LONG_EXAM_SCHEMA_NAME,
                 "Long exam generation",
                 normalizedKeyConcepts,
                 normalizedKeyConcepts
@@ -2054,7 +2055,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         batchHint
                 ),
                 questionCount,
-                "note_lib_long_exam",
+                LONG_EXAM_SCHEMA_NAME,
                 "Long exam generation batch",
                 normalizedKeyConcepts,
                 normalizedKeyConcepts
@@ -2269,7 +2270,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         questionCount,
                         allowTrueFalse,
                         normalizedKeyConceptEnum,
-                        CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName),
+                        // ⚠️ IDENTIFICATION and ENUMERATION are separate decisions and must not share one
+                        // predicate. Long Exam ships Identification (its developer prompt carries the same
+                        // notation rules, copied verbatim from the Challenge prompt, and grading is the
+                        // shared normalized exact match). Enumeration stays Challenge-only — it is
+                        // deliberately deferred for Long Exam.
+                        // ⚠️ Deriving BOTH from CHALLENGE_QUIZ_SCHEMA_NAME made the Long Exam schema forbid
+                        // questionFormat=IDENTIFICATION and forbid acceptableAnswers outright, so the entire
+                        // Identification feature could never emit a single question.
+                        CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName) || LONG_EXAM_SCHEMA_NAME.equals(schemaName),
                         CHALLENGE_QUIZ_SCHEMA_NAME.equals(schemaName)
                 ),
                 PromptGeneratedQuiz.class

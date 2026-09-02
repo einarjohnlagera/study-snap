@@ -27,8 +27,27 @@ class LongExamPlanSourceSamplerTest {
                 pool, primaryId, 4, UUID.fromString("00000000-0000-0000-0000-000000000105")
         );
 
+        // ⚠️ The size assertion is what makes this test discriminate. Without it, returning the WHOLE
+        // 6-item pool also "contains A, B, C" — so removing the sampleLimit clamp entirely left the
+        // suite green, in the release whose whole point is that cap.
+        assertThat(sampled).hasSize(4);
         assertThat(sampled).extracting(LongExamPlanSourceSampler.EligiblePlanSource::sectionLabel)
                 .contains("A", "B", "C");
+    }
+
+    @Test
+    void sample_neverReturnsMoreThanTheSampleLimit() {
+        UUID primaryId = UUID.randomUUID();
+        List<LongExamPlanSourceSampler.EligiblePlanSource> pool = new java.util.ArrayList<>();
+        pool.add(source(primaryId, "A", 0));
+        for (int index = 1; index < 77; index++) {
+            pool.add(source(UUID.randomUUID(), "S" + (index % 6), index));
+        }
+
+        // A 77-member plan against the College cap of 8 must yield exactly 8, never the pool.
+        assertThat(sampler.sample(pool, primaryId, 8, UUID.randomUUID())).hasSize(8);
+        // And a limit above the pool size is bounded by the pool, not padded.
+        assertThat(sampler.sample(pool, primaryId, 200, UUID.randomUUID())).hasSize(77);
     }
 
     @Test

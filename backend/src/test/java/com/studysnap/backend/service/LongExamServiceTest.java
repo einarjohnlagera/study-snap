@@ -1518,6 +1518,84 @@ class LongExamServiceTest {
         verify(userUsageService).incrementLongExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
+
+    @Test
+    void startSession_planSourcedNeverServesOrWarmsTheSingleNotePool() {
+        // ⚠️ additionalStudyPackIds.isEmpty() is no longer the single-note test: a plan launch sends only
+        // sourceCollectionId, so that list is empty while the exam spans the plan. Without the planSourced
+        // clause, the SECOND and every later plan launch was served a PRIMARY-ONLY pool while the session
+        // still recorded the sampled multi-source refs and sourceScope=plan — a single-note exam reported
+        // as a curriculum exam, corrupting the field a dated checkpoint reads.
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, userId);
+        StudyPackEntity second = buildStudyPack(UUID.randomUUID(), userId, "Second", BIOLOGY_SUBJECT);
+        StudyPackEntity third = buildStudyPack(UUID.randomUUID(), userId, "Third", BIOLOGY_SUBJECT);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primary));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            eq(userId), eq(primaryStudyPackId), eq(QuickReviewSessionMode.LONG_EXAM), any()
+        )).thenReturn(Optional.empty());
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(Set.of(primary.getNoteId(), second.getNoteId(), third.getNoteId()));
+        when(planSourcedExamVerifier.resolvePlanMembers(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(List.of(
+                new PlanSourcedExamVerifier.PlanExamMember(primary.getNoteId(), "A", 0),
+                new PlanSourcedExamVerifier.PlanExamMember(second.getNoteId(), "B", 1),
+                new PlanSourcedExamVerifier.PlanExamMember(third.getNoteId(), "C", 2)
+            ));
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdInAndStatus(eq(userId), any(), any()))
+            .thenReturn(List.of(primary, second, third));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        longExamService.startSession(
+            primaryStudyPackId.toString(), userId,
+            new LongExamStartRequest(null, null, collectionId.toString()));
+
+        verify(examQuestionPoolService, never()).sampleQuestions(any(UUID.class), any(), anyInt(), any());
+        verify(examQuestionPoolService, never()).initiatePoolForUsage(any(), any(UUID.class), any());
+    }
+
+    @Test
+    void startSession_eligiblePoolCountsOnlyReadyStudyPacks() {
+        // ⚠️ The DONE literal IS the definition of "ready Study Pack" — the whole eligible-pool concept and
+        // the InsufficientEligibleSources message rest on it, and nothing constrained it: the sole stub
+        // passed any() for the status, so changing DONE to FAILED left the suite green.
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, userId);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primary));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            eq(userId), eq(primaryStudyPackId), eq(QuickReviewSessionMode.LONG_EXAM), any()
+        )).thenReturn(Optional.empty());
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(Set.of(primary.getNoteId()));
+        when(planSourcedExamVerifier.resolvePlanMembers(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(List.of(new PlanSourcedExamVerifier.PlanExamMember(primary.getNoteId(), "A", 0)));
+        // The pool query is asserted to ask for DONE specifically, not "any status".
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdInAndStatus(
+            eq(userId), any(), eq(com.studysnap.backend.entity.StudyPackStatus.DONE)))
+            .thenReturn(List.of(primary));
+
+        assertThatThrownBy(() -> longExamService.startSession(
+            primaryStudyPackId.toString(), userId,
+            new LongExamStartRequest(null, null, collectionId.toString())
+        )).isInstanceOf(LongExamInsufficientEligibleSourcesException.class);
+
+        verify(studyPackRepository).findByOwnerUserIdAndNoteIdInAndStatus(
+            eq(userId), any(), eq(com.studysnap.backend.entity.StudyPackStatus.DONE));
+    }
+
     private void stubStartSession(
         UUID userId,
         UUID studyPackId,

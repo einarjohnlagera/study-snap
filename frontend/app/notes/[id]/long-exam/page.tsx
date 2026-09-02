@@ -479,12 +479,20 @@ export default function LongExamPage() {
      * what is eligible AND selected — conflating them would promise coverage the exam will not have.
      */
     const planScopeSummary = (() => {
-        const included = selectedAdditionalStudyPackIds.length + 1;
+        // ⚠️ On a plan launch the server samples; the learner picks nothing. Counting selections here
+        // printed "1 of 77" while the server sampled 10, and "4 of 77" while it sampled a different 10.
+        const included = collectionId && planTotalNoteCount !== null
+            ? (maxSourceNotes !== null && planEligibleNoteCount !== null
+                ? Math.min(maxSourceNotes, planEligibleNoteCount)
+                : null)
+            : selectedAdditionalStudyPackIds.length + 1;
         const total = planTotalNoteCount;
         const eligible = planEligibleNoteCount;
-        const scope = total === null
-            ? `Testing material from ${included} Notes in this plan.`
-            : `Testing material from ${included} of ${total} Notes in this plan.`;
+        const scope = included === null
+            ? "This exam is sampled across the Notes in this plan."
+            : total === null
+            ? `Testing material sampled from ${included} Notes in this plan.`
+            : `Testing material sampled from ${included} of ${total} Notes in this plan.`;
         if (eligible !== null && total !== null && eligible < total) {
             return `${scope} ${total - eligible} have no Study Pack yet.`;
         }
@@ -1043,7 +1051,22 @@ export default function LongExamPage() {
                                 </ul>
                             </div>
 
-                            {availableSourceNotes.length > 0 ? (
+                            {/* ⚠️ THE PICKER RENDERS FOR THE MANUAL PATH ONLY. On a plan launch the server
+                                samples representatively across the whole plan and IGNORES any picked list,
+                                so leaving the picker visible made it a decorative control whose selection
+                                was silently discarded — and whose "N of M" summary was wrong in both
+                                directions. */}
+                            {collectionId && planTotalNoteCount !== null ? (
+                                <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+                                    <div className="space-y-1">
+                                        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
+                                            Exam coverage
+                                        </h2>
+                                        <p className="text-sm text-foreground/70">{planScopeSummary}</p>
+                                    </div>
+                                </div>
+                            ) : null}
+                            {availableSourceNotes.length > 0 && !(collectionId && planTotalNoteCount !== null) ? (
                                 <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
                                     <div className="space-y-1">
                                         <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">

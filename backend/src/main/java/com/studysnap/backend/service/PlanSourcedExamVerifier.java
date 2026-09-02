@@ -46,13 +46,10 @@ public class PlanSourcedExamVerifier {
             UUID userId,
             Supplier<? extends AppException> onInvalid
     ) {
-        if (sourceCollectionIdRaw == null || sourceCollectionIdRaw.isBlank()) {
-            return Set.of();
-        }
-        UUID sourceCollectionId = UuidParsingUtils.parseUuidOrThrow(sourceCollectionIdRaw, onInvalid);
-        if (noteCollectionRepository.findByIdAndOwnerUserId(sourceCollectionId, userId).isEmpty()) {
-            throw onInvalid.get();
-        }
+        // ⚠️ NO SECOND COPY OF THE OWNERSHIP CHECK. This method delegates, and resolvePlanMembers owns the
+        // parse-and-verify. A duplicated copy here meant deleting the check from resolvePlanMembers alone
+        // left the whole suite green, where the same deletion was killed before the duplication existed —
+        // the class javadoc's "same mistake with a shorter fuse", on an authorization boundary.
         return resolvePlanMembers(sourceCollectionIdRaw, userId, onInvalid).stream()
                 .map(PlanExamMember::noteId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
