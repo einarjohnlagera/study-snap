@@ -149,6 +149,17 @@ and a missed Identification write identical rows, while `incorrect_streak` drive
 recommendation at `TWICE_MISSED_STREAK_THRESHOLD = 2`. **⚠️ Adding True/False without weighting means two
 coin flips can trigger a remediation.**
 
+**⚠️ FOUND 2026-09-02, AFTER `v0.103.0` SHIPPED — THERE ARE TWO INSTANCES, AND THEY FAIL IN OPPOSITE
+DIRECTIONS.** The audit above describes `LongExamService`, which **over-attributes**: the same concept list
+goes to every source pack, filtered by that pack's own key concepts. But `ChallengeQuizService.completeSession`
+writes to **`saved.getStudyPackId()`** — the PRIMARY pack only (`:674`, `:680`) — so a multi-note Challenge
+Quiz **under-attributes**: every concept from all six sources lands on the note the learner happened to start
+from, and the other five receive nothing.
+
+**⚠️ That path is NEW as of `v0.103.0`, so this release created a second instance of the very defect slice 1
+exists to fix.** Slice 1 therefore covers **both services**, not just `LongExamService`. Verified by reading
+both call sites; `ChallengeQuizService` contains no `recordConceptsForSourcePacks` equivalent at all.
+
 **Minimum fix:** attach the source Study Pack id to each generated item (or a parallel per-index array in
 session state). That one change unblocks Subject-Plan-scoped and Review-Set-scoped remediation later,
 because per-source accuracy becomes real rather than inferred.
