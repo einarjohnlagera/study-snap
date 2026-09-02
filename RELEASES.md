@@ -197,18 +197,33 @@ production, and 1979 tests were green while it was there.**
   hands over the answer key and corrupts `ConceptHealth`. **An overlapping sample is ABANDONED, never served
   short:** the pool is a cost optimisation, not a product promise, so the exam falls through to normal
   generation. Pinned by `startSession_boardExamAbandonsAPooledSampleThatLeaksAQuestionFromTheNotesQuizTab`.
+- **`boardExamQuotaReserved` no longer reaches the wire, and the test pins BOTH halves.** It is the sweeper's
+  only record that a crashed Board Exam still owes a refund, so it must survive on the row; it is internal
+  bookkeeping, so it has no business in the response. It was never writable — `mergeSessionState` is an
+  allowlist of the four selected-answer maps — but the client echoes session state back on every progress
+  save, so a later widening of that allowlist would have turned a visible key into a quota bypass. **A
+  one-sided guard would have been worse than none:** asserting only the strip lets a future "fix" that stops
+  writing the flag pass while silently disabling every refund.
+- **Doc drift closed, including the money surface.** `subscriptions-and-usage-limits.md`, `quiz-session.md`
+  and `collections.md` all still said Board Exam and Long Exam quota is deducted **per source note** ("a
+  3-note session costs 3 units") — false since `v0.32.2`, which moved both to **one unit per session**.
+  `challenge-quiz.md` described a source picker that a Review Set launch does not render and a "10
+  source-note units / month" cap that is really **10 sessions**. The release's own headline mechanism — the
+  Subject-Plan-to-Review-Set parent walk, the study-pack dedupe, the assembly floors and the pool exclusion —
+  was undocumented and is now written down. **Found by sweeping the SURFACE, not the diff:** `collections.md`
+  was not in this release's diff at all.
 
 ### Known limitations
 
-**⚠️ These are recorded rather than claimed. Each was verified by mutation; none is a guess.**
+**None open. Every finding this release's pressure test raised was closed before signoff, and each closure is
+mutation-verified with the killing test named above.** The list is recorded as closed rather than deleted so a
+later reader can see what was found and how, and can re-run the mutants.
 
-- **Doc drift, including a money surface:** `subscriptions-and-usage-limits.md` and `quiz-session.md` still
-  say Board Exam quota is deducted **per source note** ("a 3-note session costs 3 units"); the charge has
-  been one unit per session since `v0.32.2`. `challenge-quiz.md` still describes a picker that no longer
-  renders on the plan path, and a "10 source-note units / month" figure.
-- **Board Exam session state is serialized to the client** including `boardExamQuotaReserved` — internal
-  accounting flags on the wire. `LongExamService` keeps its equivalents server-side. No security impact.
-
+**⚠️ Two limitations carried from earlier releases are NOT closed here and stay where they were recorded:**
+`v0.104.0`'s third live instance of the concept mis-attribution defect in `InterviewPracticeService`, and
+`v0.105.0`'s reserved-before-charged window on the Long Exam start path. Neither is a Board Exam defect and
+neither was in this release's scope; folding either in would have put a third service, or a second money
+mechanic, into this diff.
 
 ## v0.105.0 - Curriculum-Scale Exams
 

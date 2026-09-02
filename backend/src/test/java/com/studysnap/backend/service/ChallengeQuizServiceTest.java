@@ -2042,6 +2042,30 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void startSession_boardExamKeepsItsQuotaBookkeepingOffTheWireButStillPersistsIt() {
+        // ⚠️ BOTH HALVES ARE THE POINT. `boardExamQuotaReserved` is the sweeper's only record that a crashed
+        // Board Exam still owes a refund, so it MUST survive on the row — but it is internal bookkeeping and
+        // has no business on the wire. It is not writable today (mergeSessionState is an allowlist of the
+        // four selected-answer maps), yet the client echoes session state back on every progress save, so a
+        // later widening of that allowlist would turn a visible key into a quota bypass.
+        // A one-sided test here would be worse than none: assert only the strip and a future "fix" that
+        // stops writing the flag passes while silently disabling every refund.
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId, new ChallengeQuizStartRequest("board_exam", null, null));
+
+        assertThat(response.sessionState()).doesNotContainKey("boardExamQuotaReserved");
+        assertThat(response.sessionState()).containsKey("mode");
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getSessionState()).containsEntry("boardExamQuotaReserved", true);
+    }
+
+    @Test
     void startSession_boardExamGenerationFailureReversesBothMetersEndToEnd() {
         // ⚠️ DRIVEN THROUGH A REAL START, never by calling the reversal helper. The refund lives inside
         // GenerationRecoveryRowWriter, so a mocked row writer would leave only

@@ -2035,6 +2035,12 @@ public class ChallengeQuizService {
         }
         Map<String, Object> sanitized = new LinkedHashMap<>(sessionState);
         sanitized.remove(SESSION_STATE_QUIZ);
+        // ⚠️ INTERNAL QUOTA BOOKKEEPING NEVER LEAVES THE SERVER. This flag is the sweeper's sole record of
+        // whether a crashed Board Exam still owes a refund. It is not writable today — mergeSessionState is
+        // an allowlist of the four selected-answer maps — but the client currently ECHOES session state back
+        // on every progress save, so a later widening of that allowlist would turn a visible key into a
+        // quota bypass. Stripping it here means the client never learns the key exists.
+        sanitized.remove(SESSION_STATE_BOARD_EXAM_QUOTA_RESERVED);
         return sanitized;
     }
 
