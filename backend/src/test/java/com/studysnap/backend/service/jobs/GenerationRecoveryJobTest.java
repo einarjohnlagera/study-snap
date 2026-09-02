@@ -29,15 +29,20 @@ class GenerationRecoveryJobTest {
     }
 
     @Test
-    void run_delegatesToAllThreeSurfaces() {
+    void run_delegatesToAllFourSurfaces() {
+        // v0.106.0 added Board Exam sessions as the FOURTH swept surface. A Board Exam start reserves two
+        // meters before its asynchronous generation runs, so a session this sweep never reaches keeps a
+        // charge the learner never received an exam for.
         when(generationRecoveryService.recoverStaleExamQuestionPools()).thenReturn(SurfaceRecoveryResult.empty());
         when(generationRecoveryService.recoverStaleLongExamSessions()).thenReturn(SurfaceRecoveryResult.empty());
+        when(generationRecoveryService.recoverStaleBoardExamSessions()).thenReturn(SurfaceRecoveryResult.empty());
         when(generationRecoveryService.recoverStaleNotes()).thenReturn(SurfaceRecoveryResult.empty());
 
         job.run();
 
         verify(generationRecoveryService).recoverStaleExamQuestionPools();
         verify(generationRecoveryService).recoverStaleLongExamSessions();
+        verify(generationRecoveryService).recoverStaleBoardExamSessions();
         verify(generationRecoveryService).recoverStaleNotes();
     }
 
@@ -46,11 +51,16 @@ class GenerationRecoveryJobTest {
         when(generationRecoveryService.recoverStaleExamQuestionPools())
                 .thenThrow(new IllegalStateException("database unavailable"));
         when(generationRecoveryService.recoverStaleLongExamSessions()).thenReturn(SurfaceRecoveryResult.empty());
+        // The Board Exam sweep is the surface that refunds two meters; it must survive an earlier surface
+        // failing, and its own failure must not stop the surfaces after it.
+        when(generationRecoveryService.recoverStaleBoardExamSessions())
+                .thenThrow(new IllegalStateException("row lock timeout"));
         when(generationRecoveryService.recoverStaleNotes()).thenReturn(SurfaceRecoveryResult.empty());
 
         assertThatCode(job::run).doesNotThrowAnyException();
 
         verify(generationRecoveryService).recoverStaleLongExamSessions();
+        verify(generationRecoveryService).recoverStaleBoardExamSessions();
         verify(generationRecoveryService).recoverStaleNotes();
     }
 
@@ -62,6 +72,7 @@ class GenerationRecoveryJobTest {
 
         verify(generationRecoveryService, never()).recoverStaleExamQuestionPools();
         verify(generationRecoveryService, never()).recoverStaleLongExamSessions();
+        verify(generationRecoveryService, never()).recoverStaleBoardExamSessions();
         verify(generationRecoveryService, never()).recoverStaleNotes();
     }
 }

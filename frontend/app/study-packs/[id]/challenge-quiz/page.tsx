@@ -374,6 +374,13 @@ export default function ChallengeQuizPage() {
   const [selectedChallengeAdditionalStudyPackIds, setSelectedChallengeAdditionalStudyPackIds] = useState<string[]>([]);
   const [sourceNotesLoading, setSourceNotesLoading] = useState(false);
   const [sourceNotesError, setSourceNotesError] = useState<string | null>(null);
+  /**
+   * ⚠️ Whether the launch collection actually RESOLVED — not merely whether a collectionId is present.
+   * The plan lookup falls back silently on failure, so gating the Board Exam picker on the id alone hid
+   * it on the degraded path too, stranding the learner with no way to choose sources. Same distinction
+   * v0.105.0 needed for Long Exam.
+   */
+  const [boardExamPlanScoped, setBoardExamPlanScoped] = useState(false);
   const [forfeitingExistingSession, setForfeitingExistingSession] = useState(false);
   const [isMobileNavigatorViewport, setIsMobileNavigatorViewport] = useState(isMobileQuestionNavigatorViewport);
   const { usageSummary } = useBillingUsageSummary();
@@ -612,6 +619,7 @@ export default function ChallengeQuizPage() {
   const refreshBoardExamSourceNotes = useCallback(async (noteDetail: NoteResponse) => {
     setSourceNotesLoading(true);
     setSourceNotesError(null);
+    setBoardExamPlanScoped(false);
     try {
       const notes = await listNotes();
       if (collectionId) {
@@ -634,6 +642,7 @@ export default function ChallengeQuizPage() {
             const availableStudyPackIds = new Set(collectionSourceNotes.map((sourceNote) => sourceNote.studyPackId).filter(Boolean));
             return current.filter((studyPackId) => availableStudyPackIds.has(studyPackId));
           });
+          setBoardExamPlanScoped(true);
           return;
         } catch {
           // Fall back to the normal single-note/same-subject setup when the plan cannot be loaded.
@@ -1306,12 +1315,23 @@ export default function ChallengeQuizPage() {
     }
     try {
       const request: ChallengeQuizStartRequest = { mode: nextMode };
-      if (nextMode === BOARD_EXAM_MODE && selectedBoardExamAdditionalStudyPackIds.length > 0) {
-        request.additionalStudyPackIds = selectedBoardExamAdditionalStudyPackIds;
-        // Without this the backend applies the same-subject rule to notes this screen pre-selected from
-        // the plan, and refuses a selection the product itself made.
-        if (collectionId) {
+      if (nextMode === BOARD_EXAM_MODE) {
+        // ⚠️ A REVIEW-SET BOARD EXAM IS THE DEFAULT WHENEVER WE ARRIVED FROM A COLLECTION, AND IT NO LONGER
+        // DEPENDS ON THE LEARNER PICKING NOTES. Previously sourceCollectionId was sent ONLY alongside a
+        // picked list — and the server samples the set and now rejects that list — so the single route
+        // into this capability was the one that invalidated itself. The server resolves the Review Set
+        // from whatever collection we came from (walking up from a Subject Plan), so it needs no picks.
+        // ⚠️ GATE ON A RESOLVED PLAN, NOT ON A PRESENT ID — the same distinction the picker uses.
+        // Sending sourceCollectionId whenever an id was in the URL removed the degradation path entirely:
+        // if the plan could not be loaded, or holds fewer than two ready Study Packs, the server now
+        // rejects and the learner cannot start a Board Exam AT ALL, where before they simply got a
+        // single-note one. It also made the picker decorative on that path — visible, and its picks
+        // dropped, because this branch ignored them whenever an id was present.
+        if (boardExamPlanScoped && collectionId) {
           request.sourceCollectionId = collectionId;
+        } else if (selectedBoardExamAdditionalStudyPackIds.length > 0) {
+          // No collection context: the legacy manual multi-note Board Exam, unchanged.
+          request.additionalStudyPackIds = selectedBoardExamAdditionalStudyPackIds;
         }
       }
       if (nextMode === CHALLENGE_MODE && selectedChallengeAdditionalStudyPackIds.length > 0) {
@@ -2063,15 +2083,20 @@ export default function ChallengeQuizPage() {
             <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
               <div className="space-y-1">
                 <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-foreground/55">
-                  Span this exam across more notes
+                  {boardExamPlanScoped ? "Exam coverage" : "Span this exam across more notes"}
                 </h2>
                 <p className="text-sm text-foreground/70">
-                  {collectionId
-                    ? `Add up to ${BOARD_EXAM_MAX_ADDITIONAL_NOTES} more notes from this plan.`
+                  {boardExamPlanScoped
+                    ? "This exam is sampled across your whole Review Set, spread over its subjects."
                     : `Add up to ${BOARD_EXAM_MAX_ADDITIONAL_NOTES} ready Study Packs from this subject.`}
                 </p>
               </div>
-              {sourceNotesLoading ? (
+              {/* ⚠️ NO PICKER WHEN THE SERVER SAMPLES. With a collection in context a Board Exam is drawn
+                  across the whole Review Set and any picked list is neither sent nor accepted, so a
+                  selector here would be a control that silently does nothing — the decorative-control
+                  defect fixed for Long Exam in v0.105.0. Multi-note CHALLENGE keeps its picker: that is a
+                  learner-chosen mode and its selection is still honoured. */}
+              {boardExamPlanScoped ? null : sourceNotesLoading ? (
                 <p className="mt-4 text-sm text-foreground/60">Loading same-subject notes...</p>
               ) : sourceNotesError ? (
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

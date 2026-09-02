@@ -75,6 +75,11 @@ A Long Exam generation that fails to meet those assembly floors does not consume
 Exam allowance; its already-reserved unit is reversed safely, including when stale-generation recovery performs
 the failure transition.
 
+Board Exam is a representative board-review exam drawn from the whole ready-Study-Pack syllabus of its Review
+Set. Subject Plans supply coverage spread rather than weights, and the bounded source sample is deterministic
+for a session. Board generation is asynchronous after the start commits; if it cannot assemble a valid exam,
+both meters it reserved (the shared Challenge Quiz meter and Board Exam meter) are reversed.
+
 Single-note exam-pool generation also carries an attempt clock. Every transition into `PENDING` or `GENERATING` refreshes `generation_status_at`; an age-based recovery sweep resolves stale non-terminal pools to `FAILED`. This prevents a pool killed while queued or generating from permanently forcing every later exam start on that Study Pack onto live generation. The sweep stops at `FAILED`: the existing `sampleQuestions` path refreshes the pool only when a learner next uses it. Pool `created_at` is never the recovery clock because pool rows are reused, and a late live task that finishes after recovery may still write the correct `READY` outcome.
 
 ## Conversion

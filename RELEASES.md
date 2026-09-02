@@ -123,7 +123,88 @@ writing the Codex prompt.**
 
 ### Shipped
 
-_(nothing yet)_
+- **Board Exam is assembled from the whole Review Set.** The eligible pool is every note in the set's
+  Subject Plans with a ready Study Pack; sources are sampled stratified across those plans, deterministic
+  per session id, reusing `v0.105.0`'s sampler. A **childless** Review Set uses its own items as one
+  stratum, mirroring the Goal endpoint's documented rule.
+- **A Subject Plan launch resolves UP to its parent Review Set.** A learner reaches Board Exam from
+  whichever collection page they were on — normally a child. Using the claimed collection directly shipped
+  *"assess across the plan you came from"*, which is **Long Exam's job**. Ownership is re-verified on the
+  parent.
+- **Generation moved off the request transaction**, with the quota reversal and resurrection guard that
+  move requires — the three ship together, as the kickoff recorded.
+- **The target item count is configuration**, with assembly floors: above them a shorter valid exam marked
+  short, below them fail and reverse.
+- **A caller-supplied note list is REJECTED on the sampled path**, not silently discarded, with an accurate
+  error rather than a borrowed "too many notes" one.
+
+### ⚠️ Found by the pre-signoff pressure test — read this before touching Board Exam again
+
+**Three cold agents in ISOLATED worktrees found a defect that would have taken every Board Exam down in
+production, and 1979 tests were green while it was there.**
+
+- **⚠️ THE CHARGE WAS IN AN `afterCommit` CALLBACK, AND THAT IS FATAL IN THIS CLASS.**
+  `ChallengeQuizService` is `@Transactional` **at class level**; `LongExamService` is not (its start path is
+  `NOT_SUPPORTED`). So copying Long Exam's dispatch pattern across **inverted its meaning**: `startSession`
+  always has an active transaction, the callback always fires, and a `PROPAGATION_REQUIRED` write there
+  joins the already-committed transaction and **throws**. Every Board Exam start returned 500. Worse, the
+  session row had already committed as `GENERATING` carrying `boardExamQuotaReserved=true`, so the sweeper
+  later refunded **both** meters for a charge that never happened — **handing back quota the learner had
+  spent on genuine Challenge Quiz sessions**, a shared meter.
+  **⚠️ IT WAS INVISIBLE BY CONSTRUCTION:** `MockitoExtension` has no transaction manager, so
+  `isSynchronizationActive()` is false and **every test took the inline fallback — the branch that never
+  runs in production.** Deleting the entire production branch left the suite green.
+  **Fixed by charging INSIDE the request transaction**, which is also simpler: the charge becomes atomic
+  with the session, which dissolves the reserved-before-charged window **and** makes the two meters
+  impossible to split. **⚠️ The old design's stated reason — that charging inside would let concurrent
+  starts observe the same remaining quota — IS FALSE:** `assertBoardExamQuotaAvailable` is an unlocked read
+  and no row lock is taken on that path, so the race is identical either way. Do not "restore" it.
+  **⚠️ NEVER PERFORM A `@Transactional` WRITE IN AN `afterCommit` CALLBACK.** Every other
+  `registerSynchronization` site in this codebase dispatches only.
+- **Board Exam had lost its AI rate limit and its answer-key filter**, both because a branch moved and a
+  gate stopped firing — the same class four times in this release. Both restored and pinned.
+- **The parent walk had ZERO coverage** — the release's headline mechanism. Now pinned, along with its
+  ownership re-verification.
+
+### Known limitations
+
+**⚠️ These are recorded rather than claimed. Each was verified by mutation; none is a guess.**
+
+- **⚠️ THE SWEEP'S MODE ARGUMENT IS UNPINNED.** Changing `recoverStaleBoardExamSessions`' candidate query
+  from `CHALLENGE` to `LONG_EXAM` leaves the whole suite green — the refund-on-crash path would silently
+  recover nothing. `GenerationRecoveryServiceTest` stubs `findStaleSessionIds(any(), any(), any(), any())`,
+  so the selection itself is never asserted.
+- **⚠️ THE REVERSAL'S `periodStart` PREDICATE IS UNPINNED, AND THE TEST THAT LOOKS LIKE IT COVERS THIS
+  PASSES VACUOUSLY.** `boardExamRefundReversesBothMetersAndClampsEachAtZero`'s closing "another period is
+  never touched" assertion reads a column the test already drove to **0**, so a cross-period write clamps
+  0 → 0 and it still passes. Fix needs a period row holding a **non-zero** value that must survive.
+- **⚠️ THE TWO ASSEMBLY FLOORS ARE NOT INDEPENDENTLY PINNED.** The only below-floor test fails **both** at
+  once, so deleting either alone stays green. Needs two cases: short-but-enough-sources, and
+  enough-questions-but-one-source.
+- **⚠️ THE SHARED-NOTE DEDUPE FIX IS CORRECT BUT ITS GUARD IS NOT EARNED.** A note in two Subject Plans of
+  one Review Set produced two pool entries carrying the same Study Pack, letting **one note satisfy the
+  two-contributing-sources floor**. The fix (first occurrence wins, keyed by study pack id) is correct by
+  construction, but `startSession_boardExamCountsANoteSharedByTwoSubjectPlansOnlyOnce` **stays green when
+  the dedupe is removed** — the fixture does not produce the intended pool shape. Two attempts were made;
+  the second asserts the property directly and still does not discriminate. **Do not read that test as
+  proof.**
+- **⚠️ LEGACY SINGLE-NOTE BOARD EXAMS SILENTLY GAINED A SHORT-EXAM TOLERANCE.** They previously failed
+  strictly when generation returned fewer questions than requested; they now succeed short above the
+  assembly floors. This is a behaviour change on a path the release did not intend to touch, and nothing
+  pins either the old or the new rule.
+- **`generateBoardExamQuizForSources` is dead code** — the `MODE_BOARD_EXAM` early return makes it
+  unreachable. Its replacement also changed the legacy multi-note path from fail-fast to partial-loss: a
+  source whose generation fails is now dropped and the exam proceeds short.
+- **The pooled Board Exam path applies no answer-key filter** — a single-note Board Exam served from a warm
+  pool can emit a question that is on the note's Quiz tab with its answer visible. **Pre-existing, not
+  introduced here**, but the sampled path's guarantee does not extend to it.
+- **Doc drift, including a money surface:** `subscriptions-and-usage-limits.md` and `quiz-session.md` still
+  say Board Exam quota is deducted **per source note** ("a 3-note session costs 3 units"); the charge has
+  been one unit per session since `v0.32.2`. `challenge-quiz.md` still describes a picker that no longer
+  renders on the plan path, and a "10 source-note units / month" figure.
+- **Board Exam session state is serialized to the client** including `boardExamQuotaReserved` — internal
+  accounting flags on the wire. `LongExamService` keeps its equivalents server-side. No security impact.
+
 
 ## v0.105.0 - Curriculum-Scale Exams
 

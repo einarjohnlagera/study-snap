@@ -1409,6 +1409,57 @@ class NativeQueryPostgresIntegrationTest {
         assertThat(readLongExamUsage(userId, periodStart.plusMonths(1))).isEqualTo(2);
     }
 
+    /**
+     * Killing test for the v0.106.0 two-meter Board Exam reversal, which no mocked repository can reach:
+     * the clamp and the second counter both live inside the JPQL {@code set} list.
+     *
+     * <p>The two columns fail DIFFERENTLY, which is exactly why both must be asserted.
+     * {@code challenge_quiz_generations} carries a {@code >= 0} CHECK from V20, so an unclamped underflow
+     * THROWS and takes the refund transaction with it; {@code board_exam_used_this_month} (V57) has no such
+     * constraint, so an unclamped underflow silently stores a negative and reads back as free allowance.
+     * Reversing only one of the two leaves the other permanently overcharged.
+     */
+    @Test
+    void boardExamRefundReversesBothMetersAndClampsEachAtZero() {
+        UUID userId = seedUser("board-refund");
+        OffsetDateTime periodStart = OffsetDateTime.now(ZoneOffset.UTC)
+                .withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        seedBoardExamUsage(userId, periodStart, 1, 1);
+
+        // Refunding 2 against a stored 1 must land on 0 on BOTH columns, never -1 and never an exception.
+        userUsageRepository.decrementBoardExamUsageNotBelowZero(userId, periodStart, 2);
+
+        assertThat(readUsageColumn(userId, periodStart, "challenge_quiz_generations")).isZero();
+        assertThat(readUsageColumn(userId, periodStart, "board_exam_used_this_month")).isZero();
+
+        // A normal single refund decrements BOTH meters rather than zeroing them or touching only one.
+        OffsetDateTime nextPeriod = periodStart.plusMonths(1);
+        seedBoardExamUsage(userId, nextPeriod, 4, 3);
+        userUsageRepository.decrementBoardExamUsageNotBelowZero(userId, nextPeriod, 1);
+
+        assertThat(readUsageColumn(userId, nextPeriod, "challenge_quiz_generations")).isEqualTo(3);
+        assertThat(readUsageColumn(userId, nextPeriod, "board_exam_used_this_month")).isEqualTo(2);
+
+        // Another period's row is never touched by a refund scoped to this one.
+        assertThat(readUsageColumn(userId, periodStart, "challenge_quiz_generations")).isZero();
+    }
+
+    private void seedBoardExamUsage(UUID userId, OffsetDateTime periodStart, int challengeUsed, int boardUsed) {
+        jdbcTemplate.update(
+                "insert into user_usage (id, user_id, month, year, period_start, period_end,"
+                        + " challenge_quiz_generations, board_exam_used_this_month, created_at)"
+                        + " values (?, ?, ?, ?, ?, ?, ?, ?, now())",
+                UUID.randomUUID(), userId, periodStart.getMonthValue(), periodStart.getYear(),
+                periodStart, periodStart.plusMonths(1), challengeUsed, boardUsed
+        );
+    }
+
+    private int readUsageColumn(UUID userId, OffsetDateTime periodStart, String column) {
+        return jdbcTemplate.queryForObject(
+                "select " + column + " from user_usage where user_id = ? and period_start = ?",
+                Integer.class, userId, periodStart);
+    }
+
     private void seedLongExamUsage(UUID userId, OffsetDateTime periodStart, int used) {
         jdbcTemplate.update(
                 "insert into user_usage (id, user_id, month, year, period_start, period_end,"

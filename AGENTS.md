@@ -10,6 +10,10 @@ Long Exam's quota charge and failure reversal must both derive from `LongExamSer
 the reservation and reversal session-state keys are public constants on that same class so the recovery sweeper
 cannot drift from the start path.
 
+Board Exam reserves and reverses its Challenge Quiz and Board Exam meters together using
+`ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION` and one idempotency stamp. Both meter decrements
+must clamp in SQL; never rely on the Challenge-meter CHECK constraint to make a partial refund safe.
+
 You are an AI coding agent helping implement NoteLib.
 Follow these rules to keep the codebase consistent and shippable.
 

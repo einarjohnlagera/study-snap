@@ -310,7 +310,9 @@ The Study Plan premium-exam launch carries `collectionId` in the URL, not a call
   ready-Study-Pack pool, and deterministically samples up to the learner-level-derived `maxSourceNotes`
   (6 / 8 / 10 including the primary). Sections inform coverage spread only; neither section size nor note
   count is an exam weight.
-- Board Exam: primary Study Pack route plus up to 2 additional Study Pack ids
+- Board Exam: primary Study Pack route plus the Review Set id. The server walks the whole ready-Study-Pack
+  Review Set, treating child Subject Plans as coverage strata (or direct items when the Review Set has no
+  children), then samples representatively. Subject Plans inform spread only and are never exam weights.
 - Challenge Quiz: Free/Plus plan launch plus optional additional Study Pack ids. The server supplies the cap (Free 3 including primary; Plus a stable 6, from the fixed 18-question multi-note count rather than Long Exam's) and verifies the collection claim before accepting mixed subjects.
 - Interview Practice: primary note route plus up to 2 additional note ids
 

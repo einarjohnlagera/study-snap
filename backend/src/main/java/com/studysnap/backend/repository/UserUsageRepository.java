@@ -122,4 +122,28 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
             @Param("periodStart") OffsetDateTime periodStart,
             @Param("count") Integer count
     );
+
+    /**
+     * Reverses the two counters a Board Exam reserves in one SQL write. Both expressions clamp because
+     * one database column has a CHECK constraint and the other does not; either underflow must be harmless.
+     */
+    @Modifying
+    @Query("""
+            update UserUsageEntity usage
+            set usage.challengeQuizGenerations = case
+                    when coalesce(usage.challengeQuizGenerations, 0) > :count then usage.challengeQuizGenerations - :count
+                    else 0
+                end,
+                usage.boardExamUsedThisMonth = case
+                    when coalesce(usage.boardExamUsedThisMonth, 0) > :count then usage.boardExamUsedThisMonth - :count
+                    else 0
+                end
+            where usage.userId = :userId
+              and usage.periodStart = :periodStart
+            """)
+    int decrementBoardExamUsageNotBelowZero(
+            @Param("userId") UUID userId,
+            @Param("periodStart") OffsetDateTime periodStart,
+            @Param("count") Integer count
+    );
 }

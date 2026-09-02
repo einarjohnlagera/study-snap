@@ -77,6 +77,18 @@ public class GenerationRecoveryRowWriter {
                 });
     }
 
+    /** Recovers only Board Exam CHALLENGE rows; ordinary Challenge sessions retain their existing path. */
+    @Transactional
+    public Optional<OffsetDateTime> recoverBoardExamSession(UUID sessionId, OffsetDateTime cutoff) {
+        return quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .filter(session -> isRecoverableBoardExamSession(session, cutoff))
+                .map(session -> {
+                    OffsetDateTime staleSince = session.getCreatedAt();
+                    markBoardExamSessionFailed(session);
+                    return staleSince;
+                });
+    }
+
     /**
      * Fails a GENERATING Long Exam session from the async generation catch, refunding its quota unit once.
      *
@@ -97,6 +109,16 @@ public class GenerationRecoveryRowWriter {
                 .ifPresent(this::markLongExamSessionFailed);
     }
 
+    /** Async Board Exam failures and the sweeper meet here so one state stamp guards both meters. */
+    @Transactional
+    public void failBoardExamSession(UUID sessionId) {
+        quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .filter(session -> session.getSessionMode() == QuickReviewSessionMode.CHALLENGE)
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.GENERATING)
+                .filter(this::isBoardExamSession)
+                .ifPresent(this::markBoardExamSessionFailed);
+    }
+
     private void markLongExamSessionFailed(QuickReviewSessionEntity session) {
         session.setStatus(QuickReviewSessionStatus.FAILED);
         Map<String, Object> state = new LinkedHashMap<>(session.getSessionState() == null ? Map.of() : session.getSessionState());
@@ -109,6 +131,24 @@ public class GenerationRecoveryRowWriter {
                     session.getCreatedAt()
             );
             state.put(LongExamService.SESSION_STATE_LONG_EXAM_QUOTA_REVERSED, true);
+        }
+        session.setSessionState(state);
+        quickReviewSessionRepository.save(session);
+    }
+
+    private void markBoardExamSessionFailed(QuickReviewSessionEntity session) {
+        session.setStatus(QuickReviewSessionStatus.FAILED);
+        Map<String, Object> state = new LinkedHashMap<>(session.getSessionState() == null ? Map.of() : session.getSessionState());
+        boolean quotaReserved = Boolean.TRUE.equals(state.get(ChallengeQuizService.SESSION_STATE_BOARD_EXAM_QUOTA_RESERVED));
+        boolean quotaReversed = Boolean.TRUE.equals(state.get(ChallengeQuizService.SESSION_STATE_BOARD_EXAM_QUOTA_REVERSED));
+        if (quotaReserved && !quotaReversed) {
+            userUsageService.reverseBoardExamGenerationBy(
+                    session.getUserId(),
+                    ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION,
+                    session.getCreatedAt()
+            );
+            // One stamp covers the two-counter SQL update; never permit a split refund.
+            state.put(ChallengeQuizService.SESSION_STATE_BOARD_EXAM_QUOTA_REVERSED, true);
         }
         session.setSessionState(state);
         quickReviewSessionRepository.save(session);
@@ -148,6 +188,20 @@ public class GenerationRecoveryRowWriter {
                 && session.getSessionMode() == QuickReviewSessionMode.LONG_EXAM
                 && session.getCreatedAt() != null
                 && session.getCreatedAt().isBefore(cutoff);
+    }
+
+    private boolean isRecoverableBoardExamSession(QuickReviewSessionEntity session, OffsetDateTime cutoff) {
+        return session.getStatus() == QuickReviewSessionStatus.GENERATING
+                && session.getSessionMode() == QuickReviewSessionMode.CHALLENGE
+                && isBoardExamSession(session)
+                && session.getCreatedAt() != null
+                && session.getCreatedAt().isBefore(cutoff);
+    }
+
+    private boolean isBoardExamSession(QuickReviewSessionEntity session) {
+        Object mode = session.getSessionState() == null ? null
+                : session.getSessionState().get(ChallengeQuizService.SESSION_STATE_MODE);
+        return ChallengeQuizService.MODE_BOARD_EXAM.equals(mode);
     }
 
     private boolean isRecoverableNote(NoteEntity note, OffsetDateTime cutoff) {
