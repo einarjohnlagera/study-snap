@@ -304,9 +304,12 @@ The non-teacher premium-exam mapping is owned by `resolvePlanPremiumExamMode` in
 
 Premium-exam eligibility differs from the Teacher Exam Builder: Long/Board/Interview generate their own questions at start, so a note only needs a **ready Study Pack** (`canIncludeCollectionItemInPremiumExam` = `STUDY_PACK_READY`) — a pre-generated quiz is **not** required. The Teacher Exam Builder still requires a generated quiz (`canIncludeCollectionItemInExam` = `generatedQuizId`) because it exports that quiz.
 
-The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its Study Pack-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap:
+The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its Study Pack-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap **(all modes EXCEPT Long Exam — Board Exam, Challenge Quiz and Interview Practice all still scope-and-preselect. A plan-sourced Long Exam shows no picker at all since `v0.105.0`; the server samples representatively across the plan.)**:
 
-- Long Exam: primary note route plus additional Study Pack ids, capped by the learner-level-derived `maxSourceNotes` the server returns (6 / 8 / 10 sources including the primary). The start request carries `sourceCollectionId`, which the server re-verifies — see `quiz.md`
+- Long Exam: primary note route plus `sourceCollectionId`. The server verifies the plan, forms the uncapped
+  ready-Study-Pack pool, and deterministically samples up to the learner-level-derived `maxSourceNotes`
+  (6 / 8 / 10 including the primary). Sections inform coverage spread only; neither section size nor note
+  count is an exam weight.
 - Board Exam: primary Study Pack route plus up to 2 additional Study Pack ids
 - Challenge Quiz: Free/Plus plan launch plus optional additional Study Pack ids. The server supplies the cap (Free 3 including primary; Plus a stable 6, from the fixed 18-question multi-note count rather than Long Exam's) and verifies the collection claim before accepting mixed subjects.
 - Interview Practice: primary note route plus up to 2 additional note ids

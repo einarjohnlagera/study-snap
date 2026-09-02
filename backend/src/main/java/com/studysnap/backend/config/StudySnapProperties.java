@@ -146,6 +146,9 @@ public class StudySnapProperties {
         private int longExamMidTierCount = 25;
         private int longExamHighTierCount = 30;
         private int longExamPoolSize = 48;
+        // A short Long Exam remains meaningful only when enough questions and sources survived fan-out.
+        private int longExamMinimumAssembledQuestions = 10;
+        private int longExamMinimumContributingSources = 2;
         private int boardExamPoolSize = 24;
         private boolean examPoolPrewarmEnabled = false;
 

@@ -69,7 +69,11 @@ Exam hubs also perform a best-effort Official Review Set enrichment:
 - Lookup failures are swallowed for this enrichment only; public notes and the rest of the anonymous hub continue rendering.
 - No matches means no additional section or empty state.
 
-Exam practice launched from adopted content follows the note's curriculum axis rather than the hub visitor's profile level. On the single-Study-Pack paths, Long Exam and Board Exam question pools are stamped and sampled by the note's effective curriculum level (`notes.learner_level` -> reader level -> `COLLEGE`). Changing the reader's profile level therefore does not invalidate a pool for a note with an authored level. Multi-note exam assembly remains always assembled from its selected sources and does not use this single-note pool key.
+Exam practice launched from adopted content follows the note's curriculum axis rather than the hub visitor's profile level. On the single-Study-Pack paths, Long Exam and Board Exam question pools are stamped and sampled by the note's effective curriculum level (`notes.learner_level` -> reader level -> `COLLEGE`). Changing the reader's profile level therefore does not invalidate a pool for a note with an authored level. A plan-sourced Long Exam is assembled from a representative deterministic sample of its whole ready-Study-Pack pool, never a learner-picked handful, and does not use this single-note pool key. If source fan-out leaves it above the configured assembly floors, it is presented as a shorter valid exam **on the completion report**; the exam itself is not annotated mid-session; below them it fails without retaining quota.
+
+A Long Exam generation that fails to meet those assembly floors does not consume the learner's monthly Long
+Exam allowance; its already-reserved unit is reversed safely, including when stale-generation recovery performs
+the failure transition.
 
 Single-note exam-pool generation also carries an attempt clock. Every transition into `PENDING` or `GENERATING` refreshes `generation_status_at`; an age-based recovery sweep resolves stale non-terminal pools to `FAILED`. This prevents a pool killed while queued or generating from permanently forcing every later exam start on that Study Pack onto live generation. The sweep stops at `FAILED`: the existing `sampleQuestions` path refreshes the pool only when a learner next uses it. Pool `created_at` is never the recovery clock because pool rows are reused, and a late live task that finishes after recovery may still write the correct `READY` outcome.
 

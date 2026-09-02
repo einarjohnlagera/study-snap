@@ -92,7 +92,13 @@ public class UserUsageService {
 
     @Transactional
     public void incrementLongExamGenerationBy(UUID userId, int count, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, count, 0, 0, 0, 0, 0, 0, 0);
+        increment(userId, occurredAt, 0, 0, 0, 0, count, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    @Transactional
+    public void reverseLongExamGenerationBy(UUID userId, int count, OffsetDateTime occurredAt) {
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, occurredAt);
+        userUsageRepository.decrementLongExamUsageNotBelowZero(userId, usagePeriod.periodStart(), count);
     }
 
     @Transactional

@@ -137,6 +137,9 @@ class NativeQueryPostgresIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private UserUsageRepository userUsageRepository;
+
+    @Autowired
     private LinkedLearnerInvitationLinkRepository invitationLinkRepository;
 
     @Autowired
@@ -1379,6 +1382,52 @@ class NativeQueryPostgresIntegrationTest {
                         + " (relationship_id, birth_year, declared_at) values (?, ?, now())",
                 relationshipId,
                 birthYear);
+    }
+
+
+    /**
+     * Killing test for reverting the Long Exam refund clamp to {@code > 0}, which underflows for any
+     * count above one. A mocked repository cannot test a predicate, and {@code long_exam_used_this_month}
+     * carries NO non-negative CHECK constraint — unlike several sibling columns — so this clamp is the
+     * only thing standing between a double refund and a negative allowance that reads as free quota.
+     */
+    @Test
+    void longExamRefundClampsAtZeroInsteadOfUnderflowing() {
+        UUID userId = seedUser("refund-clamp");
+        OffsetDateTime periodStart = OffsetDateTime.now(ZoneOffset.UTC)
+                .withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        seedLongExamUsage(userId, periodStart, 1);
+
+        // Refunding 2 against a stored 1 must land on 0, never -1.
+        userUsageRepository.decrementLongExamUsageNotBelowZero(userId, periodStart, 2);
+
+        assertThat(readLongExamUsage(userId)).isZero();
+
+        // And a normal single refund still decrements rather than zeroing everything.
+        seedLongExamUsage(userId, periodStart.plusMonths(1), 3);
+        userUsageRepository.decrementLongExamUsageNotBelowZero(userId, periodStart.plusMonths(1), 1);
+        assertThat(readLongExamUsage(userId, periodStart.plusMonths(1))).isEqualTo(2);
+    }
+
+    private void seedLongExamUsage(UUID userId, OffsetDateTime periodStart, int used) {
+        jdbcTemplate.update(
+                "insert into user_usage (id, user_id, month, year, period_start, period_end,"
+                        + " long_exam_used_this_month, created_at) values (?, ?, ?, ?, ?, ?, ?, now())",
+                UUID.randomUUID(), userId, periodStart.getMonthValue(), periodStart.getYear(),
+                periodStart, periodStart.plusMonths(1), used
+        );
+    }
+
+    private int readLongExamUsage(UUID userId) {
+        return jdbcTemplate.queryForObject(
+                "select long_exam_used_this_month from user_usage where user_id = ? order by period_start limit 1",
+                Integer.class, userId);
+    }
+
+    private int readLongExamUsage(UUID userId, OffsetDateTime periodStart) {
+        return jdbcTemplate.queryForObject(
+                "select long_exam_used_this_month from user_usage where user_id = ? and period_start = ?",
+                Integer.class, userId, periodStart);
     }
 
     private UUID seedUser(String handle) {

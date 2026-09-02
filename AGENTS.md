@@ -1,5 +1,15 @@
 # AGENTS.md - NoteLib
 
+**v0.105.0 implementation note:** `ExamSourceLimitResolver` still owns the sole `questionCount / 3`
+formula, but for Long Exam it now means **how many sources we sample from the eligible curriculum pool**,
+not how many notes a learner may pick. A plan session remains anchored on the caller-supplied primary Study
+Pack until the deferred §15 session-anchoring migration: the primary is force-included in the sample at
+index 0, and neither the active-session lookup nor its two partial unique indexes may change.
+
+Long Exam's quota charge and failure reversal must both derive from `LongExamService.QUOTA_UNITS_PER_SESSION`;
+the reservation and reversal session-state keys are public constants on that same class so the recovery sweeper
+cannot drift from the start path.
+
 You are an AI coding agent helping implement NoteLib.
 Follow these rules to keep the codebase consistent and shippable.
 

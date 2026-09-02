@@ -79,6 +79,16 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
 
     Optional<QuickReviewSessionEntity> findByIdAndUserId(UUID id, UUID userId);
 
+    /**
+     * Reads the CURRENT persisted status, bypassing the persistence context.
+     *
+     * <p>⚠️ A scalar projection is deliberate. {@code findByIdForUpdate} acquires the row lock but returns
+     * the already-managed instance from the identity map, so its {@code getStatus()} can still read a stale
+     * value after another transaction committed a change. Locking is the serialisation; this is the read.
+     */
+    @Query("select s.status from QuickReviewSessionEntity s where s.id = :id")
+    Optional<QuickReviewSessionStatus> findStatusById(@Param("id") UUID id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select q from QuickReviewSessionEntity q where q.id = :id")
     Optional<QuickReviewSessionEntity> findByIdForUpdate(@Param("id") UUID id);

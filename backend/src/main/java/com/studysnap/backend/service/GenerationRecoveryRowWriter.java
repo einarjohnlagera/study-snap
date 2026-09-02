@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -46,6 +48,7 @@ public class GenerationRecoveryRowWriter {
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final NoteRepository noteRepository;
     private final StudyPackService studyPackService;
+    private final UserUsageService userUsageService;
 
     /**
      * @return when recovered, the instant the row became stale, for the caller's age reporting
@@ -69,10 +72,39 @@ public class GenerationRecoveryRowWriter {
                 .filter(session -> isRecoverableLongExamSession(session, cutoff))
                 .map(session -> {
                     OffsetDateTime staleSince = session.getCreatedAt();
-                    session.setStatus(QuickReviewSessionStatus.FAILED);
-                    quickReviewSessionRepository.save(session);
+                    markLongExamSessionFailed(session);
                     return staleSince;
                 });
+    }
+
+    /** Shared by the async catch and the stale-session sweeper so every FAILED transition refunds once. */
+    @Transactional
+    public void failLongExamSession(UUID sessionId) {
+        quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                .filter(session -> session.getSessionMode() == QuickReviewSessionMode.LONG_EXAM)
+                // ⚠️ STATUS GUARD, matching recoverLongExamSession. Without it this public method would
+                // fail and refund an IN_PROGRESS or COMPLETED exam — destroying a live or finished session
+                // — if any future caller passed one. The mode filter alone protects other quiz modes; this
+                // protects Long Exam sessions that are past generation.
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.GENERATING)
+                .ifPresent(this::markLongExamSessionFailed);
+    }
+
+    private void markLongExamSessionFailed(QuickReviewSessionEntity session) {
+        session.setStatus(QuickReviewSessionStatus.FAILED);
+        Map<String, Object> state = new LinkedHashMap<>(session.getSessionState() == null ? Map.of() : session.getSessionState());
+        boolean quotaReserved = Boolean.TRUE.equals(state.get(LongExamService.SESSION_STATE_LONG_EXAM_QUOTA_RESERVED));
+        boolean quotaReversed = Boolean.TRUE.equals(state.get(LongExamService.SESSION_STATE_LONG_EXAM_QUOTA_REVERSED));
+        if (quotaReserved && !quotaReversed) {
+            userUsageService.reverseLongExamGenerationBy(
+                    session.getUserId(),
+                    LongExamService.QUOTA_UNITS_PER_SESSION,
+                    session.getCreatedAt()
+            );
+            state.put(LongExamService.SESSION_STATE_LONG_EXAM_QUOTA_REVERSED, true);
+        }
+        session.setSessionState(state);
+        quickReviewSessionRepository.save(session);
     }
 
     @Transactional
