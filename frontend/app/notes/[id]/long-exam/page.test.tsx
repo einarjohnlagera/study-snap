@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LongExamPage from "./page";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -9,6 +9,7 @@ import {
   getMe,
   getNote,
   listNotes,
+  saveLongExamProgress,
   startLongExam,
 } from "@/lib/api";
 
@@ -448,4 +449,5 @@ describe("LongExamPage", () => {
     expect(screen.getByText(expectedTitle)).toBeInTheDocument();
     expect(screen.queryByText(absentTitle)).not.toBeInTheDocument();
   });
+
 });

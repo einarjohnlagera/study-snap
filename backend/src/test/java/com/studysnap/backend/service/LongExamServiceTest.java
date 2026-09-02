@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
@@ -53,6 +54,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.mockito.InOrder;
 import org.mockito.ArgumentCaptor;
 import java.util.Optional;
 import java.util.Set;
@@ -1550,6 +1552,14 @@ class LongExamServiceTest {
             ));
         when(studyPackRepository.findByOwnerUserIdAndNoteIdInAndStatus(eq(userId), any(), any()))
             .thenReturn(List.of(primary, second, third));
+        // ⚠️ THIS STUB IS WHAT MAKES THE WARM ASSERTION REAL. The warm block calls findByIdAndOwnerUserId
+        // (NOT ...ForUpdate) and guards on .ifPresent, so without this stub the block could never run and
+        // `verify(never()).initiatePoolForUsage` passed vacuously — deleting the warm guard survived the
+        // whole suite.
+        // lenient: with the guard intact this stub is deliberately UNUSED — that is the proof the warm
+        // block never runs. Strict mode would reject it, and removing it makes the assertion vacuous.
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primary));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -1647,6 +1657,71 @@ class LongExamServiceTest {
 
         assertThat(savedStatuses).endsWith(QuickReviewSessionStatus.FAILED);
         verify(generationRecoveryRowWriter).failLongExamSession(response.sessionId());
+    }
+
+
+    @Test
+    void asyncGeneration_locksTheSessionRowBeforeReReadingItsStatus() {
+        // ⚠️ THE ORDER IS THE GUARD, AND THE LOCK IS THE HALF NOTHING PINNED. The freshness of the scalar
+        // read is already covered; this pins the serialisation that makes the read meaningful. Deleting the
+        // lock, or reading before taking it, leaves plain TOCTOU: the entity has no @Version, so the sweeper
+        // can commit FAILED + refund in the gap and the save then resurrects a refunded session.
+        // Both mutations survived the whole suite before this test existed — the original defect minus one line.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
+        List<QuickReviewSessionStatus> savedStatuses = new ArrayList<>();
+        List<QuickReviewSessionEntity> savedSessions = new ArrayList<>();
+
+        stubStartSession(userId, studyPackId, studyPack, buildGenerationContext(LearnerLevel.COLLEGE),
+            buildQuiz(25), savedStatuses, savedSessions);
+
+        LongExamStartResponse response = longExamService.startSession(
+            studyPackId.toString(), userId, new LongExamStartRequest(null));
+        when(quickReviewSessionRepository.findById(response.sessionId()))
+            .thenReturn(Optional.of(savedSessions.getFirst()));
+
+        dispatchedTask.run();
+
+        InOrder ordered = inOrder(quickReviewSessionRepository);
+        ordered.verify(quickReviewSessionRepository).findByIdForUpdate(response.sessionId());
+        ordered.verify(quickReviewSessionRepository).findStatusById(response.sessionId());
+    }
+
+
+    @Test
+    void startSession_planSourcedRejectsACallerSuppliedSourceListInsteadOfDiscardingIt() {
+        // ⚠️ The rule CLAUDE.md singles out: "silently ignored" drifting into "silently accepted" is how a
+        // cap gets bypassed. API-surface only — the client never sends both — so nothing else covers it.
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, userId);
+        StudyPackEntity second = buildStudyPack(UUID.randomUUID(), userId, "Second", BIOLOGY_SUBJECT);
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primary));
+        lenient().when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(second.getId(), userId))
+            .thenReturn(Optional.of(second));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            eq(userId), eq(primaryStudyPackId), eq(QuickReviewSessionMode.LONG_EXAM), any()
+        )).thenReturn(Optional.empty());
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(Set.of(primary.getNoteId(), second.getNoteId()));
+        when(planSourcedExamVerifier.resolvePlanMembers(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(List.of(
+                new PlanSourcedExamVerifier.PlanExamMember(primary.getNoteId(), "A", 0),
+                new PlanSourcedExamVerifier.PlanExamMember(second.getNoteId(), "B", 1)
+            ));
+
+        assertThatThrownBy(() -> longExamService.startSession(
+            primaryStudyPackId.toString(), userId,
+            new LongExamStartRequest(null, List.of(second.getId().toString()), collectionId.toString())
+        )).isInstanceOf(InvalidLongExamSourceException.class);
+
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
     }
 
     private void stubStartSession(

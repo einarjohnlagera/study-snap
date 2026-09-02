@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LongExamPlanSourceSamplerTest {
     private final LongExamPlanSourceSampler sampler = new LongExamPlanSourceSampler();
@@ -83,5 +84,18 @@ class LongExamPlanSourceSamplerTest {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(id);
         return new LongExamPlanSourceSampler.EligiblePlanSource(studyPack, label, position);
+    }
+
+    @Test
+    void sample_throwsANamedExceptionWhenThePrimaryIsNotEligible() {
+        // ⚠️ The primary can be absent from the pool: the start-time lookup does not filter on
+        // StudyPackStatus while the eligible pool requires DONE. A bare orElseThrow surfaced as
+        // NoSuchElementException — a generic 500 with no error code, on a paid path.
+        List<LongExamPlanSourceSampler.EligiblePlanSource> pool = List.of(
+                source(UUID.randomUUID(), "A", 0), source(UUID.randomUUID(), "B", 1)
+        );
+
+        assertThatThrownBy(() -> sampler.sample(pool, UUID.randomUUID(), 2, UUID.randomUUID()))
+                .isInstanceOf(com.studysnap.backend.exception.LongExamPrimarySourceNotEligibleException.class);
     }
 }

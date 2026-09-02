@@ -402,7 +402,7 @@ This doc proposes shape, not schedule. Concrete sequencing is owned by `ROADMAP.
 - **Cross-profile mode unlock** (Students opting into Board Exam without changing profile).
 - **Curated exam decks / cohort content** (Pro+).
 - **Cross-profile journey** (Student → Board Taker upgrade flow with continuity).
-- **Flexible review methods over one Study Pack** (`ROADMAP.md` v0.39.0) — see "Non-Engine Review Surfaces" above for Flashcards/Memorization (shipped), and "New Question Formats" above for Identification and Enumeration (both shipped, Challenge Quiz only).
+- **Flexible review methods over one Study Pack** (`ROADMAP.md` v0.39.0) — see "Non-Engine Review Surfaces" above for Flashcards/Memorization (shipped), and "New Question Formats" above for Identification and Enumeration (both shipped). **Identification also ships in Long Exam as of `v0.105.0`; Enumeration remains Challenge Quiz only.** ⚠️ This is a factual correction about WHERE an existing format is available — it adds no mode and no sub-mode, and the five-mode contract is unchanged.
 
 ---
 

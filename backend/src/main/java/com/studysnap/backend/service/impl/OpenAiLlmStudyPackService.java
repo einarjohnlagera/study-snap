@@ -575,22 +575,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private QuizItem copyQuizItemWithQuestionGroup(QuizItem item, String questionGroup, String questionFormat) {
-        return new QuizItem(
-                item.question(),
-                item.choices(),
-                item.correctIndex(),
-                item.concept(),
-                item.explanation(),
-                null,
-                questionFormat,
-                item.questionType(),
-                item.workingSolution(),
-                item.correctIndices(),
-                questionGroup,
-                item.keyConcept(),
-                item.acceptableAnswers(),
-                item.acceptableAnswerGroups()
-        );
+        // ⚠️ Trusted copy. Rebuilding through the public constructor re-ran the non-idempotent choice
+        // sanitizer and silently truncated author initials on every demoted MATCHING group; it also
+        // dropped sourceStudyPackId.
+        return item.withQuestionGroupAndFormat(questionGroup, questionFormat);
     }
 
     private UsageMetadata extractUsageMetadata(JsonNode responseJson, String fallbackModel) {

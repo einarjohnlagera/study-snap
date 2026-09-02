@@ -304,7 +304,7 @@ The non-teacher premium-exam mapping is owned by `resolvePlanPremiumExamMode` in
 
 Premium-exam eligibility differs from the Teacher Exam Builder: Long/Board/Interview generate their own questions at start, so a note only needs a **ready Study Pack** (`canIncludeCollectionItemInPremiumExam` = `STUDY_PACK_READY`) — a pre-generated quiz is **not** required. The Teacher Exam Builder still requires a generated quiz (`canIncludeCollectionItemInExam` = `generatedQuizId`) because it exports that quiz.
 
-The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its Study Pack-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap **(Interview Practice only — a plan-sourced Long Exam shows no picker at all since `v0.105.0`; the server samples representatively across the plan)**:
+The Study Plan premium-exam launch carries `collectionId` in the URL, not a caller-provided note list. Each exam prescreen fetches the collection, intersects its Study Pack-ready items with the user's Study Pack-ready notes, scopes the additional-notes picker to that plan set, and pre-selects up to the existing per-exam cap **(all modes EXCEPT Long Exam — Board Exam, Challenge Quiz and Interview Practice all still scope-and-preselect. A plan-sourced Long Exam shows no picker at all since `v0.105.0`; the server samples representatively across the plan.)**:
 
 - Long Exam: primary note route plus `sourceCollectionId`. The server verifies the plan, forms the uncapped
   ready-Study-Pack pool, and deterministically samples up to the learner-level-derived `maxSourceNotes`

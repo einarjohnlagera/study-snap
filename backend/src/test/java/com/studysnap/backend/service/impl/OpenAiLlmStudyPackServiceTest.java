@@ -2601,4 +2601,53 @@ class OpenAiLlmStudyPackServiceTest {
 
         assertThat(formats).contains("IDENTIFICATION", "ENUMERATION");
     }
+
+    @Test
+    void matchingGroupDemotionDoesNotReSanitizeChoicesOrDropProvenance() {
+        // ⚠️ SECOND INSTANCE OF THE COPY-HELPER DEFECT. sanitizeChoiceText strips a leading choice label
+        // with replaceFirst and is NOT idempotent, so rebuilding an already-sanitized item through the
+        // public constructor eats another token: "A. B. Smith" -> "B. Smith" -> "Smith". Demotion runs on
+        // every item of an invalid MATCHING group, in Challenge Quiz, Board Exam and Long Exam.
+        QuizItem original = new QuizItem(
+                "Who wrote it?", List.of("A. B. Smith", "B. C. Darwin", "Plain", "Second"),
+                0, "Concept", "Explanation", null, "MATCHING", null, null, null, "group-1")
+                .withSourceStudyPackId("11111111-1111-1111-1111-111111111111");
+
+        QuizItem demoted = ReflectionTestUtils.invokeMethod(
+                service, "copyQuizItemWithQuestionGroup", original, null, "MCQ");
+
+        assertThat(demoted.choices()).containsExactlyElementsOf(original.choices());
+        assertThat(demoted.questionFormat()).isEqualTo("MCQ");
+        assertThat(demoted.questionGroup()).isNull();
+        // Provenance must survive the rewrite; the previous rebuild dropped it to null.
+        assertThat(demoted.sourceStudyPackId()).isEqualTo("11111111-1111-1111-1111-111111111111");
+    }
+
+    @Test
+    void longExamGenerationRequestPermitsIdentificationButNotEnumeration() throws JsonProcessingException {
+        // ⚠️ THIS DRIVES THE REAL CALL SITE. The previous guard called buildGeneratedQuizSchema with
+        // HARDCODED booleans, so reverting the one line that derives allowIdentification from the schema
+        // name left the whole suite green and the feature dead again — the guard sat one layer below the
+        // defect it named. Assert on the request body actually sent for a Long Exam generation.
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload()));
+
+        service.generateLongExam(
+                "Structural Analysis",
+                "Summary",
+                List.of("Shear"),
+                List.of(),
+                2,
+                "medium",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, "Civil Engineering", "Mathematics", List.of())
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        String body = requestCaptor.getValue();
+        assertThat(body).contains("note_lib_long_exam");
+        assertThat(body).contains("IDENTIFICATION");
+        assertThat(body).doesNotContain("ENUMERATION");
+    }
+
 }

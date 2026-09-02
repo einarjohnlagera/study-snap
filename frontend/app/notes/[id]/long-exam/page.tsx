@@ -735,11 +735,46 @@ export default function LongExamPage() {
         }
     }, [currentQuestion, currentQuestionIndex, savingProgress, sessionId, showToast]);
 
-    const handleIdentificationAnswer = useCallback(async (answerText: string) => {
-        // ⚠️ LOCAL STATE FIRST, AND NEVER GATED ON AN IN-FLIGHT SAVE. The input is controlled by this
-        // state, so returning early while a save was in flight meant the character was never rendered —
-        // it simply disappeared as the learner typed. This matches the Challenge Quiz handler, which is
-        // the established precedent for the same component.
+    /**
+     * ⚠️ THE NETWORK WRITE IS DEBOUNCED; THE LOCAL STATE IS NOT.
+     *
+     * <p>QuizIdentificationInput fires per keystroke, and saveProgress is a read-modify-write of the whole
+     * session-state JSONB column. Firing one request per character raced ~19 concurrent read-modify-writes
+     * whose last arrival wins — and Long Exam is SERVER-GRADED: LongExamCompleteRequest carries only
+     * durationSeconds, so whatever the last write left in that column IS the graded answer.
+     *
+     * <p>⚠️ The Challenge Quiz handler is NOT a valid precedent for firing per keystroke, and citing it was
+     * the error: Challenge grades CLIENT-side and submits correctAnswers/totalQuestions at completion, so
+     * its progress writes are advisory. Long Exam has no such fallback.
+     *
+     * <p>Local state updates immediately so no keystroke is ever dropped or clobbered by a stale echo;
+     * the save is coalesced and flushed before completion.
+     */
+    const pendingIdentificationRef = useRef<{index: number; answer: string} | null>(null);
+    const identificationSaveTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+
+    const flushIdentificationAnswer = useCallback(async () => {
+        if (identificationSaveTimerRef.current !== null) {
+            globalThis.clearTimeout(identificationSaveTimerRef.current);
+            identificationSaveTimerRef.current = null;
+        }
+        const pending = pendingIdentificationRef.current;
+        if (!pending || !sessionId) {
+            return;
+        }
+        pendingIdentificationRef.current = null;
+        try {
+            await saveLongExamProgress(sessionId, {
+                questionIndex: pending.index,
+                selectedChoiceIndex: 0,
+                selectedIdentificationAnswer: pending.answer,
+            });
+        } catch {
+            showToast("Could not save that answer. Try again before submitting.", "error");
+        }
+    }, [sessionId, showToast]);
+
+    const handleIdentificationAnswer = useCallback((answerText: string) => {
         if (!sessionId || !currentQuestion || currentQuestion.questionFormat !== "IDENTIFICATION") {
             return;
         }
@@ -750,24 +785,14 @@ export default function LongExamPage() {
             else delete next[choiceKey];
             return next;
         });
-        setSavingProgress(true);
-        try {
-            const response = await saveLongExamProgress(sessionId, {
-                questionIndex: currentQuestionIndex,
-                selectedChoiceIndex: 0,
-                selectedIdentificationAnswer: answerText,
-            });
-            setSelectedChoices(normalizeSelectedChoices(response.selectedChoices));
-            setSelectedMultiChoices(normalizeSelectedMultiChoices(response.selectedMultiChoices));
-            // ⚠️ Deliberately NOT overwriting the identification answers from the echo. Doing so clobbered
-            // every character typed during the round trip — the learner's own newer input replaced by a
-            // stale server copy of what they had typed a moment earlier.
-        } catch {
-            showToast("Could not save that answer. Your answer is still visible.", "error");
-        } finally {
-            setSavingProgress(false);
+        pendingIdentificationRef.current = {index: currentQuestionIndex, answer: answerText};
+        if (identificationSaveTimerRef.current !== null) {
+            globalThis.clearTimeout(identificationSaveTimerRef.current);
         }
-    }, [currentQuestion, currentQuestionIndex, sessionId, showToast]);
+        identificationSaveTimerRef.current = globalThis.setTimeout(() => {
+            void flushIdentificationAnswer();
+        }, 500);
+    }, [currentQuestion, currentQuestionIndex, flushIdentificationAnswer, sessionId]);
 
     const handleSelectMatchingChoice = useCallback(async (questionIndex: number, choiceIndex: number) => {
         if (!sessionId || savingProgress || !currentMatchingGroup) {
@@ -812,6 +837,9 @@ export default function LongExamPage() {
         setSubmitting(true);
         setError(null);
         try {
+            // ⚠️ Grading reads persisted state only, so a still-pending debounce would silently drop the
+            // learner's last typed answer from their score.
+            await flushIdentificationAnswer();
             const durationSeconds = Math.max(0, timeLimitSeconds - remainingSecondsRef.current);
             const response = await completeLongExamSession(sessionId, {durationSeconds});
             setMasteryReport(response);
@@ -833,7 +861,7 @@ export default function LongExamPage() {
         } finally {
             setSubmitting(false);
         }
-    }, [noteId, sessionId, showToast, studyPackId, submitting, timeLimitSeconds]);
+    }, [flushIdentificationAnswer, noteId, sessionId, showToast, studyPackId, submitting, timeLimitSeconds]);
 
     useEffect(() => {
         if (phase !== "running" || deadlineEpochSeconds === null) {

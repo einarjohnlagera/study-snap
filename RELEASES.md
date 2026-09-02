@@ -275,12 +275,52 @@ because each is a recurring shape.**
 corrupted each other's builds.** Two detected it and re-ran in isolated worktrees; one did not. **Mutating
 agents need isolated `git worktree`s.**
 
+### Re-test — three cold agents in ISOLATED worktrees
+
+**⚠️ THE RE-TEST FOUND A LIVE DEFECT AND EIGHT SURVIVING MUTANTS, INCLUDING ONE ON A FIX I HAD JUST MADE.**
+
+- **⚠️ A SECOND COPY HELPER RE-RAN THE NON-IDEMPOTENT SANITIZER — the same defect class as `v0.104.0`'s
+  worst, found in `copyQuizItemWithQuestionGroup`.** MATCHING-group demotion rebuilt each item through the
+  sanitizing constructor, so `"A. B. Smith"` became `"B. Smith"` and then `"Smith"`, on every demoted group
+  in Challenge Quiz, Board Exam **and** Long Exam. It also dropped `sourceStudyPackId`. **Pre-existing, not
+  introduced here** — but the pressure test found it only because one agent was pointed at the blind spot
+  rather than at the feature. Fixed with a trusted copy and pinned.
+- **⚠️ A FIX OF MINE INTRODUCED A WRITE RACE ON A SERVER-GRADED PATH.** Removing the in-flight-save gate
+  stopped keystrokes being dropped but fired one `PUT` per character, each a read-modify-write of the whole
+  session-state JSONB column. **`LongExamCompleteRequest` carries only `durationSeconds`, so whatever the
+  last write leaves in that column IS the graded answer.** The Challenge Quiz precedent I cited does **not**
+  transfer: Challenge grades client-side and submits `correctAnswers`, which makes its progress writes
+  advisory. Fixed with a debounce plus a flush before completion.
+- **⚠️ THE RACE GUARD'S LOCK WAS UNPINNED — "the original defect minus one line".** Deleting
+  `findByIdForUpdate`, or reading before taking it, left the whole suite green: the test proved the read was
+  fresh but nothing proved the serialisation that makes it meaningful. Now pinned with an `InOrder` assertion.
+- **⚠️ THE IDENTIFICATION SCHEMA GUARD WAS WRITTEN ONE LAYER BELOW THE DEFECT.** It called the private schema
+  builder with **hardcoded booleans**, bypassing the single line that derives the flag from the schema name —
+  the only thing that was ever broken. Reverting the fix left the feature dead and the suite green. Replaced
+  with a test that asserts on the **request body actually sent** for a Long Exam generation.
+- **⚠️ A `never()` ASSERTION PASSED VACUOUSLY.** The pool-warm half of its test could not fire, because the
+  warm block calls `findByIdAndOwnerUserId` while the test stubbed only `…ForUpdate`. The missing stub, not
+  the guard, was satisfying it.
+- Also pinned: the plan-path rejection rule, and `LongExamPrimarySourceNotEligibleException`.
+
+**⚠️ THE ISOLATED WORKTREES WERE THE FIX FOR THE PREVIOUS ROUND'S CONTAMINATION** — three mutating agents in
+one tree had corrupted each other's builds. Every agent this round reported clean, reproducible counts.
+
+**⚠️ STILL UNPINNED AND RECORDED RATHER THAN CLAIMED: the two frontend Identification-input fixes.** Reverting
+either the debounce or the echo-clobber leaves the frontend suite green. A page-level test could not be made
+to work against the exam's resume state machine without a refactor this release should not carry.
+
 ### Known limitations
 
-- **Accepted reserved-before-charged window:** the generation session commits its quota-reserved state before
-  the synchronous charge executes. A process exit in that narrow interval can leave a reserved-but-uncharged
-  session, whose later failure attempts a clamped no-op reversal. Charging inside the creation transaction is
-  intentionally rejected because it re-opens the concurrent-start quota bypass.
+- **⚠️ Accepted reserved-before-charged window — AND THE EARLIER DESCRIPTION OF IT WAS WRONG, CORRECTED HERE.**
+  The generation session commits its quota-reserved state before the synchronous charge executes, so a process
+  exit in that narrow interval leaves a reserved-but-uncharged session. **This previously read "whose later
+  failure attempts a clamped no-op reversal". That is false and understated a money defect:** the JPQL clamps
+  the counter at **zero**, not at its **correct value**, so if the learner has any other Long Exam usage in the
+  same period the sweeper refunds a charge that was never made (3 → 2) — a silently granted free unit, for a
+  *different* session. It is a no-op only when their usage is already 0. Bounded to ≤1 unit per crashed start
+  and not attacker-triggerable. Charging inside the creation transaction stays rejected because it re-opens the
+  concurrent-start quota bypass.
 
 ## v0.104.0 - Assessment Source Provenance
 
