@@ -137,6 +137,18 @@ writing the Codex prompt.**
   short, below them fail and reverse.
 - **A caller-supplied note list is REJECTED on the sampled path**, not silently discarded, with an accurate
   error rather than a borrowed "too many notes" one.
+- **The capability is actually REACHABLE, which it was not when the backend first landed.** The frontend
+  sent `sourceCollectionId` **only alongside a picked note list** — and the server samples the Review Set and
+  now rejects such a list, so the single route into this feature was the one route that invalidated itself.
+  A Review Set Board Exam is now the default whenever the learner arrived from a collection, needing no
+  picks, and the source picker is hidden on that path rather than left as a control whose selections are
+  silently dropped. **⚠️ This is the `v0.103.0` pattern repeating — a complete, correct server capability
+  that no UI could reach — and it was found by asking how a learner gets here, not by reading the diff.**
+- **The gate is a RESOLVED plan, never a present `collectionId`, and getting that wrong twice is why it is
+  written down.** `v0.105.0` made the same mistake on Long Exam. The plan lookup falls back silently on
+  failure, so gating on the id alone removed the degradation path outright: a learner whose plan could not be
+  loaded, or which holds fewer than two ready Study Packs, could not start a Board Exam **at all**, where
+  before they simply got a single-note one.
 
 ### ⚠️ Found by the pre-signoff pressure test — read this before touching Board Exam again
 
