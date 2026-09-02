@@ -133,7 +133,36 @@ public final class QuizSessionReviewUtils {
                 selectedMultiChoices,
                 selectedIdentificationAnswers,
                 selectedEnumerationAnswers,
-                QuizItem::concept
+                QuizItem::concept,
+                UNKNOWN_CONCEPT_LABEL
+        );
+    }
+
+    /**
+     * Overload taking the caller's own unknown-concept label.
+     *
+     * <p>⚠️ `ConceptHealthEntity` is keyed `(user_id, study_pack_id, concept)`, so the label for a null or
+     * blank concept is part of the ROW IDENTITY, not cosmetic. `ChallengeQuizService` labels these
+     * `Uncategorized` while this class labels them `Unknown`; letting the Challenge completion path adop
+     * this class's label would fork the row — orphaning the accumulated `incorrect_streak` on the old
+     * label and starting a parallel row at zero — while the result screen kept showing the old one.
+     */
+    public static Map<String, List<ChallengeQuizConceptStatResponse>> computeConceptBreakdownBySourceStudyPack(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices,
+            Map<Integer, String> selectedIdentificationAnswers,
+            Map<Integer, List<String>> selectedEnumerationAnswers,
+            String unknownConceptLabel
+    ) {
+        return computeConceptBreakdownBySourceStudyPack(
+                quiz,
+                selectedChoices,
+                selectedMultiChoices,
+                selectedIdentificationAnswers,
+                selectedEnumerationAnswers,
+                QuizItem::concept,
+                unknownConceptLabel
         );
     }
 
@@ -154,7 +183,8 @@ public final class QuizSessionReviewUtils {
                 selectedMultiChoices,
                 selectedIdentificationAnswers,
                 selectedEnumerationAnswers,
-                QuizSessionReviewUtils::effectiveKeyConcept
+                QuizSessionReviewUtils::effectiveKeyConcept,
+                UNKNOWN_CONCEPT_LABEL
         );
     }
 
@@ -164,7 +194,8 @@ public final class QuizSessionReviewUtils {
             Map<Integer, List<Integer>> selectedMultiChoices,
             Map<Integer, String> selectedIdentificationAnswers,
             Map<Integer, List<String>> selectedEnumerationAnswers,
-            Function<QuizItem, String> conceptResolver
+            Function<QuizItem, String> conceptResolver,
+            String unknownConceptLabel
     ) {
         if (quiz == null || quiz.isEmpty()) {
             return Map.of();
@@ -181,7 +212,7 @@ public final class QuizSessionReviewUtils {
                     sourceStudyPackId,
                     ignored -> new LinkedHashMap<>()
             );
-            String concept = normalizeConcept(conceptResolver.apply(item));
+            String concept = normalizeConcept(conceptResolver.apply(item), unknownConceptLabel);
             ConceptCounter counter = counters.computeIfAbsent(concept, ignored -> new ConceptCounter());
             counter.totalQuestions += 1;
             if (isAnswerCorrect(item, index, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers)) {
@@ -355,11 +386,15 @@ public final class QuizSessionReviewUtils {
     }
 
     private static String normalizeConcept(String concept) {
+        return normalizeConcept(concept, UNKNOWN_CONCEPT_LABEL);
+    }
+
+    private static String normalizeConcept(String concept, String unknownConceptLabel) {
         if (concept == null) {
-            return UNKNOWN_CONCEPT_LABEL;
+            return unknownConceptLabel;
         }
         String trimmed = concept.trim();
-        return trimmed.isEmpty() ? UNKNOWN_CONCEPT_LABEL : trimmed;
+        return trimmed.isEmpty() ? unknownConceptLabel : trimmed;
     }
 
     private static String normalizeSourceStudyPackId(String sourceStudyPackId) {

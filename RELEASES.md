@@ -208,6 +208,48 @@ agreed plan**, per the correction recorded at the `v0.103.0` kickoff.
 - **Cross-source MATCHING groups now fail loudly.** A contiguous matching group with more than one source
   stamp is rejected rather than shuffling ambiguous provenance into a scored assessment.
 
+### Found by the pre-signoff cold agent, and fixed
+
+**⚠️ THE COLD AGENT DISPROVED TWO CLAIMS AND FOUND THREE SURVIVING MUTANTS. All are fixed; recorded because
+each is a shape that will recur.**
+
+- **⚠️ `withSourceStudyPackId` CORRUPTED CHOICE TEXT ON EVERY SESSION LOAD, IN EVERY QUIZ MODE — the worst
+  defect in the release, and it was invisible to 1920 passing tests.** The copy routed through the
+  sanitizing constructor, and `QuizValidationUtils.sanitizeChoiceText` strips a leading choice label with
+  `replaceFirst` and is **not idempotent**: `"A. B. Smith"` -> `"B. Smith"` -> `"Smith"`. Because
+  `QuizSessionStateUtils.extractQuiz` calls it on **every deserialized item**, the blast radius was every
+  mode, not just the stamped multi-note paths — author initials in exactly the Education, Accountancy and
+  Nursing catalogue this product carries. **Fixed with a trusted copy constructor that reuses already-
+  sanitized values verbatim**, pinned by a guard that also asserts repeated stamping is stable.
+- **⚠️ THE UNKNOWN-CONCEPT LABEL DIVERGED AND WOULD HAVE FORKED `ConceptHealth` ROWS.** `ChallengeQuizService`
+  labels an absent concept **`Uncategorized`**; `QuizSessionReviewUtils` labels it **`Unknown`**. Moving the
+  aggregation into the util silently switched Challenge and Board Exam to the second label — and since
+  `ConceptHealthEntity` is keyed `(user_id, study_pack_id, concept)`, **the label is part of the row
+  identity**: the accumulated `incorrect_streak` on the old row would have been orphaned while a parallel
+  row started at zero, with the result screen still displaying the old label. **Fixed by parameterizing the
+  label so each caller keeps its own**, pinned by a regression test.
+- **⚠️ THE MATCHING-GROUP GUARD TURNED A WORKING MULTI-NOTE SESSION INTO A HARD FAILURE.**
+  `challenge-quiz-developer.txt` instructs **every** generation to label its matching block `group-1`, and
+  `generateChallengeQuizForSources` appends sources back to back — so one source's trailing block and the
+  next source's leading block routinely share a label and sit adjacent, merging into one block and tripping
+  the new assertion **after both LLM calls had been paid for**. The agent reproduced it end to end.
+  **⚠️ "Fail loudly" was the wrong instruction here and the fix is at the cause:** the block scan now breaks
+  on the source stamp, so the blocks stay separate. The guard remains as defence in depth. **No quota was at
+  risk** — verified that every `userUsageService.increment*` runs after the shuffle, and `catch (Exception)`
+  releases bank claims and marks the session failed.
+- **⚠️ THE OWNERSHIP GUARD HAD ZERO EXECUTED COVERAGE, ERASED BY THIS RELEASE'S OWN TEST SETUP.** Deleting
+  `findByIdAndOwnerUserId` from **both** Challenge record methods passed **1920 tests**. The cause was a
+  `lenient()` stub in `setUp` returning a pack for **any** id, so the guard's empty branch was unreachable.
+  **This is the third release running where a check shipped behind a `@Mock` that made it untestable.**
+  Fixed with a test that overrides the blanket stub.
+- **Two tests claimed more than they proved.** The Board Exam test had no `never()` assertions, so
+  reintroducing under-attribution to the primary left every positive assertion satisfied; and the Challenge
+  test's `never()` assertions named a UUID the session had never heard of, which nothing could ever write
+  to. Both strengthened, and the previously-surviving mutants now fail.
+- **A feature-doc claim written during this release was false.** The rewritten `exam-hub.md` paragraph
+  asserted a `keyConcepts` intersection for **Board Exam**, which does not apply — Board Exam completes
+  through `ChallengeQuizService` and uses the non-`ForKnownConcepts` variants. Corrected.
+
 ### Known limitations
 
 - **⚠️ A THIRD INSTANCE OF THE SAME DEFECT EXISTS IN `InterviewPracticeService` AND IS NOT FIXED HERE.**
@@ -230,6 +272,14 @@ agreed plan**, per the correction recorded at the `v0.103.0` kickoff.
   (its generation path is not stamped by any of this slice's three seams), and folding a third service into a
   release that already changes what production evidence means was judged the worse trade. **Recorded rather
   than silently dropped**, per the standing rule.
+- **The provenance guarantee is per ITEM, not per SESSION.** A session mixing stamped and unstamped items
+  would still broadcast the unstamped subset to every source pack, so one concept could land in a pack's
+  correct set and its missed set in the same completion. **Not reachable today** — `generateQuizForSources`
+  stamps every source, and the only unstamped Long Exam producer is the pool path, which runs only when
+  there are no additional sources — but the invariant is narrower than "stamped sessions never broadcast".
+- **`QuizSessionReviewUtils.normalizeSourceStudyPackId` is unverified defence-in-depth.** Replacing it with a
+  pass-through leaves the suite green, because `QuizSessionStateUtils.parseSourceStudyPackId` already
+  validates on the path that matters and *is* covered. Recorded so nobody claims coverage it does not have.
 - **Cross-pack concept identity is unchanged and still blocks true cross-subject mastery.** `ConceptHealthEntity`
   remains keyed `(user_id, study_pack_id, concept)` with `concept` as free text scoped per pack, so two packs
   using the same concept string still hold independent rows. This is ADR-sized and explicitly deferred (§15).

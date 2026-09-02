@@ -311,4 +311,24 @@ class QuizSessionStateUtilsTest {
                 List.of(List.of("Legislative", "Legislature"), List.of("Executive"), List.of("Judicial", "Judiciary"))
         );
     }
+
+    @Test
+    void withSourceStudyPackId_doesNotReSanitizeChoicesOrCorruptAuthorInitials() {
+        // REGRESSION GUARD. QuizValidationUtils.sanitizeChoiceText strips a leading choice label with
+        // replaceFirst and is NOT idempotent, so a second pass eats a second token:
+        // "A. B. Smith" -> "B. Smith" -> "Smith". extractQuiz calls withSourceStudyPackId on EVERY
+        // deserialized item, so a sanitizing copy corrupted displayed choice text on every session load,
+        // in every quiz mode. The copy must reuse already-sanitized values verbatim.
+        QuizItem original = new QuizItem(
+                "Who wrote it?", List.of("A. B. Smith", "B. C. Darwin", "Plain choice", "Second"),
+                0, "Concept", "Explanation");
+
+        QuizItem copy = original.withSourceStudyPackId(UUID.randomUUID().toString());
+
+        assertThat(copy.choices()).containsExactlyElementsOf(original.choices());
+        assertThat(copy.answer()).isEqualTo(original.answer());
+        assertThat(copy.correctIndex()).isEqualTo(original.correctIndex());
+        assertThat(copy.withSourceStudyPackId(UUID.randomUUID().toString()).choices())
+                .containsExactlyElementsOf(original.choices());
+    }
 }

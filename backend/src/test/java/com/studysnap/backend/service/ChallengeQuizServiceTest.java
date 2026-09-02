@@ -52,6 +52,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1130,8 +1131,45 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void shuffleQuestionOrderPreservingMatchingGroups_rejectsAGroupThatSpansSourcePacks() {
-        List<QuizItem> crossSourceMatchingGroup = List.of(
+    void shuffleQuestionOrderPreservingMatchingGroups_splitsSameLabelBlocksFromDifferentSourcesInsteadOfFailing() {
+        // ⚠️ REGRESSION GUARD FOR A LIVE DEFECT THIS RELEASE INTRODUCED AND THEN FIXED.
+        // challenge-quiz-developer.txt tells EVERY generation to label its matching block "group-1", and
+        // generateChallengeQuizForSources appends sources back to back — so A's trailing block and B's
+        // leading block share a label and sit adjacent. Detecting that and throwing turned a working
+        // multi-note session into a hard failure AFTER both LLM calls were paid for. The block scan now
+        // breaks on the source stamp, so the two blocks stay separate and the session survives.
+        String sourceA = UUID.randomUUID().toString();
+        String sourceB = UUID.randomUUID().toString();
+        List<QuizItem> adjacentSameLabelDifferentSources = List.of(
+                new QuizItem("A1", List.of("A", "B"), 0, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(sourceA),
+                new QuizItem("A2", List.of("A", "B"), 1, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(sourceA),
+                new QuizItem("B1", List.of("A", "B"), 0, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(sourceB),
+                new QuizItem("B2", List.of("A", "B"), 1, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(sourceB)
+        );
+
+        List<QuizItem> shuffled = ReflectionTestUtils.invokeMethod(
+                challengeQuizService,
+                "shuffleQuestionOrderPreservingMatchingGroups",
+                adjacentSameLabelDifferentSources
+        );
+
+        assertThat(shuffled).hasSize(4);
+        // Each source's pair stays contiguous and never interleaves with the other source's pair.
+        List<String> sources = shuffled.stream().map(QuizItem::sourceStudyPackId).toList();
+        assertThat(sources.get(0)).isEqualTo(sources.get(1));
+        assertThat(sources.get(2)).isEqualTo(sources.get(3));
+        assertThat(sources.get(0)).isNotEqualTo(sources.get(2));
+    }
+
+    @Test
+    void shuffleQuestionOrderPreservingMatchingGroups_stillRejectsAGenuinelyMixedBlock() {
+        // The guard remains as defence in depth: the block scan can no longer BUILD a mixed block, but if
+        // a future change reintroduces one, provenance must fail loudly rather than be picked arbitrarily.
+        List<QuizItem> mixedBlock = List.of(
                 new QuizItem("A", List.of("A", "B"), 0, "Concept", "Explanation", null,
                         "MATCHING", null, null, null, "group-1").withSourceStudyPackId(UUID.randomUUID().toString()),
                 new QuizItem("B", List.of("A", "B"), 1, "Concept", "Explanation", null,
@@ -1140,8 +1178,8 @@ class ChallengeQuizServiceTest {
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
                 challengeQuizService,
-                "shuffleQuestionOrderPreservingMatchingGroups",
-                crossSourceMatchingGroup
+                "assertMatchingGroupHasOneSourceStudyPack",
+                mixedBlock
         )).isInstanceOf(MatchingQuestionGroupSourceMismatchException.class);
     }
 
@@ -2194,6 +2232,14 @@ class ChallengeQuizServiceTest {
                 ),
                 Map.of("0", "A", "1", "B", "2", "B", "3", "A")
         );
+        Map<String, Object> stateWithSources = new LinkedHashMap<>(session.getSessionState());
+        stateWithSources.put("sourceNoteRefs", List.of(
+                Map.of("studyPackId", sourceBId.toString(), "noteId", UUID.randomUUID().toString(),
+                        "noteTitle", "B", "questionCount", 2),
+                Map.of("studyPackId", sourceCId.toString(), "noteId", UUID.randomUUID().toString(),
+                        "noteTitle", "C", "questionCount", 0)
+        ));
+        session.setSessionState(stateWithSources);
 
         when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.CHALLENGE
@@ -2219,10 +2265,16 @@ class ChallengeQuizServiceTest {
                 userId, sourceBId, List.of("Moment"), session.getCompletedAt());
         verify(conceptHealthService).recordIncorrectAnswers(
                 userId, sourceBId, List.of("Shear"), session.getCompletedAt());
+        // ⚠️ sourceC is a REAL session source that contributed no item — it is listed in sourceNoteRefs
+        // below, so a broadcast-shaped regression could reach it. A bare fresh UUID here would make these
+        // assertions vacuous: nothing could ever write to an id the session has never heard of.
         verify(conceptHealthService, never()).recordCorrectAnswers(
                 eq(userId), eq(sourceCId), any(), any());
         verify(conceptHealthService, never()).recordIncorrectAnswers(
                 eq(userId), eq(sourceCId), any(), any());
+        // And the primary must not additionally absorb the other source's concepts.
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(sourceAId), eq(List.of("Moment")), any());
         assertThat(response.twiceMissedConcepts()).containsExactly("Moment", "Shear");
     }
 
@@ -2497,6 +2549,87 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void completeSession_skipsConceptHealthForASourcePackTheCallerDoesNotOwn() {
+        // ⚠️ setUp stubs findByIdAndOwnerUserId to return a pack for ANY id, which makes the ownership
+        // guard's empty branch unreachable — a cold agent deleted that guard from BOTH record methods and
+        // all 1920 tests still passed. This overrides the blanket stub for one id so the guard executes.
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID unownedStudyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId,
+                userId,
+                primaryStudyPackId,
+                UUID.randomUUID(),
+                "challenge",
+                List.of(
+                        new QuizItem("Owned", List.of("A", "B"), 0, "Owned Concept", "Explanation")
+                                .withSourceStudyPackId(primaryStudyPackId.toString()),
+                        new QuizItem("Unowned", List.of("A", "B"), 0, "Unowned Concept", "Explanation")
+                                .withSourceStudyPackId(unownedStudyPackId.toString())
+                ),
+                Map.of("0", "A", "1", "A")
+        );
+
+        when(studyPackRepository.findByIdAndOwnerUserId(unownedStudyPackId, userId)).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        challengeQuizService.completeSession(
+                sessionId.toString(), userId, new ChallengeQuizCompleteRequest(2, 2, 120)
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId, primaryStudyPackId, List.of("Owned Concept"), session.getCompletedAt());
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(unownedStudyPackId), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswers(
+                eq(userId), eq(unownedStudyPackId), any(), any());
+    }
+
+    @Test
+    void completeSession_labelsAnAbsentConceptUncategorizedNotUnknown() {
+        // ⚠️ REGRESSION GUARD. ConceptHealthEntity is keyed (user_id, study_pack_id, concept), so the
+        // label used for a null/blank concept IS part of the row identity. This service labels it
+        // "Uncategorized"; QuizSessionReviewUtils labels it "Unknown". When the per-source aggregation
+        // moved to that util, Challenge and Board Exam silently began writing "Unknown" — forking the row,
+        // orphaning the accumulated incorrect_streak on "Uncategorized", and starting a parallel row at
+        // zero, while the result screen kept displaying "Uncategorized".
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId,
+                userId,
+                studyPackId,
+                UUID.randomUUID(),
+                "challenge",
+                List.of(new QuizItem("No concept", List.of("A", "B"), 0, null, "Explanation")
+                        .withSourceStudyPackId(studyPackId.toString())),
+                Map.of("0", "A")
+        );
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        challengeQuizService.completeSession(
+                sessionId.toString(), userId, new ChallengeQuizCompleteRequest(1, 1, 60)
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId, studyPackId, List.of("Uncategorized"), session.getCompletedAt());
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(studyPackId), eq(List.of("Unknown")), any());
+    }
+
+    @Test
     void completeSession_attributesMixedBoardExamConceptsByStampedSource() {
         UUID userId = UUID.randomUUID();
         UUID sourceAId = UUID.randomUUID();
@@ -2528,6 +2661,13 @@ class ChallengeQuizServiceTest {
                 userId, sourceAId, List.of("A Concept"), session.getCompletedAt());
         verify(conceptHealthService).recordIncorrectAnswers(
                 userId, sourceBId, List.of("B Concept"), session.getCompletedAt());
+        // ⚠️ These negatives are what make this test discriminate. Without them, reintroducing Board
+        // Exam's under-attribution — writing every bucket to the PRIMARY as well — left every positive
+        // assertion above satisfied and the mutant survived. sourceA IS the primary here.
+        verify(conceptHealthService, never()).recordIncorrectAnswers(
+                eq(userId), eq(sourceAId), any(), any());
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(sourceBId), any(), any());
         assertThat(response.twiceMissedConcepts()).isEmpty();
     }
 
