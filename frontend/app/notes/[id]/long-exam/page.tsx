@@ -12,6 +12,7 @@ import {useBottomViewportClaim, useExamFocusMode} from "@/components/exam-mode/e
 import {QuestionNavigator} from "@/components/exam-mode/question-navigator";
 import {ScoreReveal} from "@/components/exam-mode/score-reveal";
 import {QuizChoiceList} from "@/components/study-pack/quiz-choice-list";
+import {QuizIdentificationInput} from "@/components/study-pack/quiz-identification-input";
 import {QuizMatchingGroup} from "@/components/study-pack/quiz-matching-group";
 import { QuizQuestionText } from "@/components/study-pack/quiz-question-text";
 import {QuizGenerationOverlay} from "@/components/study-pack/quiz-generation-overlay";
@@ -79,6 +80,10 @@ function normalizeSelectedMultiChoices(selectedChoices?: Record<string, number[]
     return {...selectedChoices};
 }
 
+function normalizeSelectedIdentificationAnswers(selectedAnswers?: Record<string, string> | null): Record<string, string> {
+    return {...selectedAnswers};
+}
+
 function getSelectedChoice(
     selectedChoices: Record<string, number>,
     questionIndex: number,
@@ -93,11 +98,18 @@ function getSelectedMultiChoices(
     return selectedChoices[String(questionIndex)] ?? [];
 }
 
-function getAnsweredCount(selectedChoices: Record<string, number>, selectedMultiChoices: Record<string, number[]>): number {
+function getAnsweredCount(
+    selectedChoices: Record<string, number>,
+    selectedMultiChoices: Record<string, number[]>,
+    selectedIdentificationAnswers: Record<string, string>,
+): number {
     return new Set([
         ...Object.keys(selectedChoices),
         ...Object.entries(selectedMultiChoices)
             .filter(([, value]) => value.length > 0)
+            .map(([key]) => key),
+        ...Object.entries(selectedIdentificationAnswers)
+            .filter(([, value]) => value.trim().length > 0)
             .map(([key]) => key),
     ]).size;
 }
@@ -205,6 +217,7 @@ export default function LongExamPage() {
     const [quiz, setQuiz] = useState<QuizItem[]>([]);
     const [selectedChoices, setSelectedChoices] = useState<Record<string, number>>({});
     const [selectedMultiChoices, setSelectedMultiChoices] = useState<Record<string, number[]>>({});
+    const [selectedIdentificationAnswers, setSelectedIdentificationAnswers] = useState<Record<string, string>>({});
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [masteryReport, setMasteryReport] = useState<LongExamMasteryReportResponse | null>(null);
     const [deadlineEpochSeconds, setDeadlineEpochSeconds] = useState<number | null>(null);
@@ -229,7 +242,10 @@ export default function LongExamPage() {
     const longExamStartDisabled = !studyPackId || starting || (currentPlanType === "PRO" && longExamLimitReached);
     const currentQuestion = totalQuestions > 0 ? quiz[currentQuestionIndex] ?? null : null;
     const currentMatchingGroup = resolveQuizItemGroupAt(quiz, currentQuestionIndex);
-    const answeredCount = useMemo(() => getAnsweredCount(selectedChoices, selectedMultiChoices), [selectedChoices, selectedMultiChoices]);
+    const answeredCount = useMemo(
+        () => getAnsweredCount(selectedChoices, selectedMultiChoices, selectedIdentificationAnswers),
+        [selectedChoices, selectedMultiChoices, selectedIdentificationAnswers],
+    );
     const progressPercentage = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
     const hasActiveInProgressPrompt = activeStartResponse?.status === "IN_PROGRESS" && activeStartResponse.canResume;
     const timerState = resolveBoardExamTimerState(remainingSeconds);
@@ -287,6 +303,7 @@ export default function LongExamPage() {
         setSourceNoteRefs(response.sourceNoteRefs ?? []);
         setSelectedChoices({});
         setSelectedMultiChoices({});
+        setSelectedIdentificationAnswers({});
         setCurrentQuestionIndex(0);
         applyTimer(response);
         setPhase("running");
@@ -301,6 +318,7 @@ export default function LongExamPage() {
         setSourceNoteRefs(response.sourceNoteRefs ?? []);
         setSelectedChoices(normalizeSelectedChoices(response.selectedChoices));
         setSelectedMultiChoices(normalizeSelectedMultiChoices(response.selectedMultiChoices));
+        setSelectedIdentificationAnswers(normalizeSelectedIdentificationAnswers(response.selectedIdentificationAnswers));
         setCurrentQuestionIndex(Math.min(Math.max(response.currentQuestionIndex, 0), Math.max(response.totalQuestions - 1, 0)));
         applyTimer(response);
         setPhase("running");
@@ -569,7 +587,9 @@ export default function LongExamPage() {
             // ⚠️ The collection id is a CLAIM the server re-verifies (ownership + live membership of
             // every source). Sending it is what lets a mixed-subject plan selection be accepted; it is
             // not, and must never become, a way to switch the same-subject rule off.
-            const requestBody = selectedAdditionalStudyPackIds.length > 0
+            const requestBody = collectionId
+                ? {sourceCollectionId: collectionId}
+                : selectedAdditionalStudyPackIds.length > 0
                 ? {
                     additionalStudyPackIds: selectedAdditionalStudyPackIds,
                     ...(collectionId ? {sourceCollectionId: collectionId} : {}),
@@ -640,6 +660,7 @@ export default function LongExamPage() {
             setSourceNoteRefs([]);
             setSelectedChoices({});
             setSelectedMultiChoices({});
+            setSelectedIdentificationAnswers({});
             setCurrentQuestionIndex(0);
             setDeadlineEpochSeconds(null);
             setRemainingSeconds(0);
@@ -701,6 +722,34 @@ export default function LongExamPage() {
             setCurrentQuestionIndex(Math.min(Math.max(response.currentQuestionIndex, 0), Math.max(response.totalQuestions - 1, 0)));
         } catch {
             showToast("Could not save that answer. Your selection is still visible.", "error");
+        } finally {
+            setSavingProgress(false);
+        }
+    }, [currentQuestion, currentQuestionIndex, savingProgress, sessionId, showToast]);
+
+    const handleIdentificationAnswer = useCallback(async (answerText: string) => {
+        if (!sessionId || !currentQuestion || savingProgress || currentQuestion.questionFormat !== "IDENTIFICATION") {
+            return;
+        }
+        const choiceKey = String(currentQuestionIndex);
+        setSelectedIdentificationAnswers((current) => {
+            const next = {...current};
+            if (answerText.trim()) next[choiceKey] = answerText;
+            else delete next[choiceKey];
+            return next;
+        });
+        setSavingProgress(true);
+        try {
+            const response = await saveLongExamProgress(sessionId, {
+                questionIndex: currentQuestionIndex,
+                selectedChoiceIndex: 0,
+                selectedIdentificationAnswer: answerText,
+            });
+            setSelectedChoices(normalizeSelectedChoices(response.selectedChoices));
+            setSelectedMultiChoices(normalizeSelectedMultiChoices(response.selectedMultiChoices));
+            setSelectedIdentificationAnswers(normalizeSelectedIdentificationAnswers(response.selectedIdentificationAnswers));
+        } catch {
+            showToast("Could not save that answer. Your answer is still visible.", "error");
         } finally {
             setSavingProgress(false);
         }
@@ -1175,7 +1224,16 @@ export default function LongExamPage() {
                         ) : (
                             <>
                                 <h1 className="text-xl font-semibold leading-relaxed text-foreground sm:text-2xl"><QuizQuestionText text={currentQuestion.question} /></h1>
-                                <QuizChoiceList
+                                {currentQuestion.questionFormat === "IDENTIFICATION" ? (
+                                    <QuizIdentificationInput
+                                        item={currentQuestion}
+                                        value={selectedIdentificationAnswers[String(currentQuestionIndex)] ?? ""}
+                                        revealAnswer={false}
+                                        disabled={submitting}
+                                        selectionStyle="board-exam"
+                                        onChangeAnswer={(answerText) => void handleIdentificationAnswer(answerText)}
+                                    />
+                                ) : <QuizChoiceList
                                     questionKey={currentQuestion.question}
                                     choices={currentQuestion.choices}
                                     correctIndex={resolveQuizCorrectIndex(currentQuestion)}
@@ -1188,7 +1246,7 @@ export default function LongExamPage() {
                                     disabled={submitting}
                                     onSelectChoice={(choiceIndex) => void handleSelectChoice(choiceIndex)}
                                     onSelectMultiChoices={(choiceIndices) => void handleSelectMultiChoices(choiceIndices)}
-                                />
+                                />}
                             </>
                         )}
                         {savingProgress ? (
@@ -1199,7 +1257,9 @@ export default function LongExamPage() {
                     <QuestionNavigator
                         total={totalQuestions}
                         currentIndex={currentQuestionIndex}
-                        isAnswered={(index) => getSelectedChoice(selectedChoices, index) !== null || getSelectedMultiChoices(selectedMultiChoices, index).length > 0}
+                        isAnswered={(index) => getSelectedChoice(selectedChoices, index) !== null
+                            || getSelectedMultiChoices(selectedMultiChoices, index).length > 0
+                            || Boolean(selectedIdentificationAnswers[String(index)]?.trim())}
                         onSelect={(index) => setCurrentQuestionIndex(index)}
                         summary={`Question ${currentQuestionIndex + 1} of ${totalQuestions} · ${answeredCount} answered`}
                         disabled={submitting}
@@ -1218,6 +1278,12 @@ export default function LongExamPage() {
                             Long Exam Complete
                         </h1>
                     </header>
+
+                    {masteryReport.shortExam ? (
+                        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-foreground/80">
+                            Some planned sources became unavailable while your exam was being built, so this is a shorter valid exam. Your score reflects the questions shown.
+                        </div>
+                    ) : null}
 
                     <ScoreReveal
                         percentage={masteryReport.scorePercentage}

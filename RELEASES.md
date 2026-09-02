@@ -50,7 +50,7 @@ syllabus, not by failing loudly.**
   **⚠️ Sections may help SPREAD coverage. They are NEVER curriculum WEIGHTS.**
 - **3. C stays level-derived (20/25/30) and UNCHANGED.** Defensible: it reflects how deep the learner works,
   not how large their syllabus is.
-- **4. `ExamSourceLimitResolver` changes MEANING, not formula** — from *"how many notes you may pick"* to
+- **4. `ExamSourceLimitResolver` changes MEANING, not formula** — from the former source-selection ceiling to
   *"how many we sample from your curriculum."* **⚠️ It stays the ONE place the formula lives and both exam
   services keep calling through it** — a second constant beside it is how `v0.103.0`'s leakage returned.
 - **5. Keep the even split WITHIN the sampled set.** It is only indefensible when the sample is
@@ -203,7 +203,52 @@ session that spawned them.**
 
 ### Shipped
 
-_(nothing yet)_
+- Long Exam now resolves an explicit uncapped pool of ready Study Packs from a verified Study Plan, then
+  deterministically samples a representative, section-spread subset for each session. The caller-supplied
+  primary remains the session anchor and is always sampled first.
+- Partial source-generation failures now assemble a clearly marked short exam only above configured question
+  and contributing-source floors; otherwise the session fails and its reserved Long Exam quota is reversed
+  exactly once, including recovery-sweeper failures.
+- Long Exam supports Identification with Challenge Quiz's existing normalized exact-match grading and
+  notation-safe generation rules.
+- Failed Long Exam assembly reverses the charged unit through the same quota constant used at start; reversal
+  is idempotent across the async catch and recovery sweeper and the usage update clamps at zero.
+
+### Verification — the coverage gap, and how it was closed
+
+**⚠️ TWO CODEX PASSES DELIVERED CORRECT IMPLEMENTATION AND A FRACTION OF THE SPECIFIED TESTS.** The first
+added **+3** tests for the whole release; the second added **+3** more. Measured by mutation rather than by
+counting, **three required mutants survived the first pass and two survived the second** — including
+**deletion of the entire quota refund**, and **reverting the refund clamp that the second pass was written to
+add.** The remaining tests were written inline rather than in a third round-trip.
+
+**⚠️ `long_exam_used_this_month` carries NO non-negative CHECK constraint** — unlike several sibling usage
+columns — so the JPQL clamp is the **only** thing preventing a negative allowance, which would read as free
+quota. It is now pinned by a real-row test against an actual PostgreSQL container, because **a mocked
+repository cannot test a predicate.**
+
+**Every mutant is now killed, with its killing test named:**
+
+| Mutation | Killing test |
+|---|---|
+| Delete the refund block | `failLongExamSession_refundsOnceAndRecordsTheIdempotencyFlag` |
+| Refund amount → 0 | `failLongExamSession_refundsOnceAndRecordsTheIdempotencyFlag` |
+| Revert the clamp to `> 0` | `longExamRefundClampsAtZeroInsteadOfUnderflowing` (real-row) |
+| Disable the assembly threshold | `asyncGeneration_belowMinimumAssembledQuestionsFailsTheSessionAndReversesQuota` |
+| `minimumSources = 0` | `startSession_planWithTooFewEligibleSourcesFailsWithoutCreatingASessionOrChargingQuota` |
+| Drop identification answers from scoring | `completeSession_gradesIdentificationAnswersAndTreatsBlankAsIncorrect` |
+| Sampler drops the primary force-include | `sample_isDeterministicForSessionId` |
+| Sampler non-deterministic | `sample_isDeterministicForSessionId` |
+
+**1938 tests, 0 failures**, run with the PostgreSQL container enabled; counts read from
+`target/surefire-reports/*.xml`.
+
+### Known limitations
+
+- **Accepted reserved-before-charged window:** the generation session commits its quota-reserved state before
+  the synchronous charge executes. A process exit in that narrow interval can leave a reserved-but-uncharged
+  session, whose later failure attempts a clamped no-op reversal. Charging inside the creation transaction is
+  intentionally rejected because it re-opens the concurrent-start quota bypass.
 
 ## v0.104.0 - Assessment Source Provenance
 

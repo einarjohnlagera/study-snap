@@ -30,6 +30,17 @@ RULES:
 - A MATCHING block must be exactly 2 to 4 consecutive questions. CRITICAL: every question in the block must use the IDENTICAL "choices" array — same 4 options, same order, copied exactly from the first item to every subsequent item. Each item maps to a distinct correct answer letter. If even one item requires different choices, the entire block is invalid — fall back to standard MCQ for all items instead.
 - Only use MATCHING when you can identify at least 2 items that genuinely share the same 4-option set. If you cannot, omit MATCHING entirely and write standard MCQ questions. Do NOT create a MATCHING group with only 1 item.
 - For MATCHING questions, set "questionFormat" to "MATCHING", set the same short "questionGroup" id such as "group-1" on each item in the block, set "correctIndices" to null, and set "answer" to that item's single correct letter.
+- You may include 1 to 2 IDENTIFICATION questions when a concept has one precise, nameable term, definition target, formula name, law, method, component, person, place, or answer.
+- Use IDENTIFICATION for focused active recall only. Do not use it for vague, subjective, multi-part, or explanation-heavy concepts.
+- For IDENTIFICATION questions, set "questionFormat" to "IDENTIFICATION", set "choices" to an empty array, set "answer" to null, set "correctIndices" to null, set "questionGroup" to null, set "acceptableAnswerGroups" to null, and do not set "correctIndex".
+- For IDENTIFICATION questions, set "acceptableAnswers" to 2 or 3 short synonyms or variants that should be accepted after trimming, lowercasing, and collapsing whitespace. Include the primary correct answer first.
+- IDENTIFICATION answers are graded by EXACT text match after trimming, lowercasing, and collapsing whitespace. There is no mathematical, chemical, or code-aware comparison. So the answer must be a term, name, or label a learner can type unambiguously IN WORDS.
+- NEVER use IDENTIFICATION when the correct answer is a symbolic or notational form: a mathematical expression or equation, a chemical formula, a code snippet, or a value with units. These have many equally-correct renderings — "x^2 + y^2", "x² + y²" and "y² + x²" are all correct and none of them match each other as text — so they cannot be graded fairly. Use an MCQ instead, with the notation forms as the four choices.
+- This applies to every subject, not only mathematics: "Identify the chemical formula for water" and "Identify the expression that reverses a list" are just as invalid as the algebraic case.
+- A formula's NAME is a valid IDENTIFICATION answer; the formula ITSELF is not. "Which law states that force equals mass times acceleration?" → "Newton's Second Law" is valid. "Identify the equation for Newton's Second Law" → "F = ma" is NOT.
+- If the stem asks the learner to identify, give, write, or state an expression, formula, equation, or notation, the answer is notation by definition — do not emit that question as IDENTIFICATION at all.
+- "acceptableAnswers"[0] must be the exact thing the stem asks for. Restating the stem is not an answer: for "Identify the algebraic expression for the sum of the squares of x and y", the answer "sum of squares" merely repeats the question and must not be used.
+- For every non-IDENTIFICATION question, set "acceptableAnswers" to null.
 - Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%). Assertion-style "Which is correct?" items are MCQ with four options ("Both statements are correct", "Only Statement 1 is correct", "Only Statement 2 is correct", "Neither statement is correct") — never TRUE_FALSE and never ["True", "False"].
 - Explanation is required for every question.
 - Explanation must explain WHY the answer is correct — do not repeat, list, or reference answer choices by letter (A, B, C, D) or by choice text.
@@ -46,6 +57,8 @@ RULES:
         "questionFormat": "MCQ",
         "questionGroup": null,
         "correctIndices": null,
+        "acceptableAnswers": null,
+        "acceptableAnswerGroups": null,
         "explanation": "...",
         "concept": "...",
         "keyConcept": "..."

@@ -10,6 +10,7 @@ public record LongExamSessionResponse(
         List<QuizItem> quiz,
         Map<Integer, Integer> selectedChoices,
         Map<Integer, List<Integer>> selectedMultiChoices,
+        Map<Integer, String> selectedIdentificationAnswers,
         int currentQuestionIndex,
         int totalQuestions,
         String difficulty,

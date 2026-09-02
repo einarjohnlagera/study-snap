@@ -34,6 +34,7 @@ import com.studysnap.backend.entity.NoteCollectionEntity;
 import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.exception.InvalidLongExamSourceException;
+import com.studysnap.backend.exception.LongExamInsufficientEligibleSourcesException;
 import com.studysnap.backend.exception.LongExamNotAvailableException;
 import com.studysnap.backend.exception.LongExamSessionNotInProgressException;
 import com.studysnap.backend.exception.LongExamSessionNotPausableException;
@@ -104,6 +105,8 @@ class LongExamServiceTest {
     private ExamQuestionPoolService examQuestionPoolService;
     @Mock
     private ConceptHealthService conceptHealthService;
+    @Mock
+    private GenerationRecoveryRowWriter generationRecoveryRowWriter;
 
     private LongExamService longExamService;
     private Runnable dispatchedTask;
@@ -115,6 +118,14 @@ class LongExamServiceTest {
             dispatchedTask = invocation.getArgument(0);
             return null;
         }).when(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
+        lenient().doAnswer(invocation -> {
+            UUID sessionId = invocation.getArgument(0);
+            quickReviewSessionRepository.findById(sessionId).ifPresent(session -> {
+                session.setStatus(QuickReviewSessionStatus.FAILED);
+                quickReviewSessionRepository.save(session);
+            });
+            return null;
+        }).when(generationRecoveryRowWriter).failLongExamSession(any(UUID.class));
         lenient().when(userUsageService.getMonthlyUsage(any(UUID.class), any(OffsetDateTime.class)))
             .thenReturn(UserUsageService.MonthlyUsage.zero());
         lenient().when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
@@ -146,7 +157,9 @@ class LongExamServiceTest {
             new SimpleAsyncTaskExecutor(),
             new SimpleAsyncTaskExecutor(),
             examQuestionPoolService,
-            conceptHealthService
+            conceptHealthService,
+            new LongExamPlanSourceSampler(),
+            generationRecoveryRowWriter
         );
     }
 
@@ -491,13 +504,14 @@ class LongExamServiceTest {
                 );
 
         @SuppressWarnings("unchecked")
-        List<QuizItem> quiz = ReflectionTestUtils.invokeMethod(
+        Object generated = ReflectionTestUtils.invokeMethod(
                 longExamService,
                 "generateQuizForSources",
                 user,
                 sources,
                 DEFAULT_DIFFICULTY
         );
+        List<QuizItem> quiz = (List<QuizItem>) ReflectionTestUtils.getField(generated, "quiz");
 
         assertThat(quiz).filteredOn(item -> primaryStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(2);
         assertThat(quiz).filteredOn(item -> additionalStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(2);
@@ -1332,6 +1346,247 @@ class LongExamServiceTest {
         stubNoActiveLongExamSession(userId, primaryStudyPack.getId());
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+
+    // ── v0.105.0 assembly-threshold, eligible-pool and Identification coverage ──────────────────────
+    // Added inline after two Codex passes left these mutants alive: disabling the assembly threshold and
+    // zeroing the minimum-contributing-sources check both left the whole suite green.
+
+    @Test
+    void asyncGeneration_belowMinimumAssembledQuestionsFailsTheSessionAndReversesQuota() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
+        StudyPackGenerationContext context = buildGenerationContext(LearnerLevel.COLLEGE);
+        List<QuickReviewSessionStatus> savedStatuses = new ArrayList<>();
+        List<QuickReviewSessionEntity> savedSessions = new ArrayList<>();
+
+        // 5 assembled questions is below longExamMinimumAssembledQuestions (10).
+        stubStartSession(userId, studyPackId, studyPack, context, buildQuiz(5), savedStatuses, savedSessions);
+
+        LongExamStartResponse response = longExamService.startSession(
+            studyPackId.toString(), userId, new LongExamStartRequest(null));
+        when(quickReviewSessionRepository.findById(response.sessionId()))
+            .thenReturn(Optional.of(savedSessions.getFirst()));
+
+        dispatchedTask.run();
+
+        assertThat(savedStatuses).endsWith(QuickReviewSessionStatus.FAILED);
+        verify(generationRecoveryRowWriter).failLongExamSession(response.sessionId());
+    }
+
+    @Test
+    void asyncGeneration_aboveThresholdButShortSucceedsAndKeepsQuota() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
+        StudyPackGenerationContext context = buildGenerationContext(LearnerLevel.COLLEGE);
+        List<QuickReviewSessionStatus> savedStatuses = new ArrayList<>();
+        List<QuickReviewSessionEntity> savedSessions = new ArrayList<>();
+
+        // 20 of an expected 25 clears both floors, so this is a SHORT but valid exam.
+        stubStartSession(userId, studyPackId, studyPack, context, buildQuiz(20), savedStatuses, savedSessions);
+
+        LongExamStartResponse response = longExamService.startSession(
+            studyPackId.toString(), userId, new LongExamStartRequest(null));
+        when(quickReviewSessionRepository.findById(response.sessionId()))
+            .thenReturn(Optional.of(savedSessions.getFirst()));
+
+        dispatchedTask.run();
+
+        assertThat(savedStatuses).containsExactly(
+            QuickReviewSessionStatus.GENERATING, QuickReviewSessionStatus.IN_PROGRESS);
+        // ⚠️ The learner keeps their charge for a short-but-valid exam; only a sub-threshold exam refunds.
+        verify(generationRecoveryRowWriter, never()).failLongExamSession(any(UUID.class));
+        QuickReviewSessionEntity ready = savedSessions.getLast();
+        assertThat(ready.getSessionState().get("shortExam")).isEqualTo(true);
+        assertThat(ready.getSessionState().get("expectedQuestionCount")).isEqualTo(25);
+    }
+
+    @Test
+    void asyncGeneration_singleSourceExamIsNotFailedByTheContributingSourcesClamp() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
+        StudyPackGenerationContext context = buildGenerationContext(LearnerLevel.COLLEGE);
+        List<QuickReviewSessionStatus> savedStatuses = new ArrayList<>();
+        List<QuickReviewSessionEntity> savedSessions = new ArrayList<>();
+
+        // One source can only ever contribute one source; Math.min(sourceCount, minimum) must not fail it.
+        stubStartSession(userId, studyPackId, studyPack, context, buildQuiz(25), savedStatuses, savedSessions);
+
+        LongExamStartResponse response = longExamService.startSession(
+            studyPackId.toString(), userId, new LongExamStartRequest(null));
+        when(quickReviewSessionRepository.findById(response.sessionId()))
+            .thenReturn(Optional.of(savedSessions.getFirst()));
+
+        dispatchedTask.run();
+
+        assertThat(savedStatuses).containsExactly(
+            QuickReviewSessionStatus.GENERATING, QuickReviewSessionStatus.IN_PROGRESS);
+        verify(generationRecoveryRowWriter, never()).failLongExamSession(any(UUID.class));
+    }
+
+    private void stubStartSession(
+        UUID userId,
+        UUID studyPackId,
+        StudyPackEntity studyPack,
+        StudyPackGenerationContext context,
+        List<QuizItem> generatedQuiz,
+        List<QuickReviewSessionStatus> savedStatuses,
+        List<QuickReviewSessionEntity> savedSessions
+    ) {
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
+            .thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.LONG_EXAM), any()
+        )).thenReturn(Optional.empty());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
+        when(quizGenerationService.generateLongExamParallel(
+            any(), any(), any(), any(), anyInt(), any(), any(), any()
+        )).thenReturn(generatedQuiz);
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+            .thenAnswer(invocation -> {
+                QuickReviewSessionEntity session = invocation.getArgument(0);
+                savedStatuses.add(session.getStatus());
+                savedSessions.add(session);
+                return session;
+            });
+    }
+
+    @Test
+    void completeSession_gradesIdentificationAnswersAndTreatsBlankAsIncorrect() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        // Three IDENTIFICATION items: correct, wrong, and blank. Blank must score incorrect, never throw.
+        List<QuizItem> quiz = List.of(
+            buildIdentificationItem("Name the powerhouse", "mitochondrion"),
+            buildIdentificationItem("Name the process", "photosynthesis"),
+            buildIdentificationItem("Name the unit", "newton")
+        );
+        QuickReviewSessionEntity session = buildSession(
+            userId, studyPackId, QuickReviewSessionStatus.IN_PROGRESS, quiz);
+        session.setSessionState(QuizSessionStateUtils.withSelectedIdentificationAnswer(
+            session.getSessionState(), 0, "  Mitochondrion  "));
+        session.setSessionState(QuizSessionStateUtils.withSelectedIdentificationAnswer(
+            session.getSessionState(), 1, "respiration"));
+        session.setSessionState(QuizSessionStateUtils.withSelectedIdentificationAnswer(
+            session.getSessionState(), 2, "   "));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+            session.getId(), userId, QuickReviewSessionMode.LONG_EXAM)).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+            .thenReturn(Optional.of(buildStudyPack(studyPackId, userId)));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LongExamMasteryReportResponse report = longExamService.completeSession(
+            session.getId(), userId, new LongExamCompleteRequest(600));
+
+        // Trim + lowercase makes item 0 correct; a wrong term and a blank are both incorrect.
+        // A BLANK answer is excluded from the answered denominator, so 1 correct of 2 answered = 50%.
+        assertThat(report.totalQuestions()).isEqualTo(3);
+        assertThat(report.answeredQuestions()).isEqualTo(2);
+        assertThat(report.scorePercentage()).isEqualTo(50);
+    }
+
+    @Test
+    void updateProgress_roundTripsTheIdentificationAnswerIntoSessionState() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildSession(
+            userId,
+            studyPackId,
+            QuickReviewSessionStatus.IN_PROGRESS,
+            List.of(buildIdentificationItem("Name the powerhouse", "mitochondrion"))
+        );
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+            session.getId(), userId, QuickReviewSessionMode.LONG_EXAM)).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        longExamService.saveProgress(
+            session.getId(), userId, new LongExamProgressRequest(0, -1, null, "mitochondrion"));
+
+        assertThat(QuizSessionStateUtils.extractSelectedIdentificationAnswers(
+            session.getSessionState(),
+            QuizSessionStateUtils.extractQuiz(session.getSessionState())
+        )).containsEntry(0, "mitochondrion");
+    }
+
+    private QuizItem buildIdentificationItem(String question, String answer) {
+        return new QuizItem(
+            question, List.of(), null, "Cells", "Explanation", null,
+            "IDENTIFICATION", null, null, null, null, "Cells", List.of(answer), null);
+    }
+
+
+    @Test
+    void startSession_planWithTooFewEligibleSourcesFailsWithoutCreatingASessionOrChargingQuota() {
+        // ⚠️ Pool A is "plan member AND has a READY Study Pack" — two predicates. A plan whose members
+        // mostly lack a ready pack must be refused before a session exists, not silently shrunk.
+        UUID userId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
+        StudyPackEntity primaryStudyPack = buildStudyPack(primaryStudyPackId, userId);
+        UUID unreadyNoteId = UUID.randomUUID();
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId))
+            .thenReturn(Optional.of(primaryStudyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            eq(userId), eq(primaryStudyPackId), eq(QuickReviewSessionMode.LONG_EXAM), any()
+        )).thenReturn(Optional.empty());
+        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(Set.of(primaryStudyPack.getNoteId(), unreadyNoteId));
+        when(planSourcedExamVerifier.resolvePlanMembers(eq(collectionId.toString()), eq(userId), any()))
+            .thenReturn(List.of(
+                new PlanSourcedExamVerifier.PlanExamMember(primaryStudyPack.getNoteId(), "Algebra", 0),
+                new PlanSourcedExamVerifier.PlanExamMember(unreadyNoteId, "Algebra", 1)
+            ));
+        // Only the primary has a READY pack, so pool A is 1 against a minimum of 2.
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdInAndStatus(eq(userId), any(), any()))
+            .thenReturn(List.of(primaryStudyPack));
+
+        assertThatThrownBy(() -> longExamService.startSession(
+            primaryStudyPackId.toString(),
+            userId,
+            new LongExamStartRequest(null, null, collectionId.toString())
+        )).isInstanceOf(LongExamInsufficientEligibleSourcesException.class);
+
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(userUsageService, never()).incrementLongExamGenerationBy(any(UUID.class), anyInt(), any());
+    }
+
+    @Test
+    void startSession_returnsTheExistingActiveSessionRatherThanCreatingASecondOne() {
+        // ⚠️ REGRESSION GUARD for kickoff Amendment 1. The session stays keyed on the CALLER-SUPPLIED
+        // primary; anchoring it on a sampled primary would make this lookup miss and spend a second
+        // quota unit, or trip one of V41's two partial unique indexes.
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId);
+        QuickReviewSessionEntity existing = buildSession(
+            userId, studyPackId, QuickReviewSessionStatus.IN_PROGRESS, buildQuiz(25));
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, LearnerLevel.COLLEGE)));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
+            .thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.LONG_EXAM), any()
+        )).thenReturn(Optional.of(existing));
+
+        LongExamStartResponse response = longExamService.startSession(
+            studyPackId.toString(), userId, new LongExamStartRequest(null));
+
+        assertThat(response.sessionId()).isEqualTo(existing.getId());
+        verify(userUsageService, never()).incrementLongExamGenerationBy(any(UUID.class), anyInt(), any());
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId) {

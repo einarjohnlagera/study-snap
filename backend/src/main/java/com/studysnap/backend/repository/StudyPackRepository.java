@@ -2,6 +2,7 @@ package com.studysnap.backend.repository;
 
 import com.studysnap.backend.dto.AdminSubjectMetricItemResponse;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import org.springframework.data.domain.Pageable;
@@ -140,6 +141,12 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     Double findMedianDaysFromVerifiedSignupToFirstPack();
 
     List<StudyPackEntity> findByNoteIdIn(Collection<UUID> noteIds);
+
+    List<StudyPackEntity> findByOwnerUserIdAndNoteIdInAndStatus(
+            UUID ownerUserId,
+            Collection<UUID> noteIds,
+            StudyPackStatus status
+    );
 
     // Return type is StudyPackProgressProjection (a marker sub-interface of StudyPackProgressView that no
     // concrete class implements), not StudyPackProgressView itself. StudyPackEntity implements
