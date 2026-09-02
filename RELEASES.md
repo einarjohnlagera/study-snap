@@ -1,5 +1,170 @@
 # RELEASES.md - NoteLib
 
+## v0.104.0 - Assessment Source Provenance
+
+**Status: In Progress** (kicked off 2026-09-02, base branch `releases/v0.104.0`, cut from `main` after
+`v0.103.0` merged and tagged)
+
+Theme: when a learner misses a concept in a multi-note assessment, the product should record it against the
+note it actually came from.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet. The three-digit minor is deliberate and was
+verified safe at the `v0.100.0` kickoff.
+
+### Why this release exists
+
+**Slice 1 of the approved assessment sequence** (`docs/claude-plans/assessment-architecture-audit.md` §13),
+and **the owner moved it AHEAD of curriculum-scale sampling on 2026-09-02.** The reason is the ordering
+argument, not the size: representative sampling pushes far more cross-source evidence through a
+mis-attributing writer, so sampling first **makes a known defect worse at exactly the moment more data flows
+through it.** The audit's §32 goal — *"Structural Engineering needs work, Transportation is stronger"* — is
+not supportable until this lands.
+
+**⚠️ THERE ARE TWO INSTANCES AND THEY FAIL IN OPPOSITE DIRECTIONS. Both re-verified at this kickoff by
+reading the code, not the audit.**
+
+- **`LongExamService.recordConceptsForSourcePacks:494-521` OVER-attributes.** It loops
+  `resolveSourceStudyPackIds(session)` and writes **the same concept list to every source pack**, filtered
+  only by whether that pack's own `getKeyConcepts()` contains the string. Sources drawn from one Subject
+  Plan share vocabulary **by construction**, so this is the normal case, not a corner case.
+- **`ChallengeQuizService.completeSession:674,680` UNDER-attributes.** It writes to
+  `saved.getStudyPackId()` — the **primary pack only** — so a multi-note Challenge Quiz lands every concept
+  from all six sources on the note the learner happened to start from, and the other five receive nothing.
+- **`QuizItem` carries no source-pack field** (verified: zero matches), which is why neither service can do
+  better than it does.
+
+**⚠️ THE CHALLENGE INSTANCE IS NEW AS OF `v0.103.0` — that release created a second instance of the very
+defect this slice exists to fix.** Recorded so it is read as a consequence of shipping multi-note Challenge,
+not as a pre-existing defect nobody noticed.
+
+### ⚠️ THE STAMP IS NECESSARY AND NOT SUFFICIENT — this is the release's central finding
+
+**Found at this kickoff, and it is NOT in the audit.** `QuizSessionReviewUtils.computeConceptBreakdown:85`
+keys its counters by **`normalizeConcept(item.concept())` alone**, so items from every source collapse into
+one map before `computeFullyCorrectConcepts` / `computeConceptsWithMisses` ever run. If Note A answered
+*Shear Force* correctly and Note B missed it, the merged counter reports *has misses* and **both** packs are
+recorded incorrect.
+
+**So a per-item `sourceStudyPackId` stamp changes NOTHING downstream on its own.** The release is **two
+coupled changes** — provenance **on the item** *and* **per-source aggregation on the `ConceptHealth` write
+path** — and shipping only the first would produce a stamped DTO, tests asserting the stamp is present, a
+green build, and `ConceptHealth` still wrong in both directions. **That is precisely the "fix that looked
+correct and changed nothing" shape that has now cost three releases running.**
+
+**⚠️ THE INDEX TRAP, stated as a constraint rather than a hint.** `computeConceptBreakdown` passes a
+**positional** `index` into `isAnswerCorrect(item, index, selectedChoices, ...)`, and the selection maps are
+keyed by **absolute index in the session's quiz array**. So the natural implementation — filter the quiz to
+one pack's items, then reuse the existing helper on the sublist — **silently reads the wrong learner answers
+for every item after the first.** The correct shape is **one pass over the full list preserving the absolute
+index, bucketing counters by `(sourceStudyPackId, concept)`.**
+
+### ⚠️ Why the field goes on `QuizItem` and NOT in a parallel per-index array
+
+The audit offered both. **The repo settles it, verified at this kickoff:**
+`ChallengeQuizService:391` calls `shuffleQuestionOrderPreservingMatchingGroups(challengeQuiz)` **after** the
+multi-source merge, and `:522` re-shuffles the redo-mistakes round. **A per-index provenance array would be
+scrambled by the shuffle that already ships.** Provenance must travel *with* the item.
+
+It also follows the existing idiom: every other per-item attribute (`questionFormat`, `keyConcept`,
+`questionGroup`) is a `QuizItem` field with a matching `QuizSessionStateUtils` key. **And the objection is
+dead:** `QuizDeduplicationUtils` is pure normalized-question-string matching and **never calls
+`QuizItem.equals`**, so adding a field cannot change dedup behaviour.
+
+### Planned Scope
+
+- **1. `sourceStudyPackId` on `QuizItem`, stamped at the generation seam (backend).** The merge loops are
+  where the source is already in scope and where **dedup has already run**, so there is no reordering
+  hazard: `generateChallengeQuizForSources:1407`, `generateBoardExamQuizForSources:1375`, and the
+  `LongExamService` per-source loop at `:966-992` (`mergedQuiz.addAll` at `:992`). Serialized through `QuizSessionStateUtils` alongside the other
+  per-item keys.
+- **2. Per-source `ConceptHealth` aggregation (backend).** Bucket by `(sourceStudyPackId, concept)` in a
+  single pass over the full quiz list, preserving absolute index. **Both services.** `LongExamService`
+  stops writing one list to every pack; `ChallengeQuizService` stops writing every concept to the primary.
+- **3. Provenance preserved for reporting.** The stamp survives into session state so per-source accuracy is
+  **real rather than inferred**, which is what slices 2–5 read.
+- **4. `+5 More Questions` provenance is the PRIMARY pack, and that is correct rather than a compromise.**
+  Verified at kickoff: `generateMoreQuestions:801` generates from `session.getStudyPackId()` alone even on a
+  multi-note session, so those items genuinely originate from the primary. Stamp them accordingly and say so.
+- **5. In-flight sessions across the deploy.** A session persisted before this release has no source key. A
+  null stamp **falls back to today's behaviour per service** — primary for Challenge,
+  `resolveSourceStudyPackIds(session)` for Long Exam — and must neither attribute to nothing nor throw.
+
+### Anti-drift
+
+**⚠️ Out of scope, each named in §15 or §16 of the audit:** cross-pack **canonical concept identity**
+(ADR-sized — `ConceptHealthEntity` is keyed `(user_id, study_pack_id, concept)` with `concept` free text
+scoped per pack, and this release does **not** change that); **format-weighted `ConceptHealth`**;
+**curriculum-pool sampling, the coverage blueprint and generation resilience** (that is slice 2, and
+resilience is coupled **into** it rather than following it); **True/False in Long Exam** (deferred);
+**Identification in Long Exam** (slice 3).
+
+**⚠️ No new quiz mode and no new sub-mode.** `EXAM_MODES.md` stays a locked five-mode contract.
+**⚠️ No change to what a concept IS**, only to which pack it is recorded against.
+**⚠️ Viewing must never write `ConceptHealth`** — locked since `v0.37.0` to move only from genuine
+assessment.
+**⚠️ PLAN-TIER ENTITLEMENTS ARE UNCHANGED.** §0 of the audit keeps three things apart: product/checkpoint
+gating (**none** on this initiative), engineering pre-signoff verification (**preserved in full**), and
+plan-tier entitlements (**a separate monetization contract**). **"Nothing is gated" is never licence to add,
+widen or remove a subscription gate** — if a slice appears to need one, stop and raise it.
+**⚠️ Quick Review and Adaptive Practice are single-source and stay untouched** —
+`QuickReviewAdaptivePracticeService:384-390` records against `session.getStudyPackId()`, which is correct
+there. **Do not refactor them into the new helper**; it widens the blast radius for no gain.
+**⚠️ `examQuestionPoolService.markServed` and `challengeQuizQuestionBankService.updateOutcomesAndReleaseClaims`
+stay primary-keyed** — they are covered by §12.1's recorded bank-bypass integrity item, which is **tracked
+and explicitly not in slices 1–4.**
+**⚠️ Do NOT add, remove or reorder an onboarding FLOW step and no code under `frontend/app/onboarding`** —
+`[CHECKPOINT — due 2026-09-11]` is **9 days out**. This slice is backend-and-evidence work and does not
+approach it.
+
+### Verification tier
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION.** The trigger is named by the gate outright: **this
+changes what production evidence means.** Hand it a tight file list and the specific claims this session
+made, and ask it to disprove each.
+
+**⚠️ Carried forward as MEASURED findings, not impressions:**
+- **Mutate the production code and confirm a test actually FAILS. Reading is not verification.** Three
+  releases running, the worst defect was a fix that looked correct and changed nothing, or a guard nothing
+  exercised — an extraction that moved a security check behind a `@Mock`, an inert `PARENT` fix, and a lock
+  that survived deletion against **1910 tests**.
+- **When you mutate, check whether the value is computed in more than one place.** A mutation hitting one of
+  two call sites survives for the wrong reason. `recordCorrectConceptsForSourcePacks` and
+  `recordIncorrectConceptsForSourcePacks` both funnel through `recordConceptsForSourcePacks`, so a mutation
+  there hits both; a mutation in the new grouping helper needs confirming it is not shadowed by a second
+  call site in `ChallengeQuizService`.
+- **Run `./mvnw test-compile` and check its exit status FIRST.** A compile error in a test class can leave
+  `mvn test` reporting green from a stale compiled class. That happened last cycle.
+- **Confirm new tests EXECUTED by reading `target/surefire-reports/*.xml`,** not the source.
+- **Call `advisor()` before writing the Codex prompt,** not only on the diff.
+
+**⚠️ THE DISCRIMINATING FIXTURE IS PRE-DECLARED — two packs, one shared concept string, NON-UNIFORM
+answers.** A uniform-answers fixture passes under the index bug and proves nothing.
+
+| item | index | source | concept | learner |
+|---|---|---|---|---|
+| 1 | 0 | A | Shear | correct |
+| 2 | 1 | A | Moment | incorrect |
+| 3 | 2 | B | Shear | incorrect |
+| 4 | 3 | B | Moment | correct |
+
+Assert pack A → Shear correct, Moment incorrect; pack B → Shear incorrect, Moment correct. This single
+fixture discriminates all four failure modes: **concept-merge** (both packs get both concepts as missed),
+**index-shift** (the correct/incorrect assignments flip), **today's Challenge behaviour** (pack B gets
+nothing), and **today's Long Exam behaviour** (both packs get everything).
+
+### Routing
+
+**→ CODEX.** It touches two services, a DTO, a shared util and the evidence model — several "→ Codex" rows
+at once. **Re-run the routing test if implementation discovers a third service or a surface not in the
+agreed plan**, per the correction recorded at the `v0.103.0` kickoff.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.103.0 - Mixed Retrieval for Free and Plus
 
 **Status: Released** (kicked off and signed off 2026-09-02, base branch `releases/v0.103.0`, cut from
