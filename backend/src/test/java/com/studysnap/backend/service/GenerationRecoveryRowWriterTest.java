@@ -74,6 +74,106 @@ class GenerationRecoveryRowWriterTest {
         verify(userUsageService, times(0)).reverseLongExamGenerationBy(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void failBoardExamSession_refundsBothMetersOnceAndRecordsTheIdempotencyFlag() {
+        QuickReviewSessionEntity session = generatingBoardExamSession(true, false);
+        when(sessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        writer.failBoardExamSession(session.getId());
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        assertThat(session.getSessionState())
+                .containsEntry(ChallengeQuizService.SESSION_STATE_BOARD_EXAM_QUOTA_REVERSED, true);
+        // ONE call reverses BOTH meters; a split refund is exactly what the single stamp exists to prevent.
+        verify(userUsageService, times(1)).reverseBoardExamGenerationBy(
+                session.getUserId(), ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION, session.getCreatedAt());
+    }
+
+    @Test
+    void failBoardExamSession_doesNotRefundASessionAlreadyStampedReversed() {
+        // ⚠️ THE SESSION IS STILL GENERATING ON PURPOSE. Calling the method twice proves nothing here: the
+        // second call is dropped by the GENERATING filter, so that test passes even with the stamp check
+        // deleted. Only a reserved-and-already-reversed row that is still eligible isolates the stamp.
+        QuickReviewSessionEntity session = generatingBoardExamSession(true, true);
+        when(sessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        writer.failBoardExamSession(session.getId());
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService, never()).reverseBoardExamGenerationBy(any(), anyInt(), any());
+    }
+
+    @Test
+    void failBoardExamSession_doesNotRefundASessionThatNeverReservedQuota() {
+        QuickReviewSessionEntity session = generatingBoardExamSession(false, false);
+        when(sessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        writer.failBoardExamSession(session.getId());
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService, never()).reverseBoardExamGenerationBy(any(), anyInt(), any());
+    }
+
+    @Test
+    void failBoardExamSession_ignoresAnOrdinaryChallengeSession() {
+        // Board Exam rides the CHALLENGE session mode, so the board-exam marker in session state — not the
+        // mode column — is what separates a refundable row from an ordinary Challenge Quiz.
+        QuickReviewSessionEntity session = generatingBoardExamSession(true, false);
+        session.setSessionState(Map.of(ChallengeQuizService.SESSION_STATE_MODE, "challenge"));
+        when(sessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        writer.failBoardExamSession(session.getId());
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        verify(userUsageService, never()).reverseBoardExamGenerationBy(any(), anyInt(), any());
+        verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
+    void recoverBoardExamSession_refundsBothMetersForAStaleReservedSession() {
+        QuickReviewSessionEntity session = generatingBoardExamSession(true, false);
+        when(sessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        writer.recoverBoardExamSession(session.getId(), OffsetDateTime.now().plusMinutes(1));
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService).reverseBoardExamGenerationBy(
+                session.getUserId(), ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION, session.getCreatedAt());
+    }
+
+    @Test
+    void recoverBoardExamSessionAndTheAsyncCatchTogetherRefundExactlyOnce() {
+        // The two refund paths meet on the same row; between them they must charge back once, never twice.
+        QuickReviewSessionEntity session = generatingBoardExamSession(true, false);
+        when(sessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        writer.failBoardExamSession(session.getId());
+        session.setStatus(QuickReviewSessionStatus.GENERATING);
+        writer.recoverBoardExamSession(session.getId(), OffsetDateTime.now().plusMinutes(1));
+
+        verify(userUsageService, times(1)).reverseBoardExamGenerationBy(
+                session.getUserId(), ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION, session.getCreatedAt());
+    }
+
+    private QuickReviewSessionEntity generatingBoardExamSession(boolean reserved, boolean reversed) {
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(UUID.randomUUID());
+        session.setUserId(UUID.randomUUID());
+        session.setCreatedAt(OffsetDateTime.now().minusMinutes(2));
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.GENERATING);
+        Map<String, Object> state = new java.util.LinkedHashMap<>();
+        state.put(ChallengeQuizService.SESSION_STATE_MODE, ChallengeQuizService.MODE_BOARD_EXAM);
+        if (reserved) {
+            state.put(ChallengeQuizService.SESSION_STATE_BOARD_EXAM_QUOTA_RESERVED, true);
+        }
+        if (reversed) {
+            state.put(ChallengeQuizService.SESSION_STATE_BOARD_EXAM_QUOTA_REVERSED, true);
+        }
+        session.setSessionState(state);
+        return session;
+    }
+
     private QuickReviewSessionEntity generatingSession(boolean reserved) {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
         session.setId(UUID.randomUUID());

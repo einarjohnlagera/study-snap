@@ -32,7 +32,7 @@ class LongExamPlanSourceSamplerTest {
         // 6-item pool also "contains A, B, C" — so removing the sampleLimit clamp entirely left the
         // suite green, in the release whose whole point is that cap.
         assertThat(sampled).hasSize(4);
-        assertThat(sampled).extracting(LongExamPlanSourceSampler.EligiblePlanSource::sectionLabel)
+        assertThat(sampled).extracting(LongExamPlanSourceSampler.EligiblePlanSource::coverageBucketLabel)
                 .contains("A", "B", "C");
     }
 

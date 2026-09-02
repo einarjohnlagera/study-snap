@@ -58,10 +58,33 @@ Study Plan / Review Set detail resolves on both profile and plan: Free and Plus 
 - A multi-note Challenge Quiz remains a `CHALLENGE` session, also consuming the shared Quiz allowance, but has a separate internal monthly ceiling: Free `2`, Plus `10`, Pro `200` by default. The counter is enforcement plumbing only: it is not surfaced as a Settings allowance.
 - Multi-note source selection is accepted only after the server verifies the claimed plan's ownership and membership (including the primary). Free may use 3 sources including the primary; Plus and Pro use the same `floor(questionCount / 3)` formula as Long Exam, fed a **fixed 18-question multi-note count**, so the cap is a stable **6 sources**. **⚠️ 12 questions / 4 sources was itself rejected as arithmetic leakage (owner, 2026-09-02); ~10 sources is UNREACHABLE because it needs 30 questions, ten past `MAX_CHALLENGE_QUIZ_QUESTIONS` (20), which `+5 More Questions` depends on — do NOT lift that ceiling to chase it.** **⚠️ NOT Long Exam's 6 / 8 / 10** — that comes from 20 / 25 / 30, and applying it here gave sources a single question each. **⚠️ And NOT the score-adaptive 10 / 12 / 15 a single-note quiz uses** — that would make the cap move between sessions on the same plan while the prestart renders it as a stable promise (owner, 2026-09-02). A per-source floor rejects any split below three questions. An invalid, ineligible, or over-cap `additionalStudyPackIds` request is rejected; it is never silently downgraded to a single-note session. A non-plan source still follows the carried same-subject rule.
 - Board Exam Mode is Pro-only
-- Board Exam Mode consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`10` source-note units / month; default configurable)
-- Board Exam quota is deducted **per source note** at session start — a 3-note session costs 3 quota units
+- Board Exam Mode consumes the shared quiz-generation monthly budget and also has a dedicated Board Exam hard cap (`10` **sessions** / month; default configurable). One unit per session, whatever the source count.
+- Board Exam reserves one shared Challenge Quiz unit and one Board Exam unit at start. A failed asynchronous
+  generation reverses both together; this does not change either entitlement.
 - Free and Plus users who choose Board Exam Mode can open the setup screen first; the Pro paywall fires from the Begin/Unlock Board Exam Start CTA so the strict exam flow is visible before the upgrade ask
-- Study Plan / Review Set launches deep-link into Board Exam setup and keep the additional Study Pack picker scoped to plan notes only; the Board Exam source-note cap and quota rules do not change
+- A Review Set launch does not show a source picker at all: the server samples the whole owned Review Set across its Subject Plans, so there is nothing for the learner to choose and a caller-supplied `additionalStudyPackIds` list is **rejected**, never silently dropped. The legacy manual path (a note with no Review Set behind it) keeps its picker, its source cap and its quota rules unchanged
+- **Board Exam's source is the WHOLE Review Set, and a Subject Plan claim resolves UP to its parent.** A
+  learner reaches Board Exam from whichever collection page they were on, which is normally a Subject Plan —
+  a child. Using the claimed collection directly would ship "assess across the plan you came from", which is
+  Long Exam's job, not Board Exam's. **Ownership is re-verified on the parent**: a child of a Review Set you
+  do not own is not a route into someone else's curriculum. A childless top-level plan is treated as one
+  stratum, exactly as the Goal endpoint does.
+- **The eligible pool is deduped by Study Pack, not by note id.** A note belonging to two Subject Plans of the
+  same Review Set produced two pool entries carrying the same Study Pack, which let a **single note satisfy
+  the two-contributing-sources assembly floor**. First occurrence wins, so a shared note is attributed to its
+  earliest stratum and position.
+- **A Board Exam ships short above two assembly floors rather than failing outright** — a configured minimum
+  of assembled questions (`10`) and of contributing sources (`min(sourceCount, 2)`). A short exam is marked
+  `shortExam` with the count it expected. Below either floor the session FAILS and **both meters are
+  reversed**. This applies to the legacy single-note path too, which previously failed strictly on any
+  shortfall.
+- **The warm question pool is never served to a Review Set Board Exam**, mirroring the `v0.105.0` Long Exam
+  rule: a sampled multi-source exam must not be served primary-only pooled questions while its session
+  records the sampled sources. On the legacy single-note path the pool is used, and **the pool
+  itself now excludes the note's own saved quiz** — at generation time, so new pools cannot contain the
+  answer key, and again at sampling time, so pools built before that fix cannot serve it either. The
+  sampling filter runs BEFORE the have-we-got-enough check, so a leaked question is never a candidate and no
+  clean pool row is spent rejecting it.
 - Board Exam quota exhaustion remains separate from Pro-only feature gating
 - monthly quiz-limit exhaustion is separate from Pro-only feature gating
 
@@ -77,8 +100,10 @@ Study Plan / Review Set detail resolves on both profile and plan: Free and Plus 
 - Challenge mode's assembled question pool (banked + Official template + freshly generated) is shuffled once at initial session start (and at `startRedoMissedSession`'s assembly), so batches never present in fixed `generatedAt` order. A MATCHING block (2–4 consecutive questions sharing a `questionGroup`) always shuffles as one contiguous unit — never split apart — since the frontend (`lib/quiz.ts`) groups them by scanning for adjacency. **A block is additionally bounded by its source Study Pack (`v0.104.0`)**: the generation prompt tells every call to label its block `group-1`, and multi-note sources are appended back to back, so without that bound one source's trailing block and the next source's leading block would fuse into a single block with two provenances. `+5 Questions` shuffles only the newly-appended batch, never the whole array, to avoid remapping already-recorded index-keyed answers (`selectedChoices` et al. are keyed by array index, not question identity). Board Exam Mode's ordering is unaffected (v0.60.1).
 - Each real-LLM Challenge Quiz shortfall records the response model plus input, output, and cached-input token usage on the session. Successful `+5 Questions` calls add to the existing values so the row represents cumulative session usage; sessions fully served from the per-user bank or Official template keep all usage columns null. Missing or malformed usage metadata is ignored without blocking the quiz. Board Exam Mode, Long Exam, and Adaptive Practice do not participate in this telemetry.
 - Challenge mode has no user-facing difficulty selector. Its difficulty is fully automatic and comes only from the latest completed Quick Review score on the same Study Pack: below 50 → Easy, 50–79 → Default/Medium, 80 or above → Hard; no prior score also uses Default/Medium.
-- Board Exam Mode question count scales with source count: `min(12 × sourceCount, 30)` — single-note: 12, two-note: 24, three-note: 30
+- Board Exam Mode uses its configured target count after representative Review-Set sampling; source count is
+  not an exam-length multiplier.
 - Board Exam Mode does not use progressive generation; question count is fixed at session start
+- Board Exam generation completes asynchronously through this service after its start transaction commits.
 - Board Exam Mode's separate difficulty behavior is unchanged: it does not expose a selector and remains fixed at `DIFFICULTY_MIXED` to preserve exam-simulation framing
 
 ### Per-user question bank (v0.58.0)

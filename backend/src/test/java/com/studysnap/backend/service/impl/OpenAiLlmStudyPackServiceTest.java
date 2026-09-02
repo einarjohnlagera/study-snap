@@ -1872,6 +1872,51 @@ class OpenAiLlmStudyPackServiceTest {
     }
 
     @Test
+    void generateBoardExamQuiz_requestsMultipleChoiceOnlyAndEnablesNoOtherQuestionFormat() throws Exception {
+        // ⚠️ ASSERTED ON THE REQUEST THE PUBLIC ENTRY POINT ACTUALLY SENDS, not by invoking the private
+        // schema builder with hand-picked booleans — that shape passes no matter which flags
+        // generateBoardExamQuiz really chooses. v0.106.0 changed what a Board Exam is built FROM; it must
+        // not have changed what a Board Exam question IS.
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload()));
+
+        service.generateBoardExamQuiz(
+            "Cell Respiration Review",
+            "Cell respiration summary",
+            List.of("ATP production"),
+            List.of(),
+            2,
+            "mixed",
+            new StudyPackGenerationContext(LearnerLevel.BOARD_EXAM_REVIEW, "Biology", "Biology", List.of())
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        JsonNode request = objectMapper.readTree(requestCaptor.getValue());
+        JsonNode itemProperties = request
+                .path("text").path("format").path("schema")
+                .path("properties").path("questions").path("items").path("properties");
+        assertThat(itemProperties.isMissingNode())
+                .as("the Board Exam request must carry a structured quiz schema")
+                .isFalse();
+
+        // Multiple choice is the only shape offered: four lettered options, one answer.
+        assertThat(jsonArrayValues(itemProperties.path("answer").path("enum")))
+                .containsExactly("A", "B", "C", "D");
+        assertThat(itemProperties.has("questionFormat")).isFalse();
+        assertThat(itemProperties.has("correctIndices")).isFalse();
+        assertThat(itemProperties.has("acceptableAnswers")).isFalse();
+        assertThat(itemProperties.has("acceptableAnswerGroups")).isFalse();
+        assertThat(itemProperties.has("questionGroup")).isFalse();
+        assertThat(requestCaptor.getValue())
+                .doesNotContain("TRUE_FALSE")
+                .doesNotContain("MULTI_SELECT")
+                .doesNotContain("ENUMERATION")
+                .doesNotContain("IDENTIFICATION")
+                .doesNotContain("MATCHING");
+    }
+
+    @Test
     void generateTeacherQuiz_substitutesRequestedQuestionCount() throws JsonProcessingException {
         stubResponsesCall();
         when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload("Teacher", 30)));

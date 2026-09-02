@@ -58,12 +58,12 @@ The explanatory line is **“Quiz sessions we generate for you, plus quizzes you
 - `100` Study Packs / month
 - `200` generated quizzes / month
 - unlimited shareable quiz links
-- Board Exam Mode uses the shared AI-quiz budget and has a dedicated `10` source-note units / month hard cap; quota is deducted per source note (a 3-note session costs 3 units)
+- Board Exam Mode uses the shared quiz-generation budget and has a dedicated `10` sessions / month hard cap. **Quota is deducted PER SESSION, not per source note** — a Review Set Board Exam drawing six notes costs the same one unit as a single-note one. (It was per source note until `v0.32.2`.)
 - topic note generation: backend-configured Pro limit (`100` by default)
 - OCR: backend-configured Pro limit (`100` by default)
 - exports: unlimited
 - Adaptive Practice available and quota-limited (`30` / month by default)
-- Long Exam available and quota-limited (`12` source-note units / month by default; quota is deducted per source note)
+- Long Exam available and quota-limited (`12` sessions / month by default; **quota is deducted per session, not per source note**)
 - Board Exam Mode available
 
 For actual behavior and gating decisions:
@@ -93,8 +93,8 @@ Topic note generation and OCR are distinct monthly quotas from Study Packs.
 
 Long Exam and Board Exam quotas are distinct monthly counters:
 
-- Long Exam is Pro-only and consumes `longExamUsed` per source note (not per session) — a 3-note Long Exam deducts 3 units; quota is checked and incremented only after successful session generation starts
-- Board Exam is Pro-only, consumes the shared Challenge Quiz budget, and also consumes `boardExamUsed` per source note — a 3-note Board Exam deducts 3 units
+- Long Exam is Pro-only and consumes **one** `longExamUsed` unit **per session**, whatever the source count — a 3-note Long Exam deducts 1 unit (`LongExamService.QUOTA_UNITS_PER_SESSION`); quota is checked and incremented only after successful session generation starts
+- Board Exam is Pro-only, consumes the shared quiz-generation budget, and also consumes **one** `boardExamUsed` unit **per session** (`ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION`) — a 3-note Board Exam deducts 1 unit, the same as a 6-note Review Set one. Both meters are charged inside the start transaction, and both are reversed together if generation later fails.
 - Board Exam must be blocked when either the Challenge Quiz budget is exhausted or the Board Exam hard cap is exhausted
 - Active sessions can always be resumed regardless of quota state; quota is only checked when starting a new session
 - Challenge Quiz, Adaptive Practice, Interview Practice, Study Pack, topic note generation, OCR, and export quotas remain separate from these counters unless explicitly stated above

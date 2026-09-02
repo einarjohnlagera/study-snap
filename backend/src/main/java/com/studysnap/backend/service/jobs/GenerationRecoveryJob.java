@@ -24,13 +24,16 @@ public class GenerationRecoveryJob {
 
         SurfaceRecoveryResult pools = recoverPools();
         SurfaceRecoveryResult longExamSessions = recoverLongExamSessions();
+        SurfaceRecoveryResult boardExamSessions = recoverBoardExamSessions();
         SurfaceRecoveryResult notes = recoverNotes();
         log.info(
-                "generation.recovery completed pools={} poolsMaxAgeMinutes={} longExamSessions={} longExamSessionsMaxAgeMinutes={} notes={} notesMaxAgeMinutes={}",
+                "generation.recovery completed pools={} poolsMaxAgeMinutes={} longExamSessions={} longExamSessionsMaxAgeMinutes={} boardExamSessions={} boardExamSessionsMaxAgeMinutes={} notes={} notesMaxAgeMinutes={}",
                 pools.recoveredCount(),
                 pools.maxRecoveredAge().toMinutes(),
                 longExamSessions.recoveredCount(),
                 longExamSessions.maxRecoveredAge().toMinutes(),
+                boardExamSessions.recoveredCount(),
+                boardExamSessions.maxRecoveredAge().toMinutes(),
                 notes.recoveredCount(),
                 notes.maxRecoveredAge().toMinutes()
         );
@@ -50,6 +53,15 @@ public class GenerationRecoveryJob {
             return generationRecoveryService.recoverStaleLongExamSessions();
         } catch (RuntimeException ex) {
             log.warn("generation.recovery long-exam-session sweep failed", ex);
+            return SurfaceRecoveryResult.empty();
+        }
+    }
+
+    private SurfaceRecoveryResult recoverBoardExamSessions() {
+        try {
+            return generationRecoveryService.recoverStaleBoardExamSessions();
+        } catch (RuntimeException ex) {
+            log.warn("generation.recovery board-exam-session sweep failed", ex);
             return SurfaceRecoveryResult.empty();
         }
     }

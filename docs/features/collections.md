@@ -310,7 +310,9 @@ The Study Plan premium-exam launch carries `collectionId` in the URL, not a call
   ready-Study-Pack pool, and deterministically samples up to the learner-level-derived `maxSourceNotes`
   (6 / 8 / 10 including the primary). Sections inform coverage spread only; neither section size nor note
   count is an exam weight.
-- Board Exam: primary Study Pack route plus up to 2 additional Study Pack ids
+- Board Exam: primary Study Pack route plus the Review Set id. The server walks the whole ready-Study-Pack
+  Review Set, treating child Subject Plans as coverage strata (or direct items when the Review Set has no
+  children), then samples representatively. Subject Plans inform spread only and are never exam weights.
 - Challenge Quiz: Free/Plus plan launch plus optional additional Study Pack ids. The server supplies the cap (Free 3 including primary; Plus a stable 6, from the fixed 18-question multi-note count rather than Long Exam's) and verifies the collection claim before accepting mixed subjects.
 - Interview Practice: primary note route plus up to 2 additional note ids
 
@@ -949,7 +951,7 @@ The shipped Prompt B integrations make collections useful from both entry points
 - Collections with only unlabeled quiz-ready notes seed one default section. Teachers can still rename, reorder, add, rebalance, and replace the initial structure with an existing Exam Builder template.
 - The terminal CTA keeps the existing partial-readiness hint when some notes are skipped and disables with `Generate a quiz for at least one note to build an exam.` when none are quiz-ready.
 - This handoff is frontend-only. DOCX export and the collection-to-Exam Builder route remain Teacher/Admin-only; sharing an individual generated quiz is available to any onboarded owner from Quiz Preview. No collection-level generation, analytics, quota, backend, or AI behavior is added.
-- Student, board-exam, and professional multi-note practice terminal CTAs are deferred. The existing MANUAL Long Exam flow is same-subject scoped (the plan-sourced flow is not, as of `v0.102.0`) and meters quota per source note, while collections can be cross-subject and mixed-readiness; a collection-level practice action needs a separate product-shape pass.
+- Student, board-exam, and professional multi-note practice terminal CTAs are deferred. The existing MANUAL Long Exam flow is same-subject scoped (the plan-sourced flow is not, as of `v0.102.0`) and meters quota per session (`v0.32.2`; the per-source-note rule this line described is long gone), while collections can be cross-subject and mixed-readiness; a collection-level practice action needs a separate product-shape pass.
 - `COLLECTION_CREATED` fires server-side from `NoteCollectionService.create(...)` only, with `itemCount` metadata for the number of initial notes. Add-items, update, remove, and reorder do not fire a creation event.
 - `NOTE_ADDED_TO_COLLECTION` fires server-side from `NoteCollectionService.addItems(...)` (added `v0.101.0`), with `addedCount` and `source` metadata. It records the transition the retention hypothesis rests on — a learner deciding a note belongs in a set — which nothing measured before.
   - **⚠️ `addedCount` counts NEWLY added notes, not the request.** `addItems` filters out notes the set already holds, and the event is guarded on that filtered list being non-empty, so **re-adding an existing note emits nothing.** A zero-count event would make every duplicate drop read as a membership decision.

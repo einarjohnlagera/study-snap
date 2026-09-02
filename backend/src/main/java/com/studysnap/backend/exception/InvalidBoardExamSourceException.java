@@ -8,6 +8,8 @@ public class InvalidBoardExamSourceException extends AppException {
     private static final String SUBJECT_MISMATCH_MESSAGE = "All notes must share the same subject";
     private static final String SOURCE_UNAVAILABLE_MESSAGE = "One of the selected notes is no longer available";
     private static final String TOO_MANY_SOURCES_MESSAGE = "Too many notes selected for the available question count — remove one";
+    private static final String SOURCES_NOT_SELECTABLE_MESSAGE =
+            "A Review Set exam covers the whole set, so individual notes cannot be chosen for it";
 
     private InvalidBoardExamSourceException(String message) {
         super(CODE, message, HttpStatus.BAD_REQUEST);
@@ -23,6 +25,11 @@ public class InvalidBoardExamSourceException extends AppException {
 
     public static InvalidBoardExamSourceException sourceUnavailable() {
         return new InvalidBoardExamSourceException(SOURCE_UNAVAILABLE_MESSAGE);
+    }
+
+    /** The caller supplied a note list on the sampled Review Set path, where the server chooses sources. */
+    public static InvalidBoardExamSourceException sourcesNotSelectable() {
+        return new InvalidBoardExamSourceException(SOURCES_NOT_SELECTABLE_MESSAGE);
     }
 
     public static InvalidBoardExamSourceException tooManySources() {

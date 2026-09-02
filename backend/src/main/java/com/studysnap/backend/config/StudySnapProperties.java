@@ -150,6 +150,11 @@ public class StudySnapProperties {
         private int longExamMinimumAssembledQuestions = 10;
         private int longExamMinimumContributingSources = 2;
         private int boardExamPoolSize = 24;
+        /** Configured target size for a representative Board Exam; source count never sizes the exam. */
+        private int boardExamTargetQuestionCount = 30;
+        // A short Board Exam remains meaningful only when enough questions and strata survived fan-out.
+        private int boardExamMinimumAssembledQuestions = 10;
+        private int boardExamMinimumContributingSources = 2;
         private boolean examPoolPrewarmEnabled = false;
 
         public int resolveMonthlyStudyPackLimit(PlanType planType) {

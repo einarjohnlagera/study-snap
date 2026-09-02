@@ -106,6 +106,13 @@ public class UserUsageService {
         increment(userId, occurredAt, 0, 0, 0, 0, 0, count, 0, 0, 0, 0, 0, 0);
     }
 
+    /** Reverses both meters charged for one Board Exam reservation atomically and never below zero. */
+    @Transactional
+    public void reverseBoardExamGenerationBy(UUID userId, int count, OffsetDateTime occurredAt) {
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, occurredAt);
+        userUsageRepository.decrementBoardExamUsageNotBelowZero(userId, usagePeriod.periodStart(), count);
+    }
+
     @Transactional
     public void incrementMultiNoteGeneration(UUID userId, OffsetDateTime occurredAt) {
         increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0);
