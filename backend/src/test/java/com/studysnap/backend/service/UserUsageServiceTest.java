@@ -59,6 +59,43 @@ class UserUsageServiceTest {
                 eq(0),
                 eq(0),
                 eq(0),
+                eq(0),
+                any(OffsetDateTime.class)
+        );
+    }
+
+    @Test
+    void incrementMultiNoteGenerationWritesTheMultiNoteColumnAndNoOther() {
+        // ⚠️ increment(...) takes THIRTEEN positional int deltas, so a counter that lands one slot off
+        // silently increments a neighbouring meter and every existing test still passes — proven by
+        // mutating this exact call and watching all 64 tests stay green. Asserting the full positional
+        // signature is the only thing that pins WHICH column moves.
+        UUID userId = UUID.randomUUID();
+        OffsetDateTime occurredAt = OffsetDateTime.parse("2026-03-10T12:00:00Z");
+        BillingUsagePeriodService.UsagePeriod usagePeriod = usagePeriod();
+        when(billingUsagePeriodService.resolveUsagePeriod(userId, occurredAt)).thenReturn(usagePeriod);
+
+        userUsageService.incrementMultiNoteGeneration(userId, occurredAt);
+
+        verify(userUsageRepository).incrementUsage(
+                eq(userId),
+                eq(usagePeriod.year()),
+                eq(usagePeriod.month()),
+                eq(usagePeriod.periodStart()),
+                eq(usagePeriod.periodEnd()),
+                eq(0),
+                eq(0),
+                eq(0),
+                eq(0),
+                eq(0),
+                eq(0),
+                eq(1),
+                eq(0),
+                eq(0),
+                eq(0),
+                eq(0),
+                eq(0),
+                eq(0),
                 any(OffsetDateTime.class)
         );
     }
@@ -83,6 +120,7 @@ class UserUsageServiceTest {
                 eq(0),
                 eq(0),
                 eq(4),
+                eq(0),
                 eq(0),
                 eq(0),
                 eq(0),

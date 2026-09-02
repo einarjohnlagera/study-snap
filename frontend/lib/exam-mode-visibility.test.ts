@@ -93,15 +93,17 @@ describe("getAvailableExamModes", () => {
 
 describe("resolvePlanPremiumExamMode", () => {
   it("maps learner profiles to their Study Plan premium exam mode", () => {
-    expect(resolvePlanPremiumExamMode("STUDENT")).toBe("long_exam");
-    expect(resolvePlanPremiumExamMode("BOARD_EXAM")).toBe("board_exam");
-    expect(resolvePlanPremiumExamMode("PROFESSIONAL")).toBe("interview");
+    expect(resolvePlanPremiumExamMode("STUDENT", "PRO")).toBe("long_exam");
+    expect(resolvePlanPremiumExamMode("BOARD_EXAM", "PRO")).toBe("board_exam");
+    expect(resolvePlanPremiumExamMode("PROFESSIONAL", "PRO")).toBe("interview");
+    expect(resolvePlanPremiumExamMode("PARENT", "PRO")).toBe("challenge");
+    expect(resolvePlanPremiumExamMode("STUDENT", "FREE")).toBe("challenge");
+    expect(resolvePlanPremiumExamMode("PROFESSIONAL", "PLUS")).toBe("challenge");
   });
 
   it("returns null for profiles without a Study Plan premium exam mode", () => {
-    expect(resolvePlanPremiumExamMode("TEACHER")).toBeNull();
-    expect(resolvePlanPremiumExamMode("PARENT")).toBeNull();
-    expect(resolvePlanPremiumExamMode(null)).toBeNull();
-    expect(resolvePlanPremiumExamMode(undefined)).toBeNull();
+    expect(resolvePlanPremiumExamMode("TEACHER", "FREE")).toBeNull();
+    expect(resolvePlanPremiumExamMode(null, "PRO")).toBeNull();
+    expect(resolvePlanPremiumExamMode(undefined, "PLUS")).toBeNull();
   });
 });

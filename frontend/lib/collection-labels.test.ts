@@ -54,32 +54,41 @@ describe("getCollectionLabels", () => {
 
 describe("getCollectionTerminalAction", () => {
   it("returns the teacher Exam Builder action", () => {
-    expect(getCollectionTerminalAction("TEACHER")).toEqual({
+    expect(getCollectionTerminalAction("TEACHER", "FREE")).toEqual({
       kind: "exam-builder",
       label: "Build Exam",
     });
   });
 
   it("returns premium exam actions for learner profiles", () => {
-    expect(getCollectionTerminalAction("STUDENT")).toEqual({
+    expect(getCollectionTerminalAction("STUDENT", "PRO")).toEqual({
       kind: "premium-exam",
       mode: "long_exam",
       label: "Take the Long Exam",
     });
-    expect(getCollectionTerminalAction("BOARD_EXAM")).toEqual({
+    expect(getCollectionTerminalAction("BOARD_EXAM", "PRO")).toEqual({
       kind: "premium-exam",
       mode: "board_exam",
       label: "Take the Board Exam",
     });
-    expect(getCollectionTerminalAction("PROFESSIONAL")).toEqual({
+    expect(getCollectionTerminalAction("PROFESSIONAL", "PRO")).toEqual({
       kind: "premium-exam",
       mode: "interview",
       label: "Start Interview Practice",
     });
   });
 
-  it("returns null for profiles without terminal actions", () => {
-    expect(getCollectionTerminalAction("PARENT")).toBeNull();
-    expect(getCollectionTerminalAction(null)).toBeNull();
+  it("uses Challenge Quiz for Free/Plus learners and handles PARENT explicitly", () => {
+    expect(getCollectionTerminalAction("STUDENT", "FREE")).toEqual({
+      kind: "premium-exam",
+      mode: "challenge",
+      label: "Start Challenge Quiz",
+    });
+    expect(getCollectionTerminalAction("PARENT", "PLUS")).toEqual({
+      kind: "premium-exam",
+      mode: "challenge",
+      label: "Start Challenge Quiz",
+    });
+    expect(getCollectionTerminalAction(null, "FREE")).toBeNull();
   });
 });

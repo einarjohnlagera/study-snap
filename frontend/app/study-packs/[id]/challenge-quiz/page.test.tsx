@@ -233,10 +233,11 @@ describe("ChallengeQuizPage", () => {
 
   function setupChallengePrestart(
     useProDefaults = true,
-    profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL" = "STUDENT",
+    profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PROFESSIONAL" | "PARENT" = "STUDENT",
     planType?: "FREE" | "PLUS" | "PRO",
     options: {
       usedThisMonth?: number;
+      maxSourceNotes?: number;
       monthlyLimit?: number;
       boardExamUsedThisMonth?: number;
       boardExamMonthlyLimit?: number;
@@ -284,6 +285,10 @@ describe("ChallengeQuizPage", () => {
       monthlyLimit: options.monthlyLimit ?? (useProDefaults ? 50 : 5),
       boardExamUsedThisMonth: options.boardExamUsedThisMonth ?? 0,
       boardExamMonthlyLimit: options.boardExamMonthlyLimit ?? 10,
+      // ⚠️ The multi-note source cap, INCLUDING the primary. The page must read it from HERE, because
+      // `challengeSession` is null until a session starts — deriving it from that object is what made
+      // the capability unreachable on every plan.
+      maxSourceNotes: options.maxSourceNotes ?? (useProDefaults ? 6 : 3),
       mode: "challenge",
       selectedDifficulty: "medium",
       quiz: [],
@@ -910,6 +915,63 @@ describe("ChallengeQuizPage", () => {
 
     expect(await screen.findByRole("dialog", { name: "Take your review all the way to exam day" })).toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("lets a Plus learner actually select plan notes for a multi-note Challenge Quiz", async () => {
+    // ⚠️ THE DEFECT THIS FIXES SHIPPED WITH ZERO COVERAGE, AND THIS FILE NEVER MENTIONED THE PICKER.
+    // The cap was derived from `challengeSession`, which is null at prestart by construction, so
+    // `maxChallengeAdditionalNotes` was always 0: every source button was disabled and the toggle
+    // early-returned. The capability was unreachable on every plan while the server side was correct.
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart(false, "STUDENT", "PLUS", { maxSourceNotes: 6 });
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
+        { noteId: "note-3", position: 2, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-3" },
+      ],
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+      { id: "note-3", title: "Plan Three", subject: "Chemistry", studyPackId: "sp-3", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<ChallengeQuizPage />);
+
+    // Selectable, not disabled — the whole point.
+    const planTwo = await screen.findByRole("button", { name: /Plan Two/ });
+    expect(planTwo).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /Plan Three/ })).not.toBeDisabled();
+    // And the cap the learner is shown is the SERVER's number, not a client-side constant.
+    expect(screen.getByText(/up to 6 notes/)).toBeInTheDocument();
+  });
+
+  it("sends a PRO parent to Challenge setup, matching the CTA that brought them", async () => {
+    // ⚠️ resolvePlanPremiumExamMode(PARENT, PRO) is "challenge", so the plan CTA reads "Start Challenge
+    // Quiz" — but the page re-derived from plan alone and forced Board Exam setup. The page contradicted
+    // the button that opened it. ⚠️ The first fix for this was INERT and a mutation caught it:
+    // isChallengeViewerProfileType excludes PARENT, so the narrowed profile was null and the resolver
+    // returned null rather than "challenge". The resolver must see the UNNARROWED profile.
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart(true, "PARENT", "PRO", { maxSourceNotes: 6 });
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [
+        { noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" },
+        { noteId: "note-2", position: 1, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2" },
+      ],
+    });
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Plan Two", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+
+    render(<ChallengeQuizPage />);
+
+    // ⚠️ Asserts a CHALLENGE-SETUP-ONLY element. An earlier version checked for the plan's source
+    // button and the absence of a "Board Exam" heading — neither discriminates, because Board Exam
+    // setup lists the same source buttons. Two mutants survived that assertion.
+    expect(await screen.findByText("Practise across this plan")).toBeInTheDocument();
   });
 
   it("opens Board Exam setup from a collection launch and scopes source notes to the plan", async () => {

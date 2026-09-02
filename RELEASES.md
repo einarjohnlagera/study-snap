@@ -85,6 +85,17 @@ separate monetization contract, unchanged.** Nothing here adds, widens or remove
   `PlanSourcedExamVerifier`, the terminal CTA resolving on (profile, plan), and `sourceCount`/`sourceScope`
   recording the **verified** outcome.
 
+### Shipped (slice 0)
+
+- **The multi-note capability is reachable.** The prestart reads the cap from the in-progress response — which already carried it and was **discarding the field** — instead of from `challengeSession`, which is **null at prestart by construction**. That single derivation made `maxChallengeAdditionalNotes` permanently `0`, disabling every source button on every plan while the server side was correct.
+- **⚠️ NO CLIENT-SIDE FALLBACK WAS ADDED.** With no server value the cap is `0`, never a local default — a constant here is the drift this release exists to remove.
+- **Plus multi-note is 18 questions → 6 sources; Free stays at 3**, still derived through `ExamSourceLimitResolver` rather than reintroduced as a standalone constant.
+- **⚠️ THE `PARENT` CONTRADICTION IS FIXED — AND THE FIRST FIX FOR IT WAS INERT, CAUGHT BY MUTATION RATHER THAN REVIEW.** `resolvePlanPremiumExamMode(PARENT, PRO)` is `"challenge"`, but the page re-derived from plan alone and forced Board Exam setup under a CTA reading *"Start Challenge Quiz"*. Routing it through the resolver **looked correct and changed nothing**: `isChallengeViewerProfileType` deliberately excludes `PARENT`, so the narrowed profile was `null` and the resolver returned `null`. **The resolver now receives the UNNARROWED profile.**
+- **⚠️ AND THE FIRST TEST FOR IT DID NOT DISCRIMINATE.** It asserted the plan's source button present and a "Board Exam" heading absent — **Board Exam setup renders the same source buttons**, so two mutants survived. Rewritten against a challenge-setup-only element; both mutants now die, including the narrowed-profile one.
+- **⚠️ A stale-closure warning was introduced and fixed rather than accepted** — the new state was missing from an effect's dependency array, which is the audit checklist's own item 4.
+- **`PLANS.md`'s PRO multi-note row is corrected.** *"200 multi-note Challenge Quiz starts / month"* was a delivery default mirroring the challenge-quiz limit, then written up as an entitlement nobody chose.
+- **Green:** 1910 backend tests, 2092 frontend tests, `tsc --noEmit` exit 0, lint back to its 15 pre-existing warnings.
+
 ### Carried out of this release, by the approved sequence
 
 - **Source provenance moves to the NEXT release and is slice 1.** **⚠️ It is deliberately AHEAD of
@@ -140,6 +151,19 @@ separate monetization contract, unchanged.** Nothing here adds, widens or remove
   added must carry through the non-Pro path unchanged. **⚠️ `sourceScope` RECORDS THE VERIFIED OUTCOME,
   NEVER THE CLIENT'S CLAIM** — that distinction was a `v0.102.0` cold-agent finding and
   `[CHECKPOINT — due 2026-09-28]` reads exactly this field.
+
+### Shipped
+
+- Challenge Quiz now accepts verified multi-note sources without adding a mode or sub-mode.
+- `V131` adds the internal multi-note usage counter; Free, Plus, and Pro allowances are configuration-backed.
+- **⚠️ CORRECTED DURING `/audit-diff` — THE DELIVERED CAP WAS SIZED FROM THE WRONG QUESTION COUNT, AND TWO DELIVERED TESTS PINNED THE DEFECT.** Free is capped at three sources; Plus and Pro use the shared level-derived formula — **but fed THIS quiz's own question count, not the Long Exam one.** As delivered, `resolveMaxChallengeSourceNotes` derived the cap from `resolveLongExamQuestionCount` (20/25/30 → 6/8/10) while a Challenge Quiz has **10/12/15** questions and, unlike Long Exam, had **no per-source floor**. A Plus learner selecting 6 sources for a 12-question quiz got **2 questions per source**; at the full cap of 8 it would have been **1 question for seven of the eight notes** — not mixed retrieval, and a direct contradiction of `ExamSourceLimitResolver`'s own guarantee.
+- **⚠️ RAISING THE QUESTION COUNT WAS NOT AVAILABLE AS A FIX, and the reason is worth keeping:** `+5 More Questions` is permitted on a multi-note Challenge session (only Board Exam blocks it) and `MAX_CHALLENGE_QUIZ_QUESTIONS` is **20**, so a Long-Exam-sized 25-question base would breach that ceiling before the learner added anything. **The owner's ruling — Plus uses the same level-derived formula as Pro rather than an artificial constant — is preserved exactly; only the input is corrected.**
+- **⚠️ AND THE MULTI-NOTE QUESTION COUNT IS FIXED AT 12, so the cap is a STABLE 4 (owner ruling, 2026-09-02).** The first correction left the cap derived from the score-adaptive single-note count (10 / 12 / 15 → 3 / 4 / 5), which meant **the cap moved between sessions on the same plan** while the prestart renders it as a stable promise — a learner shown "up to 5" could be refused at 5 after their score changed. Fixing the count removes the variance at its source and, as a side effect, removed a per-response repository lookup the first correction had introduced. **Pinned structurally, not by value:** the test asserts the score lookup is **never consulted**, because asserting the number alone would still pass if the cap went back to being score-derived and the fixture happened to land on 12.
+- **⚠️ THE TWO DELIVERED TESTS DID NOT MERELY MISS THIS — THEY ENCODED IT.** `startSession_plusUsesItsLevelDerivedSixNoteCap` asserted `maxSourceNotes == 6` and stubbed `generateChallengeQuiz(..., eq(2), ...)`, writing the below-floor split into the expectation. Both were **rewritten, not deleted**, and now assert the honest cap plus a per-source minimum. **Tenth test-that-claims-more-than-it-proves in seven releases, and the first delivered by Codex rather than written in-session.**
+- **A per-source floor guard was added and is pinned directly.** The corrected cap makes it unreachable through `startSession`, so a mutation removing it initially **survived** — `allocateQuestionsAcrossSources` is now package-private with two tests against it, because an unreachable, untested guard is exactly how the hole it closes gets silently re-opened by a later cap change.
+- **`resolveLongExamQuestionCount` was removed from `ChallengeQuizService` as dead code** once the cap stopped using it; a dead sizing helper beside a live one is how the next reader picks the wrong input.
+- Challenge starts reject over-cap source lists instead of silently dropping them, and persist verified `sourceCount` / `sourceScope` analytics.
+- Study Plan terminal actions resolve on both profile and plan, routing Free and Plus learners (including `PARENT`) to Challenge Quiz.
 
 ### Explicitly out of scope
 
