@@ -4644,6 +4644,40 @@ class ChallengeQuizServiceTest {
         assertThat(response.sourceNoteRefs()).hasSize(2);
     }
 
+
+    @Test
+    void startSession_boardExamStartEventCarriesTheMetricItsCheckpointReads() {
+        // ⚠️ THIS IS THE CHECKPOINT'S INSTRUMENTATION, NOT DECORATION. The release ships a configured target
+        // count and two assembly floors as deliberately-deferred numbers, and the dated read asks how often a
+        // Review Set Board Exam falls short of its target. questionCount ALONE cannot answer that: a sampled
+        // exam that assembled 12 is indistinguishable from a legacy single-note one that asked for 12.
+        // ⚠️ sourceScope records the VERIFIED outcome, never the caller's claim.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3, 3);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        StudyPackEntity survivor = packsByPlan.get(1).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        // Two of six sources contribute: the exam ships short, which is exactly the case the read counts.
+        stubBoardExamSourceOutcomes(Set.of(primary.getTitle(), survivor.getTitle()));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+        completeDispatchedBoardExam(response);
+
+        ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(analyticsService).trackEvent(
+                eq(userId), eq(AnalyticsEventType.BOARD_EXAM_STARTED), any(UUID.class), metadata.capture());
+        assertThat(metadata.getValue())
+                .containsEntry("sourceScope", "plan")
+                .containsEntry("sourceCount", 6)
+                .containsEntry("questionCount", 10)
+                .containsEntry("expectedQuestionCount", 30);
+    }
+
     private void stubReviewSetBoardExamGeneration(UUID userId) {
         lenient().when(generationContextResolver.resolveForStudyPack(eq(userId), any(StudyPackEntity.class)))
                 .thenReturn(new StudyPackGenerationContext(
