@@ -1,5 +1,272 @@
 # RELEASES.md - NoteLib
 
+## v0.106.0 - Board Exam Review Set Identity
+
+**Status: Released** (kicked off 2026-09-02, signed off 2026-09-03, base branch `releases/v0.106.0`, cut
+from `main` after `v0.105.0` merged, tagged and **deployed to production**)
+
+Theme: a Board Exam should be built from the whole Review Set it is named for, not from three of its notes.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet.
+
+### Why this release exists
+
+**Slice 4 of the approved assessment sequence** (`docs/claude-plans/assessment-architecture-audit.md` §8,
+§13). **⚠️ SEQUENCED DELIBERATELY AFTER A PRODUCTION DEPLOY, NOT MERELY AFTER A MERGE (owner, 2026-09-02):**
+`v0.105.0` reworked exam generation, added a pessimistic lock inside the Long Exam generation transaction and
+changed quota semantics on a paid path. Slice 4 performs surgery on the **same machinery**, so it waited for
+prod evidence rather than stacking on an unvalidated layer.
+
+**⚠️ BOARD EXAM IS TODAY WHAT THE ANTI-DRIFT RULES FORBID BUILDING, and the numbers were re-verified at this
+kickoff:** `MAX_ADDITIONAL_BOARD_EXAM_SOURCE_COUNT = 2` (`ChallengeQuizService:173`) so the largest possible
+Board Exam is **3 notes**; `min(BOARD_EXAM_QUESTIONS_PER_SOURCE 12 × sourceCount, MAX_BOARD_EXAM_TOTAL_QUESTIONS 30)`
+caps it at **30 questions**. Against a ~550-note Review Set that is a rounding error, and **the mode does not
+do the job it is named for.**
+
+### ⚠️ THE FINDING THAT SHAPES THIS RELEASE, AND IT IS NOT IN THE AUDIT
+
+The audit lists *"move generation off the transaction"* as a prerequisite (§3, §8). **It does not say what
+that removes.** Verified at this kickoff by reading both services:
+
+- `ChallengeQuizService.startSession` is a plain **`@Transactional`** (`:201`), and the Board Exam quota
+  charge `incrementBoardExamGenerationBy` runs **INSIDE it** (`:403`), alongside synchronous generation.
+- `LongExamService.startSession` is **`@Transactional(propagation = NOT_SUPPORTED)`** (`:161`) and dispatches
+  generation **after commit**, charging outside the transaction.
+
+**⚠️ SO BOARD EXAM'S QUOTA SAFETY TODAY IS AN ACCIDENT OF ITS TRANSACTION: a generation failure rolls the
+charge back automatically. That is the ONLY reason Board Exam has never needed a refund path.** Moving
+generation off the transaction **destroys that implicit rollback** — the charge commits, generation fails
+separately, and the learner is charged for an exam that never existed.
+
+**⚠️ THEREFORE THE PREREQUISITE IS NOT ONE CHANGE BUT THREE, AND THEY SHIP TOGETHER OR NOT AT ALL:**
+1. generation moves off the transaction (the audit's item);
+2. the **quota reversal** machinery `v0.105.0` built for Long Exam extends to Board Exam;
+3. the **resurrection race guard** extends with it — lock, then re-read status through the scalar projection
+   before installing the quiz.
+
+**Shipping (1) without (2) and (3) reintroduces, in Board Exam, both defects `v0.105.0` just fixed:** a
+learner charged for a failed exam, and a sweeper-refunded session resurrected as a usable one. **⚠️ Do NOT
+treat the refund and the race guard as follow-ups.**
+
+### Planned Scope
+
+- **1. The whole Review Set is the eligible syllabus.** Review Sets **are** hierarchical — verified:
+  `NoteCollectionEntity.parentCollectionId` (`:69`) — so the Subject Plan stratum is real and Board Exam
+  sampling has a genuine layer to stratify over.
+- **2. Stratify across the Review Set's Subject Plans**, then sample within, reusing `v0.105.0`'s sampler.
+  **⚠️ Do NOT build a second sampler**, and **⚠️ Subject Plans are coverage STRATA, never curriculum
+  WEIGHTS** — note count ≠ curriculum weight, section size ≠ exam weight.
+- **3. Generation moves OFF the transaction, WITH the refund and the race guard** (see the finding above).
+  Mirror `LongExamService`: `NOT_SUPPORTED` on start, dispatch after commit, charge outside, lock plus scalar
+  status re-read before installing the quiz, reversal on every transition into `FAILED` **including the
+  recovery sweeper**, idempotent and clamped at zero.
+- **4. A CONFIGURABLE target item count.** **⚠️ NOT a permanent universal constant (owner, 2026-09-02)** —
+  do not block the architecture on choosing 50 / 75 / 100. The architecture must separate: **whole Review Set
+  = eligible syllabus → Subject Plans = coverage strata → sampled sources → configured target count.**
+
+### Anti-drift
+
+**⚠️ CLAIM REPRESENTATIVE COVERAGE, NEVER OFFICIAL FIDELITY.** The repo holds **no board blueprint metadata of
+any kind**, and the "domain" groupings in scoring are **free-text concept strings, not curriculum domains**.
+Product copy stays *"representative board-review exam"* until trusted metadata exists. **⚠️ Do NOT invent true
+domain weighting, per-board format mix, or time-per-item norms.**
+**⚠️ BOARD EXAM STAYS MCQ-ONLY.** Its prompt is already MCQ-only, so this is the status quo, not new work —
+and it is the one place format fidelity is a product *claim* rather than a preference. **No True/False, no
+Identification, no Enumeration in Board Exam.**
+**⚠️ Board Exam is NOT a session mode and does NOT become one here.** It stays a `CHALLENGE` session with its
+`board_exam` mode string. `EXAM_MODES.md` is a locked five-mode contract. **No new mode, no new sub-mode.**
+**⚠️ Modes are never differentiated primarily by question count** — if this change makes Board Exam differ
+from Long Exam only in how many questions it asks, the change is wrong.
+**⚠️ Never send 550 full notes into one prompt**; the per-source fan-out shape (summary + key concepts, never
+note bodies) is preserved.
+**⚠️ PLAN-TIER ENTITLEMENTS UNCHANGED.** Board Exam stays PRO-gated via `resolveMonthlyBoardExamLimit`. No
+quota limit, meter or gate may be added, widened or removed. **The refund changes when a charge is REVERSED,
+never what anyone is entitled to.**
+**⚠️ Do NOT touch Long Exam's sampler, thresholds or refund path** beyond extending them — `v0.105.0` is
+freshly deployed and its behaviour in production is the evidence slice 5 will read.
+**⚠️ OUT OF SCOPE:** cross-pack canonical concept identity (ADR-sized); format-weighted `ConceptHealth`;
+`InterviewPracticeService`'s over-attribution (**still owed before slice 5**, live Backlog Index row); the
+seven carried `v0.103.0` limitations; the session-anchoring migration (§15, deferred until slice 6).
+**⚠️ No code under `frontend/app/onboarding`** — `[CHECKPOINT — due 2026-09-11]` is **9 days out**.
+
+### Verification tier
+
+**FULL THREE-AGENT COLD PRESSURE TEST, IN ISOLATED `git worktree`s.** Two independent triggers — production-data
+semantics and money/quota semantics — plus a transaction-boundary change on a paid path.
+
+**⚠️ THE ISOLATION IS NOT OPTIONAL.** `v0.105.0`'s first round ran three mutating agents in ONE working tree
+and they corrupted each other's builds; one agent's results had to be discarded. The re-test in isolated
+worktrees produced clean, reproducible counts. **Give each agent its own worktree.**
+
+**⚠️ ONE AGENT MUST BE POINTED AT THE BLIND SPOT, NOT AT THE FEATURE.** Splitting reviewers by feature
+reproduces the same blind spot on every side. In the last two releases the worst defect was **outside the
+stated scope** both times — a copy helper re-running a non-idempotent sanitizer, twice, in two different
+helpers.
+
+**⚠️ THE CARRIED LESSON, AND IT IS THE ONE THAT COST `v0.105.0` MOST: WRITE THE GUARD AT THE LAYER THE DEFECT
+LIVES AT.** Three separate guards there sat one layer below what they claimed to protect and passed while the
+defect was live — a schema test calling the builder with hardcoded booleans instead of the derivation that was
+broken; a race test pinning the read but not the lock; a `never()` assertion satisfied by a missing stub.
+**Ask of every new test: if I revert the actual fix, does THIS test fail?**
+
+Also carried: **MUTATE and confirm a NAMED test fails**; **run `./mvnw test-compile` and read its EXIT STATUS
+directly, never through a pipe**; **COUNT executed tests from `target/surefire-reports/*.xml`**; **run
+`npm test`** (a red frontend test shipped unnoticed because it was not run); and **call `advisor()` BEFORE
+writing the Codex prompt.**
+
+### Routing
+
+**→ CODEX.** A transaction-boundary change, a sampler extension, the refund path and a config surface.
+
+### Shipped
+
+- **Board Exam is assembled from the whole Review Set.** The eligible pool is every note in the set's
+  Subject Plans with a ready Study Pack; sources are sampled stratified across those plans, deterministic
+  per session id, reusing `v0.105.0`'s sampler. A **childless** Review Set uses its own items as one
+  stratum, mirroring the Goal endpoint's documented rule.
+- **A Subject Plan launch resolves UP to its parent Review Set.** A learner reaches Board Exam from
+  whichever collection page they were on — normally a child. Using the claimed collection directly shipped
+  *"assess across the plan you came from"*, which is **Long Exam's job**. Ownership is re-verified on the
+  parent.
+- **Generation moved off the request transaction**, with the quota reversal and resurrection guard that
+  move requires — the three ship together, as the kickoff recorded.
+- **The target item count is configuration**, with assembly floors: above them a shorter valid exam marked
+  short, below them fail and reverse.
+- **A caller-supplied note list is REJECTED on the sampled path**, not silently discarded, with an accurate
+  error rather than a borrowed "too many notes" one.
+- **The capability is actually REACHABLE, which it was not when the backend first landed.** The frontend
+  sent `sourceCollectionId` **only alongside a picked note list** — and the server samples the Review Set and
+  now rejects such a list, so the single route into this feature was the one route that invalidated itself.
+  A Review Set Board Exam is now the default whenever the learner arrived from a collection, needing no
+  picks, and the source picker is hidden on that path rather than left as a control whose selections are
+  silently dropped. **⚠️ This is the `v0.103.0` pattern repeating — a complete, correct server capability
+  that no UI could reach — and it was found by asking how a learner gets here, not by reading the diff.**
+- **The gate is a RESOLVED plan, never a present `collectionId`, and getting that wrong twice is why it is
+  written down.** `v0.105.0` made the same mistake on Long Exam. The plan lookup falls back silently on
+  failure, so gating on the id alone removed the degradation path outright: a learner whose plan could not be
+  loaded, or which holds fewer than two ready Study Packs, could not start a Board Exam **at all**, where
+  before they simply got a single-note one.
+
+### ⚠️ Found by the pre-signoff pressure test — read this before touching Board Exam again
+
+**Three cold agents in ISOLATED worktrees found a defect that would have taken every Board Exam down in
+production, and 1979 tests were green while it was there.**
+
+- **⚠️ THE CHARGE WAS IN AN `afterCommit` CALLBACK, AND THAT IS FATAL IN THIS CLASS.**
+  `ChallengeQuizService` is `@Transactional` **at class level**; `LongExamService` is not (its start path is
+  `NOT_SUPPORTED`). So copying Long Exam's dispatch pattern across **inverted its meaning**: `startSession`
+  always has an active transaction, the callback always fires, and a `PROPAGATION_REQUIRED` write there
+  joins the already-committed transaction and **throws**. Every Board Exam start returned 500. Worse, the
+  session row had already committed as `GENERATING` carrying `boardExamQuotaReserved=true`, so the sweeper
+  later refunded **both** meters for a charge that never happened — **handing back quota the learner had
+  spent on genuine Challenge Quiz sessions**, a shared meter.
+  **⚠️ IT WAS INVISIBLE BY CONSTRUCTION:** `MockitoExtension` has no transaction manager, so
+  `isSynchronizationActive()` is false and **every test took the inline fallback — the branch that never
+  runs in production.** Deleting the entire production branch left the suite green.
+  **Fixed by charging INSIDE the request transaction**, which is also simpler: the charge becomes atomic
+  with the session, which dissolves the reserved-before-charged window **and** makes the two meters
+  impossible to split. **⚠️ The old design's stated reason — that charging inside would let concurrent
+  starts observe the same remaining quota — IS FALSE:** `assertBoardExamQuotaAvailable` is an unlocked read
+  and no row lock is taken on that path, so the race is identical either way. Do not "restore" it.
+  **⚠️ NEVER PERFORM A `@Transactional` WRITE IN AN `afterCommit` CALLBACK.** Every other
+  `registerSynchronization` site in this codebase dispatches only.
+- **Board Exam had lost its AI rate limit and its answer-key filter**, both because a branch moved and a
+  gate stopped firing — the same class four times in this release. Both restored and pinned.
+- **The parent walk had ZERO coverage** — the release's headline mechanism. Now pinned, along with its
+  ownership re-verification.
+- **Three coverage gaps the pressure test opened were closed before signoff, each mutation-verified.**
+  (a) The sweep's candidate query is pinned by
+  `recoverStaleBoardExamSessions_selectsGeneratingChallengeRowsOlderThanTheCutoff`, which captures the mode,
+  status and cutoff instead of stubbing them past — flipping `CHALLENGE` to `LONG_EXAM` now fails.
+  (b) `boardExamRefundReversesBothMetersAndClampsEachAtZero` was restructured around a **bystander period row
+  holding non-zero counters that must survive both refunds**, so the `period_start` predicate is no longer
+  satisfied vacuously by a column the test had already driven to 0.
+  (c) The two assembly floors are pinned **independently** by
+  `startSession_boardExamFailsOnTheSOURCEFloorEvenWhenItHasEnoughQuestions` and
+  `startSession_boardExamFailsOnTheQUESTIONFloorEvenWhenEnoughSourcesContribute`; deleting either half of the
+  condition now fails exactly one of them. **The source-floor case asserts the per-source ASK, not the quiz
+  size** — a FAILED session holds no quiz, so the ask is the only available evidence that the question floor
+  was clear.
+- **The shared-note dedupe guard now discriminates, and why it did not is worth recording.**
+  `LongExamPlanSourceSampler.sample` filters the primary out of its bucket pass and re-adds it exactly once,
+  so while the shared note **was** the primary the sampler silently absorbed the duplicated pool entry and
+  the bug was unobservable. The fixture now makes the shared note a **non-primary**; removing the
+  `putIfAbsent` dedupe fails
+  `startSession_boardExamCountsANoteSharedByTwoSubjectPlansOnlyOnce`.
+- **The dead synchronous Board Exam branch and `generateBoardExamQuizForSources` were DELETED, not left
+  unreachable.** They were not merely dead — they encoded a **different, superseded rule**
+  (`quiz.size() != quizCount` fails the session) beside the resilient path's rule (ship above the assembly
+  floors, mark `shortExam`), which is exactly how a later edit reinstates the old one by accident. A
+  tripwire `IllegalStateException` now stands where the branch was, so removing the early return fails
+  loudly instead of falling through. The **legacy single-note rule is pinned in both directions** by
+  `startSession_legacySingleNoteBoardExamShipsShortAboveTheFloorInsteadOfFailingStrictly` (11 of 12 ships,
+  marked short) and `...StillFailsBelowTheQuestionFloorAndReversesBothMeters` (8 fails and refunds).
+- **The exam question POOL now excludes the note's own saved quiz — a pre-existing hole, and the first fix
+  for it was written at the wrong layer.** A pooled Board Exam or Long Exam could emit a question sitting on
+  the note's Quiz tab with its answer visible, which both hands over the answer key and corrupts
+  `ConceptHealth`. **The fix was initially written in `ChallengeQuizService`, filtering the RETURNED sample,
+  and that was wrong twice over:** `sampleQuestions` marks its sample **served before returning it**, so
+  dropping one leaked item would have burned a whole exam's worth of clean rows on every hit — out of a Board
+  Exam pool of **24** — and it left the identical hole open on the Long Exam pooled path. It now lives in
+  `ExamQuestionPoolService`, which serves both modes: the builder passes the saved quiz as both prompt hint
+  and hard filter so **new pools cannot contain the answer key**, and sampling filters again **before** the
+  have-we-got-enough check so **pools built earlier cannot serve it and nothing is spent rejecting it**.
+  Verified: `generateBoardExamPool` and the Long Exam builder both passed `List.of()`, so overlap was never
+  rare. Pinned by three tests in `ExamQuestionPoolServiceTest`, each mutation-verified —
+  `...neverServesAQuestionThatIsAlreadyOnTheStudyPacksQuizTab`,
+  `...burnsNoPoolRowsWhenTheAnswerKeyFilterLeavesTooFew` (which is what pins the ORDER of the filter against
+  the count check) and `generatePoolAsync_buildsTheBoardExamPoolWithTheStudyPacksOwnQuizDisallowed`.
+- **`boardExamQuotaReserved` no longer reaches the wire, and the test pins BOTH halves.** It is the sweeper's
+  only record that a crashed Board Exam still owes a refund, so it must survive on the row; it is internal
+  bookkeeping, so it has no business in the response. It was never writable — `mergeSessionState` is an
+  allowlist of the four selected-answer maps — but the client echoes session state back on every progress
+  save, so a later widening of that allowlist would have turned a visible key into a quota bypass. **A
+  one-sided guard would have been worse than none:** asserting only the strip lets a future "fix" that stops
+  writing the flag pass while silently disabling every refund.
+- **Signoff found two more stale claims in docs the release never touched, and one in a code comment.**
+  `quiz.md` still said a Review Set Board Exam's *"additional Study Pack choices are restricted to quiz-ready
+  notes in that plan, and the existing 2-additional-note cap is unchanged"* — describing precisely the picker
+  and cap this release removed — and still gave `min(12 × sourceCount, 30)` as the question count for all
+  Board Exams. `EXAM_MODES.md` still called multi-topic a capability of *"Long Exam (and optionally Board Exam
+  later)"*; later is now. A `ChallengeQuizService` comment still justified a conditional lock by the cost of
+  holding a transaction *"across LLM generation"* for **every Challenge and Board Exam start** — true of
+  Challenge, no longer true of Board Exam. **Neither doc was in this release's diff; both were found by the
+  surface sweep.**
+- **`BOARD_EXAM_STARTED` on the sampled path now carries `sourceCount`, `sourceScope` and
+  `expectedQuestionCount`**, added at signoff because the checkpoint below would otherwise have had no metric:
+  `questionCount` alone cannot separate a sampled exam that assembled 12 from a legacy single-note one that
+  only ever asked for 12. **`sourceScope` records the VERIFIED outcome, never the caller's claim.** Pinned and
+  mutation-verified by `startSession_boardExamStartEventCarriesTheMetricItsCheckpointReads`.
+- **Doc drift closed, including the money surface.** `subscriptions-and-usage-limits.md`, `quiz-session.md`
+  and `collections.md` all still said Board Exam and Long Exam quota is deducted **per source note** ("a
+  3-note session costs 3 units") — false since `v0.32.2`, which moved both to **one unit per session**.
+  `challenge-quiz.md` described a source picker that a Review Set launch does not render and a "10
+  source-note units / month" cap that is really **10 sessions**. The release's own headline mechanism — the
+  Subject-Plan-to-Review-Set parent walk, the study-pack dedupe, the assembly floors and the pool exclusion —
+  was undocumented and is now written down. **Found by sweeping the SURFACE, not the diff:** `collections.md`
+  was not in this release's diff at all.
+
+### Known limitations
+
+**None open. Every finding this release's pressure test raised was closed before signoff, and each closure is
+mutation-verified with the killing test named above.** The list is recorded as closed rather than deleted so a
+later reader can see what was found and how, and can re-run the mutants.
+
+**⚠️ ONE CHECKPOINT IS OWED AND WAS ADDED IN THIS SIGNOFF COMMIT: `[CHECKPOINT — due 2026-10-06]`.** The
+configured target of **30** items and both assembly floors (10 questions, 2 sources) shipped as reasoned
+numbers rather than measured ones — the kickoff explicitly ruled the target must not block the architecture —
+and the release **newly allows a Board Exam to ship short**. The read asks how often that fires. Its
+instrumentation shipped in the same commit and is verified emitting, not merely enum-resident.
+
+**⚠️ Two limitations carried from earlier releases are NOT closed here and stay where they were recorded:**
+`v0.104.0`'s third live instance of the concept mis-attribution defect in `InterviewPracticeService`, and
+`v0.105.0`'s reserved-before-charged window on the Long Exam start path. Neither is a Board Exam defect and
+neither was in this release's scope; folding either in would have put a third service, or a second money
+mechanic, into this diff.
+
 ## v0.105.0 - Curriculum-Scale Exams
 
 **Status: Released** (kicked off and signed off 2026-09-02, base branch `releases/v0.105.0`, cut from

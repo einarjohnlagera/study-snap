@@ -136,6 +136,9 @@ studysnap:
     interview-practice-pro-only: ${INTERVIEW_PRACTICE_PRO_ONLY:true}
     long-exam-pool-size: ${LONG_EXAM_POOL_SIZE:48}
     board-exam-pool-size: ${BOARD_EXAM_POOL_SIZE:24}
+    board-exam-target-question-count: ${BOARD_EXAM_TARGET_QUESTION_COUNT:30}
+    board-exam-minimum-assembled-questions: ${BOARD_EXAM_MINIMUM_ASSEMBLED_QUESTIONS:10}
+    board-exam-minimum-contributing-sources: ${BOARD_EXAM_MINIMUM_CONTRIBUTING_SOURCES:2}
     # Kill-switch for eager exam-pool pre-warming (fires automatically on every Study
     # Pack generation, not on actual Long/Board Exam usage). Default off: with zero
     # Pro users today, this is pure LLM-fan-out cost/memory pressure for zero value.

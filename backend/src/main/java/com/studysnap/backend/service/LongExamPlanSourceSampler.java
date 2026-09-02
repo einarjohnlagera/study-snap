@@ -13,7 +13,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * Draws a bounded, representative Long Exam sample from the uncapped eligible plan pool.
+ * Draws a bounded representative sample from an uncapped eligible curriculum pool.
  *
  * <p>Sections provide spread only. They are deliberately never weights: a large section has no
  * entitlement to more questions than a small section merely because it contains more notes.
@@ -47,7 +47,7 @@ public class LongExamPlanSourceSampler {
                 .filter(source -> !source.studyPack().getId().equals(primaryStudyPackId))
                 .sorted(Comparator.comparingInt(EligiblePlanSource::position)
                         .thenComparing(source -> source.studyPack().getId()))
-                .forEach(source -> buckets.computeIfAbsent(normalizeBucket(source.sectionLabel()), ignored -> new ArrayList<>())
+                .forEach(source -> buckets.computeIfAbsent(normalizeBucket(source.coverageBucketLabel()), ignored -> new ArrayList<>())
                         .add(source));
         buckets.values().forEach(bucket -> java.util.Collections.shuffle(bucket, random));
 
@@ -77,6 +77,11 @@ public class LongExamPlanSourceSampler {
         return label == null || label.isBlank() ? UNSECTIONED_BUCKET : label.trim();
     }
 
-    public record EligiblePlanSource(StudyPackEntity studyPack, String sectionLabel, int position) {
+    /**
+     * Mode-neutral data carrier reused by Long Exam (section bucket) and Board Exam (Subject Plan bucket).
+     * The historical class name stays for binary/source continuity during the v0.105 rollout; do not fork it
+     * for Board Exam merely because the bucket labels have a different product name.
+     */
+    public record EligiblePlanSource(StudyPackEntity studyPack, String coverageBucketLabel, int position) {
     }
 }

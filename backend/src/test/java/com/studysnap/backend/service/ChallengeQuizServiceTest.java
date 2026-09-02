@@ -13,7 +13,11 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
 import com.studysnap.backend.exception.NotEnoughNewQuestionsException;
+import com.studysnap.backend.exception.BoardExamInsufficientEligibleSourcesException;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.NoteCollectionEntity;
+import com.studysnap.backend.entity.NoteCollectionItemEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -35,6 +39,9 @@ import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.service.model.StudyPackQuizMastery;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.ExamQuestionPoolRepository;
+import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AiRateLimitService;
@@ -49,9 +56,13 @@ import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +74,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -70,7 +82,10 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -120,11 +135,106 @@ class ChallengeQuizServiceTest {
     private ConceptHealthService conceptHealthService;
     @Mock
     private StudyPackQuizMasteryService studyPackQuizMasteryService;
+    // ⚠️ NOT a @Mock. A mocked TransactionOperations returns null and never invokes the callback, so the
+    // async Board Exam generation body would never run and every test would observe GENERATING forever.
+    // Mirrors LongExamServiceTest, which executes the callback directly.
+    private final TransactionOperations studyPackGenerationTransactionOperations = new TransactionOperations() {
+        @Override
+        public <T> T execute(org.springframework.transaction.support.TransactionCallback<T> action) {
+            return action.doInTransaction(null);
+        }
+    };
+    /**
+     * ⚠️ NOT a {@code @Mock}. The two-meter Board Exam reversal lives INSIDE
+     * {@link GenerationRecoveryRowWriter#failBoardExamSession(UUID)}, so a mocked row writer reduces every
+     * refund assertion to {@code verify(rowWriter).failBoardExamSession(id)} — which keeps passing after the
+     * reversal is deleted outright. A spy runs the real body and still records the call.
+     */
+    private GenerationRecoveryRowWriter generationRecoveryRowWriter;
+    @Mock
+    private NoteCollectionRepository noteCollectionRepository;
+    @Mock
+    private NoteCollectionItemRepository noteCollectionItemRepository;
+
+    /**
+     * ⚠️ MOCKED, and the capture is the point. With a {@code Runnable::run} dispatcher the generation body
+     * executes BEFORE {@code startSession} builds its response, so the start response would show
+     * IN_PROGRESS with a full quiz and no test could ever observe the GENERATING hand-off this release
+     * introduced. Capturing the task and running it explicitly is the LongExamServiceTest model.
+     */
+    @Mock
+    private StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
+    private Runnable dispatchedTask;
+    /**
+     * A SPY, not a mock: the real stratified draw must run, while the arguments stay observable so a test
+     * can prove the sample is keyed on the session id the row is persisted under.
+     */
+    private LongExamPlanSourceSampler longExamPlanSourceSampler;
+
+    private final Map<UUID, QuickReviewSessionEntity> savedSessionsById = new LinkedHashMap<>();
+
+    /**
+     * Records every persisted session so the ASYNCHRONOUS Board Exam generation body can re-fetch it by id.
+     * Board Exam generation moved off the request transaction in v0.106.0: startSession returns GENERATING
+     * and the dispatched task loads the row again. Without this the task throws SessionNotFound, the catch
+     * swallows it, and every Board Exam test observes a session stuck at GENERATING.
+     */
+    private QuickReviewSessionEntity recordSession(QuickReviewSessionEntity session) {
+        if (session != null && session.getId() != null) {
+            savedSessionsById.put(session.getId(), session);
+        }
+        return session;
+    }
+
+
+    /**
+     * Asserts the Board Exam start handed back a GENERATING session with no quiz yet, then runs the task
+     * the request dispatched and returns the session AS PERSISTED.
+     *
+     * <p>⚠️ As of v0.106.0 Board Exam generation is off the request transaction, so the start response
+     * deliberately carries no questions. Every assertion about quiz content, per-source stamping and the
+     * IN_PROGRESS transition belongs on the persisted session, not on the start response.
+     */
+    private QuickReviewSessionEntity completeDispatchedBoardExam(ChallengeQuizStartResponse startResponse) {
+        assertThat(startResponse.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        assertThat(startResponse.quiz()).isEmpty();
+        assertThat(dispatchedTask)
+                .as("a Board Exam start must dispatch an asynchronous generation task")
+                .isNotNull();
+        dispatchedTask.run();
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(startResponse.sessionId()));
+        assertThat(persisted).as("the dispatched task must persist the session it generated").isNotNull();
+        return persisted;
+    }
+
+    private List<QuizItem> persistedQuiz(QuickReviewSessionEntity session) {
+        return QuizSessionStateUtils.extractQuiz(session.getSessionState());
+    }
 
     private ChallengeQuizService challengeQuizService;
+    /**
+     * Held as a field rather than constructed inline so a test can set a NON-DEFAULT Board Exam target,
+     * which is the only way an assertion can tell a configurable value from a hardcoded literal that
+     * happens to equal today's default.
+     */
+    private StudySnapProperties properties;
 
     @BeforeEach
     void setUp() {
+        properties = new StudySnapProperties();
+        dispatchedTask = null;
+        longExamPlanSourceSampler = spy(new LongExamPlanSourceSampler());
+        lenient().doAnswer(invocation -> {
+            dispatchedTask = invocation.getArgument(0);
+            return null;
+        }).when(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
+        generationRecoveryRowWriter = spy(new GenerationRecoveryRowWriter(
+                mock(ExamQuestionPoolRepository.class),
+                quickReviewSessionRepository,
+                noteRepository,
+                mock(StudyPackService.class),
+                userUsageService
+        ));
         lenient().when(examQuestionPoolService.sampleQuestions(any(UUID.class), any(), anyInt(), any()))
                 .thenReturn(Optional.empty());
         lenient().when(challengeQuizQuestionBankService.claimEligibleQuestions(
@@ -134,6 +244,26 @@ class ChallengeQuizServiceTest {
                 any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()
         )).thenReturn(List.of());
         lenient().when(noteRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
+        // ⚠️ Board Exam generation is ASYNCHRONOUS as of v0.106.0: startSession returns a GENERATING
+        // session and the dispatched task re-fetches it by id. Without this, generateBoardExamAsync throws
+        // SessionNotFound, is caught, and every Board Exam test observes a session stuck at GENERATING —
+        // which reads as "the feature is broken" rather than "the harness never let it finish".
+        lenient().when(quickReviewSessionRepository.findById(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            return savedSessionsById.containsKey(id) ? Optional.of(savedSessionsById.get(id)) : Optional.empty();
+        });
+        // The async body takes the row lock and THEN re-reads the scalar status. Both must resolve to the
+        // persisted session or the body returns early (or throws) and the session stays GENERATING forever —
+        // a harness gap that is indistinguishable from a broken feature.
+        lenient().when(quickReviewSessionRepository.findByIdForUpdate(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            return Optional.ofNullable(savedSessionsById.get(id));
+        });
+        lenient().when(quickReviewSessionRepository.findStatusById(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            QuickReviewSessionEntity session = savedSessionsById.get(id);
+            return session == null ? Optional.empty() : Optional.of(session.getStatus());
+        });
         lenient().when(studyPackRepository.findByIdAndOwnerUserId(any(UUID.class), any(UUID.class)))
                 .thenAnswer(invocation -> {
                     StudyPackEntity studyPack = new StudyPackEntity();
@@ -148,7 +278,7 @@ class ChallengeQuizServiceTest {
                 quickReviewSessionRepository,
                 quizGenerationService,
                 subscriptionService,
-                new StudySnapProperties(),
+                properties,
                 userUsageService,
                 billingUsagePeriodService,
                 authService,
@@ -160,7 +290,13 @@ class ChallengeQuizServiceTest {
                 challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
                 conceptHealthService,
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                studyPackGenerationTaskDispatcher,
+                studyPackGenerationTransactionOperations,
+                generationRecoveryRowWriter,
+                noteCollectionRepository,
+                noteCollectionItemRepository,
+                longExamPlanSourceSampler
         );
     }
 
@@ -305,7 +441,7 @@ class ChallengeQuizServiceTest {
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT)
         )).thenReturn(freshQuiz);
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> {
-            QuickReviewSessionEntity saved = invocation.getArgument(0);
+            QuickReviewSessionEntity saved = recordSession(invocation.getArgument(0));
             if (saved.getId() == null) {
                 saved.setId(UUID.randomUUID());
             }
@@ -454,7 +590,7 @@ class ChallengeQuizServiceTest {
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT)
         )).thenReturn(bankedQuiz);
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
@@ -497,7 +633,7 @@ class ChallengeQuizServiceTest {
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT)
         )).thenReturn(templateQuiz);
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
@@ -558,7 +694,7 @@ class ChallengeQuizServiceTest {
                 eq(DEFAULT_ADAPTIVE_QUESTION_COUNT)
         )).thenReturn(buildQuizWithPrefix("Banked", DEFAULT_ADAPTIVE_QUESTION_COUNT));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 studyPackId.toString(),
@@ -599,7 +735,7 @@ class ChallengeQuizServiceTest {
                 eq(3)
         )).thenReturn(missedQuestions);
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
         when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new BillingUsagePeriodService.UsagePeriod(
                         PlanType.FREE, BillingCycle.MONTHLY, OffsetDateTime.now().minusDays(5), OffsetDateTime.now().plusDays(25), 2026, 3
@@ -782,7 +918,7 @@ class ChallengeQuizServiceTest {
                 eq(ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS)
         )).thenReturn(missedQuestions);
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
         stubChallengeUsagePeriod(userId, PlanType.FREE);
 
         ChallengeQuizStartResponse response = challengeQuizService.startRedoMissedSession(studyPackId.toString(), userId);
@@ -835,7 +971,7 @@ class ChallengeQuizServiceTest {
                 eq(ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS)
         )).thenReturn(missedQuestions);
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> {
-            QuickReviewSessionEntity session = invocation.getArgument(0);
+            QuickReviewSessionEntity session = recordSession(invocation.getArgument(0));
             if (session == staleOrdinarySession) {
                 throw new IllegalStateException("save failed");
             }
@@ -893,7 +1029,7 @@ class ChallengeQuizServiceTest {
                 eq(generationContext)
         )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedQuiz));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
@@ -1009,7 +1145,7 @@ class ChallengeQuizServiceTest {
                 30
         ));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
@@ -1097,7 +1233,7 @@ class ChallengeQuizServiceTest {
                 generationContext
         )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedQuiz));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         // shuffleQuestionOrderPreservingMatchingGroups groups the MATCHING block into a single unit before
         // shuffling, so a correct implementation always keeps it contiguous and in order on every draw — this
@@ -1244,7 +1380,7 @@ class ChallengeQuizServiceTest {
                 new QuizItem("Q12", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
         ));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 studyPackId.toString(),
@@ -1252,15 +1388,24 @@ class ChallengeQuizServiceTest {
                 new ChallengeQuizStartRequest("board_exam", null)
         );
 
+        // Quota is charged at START, before a single question exists — the meters below are asserted on the
+        // start response on purpose.
         assertThat(response.mode()).isEqualTo("board_exam");
         assertThat(response.selectedDifficulty()).isEqualTo("mixed");
-        assertThat(response.quiz()).hasSize(12);
-        assertThat(response.timeLimitSeconds()).isEqualTo(12 * 60);
         assertThat(response.monthlyLimit()).isEqualTo(10);
         assertThat(response.usedThisMonth()).isEqualTo(1);
         assertThat(response.boardExamMonthlyLimit()).isEqualTo(10);
         assertThat(response.boardExamUsedThisMonth()).isEqualTo(1);
-        verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
+
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(persistedQuiz(persisted)).hasSize(12);
+        assertThat(persisted.getTotalQuestions()).isEqualTo(12);
+        assertThat(persisted.getSessionState().get("timeLimitSeconds")).isEqualTo(12 * 60);
+        // atLeastOnce: the asynchronous body resolves the context once per source in addition to the
+        // start-time resolution that gates the ready question pool.
+        verify(generationContextResolver, atLeastOnce()).resolveForStudyPack(userId, studyPack);
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
         verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
@@ -1314,7 +1459,7 @@ class ChallengeQuizServiceTest {
                 LearnerLevel.BOARD_EXAM_REVIEW
         )).thenReturn(Optional.of(buildQuiz(12)));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 studyPackId.toString(),
@@ -1368,7 +1513,7 @@ class ChallengeQuizServiceTest {
                 buildQuizWithPrefix("Third", 10)
         );
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 primaryStudyPackId.toString(),
@@ -1379,17 +1524,22 @@ class ChallengeQuizServiceTest {
                 ))
         );
 
-        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
-        assertThat(response.quiz()).hasSize(30);
-        assertThat(response.quiz()).filteredOn(item -> primaryStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(10);
-        assertThat(response.quiz()).filteredOn(item -> secondStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(10);
-        assertThat(response.quiz()).filteredOn(item -> thirdStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(10);
+        // The source plan is decided synchronously and is already on the GENERATING start response.
         assertThat(response.sourceNoteRefs())
                 .extracting(LongExamSourceNoteRef::studyPackId)
                 .containsExactly(primaryStudyPackId.toString(), secondStudyPackId.toString(), thirdStudyPackId.toString());
         assertThat(response.sourceNoteRefs())
                 .extracting(LongExamSourceNoteRef::questionCount)
                 .containsExactly(10, 10, 10);
+
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+        List<QuizItem> quiz = persistedQuiz(persisted);
+
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(quiz).hasSize(30);
+        assertThat(quiz).filteredOn(item -> primaryStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(10);
+        assertThat(quiz).filteredOn(item -> secondStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(10);
+        assertThat(quiz).filteredOn(item -> thirdStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(10);
         verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
         verify(examQuestionPoolService, never()).sampleQuestions(
                 eq(primaryStudyPackId),
@@ -1432,7 +1582,7 @@ class ChallengeQuizServiceTest {
                 buildQuizWithPrefix("Additional", 12)
         );
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 primaryStudyPackId.toString(),
@@ -1447,7 +1597,10 @@ class ChallengeQuizServiceTest {
         assertThat(response.sourceNoteRefs())
                 .extracting(LongExamSourceNoteRef::questionCount)
                 .containsExactly(12, 12);
-        assertThat(response.quiz()).hasSize(24);
+
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+
+        assertThat(persistedQuiz(persisted)).hasSize(24);
         verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
@@ -1499,73 +1652,523 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void startSession_boardExamFromAPlanAcceptsMixedSubjectMembers() {
-        // ⚠️ THE SAME LIVE DEFECT AS THE LONG EXAM PATH, ON THE CTA THAT BOARD_EXAM PROFILES GET.
-        // The plan CTA routes to this screen with ?collectionId=, the prescreen pre-selects the plan's
-        // notes regardless of subject, and this service rejected them with "must share the same subject".
-        // Fixing only Long Exam would have left the release's headline false for the majority profile.
+    void startSession_boardExamFromAReviewSetAcceptsMixedSubjectMembers() {
+        // ⚠️ SUPERSEDES startSession_boardExamFromAPlanAcceptsMixedSubjectMembers. Its property — a plan's
+        // own notes are never refused for their subject — survives v0.106.0 and is now structural: the
+        // Review Set pool is built from collection MEMBERSHIP and reads no subject at all. This test fails
+        // the moment anyone reintroduces a subject predicate on the Review Set path.
         UUID userId = UUID.randomUUID();
-        UUID collectionId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3, 3);
+        packsByPlan.get(0).forEach(pack -> pack.setSubject("Biology"));
+        packsByPlan.get(1).forEach(pack -> pack.setSubject("Engineering Mathematics"));
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        assertThat(response.sourceNoteRefs()).hasSize(6);
+        assertThat(planIndexesOf(response.sourceNoteRefs(), packsByPlan)).contains(0, 1);
+    }
+
+    @Test
+    void startSession_boardExamFromAReviewSetRejectsACallerSuppliedNoteList() {
+        // ⚠️ SUPERSEDES startSession_boardExamFromAPlanStillRejectsANonMemberOfADifferentSubject. The old
+        // guard rejected a smuggled outsider per source; v0.106.0 makes smuggling impossible by
+        // construction, because the pool is derived from the Review Set and never from the request. This
+        // asserts the stronger property directly, so re-wiring request-supplied ids into the Review Set
+        // path fails here.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3, 3);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        UUID outsiderStudyPackId = UUID.randomUUID();
+        StudyPackEntity outsider = buildStudyPack(outsiderStudyPackId, UUID.randomUUID(), userId);
+        outsider.setSubject("Engineering Mathematics");
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        lenient().when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(outsiderStudyPackId, userId))
+                .thenReturn(Optional.of(outsider));
+        stubReviewSetBoardExamGeneration(userId);
+
+        // ⚠️ STRENGTHENED: the request is now REJECTED, not silently narrowed. A Review Set exam is sampled
+        // by the server, so a supplied note list has no meaning — and silently discarding it was worse than
+        // cosmetic: sending that list was the ONLY way the client ever set sourceCollectionId, so the single
+        // route into this capability was the one that threw the learner's selection away.
+        assertThatThrownBy(() -> challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest(
+                        "board_exam",
+                        List.of(outsiderStudyPackId.toString()),
+                        reviewSetId.toString()
+                )
+        )).isInstanceOf(InvalidBoardExamSourceException.class);
+
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+    }
+
+    @Test
+    void startSession_boardExamSpreadsAcrossSubjectPlansInsteadOfExhaustingTheFirst() {
+        // ⚠️ THE POOL MUST BE OVERSUBSCRIBED OR THIS TEST PROVES NOTHING. With 22 eligible notes and a
+        // sample limit of 10 (30 questions / 3 per source), a flat draw would routinely miss the two small
+        // Subject Plans entirely; a stratified draw exhausts them BOTH on every single draw, because
+        // round-robin visits every bucket before taking a second source from any of them.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 18, 2, 2);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        // Every start draws a fresh random session id, so this repeats: stratification is a property of
+        // every draw, not of a lucky one.
+        for (int attempt = 0; attempt < 5; attempt++) {
+            ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                    primary.getId().toString(),
+                    userId,
+                    new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+            );
+
+            List<Integer> planIndexes = planIndexesOf(response.sourceNoteRefs(), packsByPlan);
+            assertThat(response.sourceNoteRefs()).hasSize(10);
+            assertThat(planIndexes).as("attempt %s must reach every Subject Plan", attempt).contains(0, 1, 2);
+            assertThat(planIndexes.stream().filter(index -> index == 1).count())
+                    .as("attempt %s must exhaust the small plan rather than the large one", attempt)
+                    .isEqualTo(2);
+            assertThat(planIndexes.stream().filter(index -> index == 2).count())
+                    .as("attempt %s must exhaust the second small plan too", attempt)
+                    .isEqualTo(2);
+        }
+    }
+
+    @Test
+    void startSession_boardExamSamplesDeterministicallyFromTheSessionIdItPersists() {
+        // Determinism is only useful if the seed is the id the session is actually STORED under — a sample
+        // seeded from a throwaway UUID is equally "deterministic" and completely unreproducible.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 18, 2, 2);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<LongExamPlanSourceSampler.EligiblePlanSource>> poolCaptor =
+                ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<UUID> seedCaptor = ArgumentCaptor.forClass(UUID.class);
+        verify(longExamPlanSourceSampler).sample(poolCaptor.capture(), eq(primary.getId()), eq(10), seedCaptor.capture());
+
+        assertThat(seedCaptor.getValue())
+                .as("the sample must be seeded from the session id the row is persisted under")
+                .isEqualTo(UUID.fromString(response.sessionId()));
+
+        List<String> first = new LongExamPlanSourceSampler()
+                .sample(poolCaptor.getValue(), primary.getId(), 10, seedCaptor.getValue()).stream()
+                .map(source -> source.studyPack().getId().toString())
+                .toList();
+        List<String> second = new LongExamPlanSourceSampler()
+                .sample(poolCaptor.getValue(), primary.getId(), 10, seedCaptor.getValue()).stream()
+                .map(source -> source.studyPack().getId().toString())
+                .toList();
+        assertThat(second).isEqualTo(first);
+        assertThat(response.sourceNoteRefs()).extracting(LongExamSourceNoteRef::studyPackId).isEqualTo(first);
+    }
+
+    @Test
+    void startSession_boardExamFromAChildlessReviewSetUsesItsOwnItemsAsOneStratum() {
+        // Mirrors the Goal endpoint rule: child plans win, and a Review Set with no children is itself the
+        // single stratum. Drop that fallback and the pool is empty, so this start throws instead.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, true, 6);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        assertThat(response.sourceNoteRefs()).hasSize(6);
+        assertThat(response.sourceNoteRefs())
+                .extracting(LongExamSourceNoteRef::studyPackId)
+                .containsExactlyInAnyOrderElementsOf(
+                        packsByPlan.get(0).stream().map(pack -> pack.getId().toString()).toList()
+                );
+    }
+
+    @Test
+    void startSession_boardExamPoolExcludesNotesWhoseStudyPackIsNotReady() {
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 4, 4);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        // Three notes have no READY Study Pack; they are Review Set members but not eligible material.
+        StudyPackEntity needsConfirmation = packsByPlan.get(0).get(3);
+        needsConfirmation.setStatus(StudyPackStatus.NEEDS_CONFIRMATION);
+        StudyPackEntity failed = packsByPlan.get(1).get(2);
+        failed.setStatus(StudyPackStatus.FAILED);
+        StudyPackEntity alsoUnready = packsByPlan.get(1).get(3);
+        alsoUnready.setStatus(StudyPackStatus.NEEDS_CONFIRMATION);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+
+        assertThat(response.sourceNoteRefs()).hasSize(5);
+        assertThat(response.sourceNoteRefs())
+                .extracting(LongExamSourceNoteRef::studyPackId)
+                .doesNotContain(
+                        needsConfirmation.getId().toString(),
+                        failed.getId().toString(),
+                        alsoUnready.getId().toString()
+                );
+    }
+
+    @Test
+    void startSession_boardExamRejectsAReviewSetWithTooFewReadyNotesWithoutChargingOrCreatingASession() {
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        // Only the primary is ready — below the configured floor of two contributing sources.
+        packsByPlan.get(0).get(1).setStatus(StudyPackStatus.NEEDS_CONFIRMATION);
+        packsByPlan.get(0).get(2).setStatus(StudyPackStatus.FAILED);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+
+        String id = primary.getId().toString();
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString());
+
+        assertThatThrownBy(() -> challengeQuizService.startSession(id, userId, request))
+                .isInstanceOf(BoardExamInsufficientEligibleSourcesException.class);
+
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(userUsageService, never()).incrementBoardExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_boardExamSizesItselfFromTheConfiguredTargetQuestionCountNotALiteral() {
+        // ⚠️ A NON-DEFAULT TARGET IS THE WHOLE POINT. The shipped default is 30, so any assertion taken on
+        // defaults passes just as well against a hardcoded 30 and proves nothing about configurability.
+        properties.getPricing().setBoardExamTargetQuestionCount(18);
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 10, 10);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+
+        // 18 questions / 3 minimum per source caps the sample at 6, and the 18 questions are spread over it.
+        assertThat(response.sourceNoteRefs()).hasSize(6);
+        assertThat(response.sourceNoteRefs()).extracting(LongExamSourceNoteRef::questionCount)
+                .containsExactly(3, 3, 3, 3, 3, 3);
+        verify(longExamPlanSourceSampler).sample(anyList(), eq(primary.getId()), eq(6), any(UUID.class));
+    }
+
+    @Test
+    void startSession_boardExamAboveTheAssemblyFloorsShipsShortAndSaysSo() {
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3, 3);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        StudyPackEntity survivor = packsByPlan.get(1).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        // Four of six sources fail their fan-out: 2 contributing sources and 10 questions survive, exactly
+        // the configured floors, so the exam still ships — marked short.
+        stubBoardExamSourceOutcomes(Set.of(primary.getTitle(), survivor.getTitle()));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(persistedQuiz(persisted)).hasSize(10);
+        assertThat(persisted.getSessionState()).containsEntry("shortExam", true);
+        assertThat(persisted.getSessionState()).containsEntry("expectedQuestionCount", 30);
+        verify(userUsageService, never()).reverseBoardExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_boardExamBelowTheAssemblyFloorsFailsAndReversesBothMeters() {
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3, 3);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        // Only the primary contributes: 5 questions and 1 source, under both floors.
+        stubBoardExamSourceOutcomes(Set.of(primary.getTitle()));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        dispatchedTask.run();
+
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService).reverseBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_legacySingleNoteBoardExamShipsShortAboveTheFloorInsteadOfFailingStrictly() {
+        // ⚠️ THIS IS A DELIBERATE BEHAVIOUR CHANGE ON A PATH THIS RELEASE DID NOT SET OUT TO TOUCH, and it
+        // was previously unpinned in both directions. A legacy single-note Board Exam — no Review Set, no
+        // additional packs — used to run the synchronous branch, whose rule was `quiz.size() != quizCount`
+        // → fail the whole session. It now runs the same resilient path as a sampled exam, so a short
+        // generation SHIPS above the assembly floors and is marked short. The old branch was deleted rather
+        // than left unreachable precisely so the two rules cannot both live in this class.
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        // A legacy single-note Board Exam asks for BOARD_EXAM_QUESTIONS_PER_SOURCE (12), not the sampled
+        // path's 30. The model returns 11: short of the ask, clear of the 10-question floor, and its one
+        // source is also its source floor (min(1, 2) = 1).
+        when(quizGenerationService.generateBoardExamQuiz(
+                any(), any(), any(), any(), anyInt(), any(), any(StudyPackGenerationContext.class)
+        )).thenAnswer(invocation -> buildQuizWithPrefix("Legacy", 11));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId, new ChallengeQuizStartRequest("board_exam", null, null));
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(persistedQuiz(persisted)).hasSize(11);
+        assertThat(persisted.getSessionState()).containsEntry("shortExam", true);
+        assertThat(persisted.getSessionState()).containsEntry("expectedQuestionCount", 12);
+        verify(userUsageService, never()).reverseBoardExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_legacySingleNoteBoardExamStillFailsBelowTheQuestionFloorAndReversesBothMeters() {
+        // The tolerance above is bounded, not unlimited: the same legacy path still fails under the floor,
+        // and still refunds. Without this case the test above would read as "short exams always ship".
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        when(quizGenerationService.generateBoardExamQuiz(
+                any(), any(), any(), any(), anyInt(), any(), any(StudyPackGenerationContext.class)
+        )).thenAnswer(invocation -> buildQuizWithPrefix("Legacy", 8));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId, new ChallengeQuizStartRequest("board_exam", null, null));
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        dispatchedTask.run();
+
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService).reverseBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_boardExamKeepsItsQuotaBookkeepingOffTheWireButStillPersistsIt() {
+        // ⚠️ BOTH HALVES ARE THE POINT. `boardExamQuotaReserved` is the sweeper's only record that a crashed
+        // Board Exam still owes a refund, so it MUST survive on the row — but it is internal bookkeeping and
+        // has no business on the wire. It is not writable today (mergeSessionState is an allowlist of the
+        // four selected-answer maps), yet the client echoes session state back on every progress save, so a
+        // later widening of that allowlist would turn a visible key into a quota bypass.
+        // A one-sided test here would be worse than none: assert only the strip and a future "fix" that
+        // stops writing the flag passes while silently disabling every refund.
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId, new ChallengeQuizStartRequest("board_exam", null, null));
+
+        assertThat(response.sessionState()).doesNotContainKey("boardExamQuotaReserved");
+        assertThat(response.sessionState()).containsKey("mode");
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getSessionState()).containsEntry("boardExamQuotaReserved", true);
+    }
+
+    @Test
+    void startSession_boardExamGenerationFailureReversesBothMetersEndToEnd() {
+        // ⚠️ DRIVEN THROUGH A REAL START, never by calling the reversal helper. The refund lives inside
+        // GenerationRecoveryRowWriter, so a mocked row writer would leave only
+        // verify(rowWriter).failBoardExamSession(id) — an assertion that keeps passing after the two-meter
+        // reversal is deleted outright.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3, 3);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        lenient().when(quizGenerationService.generateBoardExamQuiz(
+                any(), any(), any(), any(), anyInt(), any(), any(StudyPackGenerationContext.class)
+        )).thenThrow(new IllegalStateException("llm unavailable"));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+
+        // Both meters were charged at start...
+        verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+
+        dispatchedTask.run();
+
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        // ...and one call reverses BOTH of them, under a single stamp.
+        verify(userUsageService).reverseBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+        assertThat(persisted.getSessionState())
+                .containsEntry(ChallengeQuizService.SESSION_STATE_BOARD_EXAM_QUOTA_REVERSED, true);
+    }
+
+    @Test
+    void startSession_boardExamTakesTheRowLockBeforeReReadingTheStatusItDecidesOn() {
+        // ⚠️ InOrder, NOT two plain verifies. Asynchronous generation may finish long after a sweeper or a
+        // second request touched the row, so the GENERATING re-read is only meaningful while the row is
+        // held. Reading the status first and locking afterwards leaves exactly the window this ordering
+        // closes — and two independent verify() calls pass happily in either order.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3, 3);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+        UUID sessionId = UUID.fromString(response.sessionId());
+        dispatchedTask.run();
+
+        InOrder order = inOrder(quickReviewSessionRepository);
+        order.verify(quickReviewSessionRepository).findByIdForUpdate(sessionId);
+        order.verify(quickReviewSessionRepository).findStatusById(sessionId);
+    }
+
+    @Test
+    void startSession_boardExamAsksOnlyForMultipleChoiceQuestions() {
+        // Board Exam stays MCQ-only: it may reach the Board Exam generator and nothing else. The schema half
+        // of this guard lives in OpenAiLlmStudyPackServiceTest, which asserts the request that generator
+        // sends enables no alternative question format.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3, 3);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(),
+                userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString())
+        );
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+
+        assertThat(persistedQuiz(persisted)).isNotEmpty();
+        assertThat(persistedQuiz(persisted)).allSatisfy(item -> {
+            assertThat(item.getChoices()).hasSize(4);
+            assertThat(item.getQuestionFormat()).isNull();
+            assertThat(item.getCorrectIndices()).isNullOrEmpty();
+            assertThat(item.getAcceptableAnswers()).isNullOrEmpty();
+            assertThat(item.getAcceptableAnswerGroups()).isNullOrEmpty();
+        });
+        verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void startSession_multiNoteChallengeStaysSynchronousAndUnaffectedByTheBoardExamAsyncPath() {
+        // ⚠️ REGRESSION GUARD. Board Exam and multi-note Challenge share resolveBoardExamSourceNoteRefs, and
+        // Board Exam moved off the request transaction in v0.106.0. A Challenge Quiz must NOT follow it: it
+        // still returns a ready session and dispatches no generation task.
+        UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
         UUID primaryNoteId = UUID.randomUUID();
         UUID additionalStudyPackId = UUID.randomUUID();
         UUID additionalNoteId = UUID.randomUUID();
+        UUID collectionId = UUID.randomUUID();
         StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
-        primary.setSubject("Biology");
         StudyPackEntity additional = buildStudyPack(additionalStudyPackId, additionalNoteId, userId);
-        additional.setSubject("Engineering Mathematics");
 
-        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
-        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(additionalStudyPackId, userId))
-                .thenReturn(Optional.of(additional));
+        stubMultiNoteChallengeStart(userId, primaryStudyPackId, primary, additionalStudyPackId, additional, PlanType.FREE);
         when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
                 .thenReturn(new java.util.LinkedHashSet<>(List.of(primaryNoteId, additionalNoteId)));
+        when(generationContextResolver.resolveForStudyPack(eq(userId), any(StudyPackEntity.class)))
+                .thenReturn(new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE, "Engineering", primary.getSubject(), List.of()
+                ));
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(9), any(), any()))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Primary", 9)))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Additional", 9)));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
-        String id = primaryStudyPackId.toString();
-        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
-                "board_exam",
-                List.of(additionalStudyPackId.toString()),
-                collectionId.toString()
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primaryStudyPackId.toString(),
+                userId,
+                new ChallengeQuizStartRequest("challenge", List.of(additionalStudyPackId.toString()), collectionId.toString())
         );
 
-        // Asserts the SOURCE gate specifically, not overall success: this fixture stops short of full
-        // generation, and a broader assertion would either fail for an unrelated reason or start passing
-        // for one. The property under test is that plan members are no longer refused for their subject.
-        Throwable thrown = catchThrowable(() -> challengeQuizService.startSession(id, userId, request));
-        assertThat(thrown).isNotInstanceOf(InvalidBoardExamSourceException.class);
-    }
-
-    @Test
-    void startSession_boardExamFromAPlanStillRejectsANonMemberOfADifferentSubject() {
-        // ⚠️ Per-source, exactly as on the Long Exam path: naming a plan must not let one legitimate
-        // member smuggle in a note the plan does not contain.
-        UUID userId = UUID.randomUUID();
-        UUID collectionId = UUID.randomUUID();
-        UUID primaryStudyPackId = UUID.randomUUID();
-        UUID primaryNoteId = UUID.randomUUID();
-        UUID outsiderStudyPackId = UUID.randomUUID();
-        UUID outsiderNoteId = UUID.randomUUID();
-        StudyPackEntity primary = buildStudyPack(primaryStudyPackId, primaryNoteId, userId);
-        primary.setSubject("Biology");
-        StudyPackEntity outsider = buildStudyPack(outsiderStudyPackId, outsiderNoteId, userId);
-        outsider.setSubject("Engineering Mathematics");
-
-        stubBoardExamStartDependencies(userId, primaryStudyPackId, primary);
-        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(outsiderStudyPackId, userId))
-                .thenReturn(Optional.of(outsider));
-        // The plan contains only the primary.
-        when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
-                .thenReturn(new java.util.LinkedHashSet<>(List.of(primaryNoteId)));
-
-        String id = primaryStudyPackId.toString();
-        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(
-                "board_exam",
-                List.of(outsiderStudyPackId.toString()),
-                collectionId.toString()
-        );
-
-        assertThatThrownBy(() -> challengeQuizService.startSession(id, userId, request))
-                .isInstanceOf(InvalidBoardExamSourceException.class);
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.quiz()).hasSize(18);
+        assertThat(response.maxSourceNotes()).isEqualTo(3);
+        assertThat(response.mode()).isEqualTo("challenge");
+        assertThat(dispatchedTask).as("a Challenge Quiz must never dispatch asynchronous generation").isNull();
+        verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
+        // The Review Set walk is Board Exam's alone; Challenge keeps the plan-membership verifier.
+        verify(noteCollectionRepository, never()).findByIdAndOwnerUserId(any(UUID.class), any(UUID.class));
+        verify(longExamPlanSourceSampler, never()).sample(anyList(), any(UUID.class), anyInt(), any(UUID.class));
+        verify(userUsageService, never()).incrementBoardExamGenerationBy(any(UUID.class), anyInt(), any(OffsetDateTime.class));
     }
 
     @Test
@@ -1762,7 +2365,7 @@ class ChallengeQuizServiceTest {
                 buildQuizWithPrefix("Additional", 12)
         );
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 studyPackId.toString(),
@@ -1770,12 +2373,15 @@ class ChallengeQuizServiceTest {
                 new ChallengeQuizStartRequest("board_exam", List.of(additionalStudyPackId.toString()))
         );
 
-        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
-        assertThat(response.quiz()).hasSize(24);
         assertThat(response.boardExamUsedThisMonth()).isEqualTo(10);
         assertThat(response.sourceNoteRefs())
                 .extracting(LongExamSourceNoteRef::questionCount)
                 .containsExactly(12, 12);
+
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(persistedQuiz(persisted)).hasSize(24);
         verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
     }
 
@@ -1850,7 +2456,13 @@ class ChallengeQuizServiceTest {
                 challengeQuizQuestionBankService,
                 officialChallengeQuizTemplateService,
                 conceptHealthService,
-                studyPackQuizMasteryService
+                studyPackQuizMasteryService,
+                studyPackGenerationTaskDispatcher,
+                studyPackGenerationTransactionOperations,
+                generationRecoveryRowWriter,
+                noteCollectionRepository,
+                noteCollectionItemRepository,
+                longExamPlanSourceSampler
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
@@ -1885,7 +2497,7 @@ class ChallengeQuizServiceTest {
                 studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
         ));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = mockModeChallengeQuizService.startSession(
                 studyPackId.toString(),
@@ -1893,10 +2505,13 @@ class ChallengeQuizServiceTest {
                 new ChallengeQuizStartRequest("board_exam", null)
         );
 
-        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
         assertThat(response.mode()).isEqualTo("board_exam");
         assertThat(response.selectedDifficulty()).isEqualTo("mixed");
-        assertThat(response.quiz()).hasSize(12);
+
+        QuickReviewSessionEntity persisted = completeDispatchedBoardExam(response);
+
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(persistedQuiz(persisted)).hasSize(12);
         verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
     }
 
@@ -2042,7 +2657,7 @@ class ChallengeQuizServiceTest {
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
     }
 
     @Test
@@ -2079,7 +2694,7 @@ class ChallengeQuizServiceTest {
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         challengeQuizService.completeSession(
                 sessionId.toString(),
@@ -2182,7 +2797,7 @@ class ChallengeQuizServiceTest {
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
         when(conceptHealthService.recordIncorrectAnswers(
                 any(UUID.class),
                 any(UUID.class),
@@ -2245,7 +2860,7 @@ class ChallengeQuizServiceTest {
                 sessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
         when(conceptHealthService.recordIncorrectAnswers(
                 eq(userId), eq(sourceAId), eq(List.of("Moment")), any(OffsetDateTime.class)
         )).thenReturn(List.of("Moment"));
@@ -2305,7 +2920,7 @@ class ChallengeQuizServiceTest {
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
         when(conceptHealthService.recordIncorrectAnswers(
                 any(UUID.class),
                 any(UUID.class),
@@ -2376,7 +2991,7 @@ class ChallengeQuizServiceTest {
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         var response = challengeQuizService.completeSession(
                 sessionId.toString(),
@@ -2464,7 +3079,7 @@ class ChallengeQuizServiceTest {
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         var response = challengeQuizService.completeSession(
                 sessionId.toString(),
@@ -2526,7 +3141,7 @@ class ChallengeQuizServiceTest {
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         challengeQuizService.completeSession(
                 sessionId.toString(),
@@ -2577,7 +3192,7 @@ class ChallengeQuizServiceTest {
                 sessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         challengeQuizService.completeSession(
                 sessionId.toString(), userId, new ChallengeQuizCompleteRequest(2, 2, 120)
@@ -2617,7 +3232,7 @@ class ChallengeQuizServiceTest {
                 sessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         challengeQuizService.completeSession(
                 sessionId.toString(), userId, new ChallengeQuizCompleteRequest(1, 1, 60)
@@ -2651,7 +3266,7 @@ class ChallengeQuizServiceTest {
                 sessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizSessionResponse response = challengeQuizService.completeSession(
                 sessionId.toString(), userId, new ChallengeQuizCompleteRequest(1, 2, 120)
@@ -2704,7 +3319,7 @@ class ChallengeQuizServiceTest {
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         var response = challengeQuizService.completeSession(
                 sessionId.toString(),
@@ -2740,7 +3355,7 @@ class ChallengeQuizServiceTest {
                 QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         var response = challengeQuizService.forfeitSession(sessionId.toString(), userId);
 
@@ -2807,7 +3422,7 @@ class ChallengeQuizServiceTest {
                 20,
                 5
         ));
-        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
@@ -2862,7 +3477,7 @@ class ChallengeQuizServiceTest {
         when(quizGenerationService.generateMoreChallengeQuiz(
                 any(), any(), any(), any(), any(), eq(5), eq("medium"), any()
         )).thenReturn(GeneratedChallengeQuizContent.withoutUsage(generatedBatch));
-        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
@@ -2911,7 +3526,7 @@ class ChallengeQuizServiceTest {
         when(challengeQuizQuestionBankService.claimEligibleQuestions(
                 eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE), eq(sessionId), any(), eq(5)
         )).thenReturn(bankedQuiz);
-        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
@@ -2954,7 +3569,7 @@ class ChallengeQuizServiceTest {
         when(officialChallengeQuizTemplateService.copyTemplateQuestions(
                 eq(userId), eq(studyPackId), eq(LearnerLevel.COLLEGE), eq(sessionId), any(), eq(5)
         )).thenReturn(templateQuiz);
-        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
@@ -3030,7 +3645,7 @@ class ChallengeQuizServiceTest {
         when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
-        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         String id = sessionId.toString();
         assertThatThrownBy(() -> challengeQuizService.generateMoreQuestions(id, userId))
@@ -3269,7 +3884,7 @@ class ChallengeQuizServiceTest {
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Primary", 9)))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Additional", 9)));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 primaryStudyPackId.toString(),
@@ -3340,7 +3955,7 @@ class ChallengeQuizServiceTest {
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(3), any(), any()))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Mixed", 3)));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 primaryStudyPackId.toString(),
@@ -3429,7 +4044,7 @@ class ChallengeQuizServiceTest {
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Primary", 9)))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Additional", 9)));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         challengeQuizService.startSession(primaryStudyPackId.toString(), userId,
                 new ChallengeQuizStartRequest("challenge", List.of(additionalStudyPackId.toString()), collectionId.toString()));
@@ -3575,7 +4190,7 @@ class ChallengeQuizServiceTest {
         when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(9), any(), any()))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Primary", 9)))
                 .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Additional", 9)));
-        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
 
         challengeQuizService.startSession(primaryStudyPackId.toString(), userId,
                 new ChallengeQuizStartRequest("challenge", List.of(additionalStudyPackId.toString()), collectionId.toString()));
@@ -3603,7 +4218,7 @@ class ChallengeQuizServiceTest {
         when(subscriptionService.resolvePlan(userId)).thenReturn(planType);
         stubChallengeUsagePeriod(userId, planType);
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
     }
 
     private void stubMultiNoteChallengeStart(
@@ -3624,6 +4239,461 @@ class ChallengeQuizServiceTest {
         )).thenReturn(0L);
         when(subscriptionService.resolvePlan(userId)).thenReturn(planType);
         stubChallengeUsagePeriod(userId, planType);
+    }
+
+    /**
+     * Stubs an owned Review Set whose Subject Plans hold {@code notesPerPlan[i]} notes each, every one of
+     * them backed by a DONE Study Pack. Returns the packs per plan, in position order; {@code get(0).get(0)}
+     * is the natural primary.
+     *
+     * <p>Pass a single element to get a CHILDLESS Review Set — the items hang off the Review Set itself and
+     * must be treated as one stratum, mirroring the Goal endpoint rule.
+     */
+    private List<List<StudyPackEntity>> stubReviewSet(UUID userId, UUID reviewSetId, boolean childless, int... notesPerPlan) {
+        NoteCollectionEntity reviewSet = new NoteCollectionEntity();
+        reviewSet.setId(reviewSetId);
+        reviewSet.setOwnerUserId(userId);
+        // lenient: a request rejected before source resolution never reaches these — which is the point.
+        lenient().when(noteCollectionRepository.findByIdAndOwnerUserId(reviewSetId, userId)).thenReturn(Optional.of(reviewSet));
+
+        List<NoteCollectionEntity> children = new ArrayList<>();
+        List<List<StudyPackEntity>> packsByPlan = new ArrayList<>();
+        List<StudyPackEntity> allPacks = new ArrayList<>();
+        for (int planIndex = 0; planIndex < notesPerPlan.length; planIndex++) {
+            UUID stratumId = childless ? reviewSetId : UUID.randomUUID();
+            if (!childless) {
+                NoteCollectionEntity child = new NoteCollectionEntity();
+                child.setId(stratumId);
+                child.setOwnerUserId(userId);
+                child.setParentCollectionId(reviewSetId);
+                children.add(child);
+            }
+            List<NoteCollectionItemEntity> items = new ArrayList<>();
+            List<StudyPackEntity> packs = new ArrayList<>();
+            for (int position = 0; position < notesPerPlan[planIndex]; position++) {
+                UUID noteId = UUID.randomUUID();
+                UUID packId = UUID.randomUUID();
+                StudyPackEntity pack = buildStudyPack(packId, noteId, userId);
+                pack.setTitle("Plan " + planIndex + " note " + position);
+                pack.setStatus(StudyPackStatus.DONE);
+                packs.add(pack);
+                allPacks.add(pack);
+                NoteCollectionItemEntity item = new NoteCollectionItemEntity();
+                item.setId(UUID.randomUUID());
+                item.setCollectionId(stratumId);
+                item.setNoteId(noteId);
+                item.setPosition(position);
+                items.add(item);
+                lenient().when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(packId, userId))
+                        .thenReturn(Optional.of(pack));
+            }
+            lenient().when(noteCollectionItemRepository.findByCollectionIdOrderByPositionAsc(stratumId))
+                    .thenReturn(items);
+            packsByPlan.add(packs);
+        }
+        lenient().when(noteCollectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(reviewSetId, userId))
+                .thenReturn(children);
+        lenient().when(studyPackRepository.findByOwnerUserIdAndNoteIdInAndStatus(
+                eq(userId), anyCollection(), eq(StudyPackStatus.DONE)
+        )).thenAnswer(invocation -> {
+            Collection<UUID> noteIds = invocation.getArgument(1);
+            // Honours the status the test set on each pack: a note whose Study Pack is not DONE is a
+            // member of the Review Set but is NOT eligible material, which is the rule under test.
+            return allPacks.stream()
+                    .filter(pack -> noteIds.contains(pack.getNoteId()))
+                    .filter(pack -> pack.getStatus() == StudyPackStatus.DONE)
+                    .toList();
+        });
+        return packsByPlan;
+    }
+
+    /** Which Subject Plan (by index into the {@code stubReviewSet} result) each sampled source came from. */
+    private static List<Integer> planIndexesOf(List<LongExamSourceNoteRef> refs, List<List<StudyPackEntity>> packsByPlan) {
+        return refs.stream()
+                .map(ref -> {
+                    for (int planIndex = 0; planIndex < packsByPlan.size(); planIndex++) {
+                        boolean inPlan = packsByPlan.get(planIndex).stream()
+                                .anyMatch(pack -> pack.getId().toString().equals(ref.studyPackId()));
+                        if (inPlan) {
+                            return planIndex;
+                        }
+                    }
+                    return -1;
+                })
+                .toList();
+    }
+
+    /**
+     * Makes only the named source titles generate; every other source throws, so the resilient fan-out
+     * records a partial assembly exactly the way a real per-source LLM failure does.
+     */
+
+    @Test
+    void startSession_boardExamFailsOnTheSOURCEFloorEvenWhenItHasEnoughQuestions() {
+        // ⚠️ THE TWO FLOORS MUST BE PINNED SEPARATELY. The only below-floor test fails BOTH at once ("5
+        // questions and 1 source"), so deleting either floor alone left the suite green — the other one
+        // still fired. This case clears the QUESTION floor and fails only the SOURCE floor.
+        // Arithmetic: a 2-note pool samples 2, so each source is asked for 30/2 = 15. The primary alone
+        // yields 15 questions — comfortably over the floor of 10 — while contributing 1 source against a
+        // minimum of min(2, 2) = 2.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 1, 1);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        stubBoardExamSourceOutcomes(Set.of(primary.getTitle()));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+        dispatchedTask.run();
+
+        // The per-source ask proves the QUESTION floor was never the trigger: the primary alone was asked
+        // for 15, well over the floor of 10. A FAILED session holds no quiz, so the ask is the evidence.
+        ArgumentCaptor<Integer> perSourceCount = ArgumentCaptor.forClass(Integer.class);
+        verify(quizGenerationService, atLeastOnce()).generateBoardExamQuiz(
+                any(), any(), any(), any(), perSourceCount.capture(), any(), any(StudyPackGenerationContext.class));
+        assertThat(perSourceCount.getAllValues().get(0)).isGreaterThanOrEqualTo(10);
+
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService).reverseBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startSession_boardExamFailsOnTheQUESTIONFloorEvenWhenEnoughSourcesContribute() {
+        // The mirror case: clears the SOURCE floor and fails only the QUESTION floor.
+        // Arithmetic: a 10-note pool samples 10, so each source is asked for 30/10 = 3. Two succeeding
+        // sources clear the minimum of min(10, 2) = 2 while yielding only 6 questions, under the floor of 10.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 5, 5);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        StudyPackEntity second = packsByPlan.get(1).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        stubBoardExamSourceOutcomes(Set.of(primary.getTitle(), second.getTitle()));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+        dispatchedTask.run();
+
+        QuickReviewSessionEntity persisted = savedSessionsById.get(UUID.fromString(response.sessionId()));
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        verify(userUsageService).reverseBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+    }
+
+    private void stubBoardExamSourceOutcomes(Set<String> succeedingTitles) {
+        lenient().when(quizGenerationService.generateBoardExamQuiz(
+                any(), any(), any(), any(), anyInt(), any(), any(StudyPackGenerationContext.class)
+        )).thenAnswer(invocation -> {
+            String title = invocation.getArgument(0, String.class);
+            if (!succeedingTitles.contains(title)) {
+                throw new IllegalStateException("source generation failed for " + title);
+            }
+            return buildQuizWithPrefix("Src" + title, invocation.getArgument(4, Integer.class));
+        });
+    }
+
+    /** Generation context plus a per-source Board Exam quiz stub sized to whatever the sampler asks for. */
+
+    @Test
+    void startSession_boardExamNeverEmitsAQuestionAlreadyOnTheNotesQuizTab() {
+        // ⚠️ THE PACK'S SAVED QUIZ IS A HARD FILTER, NOT A PROMPT HINT. Passing those questions to the
+        // generator only ASKS it not to repeat them. The synchronous path also added them to the dedup set;
+        // moving generation off the transaction dropped that, leaving only the request. It matters beyond
+        // duplication: those questions sit on the note's Quiz tab WITH their answers, and Board Exam writes
+        // ConceptHealth — so a leak both hands over the answer key and corrupts a mastery signal locked
+        // since v0.37.0 to genuine assessment.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 4, 4);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        String leakedQuestion = "Question already visible on the Quiz tab";
+        for (List<StudyPackEntity> plan : packsByPlan) {
+            for (StudyPackEntity pack : plan) {
+                pack.setQuiz(List.of(new QuizItem(leakedQuestion, List.of("A", "B", "C", "D"), 0, "Cells", "Explanation")));
+            }
+        }
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        // The generator returns the learner's own saved question first — exactly what the filter must stop.
+        lenient().when(quizGenerationService.generateBoardExamQuiz(
+                any(), any(), any(), any(), anyInt(), any(), any(StudyPackGenerationContext.class)
+        )).thenAnswer(invocation -> {
+            int count = invocation.getArgument(4, Integer.class);
+            List<QuizItem> generated = new ArrayList<>();
+            generated.add(new QuizItem(leakedQuestion, List.of("A", "B", "C", "D"), 0, "Cells", "Explanation"));
+            generated.addAll(buildQuizWithPrefix("Fresh" + UUID.randomUUID(), Math.max(0, count - 1)));
+            return generated;
+        });
+
+        challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+        // Generation is dispatched, not run inline — the capture is deliberate so the GENERATING hand-off
+        // is observable. Run it here so this test exercises the real assembled exam.
+        assertThat(dispatchedTask).isNotNull();
+        dispatchedTask.run();
+
+        QuickReviewSessionEntity persisted = savedSessionsById.values().stream()
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        // ⚠️ THE FIRST TWO ASSERTIONS ARE WHAT STOP THIS PASSING VACUOUSLY. If generation had failed the
+        // session would hold an EMPTY quiz and doesNotContain would be trivially true — the exact
+        // "claims more than it proves" shape this release keeps tripping over.
+        assertThat(persisted.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        List<QuizItem> persistedQuiz = QuizSessionStateUtils.extractQuiz(persisted.getSessionState());
+        assertThat(persistedQuiz).isNotEmpty();
+        assertThat(persistedQuiz).extracting(QuizItem::question).doesNotContain(leakedQuestion);
+    }
+
+    @Test
+    void startSession_boardExamStillEnforcesTheAiRateLimit() {
+        // ⚠️ The rate limit lived inside the try-block that Board Exam no longer reaches: moving generation
+        // off the transaction added an early return, which made the old assertAllowed call site DEAD code.
+        // The mode silently lost a cost and abuse control on a PRO path and nothing failed.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 4, 4);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+
+        verify(aiRateLimitService).assertAllowed(eq(userId), any(PlanType.class), eq("challenge-quiz"));
+    }
+
+
+    @Test
+    void startSession_boardExamChargesInsideTheRequestTransactionNotInAnAfterCommitCallback() {
+        // ⚠️ THIS TEST EXISTS BECAUSE THE WHOLE UNIT SUITE WAS STRUCTURALLY BLIND TO A PRODUCTION-BREAKING
+        // DEFECT. This class is @Transactional at CLASS level, so startSession ALWAYS runs with an active
+        // transaction and the afterCommit branch ALWAYS fires in production. The charge used to live in
+        // that callback, where a PROPAGATION_REQUIRED write joins the already-committed transaction and
+        // throws — so every Board Exam start returned 500, the session row committed as GENERATING carrying
+        // boardExamQuotaReserved=true, and the sweeper then refunded BOTH meters for a charge that never
+        // happened, handing back quota spent on genuine Challenge Quiz sessions.
+        // ⚠️ MockitoExtension has no transaction manager, so isSynchronizationActive() is false and every
+        // other test takes the inline fallback — the branch that NEVER runs in production. Binding a real
+        // synchronization here makes the production branch executable, which is the only reason this test
+        // can see the defect at all. Deleting the charge from the transactional body fails it.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 4, 4);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        TransactionSynchronizationManager.initSynchronization();
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            challengeQuizService.startSession(
+                    primary.getId().toString(), userId,
+                    new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+
+            // Both meters must already be charged when startSession returns — i.e. inside the transaction —
+            // NOT deferred to a callback that cannot legally write.
+            verify(userUsageService).incrementChallengeQuizGeneration(eq(userId), any(OffsetDateTime.class));
+            verify(userUsageService).incrementBoardExamGenerationBy(eq(userId), eq(1), any(OffsetDateTime.class));
+            // Generation is still deferred: nothing dispatched until the transaction commits.
+            verify(studyPackGenerationTaskDispatcher, never()).execute(any(Runnable.class));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
+    }
+
+
+    @Test
+    void startSession_boardExamFromASubjectPlanResolvesUpToItsParentReviewSet() {
+        // ⚠️ THIS IS THE RELEASE'S HEADLINE MECHANISM AND IT HAD ZERO COVERAGE. A learner reaches Board Exam
+        // from whichever collection page they were on, which is normally a CHILD Subject Plan. Using the
+        // claimed collection directly makes the childless branch fire and ships "assess across the plan you
+        // came from" — which is LONG EXAM's job. Board Exam's identity is the whole Review Set.
+        // Every other test passes the top-level set id, so none of them exercises the walk; replacing the
+        // parent lookup with `reviewSet = claimed` left the entire suite green.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 4, 4);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+
+        // The learner launches from the FIRST Subject Plan, not from the Review Set.
+        UUID subjectPlanId = UUID.randomUUID();
+        NoteCollectionEntity subjectPlan = new NoteCollectionEntity();
+        subjectPlan.setId(subjectPlanId);
+        subjectPlan.setOwnerUserId(userId);
+        subjectPlan.setParentCollectionId(reviewSetId);
+        when(noteCollectionRepository.findByIdAndOwnerUserId(subjectPlanId, userId))
+                .thenReturn(Optional.of(subjectPlan));
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+
+        challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, subjectPlanId.toString()));
+
+        // The walk happened: the PARENT's children were read as strata. Had the claim been used directly,
+        // findOrderedChildren would have been asked for the Subject Plan's (empty) children instead.
+        verify(noteCollectionRepository).findOrderedChildrenByParentCollectionIdAndOwnerUserId(reviewSetId, userId);
+        // And the sample spans both Subject Plans, not just the one launched from.
+        QuickReviewSessionEntity persisted = savedSessionsById.values().stream()
+                .reduce((first, second) -> second).orElseThrow();
+        assertThat(persisted.getSessionState()).containsKey("sourceNoteRefs");
+    }
+
+    @Test
+    void startSession_boardExamFromASubjectPlanWhoseParentIsNotOwnedIsRefused() {
+        // ⚠️ The parent walk re-verifies ownership. A child of a Review Set you do not own must never be a
+        // route into someone else's curriculum, and the code comment claims exactly that — so it is pinned.
+        UUID userId = UUID.randomUUID();
+        UUID foreignReviewSetId = UUID.randomUUID();
+        UUID subjectPlanId = UUID.randomUUID();
+        StudyPackEntity primary = buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId);
+
+        NoteCollectionEntity subjectPlan = new NoteCollectionEntity();
+        subjectPlan.setId(subjectPlanId);
+        subjectPlan.setOwnerUserId(userId);
+        subjectPlan.setParentCollectionId(foreignReviewSetId);
+        when(noteCollectionRepository.findByIdAndOwnerUserId(subjectPlanId, userId))
+                .thenReturn(Optional.of(subjectPlan));
+        // The parent belongs to someone else, so the owner-scoped lookup finds nothing.
+        when(noteCollectionRepository.findByIdAndOwnerUserId(foreignReviewSetId, userId))
+                .thenReturn(Optional.empty());
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+
+        assertThatThrownBy(() -> challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, subjectPlanId.toString())
+        )).isInstanceOf(InvalidBoardExamSourceException.class);
+
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+    }
+
+
+    @Test
+    void startSession_boardExamCountsANoteSharedByTwoSubjectPlansOnlyOnce() {
+        // ⚠️ A note can belong to TWO Subject Plans of the same Review Set. candidateNoteIds is distinct,
+        // but the eligible POOL was not: the shared note produced two entries carrying the SAME StudyPack,
+        // and round-robin drew it from both buckets — so the exam reports more sources than it has and
+        // contributingSourceCount double-counts one note, letting a SINGLE note satisfy the
+        // two-contributing-sources assembly floor that exists to prevent exactly that.
+        // ⚠️ THE PRIMARY MUST NOT BE THE SHARED NOTE, and that is the whole reason two earlier versions of
+        // this test failed to discriminate. `LongExamPlanSourceSampler.sample` filters the primary out of
+        // the bucket pass and re-adds it exactly once, so when the shared note IS the primary the sampler
+        // silently absorbs the duplication and the pool bug becomes unobservable. Here the primary is the
+        // note that belongs to ONE plan, and the shared note is drawn from the buckets — where a duplicated
+        // pool entry survives into the sample.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        UUID sharedNoteId = UUID.randomUUID();
+        UUID otherNoteId = UUID.randomUUID();
+        StudyPackEntity shared = buildStudyPack(UUID.randomUUID(), sharedNoteId, userId);
+        StudyPackEntity other = buildStudyPack(UUID.randomUUID(), otherNoteId, userId);
+
+        NoteCollectionEntity reviewSet = new NoteCollectionEntity();
+        reviewSet.setId(reviewSetId);
+        reviewSet.setOwnerUserId(userId);
+        when(noteCollectionRepository.findByIdAndOwnerUserId(reviewSetId, userId)).thenReturn(Optional.of(reviewSet));
+
+        List<NoteCollectionEntity> plans = new ArrayList<>();
+        List<List<UUID>> noteIdsPerPlan = List.of(List.of(sharedNoteId), List.of(sharedNoteId, otherNoteId));
+        for (List<UUID> planNoteIds : noteIdsPerPlan) {
+            UUID planId = UUID.randomUUID();
+            NoteCollectionEntity plan = new NoteCollectionEntity();
+            plan.setId(planId);
+            plan.setOwnerUserId(userId);
+            plan.setParentCollectionId(reviewSetId);
+            plans.add(plan);
+            List<NoteCollectionItemEntity> items = new ArrayList<>();
+            for (int position = 0; position < planNoteIds.size(); position++) {
+                NoteCollectionItemEntity item = new NoteCollectionItemEntity();
+                item.setNoteId(planNoteIds.get(position));
+                item.setPosition(position);
+                items.add(item);
+            }
+            when(noteCollectionItemRepository.findByCollectionIdOrderByPositionAsc(planId)).thenReturn(items);
+        }
+        when(noteCollectionRepository.findOrderedChildrenByParentCollectionIdAndOwnerUserId(reviewSetId, userId))
+                .thenReturn(plans);
+        when(studyPackRepository.findByOwnerUserIdAndNoteIdInAndStatus(eq(userId), any(), any()))
+                .thenReturn(List.of(shared, other));
+
+        stubBoardExamStartDependencies(userId, other.getId(), other);
+        stubReviewSetBoardExamGeneration(userId);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                other.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+
+        // Two distinct notes exist, so the exam must draw exactly two distinct sources — never the shared
+        // note twice.
+        assertThat(response.sourceNoteRefs())
+                .extracting(LongExamSourceNoteRef::studyPackId)
+                .doesNotHaveDuplicates();
+        assertThat(response.sourceNoteRefs()).hasSize(2);
+    }
+
+
+    @Test
+    void startSession_boardExamStartEventCarriesTheMetricItsCheckpointReads() {
+        // ⚠️ THIS IS THE CHECKPOINT'S INSTRUMENTATION, NOT DECORATION. The release ships a configured target
+        // count and two assembly floors as deliberately-deferred numbers, and the dated read asks how often a
+        // Review Set Board Exam falls short of its target. questionCount ALONE cannot answer that: a sampled
+        // exam that assembled 12 is indistinguishable from a legacy single-note one that asked for 12.
+        // ⚠️ sourceScope records the VERIFIED outcome, never the caller's claim.
+        UUID userId = UUID.randomUUID();
+        UUID reviewSetId = UUID.randomUUID();
+        List<List<StudyPackEntity>> packsByPlan = stubReviewSet(userId, reviewSetId, false, 3, 3);
+        StudyPackEntity primary = packsByPlan.get(0).get(0);
+        StudyPackEntity survivor = packsByPlan.get(1).get(0);
+
+        stubBoardExamStartDependencies(userId, primary.getId(), primary);
+        stubReviewSetBoardExamGeneration(userId);
+        // Two of six sources contribute: the exam ships short, which is exactly the case the read counts.
+        stubBoardExamSourceOutcomes(Set.of(primary.getTitle(), survivor.getTitle()));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                primary.getId().toString(), userId,
+                new ChallengeQuizStartRequest("board_exam", null, reviewSetId.toString()));
+        completeDispatchedBoardExam(response);
+
+        ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(analyticsService).trackEvent(
+                eq(userId), eq(AnalyticsEventType.BOARD_EXAM_STARTED), any(UUID.class), metadata.capture());
+        assertThat(metadata.getValue())
+                .containsEntry("sourceScope", "plan")
+                .containsEntry("sourceCount", 6)
+                .containsEntry("questionCount", 10)
+                .containsEntry("expectedQuestionCount", 30);
+    }
+
+    private void stubReviewSetBoardExamGeneration(UUID userId) {
+        lenient().when(generationContextResolver.resolveForStudyPack(eq(userId), any(StudyPackEntity.class)))
+                .thenReturn(new StudyPackGenerationContext(
+                        LearnerLevel.BOARD_EXAM_REVIEW,
+                        "Nursing",
+                        "Nursing",
+                        List.of()
+                ));
+        lenient().when(quizGenerationService.generateBoardExamQuiz(
+                any(), any(), any(), any(), anyInt(), any(), any(StudyPackGenerationContext.class)
+        )).thenAnswer(invocation -> buildQuizWithPrefix(
+                "Src" + UUID.randomUUID(),
+                invocation.getArgument(4, Integer.class)
+        ));
+        lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> recordSession(invocation.getArgument(0)));
     }
 
     private void stubBoardExamStartDependencies(UUID userId, UUID studyPackId, StudyPackEntity studyPack) {

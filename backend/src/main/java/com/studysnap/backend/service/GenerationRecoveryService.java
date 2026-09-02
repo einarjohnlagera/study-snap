@@ -82,6 +82,24 @@ public class GenerationRecoveryService {
         );
     }
 
+    /** Candidates are filtered under the row lock because Board Exam is a CHALLENGE session, not a mode. */
+    public SurfaceRecoveryResult recoverStaleBoardExamSessions() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime cutoff = now.minusMinutes(properties.getGeneration().getLongExamSessionBoundMinutes());
+        List<UUID> candidateIds = quickReviewSessionRepository.findStaleSessionIds(
+                QuickReviewSessionStatus.GENERATING,
+                QuickReviewSessionMode.CHALLENGE,
+                cutoff,
+                PageRequest.of(0, normalizedBatchSize())
+        );
+        return sweep(
+                candidateIds,
+                sessionId -> rowWriter.recoverBoardExamSession(sessionId, cutoff),
+                now,
+                "board-exam-session"
+        );
+    }
+
     public SurfaceRecoveryResult recoverStaleNotes() {
         long missingStampCount = noteRepository.countByStatusAndGenerationEnqueuedAtIsNull(NoteStatus.GENERATING);
         if (missingStampCount > 0) {

@@ -974,7 +974,92 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByText("Practise across this plan")).toBeInTheDocument();
   });
 
-  it("opens Board Exam setup from a collection launch and scopes source notes to the plan", async () => {
+  it("honours the picker on the degraded path instead of dropping its selection", async () => {
+    // ⚠️ REGRESSION GUARD. When the plan lookup fails the picker deliberately returns — but the start
+    // request was gated on the collection ID being PRESENT rather than RESOLVED, so it still sent
+    // sourceCollectionId and silently discarded the picks. That is the decorative-control defect the
+    // surrounding code claims to have fixed, reintroduced through the other door: the learner was invited
+    // to add notes, and the server then rejected the request talking about notes they never selected.
+    searchParamsMock = new URLSearchParams("collectionId=missing");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getCollection as jest.Mock).mockRejectedValue(new Error("Not found"));
+    (listNotes as jest.Mock).mockResolvedValue([
+      { id: "note-2", title: "Fallback Board Note", subject: "Biology", studyPackId: "sp-2", studyPackStatus: "STUDY_PACK_READY" },
+    ]);
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "GENERATING",
+      studyPackId: "note-1",
+      title: "Board Note",
+      totalQuestions: 0,
+      timeLimitSeconds: 600,
+      usedThisMonth: 1,
+      monthlyLimit: 5,
+      mode: "board_exam",
+      selectedDifficulty: "mixed",
+      quiz: [],
+    });
+
+    render(<ChallengeQuizPage />);
+
+    // The picker is back, and picking must actually mean something.
+    const pick = await screen.findByRole("button", { name: /Fallback Board Note/ });
+    fireEvent.click(pick);
+    fireEvent.click(await screen.findByRole("button", { name: /Begin Board Exam/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Exam" }));
+
+    await waitFor(() => {
+      const call = (startChallengeQuizSession as jest.Mock).mock.calls.at(-1);
+      // No unresolved plan claim, and the learner's pick survives.
+      expect(call?.[1]).not.toHaveProperty("sourceCollectionId");
+      expect(call?.[1].additionalStudyPackIds).toEqual(["sp-2"]);
+    });
+  });
+
+  it("sends the collection id for a Board Exam WITHOUT requiring the learner to pick notes", async () => {
+    // ⚠️ REACHABILITY GUARD. sourceCollectionId used to be sent ONLY alongside a picked list, while the
+    // server samples the Review Set and rejects such a list — so the single route into this capability was
+    // the one that invalidated itself, and the shipped behaviour was never "assess across the Review Set".
+    // This is the v0.103.0 shape (a delivered capability no user could reach) and it must stay pinned.
+    searchParamsMock = new URLSearchParams("collectionId=collection-1");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
+    (getCollection as jest.Mock).mockResolvedValue({
+      id: "collection-1",
+      items: [{ noteId: "note-1", position: 0, studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1" }],
+    });
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "GENERATING",
+      studyPackId: "note-1",
+      title: "Board Note",
+      totalQuestions: 0,
+      timeLimitSeconds: 600,
+      usedThisMonth: 1,
+      monthlyLimit: 5,
+      mode: "board_exam",
+      selectedDifficulty: "mixed",
+      quiz: [],
+    });
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Begin Board Exam/i }));
+    // A confirm step guards Board Exam Mode.
+    fireEvent.click(await screen.findByRole("button", { name: "Start Exam" }));
+
+    await waitFor(() => expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", {
+      mode: "board_exam",
+      sourceCollectionId: "collection-1",
+    }));
+  });
+
+  it("opens Board Exam setup from a collection launch and states sampled coverage instead of a picker", async () => {
+    // ⚠️ INTENT CHANGED IN v0.106.0, AND THIS TEST CHANGED WITH IT RATHER THAN BEING DELETED.
+    // A Board Exam launched from a collection is now sampled by the SERVER across the whole Review Set —
+    // the server walks up from a Subject Plan to its parent set — and any picked list is neither sent nor
+    // accepted. Leaving the picker visible would be a control that silently does nothing, the same
+    // decorative-control defect fixed for Long Exam in v0.105.0. The picker still renders on the
+    // degraded path (collection lookup failed) and for the legacy no-collection launch.
     searchParamsMock = new URLSearchParams("collectionId=collection-1");
     setupChallengePrestart(true, "BOARD_EXAM", "PRO");
     (getCollection as jest.Mock).mockResolvedValue({
@@ -997,11 +1082,12 @@ describe("ChallengeQuizPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Board Exam" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Choose your quiz mode" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: /Plan Board Two/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /Plan Board Three/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /Plan Board Four/ })).toHaveAttribute("aria-pressed", "false");
+    expect(await screen.findByText("This exam is sampled across your whole Review Set, spread over its subjects.")).toBeInTheDocument();
+    // The picker must be absent: the server chooses the sources and rejects a supplied list.
+    expect(screen.queryByRole("button", { name: /Plan Board Two/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Plan Board Four/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Outside Board Note/ })).not.toBeInTheDocument();
-    expect(screen.getByText("Add up to 2 more notes from this plan.")).toBeInTheDocument();
+    expect(screen.queryByText("Add up to 2 more notes from this plan.")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Review Set/ })).toHaveAttribute("href", "/collections/collection-1");
     expect(screen.queryByRole("button", { name: "Choose another mode" })).not.toBeInTheDocument();
   });

@@ -540,6 +540,97 @@ class ExamQuestionPoolServiceTest {
         verify(studyPackGenerationTaskDispatcher).execute(any(Runnable.class));
     }
 
+
+    @Test
+    void sampleQuestions_neverServesAQuestionThatIsAlreadyOnTheStudyPacksQuizTab() {
+        // ⚠️ A POOLED QUESTION THAT SITS ON THE NOTE'S QUIZ TAB IS AN ANSWER KEY, NOT A QUESTION. The
+        // generated exam paths have always stripped those; the pooled path served its sample raw, so a
+        // Board Exam or Long Exam could ask something the learner reads WITH its answer one tab away —
+        // handing over the key AND corrupting ConceptHealth, locked since v0.37.0 to genuine assessment.
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setQuiz(List.of(new QuizItem(
+                "Question 5", List.of("A", "B", "C", "D"), 0, "Concept", "Explanation")));
+        ExamQuestionPoolEntity pool = pool(
+                studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM, "READY", buildQuiz(24));
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM)).thenReturn(Optional.of(pool));
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+
+        Optional<List<QuizItem>> result = service.sampleQuestions(
+                studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM, 12, LearnerLevel.COLLEGE);
+
+        assertThat(result).isPresent();
+        assertThat(result.get()).hasSize(12);
+        assertThat(result.get()).extracting(QuizItem::question).doesNotContain("Question 5");
+    }
+
+    @Test
+    void sampleQuestions_burnsNoPoolRowsWhenTheAnswerKeyFilterLeavesTooFew() {
+        // ⚠️ THE FILTER MUST RUN BEFORE THE COUNT CHECK, AND THIS IS THE TEST THAT SAYS SO. Filtering the
+        // RETURNED sample instead would arrive after this method has already marked those questions served,
+        // so one leaked item would burn a full exam's worth of clean rows on every start — and the Board
+        // Exam pool holds only 24. Rejected here, the pool must be untouched.
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setQuiz(List.of(new QuizItem(
+                "Question 5", List.of("A", "B", "C", "D"), 0, "Concept", "Explanation")));
+        ExamQuestionPoolEntity pool = pool(
+                studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM, "READY", buildQuiz(12));
+        when(examQuestionPoolRepository.findByStudyPackIdAndModeForUpdate(
+                studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM)).thenReturn(Optional.of(pool));
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+
+        // 12 pooled questions, one of them leaked, an ask of 12: it cannot be filled cleanly.
+        Optional<List<QuizItem>> result = service.sampleQuestions(
+                studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM, 12, LearnerLevel.COLLEGE);
+
+        assertThat(result).isEmpty();
+        assertThat(pool.getServedQuestionKeys()).isEmpty();
+        verify(examQuestionPoolRepository, never()).save(any(ExamQuestionPoolEntity.class));
+    }
+
+    @Test
+    void generatePoolAsync_buildsTheBoardExamPoolWithTheStudyPacksOwnQuizDisallowed() {
+        // The root fix: the pool is generated FROM the same study pack whose Quiz tab the learner can read,
+        // and it used to pass an empty disallow list, so every pool was free to contain the answer key.
+        // Both batches must carry it — a second batch generated blind reintroduces exactly what the first
+        // one was told to avoid.
+        UUID poolId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        ExamQuestionPoolEntity pool = pool(
+                studyPackId, ExamQuestionPoolService.MODE_BOARD_EXAM, "PENDING", List.of());
+        pool.setId(poolId);
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+        studyPack.setTitle("Engineering mechanics");
+        studyPack.setSummary("Summary");
+        studyPack.setKeyConcepts(List.of("Forces"));
+        studyPack.setQuiz(List.of(new QuizItem(
+                "What is the moment arm?", List.of("A", "B", "C", "D"), 0, "Concept", "Explanation")));
+        StudyPackGenerationContext context = new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE, "Civil Engineering", "Mechanics", List.of(), null, LearnerLevel.COLLEGE);
+        when(examQuestionPoolRepository.findByIdForUpdate(poolId)).thenReturn(Optional.of(pool));
+        when(studyPackRepository.findById(studyPackId)).thenReturn(Optional.of(studyPack));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(context);
+        when(quizGenerationService.generateBoardExamQuiz(
+                anyString(), anyString(), any(), any(), anyInt(), anyString(), eq(context)
+        )).thenReturn(buildQuiz(12));
+
+        service.generatePoolAsync(poolId);
+
+        ArgumentCaptor<List<String>> disallowed = ArgumentCaptor.forClass(List.class);
+        verify(quizGenerationService, org.mockito.Mockito.times(2)).generateBoardExamQuiz(
+                anyString(), anyString(), any(), disallowed.capture(), anyInt(), anyString(), eq(context));
+        assertThat(disallowed.getAllValues()).hasSize(2);
+        assertThat(disallowed.getAllValues())
+                .allSatisfy(batch -> assertThat(batch).contains("What is the moment arm?"));
+    }
+
     private ExamQuestionPoolEntity pool(
             UUID studyPackId,
             String mode,

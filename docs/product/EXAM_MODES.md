@@ -47,7 +47,7 @@ Adding a new sub-mode requires updating this table and the parent feature doc. A
 The earlier roadmap line *"Multi-topic exam / Long Exam mode planning — design a Board Exam session that spans multiple notes or topics"* framed Long Exam as a multi-topic Board Exam. **This document supersedes that framing.**
 
 - **Long Exam Mode** is the Student-facing long-form exam mode.
-- **Multi-topic** is a *capability* of Long Exam (and optionally Board Exam later), not a separate mode.
+- **Multi-topic** is a *capability* of Long Exam **and of Board Exam** (the latter since `v0.106.0`, which draws a Board Exam across its whole Review Set), not a separate mode. It remains a capability in both cases — **no new mode, no sub-mode, and modes are never differentiated primarily by question count.**
 
 If a future requirement does not fit cleanly inside Challenge / Long / Board, prefer extending one of the three with a new capability flag rather than introducing a fourth exam mode.
 

@@ -103,7 +103,16 @@ public class ExamQuestionPoolService {
             return Optional.empty();
         }
 
-        List<QuizItem> availableQuestions = unservedQuestions(pool);
+        // ⚠️ A POOLED QUESTION THAT SITS ON THE NOTE'S QUIZ TAB IS AN ANSWER KEY, NOT A QUESTION. The
+        // generated exam paths have always stripped those; the pooled path served its sample raw, so a
+        // Board Exam or Long Exam could ask something the learner can read WITH its answer one tab away —
+        // which both hands over the key and corrupts ConceptHealth, locked since v0.37.0 to move only from
+        // genuine assessment.
+        // ⚠️ THE FILTER RUNS BEFORE THE COUNT CHECK, AND THAT ORDER IS THE WHOLE POINT. Filtering the
+        // RETURNED sample instead would arrive after this method has already marked those questions served,
+        // burning a full exam's worth of clean rows every time one leaked item was dropped. Excluded here,
+        // a leaked question is simply never a candidate and nothing is spent.
+        List<QuizItem> availableQuestions = withoutStudyPackAnswerKey(studyPackId, unservedQuestions(pool));
         if (availableQuestions.size() < count) {
             return Optional.empty();
         }
@@ -251,31 +260,50 @@ public class ExamQuestionPoolService {
 
     private List<QuizItem> generatePoolQuestions(PoolGenerationTarget target) {
         int expectedPoolSize = poolSizeForMode(target.mode());
+        // ⚠️ THE POOL IS BUILT FROM THE SAME STUDY PACK WHOSE QUIZ TAB THE LEARNER CAN READ, so generating
+        // it with an empty disallow list is how a pooled exam ends up asking a question whose answer is one
+        // tab away. Both arguments matter and they are not the same thing: the TEXT list is a prompt hint
+        // the model may ignore, the KEY set is the hard filter applied to what comes back.
+        List<String> answerKeyQuestionTexts = answerKeyQuestionTexts(target.studyPack());
+        Set<String> answerKeyQuestionKeys = QuizDeduplicationUtils.toNormalizedQuestionSet(
+                safeQuiz(target.studyPack())
+        );
         return switch (target.mode()) {
             case MODE_LONG_EXAM -> QuizDeduplicationUtils.uniqueQuestions(
                     quizGenerationService.generateLongExamParallel(
                             target.studyPack().getTitle(),
                             target.studyPack().getSummary(),
                             getKeyConcepts(target.studyPack()),
-                            List.of(),
+                            answerKeyQuestionTexts,
                             expectedPoolSize,
                             DIFFICULTY_MIXED,
                             target.context(),
                             llmParallelTaskExecutor
                     ),
-                    Set.of()
+                    new LinkedHashSet<>(answerKeyQuestionKeys)
             );
-            case MODE_BOARD_EXAM -> generateBoardExamPool(target);
+            case MODE_BOARD_EXAM -> generateBoardExamPool(target, answerKeyQuestionTexts, answerKeyQuestionKeys);
             default -> throw new ExamQuestionPoolGenerationFailedException();
         };
     }
 
-    private List<QuizItem> generateBoardExamPool(PoolGenerationTarget target) {
+    private List<String> answerKeyQuestionTexts(StudyPackEntity studyPack) {
+        return safeQuiz(studyPack).stream()
+                .map(QuizItem::question)
+                .filter(question -> question != null && !question.isBlank())
+                .toList();
+    }
+
+    private List<QuizItem> generateBoardExamPool(
+            PoolGenerationTarget target,
+            List<String> answerKeyQuestionTexts,
+            Set<String> answerKeyQuestionKeys
+    ) {
         List<QuizItem> firstBatch = quizGenerationService.generateBoardExamQuiz(
                 target.studyPack().getTitle(),
                 target.studyPack().getSummary(),
                 getKeyConcepts(target.studyPack()),
-                List.of(),
+                answerKeyQuestionTexts,
                 BOARD_EXAM_SESSION_QUESTION_COUNT,
                 DIFFICULTY_MIXED,
                 target.context()
@@ -284,14 +312,34 @@ public class ExamQuestionPoolService {
                 target.studyPack().getTitle(),
                 target.studyPack().getSummary(),
                 getKeyConcepts(target.studyPack()),
-                List.of(),
+                answerKeyQuestionTexts,
                 BOARD_EXAM_SESSION_QUESTION_COUNT,
                 DIFFICULTY_MIXED,
                 target.context()
         );
         List<QuizItem> combined = new ArrayList<>(firstBatch);
         combined.addAll(secondBatch);
-        return QuizDeduplicationUtils.uniqueQuestions(combined, Set.of());
+        return QuizDeduplicationUtils.uniqueQuestions(combined, new LinkedHashSet<>(answerKeyQuestionKeys));
+    }
+
+    /**
+     * Removes any pooled question that already appears on the study pack's own saved quiz.
+     *
+     * <p>Applied to both modes: the pool builder does not know about the saved quiz for either, and a
+     * pool generated before that was fixed still holds the overlap.
+     */
+    private List<QuizItem> withoutStudyPackAnswerKey(UUID studyPackId, List<QuizItem> questions) {
+        Set<String> answerKeyQuestionKeys = studyPackRepository.findById(studyPackId)
+                .map(pack -> QuizDeduplicationUtils.toNormalizedQuestionSet(safeQuiz(pack)))
+                .orElseGet(Set::of);
+        if (answerKeyQuestionKeys.isEmpty()) {
+            return questions;
+        }
+        return QuizDeduplicationUtils.uniqueQuestions(questions, new LinkedHashSet<>(answerKeyQuestionKeys));
+    }
+
+    private List<QuizItem> safeQuiz(StudyPackEntity studyPack) {
+        return studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz();
     }
 
     private List<QuizItem> unservedQuestions(ExamQuestionPoolEntity pool) {

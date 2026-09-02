@@ -4,6 +4,8 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
 import com.studysnap.backend.dto.GenerateMoreChallengeQuizResponse;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteCollectionEntity;
+import com.studysnap.backend.entity.NoteCollectionItemEntity;
 import com.studysnap.backend.exception.NotEnoughNewQuestionsException;
 import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
 import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
@@ -25,12 +27,14 @@ import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.ChallengeQuizGenerationFailedException;
 import com.studysnap.backend.exception.ChallengeQuizNotAvailableException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
 import com.studysnap.backend.exception.InvalidBoardExamSourceException;
+import com.studysnap.backend.exception.BoardExamInsufficientEligibleSourcesException;
 import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.exception.InvalidChallengeQuizResultException;
 import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
@@ -40,6 +44,8 @@ import com.studysnap.backend.exception.MatchingQuestionGroupSourceMismatchExcept
 import com.studysnap.backend.exception.MultiNoteChallengeQuizSourceNotAllowedException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -54,6 +60,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -85,7 +93,7 @@ public class ChallengeQuizService {
     private static final String SESSION_STATE_SELECTED_ENUMERATION_ANSWERS = "selectedEnumerationAnswers";
     private static final String SESSION_STATE_COMPLETED = "completed";
     private static final String SESSION_STATE_DIFFICULTY = "difficulty";
-    private static final String SESSION_STATE_MODE = "mode";
+    public static final String SESSION_STATE_MODE = "mode";
     private static final String SESSION_STATE_QUIZ = "quiz";
     private static final String SESSION_STATE_SOURCE_NOTE_REFS = "sourceNoteRefs";
     private static final String SOURCE_STUDY_PACK_ID_KEY = "studyPackId";
@@ -109,6 +117,7 @@ public class ChallengeQuizService {
     private static final String PERFORMANCE_LEVEL_FAIR = "Fair";
     private static final String PERFORMANCE_LEVEL_NEEDS_IMPROVEMENT = "Needs Improvement";
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
+    private static final String ANALYTICS_METADATA_EXPECTED_QUESTION_COUNT = "expectedQuestionCount";
     private static final String ANALYTICS_METADATA_SOURCE_COUNT = "sourceCount";
     private static final String ANALYTICS_METADATA_SOURCE_SCOPE = "sourceScope";
     private static final String ANALYTICS_METADATA_SCORE_PERCENTAGE = "scorePercentage";
@@ -120,7 +129,10 @@ public class ChallengeQuizService {
     private static final String SESSION_REVIEW_NOT_AVAILABLE_CODE = "SESSION_REVIEW_NOT_AVAILABLE";
     private static final String CHALLENGE_QUIZ_SESSION_REVIEW_NOT_AVAILABLE_MESSAGE = "Challenge Quiz session review is only available after completion.";
     private static final String MODE_CHALLENGE = "challenge";
-    private static final String MODE_BOARD_EXAM = "board_exam";
+    public static final String MODE_BOARD_EXAM = "board_exam";
+    /** A Board Exam reserves both its Challenge and Board meters under this one state stamp. */
+    public static final String SESSION_STATE_BOARD_EXAM_QUOTA_RESERVED = "boardExamQuotaReserved";
+    public static final String SESSION_STATE_BOARD_EXAM_QUOTA_REVERSED = "boardExamQuotaReversed";
     private static final String SOURCE_SCOPE_MANUAL = "manual";
     private static final String SOURCE_SCOPE_PLAN = "plan";
     private static final String HISTORY_MODE_BOARD_EXAM = "BOARD_EXAM";
@@ -167,12 +179,12 @@ public class ChallengeQuizService {
     private static final int INITIAL_CHALLENGE_QUIZ_COUNT = 5;
     public static final int MAX_CHALLENGE_QUIZ_QUESTIONS = 20;
     private static final int GENERATE_MORE_BATCH_SIZE = 5;
-    private static final int MIN_NEW_QUESTIONS_AFTER_DEDUP = 3;
     private static final int BOARD_EXAM_QUESTIONS_PER_SOURCE = 12;
     private static final int MAX_BOARD_EXAM_TOTAL_QUESTIONS = 30;
+    private static final int MIN_NEW_QUESTIONS_AFTER_DEDUP = 3;
     private static final int MAX_ADDITIONAL_BOARD_EXAM_SOURCE_COUNT = 2;
     private static final int MIN_BOARD_EXAM_QUESTIONS_PER_SOURCE = 3;
-    private static final int BOARD_EXAM_QUOTA_UNITS_PER_SESSION = 1;
+    public static final int BOARD_EXAM_QUOTA_UNITS_PER_SESSION = 1;
     private static final int SECONDS_PER_QUESTION_CHALLENGE = 90;
     private static final int SECONDS_PER_QUESTION_BOARD_EXAM = 60;
     private static final String DEFAULT_SELECTED_DIFFICULTY = DIFFICULTY_MEDIUM;
@@ -197,6 +209,12 @@ public class ChallengeQuizService {
     private final OfficialChallengeQuizTemplateService officialChallengeQuizTemplateService;
     private final ConceptHealthService conceptHealthService;
     private final StudyPackQuizMasteryService studyPackQuizMasteryService;
+    private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
+    private final org.springframework.transaction.support.TransactionOperations studyPackGenerationTransactionOperations;
+    private final GenerationRecoveryRowWriter generationRecoveryRowWriter;
+    private final NoteCollectionRepository noteCollectionRepository;
+    private final NoteCollectionItemRepository noteCollectionItemRepository;
+    private final LongExamPlanSourceSampler longExamPlanSourceSampler;
 
     @Transactional
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
@@ -206,6 +224,10 @@ public class ChallengeQuizService {
         PlanType planType = subscriptionService.resolvePlan(userId);
         String selectedMode = resolveSelectedMode(request);
         String selectedDifficulty = resolveSelectedDifficulty(selectedMode);
+        boolean boardReviewSet = MODE_BOARD_EXAM.equals(selectedMode)
+                && request != null
+                && request.sourceCollectionId() != null
+                && !request.sourceCollectionId().isBlank();
 
         Optional<ChallengeQuizStartResponse> existingSession = resolveExistingChallengeSession(
                 userId,
@@ -222,16 +244,16 @@ public class ChallengeQuizService {
                 ? resolveAdditionalBoardExamStudyPackIds(request, studyPackId)
                 : resolveAdditionalChallengeStudyPackIds(request, studyPackId, maxChallengeSourceNotes - 1);
         boolean multiNoteChallenge = MODE_CHALLENGE.equals(selectedMode) && !additionalStudyPackIds.isEmpty();
-        int boardExamSourceCount = MODE_BOARD_EXAM.equals(selectedMode)
-                ? additionalStudyPackIds.size() + 1
-                : 0;
         int usedThisMonth = assertChallengeQuizQuotaAvailable(userId, planType);
         if (multiNoteChallenge) {
             // ⚠️ CONDITIONAL, and that matters. The counter is per user while the Study Pack lock is per
             // note, so concurrent starts from different notes could otherwise both see the same remaining
             // allowance. But taking it unconditionally put a PESSIMISTIC_WRITE on the user row for EVERY
-            // Challenge and Board Exam start, held across LLM generation by @Transactional — serializing
-            // that account's other quiz starts and blocking anything else that writes the same row.
+            // Challenge start, held across LLM generation by @Transactional — serializing that account's
+            // other quiz starts and blocking anything else that writes the same row. (Board Exam no longer
+            // holds the transaction across generation — it dispatches after commit — so the "every start"
+            // half of that cost is now Challenge-only. The conclusion is unchanged: only the multi-note
+            // path has a counter at stake, so only it takes the lock.)
             // Only the multi-note path has a counter at stake, so only it takes the lock.
             userRepository.findByIdForUpdate(userId);
             assertMultiNoteQuotaAvailable(userId, planType);
@@ -241,10 +263,33 @@ public class ChallengeQuizService {
             boardExamUsedThisMonth = assertBoardExamQuotaAvailable(userId, planType, BOARD_EXAM_QUOTA_UNITS_PER_SESSION);
         }
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty, selectedMode);
-        int quizCount = MODE_BOARD_EXAM.equals(selectedMode)
-                ? resolveBoardExamQuestionCount(boardExamSourceCount)
+        int quizCount = boardReviewSet
+                ? properties.getPricing().getBoardExamTargetQuestionCount()
+                : MODE_BOARD_EXAM.equals(selectedMode)
+                ? resolveBoardExamQuestionCount(additionalStudyPackIds.size() + 1)
                 : multiNoteChallenge ? MULTI_NOTE_CHALLENGE_QUESTION_COUNT : profile.questionCount();
-        ResolvedPlanSources resolvedPlanSources = MODE_BOARD_EXAM.equals(selectedMode) || multiNoteChallenge
+        UUID boardExamGenerationSessionId = MODE_BOARD_EXAM.equals(selectedMode) ? UUID.randomUUID() : null;
+        if (boardReviewSet && !additionalStudyPackIds.isEmpty()) {
+            // ⚠️ REJECT, NEVER SILENTLY DISCARD. On the sampled path the server chooses the sources, so a
+            // caller-supplied list has no meaning — and silently dropping it is how "silently ignored"
+            // becomes "silently accepted". It also made the ONLY route into this capability the one that
+            // destroyed the learner's selection.
+            throw InvalidBoardExamSourceException.sourcesNotSelectable();
+        }
+        ResolvedPlanSources resolvedPlanSources = boardReviewSet
+                ? resolveBoardExamReviewSetSourceNoteRefs(
+                        studyPack,
+                        userId,
+                        request == null ? null : request.sourceCollectionId(),
+                        quizCount,
+                        boardExamGenerationSessionId
+                )
+                // ⚠️ MODE_BOARD_EXAM MUST STAY IN THIS BRANCH. Narrowing it to multiNoteChallenge alone
+                // dropped a LEGACY multi-note Board Exam (additional packs, no Review Set) to
+                // ResolvedPlanSources.empty() — silently skipping the ownership check, the same-subject
+                // check and the 3-source cap, and quietly reducing the exam to its primary note. Unowned
+                // or mismatched sources were accepted-then-discarded instead of rejected.
+                : MODE_BOARD_EXAM.equals(selectedMode) || multiNoteChallenge
                 ? resolveBoardExamSourceNoteRefs(
                         studyPack,
                         userId,
@@ -259,13 +304,27 @@ public class ChallengeQuizService {
         StudyPackGenerationContext generationContext = null;
         if (MODE_BOARD_EXAM.equals(selectedMode)) {
             generationContext = buildQuizGenerationContext(userId, studyPack);
-            if (additionalStudyPackIds.isEmpty()) {
+            // ⚠️ RESTORED GATE. This was narrowed to `boardReviewSet`, which silently removed the ready
+            // question pool from every LEGACY single-note Board Exam — the path this release was not meant
+            // to touch — sending each one to a paid LLM generation and to GENERATING instead of an
+            // immediate IN_PROGRESS. The pool is keyed on the single primary pack, so the correct gate is
+            // "no additional sources", exactly as before.
+            // ⚠️ A REVIEW-SET Board Exam is excluded on purpose, mirroring the v0.105.0 Long Exam rule: a
+            // sampled multi-source exam must never be served primary-only pooled questions while its
+            // session records the sampled sources.
+            if (!boardReviewSet && additionalStudyPackIds.isEmpty()) {
                 Optional<List<QuizItem>> pooledQuestions = examQuestionPoolService.sampleQuestions(
                         studyPackId,
                         ExamQuestionPoolService.MODE_BOARD_EXAM,
                         quizCount,
                         StudyPackGenerationContextResolver.effectiveCurriculumLevel(generationContext)
                 );
+                // ⚠️ THE ANSWER-KEY FILTER FOR POOLED QUESTIONS LIVES IN ExamQuestionPoolService, NOT HERE.
+                // It was first written at this call site and that was the wrong layer twice over: it would
+                // have filtered AFTER sampleQuestions had already marked those questions served, burning a
+                // whole exam's worth of clean pool rows on every hit, and it would have left the identical
+                // hole open on the Long Exam pooled path. The pool now excludes the note's saved quiz at
+                // both generation and sampling time, so anything returned here is already answer-key safe.
                 if (pooledQuestions.isPresent()) {
                     QuickReviewSessionEntity session = buildGeneratingSession(
                             userId,
@@ -297,6 +356,7 @@ public class ChallengeQuizService {
             }
         }
         QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
+                boardExamGenerationSessionId,
                 userId,
                 studyPackId,
                 studyPack,
@@ -304,6 +364,34 @@ public class ChallengeQuizService {
                 selectedMode,
                 sourceNoteRefs
         ));
+        if (MODE_BOARD_EXAM.equals(selectedMode)) {
+            // ⚠️ THE CHARGE RUNS HERE, INSIDE THE REQUEST TRANSACTION, ALONGSIDE THE SESSION ROW.
+            // It used to run in an afterCommit callback, and that was BROKEN IN PRODUCTION AND INVISIBLE
+            // TO EVERY TEST: this class is @Transactional at CLASS level, so startSession always has an
+            // active transaction and the callback always fired — where a PROPAGATION_REQUIRED write joins
+            // the already-committed transaction and throws. Every Board Exam start returned 500, while the
+            // session row had already committed as GENERATING carrying boardExamQuotaReserved=true, so the
+            // sweeper later refunded BOTH meters for a charge that never happened — handing back quota the
+            // learner had spent on genuine Challenge Quiz sessions. The unit suite never saw it because
+            // MockitoExtension has no transaction manager, so every test took the inline fallback branch.
+            // ⚠️ The old design's stated reason — that charging inside would let concurrent starts observe
+            // the same remaining quota — DOES NOT HOLD: assertBoardExamQuotaAvailable is an unlocked read
+            // and no row lock is taken on this path, so that race is identical either way.
+            // Charging here also makes the charge ATOMIC with the session: a rollback undoes both, which
+            // removes the reserved-before-charged window entirely and makes the two meters impossible to
+            // split. The refund still exists for the case this release exists to handle — generation
+            // failing AFTER a successful commit.
+            userUsageService.incrementChallengeQuizGeneration(userId, session.getCreatedAt());
+            userUsageService.incrementBoardExamGenerationBy(userId, BOARD_EXAM_QUOTA_UNITS_PER_SESSION, session.getCreatedAt());
+            // ⚠️ RE-ARMED HERE BECAUSE THIS EARLY RETURN MADE THE OLD CALL SITE DEAD. Moving generation off
+            // the transaction routed Board Exam out before the try-block that used to call assertAllowed,
+            // so the mode silently lost its AI rate limit — a cost and abuse control on a PRO path. Third
+            // instance in this release of the same class: a gate that stopped firing when a branch moved.
+            aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
+            dispatchBoardExamGenerationAfterCommit(
+                    session.getId(), profile.difficulty(), userId, planType, resolvedPlanSources.planSourced());
+            return toStartResponse(session, studyPack, boardExamUsedThisMonth + BOARD_EXAM_QUOTA_UNITS_PER_SESSION, planType);
+        }
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         Set<String> disallowedQuestionKeys = QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions);
         if (generationContext == null) {
@@ -314,21 +402,19 @@ public class ChallengeQuizService {
         );
         try {
             List<QuizItem> challengeQuiz;
+            // ⚠️ TRIPWIRE, NOT DEAD-CODE PADDING. Every board_exam start returns above, into the async
+            // resilient path. The synchronous branch that used to live here — and the
+            // generateBoardExamQuizForSources helper it called — were deleted because they were not merely
+            // unreachable, they encoded a DIFFERENT and now-superseded rule: `quiz.size() != quizCount`
+            // fails the session outright, whereas the resilient path accepts a short exam above the two
+            // assembly floors and marks it `shortExam`. Leaving both rules in one class is how a future
+            // edit silently reinstates the old one. If the early return is ever removed, this fails loudly
+            // and forces that choice to be made deliberately.
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
-                aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-                List<QuizItem> generatedQuiz = additionalStudyPackIds.isEmpty()
-                        ? quizGenerationService.generateBoardExamQuiz(
-                                studyPack.getTitle(),
-                                studyPack.getSummary(),
-                                getKeyConcepts(studyPack),
-                                disallowedQuestions,
-                                quizCount,
-                                profile.difficulty(),
-                                generationContext
-                        )
-                        : generateBoardExamQuizForSources(userId, sourceNoteRefs, profile.difficulty());
-                challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(generatedQuiz, disallowedQuestionKeys);
-            } else if (multiNoteChallenge) {
+                throw new IllegalStateException(
+                        "board_exam must not reach the synchronous Challenge generation path");
+            }
+            if (multiNoteChallenge) {
                 aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
                 challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(
                         generateChallengeQuizForSources(userId, sourceNoteRefs, profile.difficulty()),
@@ -399,6 +485,9 @@ public class ChallengeQuizService {
             if (multiNoteChallenge) {
                 userUsageService.incrementMultiNoteGeneration(userId, saved.getCreatedAt());
             }
+            // ⚠️ UNREACHABLE MONEY CODE, KEPT ONLY BECAUSE REMOVING IT WIDENS A SIGNOFF DIFF. board_exam
+            // cannot reach here — the tripwire above throws first — so this charge never fires. Do not read
+            // it as the Board Exam charge; that lives in the early return, inside the request transaction.
             if (MODE_BOARD_EXAM.equals(selectedMode)) {
                 userUsageService.incrementBoardExamGenerationBy(userId, BOARD_EXAM_QUOTA_UNITS_PER_SESSION, saved.getCreatedAt());
             }
@@ -470,6 +559,157 @@ public class ChallengeQuizService {
                     exception
             );
         }
+    }
+
+    /**
+     * Board generation must begin only after the session commits. The charge intentionally runs first and
+     * outside the request transaction: moving it back inside would make concurrent Board starts observe
+     * the same remaining quota. A process death after the row commit but before this charge is the accepted
+     * reserved-before-charged window documented in the release notes.
+     */
+    private void dispatchBoardExamGenerationAfterCommit(
+            UUID sessionId,
+            String difficulty,
+            UUID userId,
+            PlanType planType,
+            boolean planSourced
+    ) {
+        Runnable generationTask = () -> generateBoardExamAsync(sessionId, difficulty, userId, planType, planSourced);
+        // ⚠️ DISPATCH ONLY. Never perform a @Transactional write in an afterCommit callback: it joins the
+        // committed transaction and throws. Every other registerSynchronization site in this codebase
+        // dispatches only, for the same reason — this one copied the pattern from a site that dispatched
+        // and then added a write it could not survive.
+        Runnable chargeThenDispatch = () -> studyPackGenerationTaskDispatcher.execute(generationTask);
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    chargeThenDispatch.run();
+                }
+            });
+            return;
+        }
+        chargeThenDispatch.run();
+    }
+
+    private void generateBoardExamAsync(
+            UUID sessionId,
+            String difficulty,
+            UUID userId,
+            PlanType planType,
+            boolean planSourced
+    ) {
+        try {
+            studyPackGenerationTransactionOperations.execute(status -> {
+                QuickReviewSessionEntity session = quickReviewSessionRepository.findById(sessionId)
+                        .orElseThrow(ChallengeQuizSessionNotFoundException::new);
+                if (session.getStatus() != QuickReviewSessionStatus.GENERATING) {
+                    return null;
+                }
+                List<LongExamSourceNoteRef> sourceNoteRefs = extractSourceNoteRefs(session.getSessionState());
+                GeneratedBoardExamQuiz generated = generateBoardExamQuizResiliently(userId, sourceNoteRefs, difficulty);
+                int minimumQuestions = properties.getPricing().getBoardExamMinimumAssembledQuestions();
+                int minimumSources = Math.min(
+                        sourceNoteRefs.size(),
+                        properties.getPricing().getBoardExamMinimumContributingSources()
+                );
+                if (generated.quiz().size() < minimumQuestions || generated.contributingSourceCount() < minimumSources) {
+                    throw new ChallengeQuizGenerationFailedException();
+                }
+                // Lock first, then query the scalar status: the locked entity can be stale in this context.
+                quickReviewSessionRepository.findByIdForUpdate(sessionId)
+                        .orElseThrow(ChallengeQuizSessionNotFoundException::new);
+                if (quickReviewSessionRepository.findStatusById(sessionId)
+                        .filter(QuickReviewSessionStatus.GENERATING::equals)
+                        .isEmpty()) {
+                    return null;
+                }
+                int expectedQuestionCount = sourceNoteRefs.stream()
+                        .mapToInt(LongExamSourceNoteRef::questionCount)
+                        .sum();
+                markSessionReady(session, generated.quiz(), difficulty);
+                markBoardExamShort(session, expectedQuestionCount, generated.quiz().size());
+                QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+                try {
+                    // ⚠️ sourceCount AND sourceScope BELONG ON THIS EVENT, and without them the release's
+                    // own numbers are unreadable. questionCount alone cannot tell a Review Set exam that
+                    // assembled short (target 30) from a legacy single-note one that asked for 12 — so the
+                    // dated checkpoint on the configured target and the assembly floors would have had no
+                    // metric. ⚠️ sourceScope records the VERIFIED outcome, never the caller's claim, exactly
+                    // as v0.102.0 established and v0.105.0's cold agent re-confirmed.
+                    analyticsService.trackEvent(userId, AnalyticsEventType.BOARD_EXAM_STARTED, saved.getStudyPackId(), Map.of(
+                            ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
+                            ANALYTICS_METADATA_QUESTION_COUNT, generated.quiz().size(),
+                            ANALYTICS_METADATA_EXPECTED_QUESTION_COUNT, expectedQuestionCount,
+                            ANALYTICS_METADATA_SOURCE_COUNT, sourceNoteRefs.size(),
+                            ANALYTICS_METADATA_SOURCE_SCOPE, planSourced ? SOURCE_SCOPE_PLAN : SOURCE_SCOPE_MANUAL,
+                            ANALYTICS_METADATA_DIFFICULTY, difficulty,
+                            ANALYTICS_METADATA_MODE, MODE_BOARD_EXAM
+                    ));
+                } catch (RuntimeException ignored) {
+                    // Analytics is never allowed to turn a ready Board Exam into a failed session.
+                }
+                return null;
+            });
+        } catch (Exception exception) {
+            log.warn("Board Exam generation failed for sessionId={}: {}", sessionId, exception.getMessage());
+            generationRecoveryRowWriter.failBoardExamSession(sessionId);
+        }
+    }
+
+    private GeneratedBoardExamQuiz generateBoardExamQuizResiliently(
+            UUID userId,
+            List<LongExamSourceNoteRef> sourceNoteRefs,
+            String difficulty
+    ) {
+        List<QuizItem> merged = new ArrayList<>();
+        Set<String> disallowed = new LinkedHashSet<>();
+        int contributors = 0;
+        for (LongExamSourceNoteRef source : sourceNoteRefs) {
+            try {
+                UUID sourceId = parseBoardExamSourceStudyPackId(source.studyPackId());
+                StudyPackEntity sourcePack = findOwnedStudyPackForGenerationOrThrow(sourceId, userId);
+                StudyPackGenerationContext context = buildQuizGenerationContext(userId, sourcePack);
+                List<String> sourceSavedQuestions = extractQuestionTexts(sourcePack.getQuiz());
+                // ⚠️ THE PACK'S OWN SAVED QUIZ IS A HARD FILTER, NOT MERELY A PROMPT HINT. Passing it to the
+                // generator asks the model not to repeat those questions; it does not STOP it. The previous
+                // synchronous path also added them to the dedup set, and this restructure dropped that,
+                // leaving only the prompt. LongExamService does add them (see its per-source loop).
+                // ⚠️ It matters beyond duplication: those questions are visible WITH THEIR ANSWERS on the
+                // note's Quiz tab, and Board Exam writes ConceptHealth — so a leaked item both hands over
+                // the answer key and corrupts a mastery signal locked since v0.37.0 to genuine assessment.
+                disallowed.addAll(QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(sourceSavedQuestions));
+                List<QuizItem> generated = quizGenerationService.generateBoardExamQuiz(
+                        sourcePack.getTitle(), sourcePack.getSummary(), getKeyConcepts(sourcePack),
+                        sourceSavedQuestions, source.questionCount(), difficulty, context
+                );
+                List<QuizItem> unique = stampQuestionsWithSourceStudyPack(
+                        QuizDeduplicationUtils.uniqueQuestions(generated, disallowed), sourceId
+                );
+                if (!unique.isEmpty()) {
+                    contributors++;
+                    merged.addAll(unique);
+                    disallowed.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(unique));
+                }
+            } catch (RuntimeException sourceFailure) {
+                log.warn("Board Exam source generation failed session-source={}", source.studyPackId(), sourceFailure);
+            }
+        }
+        return new GeneratedBoardExamQuiz(List.copyOf(merged), contributors);
+    }
+
+    private void markBoardExamShort(QuickReviewSessionEntity session, int expectedQuestionCount, int assembledQuestionCount) {
+        if (assembledQuestionCount >= expectedQuestionCount) {
+            return;
+        }
+        Map<String, Object> state = new LinkedHashMap<>(session.getSessionState());
+        state.put("shortExam", true);
+        state.put("expectedQuestionCount", expectedQuestionCount);
+        session.setSessionState(state);
+    }
+
+    private record GeneratedBoardExamQuiz(List<QuizItem> quiz, int contributingSourceCount) {
     }
 
     /**
@@ -1255,10 +1495,6 @@ public class ChallengeQuizService {
         };
     }
 
-    private int resolveBoardExamQuestionCount(int sourceCount) {
-        return Math.min(BOARD_EXAM_QUESTIONS_PER_SOURCE * sourceCount, MAX_BOARD_EXAM_TOTAL_QUESTIONS);
-    }
-
     private List<UUID> resolveAdditionalBoardExamStudyPackIds(
             ChallengeQuizStartRequest request,
             UUID primaryStudyPackId
@@ -1281,6 +1517,10 @@ public class ChallengeQuizService {
             throw InvalidBoardExamSourceException.tooManySources();
         }
         return List.copyOf(uniqueIds);
+    }
+
+    private int resolveBoardExamQuestionCount(int sourceCount) {
+        return Math.min(BOARD_EXAM_QUESTIONS_PER_SOURCE * sourceCount, MAX_BOARD_EXAM_TOTAL_QUESTIONS);
     }
 
     private List<UUID> resolveAdditionalChallengeStudyPackIds(
@@ -1386,6 +1626,109 @@ public class ChallengeQuizService {
         return new ResolvedPlanSources(List.copyOf(sourceNoteRefs), planSourced);
     }
 
+    /**
+     * Board Exam alone walks the whole owned Review Set. This is deliberately separate from
+     * {@link #resolveBoardExamSourceNoteRefs}: that older method is also the multi-note Challenge path,
+     * whose Free/Plus cap semantics must remain byte-for-byte unchanged.
+     */
+    private ResolvedPlanSources resolveBoardExamReviewSetSourceNoteRefs(
+            StudyPackEntity primaryStudyPack,
+            UUID userId,
+            String reviewSetIdRaw,
+            int questionCount,
+            UUID sessionId
+    ) {
+        if (reviewSetIdRaw == null || reviewSetIdRaw.isBlank()) {
+            throw InvalidBoardExamSourceException.sourceUnavailable();
+        }
+        UUID reviewSetId = com.studysnap.backend.util.UuidParsingUtils.parseUuidOrThrow(
+                reviewSetIdRaw,
+                InvalidBoardExamSourceException::sourceUnavailable
+        );
+        NoteCollectionEntity claimed = noteCollectionRepository.findByIdAndOwnerUserId(reviewSetId, userId)
+                .orElseThrow(InvalidBoardExamSourceException::sourceUnavailable);
+        // ⚠️ WALK UP TO THE REVIEW SET. A learner reaches Board Exam from whichever collection page they
+        // were on, which is normally a SUBJECT PLAN — a child. Using the claimed collection directly made
+        // the childless branch fire and shipped "assess across the plan you came from", which is Long
+        // Exam's job, not Board Exam's. Board Exam's identity is the WHOLE Review Set, so a child claim
+        // resolves to its parent. Ownership is re-verified on the parent; a child of a set you do not own
+        // is not a route into someone else's curriculum.
+        NoteCollectionEntity reviewSet = claimed.getParentCollectionId() == null
+                ? claimed
+                : noteCollectionRepository.findByIdAndOwnerUserId(claimed.getParentCollectionId(), userId)
+                        .orElseThrow(InvalidBoardExamSourceException::sourceUnavailable);
+        List<NoteCollectionEntity> subjectPlans = noteCollectionRepository
+                .findOrderedChildrenByParentCollectionIdAndOwnerUserId(reviewSet.getId(), userId);
+        // This exactly mirrors the Goal endpoint: child plans win; a childless top-level plan is one stratum.
+        List<NoteCollectionEntity> strata = subjectPlans.isEmpty() ? List.of(reviewSet) : subjectPlans;
+        List<BoardExamCandidate> candidates = new ArrayList<>();
+        for (int stratumIndex = 0; stratumIndex < strata.size(); stratumIndex++) {
+            NoteCollectionEntity stratum = strata.get(stratumIndex);
+            for (NoteCollectionItemEntity item : noteCollectionItemRepository.findByCollectionIdOrderByPositionAsc(stratum.getId())) {
+                candidates.add(new BoardExamCandidate(item.getNoteId(), stratum.getId().toString(), item.getPosition(), stratumIndex));
+            }
+        }
+        List<UUID> candidateNoteIds = candidates.stream().map(BoardExamCandidate::noteId).distinct().toList();
+        Map<UUID, StudyPackEntity> readyPackByNoteId = studyPackRepository
+                .findByOwnerUserIdAndNoteIdInAndStatus(userId, candidateNoteIds, StudyPackStatus.DONE).stream()
+                .collect(Collectors.toMap(StudyPackEntity::getNoteId, pack -> pack));
+        // ⚠️ DEDUPE BY STUDY PACK, NOT JUST BY NOTE ID. `candidateNoteIds` is distinct, but a note that
+        // belongs to TWO Subject Plans of the same Review Set produces two candidates, hence two pool
+        // entries carrying the SAME StudyPackEntity — and round-robin then draws it from both buckets.
+        // The exam would report more sources than it has, and `contributingSourceCount` would double-count
+        // one note, letting a SINGLE note satisfy the two-contributing-sources assembly floor.
+        // First occurrence wins, so a shared note is attributed to its earliest stratum and position.
+        Map<UUID, LongExamPlanSourceSampler.EligiblePlanSource> eligibleByStudyPackId = new LinkedHashMap<>();
+        for (BoardExamCandidate candidate : candidates) {
+            StudyPackEntity pack = readyPackByNoteId.get(candidate.noteId());
+            if (pack == null) {
+                continue;
+            }
+            eligibleByStudyPackId.putIfAbsent(pack.getId(), new LongExamPlanSourceSampler.EligiblePlanSource(
+                    pack,
+                    candidate.coverageBucketLabel(),
+                    candidate.stratumIndex() * 1_000_000 + candidate.position()
+            ));
+        }
+        List<LongExamPlanSourceSampler.EligiblePlanSource> eligiblePool = List.copyOf(eligibleByStudyPackId.values());
+        int minimumSources = Math.min(
+                eligiblePool.size(),
+                properties.getPricing().getBoardExamMinimumContributingSources()
+        );
+        if (eligiblePool.size() < properties.getPricing().getBoardExamMinimumContributingSources()) {
+            throw new BoardExamInsufficientEligibleSourcesException(
+                    eligiblePool.size(),
+                    properties.getPricing().getBoardExamMinimumContributingSources()
+            );
+        }
+        if (eligiblePool.stream().noneMatch(source -> source.studyPack().getId().equals(primaryStudyPack.getId()))) {
+            throw InvalidBoardExamSourceException.sourceUnavailable();
+        }
+        int sampleLimit = ExamSourceLimitResolver.resolveMaxSourceNotes(questionCount);
+        List<LongExamPlanSourceSampler.EligiblePlanSource> sampled = longExamPlanSourceSampler.sample(
+                eligiblePool,
+                primaryStudyPack.getId(),
+                sampleLimit,
+                sessionId
+        );
+        if (sampled.size() < minimumSources) {
+            throw new BoardExamInsufficientEligibleSourcesException(sampled.size(), minimumSources);
+        }
+        int baseQuestionCount = questionCount / sampled.size();
+        if (baseQuestionCount < MIN_BOARD_EXAM_QUESTIONS_PER_SOURCE) {
+            throw InvalidBoardExamSourceException.tooManySources();
+        }
+        int remainder = questionCount % sampled.size();
+        List<LongExamSourceNoteRef> refs = new ArrayList<>(sampled.size());
+        for (int index = 0; index < sampled.size(); index++) {
+            refs.add(buildSourceNoteRef(sampled.get(index).studyPack(), baseQuestionCount + (index == 0 ? remainder : 0)));
+        }
+        return new ResolvedPlanSources(List.copyOf(refs), true);
+    }
+
+    private record BoardExamCandidate(UUID noteId, String coverageBucketLabel, int position, int stratumIndex) {
+    }
+
     private record ResolvedPlanSources(List<LongExamSourceNoteRef> sourceNoteRefs, boolean planSourced) {
         private static ResolvedPlanSources empty() {
             return new ResolvedPlanSources(List.of(), false);
@@ -1458,42 +1801,6 @@ public class ChallengeQuizService {
                 studyPack.getTitle(),
                 questionCount
         );
-    }
-
-    private List<QuizItem> generateBoardExamQuizForSources(
-            UUID userId,
-            List<LongExamSourceNoteRef> sourceNoteRefs,
-            String difficulty
-    ) {
-        List<QuizItem> mergedQuiz = new ArrayList<>();
-        Set<String> disallowedQuestions = new LinkedHashSet<>();
-        for (LongExamSourceNoteRef sourceNoteRef : sourceNoteRefs) {
-            UUID sourceStudyPackId = parseBoardExamSourceStudyPackId(sourceNoteRef.studyPackId());
-            StudyPackEntity sourceStudyPack = findOwnedStudyPackForGenerationOrThrow(sourceStudyPackId, userId);
-            StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, sourceStudyPack);
-            List<String> sourceDisallowedQuestions = extractQuestionTexts(sourceStudyPack.getQuiz());
-            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(sourceDisallowedQuestions));
-            List<QuizItem> generatedQuiz = quizGenerationService.generateBoardExamQuiz(
-                    sourceStudyPack.getTitle(),
-                    sourceStudyPack.getSummary(),
-                    getKeyConcepts(sourceStudyPack),
-                    sourceDisallowedQuestions,
-                    sourceNoteRef.questionCount(),
-                    difficulty,
-                    generationContext
-            );
-            List<QuizItem> uniqueGeneratedQuiz = QuizDeduplicationUtils.uniqueQuestions(
-                    generatedQuiz,
-                    disallowedQuestions
-            );
-            List<QuizItem> stampedGeneratedQuiz = stampQuestionsWithSourceStudyPack(
-                    uniqueGeneratedQuiz,
-                    sourceStudyPackId
-            );
-            mergedQuiz.addAll(stampedGeneratedQuiz);
-            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(stampedGeneratedQuiz));
-        }
-        return mergedQuiz;
     }
 
     private List<QuizItem> generateChallengeQuizForSources(
@@ -1666,7 +1973,12 @@ public class ChallengeQuizService {
         state.put(SESSION_STATE_COMPLETED, false);
         state.put(SESSION_STATE_DIFFICULTY, difficulty);
         state.put(SESSION_STATE_MODE, mode);
-        if (sourceNoteRefs != null && sourceNoteRefs.size() > 1) {
+        if (MODE_BOARD_EXAM.equals(mode)) {
+            // The reservation commits before the asynchronous charge; the matched dispatch comment
+            // documents that accepted crash window. Recovery refunds only this marked reservation.
+            state.put(SESSION_STATE_BOARD_EXAM_QUOTA_RESERVED, true);
+        }
+        if (sourceNoteRefs != null && (sourceNoteRefs.size() > 1 || MODE_BOARD_EXAM.equals(mode))) {
             state.put(SESSION_STATE_SOURCE_NOTE_REFS, sourceNoteRefsToState(sourceNoteRefs));
         }
         return state;
@@ -1738,6 +2050,12 @@ public class ChallengeQuizService {
         }
         Map<String, Object> sanitized = new LinkedHashMap<>(sessionState);
         sanitized.remove(SESSION_STATE_QUIZ);
+        // ⚠️ INTERNAL QUOTA BOOKKEEPING NEVER LEAVES THE SERVER. This flag is the sweeper's sole record of
+        // whether a crashed Board Exam still owes a refund. It is not writable today — mergeSessionState is
+        // an allowlist of the four selected-answer maps — but the client currently ECHOES session state back
+        // on every progress save, so a later widening of that allowlist would turn a visible key into a
+        // quota bypass. Stripping it here means the client never learns the key exists.
+        sanitized.remove(SESSION_STATE_BOARD_EXAM_QUOTA_RESERVED);
         return sanitized;
     }
 
@@ -2232,10 +2550,11 @@ public class ChallengeQuizService {
             String difficulty,
             String mode
     ) {
-        return buildGeneratingSession(userId, studyPackId, studyPack, difficulty, mode, List.of());
+        return buildGeneratingSession(null, userId, studyPackId, studyPack, difficulty, mode, List.of());
     }
 
     private QuickReviewSessionEntity buildGeneratingSession(
+            UUID sessionId,
             UUID userId,
             UUID studyPackId,
             StudyPackEntity studyPack,
@@ -2245,7 +2564,7 @@ public class ChallengeQuizService {
     ) {
         OffsetDateTime createdAt = OffsetDateTime.now();
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
-        session.setId(UUID.randomUUID());
+        session.setId(sessionId == null ? UUID.randomUUID() : sessionId);
         session.setUserId(userId);
         session.setStudyPackId(studyPackId);
         session.setNoteId(studyPack.getNoteId());

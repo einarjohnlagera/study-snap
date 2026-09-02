@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -229,6 +230,93 @@ class GenerationRecoveryServiceTest {
         assertThat(List.of(challenge, adaptive, interview))
                 .allMatch(item -> item.getStatus() == QuickReviewSessionStatus.GENERATING);
         verify(quickReviewSessionRepository, never()).save(any());
+    }
+
+    @Test
+    void recoverStaleBoardExamSessions_sweepsAStaleBoardExamAndRefundsBothMeters() {
+        QuickReviewSessionEntity session = boardExamSession(OffsetDateTime.now().minusHours(1));
+        when(quickReviewSessionRepository.findStaleSessionIds(any(), any(), any(), any()))
+                .thenReturn(List.of(session.getId()));
+        when(quickReviewSessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        GenerationRecoveryService.SurfaceRecoveryResult result = service.recoverStaleBoardExamSessions();
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        assertThat(result.recoveredCount()).isEqualTo(1);
+        verify(userUsageService).reverseBoardExamGenerationBy(
+                eq(session.getUserId()), eq(ChallengeQuizService.BOARD_EXAM_QUOTA_UNITS_PER_SESSION), any());
+    }
+
+
+    @Test
+    void recoverStaleBoardExamSessions_selectsGeneratingChallengeRowsOlderThanTheCutoff() {
+        // ⚠️ THE CANDIDATE QUERY'S OWN ARGUMENTS WERE NEVER ASSERTED. Every other Board Exam sweep test
+        // stubs findStaleSessionIds(any(), any(), any(), any()), so switching the mode to LONG_EXAM left
+        // the whole suite green — the row-level filter then rejects every candidate and the refund-on-crash
+        // path silently recovers NOTHING. The guarantee that a crashed Board Exam is ever refunded rests
+        // entirely on these four arguments, so they are pinned here.
+        QuickReviewSessionEntity session = boardExamSession(OffsetDateTime.now().minusHours(1));
+        when(quickReviewSessionRepository.findStaleSessionIds(any(), any(), any(), any()))
+                .thenReturn(List.of(session.getId()));
+        when(quickReviewSessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        service.recoverStaleBoardExamSessions();
+
+        ArgumentCaptor<QuickReviewSessionStatus> status = ArgumentCaptor.forClass(QuickReviewSessionStatus.class);
+        ArgumentCaptor<QuickReviewSessionMode> mode = ArgumentCaptor.forClass(QuickReviewSessionMode.class);
+        ArgumentCaptor<OffsetDateTime> cutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(quickReviewSessionRepository).findStaleSessionIds(
+                status.capture(), mode.capture(), cutoff.capture(), any());
+
+        // Board Exam IS a CHALLENGE row — selecting LONG_EXAM here would sweep nothing at all.
+        assertThat(mode.getValue()).isEqualTo(QuickReviewSessionMode.CHALLENGE);
+        assertThat(status.getValue()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        // The cutoff must be in the past, or a freshly started exam would be swept mid-generation.
+        assertThat(cutoff.getValue()).isBefore(OffsetDateTime.now());
+    }
+
+    @Test
+    void recoverStaleBoardExamSessions_leavesAnOrdinaryChallengeSessionAlone() {
+        // ⚠️ THE CANDIDATE QUERY CANNOT TELL THESE APART — Board Exam IS a CHALLENGE session — so the
+        // discrimination happens under the row lock. Without it, the sweep would fail every learner's
+        // in-flight Challenge Quiz and refund a Board Exam meter they never spent.
+        QuickReviewSessionEntity boardExam = boardExamSession(OffsetDateTime.now().minusHours(1));
+        QuickReviewSessionEntity challenge = session(QuickReviewSessionMode.CHALLENGE, OffsetDateTime.now().minusHours(1));
+        challenge.setSessionState(java.util.Map.of(ChallengeQuizService.SESSION_STATE_MODE, "challenge"));
+        when(quickReviewSessionRepository.findStaleSessionIds(any(), any(), any(), any()))
+                .thenReturn(List.of(boardExam.getId(), challenge.getId()));
+        when(quickReviewSessionRepository.findByIdForUpdate(boardExam.getId())).thenReturn(Optional.of(boardExam));
+        when(quickReviewSessionRepository.findByIdForUpdate(challenge.getId())).thenReturn(Optional.of(challenge));
+
+        GenerationRecoveryService.SurfaceRecoveryResult result = service.recoverStaleBoardExamSessions();
+
+        assertThat(result.recoveredCount()).isEqualTo(1);
+        assertThat(boardExam.getStatus()).isEqualTo(QuickReviewSessionStatus.FAILED);
+        assertThat(challenge.getStatus()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        verify(userUsageService, times(1)).reverseBoardExamGenerationBy(any(), anyInt(), any());
+    }
+
+    @Test
+    void recoverStaleBoardExamSessions_withinBoundRemainsGenerating() {
+        QuickReviewSessionEntity session = boardExamSession(OffsetDateTime.now().minusMinutes(5));
+        when(quickReviewSessionRepository.findStaleSessionIds(any(), any(), any(), any()))
+                .thenReturn(List.of(session.getId()));
+        when(quickReviewSessionRepository.findByIdForUpdate(session.getId())).thenReturn(Optional.of(session));
+
+        GenerationRecoveryService.SurfaceRecoveryResult result = service.recoverStaleBoardExamSessions();
+
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        assertThat(result.recoveredCount()).isZero();
+        verify(userUsageService, never()).reverseBoardExamGenerationBy(any(), anyInt(), any());
+    }
+
+    private QuickReviewSessionEntity boardExamSession(OffsetDateTime createdAt) {
+        QuickReviewSessionEntity session = session(QuickReviewSessionMode.CHALLENGE, createdAt);
+        session.setSessionState(java.util.Map.of(
+                ChallengeQuizService.SESSION_STATE_MODE, ChallengeQuizService.MODE_BOARD_EXAM,
+                ChallengeQuizService.SESSION_STATE_BOARD_EXAM_QUOTA_RESERVED, true
+        ));
+        return session;
     }
 
     @Test
