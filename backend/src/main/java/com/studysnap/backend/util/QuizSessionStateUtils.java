@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 @UtilityClass
 public class QuizSessionStateUtils {
@@ -28,6 +29,7 @@ public class QuizSessionStateUtils {
     private static final String QUESTION_TYPE_KEY = "questionType";
     private static final String WORKING_SOLUTION_KEY = "workingSolution";
     private static final String QUESTION_GROUP_KEY = "questionGroup";
+    private static final String SOURCE_STUDY_PACK_ID_ITEM_KEY = "sourceStudyPackId";
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
     private static final String CONCEPT_SELECTION_REASONS_KEY = "conceptSelectionReasons";
     private static final String SELECTED_MULTI_CHOICES_KEY = "selectedMultiChoices";
@@ -359,6 +361,7 @@ public class QuizSessionStateUtils {
             Object questionTypeRaw = rawMap.get(QUESTION_TYPE_KEY);
             Object workingSolutionRaw = rawMap.get(WORKING_SOLUTION_KEY);
             Object questionGroupRaw = rawMap.get(QUESTION_GROUP_KEY);
+            Object sourceStudyPackIdRaw = rawMap.get(SOURCE_STUDY_PACK_ID_ITEM_KEY);
             Object choicesRaw = rawMap.get(CHOICES_KEY);
             if (!(questionRaw instanceof String question)) {
                 continue;
@@ -384,11 +387,13 @@ public class QuizSessionStateUtils {
             String questionType = questionTypeRaw instanceof String value ? value : null;
             String workingSolution = workingSolutionRaw instanceof String value ? value : null;
             String questionGroup = questionGroupRaw instanceof String value ? value : null;
+            String sourceStudyPackId = parseSourceStudyPackId(sourceStudyPackIdRaw);
             boolean isChoicelessFormat = IDENTIFICATION_FORMAT.equals(questionFormat) || ENUMERATION_FORMAT.equals(questionFormat);
             if (choices.isEmpty() && !isChoicelessFormat) {
                 continue;
             }
-            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept, acceptableAnswers, acceptableAnswerGroups));
+            quiz.add(new QuizItem(question, choices, correctIndex, concept, explanation, answer, questionFormat, questionType, workingSolution, correctIndices, questionGroup, keyConcept, acceptableAnswers, acceptableAnswerGroups)
+                    .withSourceStudyPackId(sourceStudyPackId));
         }
 
         return quiz;
@@ -607,9 +612,21 @@ public class QuizSessionStateUtils {
             quizItem.put(QUESTION_TYPE_KEY, item.questionType());
             quizItem.put(WORKING_SOLUTION_KEY, item.workingSolution());
             quizItem.put(QUESTION_GROUP_KEY, item.questionGroup());
+            quizItem.put(SOURCE_STUDY_PACK_ID_ITEM_KEY, item.sourceStudyPackId());
             serialized.add(quizItem);
         }
         return serialized;
+    }
+
+    private String parseSourceStudyPackId(Object rawSourceStudyPackId) {
+        if (!(rawSourceStudyPackId instanceof String sourceStudyPackId) || sourceStudyPackId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(sourceStudyPackId.trim()).toString();
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private List<Map<String, Object>> serializeInterviewSourceNoteRefs(List<InterviewSourceNoteRef> sourceNoteRefs) {

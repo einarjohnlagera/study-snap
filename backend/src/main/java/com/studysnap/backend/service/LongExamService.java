@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.LongExamSourceNote;
 import com.studysnap.backend.dto.LongExamSourceNoteRef;
 import com.studysnap.backend.dto.LongExamStartRequest;
 import com.studysnap.backend.dto.LongExamStartResponse;
+import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
@@ -435,18 +436,28 @@ public class LongExamService {
         session.setSessionMetadata(buildMasteryReportMetadata(statistics));
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectKeyConcepts(
-                quiz,
-                selectedChoices,
-                selectedMultiChoices
+        Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack =
+                QuizSessionReviewUtils.computeKeyConceptBreakdownBySourceStudyPack(
+                        quiz,
+                        selectedChoices,
+                        selectedMultiChoices,
+                        Map.of(),
+                        Map.of()
+                );
+        recordConceptsForSourcePacks(
+                userId,
+                saved,
+                conceptBreakdownBySourceStudyPack,
+                now,
+                true
         );
-        List<String> missedConcepts = QuizSessionReviewUtils.computeKeyConceptsWithMisses(
-                quiz,
-                selectedChoices,
-                selectedMultiChoices
+        recordConceptsForSourcePacks(
+                userId,
+                saved,
+                conceptBreakdownBySourceStudyPack,
+                now,
+                false
         );
-        recordCorrectConceptsForSourcePacks(userId, saved, correctConcepts, now);
-        recordIncorrectConceptsForSourcePacks(userId, saved, missedConcepts, now);
         if (QuizSessionStateUtils.extractPoolSourced(saved.getSessionState())) {
             examQuestionPoolService.markServed(
                     saved.getStudyPackId(),
@@ -468,38 +479,37 @@ public class LongExamService {
         );
     }
 
-    private void recordCorrectConceptsForSourcePacks(
-            UUID userId,
-            QuickReviewSessionEntity session,
-            List<String> correctConcepts,
-            OffsetDateTime now
-    ) {
-        if (correctConcepts.isEmpty()) {
-            return;
-        }
-        recordConceptsForSourcePacks(userId, session, correctConcepts, now, true);
-    }
-
-    private void recordIncorrectConceptsForSourcePacks(
-            UUID userId,
-            QuickReviewSessionEntity session,
-            List<String> incorrectConcepts,
-            OffsetDateTime now
-    ) {
-        if (incorrectConcepts.isEmpty()) {
-            return;
-        }
-        recordConceptsForSourcePacks(userId, session, incorrectConcepts, now, false);
-    }
-
     private void recordConceptsForSourcePacks(
             UUID userId,
             QuickReviewSessionEntity session,
-            List<String> concepts,
+            Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack,
             OffsetDateTime now,
             boolean correct
     ) {
-        for (UUID studyPackId : resolveSourceStudyPackIds(session)) {
+        Map<UUID, Set<String>> conceptsByStudyPack = new LinkedHashMap<>();
+        conceptBreakdownBySourceStudyPack.forEach((sourceStudyPackId, conceptBreakdown) -> {
+            List<String> concepts = correct
+                    ? QuizSessionReviewUtils.computeFullyCorrectConcepts(conceptBreakdown)
+                    : QuizSessionReviewUtils.computeConceptsWithMisses(conceptBreakdown);
+            if (concepts.isEmpty()) {
+                return;
+            }
+            UUID stampedSourceStudyPackId = parseOptionalUuid(sourceStudyPackId);
+            if (stampedSourceStudyPackId != null) {
+                conceptsByStudyPack.computeIfAbsent(stampedSourceStudyPackId, ignored -> new LinkedHashSet<>())
+                        .addAll(concepts);
+                return;
+            }
+            // Only pre-v0.104.0 (unstamped) items take the historical Long Exam broadcast fallback.
+            // Stamped items never consult sourceNoteRefs, so they cannot over-attribute to sibling packs.
+            for (UUID fallbackStudyPackId : resolveSourceStudyPackIds(session)) {
+                conceptsByStudyPack.computeIfAbsent(fallbackStudyPackId, ignored -> new LinkedHashSet<>())
+                        .addAll(concepts);
+            }
+        });
+        for (Map.Entry<UUID, Set<String>> entry : conceptsByStudyPack.entrySet()) {
+            UUID studyPackId = entry.getKey();
+            List<String> concepts = List.copyOf(entry.getValue());
             studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                     .ifPresent(studyPack -> {
                         if (correct) {
@@ -989,8 +999,11 @@ public class LongExamService {
                     generatedQuiz,
                     disallowedQuestions
             );
-            mergedQuiz.addAll(uniqueGeneratedQuiz);
-            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(uniqueGeneratedQuiz));
+            List<QuizItem> stampedGeneratedQuiz = uniqueGeneratedQuiz.stream()
+                    .map(item -> item.withSourceStudyPackId(sourceStudyPackId.toString()))
+                    .toList();
+            mergedQuiz.addAll(stampedGeneratedQuiz);
+            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(stampedGeneratedQuiz));
         }
         return mergedQuiz;
     }

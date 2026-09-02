@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Function;
 
 public final class QuizSessionReviewUtils {
     public static final int WEAK_CONCEPT_THRESHOLD = 60;
@@ -111,6 +113,130 @@ public final class QuizSessionReviewUtils {
                     );
                 })
                 .toList();
+    }
+
+    /**
+     * Computes source-scoped concept results in one pass over the persisted quiz order. The selection maps
+     * are keyed by that absolute order, so callers must not filter to per-source sublists before scoring.
+     * A null key represents an item from a session persisted before source provenance was introduced.
+     */
+    public static Map<String, List<ChallengeQuizConceptStatResponse>> computeConceptBreakdownBySourceStudyPack(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices,
+            Map<Integer, String> selectedIdentificationAnswers,
+            Map<Integer, List<String>> selectedEnumerationAnswers
+    ) {
+        return computeConceptBreakdownBySourceStudyPack(
+                quiz,
+                selectedChoices,
+                selectedMultiChoices,
+                selectedIdentificationAnswers,
+                selectedEnumerationAnswers,
+                QuizItem::concept,
+                UNKNOWN_CONCEPT_LABEL
+        );
+    }
+
+    /**
+     * Overload taking the caller's own unknown-concept label.
+     *
+     * <p>⚠️ `ConceptHealthEntity` is keyed `(user_id, study_pack_id, concept)`, so the label for a null or
+     * blank concept is part of the ROW IDENTITY, not cosmetic. `ChallengeQuizService` labels these
+     * `Uncategorized` while this class labels them `Unknown`; letting the Challenge completion path adop
+     * this class's label would fork the row — orphaning the accumulated `incorrect_streak` on the old
+     * label and starting a parallel row at zero — while the result screen kept showing the old one.
+     */
+    public static Map<String, List<ChallengeQuizConceptStatResponse>> computeConceptBreakdownBySourceStudyPack(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices,
+            Map<Integer, String> selectedIdentificationAnswers,
+            Map<Integer, List<String>> selectedEnumerationAnswers,
+            String unknownConceptLabel
+    ) {
+        return computeConceptBreakdownBySourceStudyPack(
+                quiz,
+                selectedChoices,
+                selectedMultiChoices,
+                selectedIdentificationAnswers,
+                selectedEnumerationAnswers,
+                QuizItem::concept,
+                unknownConceptLabel
+        );
+    }
+
+    /**
+     * Source-scoped equivalent of the existing Long Exam key-concept aggregation. The key-concept fallback
+     * keeps Long Exam's persisted ConceptHealth vocabulary unchanged while fixing only its source attribution.
+     */
+    public static Map<String, List<ChallengeQuizConceptStatResponse>> computeKeyConceptBreakdownBySourceStudyPack(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices,
+            Map<Integer, String> selectedIdentificationAnswers,
+            Map<Integer, List<String>> selectedEnumerationAnswers
+    ) {
+        return computeConceptBreakdownBySourceStudyPack(
+                quiz,
+                selectedChoices,
+                selectedMultiChoices,
+                selectedIdentificationAnswers,
+                selectedEnumerationAnswers,
+                QuizSessionReviewUtils::effectiveKeyConcept,
+                UNKNOWN_CONCEPT_LABEL
+        );
+    }
+
+    private static Map<String, List<ChallengeQuizConceptStatResponse>> computeConceptBreakdownBySourceStudyPack(
+            List<QuizItem> quiz,
+            Map<Integer, Integer> selectedChoices,
+            Map<Integer, List<Integer>> selectedMultiChoices,
+            Map<Integer, String> selectedIdentificationAnswers,
+            Map<Integer, List<String>> selectedEnumerationAnswers,
+            Function<QuizItem, String> conceptResolver,
+            String unknownConceptLabel
+    ) {
+        if (quiz == null || quiz.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, Map<String, ConceptCounter>> countersBySourceStudyPack = new LinkedHashMap<>();
+        for (int index = 0; index < quiz.size(); index++) {
+            QuizItem item = quiz.get(index);
+            if (item == null) {
+                continue;
+            }
+            String sourceStudyPackId = normalizeSourceStudyPackId(item.sourceStudyPackId());
+            Map<String, ConceptCounter> counters = countersBySourceStudyPack.computeIfAbsent(
+                    sourceStudyPackId,
+                    ignored -> new LinkedHashMap<>()
+            );
+            String concept = normalizeConcept(conceptResolver.apply(item), unknownConceptLabel);
+            ConceptCounter counter = counters.computeIfAbsent(concept, ignored -> new ConceptCounter());
+            counter.totalQuestions += 1;
+            if (isAnswerCorrect(item, index, selectedChoices, selectedMultiChoices, selectedIdentificationAnswers, selectedEnumerationAnswers)) {
+                counter.correctAnswers += 1;
+            }
+        }
+
+        Map<String, List<ChallengeQuizConceptStatResponse>> breakdownBySourceStudyPack = new LinkedHashMap<>();
+        countersBySourceStudyPack.forEach((sourceStudyPackId, counters) -> breakdownBySourceStudyPack.put(
+                sourceStudyPackId,
+                counters.entrySet().stream()
+                        .map(entry -> {
+                            int totalQuestions = entry.getValue().totalQuestions;
+                            int correctAnswers = entry.getValue().correctAnswers;
+                            int accuracyPercentage = totalQuestions > 0
+                                    ? (int) Math.round((correctAnswers * 100.0) / totalQuestions)
+                                    : 0;
+                            return new ChallengeQuizConceptStatResponse(
+                                    entry.getKey(), correctAnswers, totalQuestions, accuracyPercentage
+                            );
+                        })
+                        .toList()
+        ));
+        return breakdownBySourceStudyPack;
     }
 
     public static List<String> computeWeakConcepts(List<ChallengeQuizConceptStatResponse> conceptBreakdown) {
@@ -260,11 +386,26 @@ public final class QuizSessionReviewUtils {
     }
 
     private static String normalizeConcept(String concept) {
+        return normalizeConcept(concept, UNKNOWN_CONCEPT_LABEL);
+    }
+
+    private static String normalizeConcept(String concept, String unknownConceptLabel) {
         if (concept == null) {
-            return UNKNOWN_CONCEPT_LABEL;
+            return unknownConceptLabel;
         }
         String trimmed = concept.trim();
-        return trimmed.isEmpty() ? UNKNOWN_CONCEPT_LABEL : trimmed;
+        return trimmed.isEmpty() ? unknownConceptLabel : trimmed;
+    }
+
+    private static String normalizeSourceStudyPackId(String sourceStudyPackId) {
+        if (sourceStudyPackId == null || sourceStudyPackId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(sourceStudyPackId.trim()).toString();
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     public static boolean isAnswerCorrect(

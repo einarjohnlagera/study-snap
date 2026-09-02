@@ -28,6 +28,7 @@ import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
 import com.studysnap.backend.exception.MonthlyMultiNoteLimitReachedException;
+import com.studysnap.backend.exception.MatchingQuestionGroupSourceMismatchException;
 import com.studysnap.backend.exception.MultiNoteChallengeQuizSourceNotAllowedException;
 import com.studysnap.backend.service.model.GeneratedChallengeQuizContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -47,9 +48,11 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -131,6 +134,12 @@ class ChallengeQuizServiceTest {
                 any(UUID.class), any(UUID.class), any(), any(UUID.class), any(), anyInt()
         )).thenReturn(List.of());
         lenient().when(noteRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(any(UUID.class), any(UUID.class)))
+                .thenAnswer(invocation -> {
+                    StudyPackEntity studyPack = new StudyPackEntity();
+                    studyPack.setId(invocation.getArgument(0));
+                    return Optional.of(studyPack);
+                });
         challengeQuizService = new ChallengeQuizService(
                 studyPackRepository,
                 userRepository,
@@ -307,7 +316,7 @@ class ChallengeQuizServiceTest {
 
         assertThat(expired.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(response.sessionId()).isNotEqualTo(expiredSessionId.toString());
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(freshQuiz);
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(freshQuiz, studyPackId));
         verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, expiredSessionId);
     }
 
@@ -449,7 +458,7 @@ class ChallengeQuizServiceTest {
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(bankedQuiz);
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(bankedQuiz, studyPackId));
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(any(), any(), any(), any(), any());
@@ -492,7 +501,7 @@ class ChallengeQuizServiceTest {
 
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(templateQuiz);
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(templateQuiz, studyPackId));
         ArgumentCaptor<QuickReviewSessionEntity> sessionCaptor = ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
         verify(quickReviewSessionRepository, atLeastOnce()).save(sessionCaptor.capture());
         QuickReviewSessionEntity savedSession = sessionCaptor.getAllValues().getLast();
@@ -611,7 +620,7 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startRedoMissedSession(studyPackId.toString(), userId);
 
         assertThat(response.mode()).isEqualTo("challenge");
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(missedQuestions);
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(missedQuestions, studyPackId));
         assertThat(response.usedThisMonth()).isZero();
         verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
@@ -780,7 +789,7 @@ class ChallengeQuizServiceTest {
 
         assertThat(staleOrdinarySession.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
         assertThat(response.sessionId()).isNotEqualTo(staleSessionId.toString());
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(missedQuestions);
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(missedQuestions, studyPackId));
         verify(quickReviewSessionRepository).save(staleOrdinarySession);
         verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, staleSessionId);
     }
@@ -837,7 +846,7 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startRedoMissedSession(studyPackId.toString(), userId);
 
         assertThat(response.sessionId()).isNotEqualTo(staleSessionId.toString());
-        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(missedQuestions);
+        assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(missedQuestions, studyPackId));
         verify(challengeQuizQuestionBankService).releaseClaims(userId, studyPackId, staleSessionId);
     }
 
@@ -889,8 +898,8 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
         assertThat(response.quiz()).hasSize(DEFAULT_ADAPTIVE_QUESTION_COUNT);
-        assertThat(response.quiz()).containsAll(bankedQuiz);
-        assertThat(response.quiz()).containsAll(generatedQuiz);
+        assertThat(response.quiz()).containsAll(withSourceStudyPackId(bankedQuiz, studyPackId));
+        assertThat(response.quiz()).containsAll(withSourceStudyPackId(generatedQuiz, studyPackId));
         verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
         verify(challengeQuizQuestionBankService).persistGeneratedQuestions(
                 eq(userId), eq(studyPackId), any(UUID.class), eq(LearnerLevel.COLLEGE), eq(generatedQuiz)
@@ -910,6 +919,12 @@ class ChallengeQuizServiceTest {
                 new QuizItem("Practice?", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
         ));
         return studyPack;
+    }
+
+    private static List<QuizItem> withSourceStudyPackId(List<QuizItem> quiz, UUID studyPackId) {
+        return quiz.stream()
+                .map(item -> item.withSourceStudyPackId(studyPackId.toString()))
+                .toList();
     }
 
     @ParameterizedTest
@@ -1094,7 +1109,7 @@ class ChallengeQuizServiceTest {
         for (int attempt = 0; attempt < 30; attempt++) {
             ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
-            assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(generatedQuiz);
+            assertThat(response.quiz()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(generatedQuiz, studyPackId));
             List<Integer> groupIndices = new java.util.ArrayList<>();
             for (int index = 0; index < response.quiz().size(); index++) {
                 if ("group-1".equals(response.quiz().get(index).questionGroup())) {
@@ -1113,6 +1128,59 @@ class ChallengeQuizServiceTest {
                     .as("MATCHING block must preserve its original internal order after shuffling")
                     .containsExactly("Match 1", "Match 2", "Match 3");
         }
+    }
+
+    @Test
+    void shuffleQuestionOrderPreservingMatchingGroups_splitsSameLabelBlocksFromDifferentSourcesInsteadOfFailing() {
+        // ⚠️ REGRESSION GUARD FOR A LIVE DEFECT THIS RELEASE INTRODUCED AND THEN FIXED.
+        // challenge-quiz-developer.txt tells EVERY generation to label its matching block "group-1", and
+        // generateChallengeQuizForSources appends sources back to back — so A's trailing block and B's
+        // leading block share a label and sit adjacent. Detecting that and throwing turned a working
+        // multi-note session into a hard failure AFTER both LLM calls were paid for. The block scan now
+        // breaks on the source stamp, so the two blocks stay separate and the session survives.
+        String sourceA = UUID.randomUUID().toString();
+        String sourceB = UUID.randomUUID().toString();
+        List<QuizItem> adjacentSameLabelDifferentSources = List.of(
+                new QuizItem("A1", List.of("A", "B"), 0, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(sourceA),
+                new QuizItem("A2", List.of("A", "B"), 1, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(sourceA),
+                new QuizItem("B1", List.of("A", "B"), 0, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(sourceB),
+                new QuizItem("B2", List.of("A", "B"), 1, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(sourceB)
+        );
+
+        List<QuizItem> shuffled = ReflectionTestUtils.invokeMethod(
+                challengeQuizService,
+                "shuffleQuestionOrderPreservingMatchingGroups",
+                adjacentSameLabelDifferentSources
+        );
+
+        assertThat(shuffled).hasSize(4);
+        // Each source's pair stays contiguous and never interleaves with the other source's pair.
+        List<String> sources = shuffled.stream().map(QuizItem::sourceStudyPackId).toList();
+        assertThat(sources.get(0)).isEqualTo(sources.get(1));
+        assertThat(sources.get(2)).isEqualTo(sources.get(3));
+        assertThat(sources.get(0)).isNotEqualTo(sources.get(2));
+    }
+
+    @Test
+    void shuffleQuestionOrderPreservingMatchingGroups_stillRejectsAGenuinelyMixedBlock() {
+        // The guard remains as defence in depth: the block scan can no longer BUILD a mixed block, but if
+        // a future change reintroduces one, provenance must fail loudly rather than be picked arbitrarily.
+        List<QuizItem> mixedBlock = List.of(
+                new QuizItem("A", List.of("A", "B"), 0, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(UUID.randomUUID().toString()),
+                new QuizItem("B", List.of("A", "B"), 1, "Concept", "Explanation", null,
+                        "MATCHING", null, null, null, "group-1").withSourceStudyPackId(UUID.randomUUID().toString())
+        );
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                challengeQuizService,
+                "assertMatchingGroupHasOneSourceStudyPack",
+                mixedBlock
+        )).isInstanceOf(MatchingQuestionGroupSourceMismatchException.class);
     }
 
     @Test
@@ -1313,6 +1381,9 @@ class ChallengeQuizServiceTest {
 
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
         assertThat(response.quiz()).hasSize(30);
+        assertThat(response.quiz()).filteredOn(item -> primaryStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(10);
+        assertThat(response.quiz()).filteredOn(item -> secondStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(10);
+        assertThat(response.quiz()).filteredOn(item -> thirdStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(10);
         assertThat(response.sourceNoteRefs())
                 .extracting(LongExamSourceNoteRef::studyPackId)
                 .containsExactly(primaryStudyPackId.toString(), secondStudyPackId.toString(), thirdStudyPackId.toString());
@@ -2085,7 +2156,7 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
-    void completeSession_recordsOnlyFullyCorrectChallengeConceptsToConceptHealth() {
+    void completeSession_unstampedItemsFallBackToThePrimaryStudyPack() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -2138,6 +2209,73 @@ class ChallengeQuizServiceTest {
                 session.getCompletedAt()
         );
         assertThat(response.twiceMissedConcepts()).containsExactly("Weak");
+    }
+
+    @Test
+    void completeSession_attributesMixedChallengeConceptsByStampedSourceAndUnionsTwiceMissedConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceAId = UUID.randomUUID();
+        UUID sourceBId = UUID.randomUUID();
+        UUID sourceCId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId,
+                userId,
+                sourceAId,
+                UUID.randomUUID(),
+                "challenge",
+                List.of(
+                        new QuizItem("A Shear", List.of("A", "B"), 0, "Shear", "Explanation").withSourceStudyPackId(sourceAId.toString()),
+                        new QuizItem("A Moment", List.of("A", "B"), 0, "Moment", "Explanation").withSourceStudyPackId(sourceAId.toString()),
+                        new QuizItem("B Shear", List.of("A", "B"), 0, "Shear", "Explanation").withSourceStudyPackId(sourceBId.toString()),
+                        new QuizItem("B Moment", List.of("A", "B"), 0, "Moment", "Explanation").withSourceStudyPackId(sourceBId.toString())
+                ),
+                Map.of("0", "A", "1", "B", "2", "B", "3", "A")
+        );
+        Map<String, Object> stateWithSources = new LinkedHashMap<>(session.getSessionState());
+        stateWithSources.put("sourceNoteRefs", List.of(
+                Map.of("studyPackId", sourceBId.toString(), "noteId", UUID.randomUUID().toString(),
+                        "noteTitle", "B", "questionCount", 2),
+                Map.of("studyPackId", sourceCId.toString(), "noteId", UUID.randomUUID().toString(),
+                        "noteTitle", "C", "questionCount", 0)
+        ));
+        session.setSessionState(stateWithSources);
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(conceptHealthService.recordIncorrectAnswers(
+                eq(userId), eq(sourceAId), eq(List.of("Moment")), any(OffsetDateTime.class)
+        )).thenReturn(List.of("Moment"));
+        when(conceptHealthService.recordIncorrectAnswers(
+                eq(userId), eq(sourceBId), eq(List.of("Shear")), any(OffsetDateTime.class)
+        )).thenReturn(List.of("Shear"));
+
+        ChallengeQuizSessionResponse response = challengeQuizService.completeSession(
+                sessionId.toString(), userId, new ChallengeQuizCompleteRequest(2, 4, 120)
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId, sourceAId, List.of("Shear"), session.getCompletedAt());
+        verify(conceptHealthService).recordIncorrectAnswers(
+                userId, sourceAId, List.of("Moment"), session.getCompletedAt());
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId, sourceBId, List.of("Moment"), session.getCompletedAt());
+        verify(conceptHealthService).recordIncorrectAnswers(
+                userId, sourceBId, List.of("Shear"), session.getCompletedAt());
+        // ⚠️ sourceC is a REAL session source that contributed no item — it is listed in sourceNoteRefs
+        // below, so a broadcast-shaped regression could reach it. A bare fresh UUID here would make these
+        // assertions vacuous: nothing could ever write to an id the session has never heard of.
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(sourceCId), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswers(
+                eq(userId), eq(sourceCId), any(), any());
+        // And the primary must not additionally absorb the other source's concepts.
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(sourceAId), eq(List.of("Moment")), any());
+        assertThat(response.twiceMissedConcepts()).containsExactly("Moment", "Shear");
     }
 
     @Test
@@ -2411,6 +2549,129 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void completeSession_skipsConceptHealthForASourcePackTheCallerDoesNotOwn() {
+        // ⚠️ setUp stubs findByIdAndOwnerUserId to return a pack for ANY id, which makes the ownership
+        // guard's empty branch unreachable — a cold agent deleted that guard from BOTH record methods and
+        // all 1920 tests still passed. This overrides the blanket stub for one id so the guard executes.
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID unownedStudyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId,
+                userId,
+                primaryStudyPackId,
+                UUID.randomUUID(),
+                "challenge",
+                List.of(
+                        new QuizItem("Owned", List.of("A", "B"), 0, "Owned Concept", "Explanation")
+                                .withSourceStudyPackId(primaryStudyPackId.toString()),
+                        new QuizItem("Unowned", List.of("A", "B"), 0, "Unowned Concept", "Explanation")
+                                .withSourceStudyPackId(unownedStudyPackId.toString())
+                ),
+                Map.of("0", "A", "1", "A")
+        );
+
+        when(studyPackRepository.findByIdAndOwnerUserId(unownedStudyPackId, userId)).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        challengeQuizService.completeSession(
+                sessionId.toString(), userId, new ChallengeQuizCompleteRequest(2, 2, 120)
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId, primaryStudyPackId, List.of("Owned Concept"), session.getCompletedAt());
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(unownedStudyPackId), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswers(
+                eq(userId), eq(unownedStudyPackId), any(), any());
+    }
+
+    @Test
+    void completeSession_labelsAnAbsentConceptUncategorizedNotUnknown() {
+        // ⚠️ REGRESSION GUARD. ConceptHealthEntity is keyed (user_id, study_pack_id, concept), so the
+        // label used for a null/blank concept IS part of the row identity. This service labels it
+        // "Uncategorized"; QuizSessionReviewUtils labels it "Unknown". When the per-source aggregation
+        // moved to that util, Challenge and Board Exam silently began writing "Unknown" — forking the row,
+        // orphaning the accumulated incorrect_streak on "Uncategorized", and starting a parallel row at
+        // zero, while the result screen kept displaying "Uncategorized".
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId,
+                userId,
+                studyPackId,
+                UUID.randomUUID(),
+                "challenge",
+                List.of(new QuizItem("No concept", List.of("A", "B"), 0, null, "Explanation")
+                        .withSourceStudyPackId(studyPackId.toString())),
+                Map.of("0", "A")
+        );
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        challengeQuizService.completeSession(
+                sessionId.toString(), userId, new ChallengeQuizCompleteRequest(1, 1, 60)
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId, studyPackId, List.of("Uncategorized"), session.getCompletedAt());
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(studyPackId), eq(List.of("Unknown")), any());
+    }
+
+    @Test
+    void completeSession_attributesMixedBoardExamConceptsByStampedSource() {
+        UUID userId = UUID.randomUUID();
+        UUID sourceAId = UUID.randomUUID();
+        UUID sourceBId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressChallengeSession(
+                sessionId,
+                userId,
+                sourceAId,
+                UUID.randomUUID(),
+                "board_exam",
+                List.of(
+                        new QuizItem("A", List.of("A", "B"), 0, "A Concept", "Explanation").withSourceStudyPackId(sourceAId.toString()),
+                        new QuizItem("B", List.of("A", "B"), 0, "B Concept", "Explanation").withSourceStudyPackId(sourceBId.toString())
+                ),
+                Map.of("0", "A", "1", "B")
+        );
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChallengeQuizSessionResponse response = challengeQuizService.completeSession(
+                sessionId.toString(), userId, new ChallengeQuizCompleteRequest(1, 2, 120)
+        );
+
+        verify(conceptHealthService).recordCorrectAnswers(
+                userId, sourceAId, List.of("A Concept"), session.getCompletedAt());
+        verify(conceptHealthService).recordIncorrectAnswers(
+                userId, sourceBId, List.of("B Concept"), session.getCompletedAt());
+        // ⚠️ These negatives are what make this test discriminate. Without them, reintroducing Board
+        // Exam's under-attribution — writing every bucket to the PRIMARY as well — left every positive
+        // assertion above satisfied and the mutant survived. sourceA IS the primary here.
+        verify(conceptHealthService, never()).recordIncorrectAnswers(
+                eq(userId), eq(sourceAId), any(), any());
+        verify(conceptHealthService, never()).recordCorrectAnswers(
+                eq(userId), eq(sourceBId), any(), any());
+        assertThat(response.twiceMissedConcepts()).isEmpty();
+    }
+
+    @Test
     void completeSession_acceptsCanonicalSelectedChoiceIndexes() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -2610,7 +2871,7 @@ class ChallengeQuizServiceTest {
         assertThat(finalQuiz.subList(0, 5))
                 .as("existing questions must keep their original indices so recorded answers stay attached to the right question")
                 .containsExactlyElementsOf(existingQuiz);
-        assertThat(finalQuiz.subList(5, 10)).containsExactlyInAnyOrderElementsOf(generatedBatch);
+        assertThat(finalQuiz.subList(5, 10)).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(generatedBatch, studyPackId));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> selectedChoices = (Map<String, Object>) session.getSessionState().get("selectedChoices");
@@ -2654,7 +2915,7 @@ class ChallengeQuizServiceTest {
 
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
-        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(bankedQuiz);
+        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(bankedQuiz, studyPackId));
         assertThat(response.totalQuestions()).isEqualTo(10);
         verify(quizGenerationService, never()).generateMoreChallengeQuiz(any(), any(), any(), any(), any(), anyInt(), any(), any());
         verify(challengeQuizQuestionBankService, never()).persistGeneratedQuestions(
@@ -2697,7 +2958,7 @@ class ChallengeQuizServiceTest {
 
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
-        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(templateQuiz);
+        assertThat(response.newQuestions()).containsExactlyInAnyOrderElementsOf(withSourceStudyPackId(templateQuiz, studyPackId));
         assertThat(response.totalQuestions()).isEqualTo(10);
         assertThat(session.getModelUsed()).isNull();
         assertThat(session.getInputTokens()).isNull();
@@ -3018,6 +3279,8 @@ class ChallengeQuizServiceTest {
 
         assertThat(response.sourceNoteRefs()).hasSize(2);
         assertThat(response.maxSourceNotes()).isEqualTo(3);
+        assertThat(response.quiz()).filteredOn(item -> primaryStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(9);
+        assertThat(response.quiz()).filteredOn(item -> additionalStudyPackId.toString().equals(item.sourceStudyPackId())).hasSize(9);
         verify(userUsageService).incrementMultiNoteGeneration(eq(userId), any(OffsetDateTime.class));
         ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.forClass(Map.class);
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED),

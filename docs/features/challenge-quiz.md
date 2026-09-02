@@ -74,7 +74,7 @@ Study Plan / Review Set detail resolves on both profile and plan: Free and Plus 
 - `+5 Questions` (`generateMoreQuestions`) checks the session's own expiry before extending `timeLimitSeconds`; an already-expired session is forfeited and rejected instead of having its deadline pushed back into the future (v0.60.1)
 - active generation uses the shared generation lock and recovery flow
 - Standard Challenge mode starts with a score-adaptive question count from the learner's latest completed Quick Review on the same Study Pack: below 50 → 10 questions, 50–79 → 12 questions, and 80 or above → 15 questions; no prior score starts with 12. Redo Missed Questions remains fixed at up to 5 claimed questions.
-- Challenge mode's assembled question pool (banked + Official template + freshly generated) is shuffled once at initial session start (and at `startRedoMissedSession`'s assembly), so batches never present in fixed `generatedAt` order. A MATCHING block (2–4 consecutive questions sharing a `questionGroup`) always shuffles as one contiguous unit — never split apart — since the frontend (`lib/quiz.ts`) groups them by scanning for adjacency. `+5 Questions` shuffles only the newly-appended batch, never the whole array, to avoid remapping already-recorded index-keyed answers (`selectedChoices` et al. are keyed by array index, not question identity). Board Exam Mode's ordering is unaffected (v0.60.1).
+- Challenge mode's assembled question pool (banked + Official template + freshly generated) is shuffled once at initial session start (and at `startRedoMissedSession`'s assembly), so batches never present in fixed `generatedAt` order. A MATCHING block (2–4 consecutive questions sharing a `questionGroup`) always shuffles as one contiguous unit — never split apart — since the frontend (`lib/quiz.ts`) groups them by scanning for adjacency. **A block is additionally bounded by its source Study Pack (`v0.104.0`)**: the generation prompt tells every call to label its block `group-1`, and multi-note sources are appended back to back, so without that bound one source's trailing block and the next source's leading block would fuse into a single block with two provenances. `+5 Questions` shuffles only the newly-appended batch, never the whole array, to avoid remapping already-recorded index-keyed answers (`selectedChoices` et al. are keyed by array index, not question identity). Board Exam Mode's ordering is unaffected (v0.60.1).
 - Each real-LLM Challenge Quiz shortfall records the response model plus input, output, and cached-input token usage on the session. Successful `+5 Questions` calls add to the existing values so the row represents cumulative session usage; sessions fully served from the per-user bank or Official template keep all usage columns null. Missing or malformed usage metadata is ignored without blocking the quiz. Board Exam Mode, Long Exam, and Adaptive Practice do not participate in this telemetry.
 - Challenge mode has no user-facing difficulty selector. Its difficulty is fully automatic and comes only from the latest completed Quick Review score on the same Study Pack: below 50 → Easy, 50–79 → Default/Medium, 80 or above → Hard; no prior score also uses Default/Medium.
 - Board Exam Mode question count scales with source count: `min(12 × sourceCount, 30)` — single-note: 12, two-note: 24, three-note: 30
@@ -133,6 +133,8 @@ Challenge mode supports on-demand question batching within a live session:
 - Backend first reuses eligible per-user banked questions, then uses `QuizDeduplicationUtils.uniqueQuestions()` to deduplicate any generated shortfall by normalized question text against all existing session questions
 - If fewer than 3 unique new questions survive dedup, backend returns `NOT_ENOUGH_NEW_QUESTIONS` (HTTP 409); frontend treats this as `noMoreQuestions = true`, not an error state
 - New questions are appended to the session JSONB state via `QuizSessionStateUtils.appendQuizItems()`; no schema changes required
+- Every `+5` item is stamped with the primary Study Pack id. This is accurate even for a multi-note session because
+  the bank, Official template, and live generation paths for `+5` all use the primary pack only.
 - Board Exam Mode is exempt — no generate-more button; fixed question count for the session
 
 ## Action bar and button labels
@@ -206,6 +208,10 @@ If Adaptive Practice quota is exhausted, the shared component shows the targeted
 - on completion, Challenge Quiz records concepts answered fully correctly in the session to `ConceptHealth`
 - on completion, Challenge Quiz also records concepts missed in the session to `ConceptHealth.lastIncorrectAt`
 - Board Exam Mode uses the same Challenge completion path and records fully-correct and missed concepts the same way
+- In a multi-note Challenge Quiz or Board Exam, each generated item carries its source Study Pack id and completion
+  records that item's evidence only against that pack. This prevents shared concept names from being attributed to
+  the primary pack or to non-contributing sibling notes. Pre-v0.104.0 unstamped Challenge items retain the
+  historical primary-pack fallback so an in-flight session can still complete.
 - a concept is recorded only when its concept breakdown is `correctAnswers == totalQuestions` and `totalQuestions > 0`
 - weak or partially correct concepts are recorded as missed, not mastered
 - the post-session next-step endpoint reads ConceptHealth after completion, so fully correct concepts can immediately reset due-ness before the next recommendation is resolved

@@ -28,6 +28,7 @@ public final class QuizItem {
     private final String keyConcept;
     private final List<String> acceptableAnswers;
     private final List<List<String>> acceptableAnswerGroups;
+    private final String sourceStudyPackId;
 
     public QuizItem(
             String question,
@@ -129,6 +130,7 @@ public final class QuizItem {
                 questionGroup,
                 null,
                 null,
+                null,
                 null
         );
     }
@@ -149,6 +151,42 @@ public final class QuizItem {
             List<String> acceptableAnswers,
             List<List<String>> acceptableAnswerGroups
     ) {
+        this(
+                question,
+                choices,
+                correctIndex,
+                concept,
+                explanation,
+                legacyAnswer,
+                questionFormat,
+                questionType,
+                workingSolution,
+                correctIndices,
+                questionGroup,
+                keyConcept,
+                acceptableAnswers,
+                acceptableAnswerGroups,
+                null
+        );
+    }
+
+    private QuizItem(
+            String question,
+            List<String> choices,
+            Integer correctIndex,
+            String concept,
+            String explanation,
+            String legacyAnswer,
+            String questionFormat,
+            String questionType,
+            String workingSolution,
+            List<Integer> correctIndices,
+            String questionGroup,
+            String keyConcept,
+            List<String> acceptableAnswers,
+            List<List<String>> acceptableAnswerGroups,
+            String sourceStudyPackId
+    ) {
         this.question = question;
         this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
         this.correctIndices = sanitizeCorrectIndices(correctIndices, this.choices.size());
@@ -162,6 +200,7 @@ public final class QuizItem {
         this.keyConcept = keyConcept;
         this.acceptableAnswers = sanitizeAcceptableAnswers(acceptableAnswers);
         this.acceptableAnswerGroups = sanitizeAcceptableAnswerGroups(acceptableAnswerGroups);
+        this.sourceStudyPackId = sourceStudyPackId;
     }
 
     @JsonCreator
@@ -181,7 +220,8 @@ public final class QuizItem {
             @JsonProperty("questionGroup") String questionGroup,
             @JsonProperty("keyConcept") String keyConcept,
             @JsonProperty("acceptableAnswers") List<String> acceptableAnswers,
-            @JsonProperty("acceptableAnswerGroups") List<List<String>> acceptableAnswerGroups
+            @JsonProperty("acceptableAnswerGroups") List<List<String>> acceptableAnswerGroups,
+            @JsonProperty("sourceStudyPackId") String sourceStudyPackId
     ) {
         this(
                 question,
@@ -197,7 +237,8 @@ public final class QuizItem {
                 questionGroup,
                 keyConcept,
                 acceptableAnswers,
-                acceptableAnswerGroups
+                acceptableAnswerGroups,
+                sourceStudyPackId
         );
     }
 
@@ -259,6 +300,44 @@ public final class QuizItem {
 
     public List<List<String>> acceptableAnswerGroups() {
         return acceptableAnswerGroups;
+    }
+
+    public String sourceStudyPackId() {
+        return sourceStudyPackId;
+    }
+
+    /**
+     * Returns a copy carrying {@code sourceStudyPackId}, reusing the already-sanitized field values
+     * verbatim.
+     *
+     * <p>⚠️ This MUST NOT route through the sanitizing constructor.
+     * {@code QuizValidationUtils.sanitizeChoiceText} strips a leading choice label
+     * ({@code ^\s*[A-Da-d]\s*[.)]\s*}) with {@code replaceFirst} and is NOT idempotent, so a second
+     * pass over already-sanitized choices strips a second token: {@code "A. B. Smith"} sanitizes to
+     * {@code "B. Smith"} and then to {@code "Smith"}. Because {@code QuizSessionStateUtils.extractQuiz}
+     * calls this on every deserialized item, a sanitizing copy would corrupt author initials and similar
+     * text on every session load, in every quiz mode.
+     */
+    public QuizItem withSourceStudyPackId(String sourceStudyPackId) {
+        return new QuizItem(this, sourceStudyPackId);
+    }
+
+    /** Trusted copy constructor: every field is already sanitized, so no sanitizer is re-applied. */
+    private QuizItem(QuizItem source, String sourceStudyPackId) {
+        this.question = source.question;
+        this.choices = source.choices;
+        this.correctIndex = source.correctIndex;
+        this.correctIndices = source.correctIndices;
+        this.concept = source.concept;
+        this.explanation = source.explanation;
+        this.questionFormat = source.questionFormat;
+        this.questionType = source.questionType;
+        this.workingSolution = source.workingSolution;
+        this.questionGroup = source.questionGroup;
+        this.keyConcept = source.keyConcept;
+        this.acceptableAnswers = source.acceptableAnswers;
+        this.acceptableAnswerGroups = source.acceptableAnswerGroups;
+        this.sourceStudyPackId = sourceStudyPackId;
     }
 
     private static Integer resolveCorrectIndex(
@@ -387,12 +466,13 @@ public final class QuizItem {
                 && Objects.equals(questionGroup, quizItem.questionGroup)
                 && Objects.equals(keyConcept, quizItem.keyConcept)
                 && Objects.equals(acceptableAnswers, quizItem.acceptableAnswers)
-                && Objects.equals(acceptableAnswerGroups, quizItem.acceptableAnswerGroups);
+                && Objects.equals(acceptableAnswerGroups, quizItem.acceptableAnswerGroups)
+                && Objects.equals(sourceStudyPackId, quizItem.sourceStudyPackId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution, questionGroup, keyConcept, acceptableAnswers, acceptableAnswerGroups);
+        return Objects.hash(question, choices, correctIndex, correctIndices, concept, explanation, questionFormat, questionType, workingSolution, questionGroup, keyConcept, acceptableAnswers, acceptableAnswerGroups, sourceStudyPackId);
     }
 
     @Override
@@ -411,6 +491,7 @@ public final class QuizItem {
                 + ", keyConcept='" + keyConcept + '\''
                 + ", acceptableAnswers=" + acceptableAnswers
                 + ", acceptableAnswerGroups=" + acceptableAnswerGroups
+                + ", sourceStudyPackId='" + sourceStudyPackId + '\''
                 + '}';
     }
 }

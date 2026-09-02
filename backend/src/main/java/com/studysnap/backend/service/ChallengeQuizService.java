@@ -36,6 +36,7 @@ import com.studysnap.backend.exception.InvalidChallengeQuizResultException;
 import com.studysnap.backend.exception.MonthlyBoardExamLimitReachedException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
 import com.studysnap.backend.exception.MonthlyMultiNoteLimitReachedException;
+import com.studysnap.backend.exception.MatchingQuestionGroupSourceMismatchException;
 import com.studysnap.backend.exception.MultiNoteChallengeQuizSourceNotAllowedException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
@@ -387,6 +388,7 @@ public class ChallengeQuizService {
             if (challengeQuiz.size() != quizCount) {
                 throw new ChallengeQuizGenerationFailedException();
             }
+            challengeQuiz = stampUnstampedQuestionsWithPrimarySource(challengeQuiz, studyPackId);
             if (!MODE_BOARD_EXAM.equals(selectedMode)) {
                 challengeQuiz = shuffleQuestionOrderPreservingMatchingGroups(challengeQuiz);
             }
@@ -519,7 +521,9 @@ public class ChallengeQuizService {
                 INITIAL_CHALLENGE_QUIZ_COUNT,
                 ChallengeQuizQuestionBankService.MINIMUM_REDO_MISSED_QUESTIONS
         );
-        missedQuestions = shuffleQuestionOrderPreservingMatchingGroups(missedQuestions);
+        missedQuestions = shuffleQuestionOrderPreservingMatchingGroups(
+                stampUnstampedQuestionsWithPrimarySource(missedQuestions, studyPackId)
+        );
         markSessionReady(session, missedQuestions, profile.difficulty());
         session.setQuotaExempt(true);
         session.setSessionState(QuizSessionStateUtils.withRedoMissedSource(session.getSessionState(), true));
@@ -669,23 +673,28 @@ public class ChallengeQuizService {
         session.setSessionMetadata(buildCompletionSessionMetadata(statistics));
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectConcepts(statistics.conceptBreakdown());
-        List<String> missedConcepts = QuizSessionReviewUtils.computeConceptsWithMisses(statistics.conceptBreakdown());
-        if (!correctConcepts.isEmpty()) {
-            conceptHealthService.recordCorrectAnswers(userId, saved.getStudyPackId(), correctConcepts, now);
-        }
-        List<String> twiceMissedConcepts = List.of();
-        if (!missedConcepts.isEmpty()) {
-            List<String> qualifyingConcepts = conceptHealthService.recordIncorrectAnswers(
-                    userId,
-                    saved.getStudyPackId(),
-                    missedConcepts,
-                    now
-            );
-            if (MODE_CHALLENGE.equals(extractMode(saved.getSessionState()))) {
-                twiceMissedConcepts = qualifyingConcepts;
-            }
-        }
+        Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack =
+                QuizSessionReviewUtils.computeConceptBreakdownBySourceStudyPack(
+                        quiz,
+                        selectedChoices,
+                        selectedMultiChoices,
+                        selectedIdentificationAnswers,
+                        selectedEnumerationAnswers,
+                        // ⚠️ This service labels an absent concept "Uncategorized" while
+                        // QuizSessionReviewUtils labels it "Unknown". ConceptHealth is keyed
+                        // (user_id, study_pack_id, concept), so the label IS the row identity —
+                        // adopting the other label would fork the row and orphan its streak.
+                        UNKNOWN_CONCEPT_LABEL
+                );
+        recordCorrectConceptsBySourceStudyPack(userId, saved, conceptBreakdownBySourceStudyPack, now);
+        List<String> qualifyingConcepts = recordIncorrectConceptsBySourceStudyPack(
+                userId,
+                saved,
+                conceptBreakdownBySourceStudyPack,
+                now
+        );
+        String completedMode = extractMode(saved.getSessionState());
+        List<String> twiceMissedConcepts = MODE_CHALLENGE.equals(completedMode) ? qualifyingConcepts : List.of();
         if (MODE_BOARD_EXAM.equals(extractMode(saved.getSessionState()))
                 && QuizSessionStateUtils.extractPoolSourced(saved.getSessionState())) {
             examQuestionPoolService.markServed(
@@ -712,7 +721,6 @@ public class ChallengeQuizService {
         // is not instrumentation. This is the one site that completes either mode, so both fire here.
         // Analytics must never turn a successfully completed session into a failed one.
         try {
-            String completedMode = extractMode(saved.getSessionState());
             analyticsService.trackEvent(
                     userId,
                     MODE_BOARD_EXAM.equals(completedMode)
@@ -752,6 +760,81 @@ public class ChallengeQuizService {
                 isSecondCompletedSessionEver,
                 twiceMissedConcepts
         );
+    }
+
+    private void recordCorrectConceptsBySourceStudyPack(
+            UUID userId,
+            QuickReviewSessionEntity session,
+            Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack,
+            OffsetDateTime now
+    ) {
+        Map<UUID, Set<String>> conceptsByStudyPack = collectConceptsBySourceStudyPack(
+                session,
+                conceptBreakdownBySourceStudyPack,
+                true
+        );
+        conceptsByStudyPack.forEach((studyPackId, concepts) -> studyPackRepository
+                .findByIdAndOwnerUserId(studyPackId, userId)
+                .ifPresent(ignored -> conceptHealthService.recordCorrectAnswers(
+                        userId, studyPackId, List.copyOf(concepts), now
+                )));
+    }
+
+    private List<String> recordIncorrectConceptsBySourceStudyPack(
+            UUID userId,
+            QuickReviewSessionEntity session,
+            Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack,
+            OffsetDateTime now
+    ) {
+        Set<String> twiceMissedConcepts = new LinkedHashSet<>();
+        Map<UUID, Set<String>> conceptsByStudyPack = collectConceptsBySourceStudyPack(
+                session,
+                conceptBreakdownBySourceStudyPack,
+                false
+        );
+        conceptsByStudyPack.forEach((studyPackId, concepts) -> studyPackRepository
+                .findByIdAndOwnerUserId(studyPackId, userId)
+                .ifPresent(ignored -> twiceMissedConcepts.addAll(conceptHealthService.recordIncorrectAnswers(
+                        userId, studyPackId, List.copyOf(concepts), now
+                ))));
+        return List.copyOf(twiceMissedConcepts);
+    }
+
+    private Map<UUID, Set<String>> collectConceptsBySourceStudyPack(
+            QuickReviewSessionEntity session,
+            Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack,
+            boolean correct
+    ) {
+        Map<UUID, Set<String>> conceptsByStudyPack = new LinkedHashMap<>();
+        conceptBreakdownBySourceStudyPack.forEach((sourceStudyPackId, conceptBreakdown) -> {
+            List<String> concepts = correct
+                    ? QuizSessionReviewUtils.computeFullyCorrectConcepts(conceptBreakdown)
+                    : QuizSessionReviewUtils.computeConceptsWithMisses(conceptBreakdown);
+            if (concepts.isEmpty()) {
+                return;
+            }
+            UUID studyPackId = parseSourceStudyPackId(sourceStudyPackId);
+            // A pre-v0.104.0 item has no stamp. Challenge Quiz historically attributes it to the
+            // primary pack, so preserve that behaviour rather than dropping already-earned evidence.
+            if (studyPackId == null) {
+                studyPackId = session.getStudyPackId();
+            }
+            if (studyPackId != null) {
+                conceptsByStudyPack.computeIfAbsent(studyPackId, ignored -> new LinkedHashSet<>()).addAll(concepts);
+            }
+        });
+        return conceptsByStudyPack;
+    }
+
+    private UUID parseSourceStudyPackId(String sourceStudyPackId) {
+        if (sourceStudyPackId == null || sourceStudyPackId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(sourceStudyPackId.trim());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
@@ -844,8 +927,13 @@ public class ChallengeQuizService {
                 generated = generatedContent.quizItems();
             }
 
-            List<QuizItem> uniqueGenerated = QuizDeduplicationUtils.uniqueQuestions(generated, combinedQuestionKeys);
-            unique = new ArrayList<>(bankedQuestions);
+            List<QuizItem> uniqueGenerated = stampQuestionsWithSourceStudyPack(
+                    QuizDeduplicationUtils.uniqueQuestions(generated, combinedQuestionKeys),
+                    session.getStudyPackId()
+            );
+            // +5 generation, bank reuse, and template reuse all use the session primary pack only;
+            // even in a mixed session these new items genuinely originate from that primary source.
+            unique = new ArrayList<>(stampQuestionsWithSourceStudyPack(bankedQuestions, session.getStudyPackId()));
             unique.addAll(uniqueGenerated);
             unique = shuffleQuestionOrderPreservingMatchingGroups(unique);
 
@@ -1398,8 +1486,12 @@ public class ChallengeQuizService {
                     generatedQuiz,
                     disallowedQuestions
             );
-            mergedQuiz.addAll(uniqueGeneratedQuiz);
-            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(uniqueGeneratedQuiz));
+            List<QuizItem> stampedGeneratedQuiz = stampQuestionsWithSourceStudyPack(
+                    uniqueGeneratedQuiz,
+                    sourceStudyPackId
+            );
+            mergedQuiz.addAll(stampedGeneratedQuiz);
+            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(stampedGeneratedQuiz));
         }
         return mergedQuiz;
     }
@@ -1428,10 +1520,38 @@ public class ChallengeQuizService {
                     generatedContent.quizItems(),
                     disallowedQuestions
             );
-            mergedQuiz.addAll(uniqueGeneratedQuiz);
-            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(uniqueGeneratedQuiz));
+            List<QuizItem> stampedGeneratedQuiz = stampQuestionsWithSourceStudyPack(
+                    uniqueGeneratedQuiz,
+                    sourceStudyPackId
+            );
+            mergedQuiz.addAll(stampedGeneratedQuiz);
+            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(stampedGeneratedQuiz));
         }
         return mergedQuiz;
+    }
+
+    private List<QuizItem> stampQuestionsWithSourceStudyPack(List<QuizItem> quiz, UUID sourceStudyPackId) {
+        if (quiz == null || quiz.isEmpty() || sourceStudyPackId == null) {
+            return quiz == null ? List.of() : List.copyOf(quiz);
+        }
+        String sourceStudyPackIdRaw = sourceStudyPackId.toString();
+        return quiz.stream()
+                .filter(Objects::nonNull)
+                .map(item -> item.withSourceStudyPackId(sourceStudyPackIdRaw))
+                .toList();
+    }
+
+    private List<QuizItem> stampUnstampedQuestionsWithPrimarySource(List<QuizItem> quiz, UUID primaryStudyPackId) {
+        if (quiz == null || quiz.isEmpty() || primaryStudyPackId == null) {
+            return quiz == null ? List.of() : List.copyOf(quiz);
+        }
+        String primaryStudyPackIdRaw = primaryStudyPackId.toString();
+        return quiz.stream()
+                .filter(Objects::nonNull)
+                .map(item -> item.sourceStudyPackId() == null || item.sourceStudyPackId().isBlank()
+                        ? item.withSourceStudyPackId(primaryStudyPackIdRaw)
+                        : item)
+                .toList();
     }
 
     private List<String> extractQuestionTexts(List<QuizItem> quiz) {
@@ -2183,12 +2303,23 @@ public class ChallengeQuizService {
             String questionGroup = resolveMatchingQuestionGroup(questions.get(index));
             int endIndex = index + 1;
             if (questionGroup != null) {
+                // ⚠️ A block must not span two source packs. challenge-quiz-developer.txt instructs EVERY
+                // generation to label its matching block "group-1", so two independently generated sources
+                // routinely emit the SAME label; because generateChallengeQuizForSources appends sources
+                // back to back, A's trailing block and B's leading block would otherwise merge into one
+                // block with ambiguous provenance. Breaking on the source stamp fixes that at the cause —
+                // detection alone turned a working multi-note session into a hard failure after both LLM
+                // calls had been paid for.
+                String sourceStudyPackId = questions.get(index).sourceStudyPackId();
                 while (endIndex < questions.size()
-                        && questionGroup.equals(resolveMatchingQuestionGroup(questions.get(endIndex)))) {
+                        && questionGroup.equals(resolveMatchingQuestionGroup(questions.get(endIndex)))
+                        && Objects.equals(sourceStudyPackId, questions.get(endIndex).sourceStudyPackId())) {
                     endIndex += 1;
                 }
             }
-            blocks.add(new ArrayList<>(questions.subList(index, endIndex)));
+            List<QuizItem> block = new ArrayList<>(questions.subList(index, endIndex));
+            assertMatchingGroupHasOneSourceStudyPack(block);
+            blocks.add(block);
             index = endIndex;
         }
         Collections.shuffle(blocks);
@@ -2203,6 +2334,21 @@ public class ChallengeQuizService {
         }
         String normalized = question.questionGroup().trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private void assertMatchingGroupHasOneSourceStudyPack(List<QuizItem> matchingGroup) {
+        if (matchingGroup == null || matchingGroup.size() < 2) {
+            return;
+        }
+        Set<String> sourceStudyPackIds = matchingGroup.stream()
+                .map(QuizItem::sourceStudyPackId)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(sourceStudyPackId -> !sourceStudyPackId.isBlank())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (sourceStudyPackIds.size() > 1) {
+            throw new MatchingQuestionGroupSourceMismatchException();
+        }
     }
 
     private void markSessionFailed(QuickReviewSessionEntity session) {

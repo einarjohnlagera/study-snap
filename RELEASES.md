@@ -1,5 +1,309 @@
 # RELEASES.md - NoteLib
 
+## v0.104.0 - Assessment Source Provenance
+
+**Status: Released** (kicked off and signed off 2026-09-02, base branch `releases/v0.104.0`, cut from
+`main` after `v0.103.0` merged and tagged)
+
+Theme: when a learner misses a concept in a multi-note assessment, the product should record it against the
+note it actually came from.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet. The three-digit minor is deliberate and was
+verified safe at the `v0.100.0` kickoff.
+
+### Why this release exists
+
+**Slice 1 of the approved assessment sequence** (`docs/claude-plans/assessment-architecture-audit.md` §13),
+and **the owner moved it AHEAD of curriculum-scale sampling on 2026-09-02.** The reason is the ordering
+argument, not the size: representative sampling pushes far more cross-source evidence through a
+mis-attributing writer, so sampling first **makes a known defect worse at exactly the moment more data flows
+through it.** The audit's §32 goal — *"Structural Engineering needs work, Transportation is stronger"* — is
+not supportable until this lands.
+
+**⚠️ THERE ARE TWO INSTANCES AND THEY FAIL IN OPPOSITE DIRECTIONS. Both re-verified at this kickoff by
+reading the code, not the audit.**
+
+- **`LongExamService.recordConceptsForSourcePacks:494-521` OVER-attributes.** It loops
+  `resolveSourceStudyPackIds(session)` and writes **the same concept list to every source pack**, filtered
+  only by whether that pack's own `getKeyConcepts()` contains the string. Sources drawn from one Subject
+  Plan share vocabulary **by construction**, so this is the normal case, not a corner case.
+- **`ChallengeQuizService.completeSession:674,680` UNDER-attributes.** It writes to
+  `saved.getStudyPackId()` — the **primary pack only** — so a multi-note Challenge Quiz lands every concept
+  from all six sources on the note the learner happened to start from, and the other five receive nothing.
+- **`QuizItem` carries no source-pack field** (verified: zero matches), which is why neither service can do
+  better than it does.
+
+**⚠️ THE CHALLENGE INSTANCE IS NEW AS OF `v0.103.0` — that release created a second instance of the very
+defect this slice exists to fix.** Recorded so it is read as a consequence of shipping multi-note Challenge,
+not as a pre-existing defect nobody noticed.
+
+### ⚠️ THE STAMP IS NECESSARY AND NOT SUFFICIENT — this is the release's central finding
+
+**Found at this kickoff, and it is NOT in the audit.** `QuizSessionReviewUtils.computeConceptBreakdown:85`
+keys its counters by **`normalizeConcept(item.concept())` alone**, so items from every source collapse into
+one map before `computeFullyCorrectConcepts` / `computeConceptsWithMisses` ever run. If Note A answered
+*Shear Force* correctly and Note B missed it, the merged counter reports *has misses* and **both** packs are
+recorded incorrect.
+
+**So a per-item `sourceStudyPackId` stamp changes NOTHING downstream on its own.** The release is **two
+coupled changes** — provenance **on the item** *and* **per-source aggregation on the `ConceptHealth` write
+path** — and shipping only the first would produce a stamped DTO, tests asserting the stamp is present, a
+green build, and `ConceptHealth` still wrong in both directions. **That is precisely the "fix that looked
+correct and changed nothing" shape that has now cost three releases running.**
+
+**⚠️ THE INDEX TRAP, stated as a constraint rather than a hint.** `computeConceptBreakdown` passes a
+**positional** `index` into `isAnswerCorrect(item, index, selectedChoices, ...)`, and the selection maps are
+keyed by **absolute index in the session's quiz array**. So the natural implementation — filter the quiz to
+one pack's items, then reuse the existing helper on the sublist — **silently reads the wrong learner answers
+for every item after the first.** The correct shape is **one pass over the full list preserving the absolute
+index, bucketing counters by `(sourceStudyPackId, concept)`.**
+
+### ⚠️ Why the field goes on `QuizItem` and NOT in a parallel per-index array
+
+The audit offered both. **The repo settles it, verified at this kickoff:**
+`ChallengeQuizService:391` calls `shuffleQuestionOrderPreservingMatchingGroups(challengeQuiz)` **after** the
+multi-source merge, and `:522` re-shuffles the redo-mistakes round. **A per-index provenance array would be
+scrambled by the shuffle that already ships.** Provenance must travel *with* the item.
+
+It also follows the existing idiom: every other per-item attribute (`questionFormat`, `keyConcept`,
+`questionGroup`) is a `QuizItem` field with a matching `QuizSessionStateUtils` key. **And the objection is
+dead:** `QuizDeduplicationUtils` is pure normalized-question-string matching and **never calls
+`QuizItem.equals`**, so adding a field cannot change dedup behaviour.
+
+### Planned Scope
+
+- **1. `sourceStudyPackId` on `QuizItem`, stamped at the generation seam (backend).** The merge loops are
+  where the source is already in scope and where **dedup has already run**, so there is no reordering
+  hazard: `generateChallengeQuizForSources:1407`, `generateBoardExamQuizForSources:1375`, and the
+  `LongExamService` per-source loop at `:966-992` (`mergedQuiz.addAll` at `:992`). Serialized through `QuizSessionStateUtils` alongside the other
+  per-item keys.
+- **2. Per-source `ConceptHealth` aggregation (backend).** Bucket by `(sourceStudyPackId, concept)` in a
+  single pass over the full quiz list, preserving absolute index. **Both services.** `LongExamService`
+  stops writing one list to every pack; `ChallengeQuizService` stops writing every concept to the primary.
+- **3. Provenance preserved for reporting.** The stamp survives into session state so per-source accuracy is
+  **real rather than inferred**, which is what slices 2–5 read.
+- **4. `+5 More Questions` provenance is the PRIMARY pack, and that is correct rather than a compromise.**
+  Verified at kickoff: `generateMoreQuestions:801` generates from `session.getStudyPackId()` alone even on a
+  multi-note session, so those items genuinely originate from the primary. Stamp them accordingly and say so.
+- **5. In-flight sessions across the deploy.** A session persisted before this release has no source key. A
+  null stamp **falls back to today's behaviour per service** — primary for Challenge,
+  `resolveSourceStudyPackIds(session)` for Long Exam — and must neither attribute to nothing nor throw.
+
+
+### ⚠️ Amended at kickoff, after `advisor()` — three additions that change the implementation
+
+**A. `resolveSourceStudyPackIds` must be DEMOTED, not left standing beside the new path.** Verified: it has
+**exactly one caller**, `LongExamService:502` — the over-attributing loop itself. Once aggregation buckets by
+the per-item stamp, this method is either **dead** or **demoted to the null-stamp fallback path only**. The
+prompt must say which. **⚠️ LEFT AMBIGUOUS, THE LIKELY OUTCOME IS THAT BOTH RUN — per-source aggregation
+PLUS the old broadcast over the same session, which is WORSE THAN TODAY.** And the pre-declared fixture
+**does not catch that**, because a test asserting *"pack A got Shear"* still passes when the broadcast also
+wrote it.
+
+**⚠️ THE FIXTURE THEREFORE GAINS A FIFTH, NEGATIVE ASSERTION, and it is the one that discriminates a double
+write:** a third pack **C** whose `getKeyConcepts()` **contains** *Shear* but which contributed **no item to
+this session** must receive **NOTHING**. Under today's Long Exam behaviour it receives *Shear*; under a
+correct fix it receives nothing; under a both-paths-running implementation it receives *Shear* while every
+positive assertion still passes.
+
+**B. Board Exam attribution changes with the same fix, and that is IN SCOPE and intended.**
+`generateBoardExamQuizForSources:1375` is one of the stamp sites and `completeSession` is shared, so Board
+Exam gains per-source `ConceptHealth` attribution as a direct consequence. **Stated explicitly because it is
+a behaviour change on a PRO-quota path** — recording it here rather than letting the cold agent find an
+unstated change on a paid surface. **No quota, entitlement or question-count change accompanies it.**
+
+**C. A matching group must never span two source packs — assert it, do not assume it.**
+`shuffleQuestionOrderPreservingMatchingGroups:2180` builds blocks from **contiguous runs sharing a
+`questionGroup` string**. Groups are generated per source, so in practice every item in a block shares a
+stamp — **but two sources independently emitting the same group label (`"Group 1"`) adjacent at a merge
+boundary would fuse into ONE block spanning two stamps**, making that block's provenance ambiguous. **Fail
+loudly rather than silently picking one.**
+
+### Anti-drift
+
+**⚠️ Out of scope, each named in §15 or §16 of the audit:** cross-pack **canonical concept identity**
+(ADR-sized — `ConceptHealthEntity` is keyed `(user_id, study_pack_id, concept)` with `concept` free text
+scoped per pack, and this release does **not** change that); **format-weighted `ConceptHealth`**;
+**curriculum-pool sampling, the coverage blueprint and generation resilience** (that is slice 2, and
+resilience is coupled **into** it rather than following it); **True/False in Long Exam** (deferred);
+**Identification in Long Exam** (slice 3).
+
+**⚠️ No new quiz mode and no new sub-mode.** `EXAM_MODES.md` stays a locked five-mode contract.
+**⚠️ No change to what a concept IS**, only to which pack it is recorded against.
+**⚠️ Viewing must never write `ConceptHealth`** — locked since `v0.37.0` to move only from genuine
+assessment.
+**⚠️ PLAN-TIER ENTITLEMENTS ARE UNCHANGED.** §0 of the audit keeps three things apart: product/checkpoint
+gating (**none** on this initiative), engineering pre-signoff verification (**preserved in full**), and
+plan-tier entitlements (**a separate monetization contract**). **"Nothing is gated" is never licence to add,
+widen or remove a subscription gate** — if a slice appears to need one, stop and raise it.
+**⚠️ Quick Review and Adaptive Practice are single-source and stay untouched** —
+`QuickReviewAdaptivePracticeService:384-390` records against `session.getStudyPackId()`, which is correct
+there. **Do not refactor them into the new helper**; it widens the blast radius for no gain.
+**⚠️ `examQuestionPoolService.markServed` and `challengeQuizQuestionBankService.updateOutcomesAndReleaseClaims`
+stay primary-keyed** — they are covered by §12.1's recorded bank-bypass integrity item, which is **tracked
+and explicitly not in slices 1–4.**
+**⚠️ Do NOT add, remove or reorder an onboarding FLOW step and no code under `frontend/app/onboarding`** —
+`[CHECKPOINT — due 2026-09-11]` is **9 days out**. This slice is backend-and-evidence work and does not
+approach it.
+
+### Verification tier
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION.** The trigger is named by the gate outright: **this
+changes what production evidence means.** Hand it a tight file list and the specific claims this session
+made, and ask it to disprove each.
+
+**⚠️ Carried forward as MEASURED findings, not impressions:**
+- **Mutate the production code and confirm a test actually FAILS. Reading is not verification.** Three
+  releases running, the worst defect was a fix that looked correct and changed nothing, or a guard nothing
+  exercised — an extraction that moved a security check behind a `@Mock`, an inert `PARENT` fix, and a lock
+  that survived deletion against **1910 tests**.
+- **When you mutate, check whether the value is computed in more than one place.** A mutation hitting one of
+  two call sites survives for the wrong reason. `recordCorrectConceptsForSourcePacks` and
+  `recordIncorrectConceptsForSourcePacks` both funnel through `recordConceptsForSourcePacks`, so a mutation
+  there hits both; a mutation in the new grouping helper needs confirming it is not shadowed by a second
+  call site in `ChallengeQuizService`.
+- **Run `./mvnw test-compile` and check its exit status FIRST.** A compile error in a test class can leave
+  `mvn test` reporting green from a stale compiled class. That happened last cycle.
+- **Confirm new tests EXECUTED by reading `target/surefire-reports/*.xml`,** not the source.
+- **Call `advisor()` before writing the Codex prompt,** not only on the diff.
+
+**⚠️ THE DISCRIMINATING FIXTURE IS PRE-DECLARED — two packs, one shared concept string, NON-UNIFORM
+answers.** A uniform-answers fixture passes under the index bug and proves nothing.
+
+| item | index | source | concept | learner |
+|---|---|---|---|---|
+| 1 | 0 | A | Shear | correct |
+| 2 | 1 | A | Moment | incorrect |
+| 3 | 2 | B | Shear | incorrect |
+| 4 | 3 | B | Moment | correct |
+
+Assert pack A → Shear correct, Moment incorrect; pack B → Shear incorrect, Moment correct. This single
+fixture discriminates all four failure modes: **concept-merge** (both packs get both concepts as missed),
+**index-shift** (the correct/incorrect assignments flip), **today's Challenge behaviour** (pack B gets
+nothing), and **today's Long Exam behaviour** (both packs get everything).
+
+### Routing
+
+**→ CODEX.** It touches two services, a DTO, a shared util and the evidence model — several "→ Codex" rows
+at once. **Re-run the routing test if implementation discovers a third service or a surface not in the
+agreed plan**, per the correction recorded at the `v0.103.0` kickoff.
+
+### Shipped
+
+- **Every generated assessment item now carries its `sourceStudyPackId` in session state.** Challenge Quiz,
+  Board Exam, and Long Exam stamp it after per-source deduplication and before merging; it therefore survives
+  later shuffle operations with the item rather than relying on a fragile parallel index array.
+- **ConceptHealth now records multi-note evidence per contributing Study Pack.** Completion makes one
+  absolute-index-preserving pass and buckets by `(sourceStudyPackId, concept)`, so a correct *Shear* answer
+  on one note no longer overwrites or contaminates a miss on another. Board Exam gains the same intended
+  per-source attribution through its shared completion path.
+- **Pre-v0.104.0 in-flight sessions remain completable.** An unstamped Challenge item retains the historical
+  primary-pack write; an unstamped Long Exam item retains the historical source-list fallback. Missing or
+  unowned packs are skipped without failing a completed assessment.
+- **`+5 Questions` records the primary as its source deliberately.** That path generates, templates, and
+  banks only from the primary Study Pack, even in a multi-note session.
+- **A MATCHING block never spans two source packs.** The block scan breaks on the source stamp, so two
+  sources that independently label a block `group-1` — which the generation prompt tells every call to do —
+  stay separate blocks instead of fusing into one with ambiguous provenance. A guard still rejects a
+  genuinely mixed block as defence in depth. **⚠️ This bullet originally read "fail loudly … rejected";
+  detection alone turned a working multi-note session into a hard failure and was fixed at the cause before
+  signoff.**
+
+### Found by the pre-signoff cold agent, and fixed
+
+**⚠️ THE COLD AGENT DISPROVED TWO CLAIMS AND FOUND THREE SURVIVING MUTANTS. All are fixed; recorded because
+each is a shape that will recur.**
+
+- **⚠️ `withSourceStudyPackId` CORRUPTED CHOICE TEXT ON EVERY SESSION LOAD, IN EVERY QUIZ MODE — the worst
+  defect in the release, and it was invisible to 1920 passing tests.** The copy routed through the
+  sanitizing constructor, and `QuizValidationUtils.sanitizeChoiceText` strips a leading choice label with
+  `replaceFirst` and is **not idempotent**: `"A. B. Smith"` -> `"B. Smith"` -> `"Smith"`. Because
+  `QuizSessionStateUtils.extractQuiz` calls it on **every deserialized item**, the blast radius was every
+  mode, not just the stamped multi-note paths — author initials in exactly the Education, Accountancy and
+  Nursing catalogue this product carries. **Fixed with a trusted copy constructor that reuses already-
+  sanitized values verbatim**, pinned by a guard that also asserts repeated stamping is stable.
+- **⚠️ THE UNKNOWN-CONCEPT LABEL DIVERGED AND WOULD HAVE FORKED `ConceptHealth` ROWS.** `ChallengeQuizService`
+  labels an absent concept **`Uncategorized`**; `QuizSessionReviewUtils` labels it **`Unknown`**. Moving the
+  aggregation into the util silently switched Challenge and Board Exam to the second label — and since
+  `ConceptHealthEntity` is keyed `(user_id, study_pack_id, concept)`, **the label is part of the row
+  identity**: the accumulated `incorrect_streak` on the old row would have been orphaned while a parallel
+  row started at zero, with the result screen still displaying the old label. **Fixed by parameterizing the
+  label so each caller keeps its own**, pinned by a regression test.
+- **⚠️ THE MATCHING-GROUP GUARD TURNED A WORKING MULTI-NOTE SESSION INTO A HARD FAILURE.**
+  `challenge-quiz-developer.txt` instructs **every** generation to label its matching block `group-1`, and
+  `generateChallengeQuizForSources` appends sources back to back — so one source's trailing block and the
+  next source's leading block routinely share a label and sit adjacent, merging into one block and tripping
+  the new assertion **after both LLM calls had been paid for**. The agent reproduced it end to end.
+  **⚠️ "Fail loudly" was the wrong instruction here and the fix is at the cause:** the block scan now breaks
+  on the source stamp, so the blocks stay separate. The guard remains as defence in depth. **No quota was at
+  risk** — verified that every `userUsageService.increment*` runs after the shuffle, and `catch (Exception)`
+  releases bank claims and marks the session failed.
+- **⚠️ THE OWNERSHIP GUARD HAD ZERO EXECUTED COVERAGE, ERASED BY THIS RELEASE'S OWN TEST SETUP.** Deleting
+  `findByIdAndOwnerUserId` from **both** Challenge record methods passed **1920 tests**. The cause was a
+  `lenient()` stub in `setUp` returning a pack for **any** id, so the guard's empty branch was unreachable.
+  **This is the third release running where a check shipped behind a `@Mock` that made it untestable.**
+  Fixed with a test that overrides the blanket stub.
+- **Two tests claimed more than they proved.** The Board Exam test had no `never()` assertions, so
+  reintroducing under-attribution to the primary left every positive assertion satisfied; and the Challenge
+  test's `never()` assertions named a UUID the session had never heard of, which nothing could ever write
+  to. Both strengthened, and the previously-surviving mutants now fail.
+- **A feature-doc claim written during this release was false.** The rewritten `exam-hub.md` paragraph
+  asserted a `keyConcepts` intersection for **Board Exam**, which does not apply — Board Exam completes
+  through `ChallengeQuizService` and uses the non-`ForKnownConcepts` variants. Corrected.
+
+### Known limitations
+
+- **⚠️ A THIRD INSTANCE OF THE SAME DEFECT EXISTS IN `InterviewPracticeService` AND IS NOT FIXED HERE.**
+  Found during this release's diff audit, not by the architecture audit, which named only `LongExamService`.
+  `InterviewPracticeService.recordConceptsForSourcePacks:270-298` is **byte-for-byte the same shape** as the
+  Long Exam loop this release replaced: it iterates `resolveSourceStudyPackIds(session)` and writes **the same
+  concept list to every source pack**, filtered only by that pack's own `getKeyConcepts()`. Interview Practice
+  is genuinely multi-source (`interviewSourceNoteRefs` in session state), so it **over-attributes exactly as
+  Long Exam did**.
+  **⚠️ THIS IS A LIVE DEFECT TODAY, NOT A CONSEQUENCE OF THIS SLICE.** It over-attributes on every
+  multi-source Interview Practice session right now, and did so before this release existed — it is **a third
+  live instance of the same production defect, deferred for release-size reasons**, not something blocked on
+  stamping. Stating it that way deliberately: framed as *"blocked on stamping"*, a later reader would file it
+  as downstream cleanup and leave it indefinitely.
+  **⚠️ AND IT PARTIALLY UNDERCUTS THIS RELEASE'S OWN STATED PURPOSE.** The audit's §32 goal — *"Structural
+  Engineering needs work, Transportation is stronger"* — reads `ConceptHealth` written by **all** modes, so
+  subject-level reporting stays contaminated by Interview Practice until this is fixed. Long Exam and Board
+  Exam are now trustworthy; the store as a whole is not yet.
+  **Deferred rather than folded in** because fixing it needs the same two coupled changes in a third service
+  (its generation path is not stamped by any of this slice's three seams), and folding a third service into a
+  release that already changes what production evidence means was judged the worse trade. **Recorded rather
+  than silently dropped**, per the standing rule.
+- **The provenance guarantee is per ITEM, not per SESSION.** A session mixing stamped and unstamped items
+  would still broadcast the unstamped subset to every source pack, so one concept could land in a pack's
+  correct set and its missed set in the same completion. **Not reachable today** — `generateQuizForSources`
+  stamps every source, and the only unstamped Long Exam producer is the pool path, which runs only when
+  there are no additional sources — but the invariant is narrower than "stamped sessions never broadcast".
+- **`QuizSessionReviewUtils.normalizeSourceStudyPackId` is unverified defence-in-depth.** Replacing it with a
+  pass-through leaves the suite green, because `QuizSessionStateUtils.parseSourceStudyPackId` already
+  validates on the path that matters and *is* covered. Recorded so nobody claims coverage it does not have.
+- **Cross-pack concept identity is unchanged and still blocks true cross-subject mastery.** `ConceptHealthEntity`
+  remains keyed `(user_id, study_pack_id, concept)` with `concept` as free text scoped per pack, so two packs
+  using the same concept string still hold independent rows. This is ADR-sized and explicitly deferred (§15).
+- **`ConceptHealth` remains format-blind.** A missed True/False and a missed Identification still write
+  identical rows. Deferred with True/False itself (§9, §14.4).
+- **A redo of a PRE-`v0.104.0` multi-note Challenge session attributes everything to the primary pack,
+  permanently.** `redoMissedQuestions` stamps unstamped prior-session items with the primary at build time
+  rather than leaving them null for completion's fallback. **The outcome is identical either way** — the
+  historical Challenge fallback is also the primary — but it is persisted at build time instead of resolved
+  at read time, which is narrower than the *"a null stamp falls back at completion"* wording in Planned Scope.
+  Accepted deliberately: it keeps a redo session internally consistent with itself.
+- **The `startSession` stamp is belt-and-braces, not load-bearing, and no test claims otherwise.**
+  `stampUnstampedQuestionsWithPrimarySource` is unobservable at completion by construction — if it returned
+  its input unchanged, multi-source stamps would still survive and single-source, bank and template items
+  would take completion's primary fallback to the identical result. Recorded so a future reader does not
+  mistake the absence of an isolating mutant for missing coverage.
+- **The Challenge question bank and exam question pool stay primary-keyed.** `markServed` and
+  `updateOutcomesAndReleaseClaims` are unchanged, per the audit's §12.1 integrity item, which is tracked and
+  explicitly not in slices 1–4.
+
 ## v0.103.0 - Mixed Retrieval for Free and Plus
 
 **Status: Released** (kicked off and signed off 2026-09-02, base branch `releases/v0.103.0`, cut from
