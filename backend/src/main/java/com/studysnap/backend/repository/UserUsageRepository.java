@@ -106,4 +106,20 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
             @Param("askCompanionDelta") Integer askCompanionDelta,
             @Param("createdAt") OffsetDateTime createdAt
     );
+
+    @Modifying
+    @Query("""
+            update UserUsageEntity usage
+            set usage.longExamUsedThisMonth = case
+                when coalesce(usage.longExamUsedThisMonth, 0) > :count then usage.longExamUsedThisMonth - :count
+                else 0
+            end
+            where usage.userId = :userId
+              and usage.periodStart = :periodStart
+            """)
+    int decrementLongExamUsageNotBelowZero(
+            @Param("userId") UUID userId,
+            @Param("periodStart") OffsetDateTime periodStart,
+            @Param("count") Integer count
+    );
 }

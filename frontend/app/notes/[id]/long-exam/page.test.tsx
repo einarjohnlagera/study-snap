@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LongExamPage from "./page";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -9,6 +9,7 @@ import {
   getMe,
   getNote,
   listNotes,
+  saveLongExamProgress,
   startLongExam,
 } from "@/lib/api";
 
@@ -179,7 +180,13 @@ describe("LongExamPage", () => {
     expect(screen.queryByRole("button", { name: /Organic Chemistry/ })).not.toBeInTheDocument();
   });
 
-  it("scopes collection launches to plan notes and preselects up to the SERVER-reported cap", async () => {
+  it("states sampled coverage and shows NO picker for a resolved plan launch", async () => {
+    // ⚠️ INTENT CHANGED IN v0.105.0, AND THIS TEST CHANGED WITH IT RATHER THAN BEING DELETED.
+    // A plan-sourced Long Exam is now sampled representatively by the SERVER across the whole eligible
+    // plan; the client picks nothing. Leaving the old picker visible made it a decorative control whose
+    // selection was silently discarded, and whose "N of M" summary was wrong in both directions —
+    // "1 of 77" while the server sampled 10, or "4 of 77" while it sampled a different 10.
+    // The manual (non-plan) picker is unchanged and still covered by its own tests below.
     searchParamsMock = new URLSearchParams("collectionId=collection-1");
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", profileType: "STUDENT" });
     (getCollection as jest.Mock).mockResolvedValue({
@@ -202,15 +209,12 @@ describe("LongExamPage", () => {
 
     render(<LongExamPage />);
 
-    expect(await screen.findByRole("button", { name: /Plan Two/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /Plan Three/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /Plan Four/ })).toHaveAttribute("aria-pressed", "true");
-    // ⚠️ Five, not three. The cap is now the server's maxSourceNotes (8 including the primary), so a
-    // College learner reaches further than the old hardcoded 3 — and Plan Five is inside it.
-    expect(screen.getByRole("button", { name: /Plan Five/ })).toHaveAttribute("aria-pressed", "true");
+    // Coverage is STATED, not picked: 5 eligible notes under a server cap of 8 samples all 5.
+    expect(await screen.findByText("Testing material sampled from 5 of 5 Notes in this plan.")).toBeInTheDocument();
+    // ⚠️ The picker must be absent. Its presence is the defect: the server ignores any picked list.
+    expect(screen.queryByRole("button", { name: /Plan Two/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Plan Five/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Outside Plan/ })).not.toBeInTheDocument();
-    expect(screen.getByText("5 notes · 25 questions")).toBeInTheDocument();
-    expect(screen.getByText("Testing material from 5 of 5 Notes in this plan.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Study Plan/ })).toHaveAttribute("href", "/collections/collection-1");
     expect(screen.queryByRole("button", { name: "Choose another mode" })).not.toBeInTheDocument();
   });
@@ -243,8 +247,10 @@ describe("LongExamPage", () => {
     render(<LongExamPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Begin Long Exam" }));
 
+    // ⚠️ The claim alone. additionalStudyPackIds is NOT sent on a plan launch: the server samples across
+    // the verified plan, and sending a picked list would be discarded server-side anyway. Before v0.105.0
+    // this asserted {additionalStudyPackIds: ["sp-2"], sourceCollectionId} — the picker-based model.
     await waitFor(() => expect(startLongExam).toHaveBeenCalledWith("sp-1", {
-      additionalStudyPackIds: ["sp-2"],
       sourceCollectionId: "collection-1",
     }));
   });
@@ -443,4 +449,5 @@ describe("LongExamPage", () => {
     expect(screen.getByText(expectedTitle)).toBeInTheDocument();
     expect(screen.queryByText(absentTitle)).not.toBeInTheDocument();
   });
+
 });

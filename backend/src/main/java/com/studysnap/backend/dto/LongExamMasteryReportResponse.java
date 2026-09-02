@@ -13,6 +13,7 @@ public record LongExamMasteryReportResponse(
         String performanceSummary,
         String suggestedNextStep,
         List<LongExamSourceNote> sourceNotes,
+        boolean shortExam,
         boolean isFirstCompletedSessionEver,
         boolean isSecondCompletedSessionEver
 ) {

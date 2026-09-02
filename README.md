@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.104.0 - Assessment Source Provenance` (Released); previous: `v0.103.0 - Mixed Retrieval for Free and Plus` (Released)
+Current release baseline: `v0.105.0 - Curriculum-Scale Exams` (Released); previous: `v0.104.0 - Assessment Source Provenance` (Released)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 

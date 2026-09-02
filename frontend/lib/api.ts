@@ -1487,6 +1487,7 @@ export type LongExamSessionResponse = {
   quiz: QuizItem[];
   selectedChoices: Record<string, number>;
   selectedMultiChoices?: Record<string, number[]>;
+  selectedIdentificationAnswers?: Record<string, string>;
   currentQuestionIndex: number;
   totalQuestions: number;
   difficulty: string | null;
@@ -1523,6 +1524,7 @@ export type LongExamMasteryReportResponse = {
   performanceSummary: string;
   suggestedNextStep: string;
   sourceNotes: LongExamSourceNote[];
+  shortExam: boolean;
   isFirstCompletedSessionEver?: boolean;
   isSecondCompletedSessionEver?: boolean;
 };
@@ -4063,7 +4065,7 @@ export async function getLongExamSession(
 
 export async function saveLongExamProgress(
   sessionId: string,
-  body: { questionIndex: number; selectedChoiceIndex: number; selectedMultiChoiceIndices?: number[] },
+  body: { questionIndex: number; selectedChoiceIndex: number; selectedMultiChoiceIndices?: number[]; selectedIdentificationAnswer?: string },
 ): Promise<LongExamSessionResponse> {
   const response = await fetchWithAuth(
     `/long-exam/sessions/${sessionId}/progress`,

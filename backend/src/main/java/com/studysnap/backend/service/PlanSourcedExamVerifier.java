@@ -8,6 +8,7 @@ import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -45,15 +46,38 @@ public class PlanSourcedExamVerifier {
             UUID userId,
             Supplier<? extends AppException> onInvalid
     ) {
+        // ⚠️ NO SECOND COPY OF THE OWNERSHIP CHECK. This method delegates, and resolvePlanMembers owns the
+        // parse-and-verify. A duplicated copy here meant deleting the check from resolvePlanMembers alone
+        // left the whole suite green, where the same deletion was killed before the duplication existed —
+        // the class javadoc's "same mistake with a shorter fuse", on an authorization boundary.
+        return resolvePlanMembers(sourceCollectionIdRaw, userId, onInvalid).stream()
+                .map(PlanExamMember::noteId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
+     * Resolves the verified plan members without discarding the section label or plan position.
+     *
+     * <p>The verifier still owns only membership authorization. Callers decide separately whether a
+     * member has a ready Study Pack, so this shared predicate does not grow a generation concern.
+     */
+    public List<PlanExamMember> resolvePlanMembers(
+            String sourceCollectionIdRaw,
+            UUID userId,
+            Supplier<? extends AppException> onInvalid
+    ) {
         if (sourceCollectionIdRaw == null || sourceCollectionIdRaw.isBlank()) {
-            return Set.of();
+            return List.of();
         }
         UUID sourceCollectionId = UuidParsingUtils.parseUuidOrThrow(sourceCollectionIdRaw, onInvalid);
         if (noteCollectionRepository.findByIdAndOwnerUserId(sourceCollectionId, userId).isEmpty()) {
             throw onInvalid.get();
         }
         return noteCollectionItemRepository.findByCollectionIdOrderByPositionAsc(sourceCollectionId).stream()
-                .map(NoteCollectionItemEntity::getNoteId)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+                .map(item -> new PlanExamMember(item.getNoteId(), item.getLabel(), item.getPosition()))
+                .toList();
+    }
+
+    public record PlanExamMember(UUID noteId, String label, int position) {
     }
 }

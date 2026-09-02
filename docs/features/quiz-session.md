@@ -66,7 +66,10 @@ As of v0.38.0, collection practiced counts, collection detail `lastSessionComple
 
 ## Long Exam Multi-source State
 
-Long Exam sessions stay anchored to the primary `studyPackId`. When the user adds notes — same-subject on the manual path, or plan members on a plan-sourced launch — additional source attribution is stored in `sessionState.sourceNoteRefs`.
+Long Exam sessions stay anchored to the caller-supplied primary `studyPackId`. A plan-sourced launch resolves
+the whole verified ready-Study-Pack pool, then stores its deterministic representative sample in
+`sessionState.sourceNoteRefs`; the primary is force-included at index 0. Manual launches retain their
+same-subject selected-source path. This is deliberately not a session-anchoring migration.
 
 Each entry contains:
 
@@ -90,6 +93,10 @@ fallback. This keeps an in-flight pre-release assessment completable without inv
 ### Long Exam generation recovery
 
 Age-based recovery may move a `LONG_EXAM` session from `GENERATING` to `FAILED` when its immutable `created_at` is older than the configured Long Exam bound (default `30` minutes). `FAILED` remains observable but is not active, so the existing start flow creates a fresh session on the learner's next attempt instead of handing back the stale row. The frontend already treats this state as recoverable, stops generation polling, explains that the learner can try again, and returns to setup rather than showing an indefinite spinner.
+
+Long Exam progress additionally accepts `selectedIdentificationAnswer`. A blank value clears the saved answer;
+on completion it is scored as incorrect rather than causing a submission failure. Identification uses the same
+generation-time `acceptableAnswers` and normalized exact-match grading as Challenge Quiz.
 
 The recovery query is intentionally `LONG_EXAM`-only. Challenge Quiz needs its mode-owned stale-session path to release question-bank claims; Adaptive Practice and the Interview Practice sub-mode are also excluded. Recovery never generates replacement questions itself.
 

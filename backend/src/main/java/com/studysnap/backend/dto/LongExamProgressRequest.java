@@ -7,9 +7,10 @@ import java.util.List;
 public record LongExamProgressRequest(
         @Min(0) int questionIndex,
         @Min(0) int selectedChoiceIndex,
-        List<Integer> selectedMultiChoiceIndices
+        List<Integer> selectedMultiChoiceIndices,
+        String selectedIdentificationAnswer
 ) {
     public LongExamProgressRequest(int questionIndex, int selectedChoiceIndex) {
-        this(questionIndex, selectedChoiceIndex, null);
+        this(questionIndex, selectedChoiceIndex, null, null);
     }
 }

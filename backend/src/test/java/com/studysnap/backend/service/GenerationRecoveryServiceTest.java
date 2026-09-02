@@ -50,6 +50,8 @@ class GenerationRecoveryServiceTest {
     private NoteRepository noteRepository;
     @Mock
     private StudyPackService studyPackService;
+    @Mock
+    private UserUsageService userUsageService;
 
     private StudySnapProperties properties;
     private GenerationRecoveryService service;
@@ -64,7 +66,8 @@ class GenerationRecoveryServiceTest {
                 examQuestionPoolRepository,
                 quickReviewSessionRepository,
                 noteRepository,
-                studyPackService
+                studyPackService,
+                userUsageService
         );
         service = new GenerationRecoveryService(
                 examQuestionPoolRepository,

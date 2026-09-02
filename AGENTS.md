@@ -1,5 +1,15 @@
 # AGENTS.md - NoteLib
 
+**v0.105.0 implementation note:** `ExamSourceLimitResolver` still owns the sole `questionCount / 3`
+formula, but for Long Exam it now means **how many sources we sample from the eligible curriculum pool**,
+not how many notes a learner may pick. A plan session remains anchored on the caller-supplied primary Study
+Pack until the deferred §15 session-anchoring migration: the primary is force-included in the sample at
+index 0, and neither the active-session lookup nor its two partial unique indexes may change.
+
+Long Exam's quota charge and failure reversal must both derive from `LongExamService.QUOTA_UNITS_PER_SESSION`;
+the reservation and reversal session-state keys are public constants on that same class so the recovery sweeper
+cannot drift from the start path.
+
 You are an AI coding agent helping implement NoteLib.
 Follow these rules to keep the codebase consistent and shippable.
 
@@ -7,7 +17,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.104.0 - Assessment Source Provenance` (Released); previous: `v0.103.0 - Mixed Retrieval for Free and Plus` (Released)
+- `v0.105.0 - Curriculum-Scale Exams` (Released); previous: `v0.104.0 - Assessment Source Provenance` (Released)
 
 Implementation status: Phases 1-4 are **Released** (`v0.91.0`-`v0.94.0`), with **Phase 4 PARTIAL**: shareable invitation links and connection management shipped in `v0.94.0`; **supporter onboarding did NOT**. **⚠️ The reason it did not is an ASSUMPTION nobody has checked, found at the `v0.95.0` kickoff (2026-08-29):** `v0.94.0` blocked it on the onboarding freeze, but `[CHECKPOINT — due 2026-09-11]` is the **signup funnel read alone** (375 signups against a 62.4% completion baseline, measuring `app/onboarding/page.tsx`), **"supporter onboarding" has no definition anywhere in the plan**, and the redemption page already treats `/onboarding` as a waypoint it carries a token through rather than a surface it edits. **It is NOT claimed unblocked — it is claimed unchecked.** The discriminating test is whether the work edits the signup → verify-email → onboarding path; it needs a definition step, which is **`v0.97.0` item 3 — docs only, no code on the frozen path**. **No public people search is in Phase 4 at all.** **Phase 5 remains uncommitted and must not be stubbed.** **⚠️ An `ACCEPTED` relationship implies no access of any kind** — material, activity and progress each need their own live grant, and streaks/study days are reachable only through `ACTIVITY`.
 

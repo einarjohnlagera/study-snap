@@ -322,6 +322,42 @@ public final class QuizItem {
         return new QuizItem(this, sourceStudyPackId);
     }
 
+    /**
+     * Returns a copy with a different question group and format, reusing already-sanitized values.
+     *
+     * <p>⚠️ Same hazard as {@link #withSourceStudyPackId(String)}, and it bit a SECOND copy helper:
+     * {@code sanitizeChoiceText} strips a leading choice label with {@code replaceFirst} and is NOT
+     * idempotent, so rebuilding an already-sanitized item through the public constructor eats another
+     * token — {@code "A. B. Smith"} becomes {@code "B. Smith"} and then {@code "Smith"}. MATCHING-group
+     * demotion runs this on every item of an invalid group, in Challenge Quiz, Board Exam and Long Exam.
+     *
+     * <p>It also preserves {@code sourceStudyPackId}, which the previous rebuild dropped to null — latent
+     * today because demotion runs before the service stamps provenance, but it would silently undo that
+     * attribution the moment the order changed.
+     */
+    public QuizItem withQuestionGroupAndFormat(String questionGroup, String questionFormat) {
+        QuizItem copy = new QuizItem(this, sourceStudyPackId);
+        return new QuizItem(copy, questionGroup, questionFormat, sourceStudyPackId);
+    }
+
+    /** Trusted copy constructor for the group/format rewrite; no sanitizer is re-applied. */
+    private QuizItem(QuizItem source, String questionGroup, String questionFormat, String sourceStudyPackId) {
+        this.question = source.question;
+        this.choices = source.choices;
+        this.correctIndex = source.correctIndex;
+        this.correctIndices = source.correctIndices;
+        this.concept = source.concept;
+        this.explanation = source.explanation;
+        this.questionFormat = questionFormat;
+        this.questionType = source.questionType;
+        this.workingSolution = source.workingSolution;
+        this.questionGroup = normalizeQuestionGroup(questionGroup);
+        this.keyConcept = source.keyConcept;
+        this.acceptableAnswers = source.acceptableAnswers;
+        this.acceptableAnswerGroups = source.acceptableAnswerGroups;
+        this.sourceStudyPackId = sourceStudyPackId;
+    }
+
     /** Trusted copy constructor: every field is already sanitized, so no sanitizer is re-applied. */
     private QuizItem(QuizItem source, String sourceStudyPackId) {
         this.question = source.question;
