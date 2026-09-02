@@ -36,6 +36,67 @@ sessions also count against their own allowance."* — mode-agnostic by construc
 multi-note arrives, so there is no copy edit owed here. Do not "fix" it; a `quiz-session-history.test.ts`
 guard pins that it names no mode.**
 
+### ⚠️ SCOPE RESHAPED 2026-09-02, AFTER AN ASSESSMENT ARCHITECTURE AUDIT
+
+**The release keeps its theme and loses its framing.** An owner + Product UX architecture brief, a Stage 1
+repo audit and an owner tightening pass all landed on 2026-09-02, between this kickoff and delivery. Full
+record: `docs/claude-plans/assessment-architecture-audit.md`. **The Stage 1 findings are ACCEPTED and are not
+re-audited here.**
+
+**⚠️ WHY THE FRAMING CHANGED.** This release was scoped as *"Slice 3 of the Review Sets audit — mixed
+retrieval reaches Free and Plus."* That slice numbering is **superseded**: the assessment audit replaced it
+with a seven-slice sequence in which **this release is slice 0**. Its work is unchanged in substance; what
+changed is that it is now understood as *making an already-built capability reachable*, not as opening a new
+tier of the ladder.
+
+**⚠️ THE DELIVERED CAPABILITY IS UNREACHABLE ON EVERY PLAN, AND THAT IS THIS RELEASE'S REAL JOB.** A
+falsification pass proved it: `challenge-quiz/page.tsx` computes the multi-note cap from `challengeSession`,
+which is **null at prestart by construction**, so the source picker is permanently disabled and
+`additionalStudyPackIds` can never be populated; and PRO is routed to Board Exam setup before it can reach
+the picker at all. **The server side is correct and reachable via API — this is UI wiring, not
+architecture**, which is why the release is reshaped rather than withdrawn.
+
+**⚠️ THE PLUS CAP OF 4 IS REJECTED AS ARITHMETIC LEAKAGE (owner, 2026-09-02), NOT PRODUCT DESIGN.** It was
+`MULTI_NOTE_CHALLENGE_QUESTION_COUNT (12) / 3` — a division leaking into the pricing ladder.
+**⚠️ AND ~10, THE ORIGINAL INTENT, IS UNREACHABLE — VERIFIED, NOT ASSUMED.** `MAX_CHALLENGE_QUIZ_QUESTIONS`
+is **20**, and at three questions per source that bounds sources at **6**; ~10 would need 30 questions, ten
+past a ceiling that `+5 More Questions` also depends on. **OWNER RULED: 18 questions → 6 sources for Plus** —
+50% larger than the rejected 4, changing no existing contract and leaving the ceiling and `+5` untouched.
+**⚠️ Do NOT lift `MAX_CHALLENGE_QUIZ_QUESTIONS` to chase ~10; that is a Challenge Quiz identity change and
+was declined.**
+
+**⚠️ GATING, STATED BECAUSE IT IS ROUTINELY CONFLATED:** this initiative carries **no product or checkpoint
+gate**; **engineering pre-signoff verification is preserved in full**; and **plan-tier entitlements are a
+separate monetization contract, unchanged.** Nothing here adds, widens or removes a subscription gate.
+
+### Revised scope
+
+- **1. Make the multi-note capability reachable (frontend).** Read the cap at prestart from a source that is
+  actually populated then, rather than from the null `challengeSession`, and fix the PRO+`collectionId`
+  routing. **⚠️ `PARENT` on PRO is contradictory on any answer** — its CTA reads *"Start Challenge Quiz"* and
+  lands on Board Exam setup — and must be resolved in the same change.
+- **2. Plus multi-note uses 18 questions → 6 sources; Free stays at 3.** Config-backed, so the figure stays
+  tunable. **⚠️ The cap must remain derived from the question count through `ExamSourceLimitResolver`, never
+  reintroduced as a standalone constant** — a second constant beside the formula is how the leakage returns.
+- **3. Correct the docs that overclaim.** `PLANS.md` advertises *"200 multi-note Challenge Quiz starts /
+  month"* for PRO. **⚠️ Nobody chose that** — it was a delivery default mirroring the challenge-quiz limit,
+  then written up as an entitlement. PRO's plan launch opens **Board Exam**, per the ladder.
+- **4–7. UNCHANGED AND ALREADY BUILT:** the `V131` counter and its sub-limit, the plan-membership gate reusing
+  `PlanSourcedExamVerifier`, the terminal CTA resolving on (profile, plan), and `sourceCount`/`sourceScope`
+  recording the **verified** outcome.
+
+### Carried out of this release, by the approved sequence
+
+- **Source provenance moves to the NEXT release and is slice 1.** **⚠️ It is deliberately AHEAD of
+  curriculum-scale sampling:** `ConceptHealth` currently writes the same concept list to every source pack,
+  and `QuizItem` carries no source-pack field, so representative sampling would push **more** evidence
+  through a mis-attributing writer.
+- **The eligible-pool separation, the coverage blueprint and generation resilience** are slice 2, and
+  resilience is **coupled into** that slice rather than following it.
+- **⚠️ INTEGRITY ITEM, recorded not deferred silently: multi-note Challenge bypasses the Challenge question
+  bank**, weakening the very distinction between repeatable custom practice and freshly generated
+  assessment. Not blocking; tracked in the audit.
+
 ### Planned Scope
 
 - **1. Free and Plus can run a multi-note session — as a CAPABILITY of Challenge Quiz, NOT a sub-mode
