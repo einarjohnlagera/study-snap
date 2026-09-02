@@ -103,6 +103,10 @@ studysnap:
     free-monthly-challenge-quiz-limit: ${FREE_MONTHLY_CHALLENGE_QUIZ_LIMIT:20}
     plus-monthly-challenge-quiz-limit: ${PLUS_MONTHLY_CHALLENGE_QUIZ_LIMIT:100}
     pro-monthly-challenge-quiz-limit: ${PRO_MONTHLY_CHALLENGE_QUIZ_LIMIT:200}
+    free-monthly-multi-note-limit: ${FREE_MONTHLY_MULTI_NOTE_LIMIT:2}
+    plus-monthly-multi-note-limit: ${PLUS_MONTHLY_MULTI_NOTE_LIMIT:10}
+    pro-monthly-multi-note-limit: ${PRO_MONTHLY_MULTI_NOTE_LIMIT:200}
+    free-multi-note-source-cap: ${FREE_MULTI_NOTE_SOURCE_CAP:3}
     free-monthly-adaptive-practice-limit: ${FREE_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:3}
     plus-monthly-adaptive-practice-limit: ${PLUS_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:10}
     pro-monthly-adaptive-practice-limit: ${PRO_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}

@@ -2608,7 +2608,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const showWeakAreas = canViewConceptHealth(currentPlan);
   const upgradeCtas = useMemo(() => getUpgradeCtas(currentPlan), [currentPlan]);
   const labels = useMemo(() => getCollectionLabels(authUser?.profileType), [authUser?.profileType]);
-  const terminalAction = useMemo(() => getCollectionTerminalAction(authUser?.profileType), [authUser?.profileType]);
+  const terminalAction = useMemo(
+    () => getCollectionTerminalAction(authUser?.profileType, currentPlan),
+    [authUser?.profileType, currentPlan],
+  );
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [collection, setCollection] = useState<NoteCollectionDetail | null>(null);
   const [goalDetail, setGoalDetail] = useState<GoalCollectionDetailResponse | null>(null);
@@ -3152,6 +3155,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
     if (terminalAction.mode === "interview") {
       router.push(`/notes/${primaryExamItem.noteId}/interview-practice?${params.toString()}`);
+      return;
+    }
+    if (terminalAction.mode === "challenge") {
+      router.push(`/notes/${primaryExamItem.noteId}/challenge-quiz?${params.toString()}`);
       return;
     }
     if (!primaryExamStudyPackId) {

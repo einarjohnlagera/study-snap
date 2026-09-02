@@ -15,6 +15,7 @@ Create notes, generate Study Packs, review Key Concepts, and practice with Quick
 - `3` Adaptive Practice sessions / month
 - `2` exports / month (PDF / DOCX)
 - `3` shareable quiz links / month
+- `2` multi-note Challenge Quiz starts / month, up to `3` notes including the primary
 
 **Features**
 
@@ -42,6 +43,7 @@ Consistent, guided study with more room to keep going — always know what to re
 - `10` Adaptive Practice sessions / month
 - `20` Ask Companion sessions / month
 - `10` shareable quiz links / month
+- `10` multi-note Challenge Quiz starts / month, up to `4` notes including the primary
 
 **Features**
 
@@ -70,6 +72,7 @@ The complete system for serious, sustained study — plan what's next and track 
 - `20` Ask Companion sessions / month
 - `12` Long Exam sessions / month
 - `10` Board Exam sessions / month
+- `200` multi-note Challenge Quiz starts / month, up to `4` notes including the primary
 - Unlimited exports
 - Unlimited shareable quiz links
 
@@ -123,6 +126,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Interview Practice | — | — | 10 sessions |
 | Board Exam Mode | — | — | 10 sessions |
 | Long Exam Mode | — | — | 12 sessions |
+| Multi-note Challenge Quiz | 2 starts, 3 notes | 10 starts, 4 notes | 200 starts, 4 notes |
 | Summary + Key Concepts | ✓ | ✓ | ✓ |
 
 ---

@@ -114,7 +114,6 @@ public class LongExamService {
     private static final int EXCELLENT_SCORE_THRESHOLD = 90;
     private static final int SECONDS_PER_QUESTION = 90;
     private static final int MAX_ADDITIONAL_SOURCE_COUNT = 3;
-    private static final int MIN_QUESTIONS_PER_SOURCE = 3;
 
     private static final int QUOTA_UNITS_PER_SESSION = 1;
     private static final BigDecimal ZERO_SCORE = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -575,12 +574,7 @@ public class LongExamService {
     }
 
     private int resolveQuestionCount(UUID userId) {
-        LearnerLevel learnerLevel = resolveLearnerLevel(userId);
-        return switch (learnerLevel == null ? LearnerLevel.COLLEGE : learnerLevel) {
-            case GRADE_SCHOOL, JUNIOR_HIGH -> properties.getPricing().getLongExamLowTierCount();
-            case BOARD_EXAM_REVIEW, PROFESSIONAL -> properties.getPricing().getLongExamHighTierCount();
-            case SENIOR_HIGH, COLLEGE, PERSONAL_LEARNING -> properties.getPricing().getLongExamMidTierCount();
-        };
+        return properties.getPricing().resolveLongExamQuestionCount(resolveLearnerLevel(userId));
     }
 
     private LearnerLevel resolveLearnerLevel(UUID userId) {
@@ -875,13 +869,13 @@ public class LongExamService {
      * Most sources this learner may combine, counting the primary.
      *
      * <p>⚠️ Derived, never a constant. {@code questionCount} comes from the learner's LEVEL rather than
-     * their selection, and {@link #MIN_QUESTIONS_PER_SOURCE} is checked against
+     * their selection, and the three-questions-per-source floor is checked against
      * {@code questionCount / sourceCount} below — so the true ceiling is 6 / 8 / 10 by level, and a
      * College learner (the default) fails at 9. Exposing this on the response is what stops the
      * frontend re-implementing the level mapping.
      */
     int resolveMaxSourceNotes(int questionCount) {
-        return questionCount / MIN_QUESTIONS_PER_SOURCE;
+        return ExamSourceLimitResolver.resolveMaxSourceNotes(questionCount);
     }
 
     /**
@@ -940,7 +934,7 @@ public class LongExamService {
 
         int sourceCount = sources.size();
         int baseQuestionCount = questionCount / sourceCount;
-        if (baseQuestionCount < MIN_QUESTIONS_PER_SOURCE) {
+        if (baseQuestionCount < ExamSourceLimitResolver.minimumQuestionsPerSource()) {
             throw new InvalidLongExamSourceException();
         }
         int remainder = questionCount % sourceCount;

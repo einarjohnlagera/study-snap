@@ -39,6 +39,7 @@ import { getCollectionLabels } from "@/lib/collection-labels";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
+  ApiRequestError,
   type ChallengeQuizStartRequest,
   type ChallengeQuizMode,
   completeChallengeQuizSession,
@@ -348,6 +349,7 @@ export default function ChallengeQuizPage() {
   const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
   const [availableBoardExamSourceNotes, setAvailableBoardExamSourceNotes] = useState<NoteListItemResponse[]>([]);
   const [selectedBoardExamAdditionalStudyPackIds, setSelectedBoardExamAdditionalStudyPackIds] = useState<string[]>([]);
+  const [selectedChallengeAdditionalStudyPackIds, setSelectedChallengeAdditionalStudyPackIds] = useState<string[]>([]);
   const [sourceNotesLoading, setSourceNotesLoading] = useState(false);
   const [sourceNotesError, setSourceNotesError] = useState<string | null>(null);
   const [forfeitingExistingSession, setForfeitingExistingSession] = useState(false);
@@ -488,9 +490,10 @@ export default function ChallengeQuizPage() {
     if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId || resumeCandidate) {
       return;
     }
-    setSelectedMode(collectionId ? BOARD_EXAM_MODE : resolvePreferredChallengeMode(viewerProfileType));
-    setPrestartStep(collectionId ? "board-exam-setup" : resolveInitialPrestartStep(viewerProfileType));
-  }, [challengeSession?.sessionId, collectionId, phase, resumeCandidate, sharedModeSelectionEntryRequested, viewerProfileType]);
+    const collectionStartsWithChallenge = collectionId !== null && viewerPlanType !== "PRO";
+    setSelectedMode(collectionStartsWithChallenge ? CHALLENGE_MODE : collectionId ? BOARD_EXAM_MODE : resolvePreferredChallengeMode(viewerProfileType));
+    setPrestartStep(collectionStartsWithChallenge ? "challenge-setup" : collectionId ? "board-exam-setup" : resolveInitialPrestartStep(viewerProfileType));
+  }, [challengeSession?.sessionId, collectionId, phase, resumeCandidate, sharedModeSelectionEntryRequested, viewerPlanType, viewerProfileType]);
 
   useEffect(() => {
     challengeSessionRef.current = challengeSession;
@@ -600,6 +603,10 @@ export default function ChallengeQuizPage() {
               .filter((studyPackId): studyPackId is string => Boolean(studyPackId))
               .slice(0, BOARD_EXAM_MAX_ADDITIONAL_NOTES),
           );
+          setSelectedChallengeAdditionalStudyPackIds((current) => {
+            const availableStudyPackIds = new Set(collectionSourceNotes.map((sourceNote) => sourceNote.studyPackId).filter(Boolean));
+            return current.filter((studyPackId) => availableStudyPackIds.has(studyPackId));
+          });
           return;
         } catch {
           // Fall back to the normal single-note/same-subject setup when the plan cannot be loaded.
@@ -614,6 +621,7 @@ export default function ChallengeQuizPage() {
     } catch {
       setAvailableBoardExamSourceNotes([]);
       setSelectedBoardExamAdditionalStudyPackIds([]);
+      setSelectedChallengeAdditionalStudyPackIds([]);
       setSourceNotesError("Could not load same-subject notes.");
     } finally {
       setSourceNotesLoading(false);
@@ -801,11 +809,14 @@ export default function ChallengeQuizPage() {
       void refreshBoardExamSourceNotes(detail);
       const authUser = getAuthUser();
       const preferredMode = resolvePreferredChallengeMode(authUser?.profileType);
-      const requestedPrestartMode = collectionId ? BOARD_EXAM_MODE : preferredMode;
-      const requestedPrestartStep: ChallengePrestartStep = collectionId ? "board-exam-setup" : resolveInitialPrestartStep(authUser?.profileType);
       const resolvedViewerPlanType = authUser?.planType === "FREE" || authUser?.planType === "PLUS" || authUser?.planType === "PRO"
         ? authUser.planType
         : null;
+      const collectionStartsWithChallenge = collectionId !== null && resolvedViewerPlanType !== "PRO";
+      const requestedPrestartMode = collectionStartsWithChallenge ? CHALLENGE_MODE : collectionId ? BOARD_EXAM_MODE : preferredMode;
+      const requestedPrestartStep: ChallengePrestartStep = collectionStartsWithChallenge
+        ? "challenge-setup"
+        : collectionId ? "board-exam-setup" : resolveInitialPrestartStep(authUser?.profileType);
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
       setViewerPlanType(resolvedViewerPlanType);
       setViewerProfileType(isChallengeViewerProfileType(authUser?.profileType) ? authUser.profileType : null);
@@ -955,6 +966,8 @@ export default function ChallengeQuizPage() {
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
   const activeSourceNoteRefs = challengeSession?.sourceNoteRefs ?? [];
   const selectedBoardExamSourceCount = 1 + selectedBoardExamAdditionalStudyPackIds.length;
+  const maxChallengeAdditionalNotes = Math.max(0, (challengeSession?.maxSourceNotes ?? 1) - 1);
+  const selectedChallengeSourceCount = 1 + selectedChallengeAdditionalStudyPackIds.length;
   const boardExamRemaining = Math.max(0, boardExamMonthlyLimit - boardExamUsedThisMonth);
   const boardExamLimitReached = boardExamMonthlyLimit > 0 && boardExamUsedThisMonth >= boardExamMonthlyLimit;
   const boardExamUpgradeCtas = getUpgradeCtas((viewerPlanType ?? "FREE") as AppPlanType);
@@ -982,6 +995,18 @@ export default function ChallengeQuizPage() {
       return [...current, studyPackIdToToggle];
     });
   }, []);
+
+  const toggleChallengeAdditionalSource = useCallback((studyPackIdToToggle: string) => {
+    setSelectedChallengeAdditionalStudyPackIds((current) => {
+      if (current.includes(studyPackIdToToggle)) {
+        return current.filter((studyPackIdValue) => studyPackIdValue !== studyPackIdToToggle);
+      }
+      if (current.length >= maxChallengeAdditionalNotes) {
+        return current;
+      }
+      return [...current, studyPackIdToToggle];
+    });
+  }, [maxChallengeAdditionalNotes]);
 
   useEffect(() => {
     progressRef.current = {
@@ -1251,6 +1276,12 @@ export default function ChallengeQuizPage() {
           request.sourceCollectionId = collectionId;
         }
       }
+      if (nextMode === CHALLENGE_MODE && selectedChallengeAdditionalStudyPackIds.length > 0) {
+        request.additionalStudyPackIds = selectedChallengeAdditionalStudyPackIds;
+        if (collectionId) {
+          request.sourceCollectionId = collectionId;
+        }
+      }
       const started = redoMissed
         ? await startRedoMissedChallengeQuizSession(note.id)
         : await startChallengeQuizSession(note.id, request);
@@ -1279,7 +1310,15 @@ export default function ChallengeQuizPage() {
         setShowVerifyEmailModal(true);
       }
       setError(message);
-      if (message.toLowerCase().includes("monthly challenge quiz limit")) {
+      // ⚠️ Matched on the error CODE, not the message. As delivered this checked the message for
+      // "monthly multi-note challenge quiz limit", which the exception never says — its text is
+      // "You've used all N multi-note Challenge Quiz sessions in this billing period." So the multi-note
+      // ceiling matched NEITHER branch and produced a bare error with no upgrade path, silently. The
+      // other two limits are left on message-matching because their strings genuinely do match today.
+      if (err instanceof ApiRequestError && err.code === "MONTHLY_MULTI_NOTE_LIMIT_REACHED") {
+        setPhase("prestart");
+        openLockedFeaturePaywall("challenge-quiz-limit", "multi_note_challenge_quiz_start");
+      } else if (message.toLowerCase().includes("monthly challenge quiz limit")) {
         if (shouldShowChallengeQuizLimitPage(viewerPlanType)) {
           setActivePaywallModal(null);
           setPhase("limit-reached");
@@ -1295,7 +1334,7 @@ export default function ChallengeQuizPage() {
       startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [applyStartedSession, collectionId, isEmailVerified, note, openLockedFeaturePaywall, resetToPrestart, selectedBoardExamAdditionalStudyPackIds, selectedMode, viewerPlanType]);
+  }, [applyStartedSession, collectionId, isEmailVerified, note, openLockedFeaturePaywall, resetToPrestart, selectedBoardExamAdditionalStudyPackIds, selectedChallengeAdditionalStudyPackIds, selectedMode, viewerPlanType]);
 
   useEffect(() => {
     if (
@@ -1852,6 +1891,53 @@ export default function ChallengeQuizPage() {
                 </div>
               </div>
             </div>
+            {collectionId ? (
+              <div className="rounded-xl border border-border bg-background p-4">
+                <h2 className="text-sm font-semibold text-foreground">Practise across this plan</h2>
+                <p className="mt-1 text-sm text-foreground/70">
+                  {challengeSession?.maxSourceNotes
+                    ? `This quiz can cover up to ${challengeSession.maxSourceNotes} notes from this plan’s ${availableBoardExamSourceNotes.length + 1} ready notes.`
+                    : "Choose extra notes from this plan when they load."}
+                </p>
+                {sourceNotesLoading ? (
+                  <p className="mt-3 text-sm text-foreground/60">Loading plan notes…</p>
+                ) : sourceNotesError ? (
+                  <p className="mt-3 text-sm text-foreground/60">Could not load plan notes. Single-note Challenge Quiz is still available.</p>
+                ) : availableBoardExamSourceNotes.length > 0 ? (
+                  <div className="mt-3 grid gap-2">
+                    {availableBoardExamSourceNotes.map((sourceNote) => {
+                      const sourceStudyPackId = sourceNote.studyPackId ?? "";
+                      const selected = selectedChallengeAdditionalStudyPackIds.includes(sourceStudyPackId);
+                      const capped = !selected && selectedChallengeAdditionalStudyPackIds.length >= maxChallengeAdditionalNotes;
+                      return (
+                        <button
+                          key={sourceNote.id}
+                          type="button"
+                          className={cn(
+                            "rounded-xl border px-4 py-3 text-left transition",
+                            selected
+                              ? "border-foreground/40 bg-foreground/5 text-foreground"
+                              : "border-border bg-background text-foreground/75 hover:border-foreground/25 hover:bg-muted/30",
+                            capped && "opacity-60",
+                          )}
+                          aria-pressed={selected}
+                          onClick={() => toggleChallengeAdditionalSource(sourceStudyPackId)}
+                          disabled={capped}
+                        >
+                          <span className="block text-sm font-medium text-foreground">{sourceNote.title ?? "Untitled note"}</span>
+                          <span className="block text-xs text-foreground/60">{sourceNote.subject}</span>
+                        </button>
+                      );
+                    })}
+                    <p className="text-xs text-foreground/60">
+                      {selectedChallengeSourceCount} {selectedChallengeSourceCount === 1 ? "note" : "notes"} selected
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-foreground/60">No other ready notes in this plan yet. Single-note Challenge Quiz is still available.</p>
+                )}
+              </div>
+            ) : null}
             {challengeGenerationLocked ? (
               <p className="text-sm text-foreground/75">Preparing your Challenge Quiz...</p>
             ) : null}

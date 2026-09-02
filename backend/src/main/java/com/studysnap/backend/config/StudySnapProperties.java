@@ -107,6 +107,11 @@ public class StudySnapProperties {
         private int freeMonthlyChallengeQuizLimit = 20;
         private int plusMonthlyChallengeQuizLimit = 100;
         private int proMonthlyChallengeQuizLimit = 200;
+        private int freeMonthlyMultiNoteLimit = 2;
+        private int plusMonthlyMultiNoteLimit = 10;
+        // Pro keeps its existing mixed-retrieval capability; this only bounds the new Challenge path.
+        private int proMonthlyMultiNoteLimit = 200;
+        private int freeMultiNoteSourceCap = 3;
         private int freeMonthlyAdaptivePracticeLimit = 3;
         private int plusMonthlyAdaptivePracticeLimit = 10;
         private int proMonthlyAdaptivePracticeLimit = 30;
@@ -157,6 +162,23 @@ public class StudySnapProperties {
                 case PLUS -> plusMonthlyChallengeQuizLimit;
                 case PRO -> proMonthlyChallengeQuizLimit;
                 case FREE -> freeMonthlyChallengeQuizLimit;
+            };
+        }
+
+        public int resolveMonthlyMultiNoteLimit(PlanType planType) {
+            return switch (normalizePlanType(planType)) {
+                case PLUS -> plusMonthlyMultiNoteLimit;
+                case PRO -> proMonthlyMultiNoteLimit;
+                case FREE -> freeMonthlyMultiNoteLimit;
+            };
+        }
+
+        /** The configured Long Exam count for a learner level, shared by both mixed-retrieval paths. */
+        public int resolveLongExamQuestionCount(com.studysnap.backend.entity.LearnerLevel learnerLevel) {
+            return switch (learnerLevel == null ? com.studysnap.backend.entity.LearnerLevel.COLLEGE : learnerLevel) {
+                case GRADE_SCHOOL, JUNIOR_HIGH -> longExamLowTierCount;
+                case BOARD_EXAM_REVIEW, PROFESSIONAL -> longExamHighTierCount;
+                case SENIOR_HIGH, COLLEGE, PERSONAL_LEARNING -> longExamMidTierCount;
             };
         }
 

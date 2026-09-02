@@ -1,7 +1,7 @@
-import type { ProfileType } from "@/lib/api";
+import type { PlanType, ProfileType } from "@/lib/api";
 
 export type ExamModeId = "challenge" | "long_exam" | "board_exam";
-export type PlanPremiumExamMode = "long_exam" | "board_exam" | "interview";
+export type PlanPremiumExamMode = "challenge" | "long_exam" | "board_exam" | "interview";
 
 export type ExamModeCard = {
   id: ExamModeId;
@@ -70,7 +70,12 @@ export function getAvailableExamModes(
 
 export function resolvePlanPremiumExamMode(
   profileType: ProfileType | null | undefined,
+  planType: PlanType | null | undefined,
 ): PlanPremiumExamMode | null {
+  // Mixed-retrieval Challenge Quiz is the reachable plan terminal action for Free and Plus.
+  if (planType !== "PRO") {
+    return profileType === "TEACHER" || profileType == null ? null : "challenge";
+  }
   if (profileType === "STUDENT") {
     return "long_exam";
   }
@@ -79,6 +84,9 @@ export function resolvePlanPremiumExamMode(
   }
   if (profileType === "PROFESSIONAL") {
     return "interview";
+  }
+  if (profileType === "PARENT") {
+    return "challenge";
   }
   return null;
 }

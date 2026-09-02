@@ -1,4 +1,4 @@
-import type { ProfileType } from "@/lib/api";
+import type { PlanType, ProfileType } from "@/lib/api";
 import { resolvePlanPremiumExamMode, type PlanPremiumExamMode } from "@/lib/exam-mode-visibility";
 
 export type CollectionLabels = {
@@ -89,6 +89,7 @@ const LABELS_BY_PROFILE: Partial<Record<ProfileType, CollectionLabels>> = {
 };
 
 const PREMIUM_EXAM_LABELS: Record<PlanPremiumExamMode, string> = {
+  challenge: "Start Challenge Quiz",
   long_exam: "Take the Long Exam",
   board_exam: "Take the Board Exam",
   interview: "Start Interview Practice",
@@ -98,7 +99,10 @@ export function getCollectionLabels(profileType: ProfileType | null | undefined)
   return LABELS_BY_PROFILE[profileType ?? "PROFESSIONAL"] ?? DEFAULT_LABELS;
 }
 
-export function getCollectionTerminalAction(profileType: ProfileType | null | undefined): CollectionTerminalAction | null {
+export function getCollectionTerminalAction(
+  profileType: ProfileType | null | undefined,
+  planType: PlanType | null | undefined,
+): CollectionTerminalAction | null {
   if (profileType === "TEACHER") {
     return {
       kind: "exam-builder",
@@ -106,7 +110,7 @@ export function getCollectionTerminalAction(profileType: ProfileType | null | un
     };
   }
 
-  const premiumMode = resolvePlanPremiumExamMode(profileType);
+  const premiumMode = resolvePlanPremiumExamMode(profileType, planType);
   if (!premiumMode) {
     return null;
   }

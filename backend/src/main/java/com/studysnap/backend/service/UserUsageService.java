@@ -33,7 +33,8 @@ public class UserUsageService {
                         usage.getLongExamUsedThisMonth(),
                         usage.getBoardExamUsedThisMonth(),
                         usage.getQuizShareLinksCreated(),
-                        usage.getAskCompanionUsedThisMonth()
+                        usage.getAskCompanionUsedThisMonth(),
+                        usage.getMultiNoteGenerations()
                 ))
                 .orElse(MonthlyUsage.zero(usagePeriod.periodStart(), usagePeriod.periodEnd()));
     }
@@ -47,6 +48,7 @@ public class UserUsageService {
                 usagePeriod.month(),
                 usagePeriod.periodStart(),
                 usagePeriod.periodEnd(),
+                0,
                 0,
                 0,
                 0,
@@ -85,17 +87,22 @@ public class UserUsageService {
 
     @Transactional
     public void incrementAskCompanionSession(UUID userId, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
     }
 
     @Transactional
     public void incrementLongExamGenerationBy(UUID userId, int count, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, count, 0, 0, 0, 0, 0);
+        increment(userId, occurredAt, 0, 0, 0, 0, count, 0, 0, 0, 0, 0, 0, 0);
     }
 
     @Transactional
     public void incrementBoardExamGenerationBy(UUID userId, int count, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 0, count, 0, 0, 0, 0);
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, count, 0, 0, 0, 0, 0, 0);
+    }
+
+    @Transactional
+    public void incrementMultiNoteGeneration(UUID userId, OffsetDateTime occurredAt) {
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0);
     }
 
     @Transactional
@@ -110,17 +117,17 @@ public class UserUsageService {
 
     @Transactional
     public void incrementDocxExport(UUID userId, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0);
     }
 
     @Transactional
     public void incrementPdfExport(UUID userId, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
     }
 
     @Transactional
     public void incrementQuizShareLinkCreated(UUID userId, OffsetDateTime occurredAt) {
-        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
     }
 
     private void increment(
@@ -153,6 +160,7 @@ public class UserUsageService {
                 interviewPracticeDelta,
                 0,
                 0,
+                0,
                 ocrDelta,
                 noteGenerationDelta,
                 0,
@@ -169,6 +177,7 @@ public class UserUsageService {
             int interviewPracticeDelta,
             int longExamDelta,
             int boardExamDelta,
+            int multiNoteDelta,
             int ocrDelta,
             int noteGenerationDelta,
             int docxExportDelta,
@@ -183,6 +192,7 @@ public class UserUsageService {
                 interviewPracticeDelta,
                 longExamDelta,
                 boardExamDelta,
+                multiNoteDelta,
                 ocrDelta,
                 noteGenerationDelta,
                 docxExportDelta,
@@ -200,6 +210,7 @@ public class UserUsageService {
             int interviewPracticeDelta,
             int longExamDelta,
             int boardExamDelta,
+            int multiNoteDelta,
             int ocrDelta,
             int noteGenerationDelta,
             int docxExportDelta,
@@ -207,7 +218,7 @@ public class UserUsageService {
             int quizShareLinkDelta
     ) {
         increment(userId, occurredAt, studyPackDelta, challengeDelta, adaptiveDelta, interviewPracticeDelta,
-                longExamDelta, boardExamDelta, ocrDelta, noteGenerationDelta, docxExportDelta, pdfExportDelta,
+                longExamDelta, boardExamDelta, multiNoteDelta, ocrDelta, noteGenerationDelta, docxExportDelta, pdfExportDelta,
                 quizShareLinkDelta, 0);
     }
 
@@ -220,6 +231,7 @@ public class UserUsageService {
             int interviewPracticeDelta,
             int longExamDelta,
             int boardExamDelta,
+            int multiNoteDelta,
             int ocrDelta,
             int noteGenerationDelta,
             int docxExportDelta,
@@ -240,6 +252,7 @@ public class UserUsageService {
                 interviewPracticeDelta,
                 longExamDelta,
                 boardExamDelta,
+                multiNoteDelta,
                 ocrDelta,
                 noteGenerationDelta,
                 docxExportDelta,
@@ -264,8 +277,31 @@ public class UserUsageService {
             int longExamUsedThisMonth,
             int boardExamUsedThisMonth,
             int quizShareLinksCreated,
-            int askCompanionUsedThisMonth
+            int askCompanionUsedThisMonth,
+            int multiNoteGenerations
     ) {
+        /** Compatibility constructor for existing usage callers; multi-note usage starts at zero. */
+        public MonthlyUsage(
+                OffsetDateTime periodStart,
+                OffsetDateTime periodEnd,
+                int studyPackGenerations,
+                int challengeQuizGenerations,
+                int adaptiveQuizGenerations,
+                int interviewPracticeUsedThisMonth,
+                int ocrExtractions,
+                int noteGenerations,
+                int docxExportsCount,
+                int pdfExportsCount,
+                int longExamUsedThisMonth,
+                int boardExamUsedThisMonth,
+                int quizShareLinksCreated,
+                int askCompanionUsedThisMonth
+        ) {
+            this(periodStart, periodEnd, studyPackGenerations, challengeQuizGenerations, adaptiveQuizGenerations,
+                    interviewPracticeUsedThisMonth, ocrExtractions, noteGenerations, docxExportsCount,
+                    pdfExportsCount, longExamUsedThisMonth, boardExamUsedThisMonth, quizShareLinksCreated,
+                    askCompanionUsedThisMonth, 0);
+        }
         public MonthlyUsage(
                 OffsetDateTime periodStart,
                 OffsetDateTime periodEnd,
@@ -295,6 +331,7 @@ public class UserUsageService {
                     longExamUsedThisMonth,
                     boardExamUsedThisMonth,
                     quizShareLinksCreated,
+                    0,
                     0
             );
         }
@@ -319,6 +356,7 @@ public class UserUsageService {
                     ocrExtractions,
                     noteGenerations,
                     exportsCount,
+                    0,
                     0,
                     0,
                     0,
@@ -355,6 +393,7 @@ public class UserUsageService {
                     longExamUsedThisMonth,
                     boardExamUsedThisMonth,
                     0,
+                    0,
                     0
             );
         }
@@ -380,6 +419,7 @@ public class UserUsageService {
                     ocrExtractions,
                     noteGenerations,
                     exportsCount,
+                    0,
                     0,
                     0,
                     0,
@@ -415,17 +455,18 @@ public class UserUsageService {
                     longExamUsedThisMonth,
                     boardExamUsedThisMonth,
                     0,
+                    0,
                     0
             );
         }
 
         public static MonthlyUsage zero() {
             OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-            return new MonthlyUsage(now, now, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            return new MonthlyUsage(now, now, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
 
         public static MonthlyUsage zero(OffsetDateTime periodStart, OffsetDateTime periodEnd) {
-            return new MonthlyUsage(periodStart, periodEnd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            return new MonthlyUsage(periodStart, periodEnd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
     }
 }
