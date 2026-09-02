@@ -306,24 +306,38 @@ public final class QuizItem {
         return sourceStudyPackId;
     }
 
+    /**
+     * Returns a copy carrying {@code sourceStudyPackId}, reusing the already-sanitized field values
+     * verbatim.
+     *
+     * <p>⚠️ This MUST NOT route through the sanitizing constructor.
+     * {@code QuizValidationUtils.sanitizeChoiceText} strips a leading choice label
+     * ({@code ^\s*[A-Da-d]\s*[.)]\s*}) with {@code replaceFirst} and is NOT idempotent, so a second
+     * pass over already-sanitized choices strips a second token: {@code "A. B. Smith"} sanitizes to
+     * {@code "B. Smith"} and then to {@code "Smith"}. Because {@code QuizSessionStateUtils.extractQuiz}
+     * calls this on every deserialized item, a sanitizing copy would corrupt author initials and similar
+     * text on every session load, in every quiz mode.
+     */
     public QuizItem withSourceStudyPackId(String sourceStudyPackId) {
-        return new QuizItem(
-                question,
-                choices,
-                correctIndex,
-                concept,
-                explanation,
-                answer(),
-                questionFormat,
-                questionType,
-                workingSolution,
-                correctIndices,
-                questionGroup,
-                keyConcept,
-                acceptableAnswers,
-                acceptableAnswerGroups,
-                sourceStudyPackId
-        );
+        return new QuizItem(this, sourceStudyPackId);
+    }
+
+    /** Trusted copy constructor: every field is already sanitized, so no sanitizer is re-applied. */
+    private QuizItem(QuizItem source, String sourceStudyPackId) {
+        this.question = source.question;
+        this.choices = source.choices;
+        this.correctIndex = source.correctIndex;
+        this.correctIndices = source.correctIndices;
+        this.concept = source.concept;
+        this.explanation = source.explanation;
+        this.questionFormat = source.questionFormat;
+        this.questionType = source.questionType;
+        this.workingSolution = source.workingSolution;
+        this.questionGroup = source.questionGroup;
+        this.keyConcept = source.keyConcept;
+        this.acceptableAnswers = source.acceptableAnswers;
+        this.acceptableAnswerGroups = source.acceptableAnswerGroups;
+        this.sourceStudyPackId = sourceStudyPackId;
     }
 
     private static Integer resolveCorrectIndex(

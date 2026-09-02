@@ -679,7 +679,12 @@ public class ChallengeQuizService {
                         selectedChoices,
                         selectedMultiChoices,
                         selectedIdentificationAnswers,
-                        selectedEnumerationAnswers
+                        selectedEnumerationAnswers,
+                        // ⚠️ This service labels an absent concept "Uncategorized" while
+                        // QuizSessionReviewUtils labels it "Unknown". ConceptHealth is keyed
+                        // (user_id, study_pack_id, concept), so the label IS the row identity —
+                        // adopting the other label would fork the row and orphan its streak.
+                        UNKNOWN_CONCEPT_LABEL
                 );
         recordCorrectConceptsBySourceStudyPack(userId, saved, conceptBreakdownBySourceStudyPack, now);
         List<String> qualifyingConcepts = recordIncorrectConceptsBySourceStudyPack(
@@ -2298,8 +2303,17 @@ public class ChallengeQuizService {
             String questionGroup = resolveMatchingQuestionGroup(questions.get(index));
             int endIndex = index + 1;
             if (questionGroup != null) {
+                // ⚠️ A block must not span two source packs. challenge-quiz-developer.txt instructs EVERY
+                // generation to label its matching block "group-1", so two independently generated sources
+                // routinely emit the SAME label; because generateChallengeQuizForSources appends sources
+                // back to back, A's trailing block and B's leading block would otherwise merge into one
+                // block with ambiguous provenance. Breaking on the source stamp fixes that at the cause —
+                // detection alone turned a working multi-note session into a hard failure after both LLM
+                // calls had been paid for.
+                String sourceStudyPackId = questions.get(index).sourceStudyPackId();
                 while (endIndex < questions.size()
-                        && questionGroup.equals(resolveMatchingQuestionGroup(questions.get(endIndex)))) {
+                        && questionGroup.equals(resolveMatchingQuestionGroup(questions.get(endIndex)))
+                        && Objects.equals(sourceStudyPackId, questions.get(endIndex).sourceStudyPackId())) {
                     endIndex += 1;
                 }
             }
