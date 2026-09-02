@@ -152,11 +152,17 @@ public class ChallengeQuizService {
      *
      * <p>⚠️ A single-note Challenge Quiz sizes itself from the learner's last Quick Review score
      * (10 / 12 / 15). Letting a multi-note session do the same made the SOURCE CAP move between
-     * sessions on the same plan — 3, 4 or 5 depending on a score the learner may not remember — while
-     * the prestart renders that cap as a stable promise. Owner ruled 2026-09-02 to fix it, so the cap
-     * is always {@code 12 / 3 = 4} and what the prestart shows is what the start will enforce.
+     * sessions on the same plan while the prestart renders it as a stable promise. Owner ruled
+     * 2026-09-02 to fix it, so what the prestart shows is what the start will enforce.
+     *
+     * <p>⚠️ THE VALUE IS 18 BECAUSE OF A CEILING, NOT A PREFERENCE. At three questions per source this
+     * gives {@code 18 / 3 = 6} sources for Plus and Pro — rejecting the earlier 4, which was pure
+     * arithmetic leakage from a 12-question count. The original intent was ~10 sources, and that is
+     * UNREACHABLE: it needs 30 questions, ten past {@link #MAX_CHALLENGE_QUIZ_QUESTIONS} (20), which
+     * {@code +5 More Questions} also depends on. **Do NOT raise this past 20, and do NOT lift that
+     * ceiling to chase ~10** — the owner declined that as a Challenge Quiz identity change.
      */
-    private static final int MULTI_NOTE_CHALLENGE_QUESTION_COUNT = MID_SCORE_QUESTION_COUNT;
+    private static final int MULTI_NOTE_CHALLENGE_QUESTION_COUNT = 18;
     private static final int INITIAL_CHALLENGE_QUIZ_COUNT = 5;
     public static final int MAX_CHALLENGE_QUIZ_QUESTIONS = 20;
     private static final int GENERATE_MORE_BATCH_SIZE = 5;

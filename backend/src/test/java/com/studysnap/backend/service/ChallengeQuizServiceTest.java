@@ -3002,9 +3002,9 @@ class ChallengeQuizServiceTest {
         when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any()))
                 .thenReturn(new java.util.LinkedHashSet<>(List.of(primaryNoteId, additionalNoteId)));
         when(generationContextResolver.resolveForStudyPack(eq(userId), any(StudyPackEntity.class))).thenReturn(context);
-        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(6), any(), any()))
-                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Primary", 6)))
-                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Additional", 6)));
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(9), any(), any()))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Primary", 9)))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Additional", 9)));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -3022,7 +3022,7 @@ class ChallengeQuizServiceTest {
                 eq(primaryStudyPackId), metadata.capture());
         assertThat(metadata.getValue()).containsExactlyInAnyOrderEntriesOf(Map.of(
                 "sessionId", response.sessionId(),
-                "questionCount", 12,
+                "questionCount", 18,
                 "difficulty", "medium",
                 "mode", "challenge",
                 "sourceCount", 2,
@@ -3056,7 +3056,7 @@ class ChallengeQuizServiceTest {
         UUID userId = UUID.randomUUID();
         UUID primaryStudyPackId = UUID.randomUUID();
         StudyPackEntity primary = buildStudyPack(primaryStudyPackId, UUID.randomUUID(), userId);
-        List<StudyPackEntity> additionalSources = java.util.stream.IntStream.range(0, 3)
+        List<StudyPackEntity> additionalSources = java.util.stream.IntStream.range(0, 5)
                 .mapToObj(index -> buildStudyPack(UUID.randomUUID(), UUID.randomUUID(), userId))
                 .toList();
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(primaryStudyPackId, userId)).thenReturn(Optional.of(primary));
@@ -3089,8 +3089,8 @@ class ChallengeQuizServiceTest {
         // stub encoded exactly that by expecting generateChallengeQuiz(..., 2, ...). A multi-note
         // session now uses a FIXED 12 questions, so the cap is a stable 4 and every source clears the
         // floor regardless of the learner's last Quick Review score.
-        assertThat(response.maxSourceNotes()).isEqualTo(4);
-        assertThat(response.sourceNoteRefs()).hasSize(4);
+        assertThat(response.maxSourceNotes()).isEqualTo(6);
+        assertThat(response.sourceNoteRefs()).hasSize(6);
         assertThat(response.sourceNoteRefs())
                 .allSatisfy(source -> assertThat(source.questionCount()).isGreaterThanOrEqualTo(3));
     }
@@ -3117,7 +3117,7 @@ class ChallengeQuizServiceTest {
                 userId
         );
 
-        assertThat(response.maxSourceNotes()).isEqualTo(4);
+        assertThat(response.maxSourceNotes()).isEqualTo(6);
         // ⚠️ Structural, not incidental: the score lookup that sizes a single-note quiz is never
         // consulted for the cap at all. Asserting the number alone would still pass if the cap went
         // back to being score-derived and this fixture merely happened to land on 12 questions.
@@ -3172,9 +3172,9 @@ class ChallengeQuizServiceTest {
                 eq(userId), eq(primaryStudyPackId), eq(QuickReviewSessionMode.CHALLENGE), any()
         )).thenReturn(Optional.empty());
 
-        // Four sources is the cap for a 12-question quiz, so four ADDITIONAL (five total) is one past it.
+        // Six sources is the cap for an 18-question quiz, so six ADDITIONAL (seven total) is one past it.
         assertThatThrownBy(() -> challengeQuizService.startSession(primaryStudyPackId.toString(), userId,
-                new ChallengeQuizStartRequest("challenge", java.util.stream.IntStream.range(0, 4)
+                new ChallengeQuizStartRequest("challenge", java.util.stream.IntStream.range(0, 6)
                         .mapToObj(index -> UUID.randomUUID().toString()).toList())))
                 .isInstanceOf(MultiNoteChallengeQuizSourceNotAllowedException.class);
     }
@@ -3224,9 +3224,9 @@ class ChallengeQuizServiceTest {
         stubMultiNoteChallengeStart(userId, primaryStudyPackId, primary, additionalStudyPackId, additional, PlanType.FREE);
         when(planSourcedExamVerifier.resolvePlanMemberNoteIds(eq(collectionId.toString()), eq(userId), any())).thenReturn(Set.of());
         when(generationContextResolver.resolveForStudyPack(eq(userId), any(StudyPackEntity.class))).thenReturn(context);
-        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(6), any(), any()))
-                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Primary", 6)))
-                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Additional", 6)));
+        when(quizGenerationService.generateChallengeQuiz(any(), any(), any(), any(), eq(9), any(), any()))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Primary", 9)))
+                .thenReturn(GeneratedChallengeQuizContent.withoutUsage(buildQuizWithPrefix("Additional", 9)));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         challengeQuizService.startSession(primaryStudyPackId.toString(), userId,

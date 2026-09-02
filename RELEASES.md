@@ -85,6 +85,17 @@ separate monetization contract, unchanged.** Nothing here adds, widens or remove
   `PlanSourcedExamVerifier`, the terminal CTA resolving on (profile, plan), and `sourceCount`/`sourceScope`
   recording the **verified** outcome.
 
+### Shipped (slice 0)
+
+- **The multi-note capability is reachable.** The prestart reads the cap from the in-progress response — which already carried it and was **discarding the field** — instead of from `challengeSession`, which is **null at prestart by construction**. That single derivation made `maxChallengeAdditionalNotes` permanently `0`, disabling every source button on every plan while the server side was correct.
+- **⚠️ NO CLIENT-SIDE FALLBACK WAS ADDED.** With no server value the cap is `0`, never a local default — a constant here is the drift this release exists to remove.
+- **Plus multi-note is 18 questions → 6 sources; Free stays at 3**, still derived through `ExamSourceLimitResolver` rather than reintroduced as a standalone constant.
+- **⚠️ THE `PARENT` CONTRADICTION IS FIXED — AND THE FIRST FIX FOR IT WAS INERT, CAUGHT BY MUTATION RATHER THAN REVIEW.** `resolvePlanPremiumExamMode(PARENT, PRO)` is `"challenge"`, but the page re-derived from plan alone and forced Board Exam setup under a CTA reading *"Start Challenge Quiz"*. Routing it through the resolver **looked correct and changed nothing**: `isChallengeViewerProfileType` deliberately excludes `PARENT`, so the narrowed profile was `null` and the resolver returned `null`. **The resolver now receives the UNNARROWED profile.**
+- **⚠️ AND THE FIRST TEST FOR IT DID NOT DISCRIMINATE.** It asserted the plan's source button present and a "Board Exam" heading absent — **Board Exam setup renders the same source buttons**, so two mutants survived. Rewritten against a challenge-setup-only element; both mutants now die, including the narrowed-profile one.
+- **⚠️ A stale-closure warning was introduced and fixed rather than accepted** — the new state was missing from an effect's dependency array, which is the audit checklist's own item 4.
+- **`PLANS.md`'s PRO multi-note row is corrected.** *"200 multi-note Challenge Quiz starts / month"* was a delivery default mirroring the challenge-quiz limit, then written up as an entitlement nobody chose.
+- **Green:** 1910 backend tests, 2092 frontend tests, `tsc --noEmit` exit 0, lint back to its 15 pre-existing warnings.
+
 ### Carried out of this release, by the approved sequence
 
 - **Source provenance moves to the NEXT release and is slice 1.** **⚠️ It is deliberately AHEAD of

@@ -43,7 +43,7 @@ Consistent, guided study with more room to keep going — always know what to re
 - `10` Adaptive Practice sessions / month
 - `20` Ask Companion sessions / month
 - `10` shareable quiz links / month
-- `10` multi-note Challenge Quiz starts / month, up to `4` notes including the primary
+- `10` multi-note Challenge Quiz starts / month, up to `6` notes including the primary
 
 **Features**
 
@@ -72,7 +72,7 @@ The complete system for serious, sustained study — plan what's next and track 
 - `20` Ask Companion sessions / month
 - `12` Long Exam sessions / month
 - `10` Board Exam sessions / month
-- `200` multi-note Challenge Quiz starts / month, up to `4` notes including the primary
+- PRO's plan launch opens **Board Exam**, not multi-note Challenge. **⚠️ The previously listed "200 multi-note Challenge Quiz starts / month" was a delivery default mirroring the challenge-quiz limit, never an entitlement anyone chose.**
 - Unlimited exports
 - Unlimited shareable quiz links
 
@@ -126,7 +126,7 @@ These limits and feature toggles are enforced in the backend; the frontend reads
 | Interview Practice | — | — | 10 sessions |
 | Board Exam Mode | — | — | 10 sessions |
 | Long Exam Mode | — | — | 12 sessions |
-| Multi-note Challenge Quiz | 2 starts, 3 notes | 10 starts, 4 notes | 200 starts, 4 notes |
+| Multi-note Challenge Quiz | 2 starts, 3 notes | 10 starts, 6 notes | — (PRO opens Board Exam from a plan) |
 | Summary + Key Concepts | ✓ | ✓ | ✓ |
 
 ---

@@ -39,6 +39,7 @@ import { getCollectionLabels } from "@/lib/collection-labels";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
+  type ProfileType,
   ApiRequestError,
   type ChallengeQuizStartRequest,
   type ChallengeQuizMode,
@@ -103,7 +104,8 @@ import {
   buildAdaptivePracticeHref,
 } from "@/lib/adaptive-practice-entry";
 import { resolveCollectionScopedSourceNotes } from "@/lib/collection-exam";
-import { getAvailableExamModes } from "@/lib/exam-mode-visibility";
+import {
+  resolvePlanPremiumExamMode, getAvailableExamModes } from "@/lib/exam-mode-visibility";
 import { buildConceptAnchorId, normalizeConceptKey } from "@/lib/concepts";
 import { cn } from "@/lib/utils";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
@@ -349,6 +351,26 @@ export default function ChallengeQuizPage() {
   const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
   const [availableBoardExamSourceNotes, setAvailableBoardExamSourceNotes] = useState<NoteListItemResponse[]>([]);
   const [selectedBoardExamAdditionalStudyPackIds, setSelectedBoardExamAdditionalStudyPackIds] = useState<string[]>([]);
+  /**
+   * Server-reported multi-note source cap, INCLUDING the primary.
+   *
+   * ⚠️ Held separately from `challengeSession` on purpose. That object is null at prestart by
+   * construction — it is only set once a session starts — so deriving the cap from it made
+   * `maxChallengeAdditionalNotes` permanently 0, which disabled every source button and meant the
+   * capability could not be reached on any plan. The in-progress response carries the value and was
+   * being discarded. This mirrors what the Long Exam page already does for the same reason.
+   */
+  const [prestartMaxSourceNotes, setPrestartMaxSourceNotes] = useState<number | null>(null);
+  /**
+   * The viewer's profile type as the account reports it, unnarrowed.
+   *
+   * ⚠️ `viewerProfileType` runs through `isChallengeViewerProfileType`, which deliberately excludes
+   * PARENT — so it cannot represent the one profile whose plan CTA resolves to "challenge" on PRO.
+   * Passing the narrowed value to `resolvePlanPremiumExamMode` silently returns null for a PRO parent
+   * and routes them to Board Exam setup under a CTA reading "Start Challenge Quiz". The resolver must
+   * see what the CTA saw.
+   */
+  const [viewerProfileTypeRaw, setViewerProfileTypeRaw] = useState<ProfileType | null>(null);
   const [selectedChallengeAdditionalStudyPackIds, setSelectedChallengeAdditionalStudyPackIds] = useState<string[]>([]);
   const [sourceNotesLoading, setSourceNotesLoading] = useState(false);
   const [sourceNotesError, setSourceNotesError] = useState<string | null>(null);
@@ -446,6 +468,7 @@ export default function ChallengeQuizPage() {
       setViewerId(authUser?.id ?? null);
       setViewerPlanType(authUser?.planType === "FREE" || authUser?.planType === "PLUS" || authUser?.planType === "PRO" ? authUser.planType : null);
       setViewerProfileType(isChallengeViewerProfileType(authUser?.profileType) ? authUser.profileType : null);
+      setViewerProfileTypeRaw((authUser?.profileType as ProfileType | undefined) ?? null);
     };
     syncVerification();
     globalThis.addEventListener("studysnap-auth-change", syncVerification);
@@ -490,10 +513,14 @@ export default function ChallengeQuizPage() {
     if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId || resumeCandidate) {
       return;
     }
-    const collectionStartsWithChallenge = collectionId !== null && viewerPlanType !== "PRO";
+    // ⚠️ Derived from the SAME resolver the plan CTA uses, not re-derived from plan alone. A PRO
+    // learner on a PARENT profile resolves to "challenge", and re-deriving here sent them to Board Exam
+    // setup under a CTA reading "Start Challenge Quiz" — the page contradicting the button that opened it.
+    const collectionStartsWithChallenge = collectionId !== null
+        && resolvePlanPremiumExamMode(viewerProfileTypeRaw, viewerPlanType) === "challenge";
     setSelectedMode(collectionStartsWithChallenge ? CHALLENGE_MODE : collectionId ? BOARD_EXAM_MODE : resolvePreferredChallengeMode(viewerProfileType));
     setPrestartStep(collectionStartsWithChallenge ? "challenge-setup" : collectionId ? "board-exam-setup" : resolveInitialPrestartStep(viewerProfileType));
-  }, [challengeSession?.sessionId, collectionId, phase, resumeCandidate, sharedModeSelectionEntryRequested, viewerPlanType, viewerProfileType]);
+  }, [challengeSession?.sessionId, collectionId, phase, resumeCandidate, sharedModeSelectionEntryRequested, viewerPlanType, viewerProfileType, viewerProfileTypeRaw]);
 
   useEffect(() => {
     challengeSessionRef.current = challengeSession;
@@ -812,7 +839,11 @@ export default function ChallengeQuizPage() {
       const resolvedViewerPlanType = authUser?.planType === "FREE" || authUser?.planType === "PLUS" || authUser?.planType === "PRO"
         ? authUser.planType
         : null;
-      const collectionStartsWithChallenge = collectionId !== null && resolvedViewerPlanType !== "PRO";
+      const collectionStartsWithChallenge = collectionId !== null
+        && resolvePlanPremiumExamMode(
+          (authUser?.profileType as ProfileType | undefined) ?? null,
+          resolvedViewerPlanType,
+        ) === "challenge";
       const requestedPrestartMode = collectionStartsWithChallenge ? CHALLENGE_MODE : collectionId ? BOARD_EXAM_MODE : preferredMode;
       const requestedPrestartStep: ChallengePrestartStep = collectionStartsWithChallenge
         ? "challenge-setup"
@@ -844,6 +875,7 @@ export default function ChallengeQuizPage() {
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
       setBoardExamUsedThisMonth(inProgress.boardExamUsedThisMonth ?? 0);
       setBoardExamMonthlyLimit(inProgress.boardExamMonthlyLimit ?? 0);
+      setPrestartMaxSourceNotes(inProgress.maxSourceNotes ?? null);
       const isExpiredInProgressSession = inProgress.status === "IN_PROGRESS"
         && isChallengeQuizSessionExpired(inProgress);
       if (sharedModeSelectionEntryRequested) {
@@ -966,7 +998,13 @@ export default function ChallengeQuizPage() {
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
   const activeSourceNoteRefs = challengeSession?.sourceNoteRefs ?? [];
   const selectedBoardExamSourceCount = 1 + selectedBoardExamAdditionalStudyPackIds.length;
-  const maxChallengeAdditionalNotes = Math.max(0, (challengeSession?.maxSourceNotes ?? 1) - 1);
+  // Additional sources exclude the primary. Prefer the live session's value once one exists; before
+  // that, use the prestart value from the in-progress read. Never fall back to a client-side constant —
+  // the cap is server-derived and a local default would be the drift this release exists to remove.
+  const resolvedMaxSourceNotes = challengeSession?.maxSourceNotes ?? prestartMaxSourceNotes;
+  const maxChallengeAdditionalNotes = resolvedMaxSourceNotes === null
+    ? 0
+    : Math.max(0, resolvedMaxSourceNotes - 1);
   const selectedChallengeSourceCount = 1 + selectedChallengeAdditionalStudyPackIds.length;
   const boardExamRemaining = Math.max(0, boardExamMonthlyLimit - boardExamUsedThisMonth);
   const boardExamLimitReached = boardExamMonthlyLimit > 0 && boardExamUsedThisMonth >= boardExamMonthlyLimit;
@@ -1895,8 +1933,8 @@ export default function ChallengeQuizPage() {
               <div className="rounded-xl border border-border bg-background p-4">
                 <h2 className="text-sm font-semibold text-foreground">Practise across this plan</h2>
                 <p className="mt-1 text-sm text-foreground/70">
-                  {challengeSession?.maxSourceNotes
-                    ? `This quiz can cover up to ${challengeSession.maxSourceNotes} notes from this plan’s ${availableBoardExamSourceNotes.length + 1} ready notes.`
+                  {resolvedMaxSourceNotes
+                    ? `This quiz can cover up to ${resolvedMaxSourceNotes} notes from this plan’s ${availableBoardExamSourceNotes.length + 1} ready notes.`
                     : "Choose extra notes from this plan when they load."}
                 </p>
                 {sourceNotesLoading ? (
