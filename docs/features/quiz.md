@@ -72,9 +72,9 @@ Two defences, and both are needed:
 - Pro-only at Start CTA; Free and Plus users may open the setup screen before the upgrade ask
 - consumes the shared Challenge Quiz monthly budget and also has a dedicated Board Exam hard cap (`10` sessions / month by default)
 - quota is deducted per session at exam start: 1 unit per Board Exam regardless of note count; the source count still drives question-count scaling and multi-note generation
-- generated question count scales with source count: `min(12 * sourceCount, 30)` so single-note stays at 12, two notes generate 24, and three notes cap at 30
+- on the **legacy manual path** the generated question count scales with source count: `min(12 * sourceCount, 30)` so single-note stays at 12, two notes generate 24, and three notes cap at 30. **A Review Set Board Exam does not use that formula** — it is a flat configured `boardExamTargetQuestionCount` (30) split across its sampled sources, because its source count is chosen by the server rather than by the learner (`v0.106.0`)
 - selected from the same mode-selection screen
-- Board Exam can also launch from a Study Plan / Review Set through `collectionId`; the setup opens directly, additional Study Pack choices are restricted to quiz-ready notes in that plan, and the existing 2-additional-note cap is unchanged
+- Board Exam launches from a Study Plan / Review Set through `collectionId` and the setup opens directly. **As of `v0.106.0` there is no source picker on that path and no additional-note cap applies:** the server resolves the Review Set (walking up from a Subject Plan), samples across its Subject Plans, and **rejects** a caller-supplied `additionalStudyPackIds` list rather than silently dropping it. The 2-additional-note cap survives only on the legacy manual path, where a note has no collection context
 - keeps separate framing and stricter setup, but still uses note-owned session persistence
 
 ### Adaptive Practice

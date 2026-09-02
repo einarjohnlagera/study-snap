@@ -2,8 +2,8 @@
 
 ## v0.106.0 - Board Exam Review Set Identity
 
-**Status: In Progress** (kicked off 2026-09-02, base branch `releases/v0.106.0`, cut from `main` after
-`v0.105.0` merged, tagged and **deployed to production**)
+**Status: Released** (kicked off 2026-09-02, signed off 2026-09-03, base branch `releases/v0.106.0`, cut
+from `main` after `v0.105.0` merged, tagged and **deployed to production**)
 
 Theme: a Board Exam should be built from the whole Review Set it is named for, not from three of its notes.
 
@@ -226,6 +226,20 @@ production, and 1979 tests were green while it was there.**
   save, so a later widening of that allowlist would have turned a visible key into a quota bypass. **A
   one-sided guard would have been worse than none:** asserting only the strip lets a future "fix" that stops
   writing the flag pass while silently disabling every refund.
+- **Signoff found two more stale claims in docs the release never touched, and one in a code comment.**
+  `quiz.md` still said a Review Set Board Exam's *"additional Study Pack choices are restricted to quiz-ready
+  notes in that plan, and the existing 2-additional-note cap is unchanged"* — describing precisely the picker
+  and cap this release removed — and still gave `min(12 × sourceCount, 30)` as the question count for all
+  Board Exams. `EXAM_MODES.md` still called multi-topic a capability of *"Long Exam (and optionally Board Exam
+  later)"*; later is now. A `ChallengeQuizService` comment still justified a conditional lock by the cost of
+  holding a transaction *"across LLM generation"* for **every Challenge and Board Exam start** — true of
+  Challenge, no longer true of Board Exam. **Neither doc was in this release's diff; both were found by the
+  surface sweep.**
+- **`BOARD_EXAM_STARTED` on the sampled path now carries `sourceCount`, `sourceScope` and
+  `expectedQuestionCount`**, added at signoff because the checkpoint below would otherwise have had no metric:
+  `questionCount` alone cannot separate a sampled exam that assembled 12 from a legacy single-note one that
+  only ever asked for 12. **`sourceScope` records the VERIFIED outcome, never the caller's claim.** Pinned and
+  mutation-verified by `startSession_boardExamStartEventCarriesTheMetricItsCheckpointReads`.
 - **Doc drift closed, including the money surface.** `subscriptions-and-usage-limits.md`, `quiz-session.md`
   and `collections.md` all still said Board Exam and Long Exam quota is deducted **per source note** ("a
   3-note session costs 3 units") — false since `v0.32.2`, which moved both to **one unit per session**.
@@ -240,6 +254,12 @@ production, and 1979 tests were green while it was there.**
 **None open. Every finding this release's pressure test raised was closed before signoff, and each closure is
 mutation-verified with the killing test named above.** The list is recorded as closed rather than deleted so a
 later reader can see what was found and how, and can re-run the mutants.
+
+**⚠️ ONE CHECKPOINT IS OWED AND WAS ADDED IN THIS SIGNOFF COMMIT: `[CHECKPOINT — due 2026-10-06]`.** The
+configured target of **30** items and both assembly floors (10 questions, 2 sources) shipped as reasoned
+numbers rather than measured ones — the kickoff explicitly ruled the target must not block the architecture —
+and the release **newly allows a Board Exam to ship short**. The read asks how often that fires. Its
+instrumentation shipped in the same commit and is verified emitting, not merely enum-resident.
 
 **⚠️ Two limitations carried from earlier releases are NOT closed here and stay where they were recorded:**
 `v0.104.0`'s third live instance of the concept mis-attribution defect in `InterviewPracticeService`, and
