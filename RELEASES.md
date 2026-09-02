@@ -2,8 +2,8 @@
 
 ## v0.104.0 - Assessment Source Provenance
 
-**Status: In Progress** (kicked off 2026-09-02, base branch `releases/v0.104.0`, cut from `main` after
-`v0.103.0` merged and tagged)
+**Status: Released** (kicked off and signed off 2026-09-02, base branch `releases/v0.104.0`, cut from
+`main` after `v0.103.0` merged and tagged)
 
 Theme: when a learner misses a concept in a multi-note assessment, the product should record it against the
 note it actually came from.
@@ -205,8 +205,12 @@ agreed plan**, per the correction recorded at the `v0.103.0` kickoff.
   unowned packs are skipped without failing a completed assessment.
 - **`+5 Questions` records the primary as its source deliberately.** That path generates, templates, and
   banks only from the primary Study Pack, even in a multi-note session.
-- **Cross-source MATCHING groups now fail loudly.** A contiguous matching group with more than one source
-  stamp is rejected rather than shuffling ambiguous provenance into a scored assessment.
+- **A MATCHING block never spans two source packs.** The block scan breaks on the source stamp, so two
+  sources that independently label a block `group-1` — which the generation prompt tells every call to do —
+  stay separate blocks instead of fusing into one with ambiguous provenance. A guard still rejects a
+  genuinely mixed block as defence in depth. **⚠️ This bullet originally read "fail loudly … rejected";
+  detection alone turned a working multi-note session into a hard failure and was fixed at the cause before
+  signoff.**
 
 ### Found by the pre-signoff cold agent, and fixed
 
