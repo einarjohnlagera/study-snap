@@ -91,6 +91,61 @@ syllabus, not by failing loudly.**
   generations. **If Long Exam gets Identification via a NEW prompt instead of copying those rules, it will
   reproduce a bug this repo has already paid for.**
 
+
+### ⚠️ Amended at kickoff, after `advisor()` — §7.5 IS DROPPED FROM SCOPE
+
+**The audit's §7.5 — *"anchor the session on the SAMPLED primary rather than `position == 0`"* — CONTRADICTS
+§15, and §7.5 is the half that yields.**
+
+Verified by reading code and migrations at kickoff:
+
+- `V41` creates **TWO** partial unique indexes on active sessions —
+  `(user_id, study_pack_id, session_mode)` **and** `(user_id, note_id, session_mode)`, both
+  `WHERE status IN ('GENERATING','IN_PROGRESS')`.
+- The existing-session lookup (`LongExamService:172`,
+  `findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc`) keys on the
+  **caller-supplied** `studyPackId` — the path param, resolved **before** any sampling happens.
+
+**So anchoring on the sampled primary breaks both, in opposite directions:** the lookup **misses** an existing
+active session whenever the next start samples a different anchor — **creating a second active Long Exam and
+spending a second quota unit** — or the insert **trips a unique index** and the start throws.
+
+Fixing it properly means re-keying the lookup and **both** indexes to something plan-scoped. **That IS the
+session-anchoring migration §15 explicitly defers *"until slice 6 forces it"*** (nullable `study_pack_id`
+plus `source_collection_id`). Slice 6 is not in this release.
+
+**⚠️ DECISION: the session stays anchored on the CALLER-SUPPLIED primary. Sampling changes which sources are
+DRAWN, never which pack the session is KEYED on.** No migration, no index change, no lookup change.
+
+**⚠️ THE PRIMARY IS THEREFORE FORCE-INCLUDED IN THE SAMPLED SET AND STAYS AT INDEX 0.** Verified this matches
+two existing invariants rather than inventing one: `resolveSourceNoteRefs:909` does `sources.add(primaryStudyPack)`
+**first** and the allocator gives the remainder to `index == 0`, and `planSourced` already requires
+`planMemberNoteIds.contains(primaryStudyPack.getNoteId())`. **A sampler that can drop the primary would anchor
+a session on a pack contributing zero questions.**
+
+**⚠️ CARRIED AS A NAMED KNOWN LIMITATION, NOT SILENTLY:** two Subject Plans sharing a first note still cannot
+both have an active Long Exam. **That predates this release and sampling does not worsen it** — §7.5 existed to
+reduce it, and dropping §7.5 leaves it exactly where it was. **Do NOT "restore" §7.5 in a later slice without
+the §15 migration; it is a trap that costs a double charge or a constraint violation.**
+
+### ⚠️ The quota decision is TAKEN HERE, not left to implementation
+
+Owner decision 3 requires failing **without consuming quota**. Because generation is **asynchronous**, two
+mechanisms could deliver that, and the choice is a money-path decision:
+
+- **REJECTED — move the increment into `generateLongExamAsync`'s success path.** `assertLongExamQuotaAvailable`
+  runs at start, so with no increment until assembly succeeds a learner could start Long Exams on **many
+  different Study Packs concurrently** and every one would pass the quota check before any of them
+  incremented. The unique indexes are per `(user, study_pack, mode)` and so do not close that window.
+  **It trades a refund problem for a quota-bypass problem.**
+- **⚠️ SHIP THIS — keep the increment at `:254` and REVERSE it on failure.** Usage stays accurate at start and
+  the bypass window never opens.
+  **⚠️ Reversal must fire at EVERY transition into `FAILED`, including `v0.86.0`'s recovery sweeper** — a
+  generation killed by JVM exit reaches `FAILED` only through that sweeper, and a reversal wired solely into
+  the `catch` would permanently charge the learner for an exam that never existed.
+  **⚠️ Reversal must be IDEMPOTENT and must never drive usage below zero** — a session must not be refunded
+  twice if the sweeper and the catch both reach it.
+
 ### Anti-drift
 
 **⚠️ NO TRUE/FALSE (deferred, owner 2026-09-02)** — technically free, but its 50% chance floor raises
