@@ -1,5 +1,155 @@
 # RELEASES.md - NoteLib
 
+## v0.105.0 - Curriculum-Scale Exams
+
+**Status: In Progress** (kicked off 2026-09-02, base branch `releases/v0.105.0`, cut from `main` after
+`v0.104.0` merged and tagged)
+
+Theme: an exam over a 77-note Subject Plan should be built from the whole plan, not from the eight notes an
+arithmetic accident left reachable.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet.
+
+### ⚠️ THIS RELEASE FOLDS SLICES 2 AND 3, BY EXPLICIT OWNER DECISION (2026-09-02)
+
+The audit's §13 says *"at least four releases"*, and the recommendation at kickoff was slice 2 alone. **The
+owner chose to fold, and the reasoning is recorded because it is sound rather than merely accepted:**
+slice 3's *representative curriculum coverage* **is** slice 2's sampler applied, and slice 3 is the one slice
+with a hard dependency on slice 2. Building the sampler and re-opening it one release later is real waste.
+**Of the available folds this is the one that respects the dependency order.**
+
+**⚠️ THE COST IS STATED, NOT ABSORBED SILENTLY: this fires the FULL THREE-AGENT COLD PRESSURE TEST
+(~490k tokens).** Slice 2 alone carries **two** independent triggers — production-data semantics and
+money/quota semantics — and slice 3 adds a question format to a scored assessment. **Verification scales
+worse than linearly with items shipped, and folding is what forced the heaviest tier in `v0.92.0` and
+`v0.93.0`.** Budget for it before starting.
+
+### Slice 2 — the curriculum pool
+
+**⚠️ THE SCOPE/COUNT CHAIN RUNS BACKWARDS TODAY, AND THE ARITHMETIC WAS RE-VERIFIED AT THIS KICKOFF.**
+`ExamSourceLimitResolver.resolveMaxSourceNotes` is literally `questionCount / MIN_QUESTIONS_PER_SOURCE`
+(`:16-18`, `MIN_QUESTIONS_PER_SOURCE = 3`), and `questionCount` derives from the learner's **LEVEL**
+(20/25/30), never from scope. So the product reads **A ← B ← C**, exactly inverted, and **an eligible pool A
+does not exist as a concept anywhere.** A 77-note Subject Plan has ~69 notes that cannot appear in its own
+exam; a 550-note Review Set, ~540.
+
+**⚠️ NOTHING BREAKS AT SCALE — THAT IS THE PROBLEM.** There is no prompt explosion and no timeout, because
+the cap discards the curriculum before generation ever sees it. **The architecture degrades by ignoring the
+syllabus, not by failing loudly.**
+
+- **1. Pool A becomes an explicit, UNCAPPED concept** — every plan member with a ready Study Pack.
+- **2. Sample B from A**, `B = min(|A|, C / 3)`, by **coverage buckets → representative spread across
+  buckets → sample within buckets → deterministic per-session randomization.**
+  **⚠️ NOT `unpracticed-first` — REJECTED (owner, 2026-09-02), and no repo contract requires it** (verified:
+  neither exam service reads `lastSessionCompletedAt`). **Long Exam is an ASSESSMENT, not a recommendation
+  engine**; biasing it toward unpractised material makes the score mean something other than *can I perform
+  across this subject*. Weakness-driven selection belongs to Adaptive Practice.
+  **⚠️ Sections may help SPREAD coverage. They are NEVER curriculum WEIGHTS.**
+- **3. C stays level-derived (20/25/30) and UNCHANGED.** Defensible: it reflects how deep the learner works,
+  not how large their syllabus is.
+- **4. `ExamSourceLimitResolver` changes MEANING, not formula** — from *"how many notes you may pick"* to
+  *"how many we sample from your curriculum."* **⚠️ It stays the ONE place the formula lives and both exam
+  services keep calling through it** — a second constant beside it is how `v0.103.0`'s leakage returned.
+- **5. Keep the even split WITHIN the sampled set.** It is only indefensible when the sample is
+  learner-chosen; once the sample is representative, equal division is honest.
+- **6. Anchor the session on the SAMPLED primary**, not `position == 0`. This also reduces a real collision:
+  a unique index on `(user_id, study_pack_id)` for active `LONG_EXAM` sessions means two Subject Plans
+  sharing a first note cannot both have an active Long Exam today.
+- **7. GENERATION RESILIENCE — COUPLED IN, NOT A FOLLOW-UP (owner, 2026-09-02).** Broadening the sampled
+  workload while partial failure means total failure would make a known total-failure path **normal**.
+  **⚠️ AND THE QUOTA MECHANISM IS SHARPER THAN THE AUDIT STATES — re-verified at this kickoff:**
+  `dispatchLongExamGenerationAfterCommit:266` registers generation to run **after commit, asynchronously**,
+  while `userUsageService.incrementLongExamGenerationBy` runs **synchronously at `:254`**. So quota is not
+  merely charged in the wrong order — it is charged in a **different execution context**, and a failure at
+  `:310` (`longExamQuiz.size() != expectedQuestionCount`) leaves the learner **charged, with a `FAILED`
+  session and no refund path.** **⚠️ So "move the increment later" is NOT the fix** — generation is async;
+  the increment must either move into the async success path or be reversed on failure, and which one is a
+  design decision this release must take explicitly.
+  **Owner decision 3, binding:** a shorter valid exam **ONLY** above a defined minimum assembly/coverage
+  threshold; otherwise fail **WITHOUT consuming quota**. **⚠️ Never silently treat a severely incomplete
+  exam as equivalent to a complete one — a score has to mean something.**
+
+### Slice 3 — Long Exam academic identity
+
+- **8. Source = Subject Plan AND Student Study Plan.** **⚠️ "Both" costs nothing: they are the same entity**
+  (`NoteCollectionEntity`). There is no code distinction to honour — do not invent one.
+- **9. Representative curriculum coverage** — slice 2's sampler applied. This is the overlap that justified
+  the fold; **do not build a second sampler.**
+- **10. IDENTIFICATION in Long Exam — PLUMBING, NOT ARCHITECTURE, and every premise was re-verified here.**
+  `LongExamProgressRequest` carries exactly `questionIndex, selectedChoiceIndex, selectedMultiChoiceIndices`
+  — **confirmed by reading the record**. `long-exam-developer.txt` has **ZERO** identification references;
+  `challenge-quiz-developer.txt` has **nine**. The 6-arg `isAnswerCorrect` overload already exists and
+  Challenge already uses it, and the session-state keys are already defined.
+  **So this is: one DTO field, two existing session keys, one overload swap, and prompt rules that exist
+  verbatim.**
+  **⚠️ COPY THE NOTATION RULES, DO NOT WRITE NEW ONES.** `QuizValidationUtils:48` carries
+  `NOTATION_ANSWER_STEM_PATTERN`, added after a **reproduced production failure** where an Identification
+  item marked the requested notation wrong and restating the stem right, produced by two independent
+  generations. **If Long Exam gets Identification via a NEW prompt instead of copying those rules, it will
+  reproduce a bug this repo has already paid for.**
+
+### Anti-drift
+
+**⚠️ NO TRUE/FALSE (deferred, owner 2026-09-02)** — technically free, but its 50% chance floor raises
+evidence-quality questions there is no reason to answer yet. **⚠️ And do NOT build a format-weighted
+`ConceptHealth` model to accommodate it, or couple Identification to one** — Identification already has
+deterministic normalized grading and curated `acceptableAnswers`.
+**⚠️ NO LLM SEMANTIC GRADING of free responses** — nondeterministic scoring feeding `ConceptHealth` means
+the same answer is right one session and wrong the next; the mastery signal has been locked since `v0.37.0`
+to move only from genuine assessment.
+**⚠️ BOARD EXAM IS SLICE 4 AND IS OUT.** It stays MCQ-only, stays capped, and its generation stays inside
+the transaction. Moving it is a prerequisite for slice 4, not an optimisation to sneak in here.
+**⚠️ Do NOT lower `MIN_QUESTIONS_PER_SOURCE` to 2** — it weakens per-note evidence, which is exactly what
+slice 5's remediation reads. **⚠️ Do NOT scale `questionCount` with source count** — a 10-note exam would
+silently exceed the learner's level norm. Both were rejected with reasons in `v0.102.0`.
+**⚠️ No new quiz mode and no new sub-mode** (`EXAM_MODES.md` is a locked five-mode contract); **modes are
+never differentiated primarily by question count**; **never send 77 or 550 full notes into one prompt**;
+**never one question per note merely because a note exists**; **note count ≠ curriculum weight and section
+size ≠ exam weight**; **no invented official board weighting** and product copy stays *"representative"*
+until trusted blueprint metadata exists.
+**⚠️ Cross-pack canonical concept identity stays ADR-sized and OUT.** `ConceptHealthEntity` stays keyed
+`(user_id, study_pack_id, concept)`.
+**⚠️ PLAN-TIER ENTITLEMENTS ARE UNCHANGED.** §0 keeps three things apart: product/checkpoint gating (**none**
+on this initiative), engineering verification (**preserved in full**), and entitlements (**a separate
+monetization contract**). *"Nothing is gated"* is never licence to add, widen or remove a subscription gate.
+**⚠️ NOT IN SCOPE AND STILL OWED:** the `InterviewPracticeService` third instance of the provenance defect
+(**a live defect, and it must land before slice 5** — it has a Backlog Index row), and the seven carried
+`v0.103.0` limitations. Neither is closed by this release.
+**⚠️ Do NOT add, remove or reorder an onboarding FLOW step and no code under `frontend/app/onboarding`** —
+`[CHECKPOINT — due 2026-09-11]` is **9 days out**.
+
+### Verification tier
+
+**FULL THREE-AGENT COLD-CONTEXT PRESSURE TEST (~490k tokens), pre-declared at kickoff.** Three cold agents on
+**non-overlapping halves**, synthesized through `advisor()`. Spawn them with no inherited context and instruct
+them explicitly to read real code rather than trust any summary — **including summaries written by the
+session that spawned them.**
+
+**⚠️ Carried MEASURED lessons — `v0.104.0` proved every one of these the hard way:**
+- **MUTATE and confirm a test FAILS. Reading is not verification.** `v0.104.0`'s cold agent found **three
+  surviving mutants** after the implementing session had already run five of its own.
+- **⚠️ THE WORST DEFECT WAS OUTSIDE THE STATED SCOPE, and that is the lesson for a FOLDED release:** a copy
+  helper re-ran a **non-idempotent sanitizer**, corrupting quiz choice text on **every session load in every
+  mode** — invisible to 1920 passing tests, in code the session had audited and reasoned was safe. **A
+  helper that copies an object must be checked for re-applying a normalizer.**
+- **A check can ship behind a `@Mock` that makes it untestable** — third release running. Verify guards by
+  deleting them.
+- **Run `./mvnw test-compile` and check its EXIT STATUS** before trusting a green `mvn test`.
+- **COUNT executed tests from `target/surefire-reports/*.xml`**, never from test source.
+- **Call `advisor()` BEFORE writing any Codex prompt**, not only on the diff.
+
+### Routing
+
+**→ CODEX**, and not marginally: two services, a new sampler, a DTO, a prompt file and the quota path.
+**Re-run the routing test if implementation discovers a surface not in the agreed plan.**
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.104.0 - Assessment Source Provenance
 
 **Status: Released** (kicked off and signed off 2026-09-02, base branch `releases/v0.104.0`, cut from
