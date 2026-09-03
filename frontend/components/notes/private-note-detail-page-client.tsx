@@ -3250,6 +3250,18 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             tipId="teacher-generate-quiz-multi-note"
             message="You can select multiple notes to build a quiz from a full unit — use the note checkboxes in your library first."
           />
+          {/*
+            ⚠️ TEACHER-ONLY, and the gate is the fix rather than a refinement. resolveQuestionCount honours a
+            requested count for the TEACHER profile alone, so rendering this to anyone else offered a choice
+            the backend discarded: a Plus/Pro supporter picked 30 and silently received 10. Worse, the lock
+            badge and the copy below key on PLAN, not profile -- so a non-teacher on Free clicking 20 was
+            shown an upgrade prompt for a capability Plus does not grant them either. Target Level directly
+            below has been gated this way all along; the count selector simply never was.
+            ⚠️ Do NOT "fix" this by honouring the count for non-teachers -- that raises the cap, which is a
+            pricing decision nobody has taken.
+          */}
+          {profileType === "TEACHER" ? (
+          <>
           <div
             className="flex w-full gap-1 rounded-lg border border-border bg-muted/30 p-1"
             role="group"
@@ -3285,6 +3297,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             Higher counts cover more material.
             {currentPlan === "FREE" ? " Plus unlocks 20 and 30 questions." : null}
           </p>
+          </>
+          ) : null}
           {profileType === "TEACHER" ? (
             <div className="space-y-2">
               <label htmlFor="teacher-quiz-target-level" className="block text-sm font-medium text-foreground">
