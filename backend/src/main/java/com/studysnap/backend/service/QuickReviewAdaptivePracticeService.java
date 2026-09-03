@@ -88,6 +88,8 @@ public class QuickReviewAdaptivePracticeService {
     private static final String ANALYTICS_METADATA_ENTRY = "entry";
     private static final String ANALYTICS_METADATA_SOURCE_SCOPE = "sourceScope";
     private static final String SUB_MODE_INTERVIEW = "INTERVIEW";
+    private static final String INTERVIEW_SESSION_ACTIVE_MESSAGE =
+        "You have an Interview Practice session in progress on this note. Finish or end it before starting Adaptive Practice.";
     private static final int MAX_PLAN_SOURCE_PACKS = 3;
     private static final int MAX_PLAN_FOCUS_CONCEPTS = 10;
     private static final String ADAPTIVE_PRACTICE_ENTRY_DASHBOARD_TODAY_FOCUS = "dashboard-today-focus";
@@ -157,6 +159,14 @@ public class QuickReviewAdaptivePracticeService {
                 ACTIVE_GENERATION_STATUSES
             )
             .orElse(null);
+        if (existing != null && isInterviewSession(existing)) {
+            // Interview Practice shares the ADAPTIVE discriminator and therefore the
+            // (user_id, study_pack_id, session_mode) unique index on active sessions. Without this
+            // guard the branch below would either hand the learner interview questions inside an
+            // Adaptive Practice session, or -- worse -- FORFEIT a session this mode does not own.
+            // Starting a new session instead is not an option: the unique index would reject it.
+            return interviewSessionActiveResponse(studyPack);
+        }
         if (existing != null) {
             List<QuizItem> existingQuiz = QuizSessionStateUtils.extractQuiz(existing.getSessionState());
             if (existing.getStatus() == QuickReviewSessionStatus.GENERATING || !existingQuiz.isEmpty()) {
@@ -362,7 +372,8 @@ public class QuickReviewAdaptivePracticeService {
             return toAdaptiveResponse(anchorCollision, primary);
         }
         if (anchorCollision != null) {
-            return emptyCollectionResponse(collection, NO_WEAK_CONCEPTS_MESSAGE);
+            // Not "no weak concepts" -- the anchor pack is occupied by an Interview Practice session.
+            return emptyCollectionResponse(collection, INTERVIEW_SESSION_ACTIVE_MESSAGE);
         }
 
         assertAdaptivePracticeQuotaAvailable(userId, planType);
@@ -470,6 +481,19 @@ public class QuickReviewAdaptivePracticeService {
                 null, null, null, null, collection.getTitle(), List.of(), List.of(), message);
     }
 
+    private QuickReviewAdaptiveQuizResponse interviewSessionActiveResponse(StudyPackEntity studyPack) {
+        return new QuickReviewAdaptiveQuizResponse(
+            null,
+            null,
+            studyPack.getId().toString(),
+            studyPack.getNoteId() == null ? null : studyPack.getNoteId().toString(),
+            studyPack.getTitle(),
+            List.of(),
+            List.of(),
+            INTERVIEW_SESSION_ACTIVE_MESSAGE
+        );
+    }
+
     private boolean isInterviewSession(QuickReviewSessionEntity session) {
         return SUB_MODE_INTERVIEW.equals(QuizSessionStateUtils.extractSubMode(session.getSessionState()));
     }
@@ -530,6 +554,9 @@ public class QuickReviewAdaptivePracticeService {
                 OBSERVABLE_STATUSES
             )
             .orElse(null);
+        if (existing != null && isInterviewSession(existing)) {
+            return interviewSessionActiveResponse(studyPack);
+        }
         if (existing != null) {
             return toAdaptiveResponse(existing, studyPack);
         }

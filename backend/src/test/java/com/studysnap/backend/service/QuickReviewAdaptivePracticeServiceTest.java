@@ -866,6 +866,70 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
 
+
+    // ---------------------------------------------------------------------------------------------
+    // v0.107.0 item 4 -- Interview Practice and Adaptive Practice share the ADAPTIVE discriminator
+    // and the (user, pack, mode) unique index on active sessions. Neither may consume the other's.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void generateAdaptiveQuiz_neitherResumesNorForfeitsAnActiveInterviewPracticeSession() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity interview =
+                buildInProgressAdaptiveSession(UUID.randomUUID(), userId, studyPackId, noteId);
+        Map<String, Object> state = new LinkedHashMap<>(interview.getSessionState());
+        state.put("subMode", "INTERVIEW");
+        interview.setSessionState(state);
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(Optional.of(interview));
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId);
+
+        // Must not hand back the interview session...
+        assertThat(response.sessionId()).isNull();
+        assertThat(response.quiz()).isEmpty();
+        // ...and must not END it either. The forfeit branch is the destructive half of this defect:
+        // it would terminate a session Adaptive Practice does not own.
+        assertThat(interview.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(), any());
+    }
+
+    @Test
+    void getAdaptiveQuizSession_doesNotReturnAnInterviewPracticeSessionAsAdaptivePractice() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity interview =
+                buildInProgressAdaptiveSession(UUID.randomUUID(), userId, studyPackId, noteId);
+        Map<String, Object> state = new LinkedHashMap<>(interview.getSessionState());
+        state.put("subMode", "INTERVIEW");
+        interview.setSessionState(state);
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId))
+                .thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId), eq(studyPackId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(Optional.of(interview));
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.getAdaptiveQuizSession(studyPackId.toString(), userId);
+
+        assertThat(response.sessionId()).isNull();
+        assertThat(response.quiz()).isEmpty();
+    }
+
     private record CollectionFixture(
             UUID userId,
             UUID collectionId,

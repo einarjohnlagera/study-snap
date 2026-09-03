@@ -31,7 +31,11 @@ takes no `subMode` value and adds no row to `EXAM_MODES.md`.
   Interview Practice, and plan-scoped Adaptive Practice — and `V41` allows one active session per
   `(user, pack)`. So they contend: a plan-scoped session active on a pack makes a note-scoped request
   on that pack resume the plan session, and vice versa. **Known limitation, accepted deliberately.**
-  The plan-scoped lookup explicitly excludes `subMode: "INTERVIEW"` sessions.
+- **Adaptive Practice and Interview Practice never consume each other's sessions.** Both the start
+  and the read path skip a session carrying `subMode: "INTERVIEW"` and return an explanatory message
+  instead. They do **not** start a new session in that case — the unique index would reject it — and
+  they must **never** forfeit the interview session, which is the destructive half of the defect this
+  guard closes (`v0.107.0` item 4). The plan-scoped lookup applies the same exclusion.
 - **Historical `ConceptHealth` is not backfilled.** Rows written by Interview Practice before
   `v0.107.0` remain over-attributed.
 
