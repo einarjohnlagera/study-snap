@@ -2,7 +2,7 @@
 
 ## v0.107.0 - Curriculum-Scale Remediation
 
-**Status: In Progress** (kicked off 2026-09-03, base branch `releases/v0.107.0`, cut from `main` after
+**Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.107.0`, cut from `main` after
 `v0.106.0` merged, tagged and deployed to production)
 
 Theme: once every mode attributes evidence honestly, remediation can finally be scoped to a whole Subject
