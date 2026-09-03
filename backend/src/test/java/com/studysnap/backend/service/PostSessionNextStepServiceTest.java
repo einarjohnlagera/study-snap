@@ -39,6 +39,7 @@ import org.springframework.data.domain.Pageable;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -820,6 +821,46 @@ class PostSessionNextStepServiceTest {
 
         assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
         assertThat(response.actionHref()).endsWith(CHALLENGE_PATH_SUFFIX);
+        assertThat(response.concepts()).isEmpty();
+    }
+
+    @Test
+    void getNextStep_doesNotGiveAnInterviewPracticeSessionAdaptivePracticesCopy() {
+        // Interview Practice shares the ADAPTIVE discriminator, so a mode-only switch hands it
+        // Adaptive Practice's "step up with a Challenge" next step. It falls to the neutral default
+        // instead: Interview Practice has its own result framing, and inventing next-step copy for a
+        // path nothing currently calls would be designing a screen nobody asked for.
+        //
+        // ⚠️ This guard is DEFENCE-IN-DEPTH, not a live fix. Verified when written: all three callers
+        // invoke getNextStep inside their own completion handler, so the newest completed session is
+        // always theirs, and the Interview Practice page renders its own report. The hazard is that
+        // findLatestCompletedSession is mode-agnostic, so this fires the day anything gives Interview
+        // Practice a "what's next" screen.
+        UUID userId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId);
+        stubOwnedStudyPack(userId, studyPack);
+        stubPlanAndUsage(userId, PlanType.FREE, 0);
+        QuickReviewSessionEntity interview = buildCompletedSession(
+                userId, studyPack, QuickReviewSessionMode.ADAPTIVE, List.of(SECOND_CONCEPT));
+        Map<String, Object> state = new LinkedHashMap<>(
+                interview.getSessionState() == null ? Map.of() : interview.getSessionState());
+        state.put("subMode", "INTERVIEW");
+        interview.setSessionState(state);
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId), eq(studyPack.getId()), any(Pageable.class)))
+                .thenReturn(List.of(interview));
+        stubConceptHealth(userId, studyPack, List.of(
+                conceptHealth(FIRST_CONCEPT, NOW.minusDays(5), true)
+        ));
+
+        NextStepResponse response = postSessionNextStepService.getNextStep(userId, studyPack.getId());
+
+        // ⚠️ The ROUTE is not the discriminator -- the neutral default also points at Challenge Quiz,
+        // so an href assertion passes either way and proves nothing. The COPY and the surfaced
+        // concepts are what differ, so those are what this pins.
+        assertThat(response.message()).doesNotContain("Targeted practice complete");
+        assertThat(response.message()).isEqualTo(
+                "You are in good shape here. Step up with a challenge or review the note when ready.");
         assertThat(response.concepts()).isEmpty();
     }
 
