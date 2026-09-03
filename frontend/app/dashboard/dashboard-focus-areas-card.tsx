@@ -15,6 +15,8 @@ type DashboardFocusAreasCardProps = {
   primaryActionLabel?: string;
   lockedActionLabel?: string;
   showAction?: boolean;
+  onPracticeAcrossPlan?: (collectionId: string) => void;
+  planActionLabel?: string;
 };
 
 function getBarTone(accuracyPercentage: number) {
@@ -42,6 +44,8 @@ export function DashboardFocusAreasCard({
   primaryActionLabel = "Practice Weak Concepts",
   lockedActionLabel = "Unlock Adaptive Practice",
   showAction = true,
+  onPracticeAcrossPlan,
+  planActionLabel = "Practice Across This Plan",
 }: Readonly<DashboardFocusAreasCardProps>) {
   const concepts = focusAreas?.concepts ?? [];
   const hasConcepts = concepts.length > 0;
@@ -83,14 +87,29 @@ export function DashboardFocusAreasCard({
 
         {hasConcepts && showAction ? (
           focusAreas?.adaptivePracticeAvailable && focusAreas.practiceNoteId ? (
-            <ResponsiveActionLink
-              href={buildAdaptivePracticeHref(focusAreas.practiceNoteId, {
-                entry: ADAPTIVE_PRACTICE_DASHBOARD_FOCUS_AREAS_ENTRY,
-              })}
-              action="adaptivePractice"
-              label={primaryActionLabel}
-              className="w-full sm:w-auto"
-            />
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <ResponsiveActionLink
+                href={buildAdaptivePracticeHref(focusAreas.practiceNoteId, {
+                  entry: ADAPTIVE_PRACTICE_DASHBOARD_FOCUS_AREAS_ENTRY,
+                })}
+                action="adaptivePractice"
+                label={primaryActionLabel}
+                className="w-full sm:w-auto"
+              />
+              {/* Plan-scoped sibling. It appears only when the server resolved a plan for the
+                  weakest note -- the client never picks one, so this cannot disagree with the
+                  session the server would actually start. */}
+              {onPracticeAcrossPlan && focusAreas.practiceCollectionId ? (
+                <ResponsiveActionButton
+                  type="button"
+                  variant="outline"
+                  action="adaptivePractice"
+                  label={planActionLabel}
+                  className="w-full sm:w-auto"
+                  onClick={() => onPracticeAcrossPlan(focusAreas.practiceCollectionId as string)}
+                />
+              ) : null}
+            </div>
           ) : focusAreas?.practiceNoteId ? (
             <ResponsiveActionLink
               href={`/notes/${focusAreas.practiceNoteId}`}

@@ -130,6 +130,8 @@ const overview = {
       { conceptName: "DNA Replication", accuracyPercentage: 55 },
     ],
     practiceNoteId: "note-1",
+      practiceCollectionId: null,
+      practiceCollectionTitle: null,
     adaptivePracticeAvailable: false,
   },
   weeklyActivity: {
