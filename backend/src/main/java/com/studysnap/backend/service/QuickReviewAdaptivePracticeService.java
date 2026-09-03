@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -286,14 +287,6 @@ public class QuickReviewAdaptivePracticeService {
                 .orElseThrow(CollectionNotFoundException::new);
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
-        // ⚠️ GATES BEFORE THE EXPENSIVE LOAD. Resolving eligibility below materializes every DONE
-        // Study Pack of the collection -- for a Review Set that is hundreds of rows carrying full
-        // quiz JSON. Checking quota and the rate limit afterwards meant an over-quota learner paid
-        // that cost on EVERY click before being refused. Both gates depend only on (userId, plan),
-        // so nothing here needs the packs.
-        assertAdaptivePracticeQuotaAvailable(userId, planType);
-        aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-
         List<QuickReviewSessionEntity> activeAdaptiveSessions = quickReviewSessionRepository
                 .findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         userId, QuickReviewSessionMode.ADAPTIVE, ACTIVE_GENERATION_STATUSES);
@@ -307,6 +300,22 @@ public class QuickReviewAdaptivePracticeService {
             StudyPackEntity anchor = findOwnedStudyPackOrThrow(collectionSession.getStudyPackId(), userId);
             return toAdaptiveResponse(collectionSession, anchor);
         }
+
+        // ⚠️ GATES SIT HERE ON PURPOSE: AFTER the resume return, BEFORE the expensive load.
+        //
+        // Below this line, resolving eligibility reads every candidate pack of the collection — for a
+        // Review Set, hundreds of rows. Gating afterwards made an over-quota learner pay that cost on
+        // every click before being refused, which is why the checks were moved earlier.
+        //
+        // ⚠️ BUT THEY WERE MOVED TOO FAR, ABOVE THE RESUME BRANCH, AND THAT WAS A LIVE DEFECT: a
+        // learner at their monthly limit could not RESUME a session they had already paid for, and
+        // every resume burned a rate-limit token for a request that makes no LLM call. Resuming
+        // consumes neither quota nor generation capacity — only STARTING does.
+        //
+        // ⚠️ Do not move these above the resume return again. The active-session lookup that precedes
+        // them is a single indexed query, not the expensive part.
+        assertAdaptivePracticeQuotaAvailable(userId, planType);
+        aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
 
         List<NoteCollectionEntity> children = noteCollectionRepository
                 .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
@@ -323,33 +332,58 @@ public class QuickReviewAdaptivePracticeService {
             }
         }
         List<UUID> noteIds = candidates.stream().map(CollectionCandidate::noteId).distinct().toList();
-        Map<UUID, StudyPackEntity> readyByNoteId = studyPackRepository
-                .findByOwnerUserIdAndNoteIdInAndStatus(userId, noteIds, StudyPackStatus.DONE)
-                .stream()
-                .collect(Collectors.toMap(StudyPackEntity::getNoteId, pack -> pack));
-        Map<UUID, LongExamPlanSourceSampler.EligiblePlanSource> eligibleByPack = new LinkedHashMap<>();
+
+        // ⚠️ PHASE 1 — PROJECTIONS, NOT ENTITIES. Deciding eligibility needs only id, noteId,
+        // keyConcepts, ownerUserId and status, and this collection can be a whole Review Set. Loading
+        // full entities here materialized every DONE pack's `quiz` and `summary` JSON just to choose
+        // at most MAX_PLAN_SOURCE_PACKS of them. `StudyPackRepositoryTest` pins the emitted SQL:
+        // it selects `key_concepts` and never `quiz` or `summary`.
+        //
+        // ⚠️ THIS IS A REDUCTION, NOT A BOUND, and that distinction is load-bearing. Phase 2 below
+        // loads entities for the packs that survive focus and occupancy filtering — typically a small
+        // fraction. In the worst case, where EVERY pack has a due-or-weak concept, phase 2 loads what
+        // phase 1 used to and this has bought a query. A true bound needs
+        // LongExamPlanSourceSampler.EligiblePlanSource to stop taking a StudyPackEntity, and that
+        // sampler is shared with Long Exam and Board Exam.
+        //
+        // ⚠️ OWNER AND STATUS ARE FILTERED IN JAVA HERE because findProgressViewsByNoteIdIn filters
+        // neither — but be precise about what this filter IS. It is an OPTIMISATION, not the access
+        // boundary: phase 2 re-applies owner and status in SQL, so deleting these two conditions
+        // changes no observable behaviour (verified by mutation — dropping either leaves the suite
+        // green, and that is CORRECT rather than a missing test). What they buy is not loading
+        // concept health for packs that will be discarded anyway.
+        //
+        // ⚠️ THE ACCESS BOUNDARY IS PHASE 2's findByOwnerUserIdAndNoteIdInAndStatus. Do not "simplify"
+        // phase 2 to a by-id lookup that drops the owner predicate on the grounds that phase 1
+        // already filtered — phase 1 is deliberately not load-bearing for access.
+        Map<UUID, CollectionCandidate> candidateByNoteId = new LinkedHashMap<>();
         for (CollectionCandidate candidate : candidates) {
-            StudyPackEntity pack = readyByNoteId.get(candidate.noteId());
-            if (pack != null) {
-                eligibleByPack.putIfAbsent(pack.getId(), new LongExamPlanSourceSampler.EligiblePlanSource(
-                        pack, candidate.bucket(), candidate.position()));
-            }
+            candidateByNoteId.putIfAbsent(candidate.noteId(), candidate);
         }
-        List<LongExamPlanSourceSampler.EligiblePlanSource> orderedEligible = List.copyOf(eligibleByPack.values());
-        if (orderedEligible.isEmpty()) {
+        Map<UUID, List<String>> conceptsByPack = new LinkedHashMap<>();
+        Map<UUID, UUID> noteIdByPackId = new LinkedHashMap<>();
+        for (StudyPackProgressProjection projection : studyPackRepository.findProgressViewsByNoteIdIn(noteIds)) {
+            if (!userId.equals(projection.getOwnerUserId()) || projection.getStatus() != StudyPackStatus.DONE) {
+                continue;
+            }
+            if (noteIdByPackId.containsValue(projection.getNoteId())) {
+                continue;
+            }
+            noteIdByPackId.put(projection.getId(), projection.getNoteId());
+            conceptsByPack.put(
+                    projection.getId(),
+                    projection.getKeyConcepts() == null ? List.of() : projection.getKeyConcepts());
+        }
+        if (conceptsByPack.isEmpty()) {
             return emptyCollectionResponse(collection, NO_SOURCE_SESSION_MESSAGE);
         }
-
-        Map<UUID, List<String>> conceptsByPack = new LinkedHashMap<>();
-        orderedEligible.forEach(source -> conceptsByPack.put(source.studyPack().getId(), getKeyConcepts(source.studyPack())));
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         Map<UUID, List<String>> dueByPack = conceptHealthService
                 .getDueConceptsByStudyPackIds(userId, conceptsByPack, now);
         Map<UUID, List<String>> weakByPack = conceptHealthService
                 .getPersistentlyWeakConceptsByStudyPackIds(userId, List.copyOf(conceptsByPack.keySet()));
         Map<FocusKey, ConceptSelectionReason> reasonByFocus = new LinkedHashMap<>();
-        for (LongExamPlanSourceSampler.EligiblePlanSource source : orderedEligible) {
-            UUID packId = source.studyPack().getId();
+        for (UUID packId : conceptsByPack.keySet()) {
             dueByPack.getOrDefault(packId, List.of()).forEach(concept ->
                     reasonByFocus.put(new FocusKey(packId, concept.trim()), ConceptSelectionReason.DUE));
             weakByPack.getOrDefault(packId, List.of()).forEach(concept -> reasonByFocus.compute(
@@ -361,10 +395,9 @@ public class QuickReviewAdaptivePracticeService {
             return emptyCollectionResponse(collection, NO_WEAK_CONCEPTS_MESSAGE);
         }
 
-        List<LongExamPlanSourceSampler.EligiblePlanSource> withFocus = orderedEligible.stream()
-                .filter(source -> reasonByFocus.keySet().stream()
-                        .anyMatch(key -> key.studyPackId().equals(source.studyPack().getId())))
-                .toList();
+        Set<UUID> withFocus = reasonByFocus.keySet().stream()
+                .map(FocusKey::studyPackId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         if (withFocus.isEmpty()) {
             return emptyCollectionResponse(collection, NO_WEAK_CONCEPTS_MESSAGE);
         }
@@ -384,19 +417,44 @@ public class QuickReviewAdaptivePracticeService {
                 occupantByPackId.putIfAbsent(active.getStudyPackId(), active);
             }
         }
-        List<LongExamPlanSourceSampler.EligiblePlanSource> focusEligible = withFocus.stream()
-                .filter(source -> !occupantByPackId.containsKey(source.studyPack().getId()))
+        List<UUID> focusEligiblePackIds = withFocus.stream()
+                .filter(packId -> !occupantByPackId.containsKey(packId))
                 .toList();
-        if (focusEligible.isEmpty()) {
+        if (focusEligiblePackIds.isEmpty()) {
             // Everything worth practising is occupied. Say WHICH kind of session is in the way --
             // reporting "no weak concepts" here is false, and it is what the learner used to see.
             boolean blockedByInterview = withFocus.stream()
-                    .map(source -> occupantByPackId.get(source.studyPack().getId()))
+                    .map(occupantByPackId::get)
                     .filter(Objects::nonNull)
                     .anyMatch(this::isInterviewSession);
             return emptyCollectionResponse(
                     collection,
                     blockedByInterview ? INTERVIEW_SESSION_ACTIVE_MESSAGE : ADAPTIVE_SESSION_ELSEWHERE_MESSAGE);
+        }
+
+        // ⚠️ PHASE 2 — full entities, ONLY for the packs that survived focus and occupancy filtering.
+        // Owner and status stay in SQL here (findByOwnerUserIdAndNoteIdInAndStatus), so this is a
+        // second, independent access check rather than a repeat of phase 1's Java-side one.
+        List<UUID> focusEligibleNoteIds = focusEligiblePackIds.stream()
+                .map(noteIdByPackId::get)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<UUID, StudyPackEntity> packById = studyPackRepository
+                .findByOwnerUserIdAndNoteIdInAndStatus(userId, focusEligibleNoteIds, StudyPackStatus.DONE)
+                .stream()
+                .collect(Collectors.toMap(StudyPackEntity::getId, pack -> pack, (left, right) -> left));
+        Map<UUID, LongExamPlanSourceSampler.EligiblePlanSource> eligibleByPack = new LinkedHashMap<>();
+        for (UUID packId : focusEligiblePackIds) {
+            StudyPackEntity pack = packById.get(packId);
+            CollectionCandidate candidate = candidateByNoteId.get(noteIdByPackId.get(packId));
+            if (pack != null && candidate != null) {
+                eligibleByPack.put(packId, new LongExamPlanSourceSampler.EligiblePlanSource(
+                        pack, candidate.bucket(), candidate.position()));
+            }
+        }
+        List<LongExamPlanSourceSampler.EligiblePlanSource> focusEligible = List.copyOf(eligibleByPack.values());
+        if (focusEligible.isEmpty()) {
+            return emptyCollectionResponse(collection, NO_SOURCE_SESSION_MESSAGE);
         }
         UUID sessionId = UUID.randomUUID();
         StudyPackEntity primary = focusEligible.getFirst().studyPack();
@@ -561,28 +619,6 @@ public class QuickReviewAdaptivePracticeService {
         return entry != null && KNOWN_ADAPTIVE_PRACTICE_ENTRIES.contains(entry)
             ? entry
             : ADAPTIVE_PRACTICE_ENTRY_DIRECT;
-    }
-
-    @Transactional(readOnly = true)
-    public QuickReviewAdaptiveQuizResponse getAdaptiveQuizSessionForCollection(String collectionIdRaw, UUID userId) {
-        authService.requireEmailVerified(userId);
-        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(collectionIdRaw, CollectionNotFoundException::new);
-        NoteCollectionEntity collection = noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId)
-                .orElseThrow(CollectionNotFoundException::new);
-        PlanType planType = subscriptionService.resolvePlan(userId);
-        featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
-        QuickReviewSessionEntity existing = quickReviewSessionRepository
-                .findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                        userId, QuickReviewSessionMode.ADAPTIVE, OBSERVABLE_STATUSES)
-                .stream()
-                .filter(session -> !isInterviewSession(session))
-                .filter(session -> collectionId.equals(extractSourceCollectionId(session)))
-                .findFirst()
-                .orElse(null);
-        if (existing == null) {
-            return emptyCollectionResponse(collection, FOCUS_MESSAGE);
-        }
-        return toAdaptiveResponse(existing, findOwnedStudyPackOrThrow(existing.getStudyPackId(), userId));
     }
 
     @Transactional(readOnly = true)

@@ -35,7 +35,7 @@ function resolveResumePresentation(
   profileType?: ContinueSpotlightProps["profileType"],
 ): {
   action: ActionIconName;
-  hrefSuffix: "quick-review" | "challenge-quiz" | "adaptive-practice" | "long-exam";
+  hrefSuffix: "quick-review" | "challenge-quiz" | "adaptive-practice" | "long-exam" | "interview-practice";
   label: string;
 } {
   if (resumeType === "CHALLENGE") {
@@ -57,6 +57,17 @@ function resolveResumePresentation(
       action: "adaptivePractice",
       hrefSuffix: "adaptive-practice",
       label: "Resume Adaptive Practice",
+    };
+  }
+  // Interview Practice shares the ADAPTIVE session discriminator, so before v0.108.0 it arrived here
+  // as "ADAPTIVE" and routed to the Adaptive Practice page -- which now refuses another mode's
+  // session, making the card a dead end. It is routed to its own surface rather than hidden: the
+  // learner has an active session and this is their way back to it.
+  if (resumeType === "INTERVIEW_PRACTICE") {
+    return {
+      action: "adaptivePractice",
+      hrefSuffix: "interview-practice",
+      label: "Resume Interview Practice",
     };
   }
   return {
@@ -104,7 +115,9 @@ function getCardTone(recommendation: ContinueStudyingResponse) {
         ? "Adaptive Practice"
         : recommendation.resumeType === "LONG_EXAM"
           ? "Long Exam"
-          : null;
+          : recommendation.resumeType === "INTERVIEW_PRACTICE"
+            ? "Interview Practice"
+            : null;
     return {
       label: "In Progress",
       icon: TrendingUp,

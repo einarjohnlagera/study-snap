@@ -130,6 +130,14 @@ The result screen should stay focused and should not compete with unrelated acti
 
 - on completion, Adaptive Practice records fully-correct concepts to `ConceptHealth.lastCorrectAt`
 - on completion, Adaptive Practice records missed concepts to `ConceptHealth.lastIncorrectAt`
+- **Resuming a plan-scoped session spends nothing.** The start endpoint returns an existing session
+  for the collection before any quota or rate-limit check runs, so a learner at their monthly limit
+  can still resume a session they have already paid for, and a resume consumes no rate-limit budget.
+  **⚠️ Those gates sit AFTER the resume branch and BEFORE the eligibility load — both boundaries
+  matter, and moving them above the resume branch is a defect that shipped once.**
+- **There is no separate in-progress endpoint for a collection.** The start endpoint resumes, so a
+  `GET .../adaptive-practice/in-progress` for a collection would duplicate it; it was removed rather
+  than left unconsumed.
 - **⚠️ Both writes depend on the CLIENT submitting `selectedChoices` / `selectedMultiChoices` on
   completion.** Adaptive Practice has no progress endpoint, so nothing persists answers into session
   state during a session. If the client omits them the server's per-source breakdown is empty and it
