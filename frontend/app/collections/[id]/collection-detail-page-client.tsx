@@ -3182,6 +3182,24 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
       condition: () => justAdopted && isGoalView && !goalDetail?.targetCompletionDate,
       message: "Set a target completion date to see your weekly countdown and daily study budget.",
     },
+    {
+      // ⚠️ ANNOUNCEMENT, NOT AN ENTRY POINT. Four releases changed what practice and exams draw from,
+      // and nothing told anyone -- which is why both assessment checkpoints were lifted rather than
+      // read: a zero on an unannounced capability measures our silence, not demand.
+      //
+      // It deliberately has NO action button. The plan-scoped CTA is already on this page; adding a
+      // second click target for the same capability would confound the very reads this un-blocks.
+      //
+      // Lower priority than the post-adopt tip, so a brand-new adopter still gets the target-date
+      // nudge first -- pickActiveGuidance shows exactly one, and ordering is how they coexist.
+      id: "assessment-covers-whole-plan",
+      priority: 2,
+      // At least two ready notes: "this whole plan" is not a meaningful claim about one note, and a
+      // single-note plan would make the message read as a bug.
+      condition: () => !justAdopted && quizReadyNoteIds.length > 1,
+      message:
+        "Practice and exams now cover this whole plan, not one note at a time — weak areas are drawn from across it.",
+    },
   ];
   const activePostAdoptTip = pickActiveGuidance(postAdoptGuidanceRules);
 
@@ -3530,14 +3548,26 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
         )}
       />
 
+      {/* ⚠️ planPracticeAction was passed to the GOAL view only when it shipped in v0.107.0, so a
+          leaf Subject Plan -- a plan with no children -- had no plan-scoped practice CTA at all.
+          This is the SAME action, on the view it was omitted from; it is not a second entry point. */}
       <TodaysFocusCard
         action={primaryStudyAction}
         terminalAction={terminalSecondaryAction}
         dueConceptReviewHref={dueConceptReviewHref}
+        planPracticeAction={planPracticeAction}
         todaysConceptBudget={todaysConceptBudget}
         hasTargetDate={hasTargetDate}
         mentorTip={surfacedMentorTip}
       />
+
+      {activePostAdoptTip ? (
+        <GuidanceTip
+          tipId={activePostAdoptTip.id}
+          message={activePostAdoptTip.message}
+          trackAnalytics
+        />
+      ) : null}
 
       {skippedNoticeCount ? (
         <Card className="border-amber-500/25 bg-amber-500/10 p-4 text-sm text-foreground/75">

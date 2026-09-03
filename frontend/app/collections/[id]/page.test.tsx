@@ -2995,4 +2995,84 @@ describe("CollectionDetailPageClient", () => {
       expect(link).toHaveAttribute("href", "/collections");
     });
   });
+
+  it("announces that practice and exams now cover the whole plan", async () => {
+    // ⚠️ THE ANNOUNCEMENT ITEM. Four releases changed what practice and exams draw from and nothing
+    // told anyone, which is why both assessment checkpoints were LIFTED rather than read — a zero on
+    // an unannounced capability measures our own silence, not demand.
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      items: [
+        {
+          noteId: "note-1", label: null, position: 0, title: "Shear Force",
+          subject: "Structural", courseProgram: "Civil Engineering",
+          studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-1",
+          lastSessionCompletedAt: null, dueConceptCount: 1, dueConcepts: ["Shear Force"],
+          updatedAt: "2026-06-01T00:00:00Z",
+        },
+        {
+          noteId: "note-2", label: null, position: 1, title: "Bending Moment",
+          subject: "Structural", courseProgram: "Civil Engineering",
+          studyPackStatus: "STUDY_PACK_READY", generatedQuizId: "quiz-2",
+          lastSessionCompletedAt: null, dueConceptCount: 1, dueConcepts: ["Bending Moment"],
+          updatedAt: "2026-06-01T00:00:00Z",
+        },
+      ],
+    }));
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(
+      await screen.findByText(/Practice and exams now cover this whole plan/i),
+    ).toBeInTheDocument();
+  });
+
+  it("does not announce whole-plan coverage on a single-note plan", async () => {
+    // "This whole plan" is not a meaningful claim about one note, and would read as a bug. The
+    // default fixture has exactly one quiz-ready note, which is the case being pinned.
+    (getCollection as jest.Mock).mockResolvedValue(collection());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    // Wait on a note the default fixture renders, rather than the plan title, which appears in more
+    // than one heading on this page.
+    await screen.findByText("Cell Respiration");
+    expect(screen.queryByText(/Practice and exams now cover this whole plan/i)).not.toBeInTheDocument();
+  });
+
+  it("lets the post-adopt tip win over the announcement for a brand-new adopter", async () => {
+    // pickActiveGuidance shows exactly ONE tip, so ordering is how these coexist. A learner who has
+    // just adopted has a target date to set first; the announcement waits.
+    setJustAdoptedNotice("collection-1");
+    (getCollection as jest.Mock).mockResolvedValue(collection({
+      title: "LET Mastery",
+      childCount: 2,
+      items: [],
+      companion: null,
+    }));
+    (getCollectionGoal as jest.Mock).mockResolvedValue(goalDetail());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    expect(
+      await screen.findByText("Set a target completion date to see your weekly countdown and daily study budget."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Practice and exams now cover this whole plan/i)).not.toBeInTheDocument();
+  });
+
+
+  it("offers plan-scoped practice on a leaf Subject Plan, not only in Goal view", async () => {
+    // ⚠️ THIS ASSERTION IS THE POINT. planPracticeAction shipped in v0.107.0 wired to the GOAL view
+    // only, so a leaf Subject Plan -- a plan with no children -- had no plan-scoped practice CTA at
+    // all. Nothing caught it because the v0.107.0 test asserted the HANDLER, not that both views
+    // receive it, and reverting the fix left the whole suite green until this existed.
+    (getCollection as jest.Mock).mockResolvedValue(collection());
+
+    render(<CollectionDetailPageClient collectionId="collection-1" />);
+
+    await screen.findByText("Cell Respiration");
+    expect(
+      screen.getByRole("button", { name: /Practice Weak Areas Across This Plan/i }),
+    ).toBeInTheDocument();
+  });
+
 });

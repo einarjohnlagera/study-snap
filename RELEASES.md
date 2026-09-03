@@ -56,9 +56,17 @@ were in none of those diffs.
 
 - **⚠️ NO BEHAVIOUR CHANGE. This release changes what the product SAYS, not what it does.** No mode, no
   scope, no quota, no entitlement, no route.
-- **⚠️ Do NOT "fix" reachability.** The CTAs exist and work. Adding a second entry point because the
-  capability feels hidden would be solving the wrong problem and would confound the very reads item 3
-  re-arms.
+- **⚠️ AMENDED 2026-09-03 (owner), raised as a letter-versus-reason conflict rather than reasoned past,
+  per the `v0.95.0` precedent.** This line read *"Do NOT 'fix' reachability — the CTAs exist and work."*
+  **THAT PREMISE WAS FALSE and was falsified by item 2's own tests:** `planPracticeAction` was passed to
+  the **Goal view only**, and `isGoalView` requires `childCount > 0`, so a **leaf Subject Plan had no
+  plan-scoped practice CTA at all.** It was a `v0.107.0` miss — I intended two call sites and only one
+  landed, and the test I wrote asserted the *handler* rather than that both views receive it.
+  **⚠️ THE AMENDMENT IS NARROW: passing the EXISTING action to the view it was omitted from is not a
+  SECOND entry point**, which is what the line exists to prevent. The rule's purpose — do not add a new
+  door and confound the reads item 3 re-arms — is intact and still binding. **⚠️ It IS a behaviour change
+  on a shipped path, and that is stated rather than hidden.** Without it the announcement would tell
+  leaf-plan learners about something they cannot do.
 - **⚠️ NO new mode and NO new sub-mode.** `EXAM_MODES.md` stays a locked five-mode contract; it gained its
   Adaptive Practice capability line in `v0.107.0` and needs no further row.
 - **⚠️ Do NOT change `BOARD_EXAM_STARTED`'s or `ADAPTIVE_PRACTICE_STARTED`'s field names, values or firing
@@ -88,6 +96,21 @@ in-repo precedent.
 **Routing: CLAUDE CODE inline** — copy and a surface decision, not multi-system work.
 
 ### Shipped
+
+- **The capability is announced where the plan lives (item 2).** A one-time tip on the collection detail
+  page — *"Practice and exams now cover this whole plan, not one note at a time"* — routed through
+  `pickActiveGuidance()` as the kickoff required, so it is one-shot and arbitrated against the existing
+  post-adopt tip by priority rather than competing with it. **⚠️ It deliberately carries NO action
+  button**: the CTA is already on the page, and a second click target for the same capability would
+  confound the reads item 3 re-arms.
+- **⚠️ AND ITEM 2'S OWN TESTS FALSIFIED THIS RELEASE'S ANTI-DRIFT, which is the more important half.**
+  The tip would not render, and chasing that revealed `planPracticeAction` reached the **Goal view
+  only** — so a leaf Subject Plan had no plan-scoped practice CTA at all since `v0.107.0`. Both the CTA
+  and the tip slot now reach the leaf view.
+- **⚠️ THE FIX WAS NOT ENOUGH ON ITS OWN — MUTATION SHOWED WHY.** Reverting the leaf CTA left all 135
+  tests green, because nothing asserted the leaf view receives it; that is the *same* gap that let the
+  original miss ship. A named test now pins it, and reverting the fix fails it. **Fixing a defect
+  without pinning it would have let it regress identically.**
 
 - **The Board Exam and quiz-mode guides describe the product that exists (item 1).**
   `board-exam-guide.tsx` now says a Board Exam is drawn from a whole **Review Set**, that launching from
