@@ -11,6 +11,7 @@ import com.studysnap.backend.dto.NoteCollectionDetailResponse;
 import com.studysnap.backend.dto.NoteCollectionSummaryResponse;
 import com.studysnap.backend.dto.NoteConceptCountsResponse;
 import com.studysnap.backend.dto.PlanReadinessResponse;
+import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.GoalCollectionDetailResponse;
 import com.studysnap.backend.dto.SetNoteCollectionParentRequest;
 import com.studysnap.backend.dto.SetNoteCollectionChildrenOrderRequest;
@@ -20,6 +21,7 @@ import com.studysnap.backend.dto.UpdateNoteCollectionRequest;
 import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.NoteCollectionService;
+import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import com.studysnap.backend.util.UuidParsingUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +50,7 @@ import java.util.UUID;
 public class NoteCollectionController {
 
     private final NoteCollectionService service;
+    private final QuickReviewAdaptivePracticeService adaptivePracticeService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
@@ -90,6 +93,25 @@ public class NoteCollectionController {
     ) {
         UUID collectionId = UuidParsingUtils.parseUuidOrThrow(id, CollectionNotFoundException::new);
         return service.get(collectionId, user.userId());
+    }
+
+    @PostMapping("/{id}/adaptive-practice/start")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public QuickReviewAdaptiveQuizResponse startAdaptivePractice(
+            @PathVariable String id,
+            @RequestParam(value = "entry", required = false) String entry,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return adaptivePracticeService.generateAdaptiveQuizForCollection(id, user.userId(), entry);
+    }
+
+    @GetMapping("/{id}/adaptive-practice/in-progress")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public QuickReviewAdaptiveQuizResponse getAdaptivePractice(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return adaptivePracticeService.getAdaptiveQuizSessionForCollection(id, user.userId());
     }
 
     @GetMapping("/{id}/readiness")

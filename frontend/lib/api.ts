@@ -25,6 +25,7 @@ export type QuizItem = {
   correctAnswerIndex?: number;
   answer?: string | null;
   concept?: string;
+  sourceStudyPackId?: string;
   explanation: string;
   questionFormat?: "MCQ" | "TRUE_FALSE" | "MULTI_SELECT" | "MATCHING" | "IDENTIFICATION" | "ENUMERATION" | null;
   questionGroup?: string | null;
@@ -1266,14 +1267,31 @@ export type QuizSessionStatus = "GENERATING" | "FAILED" | "IN_PROGRESS" | "PAUSE
 
 export type AdaptiveConceptSelectionReason = "DUE" | "WEAK" | "BOTH";
 
+/**
+ * One focus concept, carried WITH the pack it came from.
+ *
+ * Two packs in a plan can be weak on the same concept string, and they stay two entries: concept
+ * identity is scoped per Study Pack, so merging them by name would assert a cross-pack identity the
+ * product does not have. This replaces the old parallel `weakConcepts` / `conceptSelectionReasons`
+ * arrays, which could not express that at all.
+ */
+export type AdaptivePracticeFocusConcept = {
+  concept: string;
+  sourceStudyPackId: string;
+  sourceTitle: string;
+  selectionReason: AdaptiveConceptSelectionReason | null;
+};
+
 export type QuickReviewAdaptiveQuizResponse = {
   sessionId: string | null;
   status: QuizSessionStatus | null;
   studyPackId: string;
+  /** The anchor note, DERIVED BY THE SERVER. Clients must route with this rather than computing an
+   *  anchor themselves -- a plan's item order is mutable, so a client-computed anchor drifts. */
+  noteId: string | null;
   title: string;
-  weakConcepts: string[];
+  focusConcepts: AdaptivePracticeFocusConcept[];
   quiz: QuizItem[];
-  conceptSelectionReasons: Array<AdaptiveConceptSelectionReason | null>;
   message: string;
 };
 
@@ -3770,6 +3788,52 @@ export async function generateAdaptiveQuickReviewQuiz(
   return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
     response,
     "Could not generate adaptive practice quiz.",
+  );
+}
+
+/**
+ * Plan- and Review-Set-scoped Adaptive Practice.
+ *
+ * Collection-addressed on purpose: the server derives the session's anchor pack from the
+ * collection. The client must NOT compute and send an anchor -- a plan's item order is mutable, so a
+ * client-computed anchor drifts and the resume lookup would miss a live session.
+ */
+export async function generateAdaptivePracticeForCollection(
+  collectionId: string,
+  entry?: AdaptivePracticeEntry | null,
+): Promise<QuickReviewAdaptiveQuizResponse> {
+  const path = `/collections/${collectionId}/adaptive-practice/start`;
+  const requestPath = entry
+    ? `${path}?${new URLSearchParams({ [ADAPTIVE_PRACTICE_ENTRY_QUERY_PARAM]: entry }).toString()}`
+    : path;
+  const response = await fetchWithAuth(
+    requestPath,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
+    response,
+    "Could not generate adaptive practice for this plan.",
+  );
+}
+
+export async function getInProgressCollectionAdaptivePracticeSession(
+  collectionId: string,
+): Promise<QuickReviewAdaptiveQuizResponse> {
+  const response = await fetchWithAuth(
+    `/collections/${collectionId}/adaptive-practice/in-progress`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
+    response,
+    "Could not load adaptive practice for this plan.",
   );
 }
 

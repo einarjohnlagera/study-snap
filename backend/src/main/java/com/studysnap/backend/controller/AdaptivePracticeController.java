@@ -48,7 +48,9 @@ public class AdaptivePracticeController {
                 request.correctAnswers(),
                 request.totalQuestions(),
                 request.durationSeconds(),
-                request.correctConceptNames()
+                request.correctConceptNames(),
+                request.selectedChoices(),
+                request.selectedMultiChoices()
         );
     }
 

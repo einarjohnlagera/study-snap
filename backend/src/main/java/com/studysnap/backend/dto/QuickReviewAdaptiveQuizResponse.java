@@ -8,10 +8,10 @@ public record QuickReviewAdaptiveQuizResponse(
         String sessionId,
         QuickReviewSessionStatus status,
         String studyPackId,
+        String noteId,
         String title,
-        List<String> weakConcepts,
+        List<AdaptivePracticeFocusConceptResponse> focusConcepts,
         List<QuizItem> quiz,
-        List<String> conceptSelectionReasons,
         String message
 ) {
 }
