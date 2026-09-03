@@ -8,15 +8,17 @@ import com.studysnap.backend.dto.QuizShareLinkResponse;
 import com.studysnap.backend.dto.SharedQuizResultItem;
 import com.studysnap.backend.dto.SharedQuizResultsResponse;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
+import com.studysnap.backend.entity.CombinedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.QuizShareLinkEntity;
 import com.studysnap.backend.exception.GeneratedQuizNotFoundException;
+import com.studysnap.backend.exception.CombinedQuizNotFoundException;
 import com.studysnap.backend.exception.InvalidSharedQuizAnswersException;
-import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.QuizShareLinkNotAllowedException;
 import com.studysnap.backend.exception.QuizShareLinkNotFoundException;
 import com.studysnap.backend.exception.QuizShareLinkTokenGenerationException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.CombinedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuizShareLinkRepository;
 import com.studysnap.backend.util.QuizSessionReviewUtils;
@@ -45,6 +47,7 @@ public class QuizShareLinkService {
 
     private final QuizShareLinkRepository quizShareLinkRepository;
     private final GeneratedQuizRepository generatedQuizRepository;
+    private final CombinedQuizRepository combinedQuizRepository;
     private final NoteRepository noteRepository;
     private final OnboardingGuardService onboardingGuardService;
     private final QuizShareLimitService quizShareLimitService;
@@ -80,6 +83,51 @@ public class QuizShareLinkService {
         return toResponse(saved);
     }
 
+    /**
+     * Sibling of the single-note creation path. Do not merge the nullable target ids: each target needs its
+     * own idempotency lookup, or an existing link on the other arc would be checked accidentally.
+     */
+    @Transactional
+    public QuizShareLinkResponse createCombinedQuizShareLink(UUID combinedQuizId, UUID ownerUserId) {
+        authService.requireEmailVerified(ownerUserId);
+        onboardingGuardService.assertProfileComplete(ownerUserId);
+        CombinedQuizEntity combinedQuiz = combinedQuizRepository.findByIdAndOwnerUserId(combinedQuizId, ownerUserId)
+                .orElseThrow(CombinedQuizNotFoundException::new);
+        QuizShareLinkEntity existing = quizShareLinkRepository
+                .findFirstByCombinedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(combinedQuiz.getId(), ownerUserId)
+                .orElse(null);
+        if (existing != null && Boolean.TRUE.equals(existing.getActive())) {
+            return toResponse(existing);
+        }
+        quizShareLimitService.assertShareLinkQuotaNotExceeded(ownerUserId);
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        QuizShareLinkEntity entity = new QuizShareLinkEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setCombinedQuizId(combinedQuiz.getId());
+        entity.setOwnerUserId(ownerUserId);
+        entity.setToken(generateUniqueToken());
+        entity.setActive(true);
+        entity.setCreatedAt(now);
+        QuizShareLinkEntity saved = quizShareLinkRepository.save(entity);
+        userUsageService.incrementQuizShareLinkCreated(ownerUserId, now);
+        return toResponse(saved);
+    }
+
+    /**
+     * Sibling of {@link #getShareLinkByQuizId}. Without it a client can only recover an existing link by
+     * POSTing, which is a write to read state -- and on a link the owner has toggled OFF that POST mints a
+     * NEW link and spends share-link quota, because the idempotent early return requires an ACTIVE link.
+     */
+    @Transactional(readOnly = true)
+    public QuizShareLinkResponse getCombinedQuizShareLink(UUID combinedQuizId, UUID ownerUserId) {
+        onboardingGuardService.assertProfileComplete(ownerUserId);
+        return quizShareLinkRepository
+                .findFirstByCombinedQuizIdAndOwnerUserIdOrderByCreatedAtDesc(combinedQuizId, ownerUserId)
+                .map(this::toResponse)
+                .orElseThrow(QuizShareLinkNotFoundException::new);
+    }
+
     @Transactional(readOnly = true)
     public QuizShareLinkResponse getShareLinkByQuizId(UUID generatedQuizId, UUID ownerUserId) {
         onboardingGuardService.assertProfileComplete(ownerUserId);
@@ -104,11 +152,8 @@ public class QuizShareLinkService {
     @Transactional(readOnly = true)
     public PublicSharedQuizResponse getActivePublicQuiz(String token) {
         QuizShareLinkEntity link = findActiveLink(token);
-        GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findById(link.getGeneratedQuizId())
-                .orElseThrow(QuizShareLinkNotFoundException::new);
-        NoteEntity note = noteRepository.findById(generatedQuiz.getNoteId())
-                .orElseThrow(NoteNotFoundException::new);
-        List<PublicQuizItem> questions = generatedQuiz.getQuestions().stream()
+        SharedQuiz sharedQuiz = resolveSharedQuiz(link);
+        List<PublicQuizItem> questions = sharedQuiz.questions().stream()
                 .map(question -> new PublicQuizItem(
                         question.question(),
                         question.choices(),
@@ -117,8 +162,8 @@ public class QuizShareLinkService {
                 ))
                 .toList();
         return new PublicSharedQuizResponse(
-                generatedQuiz.getId(),
-                resolveNoteTitle(note),
+                sharedQuiz.id(),
+                sharedQuiz.title(),
                 questions
         );
     }
@@ -140,9 +185,7 @@ public class QuizShareLinkService {
             List<List<Integer>> multiAnswers
     ) {
         QuizShareLinkEntity link = findActiveLink(token);
-        GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findById(link.getGeneratedQuizId())
-                .orElseThrow(QuizShareLinkNotFoundException::new);
-        List<QuizItem> questions = generatedQuiz.getQuestions();
+        List<QuizItem> questions = resolveSharedQuestions(link);
         if (answers == null || answers.size() != questions.size()) {
             throw new InvalidSharedQuizAnswersException();
         }
@@ -220,6 +263,48 @@ public class QuizShareLinkService {
             throw new QuizShareLinkNotFoundException();
         }
         return link;
+    }
+
+    private SharedQuiz resolveSharedQuiz(QuizShareLinkEntity link) {
+        if (link.getGeneratedQuizId() != null) {
+            GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findById(link.getGeneratedQuizId())
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+            NoteEntity note = noteRepository.findById(generatedQuiz.getNoteId())
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+            return new SharedQuiz(generatedQuiz.getId(), resolveNoteTitle(note), generatedQuiz.getQuestions());
+        }
+        if (link.getCombinedQuizId() != null) {
+            CombinedQuizEntity combinedQuiz = combinedQuizRepository.findById(link.getCombinedQuizId())
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+            List<QuizItem> questions = flattenCombinedQuestions(combinedQuiz);
+            return new SharedQuiz(combinedQuiz.getId(), combinedQuiz.getTitle(), questions);
+        }
+        // V132's exclusive-arc check rejects this in PostgreSQL; keep public lookup fail-closed for corrupt rows.
+        throw new QuizShareLinkNotFoundException();
+    }
+
+    private List<QuizItem> resolveSharedQuestions(QuizShareLinkEntity link) {
+        if (link.getGeneratedQuizId() != null) {
+            return generatedQuizRepository.findById(link.getGeneratedQuizId())
+                    .map(GeneratedQuizEntity::getQuestions)
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+        }
+        if (link.getCombinedQuizId() != null) {
+            return combinedQuizRepository.findById(link.getCombinedQuizId())
+                    .map(this::flattenCombinedQuestions)
+                    .orElseThrow(QuizShareLinkNotFoundException::new);
+        }
+        throw new QuizShareLinkNotFoundException();
+    }
+
+    private List<QuizItem> flattenCombinedQuestions(CombinedQuizEntity combinedQuiz) {
+        return combinedQuiz.getSections() == null ? List.of() : combinedQuiz.getSections().stream()
+                .filter(Objects::nonNull)
+                .flatMap(section -> section.questions() == null ? java.util.stream.Stream.empty() : section.questions().stream())
+                .toList();
+    }
+
+    private record SharedQuiz(UUID id, String title, List<QuizItem> questions) {
     }
 
     private String generateUniqueToken() {

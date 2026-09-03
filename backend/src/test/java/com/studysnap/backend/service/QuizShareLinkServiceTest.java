@@ -15,6 +15,7 @@ import com.studysnap.backend.exception.InvalidSharedQuizAnswersException;
 import com.studysnap.backend.exception.QuizShareLinkLimitExceededException;
 import com.studysnap.backend.exception.QuizShareLinkNotAllowedException;
 import com.studysnap.backend.exception.QuizShareLinkNotFoundException;
+import com.studysnap.backend.repository.CombinedQuizRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuizShareLinkRepository;
@@ -53,6 +54,8 @@ class QuizShareLinkServiceTest {
     @Mock
     private GeneratedQuizRepository generatedQuizRepository;
     @Mock
+    private CombinedQuizRepository combinedQuizRepository;
+    @Mock
     private NoteRepository noteRepository;
     @Mock
     private QuizShareLimitService quizShareLimitService;
@@ -70,6 +73,7 @@ class QuizShareLinkServiceTest {
         quizShareLinkService = new QuizShareLinkService(
                 quizShareLinkRepository,
                 generatedQuizRepository,
+                combinedQuizRepository,
                 noteRepository,
                 onboardingGuardService,
                 quizShareLimitService,

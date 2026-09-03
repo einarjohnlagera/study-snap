@@ -20,8 +20,12 @@ public class QuizShareLinkEntity {
     @Id
     private UUID id;
 
-    @Column(name = "generated_quiz_id", nullable = false)
+    /** Exactly one of this and combinedQuizId is set; V132 enforces the exclusive arc in PostgreSQL. */
+    @Column(name = "generated_quiz_id")
     private UUID generatedQuizId;
+
+    @Column(name = "combined_quiz_id")
+    private UUID combinedQuizId;
 
     @Column(name = "owner_user_id", nullable = false)
     private UUID ownerUserId;
