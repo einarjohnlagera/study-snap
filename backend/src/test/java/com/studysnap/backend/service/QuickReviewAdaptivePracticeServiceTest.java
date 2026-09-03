@@ -1201,34 +1201,31 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
-    void collectionScoped_inProgressReadReturnsThePlansOwnSessionAndSkipsInterviewOnes() {
-        // T3.8 -- getAdaptiveQuizSessionForCollection had ZERO tests anywhere.
+    void collectionScoped_resumesAnExistingSessionEvenWhenTheLearnerIsOutOfQuota() {
+        // ⚠️ REPLACES the test for GET /collections/{id}/adaptive-practice/in-progress, removed as
+        // redundant: the START endpoint already resumes by recorded sourceCollectionId, so the GET
+        // duplicated it and had no consumer anywhere.
+        //
+        // Working that out surfaced a LIVE defect of my own. The quota and rate-limit gates had been
+        // moved above the resume branch, so a learner at their monthly limit could not resume a
+        // session they had ALREADY PAID FOR, and every resume burned a rate-limit token for a request
+        // that makes no LLM call. Resuming consumes neither.
         CollectionFixture f = collectionFixture(1);
         QuickReviewSessionEntity planSession = buildInProgressAdaptiveSession(
                 UUID.randomUUID(), f.userId, f.packs.get(0).getId(), f.noteIds.get(0));
         Map<String, Object> state = new LinkedHashMap<>(planSession.getSessionState());
         state.put("sourceCollectionId", f.collectionId.toString());
         planSession.setSessionState(state);
-        // An interview session on the SAME collection, ordered FIRST. Without the sub-mode filter
-        // findFirst() picks it and the plan's read hands back interview questions. A fixture without
-        // this session cannot distinguish the two, which is why the first version of this test
-        // survived deleting the filter.
-        QuickReviewSessionEntity interview = interviewSessionOn(f, 0);
-        Map<String, Object> interviewState = new LinkedHashMap<>(interview.getSessionState());
-        interviewState.put("sourceCollectionId", f.collectionId.toString());
-        interview.setSessionState(interviewState);
-        lenient().when(quickReviewSessionRepository.findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                        eq(f.userId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
-                .thenReturn(List.of(interview, planSession));
-        lenient().when(studyPackRepository.findByIdAndOwnerUserId(f.packs.get(0).getId(), f.userId))
-                .thenReturn(Optional.of(f.packs.get(0)));
+        seeActiveSessions(f, planSession);
 
         QuickReviewAdaptiveQuizResponse response =
-                adaptivePracticeService.getAdaptiveQuizSessionForCollection(
-                        f.collectionId.toString(), f.userId);
+                adaptivePracticeService.generateAdaptiveQuizForCollection(
+                        f.collectionId.toString(), f.userId, "collection-detail");
 
         assertThat(response.sessionId()).isEqualTo(planSession.getId().toString());
-        assertThat(response.sessionId()).isNotEqualTo(interview.getId().toString());
+        // Neither gate may run on a resume: no quota is spent and no LLM call is made.
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
+        verify(userUsageService, never()).getMonthlyUsage(any(), any());
     }
 
 

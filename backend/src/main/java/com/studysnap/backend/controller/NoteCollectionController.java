@@ -105,15 +105,6 @@ public class NoteCollectionController {
         return adaptivePracticeService.generateAdaptiveQuizForCollection(id, user.userId(), entry);
     }
 
-    @GetMapping("/{id}/adaptive-practice/in-progress")
-    @PreAuthorize("hasAnyRole('USER','ADMIN')")
-    public QuickReviewAdaptiveQuizResponse getAdaptivePractice(
-            @PathVariable String id,
-            @AuthenticationPrincipal AuthenticatedUser user
-    ) {
-        return adaptivePracticeService.getAdaptiveQuizSessionForCollection(id, user.userId());
-    }
-
     @GetMapping("/{id}/readiness")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public PlanReadinessResponse getReadiness(

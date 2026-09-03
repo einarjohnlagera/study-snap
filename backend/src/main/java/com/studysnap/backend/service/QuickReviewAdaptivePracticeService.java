@@ -287,14 +287,6 @@ public class QuickReviewAdaptivePracticeService {
                 .orElseThrow(CollectionNotFoundException::new);
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
-        // ⚠️ GATES BEFORE THE EXPENSIVE LOAD. Resolving eligibility below materializes every DONE
-        // Study Pack of the collection -- for a Review Set that is hundreds of rows carrying full
-        // quiz JSON. Checking quota and the rate limit afterwards meant an over-quota learner paid
-        // that cost on EVERY click before being refused. Both gates depend only on (userId, plan),
-        // so nothing here needs the packs.
-        assertAdaptivePracticeQuotaAvailable(userId, planType);
-        aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-
         List<QuickReviewSessionEntity> activeAdaptiveSessions = quickReviewSessionRepository
                 .findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         userId, QuickReviewSessionMode.ADAPTIVE, ACTIVE_GENERATION_STATUSES);
@@ -308,6 +300,22 @@ public class QuickReviewAdaptivePracticeService {
             StudyPackEntity anchor = findOwnedStudyPackOrThrow(collectionSession.getStudyPackId(), userId);
             return toAdaptiveResponse(collectionSession, anchor);
         }
+
+        // ⚠️ GATES SIT HERE ON PURPOSE: AFTER the resume return, BEFORE the expensive load.
+        //
+        // Below this line, resolving eligibility reads every candidate pack of the collection — for a
+        // Review Set, hundreds of rows. Gating afterwards made an over-quota learner pay that cost on
+        // every click before being refused, which is why the checks were moved earlier.
+        //
+        // ⚠️ BUT THEY WERE MOVED TOO FAR, ABOVE THE RESUME BRANCH, AND THAT WAS A LIVE DEFECT: a
+        // learner at their monthly limit could not RESUME a session they had already paid for, and
+        // every resume burned a rate-limit token for a request that makes no LLM call. Resuming
+        // consumes neither quota nor generation capacity — only STARTING does.
+        //
+        // ⚠️ Do not move these above the resume return again. The active-session lookup that precedes
+        // them is a single indexed query, not the expensive part.
+        assertAdaptivePracticeQuotaAvailable(userId, planType);
+        aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
 
         List<NoteCollectionEntity> children = noteCollectionRepository
                 .findOrderedChildrenByParentCollectionIdAndOwnerUserId(collectionId, userId);
@@ -611,28 +619,6 @@ public class QuickReviewAdaptivePracticeService {
         return entry != null && KNOWN_ADAPTIVE_PRACTICE_ENTRIES.contains(entry)
             ? entry
             : ADAPTIVE_PRACTICE_ENTRY_DIRECT;
-    }
-
-    @Transactional(readOnly = true)
-    public QuickReviewAdaptiveQuizResponse getAdaptiveQuizSessionForCollection(String collectionIdRaw, UUID userId) {
-        authService.requireEmailVerified(userId);
-        UUID collectionId = UuidParsingUtils.parseUuidOrThrow(collectionIdRaw, CollectionNotFoundException::new);
-        NoteCollectionEntity collection = noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId)
-                .orElseThrow(CollectionNotFoundException::new);
-        PlanType planType = subscriptionService.resolvePlan(userId);
-        featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
-        QuickReviewSessionEntity existing = quickReviewSessionRepository
-                .findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
-                        userId, QuickReviewSessionMode.ADAPTIVE, OBSERVABLE_STATUSES)
-                .stream()
-                .filter(session -> !isInterviewSession(session))
-                .filter(session -> collectionId.equals(extractSourceCollectionId(session)))
-                .findFirst()
-                .orElse(null);
-        if (existing == null) {
-            return emptyCollectionResponse(collection, FOCUS_MESSAGE);
-        }
-        return toAdaptiveResponse(existing, findOwnedStudyPackOrThrow(existing.getStudyPackId(), userId));
     }
 
     @Transactional(readOnly = true)
