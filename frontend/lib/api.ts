@@ -54,6 +54,11 @@ export type PublicQuizItem = {
   question: string;
   choices: string[];
   concept?: string | null;
+  /**
+   * Present so a recipient can be given the right control. It never carries the answer key --
+   * correctIndex/correctIndices/explanation reach them only in SharedQuizResultItem, after submitting.
+   */
+  questionFormat?: string | null;
 };
 
 export type PublicSharedQuizResponse = {
@@ -65,6 +70,8 @@ export type PublicSharedQuizResponse = {
 export type SharedQuizResultItem = {
   correct: boolean;
   correctIndex: number;
+  /** Non-empty only for MULTI_SELECT. Prefer it when non-empty; otherwise use correctIndex. */
+  correctIndices?: number[] | null;
   explanation?: string | null;
 };
 
@@ -4597,16 +4604,21 @@ export async function getPublicSharedQuiz(token: string): Promise<PublicSharedQu
   return parseApiResponse<PublicSharedQuizResponse>(response, "Could not load shared quiz.");
 }
 
+/**
+ * `answers` holds one entry per question and is null at a MULTI_SELECT position, whose selections travel
+ * in the index-aligned `multiAnswers`. The server rejects either list at the wrong length.
+ */
 export async function getSharedQuizResults(
   token: string,
-  answers: number[],
+  answers: (number | null)[],
+  multiAnswers: (number[] | null)[],
 ): Promise<SharedQuizResultsResponse> {
   const response = await fetch(buildUrl(`/quiz/share/${token}/results`), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify({ answers, multiAnswers }),
   });
   return parseApiResponse<SharedQuizResultsResponse>(response, "Could not check quiz results.");
 }

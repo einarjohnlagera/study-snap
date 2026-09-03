@@ -22,14 +22,50 @@ Recipients open `/quiz/{token}` without authentication.
 
 Rules:
 
-- the initial public quiz response includes `question`, `choices`, and `concept`
-- the initial response must not include `correctIndex` or `explanation`
+- the initial public quiz response includes `question`, `choices`, `concept`, and `questionFormat`
+- **⚠️ the initial response must not include `correctIndex`, `correctIndices` or `explanation`** — `PublicQuizItem` is the only thing enforcing this, and `questionFormat` is present so the recipient can be given the right *control*, never the answer
 - no `QuickReviewSessionEntity` or score/session rows are created
 - answers stay client-side until the recipient submits the quiz
-- `/api/quiz/share/{token}/results` accepts the answer indexes and returns the score, correct indexes, and explanations for review
+- `/api/quiz/share/{token}/results` accepts the answers and returns the score, correct answers, and explanations for review
 - the results screen prompts signup instead of persisting anonymous performance
 
 This keeps public play lightweight and avoids creating student-owned history before authentication.
+
+### Question formats a recipient can be given
+
+`teacher-quiz-developer.txt` can emit four formats, and the shared path handles them differently:
+
+| Format | Graded | Rendered |
+|---|---|---|
+| `MCQ` | single `correctIndex` | one-shot choice, committed on click |
+| `TRUE_FALSE` | single `correctIndex` | same as MCQ, two choices |
+| `MULTI_SELECT` | **exact set** against `correctIndices` | checkboxes with *Select all that apply*; editable until Continue |
+| `MATCHING` | single `correctIndex` per item | ⚠️ as N unrelated MCQs — see Known limitations |
+
+### ⚠️ MULTI_SELECT grading must route through `QuizSessionReviewUtils.isAnswerCorrect`
+
+**Fixed in `v0.110.0` after shipping broken.** `getSharedQuizResults` used to compare `answer == correctIndex`.
+`QuizItem.correctIndex()` **falls back to `correctIndices.getFirst()`** for MULTI_SELECT, so on a question
+whose correct answers were `[0, 2]` a recipient selecting both scored **zero**, while one selecting only
+choice 0 scored full marks. The prompt instructs 1–2 MULTI_SELECT questions per quiz, so this was live in
+effectively every shared quiz, and all ten of the service's tests passed over it.
+
+The shared path now grades through the **same** `QuizSessionReviewUtils.isAnswerCorrect` every in-app mode
+uses — exact-set semantics, order-insensitive. **Do not reintroduce a bespoke comparison here**, and do not
+grade MULTI_SELECT by overlap or by first index; `QuizShareLinkServiceTest` pins both partial-credit cases.
+
+**The wire format is positional and both halves are required to stay aligned:**
+
+- `answers` carries one entry per question and is **null at a MULTI_SELECT position** — that question has no
+  single index
+- `multiAnswers` is index-aligned and carries the selections; it is **optional**, so a recipient still holding
+  the pre-fix browser bundle keeps submitting successfully (they simply cannot score a MULTI_SELECT question,
+  which they could never answer fully anyway)
+- both lists are rejected with `InvalidSharedQuizAnswersException` at the wrong length, because a shorter
+  `multiAnswers` would grade one question against another's selections rather than failing
+- `SharedQuizResultItem.correctIndices` is populated **only** for MULTI_SELECT and empty for every other
+  format, so the review screen follows one rule — *prefer `correctIndices` when non-empty, else
+  `correctIndex`* — and never branches on the question format itself
 
 ## Quotas
 
@@ -61,6 +97,18 @@ That separation is deliberate and load-bearing in both directions:
 - the shared quiz carries its own **Target Level** and question count, so it can be aimed at the recipient's depth rather than the owner's;
 - regeneration passes the previous shared quiz's questions as `disallowedQuestions`, so giving the same person a second quiz yields new questions;
 - **⚠️ reusing `note.quiz` would hand the recipient the exact questions the owner is assessed on** — the answer-key exposure `v0.74.0` locked the Quiz tab to prevent. Do not "optimise" this path by reading from the Study Pack quiz.
+
+## Known limitations
+
+- **A MATCHING block loses its grouping.** `teacher-quiz-developer.txt` may emit one block of 2–4
+  consecutive questions sharing a `questionGroup` and the same four choices. The shared quiz page renders
+  each as a standalone question with no *Match each item to one option* header, unlike the in-app
+  `QuizMatchingGroup`. **Grading is unaffected** — a MATCHING item carries a single `correctIndex` and is
+  graded like an MCQ. This is presentation only, and is the sharing gap `assessment-architecture-audit.md`
+  §15 records.
+- **IDENTIFICATION and ENUMERATION cannot be graded on the shared path.** Neither format is reachable
+  today — `teacher-quiz-developer.txt` does not emit them — but if one ever appeared it would score zero,
+  because the recipient has no text input to answer it with.
 
 ## Deferred
 

@@ -19,6 +19,7 @@ import com.studysnap.backend.exception.QuizShareLinkTokenGenerationException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuizShareLinkRepository;
+import com.studysnap.backend.util.QuizSessionReviewUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,9 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -109,7 +112,8 @@ public class QuizShareLinkService {
                 .map(question -> new PublicQuizItem(
                         question.question(),
                         question.choices(),
-                        question.concept()
+                        question.concept(),
+                        question.questionFormat()
                 ))
                 .toList();
         return new PublicSharedQuizResponse(
@@ -119,8 +123,22 @@ public class QuizShareLinkService {
         );
     }
 
+    /**
+     * Grades a recipient's submission.
+     *
+     * <p>⚠️ Grading MUST route through {@link QuizSessionReviewUtils#isAnswerCorrect}, the same rule every
+     * in-app mode uses. The bespoke {@code answer == correctIndex} comparison this replaced silently
+     * mis-graded every MULTI_SELECT question: {@code QuizItem.correctIndex()} falls back to
+     * {@code correctIndices.getFirst()} for that format, so on correct answers {@code [0, 2]} a recipient
+     * picking 2 scored zero and one picking only 0 scored full marks. {@code teacher-quiz-developer.txt}
+     * instructs 1-2 MULTI_SELECT questions per quiz, so it was live in effectively every shared quiz.
+     */
     @Transactional(readOnly = true)
-    public SharedQuizResultsResponse getSharedQuizResults(String token, List<Integer> answers) {
+    public SharedQuizResultsResponse getSharedQuizResults(
+            String token,
+            List<Integer> answers,
+            List<List<Integer>> multiAnswers
+    ) {
         QuizShareLinkEntity link = findActiveLink(token);
         GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findById(link.getGeneratedQuizId())
                 .orElseThrow(QuizShareLinkNotFoundException::new);
@@ -128,19 +146,71 @@ public class QuizShareLinkService {
         if (answers == null || answers.size() != questions.size()) {
             throw new InvalidSharedQuizAnswersException();
         }
+        // multiAnswers is optional -- a recipient on the pre-fix bundle sends none -- but when it is sent it
+        // is read positionally, so a length mismatch would silently grade one question against another's
+        // selections rather than failing.
+        if (multiAnswers != null && multiAnswers.size() != questions.size()) {
+            throw new InvalidSharedQuizAnswersException();
+        }
+
+        Map<Integer, Integer> selectedChoices = new HashMap<>();
+        Map<Integer, List<Integer>> selectedMultiChoices = new HashMap<>();
+        for (int index = 0; index < questions.size(); index++) {
+            Integer answer = answers.get(index);
+            if (answer != null) {
+                selectedChoices.put(index, answer);
+            }
+            List<Integer> selectedMultiChoice = normalizeSelectedIndices(
+                    multiAnswers == null ? null : multiAnswers.get(index),
+                    questions.get(index)
+            );
+            if (!selectedMultiChoice.isEmpty()) {
+                selectedMultiChoices.put(index, selectedMultiChoice);
+            }
+        }
+
         List<SharedQuizResultItem> items = new ArrayList<>();
         int score = 0;
         for (int index = 0; index < questions.size(); index++) {
             QuizItem question = questions.get(index);
-            int correctIndex = question.correctIndex() == null ? -1 : question.correctIndex();
-            Integer answer = answers != null && index < answers.size() ? answers.get(index) : null;
-            boolean correct = answer != null && answer == correctIndex;
+            boolean correct = QuizSessionReviewUtils.isAnswerCorrect(question, index, selectedChoices, selectedMultiChoices);
             if (correct) {
                 score++;
             }
-            items.add(new SharedQuizResultItem(correct, correctIndex, question.explanation()));
+            int correctIndex = question.correctIndex() == null ? -1 : question.correctIndex();
+            items.add(new SharedQuizResultItem(
+                    correct,
+                    correctIndex,
+                    resolveCorrectIndices(question),
+                    question.explanation()
+            ));
         }
         return new SharedQuizResultsResponse(score, questions.size(), items);
+    }
+
+    /**
+     * Only MULTI_SELECT questions disclose a correct-answer set, so the review screen can read
+     * "non-empty means use these" without re-deriving the format. Every other format keeps its single
+     * {@code correctIndex}.
+     */
+    private List<Integer> resolveCorrectIndices(QuizItem question) {
+        if (!question.isMultiSelect() || question.correctIndices() == null) {
+            return List.of();
+        }
+        return List.copyOf(question.correctIndices());
+    }
+
+    /** Mirrors {@code QuizSessionStateUtils.resolveSelectedChoiceIndexes}: in-range and de-duplicated. */
+    private List<Integer> normalizeSelectedIndices(List<Integer> selectedIndices, QuizItem question) {
+        if (selectedIndices == null || selectedIndices.isEmpty() || question.choices() == null) {
+            return List.of();
+        }
+        int choiceCount = question.choices().size();
+        return selectedIndices.stream()
+                .filter(Objects::nonNull)
+                .filter(index -> index >= 0 && index < choiceCount)
+                .distinct()
+                .toList();
     }
 
     private QuizShareLinkEntity findActiveLink(String token) {

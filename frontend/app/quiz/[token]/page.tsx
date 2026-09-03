@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { TrackedLink } from "@/components/analytics/tracked-link";
@@ -18,13 +18,19 @@ import {
   type SharedQuizResultsResponse,
 } from "@/lib/api";
 
+const MULTI_SELECT_FORMAT = "MULTI_SELECT";
+
 export default function SharedQuizPage() {
   const params = useParams<{ token: string }>();
   const token = params.token;
   const [quiz, setQuiz] = useState<PublicSharedQuizResponse | null>(null);
   const [results, setResults] = useState<SharedQuizResultsResponse | null>(null);
-  const [answers, setAnswers] = useState<number[]>([]);
+  // Index-aligned with the questions: `answers` is null wherever the question is MULTI_SELECT, and
+  // `multiAnswers` is null everywhere else. The server reads them positionally.
+  const [answers, setAnswers] = useState<(number | null)[]>([]);
+  const [multiAnswers, setMultiAnswers] = useState<(number[] | null)[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [selectedMultiAnswers, setSelectedMultiAnswers] = useState<number[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -44,6 +50,11 @@ export default function SharedQuizPage() {
     try {
       const loadedQuiz = await getPublicSharedQuiz(token);
       setQuiz(loadedQuiz);
+      setAnswers([]);
+      setMultiAnswers([]);
+      setSelectedAnswer(null);
+      setSelectedMultiAnswers([]);
+      setCurrentIndex(0);
       void trackAnalyticsEvent({
         eventType: "QUIZ_SHARE_LINK_OPENED",
         entityId: loadedQuiz.quizId,
@@ -68,17 +79,31 @@ export default function SharedQuizPage() {
   const currentQuestion = quiz?.questions[currentIndex] ?? null;
   const questionCount = quiz?.questions.length ?? 0;
   const progressLabel = questionCount > 0 ? `Question ${currentIndex + 1} of ${questionCount}` : "Shared quiz";
-  const answeredQuestions = useMemo(() => answers.length + (selectedAnswer === null ? 0 : 1), [answers.length, selectedAnswer]);
+  const isMultiSelect = currentQuestion?.questionFormat === MULTI_SELECT_FORMAT;
+  const hasSelection = isMultiSelect ? selectedMultiAnswers.length > 0 : selectedAnswer !== null;
+  // hasSelection is recomputed every render, so memoizing this saved nothing.
+  const answeredQuestions = answers.length + (hasSelection ? 1 : 0);
+
+  const toggleMultiAnswer = useCallback((choiceIndex: number) => {
+    setSelectedMultiAnswers((current) => (
+      current.includes(choiceIndex)
+        ? current.filter((index) => index !== choiceIndex)
+        : [...current, choiceIndex].sort((a, b) => a - b)
+    ));
+  }, []);
 
   const handleContinue = useCallback(async () => {
-    if (!quiz || selectedAnswer === null || submitting) {
+    if (!quiz || !hasSelection || submitting) {
       return;
     }
-    const nextAnswers = [...answers, selectedAnswer];
+    const nextAnswers = [...answers, isMultiSelect ? null : selectedAnswer];
+    const nextMultiAnswers = [...multiAnswers, isMultiSelect ? [...selectedMultiAnswers] : null];
     const isLastQuestion = currentIndex >= quiz.questions.length - 1;
     if (!isLastQuestion) {
       setAnswers(nextAnswers);
+      setMultiAnswers(nextMultiAnswers);
       setSelectedAnswer(null);
+      setSelectedMultiAnswers([]);
       setCurrentIndex((index) => index + 1);
       return;
     }
@@ -86,15 +111,27 @@ export default function SharedQuizPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const checkedResults = await getSharedQuizResults(token, nextAnswers);
+      const checkedResults = await getSharedQuizResults(token, nextAnswers, nextMultiAnswers);
       setAnswers(nextAnswers);
+      setMultiAnswers(nextMultiAnswers);
       setResults(checkedResults);
     } catch {
       setSubmitError("Could not submit answers. Please try again.");
     } finally {
       setSubmitting(false);
     }
-  }, [answers, currentIndex, quiz, selectedAnswer, submitting, token]);
+  }, [
+    answers,
+    currentIndex,
+    hasSelection,
+    isMultiSelect,
+    multiAnswers,
+    quiz,
+    selectedAnswer,
+    selectedMultiAnswers,
+    submitting,
+    token,
+  ]);
 
   if (loading) {
     return (
@@ -168,7 +205,10 @@ export default function SharedQuizPage() {
             {quiz.questions.map((question, index) => {
               const result = results.items[index];
               const userAnswerIndex = answers[index];
+              const userMultiAnswers = multiAnswers[index];
               const correctIndex = result?.correctIndex ?? -1;
+              // One rule, no format branching: the server sends a set only for MULTI_SELECT.
+              const correctIndices = result?.correctIndices ?? [];
               return (
                 <Card key={`${question.question}-${index}`} className="space-y-4 p-4 sm:p-6">
                   <div className="space-y-2">
@@ -179,8 +219,12 @@ export default function SharedQuizPage() {
                   </div>
                   <div className="grid gap-2">
                     {question.choices.map((choice, choiceIndex) => {
-                      const isCorrect = choiceIndex === correctIndex;
-                      const isUserAnswer = choiceIndex === userAnswerIndex;
+                      const isCorrect = correctIndices.length > 0
+                        ? correctIndices.includes(choiceIndex)
+                        : choiceIndex === correctIndex;
+                      const isUserAnswer = userMultiAnswers
+                        ? userMultiAnswers.includes(choiceIndex)
+                        : choiceIndex === userAnswerIndex;
                       return (
                         <div
                           key={`${choice}-${choiceIndex}`}
@@ -230,25 +274,49 @@ export default function SharedQuizPage() {
               {currentQuestion.concept ? (
                 <p className="text-sm text-foreground/60">{currentQuestion.concept}</p>
               ) : null}
+              {isMultiSelect ? (
+                <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">Select all that apply</p>
+              ) : null}
             </div>
             <div className="grid gap-3">
-              {currentQuestion.choices.map((choice, index) => (
-                <button
-                  key={`${choice}-${index}`}
-                  type="button"
-                  className={[
-                    "motion-pressable rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors",
-                    selectedAnswer === index
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-border bg-background hover:bg-highlight disabled:hover:bg-background",
-                  ].join(" ")}
-                  onClick={() => setSelectedAnswer(index)}
-                  disabled={selectedAnswer !== null}
-                >
-                  <span className="mr-2 font-semibold">{String.fromCharCode(65 + index)}.</span>
-                  {renderMathText(choice)}
-                </button>
-              ))}
+              {currentQuestion.choices.map((choice, index) => {
+                const isSelected = isMultiSelect ? selectedMultiAnswers.includes(index) : selectedAnswer === index;
+                return (
+                  <button
+                    key={`${choice}-${index}`}
+                    type="button"
+                    aria-pressed={isSelected}
+                    className={[
+                      "motion-pressable flex w-full items-start gap-2 rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors",
+                      isSelected
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-background hover:bg-highlight disabled:hover:bg-background",
+                    ].join(" ")}
+                    onClick={() => (isMultiSelect ? toggleMultiAnswer(index) : setSelectedAnswer(index))}
+                    // A single-choice answer is committed on click, as it always has been. A multi-select
+                    // answer stays editable until Continue, or the recipient could never pick a second one.
+                    disabled={!isMultiSelect && selectedAnswer !== null}
+                  >
+                    {isMultiSelect ? (
+                      <span
+                        className={[
+                          "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border text-[10px] leading-none",
+                          isSelected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-foreground/35 bg-background text-transparent",
+                        ].join(" ")}
+                        aria-hidden="true"
+                      >
+                        {isSelected ? "\u2713" : ""}
+                      </span>
+                    ) : null}
+                    <span className="min-w-0 flex-1">
+                      <span className="mr-2 font-semibold">{String.fromCharCode(65 + index)}.</span>
+                      {renderMathText(choice)}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             {submitError ? (
               <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>
@@ -257,7 +325,7 @@ export default function SharedQuizPage() {
               <Button
                 type="button"
                 onClick={() => void handleContinue()}
-                disabled={selectedAnswer === null}
+                disabled={!hasSelection}
                 loading={submitting}
                 loadingText="Checking..."
               >
