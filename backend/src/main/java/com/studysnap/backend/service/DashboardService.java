@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.dto.ContinueStudyingResumeType;
+import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.dto.DashboardConceptInsightResponse;
 import com.studysnap.backend.dto.DashboardFocusAreasResponse;
 import com.studysnap.backend.entity.NoteCollectionEntity;
@@ -69,6 +70,8 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 @Slf4j
 public class DashboardService {
+
+    private static final String SUB_MODE_INTERVIEW = "INTERVIEW";
     private static final BigDecimal PERFECT_SCORE = BigDecimal.valueOf(100);
     private static final Set<ProfileType> CHALLENGE_SUGGESTION_PROFILE_TYPES = EnumSet.of(
             ProfileType.STUDENT,
@@ -590,7 +593,7 @@ public class DashboardService {
                     currentRound,
                     remainingQuestions,
                     resumeState,
-                    resolveResumeType(session.getSessionMode())
+                    resolveResumeType(session)
             ));
         }
         return Optional.empty();
@@ -1009,12 +1012,21 @@ public class DashboardService {
                 .toList();
     }
 
-    private ContinueStudyingResumeType resolveResumeType(QuickReviewSessionMode sessionMode) {
+    /**
+     * ⚠️ Takes the SESSION, not the mode. Three session types share {@code ADAPTIVE} — note-scoped
+     * Adaptive Practice, plan-scoped Adaptive Practice and Interview Practice — so a mode-only
+     * signature cannot tell them apart, and the previous one silently offered Interview Practice
+     * sessions as Adaptive Practice cards. Do not narrow this back to a mode parameter.
+     */
+    private ContinueStudyingResumeType resolveResumeType(QuickReviewSessionEntity session) {
+        QuickReviewSessionMode sessionMode = session.getSessionMode();
         if (sessionMode == QuickReviewSessionMode.CHALLENGE) {
             return ContinueStudyingResumeType.CHALLENGE;
         }
         if (sessionMode == QuickReviewSessionMode.ADAPTIVE) {
-            return ContinueStudyingResumeType.ADAPTIVE;
+            return SUB_MODE_INTERVIEW.equals(QuizSessionStateUtils.extractSubMode(session.getSessionState()))
+                    ? ContinueStudyingResumeType.INTERVIEW_PRACTICE
+                    : ContinueStudyingResumeType.ADAPTIVE;
         }
         return ContinueStudyingResumeType.QUICK_REVIEW;
     }

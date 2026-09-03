@@ -27,6 +27,7 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import java.util.LinkedHashMap;
 import com.studysnap.backend.entity.NoteCollectionEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
@@ -250,6 +251,28 @@ class DashboardServiceTest {
         assertThat(response.studyPacksReviewed()).isEqualTo(2);
     }
 
+
+
+    @Test
+    void continueStudying_offersAnInterviewSessionAsInterviewPracticeNotAdaptive() {
+        // Three session types share the ADAPTIVE discriminator. Before v0.108.0 this card was labelled
+        // Adaptive Practice and routed to the Adaptive page -- which, since v0.107.0's guard, REFUSES
+        // another mode's session. So the card became a dead end. It is routed, not hidden: the learner
+        // has an active session and this is their way back.
+        QuickReviewSessionEntity interview = new QuickReviewSessionEntity();
+        interview.setSessionMode(QuickReviewSessionMode.ADAPTIVE);
+        interview.setSessionState(new LinkedHashMap<>(java.util.Map.of("subMode", "INTERVIEW")));
+
+        QuickReviewSessionEntity adaptive = new QuickReviewSessionEntity();
+        adaptive.setSessionMode(QuickReviewSessionMode.ADAPTIVE);
+        adaptive.setSessionState(new LinkedHashMap<>());
+
+        assertThat((Object) ReflectionTestUtils.invokeMethod(dashboardService, "resolveResumeType", interview))
+                .isEqualTo(ContinueStudyingResumeType.INTERVIEW_PRACTICE);
+        // ...and a genuine Adaptive session is unaffected.
+        assertThat((Object) ReflectionTestUtils.invokeMethod(dashboardService, "resolveResumeType", adaptive))
+                .isEqualTo(ContinueStudyingResumeType.ADAPTIVE);
+    }
 
     @Test
     void focusAreas_prefersThePrimaryReviewSetWhenItContainsTheWeakestNote() {
