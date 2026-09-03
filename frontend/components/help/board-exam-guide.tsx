@@ -17,10 +17,10 @@ const STEPS: Step[] = [
   {
     number: 1,
     icon: FileText,
-    title: "Build Your Notes by Topic",
+    title: "Group Your Notes into a Review Set",
     description:
-      "Organize your reviewer material one topic at a time — one note per topic works best. The more complete the note, the better the generated exam.",
-    cta: { label: "Create Note", href: "/notes/new" },
+      "Write one note per topic, then gather them into Subject Plans inside a Review Set. A Board Exam is drawn from the whole Review Set, so the more of your curriculum lives in it, the more representative the exam.",
+    cta: { label: "Open Library", href: "/library" },
   },
   {
     number: 2,
@@ -43,18 +43,20 @@ const STEPS: Step[] = [
     icon: Shield,
     title: "Simulate with Board Exam Mode",
     description:
-      "When you're ready, run Board Exam Mode for a full high-stakes simulation — strict timer, no pausing, score report at the end.",
+      "When you're ready, launch Board Exam Mode from a Review Set. Questions are sampled across its Subject Plans so the exam spans your curriculum rather than one topic — strict timer, no pausing, score report at the end.",
     badge: "Pro",
     cta: { label: "Open Library", href: "/library" },
   },
 ];
 
 const TIPS = [
-  "Challenge Quiz is focused practice. Board Exam Mode is the simulation.",
+  "Challenge Quiz is focused practice on notes you pick. Board Exam Mode is the simulation across your whole Review Set.",
+  "Launching from a Subject Plan still covers the whole Review Set it belongs to — you do not have to start from the top.",
+  "A Board Exam aims for 30 questions sampled across your Subject Plans. If your Review Set is thin, it may be shorter.",
   "Board Exam Mode has a strict timer — leaving the session forfeits your score.",
   "The timer keeps running if you close the tab. Stay in the browser during simulations.",
   "Use your weak concepts after each session to decide what to study next.",
-  "Preparing for boards? Switch your profile type to unlock Board Exam Mode.",
+  "Preparing for boards? Switch your profile type to see Board Exam Mode.",
 ];
 
 type BoardExamGuideProps = {

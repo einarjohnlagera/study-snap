@@ -89,6 +89,26 @@ in-repo precedent.
 
 ### Shipped
 
+- **The Board Exam and quiz-mode guides describe the product that exists (item 1).**
+  `board-exam-guide.tsx` now says a Board Exam is drawn from a whole **Review Set**, that launching from
+  a Subject Plan covers the parent set, and that it targets 30 questions sampled across Subject Plans.
+  `quiz-modes-guide.tsx` stops describing Long Exam as *"covering your full note"* and stops describing
+  Adaptive Practice as *"concepts you missed in Challenge Quiz"* — it is driven by due-or-persistently-weak
+  concepts and can span a Subject Plan or Review Set.
+- **⚠️ EVERY CLAIM WAS ANCHORED TO CODE BEFORE IT WAS WRITTEN**, which is the discipline whose absence
+  caused the drift. Verified in this pass: Board Exam is **PRO-only** (`resolveMonthlyBoardExamLimit`
+  returns 0 for every other plan, so the *Pro* badge is right), the target count is **30 and
+  configurable**, visibility **is** profile-gated on `BOARD_EXAM` (so the *"switch your profile type"*
+  tip survives), Long Exam accepts a `sourceCollectionId`, and Adaptive Practice reads both
+  `getDueConceptsByStudyPackIds` and `getPersistentlyWeakConceptsByStudyPackIds`. The **3 / 10 / 30**
+  Adaptive quota copy was checked and is correct — it was left alone.
+- **⚠️ THE DURABLE HALF IS A GUARD, NOT THE COPY FIX.** These guides went stale for four releases
+  precisely because nothing executes them, and only one Help guide had a test at all.
+  `assessment-guides-currency.test.tsx` now pins the scope claims of both — including the exact stale
+  sentences (*"one note per topic works best"*, *"covering your full note"*, *"concepts you missed in
+  Challenge Quiz"*) as **negative** assertions. **Mutation-verified: restoring the old copy fails two of
+  the four tests.** The file states honestly what the assertions do and do not prove.
+
 ## v0.108.0 - Session Identity
 
 **Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.108.0`, cut from `main` after
