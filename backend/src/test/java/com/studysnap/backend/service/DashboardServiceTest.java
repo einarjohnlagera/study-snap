@@ -27,6 +27,10 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.entity.NoteCollectionEntity;
+import org.springframework.test.util.ReflectionTestUtils;
+import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionMetadataProjection;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.QuickReviewSessionScoreAggregate;
@@ -68,6 +72,12 @@ class DashboardServiceTest {
     private StudyPackRepository studyPackRepository;
     @Mock
     private NoteRepository noteRepository;
+
+    @Mock
+    private NoteCollectionItemRepository noteCollectionItemRepository;
+
+    @Mock
+    private NoteCollectionRepository noteCollectionRepository;
     @Mock
     private NoteCourseProgramRepository noteCourseProgramRepository;
     @Mock
@@ -94,6 +104,8 @@ class DashboardServiceTest {
                 userRepository,
                 studyPackRepository,
                 noteRepository,
+                noteCollectionItemRepository,
+                noteCollectionRepository,
                 noteCourseProgramRepository,
                 quickReviewSessionRepository,
                 activityEventRepository,
@@ -236,6 +248,88 @@ class DashboardServiceTest {
         assertThat(response.averageRecentScore()).isEqualByComparingTo(new BigDecimal("76.67"));
         assertThat(response.bestRecentScore()).isEqualByComparingTo(bigDecimal(100));
         assertThat(response.studyPacksReviewed()).isEqualTo(2);
+    }
+
+
+    @Test
+    void focusAreas_prefersThePrimaryReviewSetWhenItContainsTheWeakestNote() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID primaryCollectionId = UUID.randomUUID();
+        UUID otherCollectionId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setPrimaryCollectionId(primaryCollectionId);
+        NoteCollectionEntity primary = new NoteCollectionEntity();
+        primary.setId(primaryCollectionId);
+        primary.setOwnerUserId(userId);
+        primary.setTitle("CE Board Review");
+
+        // The query returns most-recently-updated FIRST, so the primary is deliberately NOT first:
+        // a test where it happens to be first passes even if the precedence rule is dropped.
+        when(noteCollectionItemRepository
+                .findContainingCollectionIdsByNoteIdAndOwnerUserIdOrderByUpdatedAtDesc(noteId, userId))
+                .thenReturn(List.of(otherCollectionId, primaryCollectionId));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(noteCollectionRepository.findByIdAndOwnerUserId(primaryCollectionId, userId))
+                .thenReturn(Optional.of(primary));
+        // The other collection IS resolvable, lenient() because correct code never asks for it.
+        // Without this the assertion below is vacuous: dropping the primary-precedence rule would
+        // fail only as a Mockito PotentialStubbingProblem, which reads as a test-setup bug rather
+        // than as "we picked the wrong plan". Verified by mutation 2026-09-03.
+        NoteCollectionEntity other = new NoteCollectionEntity();
+        other.setId(otherCollectionId);
+        other.setOwnerUserId(userId);
+        other.setTitle("Some Other Plan");
+        lenient().when(noteCollectionRepository.findByIdAndOwnerUserId(otherCollectionId, userId))
+                .thenReturn(Optional.of(other));
+
+        NoteCollectionEntity resolved = ReflectionTestUtils.invokeMethod(
+                dashboardService, "resolvePracticeCollection", userId, noteId.toString());
+
+        assertThat(resolved).isNotNull();
+        assertThat(resolved.getId()).isEqualTo(primaryCollectionId);
+    }
+
+    @Test
+    void focusAreas_fallsBackToTheMostRecentlyUpdatedContainingCollection() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID recentCollectionId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setPrimaryCollectionId(UUID.randomUUID()); // a plan that does NOT contain the note
+        NoteCollectionEntity recent = new NoteCollectionEntity();
+        recent.setId(recentCollectionId);
+        recent.setOwnerUserId(userId);
+        recent.setTitle("Structural Engineering");
+
+        when(noteCollectionItemRepository
+                .findContainingCollectionIdsByNoteIdAndOwnerUserIdOrderByUpdatedAtDesc(noteId, userId))
+                .thenReturn(List.of(recentCollectionId, UUID.randomUUID()));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(noteCollectionRepository.findByIdAndOwnerUserId(recentCollectionId, userId))
+                .thenReturn(Optional.of(recent));
+
+        NoteCollectionEntity resolved = ReflectionTestUtils.invokeMethod(
+                dashboardService, "resolvePracticeCollection", userId, noteId.toString());
+
+        assertThat(resolved).isNotNull();
+        assertThat(resolved.getId()).isEqualTo(recentCollectionId);
+    }
+
+    @Test
+    void focusAreas_offersNoPlanWhenTheWeakestNoteBelongsToNone() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        when(noteCollectionItemRepository
+                .findContainingCollectionIdsByNoteIdAndOwnerUserIdOrderByUpdatedAtDesc(noteId, userId))
+                .thenReturn(List.of());
+
+        NoteCollectionEntity resolved = ReflectionTestUtils.invokeMethod(
+                dashboardService, "resolvePracticeCollection", userId, noteId.toString());
+
+        assertThat(resolved).isNull();
     }
 
     @Test

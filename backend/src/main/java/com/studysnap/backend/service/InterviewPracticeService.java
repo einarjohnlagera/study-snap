@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.InterviewPracticeStartRequest;
 import com.studysnap.backend.dto.InterviewPracticeStartResponse;
 import com.studysnap.backend.dto.InterviewReadinessReportResponse;
 import com.studysnap.backend.dto.InterviewSourceNoteRef;
+import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
@@ -22,6 +23,7 @@ import com.studysnap.backend.exception.InterviewPracticeQuotaExhaustedException;
 import com.studysnap.backend.exception.InterviewPracticeSessionNotFoundException;
 import com.studysnap.backend.exception.InterviewPracticeSessionNotInProgressException;
 import com.studysnap.backend.exception.InvalidInterviewPracticeRequestException;
+import com.studysnap.backend.exception.AdaptivePracticeSessionActiveException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -120,8 +122,12 @@ public class InterviewPracticeService {
             return toStartResponse(existing);
         }
         if (existing != null) {
-            markForfeited(existing);
-            quickReviewSessionRepository.save(existing);
+            // ⚠️ THE REVERSE DIRECTION, and it is the destructive one. `existing` here is an ADAPTIVE
+            // session that is NOT ours -- a note-scoped or plan-scoped Adaptive Practice session, which
+            // shares this mode discriminator and V41's (user, pack, mode) unique index. Forfeiting it
+            // would silently end a session this mode does not own. Starting anyway is not an option
+            // either: the unique index would reject the insert.
+            throw new AdaptivePracticeSessionActiveException();
         }
 
         assertQuotaAvailable(userId, planType);
@@ -224,18 +230,16 @@ public class InterviewPracticeService {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         session.setCompletedAt(now);
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-        List<String> correctConcepts = QuizSessionReviewUtils.computeFullyCorrectKeyConcepts(
+        Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack =
+                QuizSessionReviewUtils.computeKeyConceptBreakdownBySourceStudyPack(
                 quiz,
                 selectedChoices,
+                Map.of(),
+                Map.of(),
                 Map.of()
         );
-        List<String> missedConcepts = QuizSessionReviewUtils.computeKeyConceptsWithMisses(
-                quiz,
-                selectedChoices,
-                Map.of()
-        );
-        recordCorrectConceptsForSourcePacks(userId, saved, correctConcepts, now);
-        recordIncorrectConceptsForSourcePacks(userId, saved, missedConcepts, now);
+        recordCorrectConceptsForSourcePacks(userId, saved, conceptBreakdownBySourceStudyPack, now);
+        recordIncorrectConceptsForSourcePacks(userId, saved, conceptBreakdownBySourceStudyPack, now);
         trackAnalytics(userId, AnalyticsEventType.INTERVIEW_PRACTICE_COMPLETED, session.getStudyPackId(), Map.of(
                 ANALYTICS_METADATA_SESSION_ID, session.getId().toString(),
                 ANALYTICS_METADATA_SCORE_PERCENTAGE, report.scorePercentage()
@@ -246,35 +250,57 @@ public class InterviewPracticeService {
     private void recordCorrectConceptsForSourcePacks(
             UUID userId,
             QuickReviewSessionEntity session,
-            List<String> correctConcepts,
+            Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack,
             OffsetDateTime now
     ) {
-        if (correctConcepts.isEmpty()) {
+        if (conceptBreakdownBySourceStudyPack.isEmpty()) {
             return;
         }
-        recordConceptsForSourcePacks(userId, session, correctConcepts, now, true);
+        recordConceptsForSourcePacks(userId, session, conceptBreakdownBySourceStudyPack, now, true);
     }
 
     private void recordIncorrectConceptsForSourcePacks(
             UUID userId,
             QuickReviewSessionEntity session,
-            List<String> incorrectConcepts,
+            Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack,
             OffsetDateTime now
     ) {
-        if (incorrectConcepts.isEmpty()) {
+        if (conceptBreakdownBySourceStudyPack.isEmpty()) {
             return;
         }
-        recordConceptsForSourcePacks(userId, session, incorrectConcepts, now, false);
+        recordConceptsForSourcePacks(userId, session, conceptBreakdownBySourceStudyPack, now, false);
     }
 
     private void recordConceptsForSourcePacks(
             UUID userId,
             QuickReviewSessionEntity session,
-            List<String> concepts,
+            Map<String, List<ChallengeQuizConceptStatResponse>> conceptBreakdownBySourceStudyPack,
             OffsetDateTime now,
             boolean correct
     ) {
-        for (UUID studyPackId : resolveSourceStudyPackIds(session)) {
+        Map<UUID, Set<String>> conceptsByStudyPack = new LinkedHashMap<>();
+        conceptBreakdownBySourceStudyPack.forEach((sourceStudyPackId, conceptBreakdown) -> {
+            List<String> concepts = correct
+                    ? QuizSessionReviewUtils.computeFullyCorrectConcepts(conceptBreakdown)
+                    : QuizSessionReviewUtils.computeConceptsWithMisses(conceptBreakdown);
+            if (concepts.isEmpty()) {
+                return;
+            }
+            UUID stampedSourceStudyPackId = parseOptionalUuid(sourceStudyPackId);
+            if (stampedSourceStudyPackId != null) {
+                conceptsByStudyPack.computeIfAbsent(stampedSourceStudyPackId, ignored -> new LinkedHashSet<>())
+                        .addAll(concepts);
+                return;
+            }
+            // Only unstamped pre-release or in-flight items retain the historical broadcast fallback.
+            for (UUID fallbackStudyPackId : resolveSourceStudyPackIds(session)) {
+                conceptsByStudyPack.computeIfAbsent(fallbackStudyPackId, ignored -> new LinkedHashSet<>())
+                        .addAll(concepts);
+            }
+        });
+        for (Map.Entry<UUID, Set<String>> entry : conceptsByStudyPack.entrySet()) {
+            UUID studyPackId = entry.getKey();
+            List<String> concepts = List.copyOf(entry.getValue());
             studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                     .ifPresent(studyPack -> {
                         if (correct) {
@@ -598,8 +624,11 @@ public class InterviewPracticeService {
                     generatedQuiz,
                     disallowedQuestions
             );
-            mergedQuiz.addAll(uniqueGeneratedQuiz);
-            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(uniqueGeneratedQuiz));
+            List<QuizItem> stampedGeneratedQuiz = uniqueGeneratedQuiz.stream()
+                    .map(item -> item.withSourceStudyPackId(sourceStudyPackId.toString()))
+                    .toList();
+            mergedQuiz.addAll(stampedGeneratedQuiz);
+            disallowedQuestions.addAll(QuizDeduplicationUtils.toNormalizedQuestionSet(stampedGeneratedQuiz));
         }
         return mergedQuiz;
     }

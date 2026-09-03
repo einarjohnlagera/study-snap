@@ -793,6 +793,8 @@ describe("DashboardFocusAreasCard progress link", () => {
         focusAreas={{
           concepts: [{ conceptName: "Mitosis", accuracyPercentage: 45 }],
           practiceNoteId: "note-1",
+      practiceCollectionId: null,
+      practiceCollectionTitle: null,
           adaptivePracticeAvailable: false,
         }}
         onUnlockAdaptivePractice={jest.fn()}
@@ -805,7 +807,9 @@ describe("DashboardFocusAreasCard progress link", () => {
   it("shows the full progress report link in the empty state", () => {
     render(
       <DashboardFocusAreasCard
-        focusAreas={{ concepts: [], practiceNoteId: null, adaptivePracticeAvailable: false }}
+        focusAreas={{ concepts: [], practiceNoteId: null,
+      practiceCollectionId: null,
+      practiceCollectionTitle: null, adaptivePracticeAvailable: false }}
         onUnlockAdaptivePractice={jest.fn()}
       />,
     );

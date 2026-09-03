@@ -321,10 +321,16 @@ export default function AdaptivePracticePage() {
     const uniqueRationales = new Set<string>();
     questionIndexes.forEach((questionIndex) => {
       const question = quiz[questionIndex];
-      const rationale = formatSelectionRationale(
-        question?.concept,
-        adaptiveQuiz?.conceptSelectionReasons?.[questionIndex],
+      // The reason now travels WITH its focus concept rather than in a quiz-parallel array, so
+      // resolve it by matching the question's concept AND its source pack. Matching the pack too
+      // matters once a plan has two packs weak on the same concept string -- they are two distinct
+      // focus entries, and concept-only matching would silently pick the first.
+      const focus = adaptiveQuiz?.focusConcepts?.find(
+        (entry) =>
+          normalizeConceptKey(entry.concept) === normalizeConceptKey(question?.concept ?? "") &&
+          (!question?.sourceStudyPackId || entry.sourceStudyPackId === question.sourceStudyPackId),
       );
+      const rationale = formatSelectionRationale(question?.concept, focus?.selectionReason ?? null);
       if (rationale) {
         uniqueRationales.add(rationale);
       }
@@ -474,6 +480,26 @@ export default function AdaptivePracticePage() {
   }, [adaptivePracticeEntry, applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall, shouldUpgradeForAdaptivePracticeLimit]);
 
   const adaptiveGenerationLocked = startingAdaptive || adaptiveQuiz?.status === "GENERATING";
+  // Display names for the focus list. Duplicates are preserved DELIBERATELY: two packs weak on the
+  // same concept are two distinct focus entries, and de-duplicating here would re-introduce, in the
+  // UI, exactly the cross-pack merge the response shape exists to prevent.
+  const adaptiveFocusEntries = useMemo(() => adaptiveQuiz?.focusConcepts ?? [], [adaptiveQuiz]);
+  const adaptiveFocusConceptNames = useMemo(
+    () => adaptiveFocusEntries.map((entry) => entry.concept),
+    [adaptiveFocusEntries],
+  );
+  /**
+   * True when the same concept string appears for more than one pack.
+   *
+   * Duplicates are preserved deliberately -- two packs weak on one concept are two distinct focus
+   * entries -- so the SOURCE has to be shown, or the list reads as a rendering bug. This is the
+   * disambiguation the "never merge concepts across packs" decision rests on.
+   */
+  const adaptiveFocusHasDuplicateNames = useMemo(
+    () => new Set(adaptiveFocusConceptNames).size !== adaptiveFocusConceptNames.length,
+    [adaptiveFocusConceptNames],
+  );
+
   const adaptiveQuizActive = Boolean(
     adaptiveQuiz?.sessionId
     && adaptiveQuiz.status === "IN_PROGRESS"
@@ -562,6 +588,11 @@ export default function AdaptivePracticePage() {
           correctAnswers: score,
           totalQuestions: quiz.length,
           durationSeconds,
+          // Sent so the server can bucket ConceptHealth by (sourceStudyPackId, concept). Without
+          // them its breakdown is empty, and a plan-scoped session attributes every concept to the
+          // anchor pack and records no misses -- the exact over-attribution shape item 1 removed.
+          selectedChoices,
+          selectedMultiChoices,
         };
         if (correctConceptNames.length > 0) {
           completeRequest.correctConceptNames = correctConceptNames;
@@ -571,7 +602,12 @@ export default function AdaptivePracticePage() {
           .then((completed) => {
             setCompletionResult(completed);
             setCompletionSignalLoaded(true);
-            return getPostSessionNextStep(adaptiveQuiz.studyPackId);
+            // studyPackId is null only on a declined start, which carries no session to complete,
+            // so this branch is unreachable from here -- but the type now says so rather than
+            // relying on a cast that hid it.
+            return adaptiveQuiz.studyPackId
+              ? getPostSessionNextStep(adaptiveQuiz.studyPackId)
+              : Promise.resolve(null);
           })
           .then(setNextStepResponse)
           .catch(() => {
@@ -662,7 +698,7 @@ export default function AdaptivePracticePage() {
             {adaptiveGenerationLocked ? "Starting..." : "Try Again"}
           </Button>
         </Card>
-      ) : !adaptiveQuiz || (!hasQuestions && adaptiveQuiz.weakConcepts.length === 0) ? (
+      ) : !adaptiveQuiz || (!hasQuestions && adaptiveFocusConceptNames.length === 0) ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Adaptive Practice
@@ -690,10 +726,15 @@ export default function AdaptivePracticePage() {
           </div>
           <div className="space-y-2 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
             <p className="font-medium text-foreground">Weak concepts:</p>
-            {adaptiveQuiz.weakConcepts.length > 0 ? (
+            {adaptiveFocusConceptNames.length > 0 ? (
               <ul className="list-disc space-y-1 pl-5">
-                {adaptiveQuiz.weakConcepts.map((concept) => (
-                  <li key={`weak-concept-${concept}`}>{concept}</li>
+                {adaptiveFocusEntries.map((entry) => (
+                  <li key={`weak-concept-${entry.sourceStudyPackId}-${entry.concept}`}>
+                    {entry.concept}
+                    {adaptiveFocusHasDuplicateNames && entry.sourceTitle ? (
+                      <span className="text-foreground/60"> · {entry.sourceTitle}</span>
+                    ) : null}
+                  </li>
                 ))}
               </ul>
             ) : (
@@ -721,14 +762,16 @@ export default function AdaptivePracticePage() {
           <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/85">
             {completionMessage}
           </div>
-          {adaptiveQuiz.weakConcepts.length > 0 ? (
+          {adaptiveFocusConceptNames.length > 0 ? (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground/80">
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
                 Targeted Weak Areas
               </p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
-                {adaptiveQuiz.weakConcepts.map((concept) => (
-                  <li key={concept}>
+                {adaptiveFocusEntries.map((entry) => {
+                  const concept = entry.concept;
+                  return (
+                  <li key={`${entry.sourceStudyPackId}-${concept}`}>
                     {note?.id && note.keyConcepts?.some((keyConcept) => (
                       normalizeConceptKey(keyConcept) === normalizeConceptKey(concept)
                     )) ? (
@@ -739,8 +782,12 @@ export default function AdaptivePracticePage() {
                         {concept}
                       </Link>
                     ) : concept}
+                    {adaptiveFocusHasDuplicateNames && entry.sourceTitle ? (
+                      <span className="text-foreground/60"> · {entry.sourceTitle}</span>
+                    ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
           ) : (
@@ -844,9 +891,9 @@ export default function AdaptivePracticePage() {
             <p className="text-sm text-foreground/75">
               New follow-up practice based on your weak areas.
             </p>
-            {adaptiveQuiz.weakConcepts.length > 0 ? (
+            {adaptiveFocusConceptNames.length > 0 ? (
               <p className="text-sm text-foreground/75">
-                Focus concepts: {adaptiveQuiz.weakConcepts.join(", ")}
+                Focus concepts: {adaptiveFocusConceptNames.join(", ")}
               </p>
             ) : null}
             <p className="text-sm text-foreground/75">

@@ -35,6 +35,7 @@ import {
   type NoteListItemResponse,
   type ProfileType,
   type TodayFocusResponse,
+  generateAdaptivePracticeForCollection,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -75,6 +76,7 @@ import {
 import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
 import {
   ADAPTIVE_PRACTICE_DASHBOARD_FOCUS_AREAS_ENTRY,
+  ADAPTIVE_PRACTICE_DASHBOARD_PLAN_ENTRY,
   buildAdaptivePracticeHref,
 } from "@/lib/adaptive-practice-entry";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
@@ -320,6 +322,48 @@ function DashboardGoalCardSkeleton() {
 
 export default function DashboardPage() {
   const router = useRouter();
+
+  // Starts a plan-scoped Adaptive Practice session from the dashboard. The collection id comes from
+  // the SERVER (focusAreas.practiceCollectionId); the client never picks a plan, so this cannot
+  // disagree with the session the server would actually start. The anchor comes back on the
+  // response for the same reason -- a plan's item order is mutable, so a client-derived anchor
+  // would drift.
+  const [planPracticePending, setPlanPracticePending] = useState(false);
+  const [planPracticeNotice, setPlanPracticeNotice] = useState<string | null>(null);
+  const handlePracticeAcrossPlan = useCallback(
+    async (collectionId: string) => {
+      if (planPracticePending) {
+        return;
+      }
+      setPlanPracticePending(true);
+      setPlanPracticeNotice(null);
+      try {
+        const session = await generateAdaptivePracticeForCollection(
+          collectionId,
+          ADAPTIVE_PRACTICE_DASHBOARD_PLAN_ENTRY,
+        );
+        if (session.noteId) {
+          router.push(
+            buildAdaptivePracticeHref(session.noteId, {
+              entry: ADAPTIVE_PRACTICE_DASHBOARD_PLAN_ENTRY,
+            }),
+          );
+          return;
+        }
+        // ⚠️ NO SILENT NO-OP. The server can legitimately decline to start (nothing due, or every
+        // eligible pack occupied by another session) and answers with a message. The button's
+        // render predicate is WIDER than server eligibility -- it shows whenever the weakest note
+        // belongs to any plan, while the server needs ConceptHealth due-or-weak concepts across
+        // that plan -- so this branch is reachable, and without it the button just un-spins forever.
+        setPlanPracticeNotice(session.message);
+      } catch {
+        setPlanPracticeNotice("Could not start practice for this plan.");
+      } finally {
+        setPlanPracticePending(false);
+      }
+    },
+    [planPracticePending, router],
+  );
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [recentNoteMetaById, setRecentNoteMetaById] = useState<Record<string, { lastReviewedAt: string | null; quizCount: number | null }>>({});
   const [teacherGeneratedQuizzes, setTeacherGeneratedQuizzes] = useState<TeacherGeneratedQuizSummary[]>([]);
@@ -858,6 +902,8 @@ export default function DashboardPage() {
                   ? "Finish a few Certification Reviews to reveal the concepts that need more applied practice."
                   : "Finish a few Challenge Quizzes to reveal the concepts that need more review."}
                 primaryActionLabel="Practice Weak Concepts"
+                onPracticeAcrossPlan={handlePracticeAcrossPlan}
+                planPracticeNotice={planPracticeNotice}
                 lockedActionLabel="Unlock Adaptive Practice"
                 onUnlockAdaptivePractice={() => setActivePaywallModal("adaptive-practice")}
               />

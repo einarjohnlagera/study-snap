@@ -23,6 +23,7 @@ import com.studysnap.backend.exception.CollectionNotFoundException;
 import com.studysnap.backend.exception.InvalidCollectionRequestException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.NoteCollectionService;
+import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -54,6 +55,9 @@ class NoteCollectionControllerTest {
     @Mock
     private NoteCollectionService service;
 
+    @Mock
+    private QuickReviewAdaptivePracticeService adaptivePracticeService;
+
     @Test
     void endpoints_requireAuthenticatedUserRole() throws NoSuchMethodException {
         assertThat(NoteCollectionController.class
@@ -62,6 +66,13 @@ class NoteCollectionControllerTest {
         assertThat(NoteCollectionController.class
                 .getMethod("create", CreateNoteCollectionRequest.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
+        assertThat(NoteCollectionController.class
+                .getMethod("startAdaptivePractice", String.class, String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo("hasAnyRole('USER','ADMIN')");
+        assertThat(NoteCollectionController.class
+                .getMethod("getAdaptivePractice", String.class, AuthenticatedUser.class)
+                .getAnnotation(PreAuthorize.class).value()).isEqualTo("hasAnyRole('USER','ADMIN')");
+
         assertThat(NoteCollectionController.class
                 .getMethod("get", String.class, AuthenticatedUser.class)
                 .getAnnotation(PreAuthorize.class).value()).isEqualTo(PREAUTHORIZE_ROLES);
@@ -123,7 +134,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void list_returnsCollectionsForAuthenticatedUser() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         NoteCollectionSummaryResponse response = summaryResponse();
         when(service.list(user.userId())).thenReturn(List.of(response));
@@ -136,7 +147,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void list_returnsOnlyNoteAcceptingCollectionsWhenRequested() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         NoteCollectionSummaryResponse response = summaryResponse();
         when(service.listNoteAccepting(user.userId())).thenReturn(List.of(response));
@@ -149,7 +160,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void create_returnsCreatedCollection() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         CreateNoteCollectionRequest request = new CreateNoteCollectionRequest(COLLECTION_TITLE, null, List.of(UUID.fromString(NOTE_ID)));
         NoteCollectionDetailResponse response = detailResponse();
@@ -164,7 +175,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void get_returnsCollection() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         NoteCollectionDetailResponse response = detailResponse();
         when(service.get(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
@@ -177,7 +188,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void getReadiness_returnsCollectionReadiness() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         PlanReadinessResponse response = new PlanReadinessResponse(
                 UUID.fromString(COLLECTION_ID),
@@ -200,7 +211,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void getNoteConceptCounts_returnsPerNoteCounts() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         Map<String, NoteConceptCountsResponse> response = Map.of(
                 NOTE_ID,
@@ -216,7 +227,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void patch_returnsUpdatedCollection() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         UpdateNoteCollectionRequest request = new UpdateNoteCollectionRequest("Updated", null, null, 3, null);
         NoteCollectionDetailResponse response = detailResponse();
@@ -230,7 +241,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void updateParent_delegatesParentRequest() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         SetNoteCollectionParentRequest request = new SetNoteCollectionParentRequest(UUID.randomUUID());
         NoteCollectionDetailResponse response = detailResponse();
@@ -244,7 +255,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void setPrimary_returnsNoContent() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
 
         ResponseEntity<Void> result = controller.setPrimary(COLLECTION_ID, user);
@@ -255,7 +266,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void clearPrimary_returnsNoContent() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
 
         ResponseEntity<Void> result = controller.clearPrimary(COLLECTION_ID, user);
@@ -266,7 +277,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void setCompanion_delegatesToServiceAndReturnsUpdatedCollection() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         CompanionContent content = companionContent();
         NoteCollectionDetailResponse response = detailResponse();
@@ -280,7 +291,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void clearCompanion_delegatesToServiceAndReturnsUpdatedCollection() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         NoteCollectionDetailResponse response = detailResponse();
         when(service.clearCompanion(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
@@ -293,7 +304,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void clearTargetDate_delegatesToServiceAndReturnsUpdatedCollection() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         NoteCollectionDetailResponse response = detailResponse();
         when(service.clearTargetDate(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
@@ -306,7 +317,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void listPublic_returnsPublishedCollectionsWithoutAuthentication() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         NoteCollectionSummaryResponse response = summaryResponse();
         when(service.listPublic("LET")).thenReturn(List.of(response));
 
@@ -318,7 +329,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void getPublic_returnsPublishedCollectionWithoutAuthentication() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         NoteCollectionDetailResponse response = detailResponse();
         when(service.getPublic(UUID.fromString(COLLECTION_ID))).thenReturn(response);
 
@@ -330,7 +341,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void updateVisibility_delegatesAdminPublishRequest() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         UpdateCollectionVisibilityRequest request = new UpdateCollectionVisibilityRequest(CollectionVisibility.PUBLIC.name());
         NoteCollectionDetailResponse response = detailResponse();
@@ -345,7 +356,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void adopt_returnsPersonalStudyPlanId() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         AdoptStudyPlanResponse response = new AdoptStudyPlanResponse(UUID.fromString(COLLECTION_ID), 3, 0, false);
         when(service.adopt(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
@@ -358,7 +369,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void adoptGoal_returnsPersonalGoalId() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         AdoptGoalResponse response = new AdoptGoalResponse(UUID.fromString(COLLECTION_ID), 2, 0, 6, 1, false);
         when(service.adoptGoal(UUID.fromString(COLLECTION_ID), user.userId())).thenReturn(response);
@@ -371,7 +382,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void delete_returnsNoContent() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
 
         ResponseEntity<Void> result = controller.delete(COLLECTION_ID, user);
@@ -382,7 +393,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void addItems_returnsCollection() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         AddNoteCollectionItemsRequest request = new AddNoteCollectionItemsRequest(List.of(UUID.fromString(NOTE_ID)));
         NoteCollectionDetailResponse response = detailResponse();
@@ -396,7 +407,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void removeItem_returnsNoContent() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
 
         ResponseEntity<Void> result = controller.removeItem(COLLECTION_ID, NOTE_ID, user);
@@ -407,7 +418,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void order_returnsCollection() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         SetNoteCollectionOrderRequest request = new SetNoteCollectionOrderRequest(List.of(
                 new SetNoteCollectionOrderRequest.OrderedItem(UUID.fromString(NOTE_ID), "Week 1")
@@ -423,7 +434,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void childrenOrder_returnsGoalCollection() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         UUID childId = UUID.randomUUID();
         SetNoteCollectionChildrenOrderRequest request = new SetNoteCollectionChildrenOrderRequest(List.of(childId));
@@ -438,7 +449,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void unknownCollectionExceptionCarriesNotFoundStatus() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         when(service.get(UUID.fromString(COLLECTION_ID), user.userId())).thenThrow(new CollectionNotFoundException());
 
@@ -450,7 +461,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void nonOwnedCollectionExceptionCarriesNotFoundStatus() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         doThrow(new CollectionNotFoundException()).when(service).delete(UUID.fromString(COLLECTION_ID), user.userId());
 
@@ -462,7 +473,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void blankTitleExceptionCarriesBadRequestStatus() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
         CreateNoteCollectionRequest request = new CreateNoteCollectionRequest(" ", null, null);
         when(service.create(user.userId(), request)).thenThrow(new InvalidCollectionRequestException("Collection title is required."));
@@ -475,7 +486,7 @@ class NoteCollectionControllerTest {
 
     @Test
     void malformedPathUuidThrowsCollectionNotFound() {
-        NoteCollectionController controller = new NoteCollectionController(service);
+        NoteCollectionController controller = new NoteCollectionController(service, adaptivePracticeService);
         AuthenticatedUser user = authenticatedUser();
 
         assertThatThrownBy(() -> controller.get("not-a-uuid", user))

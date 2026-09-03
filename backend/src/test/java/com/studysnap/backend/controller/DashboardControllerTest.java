@@ -39,7 +39,7 @@ class DashboardControllerTest {
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         DashboardOverviewResponse expected = new DashboardOverviewResponse(
                 new DashboardPerformanceSummaryResponse(null, 0, 0, null, null),
-                new DashboardFocusAreasResponse(List.of(), null, false),
+                new DashboardFocusAreasResponse(List.of(), null, null, null, false),
                 new DashboardWeeklyActivityResponse(0, 0, 0, 0),
                 null,
                 0,

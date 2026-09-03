@@ -16,6 +16,10 @@ import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { PageHeader } from "@/components/page-header";
 import { ReadinessSummary } from "@/components/readiness/readiness-summary";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
+import {
+  ADAPTIVE_PRACTICE_COLLECTION_DETAIL_ENTRY,
+  buildAdaptivePracticeHref,
+} from "@/lib/adaptive-practice-entry";
 import { SummaryMarkdown } from "@/components/ui/summary-markdown";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
@@ -66,6 +70,7 @@ import {
   type NoteListItemResponse,
   type NoteVisibility,
   type PlanReadinessResponse,
+  generateAdaptivePracticeForCollection,
 } from "@/lib/api";
 import { getStudyPlanSkippedNotice } from "@/app/dashboard/dashboard-study-plan-section";
 import {
@@ -118,6 +123,7 @@ const TODAY_FOCUS_EYEBROW = "Today's Focus";
 const CONTINUE_STUDYING_LABEL = "Continue Studying";
 const QUICK_ACTIONS_LABEL = "Quick Actions";
 const REVIEW_DUE_CONCEPTS_LABEL = "Review Due Concepts";
+const PRACTICE_WHOLE_PLAN_LABEL = "Practice Weak Areas Across This Plan";
 const FOCUS_DONE_MESSAGE = "You've worked through everything here. Nice work.";
 const FOCUS_NO_TARGET_MESSAGE = "Pick up where you left off — you've got this.";
 const MENTOR_TIP_GUIDE_HEADING_ID = "companion-mentor-tips-heading";
@@ -614,6 +620,7 @@ function buildCountdownLine(
 function TodaysFocusCard({
   action,
   terminalAction,
+  planPracticeAction,
   dueConceptReviewHref,
   todaysConceptBudget,
   hasTargetDate,
@@ -621,6 +628,7 @@ function TodaysFocusCard({
 }: Readonly<{
   action: ResolvedPrimaryAction | null;
   terminalAction?: ReactNode;
+  planPracticeAction?: ReactNode;
   dueConceptReviewHref: string | null;
   todaysConceptBudget: number | null;
   hasTargetDate: boolean;
@@ -635,7 +643,7 @@ function TodaysFocusCard({
           : "You're on pace — no new concepts scheduled today."
       : FOCUS_NO_TARGET_MESSAGE
     : null;
-  const hasQuickActions = dueConceptReviewHref !== null || Boolean(terminalAction);
+  const hasQuickActions = dueConceptReviewHref !== null || Boolean(terminalAction) || Boolean(planPracticeAction);
 
   return (
     <Card className="space-y-4 border-blue-500/25 bg-blue-500/5 p-4 sm:p-5">
@@ -694,6 +702,7 @@ function TodaysFocusCard({
                   className="w-full sm:w-auto"
                 />
               ) : null}
+              {planPracticeAction}
               {terminalAction}
             </div>
           </div>
@@ -3082,6 +3091,49 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
   const dueConceptReviewHref = dueConceptReviewItem
     ? `/notes/${dueConceptReviewItem.noteId}?ref=${encodeURIComponent(`/collections/${collectionId}`)}`
     : null;
+
+  // Plan-level sibling of the per-note "Review due concepts" action above. It starts a session
+  // scoped to the WHOLE plan; the server derives which pack the session is anchored on and returns
+  // it, so this never computes an anchor itself.
+  const [planPracticePending, setPlanPracticePending] = useState(false);
+  const startPlanScopedPractice = useCallback(async () => {
+    if (planPracticePending) {
+      return;
+    }
+    setPlanPracticePending(true);
+    try {
+      const session = await generateAdaptivePracticeForCollection(
+        collectionId,
+        ADAPTIVE_PRACTICE_COLLECTION_DETAIL_ENTRY,
+      );
+      if (session.noteId) {
+        router.push(buildAdaptivePracticeHref(session.noteId, {
+          entry: ADAPTIVE_PRACTICE_COLLECTION_DETAIL_ENTRY,
+        }));
+        return;
+      }
+      showActionToast(session.message);
+    } catch (error) {
+      showActionToast("Could not start practice for this plan.");
+    } finally {
+      setPlanPracticePending(false);
+    }
+  }, [collectionId, planPracticePending, router, showActionToast]);
+
+  // ⚠️ NOT gated on dueConceptReviewItem. That is a DUE-count item, while server eligibility is
+  // due OR persistently weak, so a plan whose weakness is all incorrect_streak >= 2 with nothing
+  // due would show no button while the server would happily start a session.
+  const planPracticeAction = items.length > 0 ? (
+    <ResponsiveActionButton
+      action="adaptivePractice"
+      label={planPracticePending ? "Starting…" : PRACTICE_WHOLE_PLAN_LABEL}
+      variant="outline"
+      size="sm"
+      className="w-full sm:w-auto"
+      disabled={planPracticePending}
+      onClick={startPlanScopedPractice}
+    />
+  ) : null;
   const primaryStudyAction = useMemo<ResolvedPrimaryAction | null>(() => {
     if (continueAction) {
       return {
@@ -3308,6 +3360,7 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
             action={primaryStudyAction}
             terminalAction={terminalSecondaryAction}
             dueConceptReviewHref={dueConceptReviewHref}
+            planPracticeAction={planPracticeAction}
             todaysConceptBudget={todaysConceptBudget}
             hasTargetDate={hasTargetDate}
             mentorTip={surfacedMentorTip}

@@ -5,6 +5,7 @@ import {
   completeOnboarding,
   getContinueStudyingRecommendation,
   getDashboardOverview,
+  generateAdaptivePracticeForCollection,
   getFeedbackPromptContext,
   getCollectionGoal,
   getGoalSummary,
@@ -69,6 +70,7 @@ jest.mock("@/lib/api", () => ({
   createPremiumCheckoutSession: jest.fn(),
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
+  generateAdaptivePracticeForCollection: jest.fn(),
   getFeedbackPromptContext: jest.fn(),
   getCollectionGoal: jest.fn(),
   getGoalSummary: jest.fn(),
@@ -130,6 +132,8 @@ const overview = {
       { conceptName: "DNA Replication", accuracyPercentage: 55 },
     ],
     practiceNoteId: "note-1",
+      practiceCollectionId: null,
+      practiceCollectionTitle: null,
     adaptivePracticeAvailable: false,
   },
   weeklyActivity: {
@@ -1427,4 +1431,48 @@ describe("DashboardPage profile variants", () => {
       expect(props.suppressPointerWhenNoPrimary).not.toBe(true);
     }
   });
+
+  it("tells the learner why plan practice did not start, instead of silently doing nothing", async () => {
+    // ⚠️ PINNED AT THE PAGE LAYER ON PURPOSE. A card-level test that passes the notice as a prop
+    // cannot catch the page dropping it -- that is the guard-one-layer-below-the-defect mistake, and
+    // the first version of this test made exactly it.
+    (getDashboardOverview as jest.Mock).mockResolvedValue({
+      ...overview,
+      focusAreas: {
+        ...overview.focusAreas,
+        practiceCollectionId: "collection-1",
+        practiceCollectionTitle: "CE Board Review",
+        adaptivePracticeAvailable: true,
+      },
+    });
+    (generateAdaptivePracticeForCollection as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      status: null,
+      studyPackId: null,
+      noteId: null,
+      title: "CE Board Review",
+      focusConcepts: [],
+      quiz: [],
+      message: "You have another Adaptive Practice session in progress on one of this plan's notes.",
+    });
+
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      courseProgram: "PNLE",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+
+    render(<DashboardPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Practice Across This Plan" }));
+
+    expect(
+      await screen.findByText(/another Adaptive Practice session in progress/i),
+    ).toBeInTheDocument();
+  });
+
 });

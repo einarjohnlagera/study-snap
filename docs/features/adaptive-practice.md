@@ -4,6 +4,41 @@
 
 Adaptive Practice is the weak-area follow-up quiz mode for a Study Pack-ready note.
 
+**As of `v0.107.0` it also runs at PLAN scope.** A learner can practise weak areas across a whole
+Subject Plan or Review Set, not just one note. This is a **capability of Adaptive Practice, not a new
+mode and not a sub-mode** — same questions, same scoring, same result screen, more notes — so it
+takes no `subMode` value and adds no row to `EXAM_MODES.md`.
+
+### Plan scope, and the rules that constrain it
+
+- **The session is anchored on a primary pack: the plan's lowest-position eligible pack.** The route
+  is collection-addressed (`/collections/{id}/adaptive-practice/...`) and **the server derives the
+  anchor** — a client must never compute and send one, because a plan's item order is mutable and a
+  client-computed anchor drifts.
+- **Resume is resolved by the recorded source collection id, filtered in Java**, never by recomputing
+  the anchor. Recomputing would miss a live session after a reorder and start a second one, leaving
+  the first unreachable.
+- **Concepts are never merged across packs.** Two packs weak on the same concept string stay **two**
+  focus entries, each carrying its source pack. Concept identity is scoped per Study Pack, so merging
+  would assert a cross-pack identity the product does not have. The focus structure is keyed by
+  `(studyPackId, concept)` — a `Set<String>` would silently collapse it.
+- **One quota unit per session**, regardless of scope or pack count, charged **after** successful
+  generation. That ordering is what makes a refund path unnecessary: a generation failure never
+  charges. **Do not move generation off the transaction** — doing so destroys that guarantee.
+- **Both the sampled pack count and the focus-concept list are bounded.** The question-count cap
+  bounds only the output; the focus list feeds the prompt and needs its own bound.
+- **Three session types share the `ADAPTIVE` discriminator** — note-scoped Adaptive Practice,
+  Interview Practice, and plan-scoped Adaptive Practice — and `V41` allows one active session per
+  `(user, pack)`. So they contend: a plan-scoped session active on a pack makes a note-scoped request
+  on that pack resume the plan session, and vice versa. **Known limitation, accepted deliberately.**
+- **Adaptive Practice and Interview Practice never consume each other's sessions.** Both the start
+  and the read path skip a session carrying `subMode: "INTERVIEW"` and return an explanatory message
+  instead. They do **not** start a new session in that case — the unique index would reject it — and
+  they must **never** forfeit the interview session, which is the destructive half of the defect this
+  guard closes (`v0.107.0` item 4). The plan-scoped lookup applies the same exclusion.
+- **Historical `ConceptHealth` is not backfilled.** Rows written by Interview Practice before
+  `v0.107.0` remain over-attributed.
+
 Interview Practice is a Pro-only Professional Profile sub-mode of Adaptive Practice. It keeps the `ADAPTIVE` session discriminator and stores `subMode: "INTERVIEW"` in session state.
 
 It should stay focused on:
@@ -64,7 +99,6 @@ Each targeted question may show a compact `Reviewing: {concept} — {reason}` ta
 - concepts missed in the latest completed Quick Review or Challenge Quiz use `missed last time`
 - concepts in both groups use `missed last time and due for review`
 
-The reason is deterministic selection metadata, not LLM-authored guidance. `QuickReviewAdaptivePracticeService` captures the due / weak / both distinction before the focus lists merge, then stores a nullable `conceptSelectionReasons` array beside the generated quiz in `sessionState`. The response returns that array in quiz order on both initial start and resume, so refreshes preserve the same tag.
 
 Selection provenance does not belong to `QuizItem`: the same question model also represents generated and persisted Study Pack content, while this reason is specific to one Adaptive Practice run. If a generated question's concept does not match the selected focus map, its parallel reason is `null` and the UI renders no tag rather than guessing.
 
@@ -96,6 +130,16 @@ The result screen should stay focused and should not compete with unrelated acti
 
 - on completion, Adaptive Practice records fully-correct concepts to `ConceptHealth.lastCorrectAt`
 - on completion, Adaptive Practice records missed concepts to `ConceptHealth.lastIncorrectAt`
+- **⚠️ Both writes depend on the CLIENT submitting `selectedChoices` / `selectedMultiChoices` on
+  completion.** Adaptive Practice has no progress endpoint, so nothing persists answers into session
+  state during a session. If the client omits them the server's per-source breakdown is empty and it
+  falls back to attributing everything to the anchor pack with **no misses recorded at all** — which
+  is correct for a single-note session and wrong for a plan-scoped one. Pinned on both sides.
+- **Attribution is bucketed by `(sourceStudyPackId, concept)`**, so two packs weak on the same
+  concept string are recorded separately. Note the API: Adaptive Practice uses
+  `recordCorrect/IncorrectAnswers`, **not** the `...ForKnownConcepts` variants, so it applies no
+  `keyConcepts` intersection — an asymmetry it shares with Board Exam. Bucketing by source is what
+  keeps that safe.
 - a concept is missed when it appears in the session and is not fully correct (`correctAnswers < totalQuestions`)
 - forfeit paths do not record correct or missed ConceptHealth signals
 - a later fully-correct session updates `lastCorrectAt` and clears the struggling state derived from a newer `lastIncorrectAt`

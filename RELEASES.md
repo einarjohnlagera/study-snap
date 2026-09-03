@@ -1,5 +1,206 @@
 # RELEASES.md - NoteLib
 
+## v0.107.0 - Curriculum-Scale Remediation
+
+**Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.107.0`, cut from `main` after
+`v0.106.0` merged, tagged and deployed to production)
+
+Theme: once every mode attributes evidence honestly, remediation can finally be scoped to a whole Subject
+Plan or Review Set instead of a single note.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet.
+
+### Why this release exists
+
+**Slice 5 of the approved assessment sequence** (`docs/claude-plans/assessment-architecture-audit.md` §13),
+**folded with the provenance debt slice 5 depends on.** **⚠️ THE FOLD IS AN EXPLICIT OWNER DECISION
+(2026-09-03), TAKEN AGAINST A RECOMMENDATION TO SHIP THE FIX ALONE — and the cost was stated before it was
+accepted, not absorbed afterwards.** The recommendation was two small items; the owner chose to add slice 5.
+The reasoning that makes it coherent is recorded so it is not re-derived: slice 5 exists **only** to consume
+per-source evidence, and Interview Practice is the last mode still corrupting that evidence, so the two are
+one dependency chain rather than two adjacent features. **⚠️ THE COST IS THE FULL THREE-AGENT COLD PRESSURE
+TEST IN ISOLATED `git worktree`s (~490k tokens)** — folding is what forced the heaviest tier in `v0.105.0`,
+the most expensive release this project has run, and it forces it again here.
+
+**⚠️ THE PROVENANCE FIX IS PROSPECTIVE, AND SLICE 5 READS THE STORE IT DOES NOT REPAIR.** Verified against
+precedent rather than assumed: `v0.104.0` shipped **no backfill** — unstamped in-flight items kept the
+historical fallback and already-written contaminated rows were left alone. Interview Practice inherits that
+shape, so `ConceptHealth` rows written by past multi-source Interview Practice sessions stay
+over-attributed. **Slice 5's remediation therefore reads a partly contaminated store on day one, and that is
+ACCEPTED, not overlooked** — it is the direct argument for landing the fix now rather than deferring it a
+fourth time, since every release it slips adds more bad evidence.
+
+**⚠️ THE DEFECT WAS RE-VERIFIED BY READING CODE AT KICKOFF, and it is SMALLER than three releases of
+handoffs have implied.** `InterviewPracticeService.recordConceptsForSourcePacks:270-298` iterates
+`resolveSourceStudyPackIds(session)` and writes the **same concept list to every source pack**, filtered
+only by that pack's own `getKeyConcepts()` — byte-for-byte the shape `v0.104.0` replaced in `LongExamService`.
+`generateQuizForSources:573-604` stamps **nothing** (zero `withSourceStudyPackId` in the file). **⚠️ BUT THE
+HELPER ALREADY EXISTS: `QuizSessionReviewUtils.computeKeyConceptBreakdownBySourceStudyPack` (`:173`) is the
+`keyConcept`-variant per-source breakdown, already used by `LongExamService:508` with identical semantics.**
+So this is one stamp at the merge seam plus a near-verbatim port of `LongExamService:550-600` — **no new
+util, no new API, no DTO change, no migration.**
+
+**⚠️ A CORRECTNESS-SEMANTICS TRAP THAT THE MULTI-PACK FIXTURE CANNOT CATCH.** Interview Practice today calls
+the **3-arg** `computeFullyCorrectKeyConcepts(quiz, selectedChoices, Map.of())`, where that `Map.of()` is
+`selectedMultiChoices` and identification/enumeration default empty. The breakdown helper takes **5**. Both
+funnel through the same `effectiveKeyConcept` resolver, so semantics are preserved **only if** it is called
+as `(quiz, selectedChoices, Map.of(), Map.of(), Map.of())`. Get the mapping wrong and the release silently
+changes **what counts as correct** while appearing to change only attribution — and a multi-pack fixture will
+not catch it, because both packs move together. **⚠️ THE PINNING GUARD IS PRE-DECLARED: a SINGLE-SOURCE
+Interview Practice session must write byte-identical `ConceptHealth` before and after.** That isolates
+attribution (intended) from correctness computation (not intended).
+
+**⚠️ THE KICKOFF'S ACCOUNT OF ITEM 3 WAS WRONG AND IS SUPERSEDED — see the item 3 entry in Planned Scope.** It claimed the `2026-09-12` kill criterion was un-actioned; **the remedy was in fact re-specified 2026-08-14, before the read.** What the release actually owes is a re-specified **QUERY**, because the metric is a bare count that item 2 would silently inflate. The stale *direction* row that produced the error is marked DISCHARGED. 
+
+### Planned Scope
+
+- **(1) Interview Practice attributes `ConceptHealth` per source pack (backend).** Stamp `sourceStudyPackId`
+  at the `generateQuizForSources` merge seam, after per-source dedup and before `mergedQuiz.addAll`, mirroring
+  `LongExamService:1163`. Then replace the broadcast in `recordConceptsForSourcePacks` with the
+  `LongExamService:550-600` shape, bucketing by `(sourceStudyPackId, concept)` via
+  `computeKeyConceptBreakdownBySourceStudyPack`. **⚠️ `resolveSourceStudyPackIds` is DEMOTED TO FALLBACK-ONLY**
+  — reached only by unstamped (pre-release, in-flight) items. **Left ambiguous, both run — per-source
+  aggregation PLUS the old broadcast — which is WORSE THAN TODAY, and the obvious fixture does not catch it.**
+- **(2) Subject-Plan- and Review-Set-scoped Adaptive Practice remediation (backend + frontend).** Slice 5
+  proper: use the now-trustworthy per-source evidence to offer remediation scoped to a whole Subject Plan or
+  Review Set. **⚠️ EXISTING NOTE-SCOPED ADAPTIVE PRACTICE IS UNCHANGED** — this adds a scope, it does not
+  replace or re-point the one that ships today.
+- **⚠️ ITEM 3 WAS MIS-SPECIFIED AT THIS RELEASE'S OWN KICKOFF AND IS CORRECTED HERE — THE CORRECTION IS RECORDED RATHER THAN QUIETLY SWAPPED, BECAUSE THE STALE CLAIM WAS COMMITTED TO THREE FILES.** The kickoff asserted that `[CHECKPOINT — due 2026-09-12]`'s contradictory kill criterion was un-actioned and would fire in 9 days. **THAT IS FALSE: the remedy was ALREADY RE-SPECIFIED ON 2026-08-14, before the read**, and the checkpoint row carries it struck through — *"~~Old remedy: restore a demoted entry point.~~ NEW REMEDY — the result now changes SEQUENCING, not placement"*, the dashboard recommendation becoming a **prerequisite** for any further entry-point removal. **⚠️ THE ERROR CAME FROM A GENUINELY STALE ROW, WHICH IS WHY IT IS WORTH FIXING RATHER THAN JUST APOLOGISING FOR: the *Adaptive Practice becomes the recommendation engine* DIRECTION row still says the checkpoint "must be re-specified now, or it will fire in September"** — a warning written **before** the obligation was discharged and never updated afterwards. **Two rows describe one obligation; one carries the completed action and the other still carries the warning**, and reading the warning row first produced a wrong scoping decision this session. The direction row is marked **DISCHARGED** so it cannot cause a fourth re-derivation. **⚠️ THE RELEASE STILL OWES SOMETHING ON THAT CHECKPOINT, AND IT IS SHARPER THAN WHAT THE KICKOFF CLAIMED — A RE-SPECIFIED QUERY, NOT A RE-SPECIFIED REMEDY.** Its metric is a **BARE COUNT** of `ADAPTIVE_PRACTICE_STARTED` per active learner, post-deploy against the equivalent pre-deploy window — **it does NOT read entry metadata.** Item 2 adds a **new way to start an `ADAPTIVE` session inside that measurement window**, so plan-scoped starts would **silently inflate the count and the checkpoint would report *starts held* while the NEW surface did the work** — answering a question about the removed Quick Review route with evidence produced by a feature that did not exist when the question was asked. **⚠️ SO THE QUERY MUST FILTER BY `entry`, counting only the pre-existing note-scoped entries against the pre-deploy window** — which is possible only because `v0.76.1` put `entry` on that event for exactly this purpose. **Docs only; the metric's DEFINITION is narrowed, its remedy and kill criterion are UNTOUCHED.**
+- **⚠️ THE ENTRY POINT IS DECIDED AT KICKOFF (owner, 2026-09-03): BOTH the collection detail page AND the dashboard, sharing ONE backend path.** **⚠️ THE COLLECTION PAGE ALREADY DEMONSTRATES THE CORRECT AGGREGATION AND THAT IS WHY IT IS THE NATURAL HOME:** `collection-detail-page-client.tsx:224` already computes `due: previous.due + counts.dueConceptCount` — **SUMMATION ACROSS PACKS, NOT CONCEPT MERGING**, which is exactly the semantics this release's anti-drift requires — renders it as a `N% · M due` readiness pill (`:291`), and already offers a per-note **_Review due concepts_** CTA (`:252`, `:917`). Plan scope is the **plan-level sibling of a CTA that already exists**, not a new concept. **⚠️ THE DASHBOARD IS IN SCOPE BECAUSE THE RATIFIED REMEDY NAMES IT, NOT FOR SYMMETRY.** `[CHECKPOINT — due 2026-09-12]`'s remedy — re-specified **2026-08-14, before the read** — states that *"the dashboard recommendation must carry that discovery load, and must be built and proven BEFORE any further entry point is removed."* Shipping slice 5 with no dashboard surface would leave that remedy pointing at something the release deliberately did not build. **⚠️ `DashboardFocusAreasResponse` carries a single `practiceNoteId` today, so this is a real contract change plus a *which plan do we surface* ranking rule — priced in, not discovered later.** **⚠️ ROUTE SHAPE IS COLLECTION-ADDRESSED, AND THIS IS FORCED BY THE ANCHOR DECISION RATHER THAN CHOSEN FOR TASTE.** `buildAdaptivePracticeHref(noteId, …)` builds `/notes/{noteId}/adaptive-practice`, so a `?collectionId=` param would require the **FRONTEND** to supply the anchor — **reintroducing the exact anchor-drift hazard the anchor decision mitigates for resume but NOT for start.** A collection-addressed route lets the **BACKEND** derive the anchor, which is what that decision already assumes. **⚠️ A `?collectionId=` param on the note-addressed route CONTRADICTS the anchor decision; do not use it.** **⚠️ `entry` AND `sourceScope` ARE SEPARATE FIELDS AND MUST NOT BE CONFLATED — `entry` answers WHERE the learner started, `sourceScope` answers WHAT was practised.** Add entry values for the two new surfaces, and record `sourceScope` (`note` | `plan` | `review-set`) as analytics metadata following the Board Exam precedent exactly — **the VERIFIED outcome, never the caller's claim** (`ChallengeQuizService:511,646`). **⚠️ Do NOT mint one entry value per scope**; collapsing the two axes into one string is how `v0.103.0`'s leakage returned. The server already allowlists `entry` and normalizes unknown input to `direct` (`QuickReviewAdaptivePracticeService:87-95`) — extend that set, do not bypass it. **⚠️ SECTIONS ARE NOT A THIRD SCOPE.** The audit says Subject-Plan- **and** Review-Set-scoped; a section-scoped variant is creep. **⚠️ And Subject Plan vs Student Study Plan is NOT a distinction — they are the same `NoteCollectionEntity`** (`v0.105.0` anti-drift); do not invent one.
+
+### Anti-drift (locked for this release)
+
+- **⚠️ CROSS-PACK CANONICAL CONCEPT IDENTITY STAYS ADR-SIZED AND OUT.** `ConceptHealthEntity` stays keyed
+  `(user_id, study_pack_id, concept)` with free-text concept scoped per pack. **Plan- and Review-Set-scoped
+  remediation must AGGREGATE OVER packs, never MERGE concepts across them** — a Subject Plan's packs sharing
+  a concept string is exactly the case that is not yet decidable, and slice 5 must not quietly decide it.
+- **⚠️ CONCEPT AGGREGATION IS DECIDED AT KICKOFF (owner, 2026-09-03): TWO ENTRIES, EACH STAMPED WITH ITS SOURCE PACK. NEVER MERGE BY CONCEPT STRING.** **⚠️ THE REPO ALREADY ANSWERS THIS AND THE ANSWER IS UNAMBIGUOUS — THE PRODUCT HAS NEVER DISPLAYED A BARE CONCEPT NAME AT MULTI-PACK SCOPE.** `ConceptHealthService.getDueConceptsByStudyPackIds` returns `Map<UUID, List<String>>` — **per pack, unmerged** — and already has four callers (`DashboardService:309,:400`, `RetentionService:351`, `NoteCollectionService:2197`); `DashboardService:400` builds `TodayFocusConceptResponse(concept, noteId, studyPack.getTitle())`, the DTO is `record(concept, noteId, noteTitle)`, and `today-focus-card.tsx:62,65` **renders `concept.noteTitle` beside every concept.** So *Shear Force · Structural Analysis* and *Shear Force · Reinforced Concrete Design* are visibly distinct rows and **do NOT read as a duplicate bug** — the source pack is what disambiguates them. **⚠️ MERGING WOULD BE A CROSS-PACK CANONICAL IDENTITY CLAIM — exactly what is locked ADR-sized and OUT, and what `v0.104.0`'s entire provenance arc exists to prevent.** It is also **unfixable later without a migration**, because once merged in the UI the learner can no longer tell which pack the weakness came from. **⚠️ AND THE DECISION IS NECESSARY BUT NOT SUFFICIENT — THE COLLAPSE POINT IS A DATA STRUCTURE, WHICH IS THE `v0.104.0` LESSON REPEATING ON A NEW SURFACE.** `resolveAdaptiveFocus` returns `new ArrayList<>(focusConcepts)` where `focusConcepts` is a **`LinkedHashSet<String>` of BARE CONCEPT NAMES**. That is harmless for one pack and **silently merges across packs the moment plan scope reuses it** — the identical shape as `computeConceptBreakdown` keying by `normalizeConcept(item.concept())` alone, which made `v0.104.0`'s correct stamp change nothing downstream. **⚠️ SO THE PLAN-SCOPED FOCUS STRUCTURE MUST BE KEYED BY `(studyPackId, concept)`, NOT BY A `Set<String>`. A test that only asserts "two entries appear" against a fixture with DIFFERENT concept names passes under the merge; the fixture must use the SAME concept string in two packs.** **⚠️ `ConceptHealthService.normalizeConcept` is `trim()` ONLY (`:387-393`) and is applied INSIDE the per-pack map (`:176`), so it does not collapse across packs — do not "harden" it into a lowercase-and-key step, which would.** **⚠️ COUNT AGGREGATION IS UNAFFECTED AND STAYS AS IT IS:** `collection-detail-page-client.tsx:224` sums `dueConceptCount` across packs for the readiness pill. **Summing COUNTS makes no identity claim and is correct. ⚠️ Do NOT "fix" it to dedupe by concept name** — that would introduce this very merge on the one surface that displays no names at all. **⚠️ GENERATION FALLS OUT FOR FREE AND MUST NOT BE "OPTIMISED":** generation already fans out per pack, so *Shear Force* from pack A is generated against pack A's title, summary and key concepts and pack B's against pack B's, with **no special handling. ⚠️ Do NOT pass a merged concept list into a single prompt** — it would ask one pack's context to generate another pack's weakness. **⚠️ DEDUPLICATION MUST ACCUMULATE ACROSS PACKS, AND THIS IS THE HIGHEST-COLLISION CASE THE DEDUPE WILL EVER SEE** — two packs weak on the SAME concept generating in ONE session. The note-scoped path passes only `extractQuestionTexts(studyPack.getQuiz())`, a single pack's saved quiz; **plan scope must follow `InterviewPracticeService.generateQuizForSources`, accumulating `disallowedQuestions` across sources AND excluding each pack's own saved quiz**, which is also what `v0.106.0` shipped for both exam modes. **⚠️ Keep that exclusion at the generation seam; do NOT move it to a caller.** **⚠️ "WHICH PACK DO WE SURFACE" ALREADY HAS AN ANSWER — DO NOT BUILD A RANKING MODEL.** `DashboardService:400` returns inside its loop, surfacing the **first pack with due concepts** over `findByOwnerUserIdOrderByCreatedAtDescIdDesc` — a **deterministic total order** (`id` breaks `createdAt` ties), verified rather than assumed. **⚠️ A weakness-ranking engine is the recommendation engine's own UNRATIFIED scope and is explicitly OUT of this release.**
+- **⚠️ NO NEW MODE AND NO NEW SUB-MODE.** `EXAM_MODES.md` is a locked five-mode contract. **Modes are never
+  differentiated primarily by question count.** Broader scope is a CAPABILITY of Adaptive Practice.
+- **⚠️ VIEWING MUST NEVER WRITE `ConceptHealth`** — locked since `v0.37.0` to move only from genuine
+  assessment. A remediation surface that reads evidence must write none.
+- **⚠️ QUOTA IS DECIDED AT KICKOFF (owner, 2026-09-03): ONE `adaptive_quiz_generations` UNIT PER SESSION, regardless of scope or pack count, CHARGED AFTER SUCCESSFUL GENERATION, WITH GENERATION STAYING SYNCHRONOUS INSIDE THE TRANSACTION.** Both precedents say one and the arithmetic is not close: `BOARD_EXAM_QUOTA_UNITS_PER_SESSION = 1` (`ChallengeQuizService:187`) charges a single unit for a Review-Set-scoped Board Exam of up to **30** questions, and `LongExamService:272` charges `QUOTA_UNITS_PER_SESSION` once for a multi-source plan-sourced exam. **⚠️ REJECTED — per-pack charging:** it changes what a unit BUYS, which is the quota change this release explicitly locks, and it would charge more for **identical output**, since a plan-scoped session produces the same **≤10** questions as a note-scoped one. **⚠️ THE NO-REFUND PROPERTY IS AN ACCIDENT OF ORDERING PLUS THE TRANSACTION — THE SAME SHAPE `v0.106.0` FOUND IN BOARD EXAM, AND IT MUST NOT BE BROKEN THE SAME WAY.** `incrementAdaptiveQuizGeneration` runs at `:220`, **AFTER** `markSessionReady`, inside a class-level `@Transactional` (`:50`), so a generation failure simply never charges. **⚠️ THEREFORE: DO NOT COPY `v0.105.0`/`v0.106.0`'s REFUND MACHINERY INTO ADAPTIVE PRACTICE — it is not needed and adding it is scope creep. The refund question opens ONLY if the transaction boundary moves, so DO NOT MOVE IT.** **⚠️ AND THE TRANSACTION DECISION IS VALID ONLY UNDER A BOUND — this is a PRECONDITION, not a residual.** `InterviewPracticeService` already fans out one LLM call per source inside its own class-level `@Transactional` (`:52`), but its fan-out is bounded by a handful of learner-picked `additionalNoteIds`; **a Subject Plan is ~77 notes and a Review Set ~550, so "Interview Practice already does this" licenses N≈3, NEVER N≈77.** An unbounded fan-out would hold a database transaction open across dozens of LLM calls — **precisely the pathology `v0.105.0` and `v0.106.0` moved generation off the transaction to escape, arriving here by the back door.** **⚠️ SO THE SAMPLED PACK COUNT MUST BE BOUNDED — REUSE `LongExamPlanSourceSampler` (already injected into `ChallengeQuizService`), do NOT build a second sampler, and never fan out over every note in a plan. IF IT CANNOT BE BOUNDED, THE TRANSACTION BOUNDARY MUST MOVE AND THE REFUND QUESTION REOPENS — the two decisions are coupled and must be taken together.** **⚠️ A SECOND BOUND IS OWED AND IS EASY TO MISS BECAUSE THE QUESTION-COUNT CAP LOOKS LIKE IT COVERS IT — IT DOES NOT. `focusConcepts` IS UNBOUNDED:** `resolveAdaptiveFocus` returns a `LinkedHashSet` union of `getDueConcepts(...)` and the previous session's weak concepts with **no cap**, bounded today only because a single pack has few key concepts. Aggregated across a plan it **grows without limit and is passed straight into the prompt**, while `resolveAdaptiveQuestionCount` (5 / 7 / 10, a step function on WEAK CONCEPT COUNT with **no source-count input**) caps only the **OUTPUT**. **⚠️ Bound the focus-concept list explicitly for plan scope; do NOT rely on the question cap, and do NOT change `resolveAdaptiveQuestionCount`** — its lack of a source-count input is what already satisfies `v0.102.0`'s standing *"do NOT scale questionCount with source count"* rule, for free. **⚠️ THE UNLOCKED QUOTA READ IS A PRE-EXISTING DOUBLE-SPEND HOLE — NAMED, NOT INTRODUCED, AND DELIBERATELY NOT FIXED HERE.** `assertAdaptivePracticeQuotaAvailable` (`:185`) is an unlocked read and the `GENERATING` insert lands at `:188`. Concurrent starts on the **same** anchor are caught by `V41`'s unique index; concurrent starts on **different** anchors (a note-scoped session on pack A beside a plan-scoped one on pack B) both pass the check and both charge. **⚠️ This is reachable TODAY with two packs, so plan scope makes it easier to hit without creating a new defect class.** **⚠️ DO NOT "FIX" IT WITH `userRepository.findByIdForUpdate(userId)`.** That is the right pattern in `ChallengeQuizService`, where it is taken **conditionally** on the multi-note path, and it is safe there **only because Board Exam generation no longer holds the transaction across generation.** Adaptive Practice generation **does**, by the decision above — so taking the user-row lock here would hold a `PESSIMISTIC_WRITE` across the LLM call and serialize every other quiz start on that account, which is the exact cost `ChallengeQuizService`'s own comment documents. **The lock and the in-transaction generation are mutually exclusive; this release keeps the generation and names the hole.**
+- **⚠️ PLAN-TIER ENTITLEMENTS UNCHANGED.** Separate monetization contract; *"nothing is gated"* is never
+  licence to add, widen or remove a subscription gate. No quota or meter change.
+- **⚠️ NO BACKFILL of historical `ConceptHealth`** — matching `v0.104.0`'s precedent; the contamination is
+  recorded as a Known limitation instead.
+- **⚠️ DO NOT REMOVE THE CHALLENGE QUIZ ADAPTIVE PRACTICE ENTRY POINT.** Standing constraint; item 3
+  re-specifies the checkpoint, it does not license the removal the checkpoint was guarding.
+- **⚠️ THE SESSION ANCHOR IS DECIDED AT KICKOFF, NOT LEFT TO IMPLEMENTATION (owner, 2026-09-03) — and the handoff's "§15 is not needed for slice 5" was RIGHT IN CONCLUSION BUT UNDERIVED, so the reasoning is recorded rather than the verdict alone.** Verified by reading migrations: `quick_review_sessions.study_pack_id` **and** `note_id` are both **`NOT NULL`** (`V4:4`, `V19:162`, the latter backfilled FROM `study_packs.note_id`), and **`V41` DROPS AND RECREATES** the active-session unique indexes as `(user_id, study_pack_id, session_mode)` and `(user_id, note_id, session_mode)`, both **`WHERE status IN ('GENERATING','IN_PROGRESS')`** — so a still-**GENERATING** session already blocks, and the collision window is wider than *"in progress"* suggests. `QuickReviewSessionMode` has four values and **`ADAPTIVE` is shared** (no new mode is permitted), so a session is anchored to exactly one `(pack, note)` pair. **⚠️ DECISION: the session stays anchored on a PRIMARY PACK, and `sourceCollectionId` is a REQUEST FIELD that widens the SOURCE set only — never the pack the session is KEYED on. NO MIGRATION, NO INDEX CHANGE, NO NEW COLUMN.** This is the third consecutive release to answer it the same way and the precedent is what settles it: `v0.105.0` ruled it for plan-sourced Long Exam, and `v0.106.0` shipped Review-Set-scoped Board Exam **still taking a caller-supplied primary from the URL path**, recording scope as **analytics metadata** (`sourceScope`, the VERIFIED outcome, never the caller's claim) rather than as a column. **⚠️ BUT SLICE 5 HAS NO CALLER TO SUPPLY IT — its entry is DASHBOARD-DRIVEN, so nothing hands it a pack, and that is the part the precedent does NOT answer. THE ANCHOR IS THE PLAN'S LOWEST-POSITION ELIGIBLE PACK** (`findByCollectionIdOrderByPositionAsc` already exists), which matches the convention already in the repo — `resolveSourceNoteRefs` adds the primary first and `v0.105.0` force-includes it at index 0 — and is stable across visits with no learner action. **⚠️ RESIDUAL HAZARD, NAMED BECAUSE IT IS NOT OBVIOUS: `position` IS MUTABLE** (`NoteCollectionService.setPosition` fires on reorder-save and on add/remove), so reordering a plan — or removing its first note — **CHANGES THE ANCHOR MID-SESSION.** A resume lookup that **RECOMPUTES** the anchor would then miss the active session and the insert would succeed on a different `study_pack_id`, leaving **TWO active plan-scoped sessions with the first permanently unreachable.** **⚠️ SO THE RESUME MUST BE RESOLVED FROM A `(user, mode, status)` LIST FILTERED IN JAVA ON THE RECORDED COLLECTION ID, NEVER BY RECOMPUTING THE ANCHOR** — `findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc` already exists (`:372`) and a `StatusIn` List variant is a derived query. **⚠️ Do NOT add a JSONB predicate to do this — `v0.103.0` REJECTED that** (first in the repo, PostgreSQL-only, invisible to the mocked tests that are most of the suite). **⚠️ THE ACCEPTED COST IS A TWO-WAY COLLISION, RATIFIED BY THE OWNER (2026-09-03) AND SHIPPING AS A NAMED KNOWN LIMITATION — BOTH DIRECTIONS MUST BE PINNED BY TESTS:** (a) a plan-scoped session active on pack X makes a **note-scoped** request on X resume the **plan** session; (b) a note-scoped session active on X makes a **plan-scoped** request resume the **note** session. **⚠️ (b) IS THE WORSE SYMPTOM AND THE ONE THAT MAKES ITEM 2 LOOK BROKEN IN PRODUCTION** — the learner asks for whole-plan remediation and silently receives a single-note session. **Board Exam ↔ Challenge already ships this exact collision** on the same index (`resolveExistingChallengeSession` is mode-agnostic within `CHALLENGE`), which is why it is acceptable rather than novel. **⚠️ THE ANTI-DRIFT GUARANTEE IS THEREFORE NARROWED TO WHAT IT ACTUALLY PROTECTS: note-scoped Adaptive Practice is NOT re-pointed, replaced, or changed in behaviour — but it MAY CONTEND with a plan-scoped session for its anchor pack.** Stated at kickoff rather than discovered as a bug report. **⚠️ WIDENED 2026-09-03 DURING THE ITEM 1 DIFF AUDIT — THE COLLISION IS THREE-WAY, NOT TWO-WAY, AND ONE LEG ALREADY SHIPS.** `InterviewPracticeService` also creates its sessions with **`QuickReviewSessionMode.ADAPTIVE`** (`:370`) and distinguishes its own by a **sub-mode string in session state** (`isInterviewSession:511-513`, `SUB_MODE_INTERVIEW`) — the same discriminator pattern Board Exam uses on `CHALLENGE`. **So THREE session types share the `ADAPTIVE` enum and therefore the `(user_id, study_pack_id, session_mode)` unique index.** **⚠️ THE INTERVIEW ↔ ADAPTIVE LEG WAS A LIVE PRE-EXISTING DEFECT — ✅ FIXED IN THIS RELEASE AS ITEM 4, and the finding is kept because it is why the guard exists — verified by reading, not inferred:** `QuickReviewAdaptivePracticeService:131-145` looks up by `(userId, studyPackId, ADAPTIVE, ACTIVE)` and **does NOT check the sub-mode**, while `toAdaptiveResponse:503-527` **does not throw** on an interview-shaped session — it extracts the quiz from session state and returns it. **So an active Interview Practice session on pack X, when the learner requests Adaptive Practice on pack X, is RETURNED AS AN ADAPTIVE PRACTICE SESSION carrying the interview questions.** **⚠️ THE GUARD IS ASYMMETRIC, WHICH IS THE EVIDENCE IT IS AN OVERSIGHT RATHER THAN A DESIGN CHOICE:** Interview Practice resumes only its own (`existing != null && isInterviewSession(existing)`); Adaptive Practice never added the reciprocal check. Quota is NOT spent — the early return precedes `assertAdaptivePracticeQuotaAvailable`. **⚠️ DECISION TAKEN 2026-09-03 (owner): FOLDED INTO `v0.107.0` AS A NAMED ANTI-DRIFT EXCEPTION, AND SEQUENCED AFTER ITEM 2 — it is item 4.** It was raised as pre-existing and out of the stated scope, because fixing it **changes note-scoped Adaptive Practice behaviour, which this release's anti-drift otherwise locks**; the owner ruled to fix it here rather than defer it to a patch, since it is a one-line reciprocal guard in code item 2 already edits and the release is already at the full three-agent verification tier. **⚠️ THE ANTI-DRIFT LINE IS THEREFORE NARROWED A SECOND TIME, DELIBERATELY: *note-scoped Adaptive Practice is not re-pointed or replaced, and its behaviour changes ONLY by ceasing to return another mode's session.* That is the whole of the permitted change — it is NOT licence to alter what a note-scoped session does, resumes, or scores in any other respect.** **⚠️ SEQUENCING IS BINDING: item 4 lands AFTER item 2 merges, in its own branch and PR, NOT inside item 2's diff.** Item 2's prompt correctly instructs Codex to exclude `SUB_MODE_INTERVIEW` in its NEW lookup and to leave the existing one alone; folding the fix into that same pass would put a behaviour change to a shipped path inside a diff already introducing a new one. **⚠️ THE FIX IS THE RECIPROCAL GUARD, NOTHING MORE:** `QuickReviewAdaptivePracticeService`'s existing lookup gains the sub-mode check that `InterviewPracticeService:520` already applies in the other direction. **Do NOT restructure the lookup, do NOT add a sub-mode value, and do NOT touch `toAdaptiveResponse`.** **⚠️ IT NEEDS A PINNING TEST THAT FAILS ON REMOVAL:** an active Interview Practice session on pack X, with note-scoped Adaptive Practice requested on X, must NOT return the interview session — and the fixture's subject must be REACHABLE, per the vacuous-assertion finding from item 1's audit. **⚠️ REGARDLESS OF THAT DECISION, item 2's NEW plan-scoped lookup MUST exclude `SUB_MODE_INTERVIEW` sessions** — omitting it would newly build the very bug this audit found. **⚠️ AND PLAN SCOPE MUST NOT TAKE A SUB-MODE VALUE:** by `v0.103.0`'s own sub-mode test it is a **capability** — same questions, same scoring, same result screen, more notes — so discrimination is by the **recorded collection id**, filtered in Java. **⚠️ REJECTED WITH REASONS, DO NOT RE-PROPOSE: widening the partial unique index with a scope discriminator.** A nullable column makes NULLs **DISTINCT** in PostgreSQL, which would BREAK the existing one-active-per-pack guarantee for note-scoped sessions unless `COALESCE`d to a sentinel — and it is a scope change plus a routing re-run that touches the very table slice 6 was meant to migrate. **⚠️ AND "NO MIGRATION" IS NOT "NO CONTRACT CHANGE": `generateAdaptiveQuiz(String studyPackIdRaw, UUID userId, String entry)` takes RAW PARAMS with no request DTO**, so plan scope needs a DTO or a new endpoint — a Codex-shaped surface.
+- **⚠️ Do NOT touch Long Exam's or Board Exam's sampler, thresholds or refund path** beyond reading them.
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN until 2026-09-11** — `[CHECKPOINT — due 2026-09-11]` is 8 days
+  out. Do not add, remove or reorder an onboarding FLOW step.
+- **⚠️ Do NOT change `BOARD_EXAM_STARTED`'s `sourceScope` / `sourceCount` / `questionCount` /
+  `expectedQuestionCount` field names or firing condition** — `[CHECKPOINT — due 2026-10-06]` reads them.
+
+### Verification
+
+**FULL THREE-AGENT COLD PRESSURE TEST IN ISOLATED `git worktree`s.** Two independent triggers:
+production-data semantics on a shared evidence store (item 1) and a new learner-facing assessment scope
+consuming it (item 2). **⚠️ THE ISOLATION IS NOT OPTIONAL** — `v0.105.0` ran three mutating agents in one
+tree and they corrupted each other's builds; one agent's entire result set was discarded. **⚠️ ONE AGENT MUST
+BE POINTED AT THE BLIND SPOT, NOT THE FEATURE** — in the last three releases the worst defect was outside the
+stated scope every time.
+
+**Carried measured lessons:** **write the guard at the LAYER THE DEFECT LIVES AT** (four releases running);
+**MUTATE and confirm a NAMED test fails**; **ask what in the fixture is NEUTRALISING a surviving mutant**
+before weakening the assertion (a mock or a sampler quietly absorbed the effect twice in `v0.106.0`);
+**assertions can pass VACUOUSLY** — a bystander row must hold non-zero values it would lose; **read
+`./mvnw test-compile`'s EXIT STATUS directly, never through a pipe**; **COUNT executed tests from
+`target/surefire-reports/*.xml`**; **run `npm test`**; **sweep by SURFACE, not by diff**; and **call
+`advisor()` BEFORE writing the Codex prompt**, which is where the yield is.
+
+**Routing: CODEX.** Item 2 is multi-system. **⚠️ Item 1 alone would be inline** — re-run the routing test if
+implementation discovers a surface not in the agreed plan, which is how `v0.103.0` was mis-routed.
+
+### Shipped
+
+- **A three-agent cold pressure test in isolated worktrees found 7 live defects, 4 false shipped
+  claims and 9 guards that were removable with the whole suite green.** All are remediated; the
+  findings and what survived are recorded above. **⚠️ Three of the false claims were mine, written
+  into `RELEASES.md` and `docs/features/adaptive-practice.md` as though verified** — item 4's guard
+  covered two of five call sites, its message branch was dead code, and the aggregation decision's
+  stated rationale (source titles disambiguate two same-named rows) was false in the shipped UI.
+- **⚠️ KNOWN LIMITATION — resolving eligibility still materializes every DONE Study Pack of the
+  collection.** For a large Review Set that is hundreds of rows carrying full quiz JSON, loaded to
+  pick at most three. The quota and rate-limit gates now run BEFORE it, so an over-quota learner no
+  longer pays it on every click, but the load itself remains. **Not fixed deliberately:**
+  `LongExamPlanSourceSampler.EligiblePlanSource` takes a `StudyPackEntity`, and that sampler is
+  shared with Long Exam and Board Exam, which this release's anti-drift forbids changing. A
+  projection-based fix needs the sampler contract to change and belongs with whichever slice may
+  touch it.
+- **⚠️ KNOWN LIMITATION — `GET /collections/{id}/adaptive-practice/in-progress` has no client
+  consumer.** It is the natural pair of the start endpoint and is now covered by a test; the unused
+  frontend wrapper was removed rather than left as dead code. A resume affordance would consume it.
+- **⚠️ KNOWN LIMITATION, PRE-EXISTING — `DashboardService.findInProgressSessionsByRecency` and
+  `PostSessionNextStepService` surface an in-progress Interview Practice session as an Adaptive
+  Practice one.** Both predate `v0.107.0` and are untouched here; they are the same shared-`ADAPTIVE`
+  -discriminator class as item 4 but on read-only surfaces.
+
+- **Adaptive Practice and Interview Practice no longer consume each other's sessions (item 4).** Both
+  share the `ADAPTIVE` discriminator and therefore `V41`'s `(user_id, study_pack_id, session_mode)`
+  unique index on active sessions. The note-scoped start path would **resume** an interview session as
+  an Adaptive Practice session, and — in its other branch — **FORFEIT** one, ending a session this mode
+  does not own; the read path returned one as its own. Both paths now skip `subMode: "INTERVIEW"` and
+  return an explanatory message. **They deliberately do not start a new session instead: the unique
+  index would reject it.**
+- **⚠️ The guard is verified by DELETION, not by reading.** Removing both guards fails
+  `generateAdaptiveQuiz_neitherResumesNorForfeitsAnActiveInterviewPracticeSession` and
+  `getAdaptiveQuizSession_doesNotReturnAnInterviewPracticeSessionAsAdaptivePractice`. The first
+  asserts the interview session's status is untouched, which is what pins the **destructive** half —
+  a test that only checked the returned payload would pass while the forfeit still fired.
+- **A misleading message on the plan-scoped path is corrected.** An anchor pack occupied by an
+  interview session reported *"no weak concepts"*, which is not why it stopped.
+
+- **Adaptive Practice runs at Subject-Plan and Review-Set scope (item 2).** A collection-addressed
+  endpoint starts a session over a whole plan; the **server derives the anchor** (the plan's
+  lowest-position eligible pack) so no client computes one, and resume is resolved from the recorded
+  source collection id rather than by recomputing an anchor that a reorder would move. The plan-level
+  CTA sits on the collection detail page beside the existing per-note *Review due concepts* action.
+- **Concepts stay separated by source pack.** `QuickReviewAdaptiveQuizResponse` replaces its
+  `weakConcepts` + quiz-parallel `conceptSelectionReasons` arrays with one structured
+  `focusConcepts` list carrying `(concept, sourceStudyPackId, sourceTitle, selectionReason)`. Two
+  packs weak on the same concept produce **two** entries — mutation-verified by
+  `collectionScoped_keepsTheSameConceptSeparatePerSourcePack`, which fails when the focus structure
+  collapses by concept name.
+- **Bounded, and the bound is load-bearing.** Both the sampled pack count and the focus-concept list
+  are bounded, which is what keeps generation inside the transaction — and keeping it there is what
+  makes a refund path unnecessary, since the quota increment already runs only after success.
+- **The plan-scoped lookup excludes Interview Practice sessions.** Three session types share the
+  `ADAPTIVE` discriminator, so without that filter a plan-scoped start could resume an interview
+  session — the same live defect this release recorded against the existing note-scoped lookup.
+- **✅ THE DASHBOARD SURFACE NOW SHIPS — the gap recorded when item 2 landed is closed.** The Focus
+  Areas card gains a `Practice Across This Plan` action beside the existing per-note one, rendering
+  **only when the server resolved a plan**. `DashboardFocusAreasResponse` carries
+  `practiceCollectionId` / `practiceCollectionTitle`, resolved by **`v0.78.0`'s existing rule** —
+  Primary Review Set when it contains the weakest note, else the most recently updated containing
+  collection — rather than a second selection rule. **⚠️ No weakness ranking was built; ordering
+  plans by weakness is the recommendation engine's unratified scope.**
+  **⚠️ Mutation-verified: dropping the Primary-Review-Set precedence fails
+  `focusAreas_prefersThePrimaryReviewSetWhenItContainsTheWeakestNote`.** That test stubs the
+  *losing* collection `lenient()` on purpose — without it the mutant would fail only as a Mockito
+  `PotentialStubbingProblem`, which reads as a test-setup bug rather than as picking the wrong plan.
+  The same vacuity was found and fixed in item 1's audit.
+
+- **Interview Practice records `ConceptHealth` per contributing Study Pack (item 1).** It stamps
+  `sourceStudyPackId` at the `generateQuizForSources` merge seam — after per-source dedup, before
+  merge — and completion now buckets by `(sourceStudyPackId, concept)` through the existing
+  `computeKeyConceptBreakdownBySourceStudyPack`, replacing the broadcast that wrote one concept list
+  to every source pack. **This closes the third and last live instance of the `v0.104.0` defect**, so
+  every mode now writes honest per-source evidence. `resolveSourceStudyPackIds` is demoted to a
+  fallback reached only by unstamped in-flight items.
+- **A vacuous negative assertion was found and fixed during the diff audit.** The delivered fixture
+  asserted that a non-contributing pack receives nothing, but never stubbed that pack into the
+  repository — so `ifPresent` could not fire and the `never()` assertions passed regardless. A
+  restored broadcast was caught only by Mockito strictness, reported as `PotentialStubbingProblem`,
+  which reads as a test-setup bug rather than as wrong attribution. The stub is now present and
+  `lenient()`; **verified by mutation in both directions** — with the fix the mutant fails on the
+  assertion that names the behaviour, and correct code stays green.
+
+
 ## v0.106.0 - Board Exam Review Set Identity
 
 **Status: Released** (kicked off 2026-09-02, signed off 2026-09-03, base branch `releases/v0.106.0`, cut

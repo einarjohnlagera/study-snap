@@ -114,7 +114,10 @@ class QuickReviewFirstCompletedQuizIntegrationTest {
                 mock(AnalyticsService.class),
                 mock(AiRateLimitService.class),
                 mock(StudyPackGenerationContextResolver.class),
-                mock(ConceptHealthService.class)
+                mock(ConceptHealthService.class),
+                mock(com.studysnap.backend.repository.NoteCollectionRepository.class),
+                mock(com.studysnap.backend.repository.NoteCollectionItemRepository.class),
+                new LongExamPlanSourceSampler()
         );
     }
 
