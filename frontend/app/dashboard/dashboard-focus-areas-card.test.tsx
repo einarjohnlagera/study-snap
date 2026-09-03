@@ -57,4 +57,27 @@ describe("DashboardFocusAreasCard", () => {
     expect(onPracticeAcrossPlan).toHaveBeenCalledWith("collection-1");
   });
 
+
+  it("surfaces the server's message instead of silently doing nothing", () => {
+    // The button's render predicate is wider than server eligibility, so a decline is reachable.
+    // Without a visible notice the button just un-spins and the learner has no idea why.
+    render(
+      <DashboardFocusAreasCard
+        focusAreas={{
+          concepts: [{ conceptName: "Shear Force", accuracyPercentage: 40 }],
+          practiceNoteId: "note-1",
+          practiceCollectionId: "collection-1",
+          practiceCollectionTitle: "CE Board Review",
+          adaptivePracticeAvailable: true,
+        }}
+        onUnlockAdaptivePractice={jest.fn()}
+        onPracticeAcrossPlan={jest.fn()}
+        planPracticeNotice="You have another Adaptive Practice session in progress on one of this plan's notes."
+      />,
+    );
+    expect(
+      screen.getByText(/another Adaptive Practice session in progress/i),
+    ).toBeInTheDocument();
+  });
+
 });

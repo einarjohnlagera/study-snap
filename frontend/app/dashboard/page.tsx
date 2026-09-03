@@ -329,12 +329,14 @@ export default function DashboardPage() {
   // response for the same reason -- a plan's item order is mutable, so a client-derived anchor
   // would drift.
   const [planPracticePending, setPlanPracticePending] = useState(false);
+  const [planPracticeNotice, setPlanPracticeNotice] = useState<string | null>(null);
   const handlePracticeAcrossPlan = useCallback(
     async (collectionId: string) => {
       if (planPracticePending) {
         return;
       }
       setPlanPracticePending(true);
+      setPlanPracticeNotice(null);
       try {
         const session = await generateAdaptivePracticeForCollection(
           collectionId,
@@ -346,9 +348,16 @@ export default function DashboardPage() {
               entry: ADAPTIVE_PRACTICE_DASHBOARD_PLAN_ENTRY,
             }),
           );
+          return;
         }
+        // ⚠️ NO SILENT NO-OP. The server can legitimately decline to start (nothing due, or every
+        // eligible pack occupied by another session) and answers with a message. The button's
+        // render predicate is WIDER than server eligibility -- it shows whenever the weakest note
+        // belongs to any plan, while the server needs ConceptHealth due-or-weak concepts across
+        // that plan -- so this branch is reachable, and without it the button just un-spins forever.
+        setPlanPracticeNotice(session.message);
       } catch {
-        router.push(`/collections/${collectionId}`);
+        setPlanPracticeNotice("Could not start practice for this plan.");
       } finally {
         setPlanPracticePending(false);
       }
@@ -894,6 +903,7 @@ export default function DashboardPage() {
                   : "Finish a few Challenge Quizzes to reveal the concepts that need more review."}
                 primaryActionLabel="Practice Weak Concepts"
                 onPracticeAcrossPlan={handlePracticeAcrossPlan}
+                planPracticeNotice={planPracticeNotice}
                 lockedActionLabel="Unlock Adaptive Practice"
                 onUnlockAdaptivePractice={() => setActivePaywallModal("adaptive-practice")}
               />

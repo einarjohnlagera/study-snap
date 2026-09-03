@@ -825,4 +825,34 @@ describe("AdaptivePracticePage", () => {
     expect(review).toHaveTextContent("Correct Answer");
     expect(review).toHaveTextContent("The derivative of sin(x) is cos(x).");
   });
+
+  it("keeps two packs' identical concept apart, labels the source, and matches the rationale by pack", async () => {
+    // ⚠️ THE ONLY FIXTURE IN THE SUITE WHOSE QUIZ ITEMS CARRY sourceStudyPackId. Every other one
+    // short-circuits the pack-matching clause via `!question?.sourceStudyPackId`, so the clause the
+    // comment calls load-bearing was never exercised, and the duplicate-key case the "never merge
+    // concepts" decision mandates was never rendered.
+    setupGeneratedAdaptiveQuiz();
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      status: null,
+      studyPackId: "study-pack-1",
+      noteId: "note-1",
+      title: "Structural Engineering",
+      focusConcepts: [
+        { concept: "Shear Force", sourceStudyPackId: "pack-a", sourceTitle: "Structural Analysis", selectionReason: "BOTH" },
+        { concept: "Shear Force", sourceStudyPackId: "pack-b", sourceTitle: "Reinforced Concrete", selectionReason: "WEAK" },
+      ],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [],
+    });
+
+    render(<AdaptivePracticePage />);
+
+    // Both entries render -- NOT merged into one -- and each carries its source, which is the
+    // disambiguation the "never merge concepts across packs" decision rests on.
+    expect(await screen.findAllByText(/Shear Force/)).toHaveLength(2);
+    expect(screen.getByText(/Structural Analysis/)).toBeInTheDocument();
+    expect(screen.getByText(/Reinforced Concrete/)).toBeInTheDocument();
+  });
+
 });

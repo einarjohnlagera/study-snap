@@ -17,6 +17,7 @@ type DashboardFocusAreasCardProps = {
   showAction?: boolean;
   onPracticeAcrossPlan?: (collectionId: string) => void;
   planActionLabel?: string;
+  planPracticeNotice?: string | null;
 };
 
 function getBarTone(accuracyPercentage: number) {
@@ -46,6 +47,7 @@ export function DashboardFocusAreasCard({
   showAction = true,
   onPracticeAcrossPlan,
   planActionLabel = "Practice Across This Plan",
+  planPracticeNotice = null,
 }: Readonly<DashboardFocusAreasCardProps>) {
   const concepts = focusAreas?.concepts ?? [];
   const hasConcepts = concepts.length > 0;
@@ -120,6 +122,9 @@ export function DashboardFocusAreasCard({
           ) : (
             <ResponsiveActionButton type="button" variant="outline" onClick={onUnlockAdaptivePractice} action="adaptivePractice" label={lockedActionLabel} />
           )
+        ) : null}
+        {planPracticeNotice ? (
+          <p className="text-sm text-foreground/70">{planPracticeNotice}</p>
         ) : null}
       </Card>
     </section>

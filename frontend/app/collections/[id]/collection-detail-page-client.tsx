@@ -3120,7 +3120,10 @@ export function CollectionDetailPageClient({ collectionId }: Readonly<{ collecti
     }
   }, [collectionId, planPracticePending, router, showActionToast]);
 
-  const planPracticeAction = dueConceptReviewItem ? (
+  // ⚠️ NOT gated on dueConceptReviewItem. That is a DUE-count item, while server eligibility is
+  // due OR persistently weak, so a plan whose weakness is all incorrect_streak >= 2 with nothing
+  // due would show no button while the server would happily start a session.
+  const planPracticeAction = items.length > 0 ? (
     <ResponsiveActionButton
       action="adaptivePractice"
       label={planPracticePending ? "Starting…" : PRACTICE_WHOLE_PLAN_LABEL}
