@@ -297,6 +297,32 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   spend quota. The share card reuses the existing link meter and events with `scope=combined_quiz` metadata;
   it adds no entitlement, counter, quiz mode, DOCX action, connection requirement, or `ProfileType` gate.
 
+- **Item 3 — the product stops advertising a capability to people who could not use it.** The Generate
+  Quiz modal's guidance tip was rendered **unconditionally** and told every reader to *"select multiple
+  notes to build a quiz from a full unit — use the note checkboxes in your library first."* The only
+  multi-note quiz CTA there was `TEACHER`-gated, so for most of its audience it advertised something
+  unreachable. It now names the path item 5 shipped: *"Building a quiz for a whole unit? In your Library,
+  choose Combined quiz to pick several notes and share one quiz."*
+- **⚠️ The `tipId` changed deliberately, which re-shows the tip once to everyone who dismissed the old
+  one.** They dismissed a **different, false** message, so they were never told about a capability that now
+  exists — and `v0.109.0` records that shipping a capability without announcing it produces a false demand
+  signal. The old `teacher-` prefix was dropped because the path is not teacher-gated; keeping it would
+  re-encode the `ProfileType` axis error `v0.89.0` exists to correct.
+- **⚠️ SWEPT BY SURFACE, NOT BY DIFF, AND THE OTHER THREE CANDIDATES WERE VERIFIED RATHER THAN ASSUMED.**
+  `v0.109.0`'s lesson is that a file explaining a feature is exactly the file that never changes when the
+  feature does. Grepping every frontend surface for multi-note quiz copy found three more candidates —
+  `library/page.tsx:1473`'s `teacher-library-multi-note-select` tip, `library/page.tsx:1596`'s empty-library
+  copy, and `dashboard/page.tsx:1049`'s teaching-workspace card — and **all three are correctly
+  `isTeacherProfile`-gated**, so they describe the teacher path to teachers and are not falsehoods.
+  **Exactly one live instance existed, and it is the one item 3 named.**
+- **Two tests pin what nothing else executes**, which is the guard `v0.109.0` asked for on copy: one asserts
+  the tip names the ungated path and no longer says *"note checkboxes"* (both negative assertions have
+  reachable subjects — those strings were in the shipped message, so the test would have failed before the
+  fix); the other seeds the **old** tipId as dismissed and proves the corrected tip still reaches that
+  learner. **⚠️ A tautological `tipId === "..."` assertion was considered and rejected** — it compares a
+  literal to itself. Mutants: restoring the shipped copy reds the first test; reverting the tipId alone reds
+  the second.
+
 ### Known limitations
 
 - **A MATCHING block loses its grouping on the shared quiz page.** `teacher-quiz-developer.txt` may emit one
