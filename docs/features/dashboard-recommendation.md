@@ -180,6 +180,11 @@ Routing guidance:
 - `RESUME_REVIEW` -> Note Detail Quick Review path
 - `RETRY_REVIEW` -> Note Detail Quick Review path
 - `PRACTICE_WEAK_CONCEPT` -> Note Detail Adaptive Practice path
+- **`INTERVIEW_PRACTICE` resume (v0.108.0)** — an in-progress Interview Practice session now
+  surfaces as its own *Continue Studying* card routing to `/notes/{id}/interview-practice`, not as an
+  Adaptive Practice card. Three session types share the `ADAPTIVE` discriminator, so a resume type
+  derived from session MODE alone could not tell them apart. **It is routed rather than hidden — the
+  learner has an active session and this is their way back to it.**
 - `REVIEW_PACK` -> Note Detail path
 - `STUDY_SUGGESTION` -> New Note flow
 

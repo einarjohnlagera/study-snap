@@ -201,7 +201,7 @@ export type ContinueStudyingReason =
   | "RECENTLY_OPENED"
   | "RECENTLY_CREATED";
 export type ContinueStudyingResumeState = "QUESTION_IN_PROGRESS" | "RETRY_TRANSITION" | "RETRY_IN_PROGRESS";
-export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE" | "LONG_EXAM";
+export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE" | "LONG_EXAM" | "INTERVIEW_PRACTICE";
 export type TodayFocusType =
   | "RESUME_REVIEW"
   | "RETRY_REVIEW"

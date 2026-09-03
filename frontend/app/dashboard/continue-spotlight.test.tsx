@@ -46,6 +46,41 @@ describe("ContinueSpotlight", () => {
     );
   });
 
+  it("routes an interview practice resume to its own surface, not the adaptive one", () => {
+    // Interview Practice shares the ADAPTIVE session discriminator, so this card used to arrive as
+    // "ADAPTIVE" and link to /adaptive-practice -- which refuses another mode's session, making the
+    // card a dead end. The href is the assertion that matters: a label-only check would pass while
+    // the link still pointed at the page that refuses it.
+    render(
+      <ContinueSpotlight
+        recommendation={{
+          studyPackId: "pack-3",
+          noteId: "note-3",
+          noteTitle: "Systems Design Prep",
+          subject: "Software Engineering",
+          courseProgram: "Computer Science",
+          summaryPreview: null,
+          resumeType: "INTERVIEW_PRACTICE",
+          reason: "RESUME_REVIEW",
+          lastScorePercentage: null,
+          lastReviewedAt: "2026-04-02T09:00:00Z",
+          lastOpenedAt: null,
+          createdAt: "2026-03-30T09:00:00Z",
+          currentQuestionIndex: 0,
+          totalQuestions: 6,
+          currentRound: "INITIAL",
+          remainingQuestions: null,
+          resumeState: "QUESTION_IN_PROGRESS",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Resume Interview Practice" })).toHaveAttribute(
+      "href",
+      "/notes/note-3/interview-practice",
+    );
+  });
+
   it("switches the label and route for adaptive practice", () => {
     render(
       <ContinueSpotlight
