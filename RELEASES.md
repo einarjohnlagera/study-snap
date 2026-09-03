@@ -1,5 +1,101 @@
 # RELEASES.md - NoteLib
 
+## v0.110.0 - Supporter Combined Quiz
+
+**Status: In Progress** (kicked off 2026-09-03, base branch `releases/v0.110.0`, cut from `main` after
+`v0.109.0` merged and tagged)
+
+Theme: someone helping a learner can build one quiz from several notes and hand it over, without either
+of them needing a Learning Connection.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet.
+
+### Why this release exists
+
+**Slice 6 of the approved assessment sequence — the LAST one** (`docs/claude-plans/assessment-architecture-audit.md`
+§13). Slices 1–5 shipped across `v0.104.0`–`v0.107.0` and were announced in `v0.109.0`.
+
+**⚠️ THIS RELEASE IS SMALLER THAN THE ROADMAP IMPLIED, AND THE CORRECTION IS THE REASON IT OPENS NOW.**
+§13 recorded the sequence as *"at least four releases"* and §15 said the session-anchoring migration was
+deferred *"until slice 6 forces it"* — so slice 6 read as a `quick_review_sessions` migration touching
+`V41`'s two partial unique indexes, i.e. a full-pressure-test release. **That premise was checked against
+code on 2026-09-03 and is FALSE: `GeneratedQuizService` and `QuizShareLinkService` reference
+`quick_review_sessions` ZERO times.** The supporter quiz path persists to `generated_quizzes` and is taken
+by a recipient who needs no account, so it creates no session and session anchoring cannot bind on it.
+§15 is corrected.
+
+**⚠️ THE REAL CONSTRAINT IS A DIFFERENT TABLE, AND IT IS SHARP:** `generated_quizzes.note_id` is
+`NOT NULL` with a **unique index** (`uq_generated_quizzes_note_id`, `V43`), so **exactly one generated
+quiz exists per note.** A *combined* quiz spanning several notes has no `note_id` it can legally take, and
+anchoring it on one note would collide with any quiz already generated for that note. **⚠️ So this release
+does owe a migration — on `generated_quizzes`, not on `quick_review_sessions`.**
+
+**⚠️ HALF OF THIS IS ALREADY BUILT, AND `v0.89.0` AUDITED IT RATHER THAN TRUSTING THE ROADMAP — DO THE
+SAME BEFORE SCOPING ANY ITEM.** Generating a quiz for someone else is already ungated, `/quiz/share/**` is
+already `permitAll` so the recipient needs no account, and `QuizShareLimitService` already meters share
+links per plan. **What is missing is the COMBINED part**, not the sharing.
+
+### Planned Scope
+
+- **(1) A generated quiz can span several notes.** **⚠️ THE ANCHOR PROBLEM HAS A KNOWN ANSWER IN THIS
+  REPO — do NOT invent a second one:** `QuizItem` has carried `sourceStudyPackId` since `v0.104.0`, so
+  items hold their own provenance while the row keeps a primary, exactly as Long Exam, Board Exam and
+  plan-scoped Adaptive Practice all do. **⚠️ Decide at prompt time whether the migration relaxes
+  `note_id`'s uniqueness, makes it nullable, or adds a source list — and RECORD which, with the reason.**
+- **(2) The share path carries a combined quiz unchanged.** **⚠️ Verify before building** — the sharing
+  half is believed already complete, and `v0.89.0`'s audit of a supposedly-unbuilt phase found half of it
+  shipped. **⚠️ `PublicQuizItem` / DOCX export are MCQ-only** (audit §15, a recorded sharing gap): confirm
+  what a combined quiz's formats do on the share path before promising anything.
+- **(3) Selecting the notes.** **⚠️ Reuse the existing selection surface rather than adding one** — the
+  Challenge Quiz multi-note picker and `collection-exam.ts` already select notes by membership.
+
+### Anti-drift (locked for this release)
+
+- **⚠️ NO SESSION-ANCHORING MIGRATION.** It has **no forcing slice any more** — that is this release's own
+  finding — so the plan/note session collision stays a **named Known limitation** and its fix is a
+  separate decision. **⚠️ Do NOT take it opportunistically because a migration is already in the diff.**
+- **⚠️ Do NOT touch `quick_review_sessions` at all.** If an item appears to need a session, that is the
+  signal the scope is wrong — the supporter path deliberately has none.
+- **⚠️ NO Learning Connection requirement**, which is the slice's whole point. Sharing stays open to a
+  recipient with no account, and **⚠️ do NOT gate it on `ProfileType`** — `v0.89.0` records that as the
+  axis error this capability exists to correct.
+- **⚠️ Invitations stay ONE-AT-A-TIME** (`v0.90.0`); the quiz share link stays the many-recipient
+  mechanism, and the two are not merged.
+- **⚠️ NO new mode and NO new sub-mode.** `EXAM_MODES.md` stays a locked five-mode contract; a combined
+  supporter quiz is a **capability**, and by `v0.103.0`'s own sub-mode test it has no label, entry point
+  or differentiator of its own.
+- **⚠️ NO quota, limit or meter change.** `QuizShareLimitService` already meters share links per plan;
+  **do NOT add a second counter** — `v0.92.0` rejected that as an untaken pricing decision.
+- **⚠️ Keep DOCX export and multi-version exports `TEACHER`-gated** (`v0.89.0`).
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN — `[CHECKPOINT — due 2026-09-11]` is 8 DAYS OUT.**
+- **⚠️ Do NOT change `BOARD_EXAM_STARTED` or `ADAPTIVE_PRACTICE_STARTED` fields** — the two `2026-10-13`
+  checkpoints re-armed in `v0.109.0` own those metrics.
+
+### Verification
+
+**ONE SCOPED COLD AGENT, framed as FALSIFICATION.** The trigger is named by the gate outright: this
+release changes **production-data semantics via a migration**. It is **not** the three-agent test — there
+is no permission substrate, no cross-user read beyond the sharing that already ships, and no money or
+quota change.
+
+**⚠️ ESCALATE TO THE FULL TEST IF** the migration turns out to need `quick_review_sessions` after all, or
+if item 2 discovers the share path is not already complete.
+
+**⚠️ CARRIED LESSONS, EVERY ONE OF WHICH THIS SESSION PAID FOR: a negative assertion must have a REACHABLE
+subject**; **write the guard at the LAYER THE DEFECT LIVES AT**; **a test can survive its own mutation** if
+the fixture cannot discriminate; **MUTATE and confirm a NAMED test fails**; **read `./mvnw`'s EXIT STATUS
+directly, never through a pipe**; **COUNT executed tests from `target/surefire-reports/*.xml`**; **run
+`npm test`**; **SWEEP BY SURFACE, not by diff**; **verify "X already does Y" against code BEFORE it reaches
+a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
+
+**Routing: CODEX** — a migration plus a service and a surface. **⚠️ Re-run the routing test if item 1's
+migration turns out to be a one-column change and items 2 and 3 are already built.**
+
+### Shipped
+
 ## v0.109.0 - Assessment Discoverability
 
 **Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.109.0`, cut from `main` after
