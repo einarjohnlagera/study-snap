@@ -438,6 +438,11 @@ export type DashboardPerformanceSummaryResponse = {
 export type DashboardFocusAreasResponse = {
   concepts: DashboardConceptInsightResponse[];
   practiceNoteId: string | null;
+  /** The plan to practise across, resolved SERVER-side by v0.78.0's rule (Primary Review Set if it
+   *  contains the weakest note, else the most recently updated containing collection). Null when the
+   *  weakest note belongs to no plan. Deliberately not a weakness ranking. */
+  practiceCollectionId: string | null;
+  practiceCollectionTitle: string | null;
   adaptivePracticeAvailable: boolean;
 };
 

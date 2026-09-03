@@ -6,6 +6,9 @@ import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.dto.ContinueStudyingResumeType;
 import com.studysnap.backend.dto.DashboardConceptInsightResponse;
 import com.studysnap.backend.dto.DashboardFocusAreasResponse;
+import com.studysnap.backend.entity.NoteCollectionEntity;
+import com.studysnap.backend.repository.NoteCollectionItemRepository;
+import com.studysnap.backend.repository.NoteCollectionRepository;
 import com.studysnap.backend.dto.ExamPacingPlanResponse;
 import com.studysnap.backend.dto.DashboardOverviewResponse;
 import com.studysnap.backend.dto.DashboardPerformanceSummaryResponse;
@@ -84,6 +87,8 @@ public class DashboardService {
     private final UserRepository userRepository;
     private final StudyPackRepository studyPackRepository;
     private final NoteRepository noteRepository;
+    private final NoteCollectionItemRepository noteCollectionItemRepository;
+    private final NoteCollectionRepository noteCollectionRepository;
     private final NoteCourseProgramRepository noteCourseProgramRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ActivityEventRepository activityEventRepository;
@@ -268,7 +273,7 @@ public class DashboardService {
                 completedChallengeSessions,
                 studyPackRepository.countByOwnerUserId(userId)
         );
-        DashboardFocusAreasResponse focusAreas = buildFocusAreas(completedChallengeSessions, planType);
+        DashboardFocusAreasResponse focusAreas = buildFocusAreas(userId, completedChallengeSessions, planType);
         DashboardWeeklyActivityResponse weeklyActivity = buildWeeklyActivity(userId);
         ExamPacingPlanResponse examPacingPlan = resolveExamPacingPlan(userId, OffsetDateTime.now(ZoneOffset.UTC));
         long totalNoteCount = noteRepository.countByOwnerUserId(userId);
@@ -778,6 +783,7 @@ public class DashboardService {
     }
 
     private DashboardFocusAreasResponse buildFocusAreas(
+            UUID userId,
             List<QuickReviewSessionMetadataProjection> completedChallengeSessions,
             PlanType planType
     ) {
@@ -797,13 +803,52 @@ public class DashboardService {
                 .findFirst()
                 .orElse(null);
 
+        NoteCollectionEntity practiceCollection = resolvePracticeCollection(userId, practiceNoteId);
+
         return new DashboardFocusAreasResponse(
                 weakestConcepts.stream()
                         .map(ConceptPerformanceAccumulator::toInsight)
                         .toList(),
                 practiceNoteId,
+                practiceCollection == null ? null : practiceCollection.getId().toString(),
+                practiceCollection == null ? null : practiceCollection.getTitle(),
                 featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ)
         );
+    }
+
+    /**
+     * Which plan to offer practice across, for the weakest note.
+     *
+     * <p>Reuses the selection rule {@code v0.78.0} ratified for post-session next steps rather than
+     * inventing a second one: the Primary Review Set when it contains the note, otherwise the most
+     * recently updated containing collection. The underlying query orders by
+     * {@code updatedAt desc, id asc}, so the fallback is a deterministic total order.
+     *
+     * <p>⚠️ This is deliberately NOT a weakness ranking. Ordering plans by how weak they are belongs
+     * to the recommendation engine, whose scope is not ratified.
+     */
+    private NoteCollectionEntity resolvePracticeCollection(UUID userId, String practiceNoteId) {
+        if (practiceNoteId == null) {
+            return null;
+        }
+        UUID noteId;
+        try {
+            noteId = UUID.fromString(practiceNoteId);
+        } catch (IllegalArgumentException malformed) {
+            return null;
+        }
+        List<UUID> containing = noteCollectionItemRepository
+                .findContainingCollectionIdsByNoteIdAndOwnerUserIdOrderByUpdatedAtDesc(noteId, userId);
+        if (containing.isEmpty()) {
+            return null;
+        }
+        UUID primaryCollectionId = userRepository.findById(userId)
+                .map(UserEntity::getPrimaryCollectionId)
+                .orElse(null);
+        UUID collectionId = primaryCollectionId != null && containing.contains(primaryCollectionId)
+                ? primaryCollectionId
+                : containing.getFirst();
+        return noteCollectionRepository.findByIdAndOwnerUserId(collectionId, userId).orElse(null);
     }
 
     private DashboardWeeklyActivityResponse buildWeeklyActivity(UUID userId) {

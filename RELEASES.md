@@ -150,14 +150,18 @@ implementation discovers a surface not in the agreed plan, which is how `v0.103.
 - **The plan-scoped lookup excludes Interview Practice sessions.** Three session types share the
   `ADAPTIVE` discriminator, so without that filter a plan-scoped start could resume an interview
   session — the same live defect this release recorded against the existing note-scoped lookup.
-- **⚠️ THE DASHBOARD SURFACE IS NOT BUILT, AND THE DECISION CALLED FOR BOTH.** The entry-point
-  decision scoped the collection detail page **and** the dashboard, the latter because the ratified
-  `[CHECKPOINT — due 2026-09-12]` remedy names *"the dashboard recommendation"* as the thing that must
-  carry discovery load. Only the collection page shipped. `DashboardFocusAreasResponse` still carries a
-  single `practiceNoteId`, and `docs/features/dashboard-recommendation.md` still describes a
-  note-scoped dashboard path — **those statements remain TRUE and were deliberately left alone.**
-  **⚠️ Until the dashboard half lands, that checkpoint's remedy points at something this release did
-  not build.** Recorded as owed rather than discovered at signoff.
+- **✅ THE DASHBOARD SURFACE NOW SHIPS — the gap recorded when item 2 landed is closed.** The Focus
+  Areas card gains a `Practice Across This Plan` action beside the existing per-note one, rendering
+  **only when the server resolved a plan**. `DashboardFocusAreasResponse` carries
+  `practiceCollectionId` / `practiceCollectionTitle`, resolved by **`v0.78.0`'s existing rule** —
+  Primary Review Set when it contains the weakest note, else the most recently updated containing
+  collection — rather than a second selection rule. **⚠️ No weakness ranking was built; ordering
+  plans by weakness is the recommendation engine's unratified scope.**
+  **⚠️ Mutation-verified: dropping the Primary-Review-Set precedence fails
+  `focusAreas_prefersThePrimaryReviewSetWhenItContainsTheWeakestNote`.** That test stubs the
+  *losing* collection `lenient()` on purpose — without it the mutant would fail only as a Mockito
+  `PotentialStubbingProblem`, which reads as a test-setup bug rather than as picking the wrong plan.
+  The same vacuity was found and fixed in item 1's audit.
 
 - **Interview Practice records `ConceptHealth` per contributing Study Pack (item 1).** It stamps
   `sourceStudyPackId` at the `generateQuizForSources` merge seam — after per-source dedup, before
