@@ -7,7 +7,10 @@ import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.CombinedQuizValidationException;
+import com.studysnap.backend.entity.CombinedQuizEntity;
+import com.studysnap.backend.exception.CombinedQuizNotFoundException;
 import com.studysnap.backend.exception.GeneratedQuizBatchExportValidationException;
+import com.studysnap.backend.dto.CombinedQuizSection;
 import com.studysnap.backend.repository.CombinedQuizRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
@@ -20,6 +23,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Optional;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -74,6 +79,13 @@ class CombinedQuizServiceTest {
                 .containsExactly("Cell structure", "Cell division");
         assertThat(response.sections().getFirst().questions()).extracting(QuizItem::question)
                 .containsExactly("First");
+        // ⚠️ THIS PROVES THE COPY IS TRUSTED IN MEMORY ONLY, AND MUST NOT BE READ AS AN END-TO-END
+        // GUARANTEE. The repository is mocked, so nothing here crosses the storage boundary. Round-tripping
+        // this value through JSONB strips a SECOND label, because QuizItem's @JsonCreator routes into the
+        // sanitizing constructor and QuizValidationUtils.sanitizeChoiceTexts is not idempotent:
+        // "B. Smith" is read back as "Smith". That is a live, product-wide defect recorded as a Known
+        // limitation in RELEASES.md -- it is NOT closed by the trusted-copy helpers, which only prevent a
+        // THIRD strip within a single in-memory copy.
         assertThat(response.sections().getFirst().questions().getFirst().choices()).containsExactly("B. Smith", "Other");
         assertThat(response.sections().getFirst().questions().getFirst().sourceStudyPackId())
                 .isEqualTo(firstPack.toString());
@@ -104,6 +116,40 @@ class CombinedQuizServiceTest {
     }
 
     /** Killing test for replacing cap rejection with truncation: no row may be written. */
+    /**
+     * ⚠️ FINDING 3 — the ownership scope on the read had NO coverage: swapping
+     * {@code findByIdAndOwnerUserId} for {@code findById} passed every test in the suite, and a full answer
+     * key (correctIndex, correctIndices, explanation for up to 100 questions) sits behind that one
+     * predicate.
+     */
+    @Test
+    void getById_refusesACombinedQuizOwnedBySomeoneElse() {
+        UUID combinedQuizId = UUID.randomUUID();
+        UUID caller = UUID.randomUUID();
+        when(combinedQuizRepository.findByIdAndOwnerUserId(combinedQuizId, caller)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getById(combinedQuizId, caller))
+                .isInstanceOf(CombinedQuizNotFoundException.class);
+
+        // The owner-scoped query is the gate; an unscoped lookup must never be the one consulted.
+        verify(combinedQuizRepository, never()).findById(any(UUID.class));
+    }
+
+    @Test
+    void getById_returnsTheOwnersOwnCombinedQuiz() {
+        UUID combinedQuizId = UUID.randomUUID();
+        UUID owner = UUID.randomUUID();
+        CombinedQuizEntity entity = new CombinedQuizEntity();
+        entity.setId(combinedQuizId);
+        entity.setOwnerUserId(owner);
+        entity.setTitle("Unit review");
+        entity.setSections(List.of(new CombinedQuizSection("First note", List.of())));
+        entity.setCreatedAt(OffsetDateTime.now());
+        when(combinedQuizRepository.findByIdAndOwnerUserId(combinedQuizId, owner)).thenReturn(Optional.of(entity));
+
+        assertThat(service.getById(combinedQuizId, owner).title()).isEqualTo("Unit review");
+    }
+
     @Test
     void assemble_rejectsAnOverCapSelectionWithoutPersisting() {
         UUID noteId = UUID.randomUUID();

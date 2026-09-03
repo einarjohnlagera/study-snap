@@ -294,7 +294,7 @@ Profile-aware presentation is a frontend responsibility. The backend responses s
 
 | Profile | Frontend label | Primary terminal action |
 |---|---|---|
-| `TEACHER` | `Lesson Plan` | `Build Exam` → combined sectioned DOCX through Exam Builder; quiz share links are available to every onboarded profile from Quiz Preview |
+| `TEACHER` | `Lesson Plan` | `Build Exam` → combined sectioned DOCX through Exam Builder; quiz share links are available to every onboarded profile from Quiz Preview, and (since `v0.110.0`) from a combined quiz at `/library/combined-quiz/{id}`, reached by selecting several notes in the Library |
 | `STUDENT` | `Study Plan` | Free/Plus: `Start Challenge Quiz`; Pro: `Take the Long Exam` |
 | `BOARD_EXAM` | `Review Set` | Free/Plus: `Start Challenge Quiz`; Pro: `Take the Board Exam` |
 | `PROFESSIONAL` | `Collection` | Free/Plus: `Start Challenge Quiz`; Pro: `Start Interview Practice` |
@@ -970,7 +970,7 @@ Deferred Prompt B slots:
 Do not add these under the collection CRUD spine unless explicitly scoped later:
 
 - profile-aware labels or CTAs in the backend
-- DOCX generation directly from collections; quiz share links remain a profile-neutral Quiz Preview action rather than a collection-level action
+- DOCX generation directly from collections; quiz share links remain profile-neutral and are created from Quiz Preview or from a combined quiz built out of a Library multi-note selection (`v0.110.0`) — still never a collection-level action
 - collection-level AI synthesis
 - bulk generate across a collection
 - user/teacher-authored published or shared collections (admin-published plans shipped in v0.31.0; non-admin publishing stays deferred)

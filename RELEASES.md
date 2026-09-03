@@ -2,7 +2,7 @@
 
 ## v0.110.0 - Supporter Combined Quiz
 
-**Status: In Progress** (kicked off 2026-09-03, base branch `releases/v0.110.0`, cut from `main` after
+**Status: Released** (kicked off 2026-09-03, signed off 2026-09-04, base branch `releases/v0.110.0`, cut from `main` after
 `v0.109.0` merged and tagged)
 
 Theme: someone helping a learner can build one quiz from several notes and hand it over, without either
@@ -199,8 +199,8 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   assertions survive the first mutant** — under the new wire format a MULTI_SELECT position sends `null` in
   `answers`, so the shipped defect also scored them zero. They are kept because they are the only guards
   against a *lenient* reimplementation, and each has a named killing mutant above.
-- Backend `2033` tests green (counted from `target/surefire-reports/*.xml`, and including the
-  real-PostgreSQL `NativeQueryPostgresIntegrationTest`); frontend `2117` tests green across 195 suites;
+- Backend `2049` tests green (counted from `target/surefire-reports/*.xml`, and including the
+  real-PostgreSQL `NativeQueryPostgresIntegrationTest`); frontend `2130` tests green across 197 suites;
   `tsc --noEmit` clean and `npm run lint` at 0 errors.
 
 - **Item 2 — a supporter is no longer offered a question count the backend discards.**
@@ -323,6 +323,37 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   literal to itself. Mutants: restoring the shipped copy reds the first test; reverting the tipId alone reds
   the second.
 
+### Pre-signoff pressure test — TWO COLD AGENTS, and what they found
+
+**Tier stated rather than inherited.** The single-agent triggers fired several times over (a migration
+altering a live table; two PRs touching `QuizShareLinkService`; delivery introducing defects the same
+session). The three-agent triggers did not — no permission substrate, no new cross-user read, no money or
+quota change. So **two** agents ran in **isolated `git worktree`s**: one falsifying the release's specific
+claims, one pointed at the **blind spot** rather than the feature, because in the last three releases the
+worst defect was outside the stated scope every time.
+
+**All five claims survived falsification**, each re-verified by mutation rather than reading. **The
+blind-spot agent found eight real issues, four of them surviving mutants.** Fixed here:
+
+- **⚠️ `QuizItem.isMultiSelect()` was silently widening the persisted JSONB in SIX TABLES — a defect this
+  release INTRODUCED, during its own item 1 audit.** Jackson treats `isX()` as a property, so every
+  serialized `QuizItem` carried a derived `"multiSelect"` key — in `generated_quizzes`, `study_packs`,
+  `quick_review_sessions.session_state`, `exam_question_pool`, `challenge_quiz_question_bank` and
+  `combined_quizzes`, across every quiz mode, plus every API response. `answer()` carries `@JsonIgnore` for
+  exactly this reason and the new getter did not. **A derived getter is not a read-only addition.** Now
+  annotated, and pinned by a test asserting the SERIALIZED SHAPE rather than the annotation, so it also
+  catches the next getter added without one.
+- **Three assertions had no reachable subject and are now discriminating.** (a) The ownership scope on
+  `GET /combined-quizzes/{id}` had **no coverage at all** — swapping `findByIdAndOwnerUserId` for `findById`
+  passed the entire suite, with a full answer key for up to 100 questions behind that one predicate. (b)
+  `getActivePublicQuizRejectsInactiveLink` passed **vacuously**: with the `isActive` guard deleted, the
+  unstubbed repository returned `Optional.empty()` and `orElseThrow` raised the very exception the test
+  asserted. (c) `sharedQuizStillGradesSingleChoiceQuestions` asserted `correctIndices().isEmpty()` against a
+  fixture whose `correctIndices` was empty **by construction**. The combined arc also had no inactive-link
+  test at all — every fixture built an active link.
+- **A combined-quiz title over 512 characters was a 500, not a 400** — `@NotBlank` with no `@Size` against a
+  `VARCHAR(512)` column, on a directly callable endpoint where the frontend's `maxLength` is not a bound.
+
 ### Known limitations
 
 - **A MATCHING block loses its grouping on the shared quiz page.** `teacher-quiz-developer.txt` may emit one
@@ -348,7 +379,7 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
     guarantee is held jointly and the ref added nothing. It was deleted rather than shipped as code whose
     necessity could not be demonstrated — the same discipline that catches a fix which changes nothing,
     pointed at my own work. The test stays, with its subject and the mutation result recorded in a comment.
-- **Verification:** frontend **2127** tests green across 197 suites, `tsc --noEmit` clean, `npm run lint` at
+- **Verification:** frontend **2130** tests green across 197 suites, `tsc --noEmit` clean, `npm run lint` at
   0 errors, and the backend suite unchanged at **2044** (zero backend files touched). Mutants and their
   killing tests: replacing the share step's read with a POST on load reds all four
   `CombinedQuizSharePage` tests; removing both assemble guards reds
@@ -358,6 +389,42 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   flat list. **Grading and ordering are unaffected** — section order is preserved in the flattened list.
   Showing the recipient which note each question came from would need a new field on `PublicQuizItem` and is
   an unmade product decision, not an oversight.
+- **⚠️ CRITICAL, PRE-EXISTING, PRODUCT-WIDE AND NOT FIXED HERE: quiz choice text is re-sanitized on every
+  read and degrades progressively.** `QuizItem`'s `@JsonCreator` routes into the sanitizing constructor, and
+  `QuizValidationUtils.sanitizeChoiceTexts` strips a leading choice label with `replaceFirst` and is **not
+  idempotent** — so the strip runs at generation AND again on every deserialization. **Reproduced directly
+  at signoff, not inferred:** an LLM choice `"A. B. Smith"` is stored as `"B. Smith"` and read back as
+  `"Smith"`; `"B. D.C. generator"` is stored as `"D.C. generator"`, read back as `"C. generator"`, and after
+  a further round-trip as `"generator"`. It **compounds with each read**. Blast radius is every table
+  holding a `QuizItem` and every quiz mode — Electrical Engineering (`A.C.`/`D.C.`) and biology binomials
+  (`C. elegans`, `B. subtilis`) are squarely in `[A-D]`, and this catalog is board-exam content.
+  **⚠️ The mechanism predates this release, but this release makes it WORSE and asserted the opposite:** a
+  combined quiz adds a storage round-trip, and `CombinedQuizServiceTest` asserted `"B. Smith"` survives —
+  true in memory, false end-to-end, because its repository is mocked. **That test now carries the correction
+  rather than the claim.** The trusted-copy helpers do NOT close this; they only prevent a further strip
+  within one in-memory copy. **Fixing it is its own release** — the sanitizer is load-bearing at generation,
+  so the fix is to stop re-running it on deserialization, which changes a contract six tables depend on.
+- **⚠️ NO IN-PRODUCT PATH REACHES AN EXISTING COMBINED QUIZ OR ITS SHARE LINK — an owner-control gap, and
+  an OWNER DECISION IS OWED.** `/library/combined-quiz/{id}` is reachable only by the redirect immediately
+  after assembling. There is no listing endpoint (`CombinedQuizRepository` declares only
+  `findByIdAndOwnerUserId`), no Library section and no nav entry. **The tell is in the schema:** `V132`
+  creates `idx_combined_quizzes_owner_created_at` and **nothing queries it** — an index shaped for a listing
+  that was never built, which is evidence of an omission rather than a decision. So a supporter who closes
+  the tab cannot turn sharing off, cannot re-copy the URL, and re-assembling spends a second share-link unit
+  against a FREE allowance of 3/month. **The single-note arc always recovers** via
+  `getQuizShareLinkByQuizId` from `/notes/{id}/quiz`. **Recommended: build the listing the index already
+  anticipates.**
+- **The recipient page has no resume, and this release raised the ceiling from ~30 to 100 questions.**
+  Anonymous recipients deliberately get no session rows, so answers live in React state; a refresh at
+  question 90 of 100 discards everything, and neither page says so. The decision is locked; the **scale** is
+  new, and the gap is copy.
+- **A recipient still on the pre-fix browser bundle now scores ZERO on every MULTI_SELECT question**, where
+  before item 1 picking `correctIndices.getFirst()` scored full marks. Transitional and strictly more
+  honest — they could never select the full set — but it is a behaviour change for in-flight recipients.
+- **`combined_quizzes` is purged by cascade only.** `AccountPurgeService.deletePersonalRows` enumerates 20
+  user-owned tables explicitly and does not name it; the rows die via `owner_user_id ... ON DELETE CASCADE`.
+  **Verified against real PostgreSQL that deletion leaves zero rows — there is no retention leak** — but it
+  is undocumented on a retention document that spells out every other table.
 - **⚠️ A non-teacher still persists a Target Level they never chose — FOUND DURING ITEM 2, DELIBERATELY NOT
   FOLDED IN, AND AN OWNER DECISION IS OWED.** `openGenerateQuizModal:1855` sets `selectedQuizLearnerLevel`
   unconditionally and `handleGenerateTeacherQuiz:1880` sends it for **every** profile, while the Target

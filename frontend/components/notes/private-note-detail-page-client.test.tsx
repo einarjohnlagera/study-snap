@@ -703,6 +703,37 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   /**
+   * ⚠️ Without this impression event a zero reading on the v0.110.0 checkpoint is UNINTERPRETABLE — it
+   * cannot separate "nobody was told" from "nobody wanted it", which is the exact confound that made
+   * v0.109.0 lift two dated reads instead of letting them fire. The signoff gate requires instrumentation
+   * shipped in the same release and verified EMITTING, so this asserts the fire, not enum membership.
+   */
+  it("emits a tip impression so the combined-quiz read has a denominator", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Quiz for someone/i }));
+    expect(await screen.findByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
+
+    await waitFor(() => expect(trackAnalyticsEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "GUIDANCE_TIP_SHOWN",
+      metadata: expect.objectContaining({ tipId: "generate-quiz-combined-multi-note" }),
+    })));
+  });
+
+  /**
    * ⚠️ This pins the RE-ANNOUNCEMENT, which is the only part of the tipId change with a real failure mode.
    * Asserting the tipId string directly would be tautological — it would compare a literal to itself. This
    * instead seeds the OLD id as dismissed and proves the corrected tip still reaches that learner, so

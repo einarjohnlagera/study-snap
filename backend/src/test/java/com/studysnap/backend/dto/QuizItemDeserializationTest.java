@@ -363,6 +363,28 @@ class QuizItemDeserializationTest {
         assertThat(first.hashCode()).isNotEqualTo(differentAcceptableAnswers.hashCode());
     }
 
+    /**
+     * ⚠️ A DERIVED GETTER IS NOT A READ-ONLY ADDITION. Jackson treats {@code isX()} as a property, so an
+     * un-annotated {@code isMultiSelect()} writes a {@code "multiSelect"} key into EVERY serialized
+     * QuizItem — widening the persisted JSONB in {@code generated_quizzes}, {@code study_packs},
+     * {@code quick_review_sessions.session_state}, {@code exam_question_pool},
+     * {@code challenge_quiz_question_bank} and {@code combined_quizzes}, across every quiz mode.
+     * {@code answer()} carries {@code @JsonIgnore} for exactly this reason.
+     *
+     * <p>This pins the SERIALIZED SHAPE rather than the annotation, so it also catches a future getter
+     * added without one.
+     */
+    @Test
+    void serializedQuizItemExposesNoDerivedProperties() throws Exception {
+        QuizItem item = new QuizItem("Q?", List.of("Alpha", "Bravo", "Charlie", "Delta"), 0, "Concept", "Because");
+
+        String json = new ObjectMapper().writeValueAsString(item);
+
+        assertThat(json).doesNotContain("multiSelect").doesNotContain("\"answer\"");
+        // The real fields must still be there, so this cannot pass by serializing nothing.
+        assertThat(json).contains("question").contains("choices").contains("correctIndex");
+    }
+
     private QuizItem identificationItem(List<String> acceptableAnswers) {
         return new QuizItem(
                 "Identify the law that relates voltage, current, and resistance.",

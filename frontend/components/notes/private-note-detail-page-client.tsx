@@ -3261,6 +3261,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           <GuidanceTip
             tipId="generate-quiz-combined-multi-note"
             message="Building a quiz for a whole unit? In your Library, choose Combined quiz to pick several notes and share one quiz."
+            // ⚠️ trackAnalytics is ON for this tip specifically, and it is what makes the v0.110.0 checkpoint
+            // readable. The outcome metric (QUIZ_SHARE_LINK_CREATED with scope=combined_quiz) alone cannot
+            // separate "nobody was told" from "nobody wanted it" — and that exact confound is why v0.109.0
+            // LIFTED two dated reads rather than letting them fire on evidence they were not designed to
+            // weigh. GUIDANCE_TIP_SHOWN supplies the denominator.
+            trackAnalytics
           />
           {/*
             ⚠️ TEACHER-ONLY, and the gate is the fix rather than a refinement. resolveQuestionCount honours a

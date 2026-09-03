@@ -39,6 +39,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -148,10 +149,25 @@ class QuizShareLinkServiceTest {
         verify(userUsageService, never()).incrementQuizShareLinkCreated(eq(ownerUserId), any(OffsetDateTime.class));
     }
 
+    /**
+     * ⚠️ THE QUIZ MUST BE STUBBED AND RESOLVABLE, or this passes for the wrong reason. With the
+     * {@code isActive} check deleted, an UNSTUBBED {@code generatedQuizRepository.findById} returns
+     * {@code Optional.empty()} and {@code orElseThrow} raises the SAME exception this asserts — so the
+     * fixture could not tell a working guard from a missing one. Stubbing the lookup makes the active
+     * check the only thing that can throw.
+     */
     @Test
     void getActivePublicQuizRejectsInactiveLink() {
-        QuizShareLinkEntity link = buildLink(UUID.randomUUID(), UUID.randomUUID(), TEST_TOKEN, false);
+        UUID generatedQuizId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        QuizShareLinkEntity link = buildLink(generatedQuizId, UUID.randomUUID(), TEST_TOKEN, false);
+        GeneratedQuizEntity generatedQuiz = buildGeneratedQuiz(generatedQuizId, UUID.randomUUID(), noteId);
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setTitle("Cell Structure");
         when(quizShareLinkRepository.findByToken(TEST_TOKEN)).thenReturn(Optional.of(link));
+        lenient().when(generatedQuizRepository.findById(generatedQuizId)).thenReturn(Optional.of(generatedQuiz));
+        lenient().when(noteRepository.findById(noteId)).thenReturn(Optional.of(note));
 
         assertThatThrownBy(() -> quizShareLinkService.getActivePublicQuiz(TEST_TOKEN))
                 .isInstanceOf(QuizShareLinkNotFoundException.class);
@@ -331,6 +347,41 @@ class QuizShareLinkServiceTest {
         // cannot mis-highlight a single-choice question.
         assertThat(correct.items().getFirst().correctIndices()).isEmpty();
         assertThat(wrong.score()).isZero();
+    }
+
+    /**
+     * ⚠️ THE DISCRIMINATING FIXTURE for {@code resolveCorrectIndices}'s format guard.
+     * {@code sharedQuizStillGradesSingleChoiceQuestions} cannot catch its removal: its MCQ fixture has
+     * {@code correctIndices == List.of()} BY CONSTRUCTION, so the emptiness assertion holds either way —
+     * an assertion with no reachable subject. This item is NOT MULTI_SELECT yet CARRIES non-empty
+     * correctIndices (reachable: an LLM emitting them on an MCQ, or a legacy row), so dropping the
+     * {@code !question.isMultiSelect()} guard makes the review screen highlight the wrong choices as
+     * correct under its "prefer correctIndices when non-empty" rule.
+     */
+    @Test
+    void sharedQuizWithholdsACorrectAnswerSetFromANonMultiSelectQuestionThatCarriesOne() {
+        UUID generatedQuizId = UUID.randomUUID();
+        stubActiveQuiz(generatedQuizId, List.of(new QuizItem(
+                "Single?",
+                CHOICES,
+                1,
+                "Concept",
+                "Because B",
+                null,
+                "MCQ",
+                null,
+                null,
+                List.of(0, 2)
+        )));
+
+        SharedQuizResultsResponse response = quizShareLinkService.getSharedQuizResults(
+                TEST_TOKEN,
+                Collections.singletonList(1),
+                null
+        );
+
+        assertThat(response.items().getFirst().correctIndices()).isEmpty();
+        assertThat(response.items().getFirst().correctIndex()).isEqualTo(1);
     }
 
     @Test

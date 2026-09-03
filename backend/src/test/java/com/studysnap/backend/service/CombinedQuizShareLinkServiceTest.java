@@ -89,6 +89,27 @@ class CombinedQuizShareLinkServiceTest {
      * link the owner has toggled OFF that POST does not return it -- the idempotent early return requires an
      * ACTIVE link -- so it mints a NEW link and spends share-link quota on a page refresh.
      */
+    /**
+     * ⚠️ The combined arc had NO inactive-link coverage: every fixture built an ACTIVE link, so deleting
+     * the {@code isActive} guard in {@code findActiveLink} passed the whole suite. If that guard were ever
+     * lost, "Turn sharing off" would become inert and a revoked public quiz would stay live —
+     * {@code shareable-quiz-links.md} promises a 404 and nothing executed it for this path.
+     */
+    @Test
+    void takingACombinedQuizThroughAnInactiveLinkIsNotFound() {
+        UUID quizId = UUID.randomUUID();
+        QuizShareLinkEntity inactive = link(quizId, false);
+        when(linkRepository.findByToken(anyString())).thenReturn(Optional.of(inactive));
+
+        assertThatThrownBy(() -> service.getActivePublicQuiz(inactive.getToken()))
+                .isInstanceOf(QuizShareLinkNotFoundException.class);
+        assertThatThrownBy(() -> service.getSharedQuizResults(inactive.getToken(), List.of(), null))
+                .isInstanceOf(QuizShareLinkNotFoundException.class);
+
+        // The guard must short-circuit BEFORE the snapshot is read, or an inactive link still discloses it.
+        verify(combinedQuizRepository, never()).findById(any(UUID.class));
+    }
+
     @Test
     void combinedShareLinkIsReadableWithoutCreatingOrSpendingQuota() {
         UUID quizId = UUID.randomUUID();
