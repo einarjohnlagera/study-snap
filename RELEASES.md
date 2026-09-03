@@ -97,6 +97,19 @@ in-repo precedent.
 
 ### Shipped
 
+- **Both lifted assessment checkpoints are RE-ARMED, dated `2026-10-13` (item 3).** The `[EFFORT]` gate
+  named announcement as its condition, and this release is the announcement — so the dated obligation
+  returns. Their reads, kill criteria and denominator clauses were **re-used verbatim from the Backlog
+  Index rather than re-derived**, which is why they were preserved rather than deleted at the lift.
+- **⚠️ `2026-10-13` is deploy+40, not the usual +30, and both reasons are deliberate:** it **joins the
+  existing `2026-10-13` batch** per the consolidation rule instead of minting `2026-10-03`, and the extra
+  ten days go straight to the denominator these rows were lifted over in the first place.
+- **⚠️ THE PRE-ANNOUNCEMENT WINDOW MUST NOT BE POOLED WITH THE NEW ONE — recorded on both rows before the
+  read.** Anything before this deploy measures a capability nobody was told about, which is the entire
+  reason they were lifted; counting it in would reproduce the false zero the lift existed to prevent.
+- Instrumentation was verified emitting at the `v0.107.0` and `v0.106.0` signoffs and is unchanged by
+  either the lift or the re-arm; this release touched no analytics field or firing condition.
+
 - **The capability is announced where the plan lives (item 2).** A one-time tip on the collection detail
   page — *"Practice and exams now cover this whole plan, not one note at a time"* — routed through
   `pickActiveGuidance()` as the kickoff required, so it is one-shot and arbitrated against the existing
