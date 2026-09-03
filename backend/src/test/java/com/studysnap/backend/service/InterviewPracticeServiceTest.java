@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -518,6 +519,66 @@ class InterviewPracticeServiceTest {
     }
 
     @Test
+    void completeSession_recordsStampedConceptsOnlyForTheirContributingPack() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID primaryNoteId = UUID.randomUUID();
+        UUID additionalNoteId = UUID.randomUUID();
+        UUID thirdNoteId = UUID.randomUUID();
+        UUID primaryStudyPackId = UUID.randomUUID();
+        UUID additionalStudyPackId = UUID.randomUUID();
+        UUID nonContributingStudyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildSession(userId, primaryNoteId, primaryStudyPackId, List.of(
+                stampedQuizItem("A X", 0, "Shear Force", primaryStudyPackId),
+                stampedQuizItem("A Y", 0, "Bending Moment", primaryStudyPackId),
+                stampedQuizItem("B X", 0, "Shear Force", additionalStudyPackId),
+                stampedQuizItem("B Y", 0, "Bending Moment", additionalStudyPackId)
+        ));
+        session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 0, 0, 90));
+        session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 1, 1, 90));
+        session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 2, 1, 90));
+        session.setSessionState(QuizSessionStateUtils.withInterviewAnswer(session.getSessionState(), 3, 0, 90));
+        session.setSessionState(withInterviewSourceRefs(session.getSessionState(), additionalStudyPackId, additionalNoteId));
+        session.setSessionState(withInterviewSourceRefs(session.getSessionState(), nonContributingStudyPackId, thirdNoteId));
+        StudyPackEntity primary = buildStudyPack(userId, primaryNoteId, primaryStudyPackId);
+        StudyPackEntity additional = buildStudyPack(userId, additionalNoteId, additionalStudyPackId);
+        StudyPackEntity nonContributing = buildStudyPack(userId, thirdNoteId, nonContributingStudyPackId);
+        primary.setKeyConcepts(List.of("Shear Force", "Bending Moment"));
+        additional.setKeyConcepts(List.of("Shear Force", "Bending Moment"));
+        nonContributing.setKeyConcepts(List.of("Shear Force", "Bending Moment"));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(sessionId, userId, QuickReviewSessionMode.ADAPTIVE))
+                .thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId)).thenReturn(Optional.of(primary));
+        when(studyPackRepository.findByIdAndOwnerUserId(additionalStudyPackId, userId)).thenReturn(Optional.of(additional));
+        // Pack C IS resolvable on purpose, and the stub is lenient() because correct code never
+        // looks it up. Without it the never() assertions below pass VACUOUSLY: the lookup would
+        // return Optional.empty(), ifPresent could never fire, and a restored broadcast would be
+        // caught only by Mockito strictness -- reported as PotentialStubbingProblem, which reads
+        // as a test-setup bug rather than as wrong attribution. With the stub, the mutant fails on
+        // the assertion that names the behaviour. Verified by mutation 2026-09-03.
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(nonContributingStudyPackId, userId))
+                .thenReturn(Optional.of(nonContributing));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.completeSession(sessionId, userId);
+
+        verify(conceptHealthService).recordCorrectAnswersForKnownConcepts(
+                eq(userId), eq(primaryStudyPackId), eq(List.of("Shear Force")), any(), any());
+        verify(conceptHealthService).recordIncorrectAnswersForKnownConcepts(
+                eq(userId), eq(primaryStudyPackId), eq(List.of("Bending Moment")), any(), any());
+        verify(conceptHealthService).recordCorrectAnswersForKnownConcepts(
+                eq(userId), eq(additionalStudyPackId), eq(List.of("Bending Moment")), any(), any());
+        verify(conceptHealthService).recordIncorrectAnswersForKnownConcepts(
+                eq(userId), eq(additionalStudyPackId), eq(List.of("Shear Force")), any(), any());
+        verify(conceptHealthService, never()).recordCorrectAnswersForKnownConcepts(
+                eq(userId), eq(nonContributingStudyPackId), any(), any(), any());
+        verify(conceptHealthService, never()).recordIncorrectAnswersForKnownConcepts(
+                eq(userId), eq(nonContributingStudyPackId), any(), any(), any());
+    }
+
+    @Test
     void completeSessionSkipsMissingSourcePackAndStillReturnsReport() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -702,5 +763,11 @@ class InterviewPracticeServiceTest {
                         "Explanation " + index
                 ))
                 .toList();
+    }
+
+    private QuizItem stampedQuizItem(String question, int correctIndex, String keyConcept, UUID sourceStudyPackId) {
+        return new QuizItem(question, List.of("A", "B", "C", "D"), correctIndex, keyConcept, "Explanation",
+                null, "MCQ", null, null, null, null, keyConcept, null, null)
+                .withSourceStudyPackId(sourceStudyPackId.toString());
     }
 }

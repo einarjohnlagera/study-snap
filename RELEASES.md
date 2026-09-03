@@ -118,6 +118,21 @@ implementation discovers a surface not in the agreed plan, which is how `v0.103.
 
 ### Shipped
 
+- **Interview Practice records `ConceptHealth` per contributing Study Pack (item 1).** It stamps
+  `sourceStudyPackId` at the `generateQuizForSources` merge seam — after per-source dedup, before
+  merge — and completion now buckets by `(sourceStudyPackId, concept)` through the existing
+  `computeKeyConceptBreakdownBySourceStudyPack`, replacing the broadcast that wrote one concept list
+  to every source pack. **This closes the third and last live instance of the `v0.104.0` defect**, so
+  every mode now writes honest per-source evidence. `resolveSourceStudyPackIds` is demoted to a
+  fallback reached only by unstamped in-flight items.
+- **A vacuous negative assertion was found and fixed during the diff audit.** The delivered fixture
+  asserted that a non-contributing pack receives nothing, but never stubbed that pack into the
+  repository — so `ifPresent` could not fire and the `never()` assertions passed regardless. A
+  restored broadcast was caught only by Mockito strictness, reported as `PotentialStubbingProblem`,
+  which reads as a test-setup bug rather than as wrong attribution. The stub is now present and
+  `lenient()`; **verified by mutation in both directions** — with the fix the mutant fails on the
+  assertion that names the behaviour, and correct code stays green.
+
 _(nothing yet)_
 
 ## v0.106.0 - Board Exam Review Set Identity
