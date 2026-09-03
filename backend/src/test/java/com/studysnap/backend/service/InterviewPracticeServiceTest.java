@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -550,6 +551,14 @@ class InterviewPracticeServiceTest {
                 .thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(primaryStudyPackId, userId)).thenReturn(Optional.of(primary));
         when(studyPackRepository.findByIdAndOwnerUserId(additionalStudyPackId, userId)).thenReturn(Optional.of(additional));
+        // Pack C IS resolvable on purpose, and the stub is lenient() because correct code never
+        // looks it up. Without it the never() assertions below pass VACUOUSLY: the lookup would
+        // return Optional.empty(), ifPresent could never fire, and a restored broadcast would be
+        // caught only by Mockito strictness -- reported as PotentialStubbingProblem, which reads
+        // as a test-setup bug rather than as wrong attribution. With the stub, the mutant fails on
+        // the assertion that names the behaviour. Verified by mutation 2026-09-03.
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(nonContributingStudyPackId, userId))
+                .thenReturn(Optional.of(nonContributing));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
