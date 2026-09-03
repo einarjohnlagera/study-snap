@@ -2,7 +2,7 @@
 
 ## v0.108.0 - Session Identity
 
-**Status: In Progress** (kicked off 2026-09-03, base branch `releases/v0.108.0`, cut from `main` after
+**Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.108.0`, cut from `main` after
 `v0.107.0` merged and tagged)
 
 Theme: five places read the `ADAPTIVE` session discriminator and only three of them know what they are
