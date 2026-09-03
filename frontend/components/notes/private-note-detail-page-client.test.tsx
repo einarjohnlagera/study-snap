@@ -667,6 +667,71 @@ describe("PrivateNoteDetailPageClient", () => {
     });
   });
 
+  /**
+   * ⚠️ PINNED COPY, because nothing else executes it. This tip told every reader to "use the note
+   * checkboxes in your library" while the only multi-note quiz CTA there was TEACHER-gated — a live
+   * falsehood for most of its audience. v0.110.0 item 5 made a combined quiz reachable for everyone, so
+   * the tip now names that path.
+   *
+   * <p>The two negative assertions have REACHABLE subjects: both strings were in the shipped message, so
+   * this test would have failed before the fix rather than passing vacuously.
+   */
+  it("points every learner at the ungated combined-quiz path, not the teacher-gated checkboxes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Quiz for someone/i }));
+    expect(await screen.findByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
+
+    // "Combined quiz" must match the Library Create-menu item label verbatim, or the tip names a control
+    // that does not exist.
+    expect(screen.getByText(/In your Library, choose Combined quiz/i)).toBeInTheDocument();
+    expect(screen.queryByText(/note checkboxes/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/full unit — use/i)).not.toBeInTheDocument();
+  });
+
+  /**
+   * ⚠️ This pins the RE-ANNOUNCEMENT, which is the only part of the tipId change with a real failure mode.
+   * Asserting the tipId string directly would be tautological — it would compare a literal to itself. This
+   * instead seeds the OLD id as dismissed and proves the corrected tip still reaches that learner, so
+   * reverting the tipId reds it. Everyone who dismissed the old message dismissed a false one, and
+   * v0.109.0 records that a capability shipped without announcement produces a false demand signal.
+   */
+  it("still shows the corrected tip to a learner who dismissed the old false one", async () => {
+    window.localStorage.setItem("notelib-guidance-dismissed-teacher-generate-quiz-multi-note", "1");
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Quiz for someone/i }));
+    expect(await screen.findByRole("dialog", { name: "Generate quiz" })).toBeInTheDocument();
+
+    expect(screen.getByText(/In your Library, choose Combined quiz/i)).toBeInTheDocument();
+  });
+
   it("never sells a supporter on Free an upgrade for a count Plus would not give them", async () => {
     // The lock badge and its copy keyed on PLAN with no profile check, so a Free supporter clicking 20 was
     // shown "Plus unlocks 20 and 30 questions" and an upgrade prompt -- for a capability gated on the

@@ -3246,9 +3246,21 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               ) : null}
             </div>
           ) : null}
+          {/*
+            ⚠️ The tipId CHANGED on purpose, which re-shows this once to everyone who dismissed the old one.
+            They dismissed a DIFFERENT, false message: it told every reader to "use the note checkboxes in
+            your library", and the only multi-note quiz CTA there was TEACHER-gated, so for most readers it
+            advertised something unreachable. v0.110.0 item 5 made a combined quiz reachable for every
+            onboarded user, and v0.109.0 records that shipping a capability without announcing it produces a
+            false demand signal — so this re-announces rather than silently correcting itself.
+            ⚠️ The old "teacher-" prefix is dropped because the path is not teacher-gated; keeping it would
+            re-encode the ProfileType axis error v0.89.0 exists to correct.
+            ⚠️ The named entry point is the Library Create menu item, labelled exactly "Combined quiz"
+            (library/page.tsx). If that label changes, this copy is falsified — a pinned test guards it.
+          */}
           <GuidanceTip
-            tipId="teacher-generate-quiz-multi-note"
-            message="You can select multiple notes to build a quiz from a full unit — use the note checkboxes in your library first."
+            tipId="generate-quiz-combined-multi-note"
+            message="Building a quiz for a whole unit? In your Library, choose Combined quiz to pick several notes and share one quiz."
           />
           {/*
             ⚠️ TEACHER-ONLY, and the gate is the fix rather than a refinement. resolveQuestionCount honours a

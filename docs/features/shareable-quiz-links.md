@@ -155,6 +155,13 @@ That separation is deliberate and load-bearing in both directions:
 - regeneration passes the previous shared quiz's questions as `disallowedQuestions`, so giving the same person a second quiz yields new questions;
 - **⚠️ reusing `note.quiz` would hand the recipient the exact questions the owner is assessed on** — the answer-key exposure `v0.74.0` locked the Quiz tab to prevent. Do not "optimise" this path by reading from the Study Pack quiz.
 
+### How a supporter finds the combined path
+
+The Generate Quiz modal carries a one-time tip pointing at the Library's **Combined quiz** Create-menu item.
+**⚠️ That copy names a control by its exact label**, so renaming the menu item falsifies the tip — a pinned
+test in `private-note-detail-page-client.test.tsx` guards the pairing. The tip is **not** profile-gated,
+because the combined path is not either.
+
 ## Known limitations
 
 - **A MATCHING block loses its grouping.** `teacher-quiz-developer.txt` may emit one block of 2–4
