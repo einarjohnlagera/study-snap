@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.config.ExamGoalConfig;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ApplicableProgramResponse;
@@ -48,6 +49,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PostSessionNextStepService {
+
+    private static final String SUB_MODE_INTERVIEW = "INTERVIEW";
     private static final int CONCEPT_LIMIT = 5;
     private static final int FIRST_PAGE = 0;
     private static final String SESSION_METADATA_WEAK_CONCEPTS = "weakConcepts";
@@ -157,16 +160,37 @@ public class PostSessionNextStepService {
                     adaptivePracticeQuota,
                     goalNudge
             );
-            case ADAPTIVE -> reviewPackResponse(
-                    studyPack,
-                    adaptivePracticeQuota,
-                    goalNudge,
-                    genuineWeakConcepts,
-                    "Targeted practice complete. Step up with a Challenge when you are ready.",
-                    null
-            );
+            // ⚠️ Three session types share the ADAPTIVE discriminator, so the mode alone does not say
+            // which one completed. An Interview Practice session must NOT receive Adaptive Practice's
+            // copy -- it has its own result framing (EXAM_MODES.md), and "step up with a Challenge"
+            // is not its next step.
+            //
+            // ⚠️ NOT REACHABLE TODAY, and deliberately fixed anyway. Verified at the time of writing:
+            // all three callers (quick-review, challenge-quiz, adaptive-practice pages) invoke this
+            // inside their own completion handler, so the session they just completed is always the
+            // newest; and the Interview Practice page renders its own report without calling here.
+            // The hazard is latent: findLatestCompletedSession is mode-agnostic, so the day anything
+            // gives Interview Practice a "what's next" screen, the wrong copy fires silently.
+            //
+            // ⚠️ It falls to the NEUTRAL default rather than getting Interview-specific copy. Writing
+            // that copy would be designing a result screen nobody has asked for, on a path nothing
+            // calls -- a product decision, not a gap to fill in.
+            case ADAPTIVE -> isInterviewSession(latestCompletedSession)
+                    ? reviewPackResponse(studyPack, adaptivePracticeQuota, goalNudge)
+                    : reviewPackResponse(
+                            studyPack,
+                            adaptivePracticeQuota,
+                            goalNudge,
+                            genuineWeakConcepts,
+                            "Targeted practice complete. Step up with a Challenge when you are ready.",
+                            null
+                    );
             default -> reviewPackResponse(studyPack, adaptivePracticeQuota, goalNudge);
         };
+    }
+
+    private boolean isInterviewSession(QuickReviewSessionEntity session) {
+        return SUB_MODE_INTERVIEW.equals(QuizSessionStateUtils.extractSubMode(session.getSessionState()));
     }
 
     private NextStepResponse resolveChallengeNextStep(
