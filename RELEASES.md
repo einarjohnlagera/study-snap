@@ -2,7 +2,7 @@
 
 ## v0.109.0 - Assessment Discoverability
 
-**Status: In Progress** (kicked off 2026-09-03, base branch `releases/v0.109.0`, cut from `main` after
+**Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.109.0`, cut from `main` after
 `v0.108.0` merged and tagged)
 
 Theme: four releases rebuilt what an exam and a practice session are, and nobody has been told.

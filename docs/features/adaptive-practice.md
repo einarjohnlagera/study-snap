@@ -83,7 +83,18 @@ Attributed route links use the existing `entry` query parameter convention with 
 | `interview-practice-gap` | Interview Practice readiness gap |
 | `note-detail` | Note Detail — the Adaptive Practice mode launch |
 | `note-detail-due-concepts` | Note Detail — the "N concepts due for review" prompt |
+| `collection-detail` | Collection detail page — the plan-scoped *Practice Weak Areas Across This Plan* action |
+| `dashboard-plan` | Dashboard — *Practice Across This Plan* on the Weak Concepts card |
 | `direct` | everything else (see below) |
+
+**⚠️ The two plan-scoped values were added in `v0.107.0` and were MISSING from this table until the
+`v0.109.0` signoff** — while the sentence below claimed every start link was tagged. Both re-armed
+`2026-10-13` checkpoints split on this column, so an incomplete table here is not cosmetic.
+
+**⚠️ The collection-page action appears in BOTH the Goal/Review Set view and the leaf Subject Plan
+view.** It reached the Goal view only from `v0.107.0` until `v0.109.0`, so a plan with no children had
+no plan-scoped CTA at all; `page.test.tsx` now pins the leaf case, because reverting the fix left the
+whole suite green.
 
 **Every route link that can start a session is tagged.** `dashboard-continue` is included even though it is normally a *resume* path: if the session it resumes has expired, the page starts a fresh one, and an untagged link would record that as `direct` — **understating Dashboard-originated discovery, which is the exact figure the `2026-09-12` checkpoint reads.**
 
