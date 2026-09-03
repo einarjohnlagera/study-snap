@@ -1,5 +1,101 @@
 # RELEASES.md - NoteLib
 
+## v0.108.0 - Session Identity
+
+**Status: In Progress** (kicked off 2026-09-03, base branch `releases/v0.108.0`, cut from `main` after
+`v0.107.0` merged and tagged)
+
+Theme: five places read the `ADAPTIVE` session discriminator and only three of them know what they are
+looking at.
+
+### Why this version number, and not `v1.0.0`
+
+**⚠️ `v1.0.0` STAYS RESERVED (owner, 2026-07-23; re-confirmed 2026-09-01).** Conjunctive condition — live
+core **and** product success — and both halves are unmet.
+
+### Why this release exists
+
+**⚠️ DELIBERATELY SMALL, AND THE REASON IS MEASURED RATHER THAN STYLISTIC.** `v0.107.0` opened at three
+items, closed at five plus a **four-batch remediation**, and its three-agent pressure test found that the
+feature's central mechanism had never fired in production. This release is scoped to what that release
+recorded and did not fix. **⚠️ NO MIGRATION, NO NEW CAPABILITY** — the next slice that would carry one
+(slice 6, the supporter combined quiz) is explicitly NOT started here.
+
+**⚠️ THE HEADLINE ITEM IS NOT PURELY INHERITED — `v0.107.0` MADE IT WORSE, AND THAT IS WHY IT LEADS.**
+`DashboardService.findInProgressSessionsByRecency:990-1002` queries `(userId, ADAPTIVE, IN_PROGRESS)` with
+**no sub-mode filter** (verified by reading, zero `subMode` references in that method), and
+`continue-spotlight.tsx:55-58` routes the result to `/notes/{id}/adaptive-practice`. So an in-progress
+**Interview Practice** session has always surfaced as an Adaptive Practice *Continue Studying* card.
+**⚠️ BEFORE `v0.107.0` that card rendered the interview session — wrong, but it went somewhere. Item 4's
+guard now makes `getAdaptiveQuizSession` REFUSE interview sessions, so the card routes to a page that
+explains the conflict and offers nothing. The card is a DEAD END THIS PROJECT CREATED**, which is the
+argument for fixing it now rather than carrying it further.
+
+**⚠️ THE PATTERN, STATED ONCE SO IT IS NOT RE-DERIVED PER SITE: three session types share the `ADAPTIVE`
+discriminator** — note-scoped Adaptive Practice, Interview Practice, and plan-scoped Adaptive Practice —
+and `V41` permits one active session per `(user, pack, mode)`. `v0.107.0` taught **five** read sites to tell
+them apart and left **two** that cannot. This release finishes that, and does not widen it.
+
+### Planned Scope
+
+- **(1) The Dashboard *Continue Studying* card stops offering another mode's session (backend + frontend).**
+  Filter by sub-mode at `findInProgressSessionsByRecency`, or resolve the correct resume route for an
+  interview session. **⚠️ Decide which at prompt time and record it** — routing it correctly is more useful
+  to the learner than hiding it, but it touches `ContinueStudyingResumeType`, which is a wider contract.
+- **(2) `PostSessionNextStepService:160` stops giving an interview session Adaptive Practice's copy.**
+  Cosmetic, same root cause, same fix site family.
+- **(3) Eligibility resolution stops materializing every DONE pack of the collection (backend).**
+  **⚠️ VERIFIED VIABLE WITHOUT TOUCHING THE SHARED SAMPLER, which is what kept it out of `v0.107.0`:** the
+  existing `findProgressViewsByNoteIdIn` projection already carries `id`, `noteId`, `ownerUserId`,
+  `keyConcepts` and `status`, so owner and status filter in **Java**, eligibility computes from
+  projections, and full entities load only for the focus-eligible set.
+  **⚠️ Use the EXISTING query — do NOT add a new projection query.** `StudyPackRepository:151-158` records a
+  reproduced `ConverterNotFoundException` trap around projection return types; reusing the existing method
+  avoids it entirely.
+  **⚠️ RESIDUAL, STATED NOT HIDDEN: this is a REDUCTION, not a bound.** A plan where every pack has weak
+  concepts still loads every pack. A true bound needs `LongExamPlanSourceSampler.EligiblePlanSource` to stop
+  taking a `StudyPackEntity`, and that sampler is shared with Long Exam and Board Exam.
+- **(4) The unconsumed `GET /collections/{id}/adaptive-practice/in-progress`.** Either give it a consumer
+  (a resume affordance on the plan page) or remove it. **⚠️ Decide, do not leave it unconsumed a second
+  release.**
+
+### Anti-drift (locked for this release)
+
+- **⚠️ NO MIGRATION.** The session-anchoring migration (nullable `study_pack_id` plus `source_collection_id`)
+  stays deferred until slice 6 forces it, per audit §15. **⚠️ It is TEMPTING here because it would dissolve
+  the shared-discriminator problem outright — do NOT take it.** That is a `quick_review_sessions` migration
+  touching `V41`'s two partial unique indexes, which is a full-pressure-test release on its own.
+- **⚠️ NO new mode and NO new sub-mode.** `EXAM_MODES.md` stays a locked five-mode contract.
+- **⚠️ Slice 6 (supporter combined quiz) is NOT started.**
+- **⚠️ The plan/note session collision stays a NAMED Known limitation.** Fixing it needs the migration above.
+- **⚠️ Viewing must NEVER write `ConceptHealth`.** Item 1 touches a read path; it writes nothing.
+- **⚠️ Plan-tier entitlements UNCHANGED.** No quota, meter or limit change.
+- **⚠️ NO backfill of historical `ConceptHealth`.**
+- **⚠️ `frontend/app/onboarding` STAYS FROZEN — `[CHECKPOINT — due 2026-09-11]` is 8 DAYS OUT** and the
+  cluster it opens is deliberately left for its own slot.
+- **⚠️ Do NOT change `ADAPTIVE_PRACTICE_STARTED`'s `sourceScope` / `entry` values or firing condition** —
+  `[CHECKPOINT — due 2026-10-06]` and the re-specified `[CHECKPOINT — due 2026-09-12]` both read them.
+
+### Verification
+
+**A single `advisor()` call on the diff**, and the tier is chosen rather than inherited: no permission
+substrate, no cross-user read, no money or quota semantics, no migration. **⚠️ ESCALATE TO ONE SCOPED COLD
+AGENT IF** item 1 turns out to need a `ContinueStudyingResumeType` change, or item 3 cannot avoid touching
+the shared sampler.
+
+**⚠️ CARRIED LESSONS, AND `v0.107.0` PROVED ALL OF THEM AT COST: a negative assertion must have a REACHABLE
+subject** (four vacuous assertions found, one written while hunting that exact class); **write the guard at
+the LAYER THE DEFECT LIVES AT** (a card-level test could not catch a page-level bug); **a test can survive
+its own mutation** if the fixture cannot discriminate; **MUTATE and confirm a NAMED test fails**; **read
+`./mvnw`'s EXIT STATUS directly, never through a pipe**; **count executed tests from
+`target/surefire-reports/*.xml`**; **run `npm test`**; **sweep by SURFACE, not by diff**; and **call
+`advisor()` BEFORE writing any Codex prompt.**
+
+**Routing: CLAUDE CODE inline** — items 1, 2 and 4 are small and in 1–3 files each. **⚠️ Re-run the routing
+test if item 3's projection change grows past the selection phase.**
+
+### Shipped
+
 ## v0.107.0 - Curriculum-Scale Remediation
 
 **Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.107.0`, cut from `main` after
