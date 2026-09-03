@@ -21,6 +21,7 @@ import com.studysnap.backend.exception.InvalidGeneratedQuizQuestionCountExceptio
 import com.studysnap.backend.exception.InvalidQuizDocxVersionCountException;
 import com.studysnap.backend.exception.MultipleExamVersionsNotAllowedForPlanException;
 import com.studysnap.backend.exception.QuestionCountNotAllowedForPlanException;
+import com.studysnap.backend.exception.QuestionCountNotSelectableException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -205,6 +206,89 @@ class GeneratedQuizServiceTest {
 
         verify(userUsageService, never()).getMonthlyUsage(eq(userId), any(OffsetDateTime.class));
         verify(quizGenerationService, never()).generateTeacherQuiz(any(), any(), any(), any(Integer.class), any());
+    }
+
+    /**
+     * ⚠️ THE DISCRIMINATING SHAPE. The profile must be stubbed EXPLICITLY non-TEACHER and the request must
+     * carry a NON-DEFAULT count: a fixture that sends null, or asserts only "a non-teacher gets 10", passes
+     * identically under the silent discard this replaced and proves nothing.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {20, 30})
+    void generate_refusesToSilentlyShrinkANonTeacherQuestionCount(int questionCount) {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, UserRole.USER, ProfileType.STUDENT)));
+
+        String id = noteId.toString();
+        assertThatThrownBy(() -> generatedQuizService.generate(id, userId, questionCount))
+                .isInstanceOf(QuestionCountNotSelectableException.class)
+                .satisfies(error -> {
+                    QuestionCountNotSelectableException exception = (QuestionCountNotSelectableException) error;
+                    assertThat(exception.getCode()).isEqualTo("QUESTION_COUNT_NOT_SELECTABLE");
+                    // ⚠️ Not the plan exception: question count is gated on the TEACHER profile, so no plan
+                    // buys it. Selling an upgrade here would promise something Plus does not grant.
+                    assertThat(exception.getStatus()).isEqualTo(org.springframework.http.HttpStatus.FORBIDDEN);
+                    assertThat(exception.getAction()).isNull();
+                });
+
+        verify(userUsageService, never()).getMonthlyUsage(eq(userId), any(OffsetDateTime.class));
+        verify(quizGenerationService, never()).generateTeacherQuiz(any(), any(), any(), any(Integer.class), any());
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void generate_stillServesANonTeacherWhoRequestsNoParticularCount() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PLUS);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, UserRole.USER, ProfileType.STUDENT)));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        when(generationContextResolver.resolve(userId, note)).thenReturn(
+                new StudyPackGenerationContext(null, "Biology", "Biology", List.of("cells"))
+        );
+        when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
+                .thenReturn(buildQuestions(10));
+        when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // The supporter path is UNGATED and must stay that way -- the rejection is about CHOOSING a count,
+        // never about who may generate a quiz for someone.
+        GeneratedQuizResponse response = generatedQuizService.generate(noteId.toString(), userId, null);
+
+        assertThat(response.questions()).hasSize(10);
+        verify(quizGenerationService).generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class));
+    }
+
+    @Test
+    void generate_stillServesANonTeacherWhoRequestsTheDefaultCountExplicitly() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildUser(userId, UserRole.USER, ProfileType.PARENT)));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
+        );
+        when(generationContextResolver.resolve(userId, note)).thenReturn(
+                new StudyPackGenerationContext(null, "Biology", "Biology", List.of("cells"))
+        );
+        when(quizGenerationService.generateTeacherQuiz(any(), any(), any(), eq(10), any(StudyPackGenerationContext.class)))
+                .thenReturn(buildQuestions(10));
+        when(generatedQuizRepository.save(any(GeneratedQuizEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GeneratedQuizResponse response = generatedQuizService.generate(noteId.toString(), userId, 10);
+
+        assertThat(response.questions()).hasSize(10);
     }
 
     @Test

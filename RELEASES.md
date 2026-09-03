@@ -199,9 +199,40 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   assertions survive the first mutant** — under the new wire format a MULTI_SELECT position sends `null` in
   `answers`, so the shipped defect also scored them zero. They are kept because they are the only guards
   against a *lenient* reimplementation, and each has a named killing mutant above.
-- Backend `2029` tests green (counted from `target/surefire-reports/*.xml`, and including the
-  real-PostgreSQL `NativeQueryPostgresIntegrationTest`); frontend `2115` tests green across 195 suites;
+- Backend `2033` tests green (counted from `target/surefire-reports/*.xml`, and including the
+  real-PostgreSQL `NativeQueryPostgresIntegrationTest`); frontend `2117` tests green across 195 suites;
   `tsc --noEmit` clean and `npm run lint` at 0 errors.
+
+- **Item 2 — a supporter is no longer offered a question count the backend discards.**
+  `resolveQuestionCount` honours a requested count for the `TEACHER` profile alone and **returned the
+  default `10` for everyone else**, so a Plus/Pro supporter who picked 30 in the Generate Quiz modal
+  received 10 with no error. Two changes, because the defect had two ends.
+- **The backend now REJECTS rather than silently clamping**, with a new
+  `QuestionCountNotSelectableException`. Silent-discard is the pattern `v0.103.0` recorded as how a cap
+  gets bypassed, and **item 5 adds a second caller on this exact path**, so the guard belongs at the layer
+  the discard lives at rather than only in the UI. Raised before `assertQuizCreditAvailable` and the LLM
+  call, so nothing is charged; a caller sending nothing, or `10`, is unaffected.
+- **⚠️ The new exception is deliberately NOT `QuestionCountNotAllowedForPlanException`.** That one carries
+  `UPGRADE_TO_PLUS` and `PAYMENT_REQUIRED` — correct for a Teacher on Free, who can actually buy the
+  capability. Question count is gated on the **profile**, so no plan grants it; reusing the plan exception
+  would have put a money-surface falsehood into the API. The new one is `FORBIDDEN` with **no action**.
+- **The modal shows the count selector to `TEACHER` only** — the same gate Target Level directly beside it
+  has carried all along; the count control simply never got it.
+- **⚠️ A SHARPER DEFECT WAS FOUND INSIDE ITEM 2 AND IS FIXED BY THE SAME GATE: the product was selling an
+  upgrade for a capability the upgrade does not grant.** The lock badge (`:3259`) and its copy
+  (*"Plus unlocks 20 and 30 questions"*) keyed on **plan with no profile check**, so a supporter on `FREE`
+  clicking 20 was routed to `openPaywallModal("teacher-quiz-question-count", …)`. That is worse than the
+  silent discard — it asks for money against a promise the backend cannot keep. **Nothing reads that
+  paywall's analytics** (`private_note_detail_teacher_quiz_question_count`), verified against the Backlog
+  Index, so **no deploy-split caveat is owed** despite non-teacher impressions having inflated it.
+- **⚠️ THE CAP DID NOT MOVE.** Honouring 20/30 for non-teachers would raise it, which `v0.92.0` records as
+  an untaken pricing decision. The choice was withdrawn, not granted.
+- **Tests: +3 in `GeneratedQuizServiceTest`, +2 in `private-note-detail-page-client.test.tsx`.** The
+  discriminating fixture stubs an **explicitly non-`TEACHER`** profile and sends a **non-default** count —
+  a fixture sending `null`, or asserting only "a non-teacher gets 10", passes identically under the silent
+  discard and proves nothing. Deleting the throw reds
+  `generate_refusesToSilentlyShrinkANonTeacherQuestionCount` (both parameterized cases); forcing the modal
+  gate true reds both page tests.
 
 ### Known limitations
 
@@ -214,6 +245,18 @@ a prompt**; and **call `advisor()` BEFORE writing the Codex prompt.**
   mis-grade.
 - **IDENTIFICATION and ENUMERATION remain ungradeable on the shared path.** Neither is reachable today —
   the teacher-quiz prompt does not emit them — and the recipient has no text input to answer one with.
+- **⚠️ A non-teacher still persists a Target Level they never chose — FOUND DURING ITEM 2, DELIBERATELY NOT
+  FOLDED IN, AND AN OWNER DECISION IS OWED.** `openGenerateQuizModal:1855` sets `selectedQuizLearnerLevel`
+  unconditionally and `handleGenerateTeacherQuiz:1880` sends it for **every** profile, while the Target
+  Level control renders for `TEACHER` only. `withLearnerLevelOverride` applies no profile check, so
+  `entity.setTargetLearnerLevel(...)` writes the supporter's own profile level. The comment at
+  `GeneratedQuizService:144-149` states exactly why that matters: it destroys the "never targeted" state
+  `findByNoteIdAndTargetLearnerLevelIsNotNullOrderByGeneratedAtDesc` encodes, which feeds
+  `lastUsedTargetLearnerLevel` and pre-fills the teacher UI *"as though it had been selected."*
+  **It is the same one-line profile gate as item 2 and was left out on purpose:** it changes what gets
+  **persisted**, so rows written before and after would mean different things, and whether to backfill is a
+  data decision this release has not taken. **Recommended fix: stop sending the level for non-teachers, no
+  backfill** — but that is the owner's call, not a default.
 
 **Routing: CODEX** — a migration plus a service and a surface. **⚠️ Re-run the routing test if item 1's
 migration turns out to be a one-column change and items 2 and 3 are already built.**

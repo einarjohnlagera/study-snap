@@ -24,6 +24,7 @@ import com.studysnap.backend.exception.MonthlyQuizCreditLimitReachedException;
 import com.studysnap.backend.exception.MultipleExamVersionsNotAllowedForPlanException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.QuestionCountNotAllowedForPlanException;
+import com.studysnap.backend.exception.QuestionCountNotSelectableException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -354,6 +355,14 @@ public class GeneratedQuizService {
                 .map(UserEntity::getProfileType)
                 .orElse(null);
         if (profileType != ProfileType.TEACHER) {
+            // ⚠️ REJECT, do not silently clamp. This used to `return DEFAULT_...`, so a Plus/Pro supporter
+            // who picked 30 in the modal received 10 with no error and no explanation. Silently discarding a
+            // caller's choice is the pattern v0.103.0 recorded as how a cap gets bypassed -- state what an
+            // ineligible caller gets. Reached before assertQuizCreditAvailable and the LLM call, so nothing
+            // is charged. A caller who sends nothing, or the default, is unaffected.
+            if (questionCount != DEFAULT_GENERATED_QUIZ_QUESTION_COUNT) {
+                throw new QuestionCountNotSelectableException();
+            }
             return DEFAULT_GENERATED_QUIZ_QUESTION_COUNT;
         }
         if (planType == PlanType.FREE && questionCount != DEFAULT_GENERATED_QUIZ_QUESTION_COUNT) {

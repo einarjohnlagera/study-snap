@@ -86,7 +86,28 @@ Runtime tracking uses `user_usage.quiz_share_links_created`. The quiz preview pa
 
 The shared meter is disclosed before generation as **“Quiz generations”**, described as “Quiz sessions we generate for you, plus quizzes you make for someone. Board Exam sessions also count against their own allowance.” The same pre-generation view shows share links remaining. If links are exhausted, generation remains available for export or later sharing; `QuizShareLimitService` still enforces the share-link cap only when a link is created. No separate generation counter exists, and no quota behaviour changed.
 
-**Question count is a separate axis again.** `resolveQuestionCount` returns the default `10` for every non-`TEACHER` profile regardless of plan; only a `TEACHER` may choose another count, and a `TEACHER` on `FREE` is refused any non-default value with `QuestionCountNotAllowedForPlanException`.
+**Question count is a separate axis again, and it is gated on PROFILE, not plan.** Only a `TEACHER` may
+choose a count; a `TEACHER` on `FREE` is refused any non-default value with
+`QuestionCountNotAllowedForPlanException`.
+
+**⚠️ A non-`TEACHER` who sends a non-default count is REJECTED with `QuestionCountNotSelectableException`
+— it must never be silently clamped to `10`.** `resolveQuestionCount` used to `return` the default for
+every non-teacher, so a Plus/Pro supporter who picked 30 in the Generate Quiz modal received 10 with no
+error and no explanation. Silently discarding a caller's choice is the pattern `v0.103.0` recorded as how a
+cap gets bypassed. The rejection is raised before `assertQuizCreditAvailable` and the LLM call, so nothing
+is charged; a caller sending nothing, or `10`, is unaffected.
+
+**⚠️ The two exceptions are NOT interchangeable.** `QuestionCountNotAllowedForPlanException` carries
+`UPGRADE_TO_PLUS` and `PAYMENT_REQUIRED` — correct for a Teacher on Free, who can actually buy the
+capability. `QuestionCountNotSelectableException` is `FORBIDDEN` with **no upgrade action**, because
+question count is gated on the Teacher profile and **no plan grants it**. Reusing the plan exception would
+sell Plus for something Plus does not give.
+
+**⚠️ The modal therefore shows the count selector to `TEACHER` only** — the same gate Target Level beside
+it has always carried. Before that gate, the lock badge and its *"Plus unlocks 20 and 30 questions"* copy
+keyed on **plan with no profile check**, so a supporter on Free clicking 20 was shown an upgrade prompt for
+a capability Plus would not have given them either. **⚠️ Do not "fix" this by honouring the count for
+non-teachers — that raises the cap, which is an untaken pricing decision.**
 
 ### The shared quiz is generated, never reused
 
