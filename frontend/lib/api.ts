@@ -50,6 +50,26 @@ export type QuizShareLinkResponse = {
   createdAt: string;
 };
 
+export type CombinedQuizSection = {
+  title: string;
+  questions: QuizItem[];
+};
+
+export type CombinedQuizResponse = {
+  id: string;
+  title: string;
+  sections: CombinedQuizSection[];
+  createdAt: string;
+};
+
+export type CreateCombinedQuizRequest = {
+  title: string;
+  sections: Array<{
+    noteId: string;
+    questionIndexes: number[];
+  }>;
+};
+
 export type PublicQuizItem = {
   question: string;
   choices: string[];
@@ -4571,6 +4591,54 @@ export async function createQuizShareLink(generatedQuizId: string): Promise<Quiz
     true,
   );
   return parseApiResponse<QuizShareLinkResponse>(response, "Could not create share link.");
+}
+
+export async function createCombinedQuiz(request: CreateCombinedQuizRequest): Promise<CombinedQuizResponse> {
+  const response = await fetchWithAuth(
+    "/combined-quizzes",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<CombinedQuizResponse>(response, "Could not assemble combined quiz.");
+}
+
+export async function getCombinedQuiz(combinedQuizId: string): Promise<CombinedQuizResponse> {
+  const response = await fetchWithAuth(
+    `/combined-quizzes/${combinedQuizId}`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  return parseApiResponse<CombinedQuizResponse>(response, "Could not load combined quiz.");
+}
+
+export async function createCombinedQuizShareLink(combinedQuizId: string): Promise<QuizShareLinkResponse> {
+  const response = await fetchWithAuth(
+    "/combined-quiz-share",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ combinedQuizId }),
+    },
+    true,
+  );
+  return parseApiResponse<QuizShareLinkResponse>(response, "Could not create share link.");
+}
+
+/** A 404 is the normal no-link-yet state; this read must never create a replacement link. */
+export async function getCombinedQuizShareLink(combinedQuizId: string): Promise<QuizShareLinkResponse | null> {
+  const response = await fetchWithAuth(
+    `/combined-quiz-share/${combinedQuizId}`,
+    { method: "GET", headers: buildAuthHeaders() },
+    true,
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  return parseApiResponse<QuizShareLinkResponse>(response, "Could not load share link.");
 }
 
 export async function getQuizShareLinkByQuizId(generatedQuizId: string): Promise<QuizShareLinkResponse | null> {

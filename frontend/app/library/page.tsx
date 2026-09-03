@@ -62,6 +62,7 @@ import {normalizeCourseProgram} from "@/lib/learning-profile";
 import {getCollectionLabels} from "@/lib/collection-labels";
 import {shouldShowQuizReadyIndicator} from "@/lib/profile-mode";
 import {requireAuthenticatedOnboardedUser} from "@/lib/route-guards";
+import {isCombinedQuizSelectionOverCap} from "@/lib/combined-quiz";
 import {normalizeSubject} from "@/lib/subjects";
 import {formatStudyPackScope, getStudyPackScope} from "@/lib/study-pack-scope";
 import {GuidanceTip} from "@/components/ui/guidance-tip";
@@ -78,6 +79,7 @@ type LibrarySortOption =
 
 type LibraryReadinessFilter = "ALL" | "DRAFT" | "QUIZ_READY" | "STUDY_PACK_READY";
 type LibraryVisibilityFilter = "ALL" | "PUBLIC" | "PRIVATE";
+type LibrarySelectionIntent = "collection" | "combined-quiz";
 
 const LIBRARY_PAGE_SIZE = 20;
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
@@ -606,6 +608,7 @@ export default function LibraryPage() {
   const [readinessFilter, setReadinessFilter] = useState<LibraryReadinessFilter>(() => parseReadinessFilter(searchParams.get("status")));
   const [visibilityFilter, setVisibilityFilter] = useState<LibraryVisibilityFilter>(() => parseVisibilityFilter(searchParams.get("visibility")));
   const [selectionMode, setSelectionMode] = useState(false);
+  const [selectionIntent, setSelectionIntent] = useState<LibrarySelectionIntent>("collection");
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [matchingSelectionIds, setMatchingSelectionIds] = useState<string[]>([]);
   const [selectingAll, setSelectingAll] = useState(false);
@@ -1209,6 +1212,13 @@ export default function LibraryPage() {
   );
   const selectedHasNonQuizReadyNotes = selectedNotes.length > selectedQuizReadyCount;
   const selectedUnresolvedCount = selectedNoteIds.length - selectedNotes.length;
+  const selectedQuizQuestionCount = useMemo(
+    () => selectedNotes
+      .filter(canIncludeInExam)
+      .reduce((total, item) => total + (item.generatedQuizQuestionCount ?? 0), 0),
+    [selectedNotes],
+  );
+  const combinedQuizSelectionOverCap = isCombinedQuizSelectionOverCap(selectedQuizReadyCount, selectedQuizQuestionCount);
 
   const applySavedFilter = useCallback((filterState: SavedLibraryFilterState) => {
     const nextSearch = readSavedString(filterState.search) ?? "";
@@ -1331,16 +1341,26 @@ export default function LibraryPage() {
   const resetSelectionMode = useCallback(() => {
     selectionRequestTokenRef.current += 1;
     setSelectionMode(false);
+    setSelectionIntent("collection");
     setSelectedNoteIds([]);
     setMatchingSelectionIds([]);
     setSelectingAll(false);
   }, []);
 
-  const startPlanSelection = useCallback(() => {
+  const startSelection = useCallback((intent: LibrarySelectionIntent) => {
     setSelectedNoteIds([]);
     setMatchingSelectionIds([]);
+    setSelectionIntent(intent);
     setSelectionMode(true);
   }, []);
+
+  const startPlanSelection = useCallback(() => {
+    startSelection("collection");
+  }, [startSelection]);
+
+  const startCombinedQuizSelection = useCallback(() => {
+    startSelection("combined-quiz");
+  }, [startSelection]);
 
   const handleNoteNavigate = useCallback((noteId: string) => {
     const returnUrl = buildLibraryUrl(searchQuery, selectedSubject, selectedCourseProgram, selectedTags, readinessFilter, sortBy, visibilityFilter);
@@ -1398,6 +1418,14 @@ export default function LibraryPage() {
     });
     router.push(`/library/exam-builder?${params.toString()}`);
   }, [router, selectedNoteIds, selectedQuizReadyCount]);
+
+  const openCombinedQuizBuilder = useCallback(() => {
+    if (selectedNoteIds.length === 0 || selectedQuizReadyCount === 0 || combinedQuizSelectionOverCap) {
+      return;
+    }
+    const params = new URLSearchParams({ notes: selectedNoteIds.join(",") });
+    router.push(`/library/combined-quiz?${params.toString()}`);
+  }, [combinedQuizSelectionOverCap, router, selectedNoteIds, selectedQuizReadyCount]);
 
   const retryBulkFailures = useCallback(() => {
     if (!bulkFailureBanner || bulkFailureBanner.failedTopics.length === 0) {
@@ -1487,6 +1515,7 @@ export default function LibraryPage() {
                   onSelect: () => router.push("/library/bulk-generate"),
                 },
                 { key: "collection", label: collectionLabels.singular, description: `Pick notes for a new ${collectionLabels.singular.toLowerCase()}`, onSelect: startPlanSelection },
+                { key: "combined-quiz", label: "Combined quiz", description: "Build one shareable quiz from several notes", onSelect: startCombinedQuizSelection },
               ]}
             />
           </div>
@@ -1592,25 +1621,58 @@ export default function LibraryPage() {
             <Card className="space-y-3 p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
-                  <h2 className="text-lg font-semibold">Pick notes for your new {collectionLabels.singular}</h2>
-                  <p className="text-sm text-foreground/70">
-                    {selectedNoteIds.length} note{selectedNoteIds.length === 1 ? "" : "s"} selected · filter and select, or create an empty {collectionLabels.singular.toLowerCase()}.
-                  </p>
-                  {isTeacherExamBuilderEnabled && selectedHasNonQuizReadyNotes && selectedQuizReadyCount > 0 ? (
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                      Only quiz-ready notes will be added to the exam.
-                    </p>
-                  ) : null}
-                  {isTeacherExamBuilderEnabled && selectedNoteIds.length > 0 && selectedQuizReadyCount === 0 ? (
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                      Generate a quiz for at least one note to build an exam.
-                    </p>
-                  ) : null}
-                  {isTeacherExamBuilderEnabled && selectedUnresolvedCount > 0 ? (
-                    <p className="text-xs text-foreground/60">
-                      Quiz-ready count is based on the {selectedNotes.length} of {selectedNoteIds.length} selected notes currently loaded — load more or narrow your filters to see the full picture.
-                    </p>
-                  ) : null}
+                  {selectionIntent === "collection" ? (
+                    <>
+                      <h2 className="text-lg font-semibold">Pick notes for your new {collectionLabels.singular}</h2>
+                      <p className="text-sm text-foreground/70">
+                        {selectedNoteIds.length} note{selectedNoteIds.length === 1 ? "" : "s"} selected · filter and select, or create an empty {collectionLabels.singular.toLowerCase()}.
+                      </p>
+                      {isTeacherExamBuilderEnabled && selectedHasNonQuizReadyNotes && selectedQuizReadyCount > 0 ? (
+                        <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                          Only quiz-ready notes will be added to the exam.
+                        </p>
+                      ) : null}
+                      {isTeacherExamBuilderEnabled && selectedNoteIds.length > 0 && selectedQuizReadyCount === 0 ? (
+                        <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                          Generate a quiz for at least one note to build an exam.
+                        </p>
+                      ) : null}
+                      {isTeacherExamBuilderEnabled && selectedUnresolvedCount > 0 ? (
+                        <p className="text-xs text-foreground/60">
+                          Quiz-ready count is based on the {selectedNotes.length} of {selectedNoteIds.length} selected notes currently loaded — load more or narrow your filters to see the full picture.
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="text-lg font-semibold">Pick notes for your combined quiz</h2>
+                      <p className="text-sm text-foreground/70">
+                        {selectedNoteIds.length} note{selectedNoteIds.length === 1 ? "" : "s"} selected · {selectedQuizReadyCount} with generated quizzes will contribute all of their questions.
+                      </p>
+                      {selectedHasNonQuizReadyNotes ? (
+                        <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                          {selectedNotes.length - selectedQuizReadyCount} selected note{selectedNotes.length - selectedQuizReadyCount === 1 ? " has" : "s have"} no generated quiz and will not be included. Generate a quiz first to include {selectedNotes.length - selectedQuizReadyCount === 1 ? "it" : "them"}.
+                        </p>
+                      ) : null}
+                      {selectedNoteIds.length > 0 && selectedQuizReadyCount === 0 ? (
+                        <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                          Generate a quiz for at least one selected note to build a combined quiz.
+                        </p>
+                      ) : null}
+                      <p className={`text-xs font-medium ${combinedQuizSelectionOverCap ? "text-amber-700 dark:text-amber-300" : "text-foreground/60"}`}>
+                        {selectedQuizQuestionCount} of 100 questions · {selectedQuizReadyCount} of 20 source notes.
+                        {combinedQuizSelectionOverCap ? " Remove quiz-ready notes before building; combined quizzes cannot exceed either limit." : ""}
+                      </p>
+                      <p className="text-xs text-foreground/60">
+                        Each note that needs a quiz first uses one Study Pack generation and one quiz generation. Assembling costs nothing.
+                      </p>
+                      {selectedUnresolvedCount > 0 ? (
+                        <p className="text-xs text-foreground/60">
+                          Eligibility is based on the {selectedNotes.length} of {selectedNoteIds.length} selected notes currently loaded — load more or narrow your filters to confirm every selected note.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
@@ -1624,12 +1686,23 @@ export default function LibraryPage() {
                   <Button type="button" variant="outline" onClick={resetSelectionMode}>
                     Cancel
                   </Button>
-                  <Button
-                    type="button"
-                    onClick={() => setCreatePlanOpen(true)}
-                  >
-                    Create {collectionLabels.singular}
-                  </Button>
+                  {selectionIntent === "collection" ? (
+                    <Button
+                      type="button"
+                      onClick={() => setCreatePlanOpen(true)}
+                    >
+                      Create {collectionLabels.singular}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={openCombinedQuizBuilder}
+                      aria-disabled={selectedQuizReadyCount === 0 || combinedQuizSelectionOverCap}
+                      className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                    >
+                      Build quiz
+                    </Button>
+                  )}
                   {isTeacherExamBuilderEnabled ? (
                     <Button
                       type="button"
