@@ -425,7 +425,18 @@ All four are settled. Recorded with reasoning so they are not re-opened.
 
 Enumeration in Long Exam; mixed formats in Board Exam; cross-pack canonical concept identity (ADR-sized);
 authoritative licensure blueprint weighting; the session-anchoring migration (nullable `study_pack_id` plus
-`source_collection_id` — **not needed for slices 1–5**, defer until slice 6 forces it); exam templates;
+`source_collection_id` — **not needed for slices 1–5**, and **⚠️ CORRECTED 2026-09-03: SLICE 6 DOES NOT
+FORCE IT EITHER.** This line said *"defer until slice 6 forces it"*, which was an assumption recorded
+once and inherited without check — it shaped release sequencing advice twice. **Verified against code:
+`GeneratedQuizService` and `QuizShareLinkService` reference `quick_review_sessions` ZERO times.** The
+supporter quiz path persists to `generated_quizzes` and is taken by recipients who need no account, so it
+creates no session and session anchoring cannot bind on it. **⚠️ SLICE 6 LIKELY FORCES A DIFFERENT
+MIGRATION, ON A DIFFERENT TABLE:** `generated_quizzes.note_id` is `NOT NULL` with a **unique index**
+(`uq_generated_quizzes_note_id`, `V43`), so one generated quiz exists per note and a COMBINED quiz
+spanning several notes has no `note_id` it can legally take. **⚠️ CONSEQUENCE, STATED PLAINLY: the
+session-anchoring migration now has NO identified forcing slice**, so the plan/note session collision it
+would fix — a named, accepted limitation since `v0.107.0` — has no scheduled fix. That is a decision
+owed, not an oversight to leave implied); exam templates;
 teacher exam authoring inside learner Long Exam; mastery comparison between people; and non-MCQ support in
 `PublicQuizItem` / DOCX export — a real gap, but it constrains **sharing**, not assessment.
 
