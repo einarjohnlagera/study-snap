@@ -96,6 +96,29 @@ test if item 3's projection change grows past the selection phase.**
 
 ### Shipped
 
+- **Plan eligibility runs on projections, not full entities (item 3).** Choosing which packs a
+  plan-scoped session draws from needs only `id`, `noteId`, `keyConcepts`, `ownerUserId` and `status`,
+  so phase 1 now uses the existing `findProgressViewsByNoteIdIn`; phase 2 loads full entities **only
+  for the packs that survive focus and occupancy filtering**. A Review Set no longer materializes
+  every DONE pack's `quiz` and `summary` JSON to choose at most three.
+- **⚠️ The projection's cost claim is now PINNED, not assumed.** `StudyPackRepositoryTest` already had
+  a test named *"projectsOnlyTheReadPathFields"* whose assertions only checked returned VALUES — it
+  never looked at the emitted SQL. It now asserts the statement contains `key_concepts` and **neither
+  `quiz` nor `summary`**, which is what the name always claimed and what item 3 depends on.
+- **⚠️ A comment of mine was WRONG and is corrected, found by mutation.** I wrote that phase 1's
+  Java-side owner filter *"is the access boundary"*. It is not: phase 2 re-applies owner and status in
+  SQL, so dropping either phase-1 condition leaves the suite green — **correctly**, because behaviour
+  genuinely does not change. Phase 1's filters are an **optimisation**; the access boundary is phase
+  2's `findByOwnerUserIdAndNoteIdInAndStatus`, and the comment now says so.
+- **The ownership assertion the pressure test said was missing now exists.** Ownership previously
+  survived *"by stub shape, not by a semantic assertion"* — every fixture had one user, so a dropped
+  owner filter was invisible. A second user's pack in the returned projections must never anchor a
+  session or appear as a focus source.
+- **⚠️ STILL A REDUCTION, NOT A BOUND — unchanged from the kickoff and stated in code, not only here.**
+  Where every pack has a due-or-weak concept, phase 2 loads what phase 1 used to. A true bound needs
+  `LongExamPlanSourceSampler.EligiblePlanSource` to stop taking a `StudyPackEntity`, and that sampler
+  is shared with Long Exam and Board Exam.
+
 ## v0.107.0 - Curriculum-Scale Remediation
 
 **Status: Released** (kicked off and signed off 2026-09-03, base branch `releases/v0.107.0`, cut from `main` after

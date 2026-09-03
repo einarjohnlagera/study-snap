@@ -86,6 +86,18 @@ class StudyPackRepositoryTest {
         assertThat(projection.getSubject()).isEqualTo("Biology");
         assertThat(projection.getKeyConcepts()).containsExactly("Cells", "DNA");
         assertThat(projection.getStatus()).isEqualTo(StudyPackStatus.DONE);
+
+        // ⚠️ THE ASSERTION THIS TEST'S NAME ALREADY CLAIMED. Checking the returned VALUES proves the
+        // projection maps correctly; it does not prove Hibernate avoided materializing the row. The
+        // point of a projection here is that `quiz` and `summary` -- large JSON columns -- are never
+        // read, so any caller choosing it for that reason needs the emitted SQL pinned, not inferred.
+        String projectionSql = SqlCaptureStatementInspector.statements().stream()
+                .filter(sql -> sql.contains("study_packs"))
+                .reduce((first, second) -> second)
+                .orElseThrow();
+        assertThat(projectionSql).doesNotContain("quiz");
+        assertThat(projectionSql).doesNotContain("summary");
+        assertThat(projectionSql).contains("key_concepts");
     }
 
     @Test

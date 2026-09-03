@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.model.StudyPackProgressProjection;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AdaptivePracticeSessionNotFoundException;
 import com.studysnap.backend.entity.StudyPackStatus;
@@ -36,6 +37,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -49,6 +51,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
@@ -1072,6 +1075,65 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
+    void collectionScoped_loadsFullPacksOnlyForTheFocusEligibleSubset() {
+        // ⚠️ THIS IS THE ASSERTION FOR WHAT ITEM 3 ACTUALLY DOES. Eligibility runs on projections so
+        // a Review Set's quiz/summary JSON is not materialized to choose three packs; phase 2 then
+        // loads entities for the survivors only. Widening phase 2 back to every candidate note left
+        // every other test green -- the reduction is invisible unless the narrowed argument is pinned.
+        CollectionFixture f = collectionFixture(4);
+        // Only pack 1 has anything to practise, so only pack 1 should be loaded in full.
+        stubCollectionFocus(f, 1, List.of("Shear Force"), List.of());
+        stubCollectionGeneration(f, 1);
+
+        adaptivePracticeService.generateAdaptiveQuizForCollection(
+                f.collectionId.toString(), f.userId, "collection-detail");
+
+        ArgumentCaptor<Collection<UUID>> noteIdsCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(studyPackRepository).findByOwnerUserIdAndNoteIdInAndStatus(
+                eq(f.userId), noteIdsCaptor.capture(), eq(StudyPackStatus.DONE));
+        assertThat(noteIdsCaptor.getValue()).containsExactly(f.noteIds.get(1));
+    }
+
+    @Test
+    void collectionScoped_neverTreatsAnotherUsersPackAsEligible() {
+        // ⚠️ THE ASSERTION THE PRESSURE TEST SAID WAS MISSING. Ownership previously survived only
+        // "by stub shape, not by a semantic assertion" -- every fixture had one user, so dropping an
+        // owner filter changed nothing any test could see. Phase 1 now filters owner in JAVA, because
+        // findProgressViewsByNoteIdIn does not filter it in SQL, so that filter IS the access
+        // boundary and needs a fixture that can tell.
+        CollectionFixture f = collectionFixture(1);
+        stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
+        stubCollectionGeneration(f, 1);
+
+        UUID intruderUserId = UUID.randomUUID();
+        UUID intruderNoteId = UUID.randomUUID();
+        UUID intruderPackId = UUID.randomUUID();
+        StudyPackEntity intruder = buildStudyPack(intruderPackId, intruderNoteId, intruderUserId);
+        intruder.setKeyConcepts(List.of("Shear Force"));
+        StudyPackProgressProjection foreign = mock(StudyPackProgressProjection.class);
+        lenient().when(foreign.getId()).thenReturn(intruderPackId);
+        lenient().when(foreign.getNoteId()).thenReturn(intruderNoteId);
+        lenient().when(foreign.getOwnerUserId()).thenReturn(intruderUserId);
+        lenient().when(foreign.getKeyConcepts()).thenReturn(List.of("Shear Force"));
+        lenient().when(foreign.getStatus()).thenReturn(StudyPackStatus.DONE);
+
+        List<StudyPackProgressProjection> withIntruder = new ArrayList<>();
+        withIntruder.add(foreign);
+        withIntruder.add(projectionOf(f.packs.get(0), f.userId));
+        when(studyPackRepository.findProgressViewsByNoteIdIn(any())).thenReturn(withIntruder);
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuizForCollection(
+                        f.collectionId.toString(), f.userId, "collection-detail");
+
+        // The intruder's pack must never anchor the session nor appear as a focus source.
+        assertThat(response.studyPackId()).isNotEqualTo(intruderPackId.toString());
+        assertThat(response.focusConcepts())
+                .extracting("sourceStudyPackId")
+                .doesNotContain(intruderPackId.toString());
+    }
+
+    @Test
     void collectionScoped_returnsTheServerDerivedAnchorNoteIdForNavigation() {
         // T3.1 -- noteId was asserted NOWHERE in the stack, yet it is what the new plan-scoped
         // navigation routes on. Nulling it at all 7 construction sites left the whole suite green,
@@ -1169,6 +1231,18 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(response.sessionId()).isNotEqualTo(interview.getId().toString());
     }
 
+
+    /** A read-path projection over a fixture pack, mirroring findProgressViewsByNoteIdIn's shape. */
+    private StudyPackProgressProjection projectionOf(StudyPackEntity pack, UUID ownerUserId) {
+        StudyPackProgressProjection projection = mock(StudyPackProgressProjection.class);
+        lenient().when(projection.getId()).thenReturn(pack.getId());
+        lenient().when(projection.getNoteId()).thenReturn(pack.getNoteId());
+        lenient().when(projection.getOwnerUserId()).thenReturn(ownerUserId);
+        lenient().when(projection.getKeyConcepts()).thenReturn(pack.getKeyConcepts());
+        lenient().when(projection.getStatus()).thenReturn(StudyPackStatus.DONE);
+        return projection;
+    }
+
     private QuickReviewSessionEntity interviewSessionOn(CollectionFixture f, int packIndex) {
         QuickReviewSessionEntity interview = buildInProgressAdaptiveSession(
                 UUID.randomUUID(), f.userId, f.packs.get(packIndex).getId(), f.noteIds.get(packIndex));
@@ -1247,9 +1321,22 @@ class QuickReviewAdaptivePracticeServiceTest {
                 .thenReturn(List.of());
         lenient().when(noteCollectionItemRepository.findByCollectionIdOrderByPositionAsc(collectionId))
                 .thenReturn(items);
+        // Phase 1 is a PROJECTION query now (eligibility needs no quiz/summary JSON); phase 2 loads
+        // full entities only for the packs that survive. Both are stubbed, and phase 2 is answered
+        // from the requested note ids so a narrowed phase 2 returns a narrowed result -- stubbing it
+        // to return every pack regardless would hide whether the narrowing happens at all.
+        // Built BEFORE the when(...) call: creating mocks inside a thenReturn argument is nested
+        // stubbing and Mockito rejects it as UnfinishedStubbingException.
+        List<StudyPackProgressProjection> projections = packs.stream()
+                .map(pack -> projectionOf(pack, userId))
+                .toList();
+        lenient().when(studyPackRepository.findProgressViewsByNoteIdIn(any())).thenReturn(projections);
         lenient().when(studyPackRepository.findByOwnerUserIdAndNoteIdInAndStatus(
                         eq(userId), any(), eq(StudyPackStatus.DONE)))
-                .thenReturn(packs);
+                .thenAnswer(invocation -> {
+                    Collection<UUID> requested = invocation.getArgument(1);
+                    return packs.stream().filter(pack -> requested.contains(pack.getNoteId())).toList();
+                });
         lenient().when(quickReviewSessionRepository.findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         eq(userId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
                 .thenReturn(List.of());
