@@ -602,7 +602,12 @@ export default function AdaptivePracticePage() {
           .then((completed) => {
             setCompletionResult(completed);
             setCompletionSignalLoaded(true);
-            return getPostSessionNextStep(adaptiveQuiz.studyPackId);
+            // studyPackId is null only on a declined start, which carries no session to complete,
+            // so this branch is unreachable from here -- but the type now says so rather than
+            // relying on a cast that hid it.
+            return adaptiveQuiz.studyPackId
+              ? getPostSessionNextStep(adaptiveQuiz.studyPackId)
+              : Promise.resolve(null);
           })
           .then(setNextStepResponse)
           .catch(() => {

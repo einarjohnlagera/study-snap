@@ -99,7 +99,6 @@ Each targeted question may show a compact `Reviewing: {concept} — {reason}` ta
 - concepts missed in the latest completed Quick Review or Challenge Quiz use `missed last time`
 - concepts in both groups use `missed last time and due for review`
 
-The reason is deterministic selection metadata, not LLM-authored guidance. `QuickReviewAdaptivePracticeService` captures the due / weak / both distinction before the focus lists merge, then stores a nullable `conceptSelectionReasons` array beside the generated quiz in `sessionState`. The response returns that array in quiz order on both initial start and resume, so refreshes preserve the same tag.
 
 Selection provenance does not belong to `QuizItem`: the same question model also represents generated and persisted Study Pack content, while this reason is specific to one Adaptive Practice run. If a generated question's concept does not match the selected focus map, its parallel reason is `null` and the UI renders no tag rather than guessing.
 
@@ -131,6 +130,16 @@ The result screen should stay focused and should not compete with unrelated acti
 
 - on completion, Adaptive Practice records fully-correct concepts to `ConceptHealth.lastCorrectAt`
 - on completion, Adaptive Practice records missed concepts to `ConceptHealth.lastIncorrectAt`
+- **⚠️ Both writes depend on the CLIENT submitting `selectedChoices` / `selectedMultiChoices` on
+  completion.** Adaptive Practice has no progress endpoint, so nothing persists answers into session
+  state during a session. If the client omits them the server's per-source breakdown is empty and it
+  falls back to attributing everything to the anchor pack with **no misses recorded at all** — which
+  is correct for a single-note session and wrong for a plan-scoped one. Pinned on both sides.
+- **Attribution is bucketed by `(sourceStudyPackId, concept)`**, so two packs weak on the same
+  concept string are recorded separately. Note the API: Adaptive Practice uses
+  `recordCorrect/IncorrectAnswers`, **not** the `...ForKnownConcepts` variants, so it applies no
+  `keyConcepts` intersection — an asymmetry it shares with Board Exam. Bucketing by source is what
+  keeps that safe.
 - a concept is missed when it appears in the session and is not fully correct (`correctAnswers < totalQuestions`)
 - forfeit paths do not record correct or missed ConceptHealth signals
 - a later fully-correct session updates `lastCorrectAt` and clears the struggling state derived from a newer `lastIncorrectAt`

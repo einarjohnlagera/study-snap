@@ -118,6 +118,28 @@ implementation discovers a surface not in the agreed plan, which is how `v0.103.
 
 ### Shipped
 
+- **A three-agent cold pressure test in isolated worktrees found 7 live defects, 4 false shipped
+  claims and 9 guards that were removable with the whole suite green.** All are remediated; the
+  findings and what survived are recorded above. **⚠️ Three of the false claims were mine, written
+  into `RELEASES.md` and `docs/features/adaptive-practice.md` as though verified** — item 4's guard
+  covered two of five call sites, its message branch was dead code, and the aggregation decision's
+  stated rationale (source titles disambiguate two same-named rows) was false in the shipped UI.
+- **⚠️ KNOWN LIMITATION — resolving eligibility still materializes every DONE Study Pack of the
+  collection.** For a large Review Set that is hundreds of rows carrying full quiz JSON, loaded to
+  pick at most three. The quota and rate-limit gates now run BEFORE it, so an over-quota learner no
+  longer pays it on every click, but the load itself remains. **Not fixed deliberately:**
+  `LongExamPlanSourceSampler.EligiblePlanSource` takes a `StudyPackEntity`, and that sampler is
+  shared with Long Exam and Board Exam, which this release's anti-drift forbids changing. A
+  projection-based fix needs the sampler contract to change and belongs with whichever slice may
+  touch it.
+- **⚠️ KNOWN LIMITATION — `GET /collections/{id}/adaptive-practice/in-progress` has no client
+  consumer.** It is the natural pair of the start endpoint and is now covered by a test; the unused
+  frontend wrapper was removed rather than left as dead code. A resume affordance would consume it.
+- **⚠️ KNOWN LIMITATION, PRE-EXISTING — `DashboardService.findInProgressSessionsByRecency` and
+  `PostSessionNextStepService` surface an in-progress Interview Practice session as an Adaptive
+  Practice one.** Both predate `v0.107.0` and are untouched here; they are the same shared-`ADAPTIVE`
+  -discriminator class as item 4 but on read-only surfaces.
+
 - **Adaptive Practice and Interview Practice no longer consume each other's sessions (item 4).** Both
   share the `ADAPTIVE` discriminator and therefore `V41`'s `(user_id, study_pack_id, session_mode)`
   unique index on active sessions. The note-scoped start path would **resume** an interview session as
@@ -178,7 +200,6 @@ implementation discovers a surface not in the agreed plan, which is how `v0.103.
   `lenient()`; **verified by mutation in both directions** — with the fix the mutant fails on the
   assertion that names the behaviour, and correct code stays green.
 
-_(nothing yet)_
 
 ## v0.106.0 - Board Exam Review Set Identity
 

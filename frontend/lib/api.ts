@@ -1290,7 +1290,9 @@ export type AdaptivePracticeFocusConcept = {
 export type QuickReviewAdaptiveQuizResponse = {
   sessionId: string | null;
   status: QuizSessionStatus | null;
-  studyPackId: string;
+  /** Null when the server declined to start a session (nothing due, or every eligible pack is
+   *  occupied) -- emptyCollectionResponse returns nulls for the whole identity block. */
+  studyPackId: string | null;
   /** The anchor note, DERIVED BY THE SERVER. Clients must route with this rather than computing an
    *  anchor themselves -- a plan's item order is mutable, so a client-computed anchor drifts. */
   noteId: string | null;
@@ -3836,22 +3838,6 @@ export async function generateAdaptivePracticeForCollection(
   );
 }
 
-export async function getInProgressCollectionAdaptivePracticeSession(
-  collectionId: string,
-): Promise<QuickReviewAdaptiveQuizResponse> {
-  const response = await fetchWithAuth(
-    `/collections/${collectionId}/adaptive-practice/in-progress`,
-    {
-      method: "GET",
-      headers: buildAuthHeaders(),
-    },
-    true,
-  );
-  return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
-    response,
-    "Could not load adaptive practice for this plan.",
-  );
-}
 
 export async function getInProgressAdaptivePracticeSession(
   noteId: string,

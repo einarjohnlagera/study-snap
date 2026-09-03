@@ -286,6 +286,13 @@ public class QuickReviewAdaptivePracticeService {
                 .orElseThrow(CollectionNotFoundException::new);
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
+        // ⚠️ GATES BEFORE THE EXPENSIVE LOAD. Resolving eligibility below materializes every DONE
+        // Study Pack of the collection -- for a Review Set that is hundreds of rows carrying full
+        // quiz JSON. Checking quota and the rate limit afterwards meant an over-quota learner paid
+        // that cost on EVERY click before being refused. Both gates depend only on (userId, plan),
+        // so nothing here needs the packs.
+        assertAdaptivePracticeQuotaAvailable(userId, planType);
+        aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
 
         List<QuickReviewSessionEntity> activeAdaptiveSessions = quickReviewSessionRepository
                 .findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
@@ -309,7 +316,10 @@ public class QuickReviewAdaptivePracticeService {
         for (NoteCollectionEntity stratum : strata) {
             for (NoteCollectionItemEntity item : noteCollectionItemRepository
                     .findByCollectionIdOrderByPositionAsc(stratum.getId())) {
-                candidates.add(new CollectionCandidate(item.getNoteId(), stratum.getTitle(), ordinal++));
+                // Bucket by stratum ID, not title: titles are mutable and non-unique, so two same-titled
+                // Subject Plans would collapse into one coverage bucket. ChallengeQuizService's Board
+                // Exam call site (shipped one release earlier, same sampler) already uses the id.
+                candidates.add(new CollectionCandidate(item.getNoteId(), stratum.getId().toString(), ordinal++));
             }
         }
         List<UUID> noteIds = candidates.stream().map(CollectionCandidate::noteId).distinct().toList();
@@ -410,13 +420,11 @@ public class QuickReviewAdaptivePracticeService {
                             : ADAPTIVE_SESSION_ELSEWHERE_MESSAGE);
         }
 
-        assertAdaptivePracticeQuotaAvailable(userId, planType);
         // ⚠️ ONE rate-limit unit, deliberately, even though generateCollectionQuiz issues up to
         // MAX_PLAN_SOURCE_PACKS LLM calls where the note path issues one. Decided (owner,
         // 2026-09-03) rather than left implicit: checking per call would fail PART WAY THROUGH
         // generation and strand a FAILED session, which is worse for the learner than a 3x
         // allowance on a path whose fan-out is already bounded. Revisit only if the bound moves.
-        aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
         int questionCount = resolveAdaptiveQuestionCount(focusEntries.size());
         QuickReviewSessionEntity session = buildGeneratingSession(
                 userId, primary.getId(), primary, focusEntries, collectionId);
@@ -794,9 +802,6 @@ public class QuickReviewAdaptivePracticeService {
         session.setCompletedAt(null);
     }
 
-    private List<ChallengeQuizConceptStatResponse> computeConceptBreakdownForCompletion(QuickReviewSessionEntity session) {
-        return QuizSessionReviewUtils.computeConceptBreakdownForStoredSelections(session.getSessionState());
-    }
 
     private UUID parseSourceStudyPackId(String raw, UUID fallback) {
         try {

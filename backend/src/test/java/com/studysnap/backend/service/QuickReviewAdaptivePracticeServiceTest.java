@@ -1071,6 +1071,104 @@ class QuickReviewAdaptivePracticeServiceTest {
                 .withSourceStudyPackId(sourceStudyPackId.toString());
     }
 
+    @Test
+    void collectionScoped_returnsTheServerDerivedAnchorNoteIdForNavigation() {
+        // T3.1 -- noteId was asserted NOWHERE in the stack, yet it is what the new plan-scoped
+        // navigation routes on. Nulling it at all 7 construction sites left the whole suite green,
+        // and it was inserted by a regex that over-matched once during development.
+        CollectionFixture f = collectionFixture(1);
+        stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
+        stubCollectionGeneration(f, 1);
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuizForCollection(
+                        f.collectionId.toString(), f.userId, "collection-detail");
+
+        assertThat(response.noteId()).isEqualTo(f.noteIds.get(0).toString());
+        assertThat(response.studyPackId()).isEqualTo(f.packs.get(0).getId().toString());
+    }
+
+    @Test
+    void collectionScoped_excludesEachPacksOwnSavedQuizAndAccumulatesAcrossPacks() {
+        // T3.5 -- the whole dedup mechanism was deletable with 26/26 green, because the fixture
+        // generated a fresh UUID per question so nothing could ever collide. Here the generator
+        // returns the SAME question text every time, so only real dedup keeps the run honest.
+        CollectionFixture f = collectionFixture(2);
+        stubCollectionFocus(f, 0, List.of("Shear Force"), List.of());
+        stubCollectionFocus(f, 1, List.of("Bending Moment"), List.of());
+        lenient().when(longExamPlanSourceSampler.sample(any(), any(), anyInt(), any()))
+                .thenAnswer(invocation -> invocation.<List<LongExamPlanSourceSampler.EligiblePlanSource>>getArgument(0));
+
+        ArgumentCaptor<List<String>> disallowedCaptor = ArgumentCaptor.forClass(List.class);
+        lenient().when(quizGenerationService.generateAdaptivePracticeQuiz(
+                        any(), any(), any(), any(), disallowedCaptor.capture(), anyInt(), any()))
+                .thenAnswer(invocation -> List.of(new QuizItem(
+                        "Repeated question", List.of("A", "B", "C", "D"), "A", "Shear Force", "Explanation")));
+
+        adaptivePracticeService.generateAdaptiveQuizForCollection(
+                f.collectionId.toString(), f.userId, "collection-detail");
+
+        List<List<String>> disallowedPerCall = disallowedCaptor.getAllValues();
+        assertThat(disallowedPerCall).hasSizeGreaterThanOrEqualTo(2);
+        // Each pack excludes its OWN saved quiz...
+        assertThat(disallowedPerCall.get(0)).contains("Base Q");
+        // ...and the second call also carries what the first pack already produced.
+        assertThat(disallowedPerCall.get(1)).contains("Repeated question");
+    }
+
+    @Test
+    void collectionScoped_boundsTheFocusConceptListThatFeedsThePrompt() {
+        // T3.7 -- MAX_PLAN_FOCUS_CONCEPTS could be raised to 10000 with every test green. The
+        // question-count cap bounds the OUTPUT; this list is what goes INTO the prompt.
+        CollectionFixture f = collectionFixture(3);
+        List<String> many = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            many.add("Concept " + i);
+        }
+        for (int i = 0; i < 3; i++) {
+            f.packs.get(i).setKeyConcepts(many);
+            stubCollectionFocus(f, i, many, List.of());
+        }
+        stubCollectionGeneration(f, 3);
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.generateAdaptiveQuizForCollection(
+                        f.collectionId.toString(), f.userId, "collection-detail");
+
+        assertThat(response.focusConcepts()).hasSizeLessThanOrEqualTo(10);
+    }
+
+    @Test
+    void collectionScoped_inProgressReadReturnsThePlansOwnSessionAndSkipsInterviewOnes() {
+        // T3.8 -- getAdaptiveQuizSessionForCollection had ZERO tests anywhere.
+        CollectionFixture f = collectionFixture(1);
+        QuickReviewSessionEntity planSession = buildInProgressAdaptiveSession(
+                UUID.randomUUID(), f.userId, f.packs.get(0).getId(), f.noteIds.get(0));
+        Map<String, Object> state = new LinkedHashMap<>(planSession.getSessionState());
+        state.put("sourceCollectionId", f.collectionId.toString());
+        planSession.setSessionState(state);
+        // An interview session on the SAME collection, ordered FIRST. Without the sub-mode filter
+        // findFirst() picks it and the plan's read hands back interview questions. A fixture without
+        // this session cannot distinguish the two, which is why the first version of this test
+        // survived deleting the filter.
+        QuickReviewSessionEntity interview = interviewSessionOn(f, 0);
+        Map<String, Object> interviewState = new LinkedHashMap<>(interview.getSessionState());
+        interviewState.put("sourceCollectionId", f.collectionId.toString());
+        interview.setSessionState(interviewState);
+        lenient().when(quickReviewSessionRepository.findByUserIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                        eq(f.userId), eq(QuickReviewSessionMode.ADAPTIVE), any()))
+                .thenReturn(List.of(interview, planSession));
+        lenient().when(studyPackRepository.findByIdAndOwnerUserId(f.packs.get(0).getId(), f.userId))
+                .thenReturn(Optional.of(f.packs.get(0)));
+
+        QuickReviewAdaptiveQuizResponse response =
+                adaptivePracticeService.getAdaptiveQuizSessionForCollection(
+                        f.collectionId.toString(), f.userId);
+
+        assertThat(response.sessionId()).isEqualTo(planSession.getId().toString());
+        assertThat(response.sessionId()).isNotEqualTo(interview.getId().toString());
+    }
+
     private QuickReviewSessionEntity interviewSessionOn(CollectionFixture f, int packIndex) {
         QuickReviewSessionEntity interview = buildInProgressAdaptiveSession(
                 UUID.randomUUID(), f.userId, f.packs.get(packIndex).getId(), f.noteIds.get(packIndex));
