@@ -356,11 +356,14 @@ implementation discovers a surface not in the agreed plan, which is how `v0.103.
 - **⚠️ KNOWN LIMITATION — `GET /collections/{id}/adaptive-practice/in-progress` has no client
   consumer.** It is the natural pair of the start endpoint and is now covered by a test; the unused
   frontend wrapper was removed rather than left as dead code. A resume affordance would consume it.
-- **⚠️ KNOWN LIMITATION, PRE-EXISTING — `DashboardService.findInProgressSessionsByRecency` and
+- **~~⚠️ KNOWN LIMITATION, PRE-EXISTING — `DashboardService.findInProgressSessionsByRecency` and
   `PostSessionNextStepService` surface an in-progress Interview Practice session as an Adaptive
-  Practice one.** Both predate `v0.107.0` and are untouched here; they are the same shared-`ADAPTIVE`
-  -discriminator class as item 4 but on read-only surfaces.
-
+  Practice one.~~ ✅ CLOSED IN `v0.108.0` items 1 and 2** (2026-09-03), verified in code at that
+  release's signoff: `resolveResumeType` now takes the SESSION rather than the mode and emits
+  `INTERVIEW_PRACTICE`, and `PostSessionNextStepService` routes an interview session to the neutral
+  default. **⚠️ Struck through rather than deleted, because this entry was still asserting an open
+  defect a full release after it was fixed** — and a stale limitation reads as live work to the next
+  person who opens this file.
 - **Adaptive Practice and Interview Practice no longer consume each other's sessions (item 4).** Both
   share the `ADAPTIVE` discriminator and therefore `V41`'s `(user_id, study_pack_id, session_mode)`
   unique index on active sessions. The note-scoped start path would **resume** an interview session as
